@@ -1,0 +1,864 @@
+{
+  "contract": "v1alpha1",
+  "concept": "K1",
+  "vectors": [
+    {
+      "id": "k1.resolve.self",
+      "rules": [
+        "I1"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "a"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.resolve.unknown",
+      "rules": [
+        "I2"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "b"
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.resolve.type-distinguishes",
+      "rules": [
+        "I1",
+        "I2"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.other",
+            "id": "a"
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.merge.chain",
+      "rules": [
+        "I8"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          },
+          {
+            "type": "test.item",
+            "id": "c"
+          }
+        ],
+        "redirects": [
+          {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          {
+            "from": {
+              "type": "test.item",
+              "id": "b"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "c"
+            }
+          }
+        },
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "b"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "c"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.merge.across-types",
+      "rules": [
+        "I8"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.part",
+            "id": "x"
+          }
+        ],
+        "redirects": [
+          {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.part",
+                "id": "x"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.part",
+              "id": "x"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.split.ambiguous",
+      "rules": [
+        "I8"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          },
+          {
+            "type": "test.item",
+            "id": "c"
+          }
+        ],
+        "redirects": [
+          {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              },
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ],
+            "kind": "REDIRECT_KIND_SPLIT"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "ambiguous": [
+              {
+                "type": "test.item",
+                "id": "b"
+              },
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.split.then-merge",
+      "rules": [
+        "I8"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          },
+          {
+            "type": "test.item",
+            "id": "c"
+          },
+          {
+            "type": "test.item",
+            "id": "d"
+          }
+        ],
+        "redirects": [
+          {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              },
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ],
+            "kind": "REDIRECT_KIND_SPLIT"
+          },
+          {
+            "from": {
+              "type": "test.item",
+              "id": "c"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "d"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "ambiguous": [
+              {
+                "type": "test.item",
+                "id": "b"
+              },
+              {
+                "type": "test.item",
+                "id": "d"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.split.converges",
+      "rules": [
+        "I8"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          },
+          {
+            "type": "test.item",
+            "id": "c"
+          },
+          {
+            "type": "test.item",
+            "id": "d"
+          }
+        ],
+        "redirects": [
+          {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              },
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ],
+            "kind": "REDIRECT_KIND_SPLIT"
+          },
+          {
+            "from": {
+              "type": "test.item",
+              "id": "b"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "d"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          {
+            "from": {
+              "type": "test.item",
+              "id": "c"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "d"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "d"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.redirect.kind-arity",
+      "rules": [
+        "I3",
+        "I9"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          },
+          {
+            "type": "test.item",
+            "id": "c"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              },
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              }
+            ],
+            "kind": "REDIRECT_KIND_SPLIT"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              }
+            ]
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "a"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.redirect.unknown-from",
+      "rules": [
+        "I4"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "b"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.redirect.unknown-target",
+      "rules": [
+        "I5",
+        "I9"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              },
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ],
+            "kind": "REDIRECT_KIND_SPLIT"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_REFERENCE"
+          }
+        },
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "a"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.redirect.single",
+      "rules": [
+        "I6"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          },
+          {
+            "type": "test.item",
+            "id": "c"
+          }
+        ],
+        "redirects": [
+          {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.redirect.cycle",
+      "rules": [
+        "I7",
+        "I9"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          },
+          {
+            "type": "test.item",
+            "id": "c"
+          }
+        ],
+        "redirects": [
+          {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          {
+            "from": {
+              "type": "test.item",
+              "id": "b"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "c"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "c"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "a"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          "expect": {
+            "error": "ERROR_CODE_REDIRECT_CYCLE"
+          }
+        },
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "c"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.redirect.self",
+      "rules": [
+        "I7"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "a"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          "expect": {
+            "error": "ERROR_CODE_REDIRECT_CYCLE"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k1.redirect.accepted",
+      "rules": [
+        "I8"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "addRedirect": {
+            "from": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "b"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "b"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

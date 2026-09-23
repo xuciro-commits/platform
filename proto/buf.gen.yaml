@@ -1,0 +1,11 @@
+# Generated code is an implementation detail of each runtime; the .proto files stay language-neutral.
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: platformkernel/gen
+plugins:
+  - local: protoc-gen-go
+    out: ../go/gen
+    opt: paths=source_relative

@@ -1,0 +1,8 @@
+# Data-contract checks. Semantics are not checked here: see ../spec and ../vectors.
+version: v2
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - WIRE_JSON

@@ -1,0 +1,34 @@
+// K4 Change record — data contract only. Meaning: Contract/spec/K4-change-record.md.
+syntax = "proto3";
+
+package platform.kernel.v1alpha1;
+
+import "google/protobuf/timestamp.proto";
+import "platform/kernel/v1alpha1/identity.proto";
+
+message SchemaRef {
+  string name = 1;
+  uint32 version = 2;
+}
+
+// A decision as submitted. The accepting authority assigns id and recorded time.
+message Submission {
+  string tenant_id = 1;
+  string principal_id = 2;
+  string authority = 3;
+  EntityRef target = 4;
+  SchemaRef schema = 5;
+  google.protobuf.Timestamp valid_time = 6;
+  string causation_id = 7;
+  string correlation_id = 8;
+  string idempotency_key = 9;
+  bytes payload = 10;
+}
+
+// An accepted decision. Immutable once recorded.
+message ChangeRecord {
+  string change_id = 1;
+  Submission submission = 2;
+  google.protobuf.Timestamp valid_time = 3;
+  google.protobuf.Timestamp recorded_time = 4;
+}

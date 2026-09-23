@@ -1,0 +1,689 @@
+{
+  "contract": "v1alpha1",
+  "concept": "K4",
+  "vectors": [
+    {
+      "id": "k4.accept.times",
+      "rules": [
+        "C6",
+        "C7"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30=",
+            "validTime": "2025-12-24T00:00:00Z"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2025-12-24T00:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-2",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:05:00Z",
+              "recordedTime": "2026-01-01T10:05:00Z"
+            }
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 2
+      }
+    },
+    {
+      "id": "k4.required-fields",
+      "rules": [
+        "C1",
+        "C9"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": ""
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 0
+      }
+    },
+    {
+      "id": "k4.unknown-schema",
+      "rules": [
+        "C2",
+        "C9"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 2
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.other",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 0
+      }
+    },
+    {
+      "id": "k4.idempotent-replay",
+      "rules": [
+        "C4"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z",
+              "sameAs": 0
+            }
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 1
+      }
+    },
+    {
+      "id": "k4.idempotency-conflict",
+      "rules": [
+        "C5",
+        "C9"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "eyJ2IjoyfQ=="
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "error": "ERROR_CODE_IDEMPOTENCY_CONFLICT"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "error": "ERROR_CODE_IDEMPOTENCY_CONFLICT"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30=",
+            "validTime": "2026-01-01T10:00:00Z"
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "error": "ERROR_CODE_IDEMPOTENCY_CONFLICT"
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 1
+      }
+    },
+    {
+      "id": "k4.idempotency-scoped-by-tenant",
+      "rules": [
+        "C4"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-b",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:05:00Z",
+              "recordedTime": "2026-01-01T10:05:00Z"
+            }
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 1,
+        "tenant-b": 1
+      }
+    },
+    {
+      "id": "k4.recorded-time-monotonic",
+      "rules": [
+        "C6",
+        "C7"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:05:00Z",
+              "recordedTime": "2026-01-01T10:05:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-2",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T09:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:05:00Z",
+              "recordedTime": "2026-01-01T10:05:00Z"
+            }
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 2
+      }
+    },
+    {
+      "id": "k4.causation",
+      "rules": [
+        "C3",
+        "C8",
+        "C9"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-2",
+            "payload": "e30=",
+            "causationId": "$step:0"
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:05:00Z",
+              "recordedTime": "2026-01-01T10:05:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-3",
+            "payload": "e30=",
+            "causationId": "no-such-change"
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_REFERENCE"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-b",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-4",
+            "payload": "e30=",
+            "causationId": "$step:0"
+          },
+          "at": "2026-01-01T10:05:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_REFERENCE"
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 2,
+        "tenant-b": 0
+      }
+    }
+  ]
+}
