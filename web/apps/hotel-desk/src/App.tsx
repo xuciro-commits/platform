@@ -13,13 +13,17 @@ const reservationStatuses = defineStatuses({
 });
 
 const stay = z.object({
-  roomType: z.enum(["standard", "suite"]),
+  roomType: z.enum(["standard", "suite", "apartment"]),
   checkIn: z.iso.date("Pick a date"),
   checkOut: z.iso.date("Pick a date"),
 }).refine((s) => s.checkOut > s.checkIn, { message: "Check-out must be after check-in", path: ["checkOut"] });
 const newReservation = stay.and(z.object({ guest: z.string().trim().min(1, "Required") }));
 
-const roomTypes = [{ value: "standard", label: "Standard" }, { value: "suite", label: "Suite" }];
+const roomTypes = [{ value: "standard", label: "Standard" }, { value: "suite", label: "Suite" }, { value: "apartment", label: "Serviced apartment (28+ nights)" }];
+const workspaceTypes = [{ value: "meeting-room", label: "Meeting room" }, { value: "hot-desk", label: "Hot desk" }];
+const hour = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:00$/, "Whole hours");
+const newBooking = z.object({ roomType: z.enum(["meeting-room", "hot-desk"]), checkIn: hour, checkOut: hour, guest: z.string().trim().min(1, "Required") })
+  .refine((s) => s.checkOut > s.checkIn, { message: "End must be after start", path: ["checkOut"] });
 const nextDay = (date: string) => new Date(Date.parse(date + "T00:00:00Z") + 86_400_000).toISOString().slice(0, 10);
 const short = (id: string) => id.slice(0, 12);
 
@@ -110,6 +114,7 @@ export function App() {
   const [token, setToken] = useState("desk-a");
   const [connecting, setConnecting] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [booking, setBooking] = useState(false);
   const [revising, setRevising] = useState<OutboxEntry>();
 
   const refresh = useCallback(() => api.snapshot().then(setSnapshot, (e) => { notify.error(String(e)); }), []);
@@ -143,11 +148,13 @@ export function App() {
         ] }]}
         menus={[{ label: "File", items: [
           { label: "New reservation", onSelect: () => setCreating(true), disabled: !snapshot?.principal },
+          { label: "Book workspace (hourly)", onSelect: () => setBooking(true), disabled: !snapshot?.principal },
           { label: "Send outbox", onSelect: send },
           { label: "Connection…", onSelect: () => setConnecting(true) },
         ] }]}
         commands={[
           { id: "new", label: "New reservation", run: () => setCreating(true) },
+          { id: "book", label: "Book workspace (hourly)", run: () => setBooking(true) },
           { id: "send", label: "Send outbox", run: send },
           { id: "connection", label: "Connection…", run: () => setConnecting(true) },
         ]}
@@ -166,10 +173,21 @@ export function App() {
           ]}
           onSubmit={(values) => run(api.draft("create", null, values)).then(() => { setCreating(false); notify("Draft saved in the outbox"); })} />
       </Dialog>
+      <Dialog open={booking} onOpenChange={setBooking} title="Book workspace">
+        <EntityForm schema={newBooking} submitLabel="Save draft" onCancel={() => setBooking(false)}
+          defaultValues={{ roomType: "meeting-room", checkIn: "", checkOut: "", guest: "" }}
+          fields={[
+            { name: "guest", label: "Member" },
+            { name: "roomType", label: "Space", kind: "select", options: workspaceTypes },
+            { name: "checkIn", label: "From", kind: "datetime" },
+            { name: "checkOut", label: "Until", kind: "datetime" },
+          ]}
+          onSubmit={(values) => run(api.draft("create", null, values)).then(() => { setBooking(false); notify("Draft saved in the outbox"); })} />
+      </Dialog>
       <Dialog open={!!revising} onOpenChange={(open) => !open && setRevising(undefined)} title="Revise dates">
         {revising && (
           <EntityForm schema={stay} submitLabel="Save as new draft" onCancel={() => setRevising(undefined)}
-            defaultValues={{ roomType: revising.payload?.roomType as "standard" | "suite", checkIn: revising.payload?.checkIn, checkOut: revising.payload?.checkOut }}
+            defaultValues={{ roomType: revising.payload?.roomType as "standard" | "suite" | "apartment", checkIn: revising.payload?.checkIn, checkOut: revising.payload?.checkOut }}
             fields={[
               { name: "roomType", label: "Room type", kind: "select", options: roomTypes },
               { name: "checkIn", label: "Check-in", kind: "date" },

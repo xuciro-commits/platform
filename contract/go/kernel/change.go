@@ -83,3 +83,31 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 }
 
 func schemaKey(s *pb.SchemaRef) string { return fmt.Sprintf("%s@%d", s.GetName(), s.GetVersion()) }
+
+// Adopt takes over a previous authority's accepted records unchanged (K5 A10):
+// into an empty tenant log, in recorded order, with unique change IDs and keys.
+func (l *ChangeLog) Adopt(records []*pb.ChangeRecord) *Error {
+	conflict := errorf(pb.ErrorCode_ERROR_CODE_CONFLICT)
+	if len(records) == 0 {
+		return nil
+	}
+	tenant := records[0].GetSubmission().GetTenantId()
+	if len(l.logs[tenant]) > 0 {
+		return conflict
+	}
+	ids, keys := map[string]bool{}, map[string]bool{}
+	for i, r := range records {
+		s := r.GetSubmission()
+		if s.GetTenantId() != tenant || ids[r.GetChangeId()] || keys[s.GetIdempotencyKey()] ||
+			i > 0 && r.GetRecordedTime().AsTime().Before(records[i-1].GetRecordedTime().AsTime()) {
+			return conflict
+		}
+		ids[r.GetChangeId()], keys[s.GetIdempotencyKey()] = true, true
+	}
+	l.logs[tenant] = append([]*pb.ChangeRecord(nil), records...)
+	l.byKey[tenant] = map[string]*pb.ChangeRecord{}
+	for _, r := range records {
+		l.byKey[tenant][r.GetSubmission().GetIdempotencyKey()] = r
+	}
+	return nil
+}

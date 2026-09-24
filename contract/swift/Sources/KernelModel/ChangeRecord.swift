@@ -48,6 +48,13 @@ public struct ChangeRecord: Equatable, Sendable {
     public let submission: Submission
     public let validTime: Date
     public let recordedTime: Date
+
+    public init(changeId: String, submission: Submission, validTime: Date, recordedTime: Date) {
+        self.changeId = changeId
+        self.submission = submission
+        self.validTime = validTime
+        self.recordedTime = recordedTime
+    }
 }
 
 /// Accepts submissions for one authority; one append-only log per tenant.
@@ -93,5 +100,18 @@ public struct ChangeLog: Sendable {
         logs[s.tenantId, default: []].append(record)
         byKey[s.tenantId, default: [:]][s.idempotencyKey] = record
         return record
+    }
+
+    /// Takes over a previous authority's accepted records unchanged (K5 A10): into an
+    /// empty tenant log, in recorded order, with unique change IDs and keys.
+    public mutating func adopt(_ records: [ChangeRecord]) throws(KernelError) {
+        guard let tenant = records.first?.submission.tenantId else { return }
+        guard (logs[tenant] ?? []).isEmpty,
+              records.allSatisfy({ $0.submission.tenantId == tenant }),
+              Set(records.map(\.changeId)).count == records.count,
+              Set(records.map(\.submission.idempotencyKey)).count == records.count,
+              zip(records, records.dropFirst()).allSatisfy({ $0.recordedTime <= $1.recordedTime }) else { throw .conflict }
+        logs[tenant] = records
+        byKey[tenant] = Dictionary(uniqueKeysWithValues: records.map { ($0.submission.idempotencyKey, $0) })
     }
 }

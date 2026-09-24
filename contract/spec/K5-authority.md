@@ -22,10 +22,12 @@ Schema: `proto/platform/kernel/v1alpha1/authority.proto`. Vectors: `vectors/k5-a
 | A7 | A rejected operation leaves declarations and the outbox unchanged. | — |
 | A8 | An authority's answer maps to exactly one event: no error → confirm; `CONFLICT` or `IDEMPOTENCY_CONFLICT` → conflict; any other code → reject. No answer is a timeout. | — |
 | A9 | An edge takes its declarations from its tenant's authority and refreshes them after a `NOT_AUTHORITY` answer (the data class migrated, A2). | — |
+| A10 | After a migration (A2) the new authority **adopts** the previous authority's accepted records unchanged — change ID, times, principal and authority — before accepting new submissions. Adopted records keep their recorded order (K4 C6) and idempotency keys, so replays of adopted keys return the adopted record (C4). Records out of recorded order, from another tenant, or repeating a change ID or key are refused and nothing is adopted. | `CONFLICT` |
 
 ## Notes
 
 - `UNKNOWN` means the edge cannot tell whether the authority accepted the submission; the retry is safe because K4 C4 returns the original record.
 - A draft in `CONFLICT` or `REJECTED` is kept for the user; resolving it is a revision (A6).
+- Adoption (A10) is how a personal space becomes shared without rewriting history (drill E2); the tenant ID stays the same, so a personal tenant needs a globally unique ID from the start.
 - Negotiated authority (several parties must agree) has no v1alpha1 rules; it is K5's open case.
 - Queues and results are isolated per tenant (A6); per-principal isolation belongs to K6.

@@ -15,7 +15,8 @@ func main() {
 	delay := flag.Duration("response-delay", 0, "delay every response (reproduces client timeouts)")
 	delayCount := flag.Int("delay-count", 0, "delay only the first N responses (0: all)")
 	flag.Parse()
-	rooms := map[string]hotel.RoomType{"standard": {Rooms: 3, Overbooking: 1}, "suite": {Rooms: 1}}
+	rooms := map[string]hotel.RoomType{"standard": {Rooms: 3, Overbooking: 1}, "suite": {Rooms: 1},
+		"apartment": {Rooms: 2, MinUnits: 28}, "meeting-room": {Rooms: 1, Hourly: true}, "hot-desk": {Rooms: 6, Hourly: true}}
 	server := &hotel.Server{
 		Hotels: map[string]*hotel.Hotel{
 			"hotel-a": hotel.NewHotel("hotel-a", rooms, hotel.DefaultPolicy),

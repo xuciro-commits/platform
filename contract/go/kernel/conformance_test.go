@@ -600,3 +600,79 @@ func TestConnectorVectors(t *testing.T) {
 		})
 	}
 }
+
+func TestMigrationVectors(t *testing.T) {
+	for _, v := range load(t, "k5-migration.json").Vectors {
+		t.Run(v.ID, func(t *testing.T) {
+			var given struct {
+				Schemas []json.RawMessage `json:"schemas"`
+			}
+			json.Unmarshal(v.Given, &given)
+			var schemas []*pb.SchemaRef
+			for _, raw := range given.Schemas {
+				s := &pb.SchemaRef{}
+				decode(t, raw, s)
+				schemas = append(schemas, s)
+			}
+			log := NewChangeLog(NewSchemaRegistry(schemas, nil))
+			for i, rawStep := range v.Steps {
+				var step struct {
+					Adopt  []json.RawMessage `json:"adopt"`
+					Submit json.RawMessage   `json:"submit"`
+					At     time.Time         `json:"at"`
+					Expect struct {
+						OK       bool `json:"ok"`
+						Accepted *struct {
+							ChangeID     string    `json:"changeId"`
+							ValidTime    time.Time `json:"validTime"`
+							RecordedTime time.Time `json:"recordedTime"`
+						} `json:"accepted"`
+						Error string `json:"error"`
+					} `json:"expect"`
+				}
+				if err := json.Unmarshal(rawStep, &step); err != nil {
+					t.Fatal(err)
+				}
+				if step.Adopt != nil {
+					var records []*pb.ChangeRecord
+					for _, raw := range step.Adopt {
+						r := &pb.ChangeRecord{}
+						decode(t, raw, r)
+						records = append(records, r)
+					}
+					got := "ok"
+					if err := log.Adopt(records); err != nil {
+						got = err.Error()
+					}
+					want := step.Expect.Error
+					if step.Expect.OK {
+						want = "ok"
+					}
+					if got != want {
+						t.Errorf("step %d: adopt got %s, want %s", i, got, want)
+					}
+					continue
+				}
+				s := &pb.Submission{}
+				decode(t, step.Submit, s)
+				record, err := log.Submit(s, step.At)
+				if a := step.Expect.Accepted; a != nil {
+					if err != nil {
+						t.Fatalf("step %d: rejected with %v", i, err)
+					}
+					if a.ChangeID != "" && record.GetChangeId() != a.ChangeID ||
+						!record.GetValidTime().AsTime().Equal(a.ValidTime) || !record.GetRecordedTime().AsTime().Equal(a.RecordedTime) {
+						t.Errorf("step %d: got %v", i, record)
+					}
+				} else if err == nil || err.Error() != step.Expect.Error {
+					t.Errorf("step %d: got %v, want %s", i, err, step.Expect.Error)
+				}
+			}
+			for tenant, count := range v.ExpectLog {
+				if got := len(log.Records(tenant)); got != count {
+					t.Errorf("log %s: %d records, want %d", tenant, got, count)
+				}
+			}
+		})
+	}
+}

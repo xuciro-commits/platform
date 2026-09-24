@@ -1,0 +1,386 @@
+{
+  "contract": "v1alpha1",
+  "concept": "K5",
+  "vectors": [
+    {
+      "id": "k5.adopt-then-continue",
+      "rules": [
+        "A10",
+        "C4",
+        "C6"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "adopt": [
+            {
+              "changeId": "dev-1",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-1",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            },
+            {
+              "changeId": "dev-2",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-2",
+                "payload": "e30=",
+                "causationId": "dev-1"
+              },
+              "validTime": "2026-01-01T11:00:00Z",
+              "recordedTime": "2026-01-01T11:00:00Z"
+            }
+          ],
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "ada",
+            "authority": "device-ada",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-02T09:00:00Z",
+          "expect": {
+            "accepted": {
+              "changeId": "dev-1",
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "bob",
+            "authority": "family-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-3",
+            "payload": "e30=",
+            "causationId": "dev-2"
+          },
+          "at": "2026-01-01T09:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T11:00:00Z",
+              "recordedTime": "2026-01-01T11:00:00Z"
+            }
+          }
+        },
+        {
+          "adopt": [
+            {
+              "changeId": "dev-9",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-9",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-02T09:00:00Z",
+              "recordedTime": "2026-01-02T09:00:00Z"
+            }
+          ],
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 3
+      }
+    },
+    {
+      "id": "k5.adopt-refuses-broken-history",
+      "rules": [
+        "A10"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "adopt": [
+            {
+              "changeId": "dev-2",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-2",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T11:00:00Z",
+              "recordedTime": "2026-01-01T11:00:00Z"
+            },
+            {
+              "changeId": "dev-1",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-1",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          ],
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "adopt": [
+            {
+              "changeId": "dev-1",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-1",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            },
+            {
+              "changeId": "dev-1",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-2",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T11:00:00Z",
+              "recordedTime": "2026-01-01T11:00:00Z"
+            }
+          ],
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "adopt": [
+            {
+              "changeId": "dev-1",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-1",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            },
+            {
+              "changeId": "dev-2",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-1",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T11:00:00Z",
+              "recordedTime": "2026-01-01T11:00:00Z"
+            }
+          ],
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "adopt": [
+            {
+              "changeId": "dev-1",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-1",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            },
+            {
+              "changeId": "dev-2",
+              "submission": {
+                "tenantId": "tenant-b",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-2",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T11:00:00Z",
+              "recordedTime": "2026-01-01T11:00:00Z"
+            }
+          ],
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "adopt": [
+            {
+              "changeId": "dev-1",
+              "submission": {
+                "tenantId": "tenant-a",
+                "principalId": "ada",
+                "authority": "device-ada",
+                "target": {
+                  "type": "test.item",
+                  "id": "a"
+                },
+                "schema": {
+                  "name": "test.note",
+                  "version": 1
+                },
+                "idempotencyKey": "k-1",
+                "payload": "e30="
+              },
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          ],
+          "expect": {
+            "ok": true
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 1
+      }
+    }
+  ]
+}

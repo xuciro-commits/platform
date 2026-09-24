@@ -127,3 +127,30 @@ func TestChannelDuplicatesCollapse(t *testing.T) {
 		t.Fatalf("observation of the refused booking was not kept: %d", n)
 	}
 }
+
+// Drill E1: serviced apartments (long stays) and coworking (hourly) reuse the
+// reservation lifecycle; only the domain's capacity unit changed.
+func TestDrillE1ApartmentsAndCoworking(t *testing.T) {
+	h := NewHotel("hotel-a", map[string]RoomType{
+		"apartment":    {Rooms: 1, MinUnits: 28},
+		"meeting-room": {Rooms: 1, Hourly: true},
+	}, DefaultPolicy)
+	_, got := create(h, desk, "a1", "k1", "apartment", "2026-10-01", "2026-10-04")
+	expect(t, got, "ERROR_CODE_INVALID_ARGUMENT") // shorter than the minimum stay
+	_, got = create(h, desk, "a2", "k2", "apartment", "2026-10-01", "2026-11-01")
+	expect(t, got, "ok")
+	_, got = create(h, desk, "m1", "k3", "meeting-room", "2026-10-01T09:00", "2026-10-01T11:00")
+	expect(t, got, "ok")
+	_, got = create(h, desk, "m2", "k4", "meeting-room", "2026-10-01T11:00", "2026-10-01T12:00")
+	expect(t, got, "ok")
+	_, got = create(h, desk, "m3", "k5", "meeting-room", "2026-10-01T10:00", "2026-10-01T12:00")
+	expect(t, got, "ERROR_CODE_CONFLICT")
+	_, got = create(h, desk, "m4", "k6", "meeting-room", "2026-10-01T12:30", "2026-10-01T13:00")
+	expect(t, got, "ERROR_CODE_INVALID_ARGUMENT") // not whole hours
+	_, err := h.Submit(manager, submission(manager, SchemaCancel, "m1", "k7", map[string]int{"expectedVersion": 1}), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got = create(h, desk, "m5", "k8", "meeting-room", "2026-10-01T10:00", "2026-10-01T11:00")
+	expect(t, got, "ok")
+}

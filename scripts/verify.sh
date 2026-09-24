@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|web|hotel|manufacturing]   (default: everything)
+# Platform verification. Usage: scripts/verify.sh [contract|web|hotel|manufacturing|drills]   (default: everything)
 # The web step needs node and pnpm (brew install node pnpm).
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
@@ -38,6 +38,10 @@ manufacturing() {
   step manufacturing-server bash -c 'cd slices/manufacturing/server && go vet ./... && go test -count=1 ./...'
 }
 
+drills() {
+  step drills bash -c 'cd slices/drills && go vet ./... && go test -count=1 ./...'
+}
+
 hotel() {
   step hotel-server bash -c 'cd slices/hotel/server && go vet ./... && go test -count=1 ./...'
   step hotel-client-k5 cargo test --manifest-path slices/hotel/client/src-tauri/Cargo.toml
@@ -49,8 +53,9 @@ case "${1:-all}" in
   web) web ;;
   hotel) web; hotel ;;
   manufacturing) manufacturing ;;
-  all) contract; web; hotel; manufacturing ;;
-  *) echo "usage: $0 [contract|web|hotel|manufacturing]"; exit 2 ;;
+  drills) drills ;;
+  all) contract; web; hotel; manufacturing; drills ;;
+  *) echo "usage: $0 [contract|web|hotel|manufacturing|drills]"; exit 2 ;;
 esac
 
 if ((${#failed[@]})); then echo "Failed: ${failed[*]}"; exit 1; fi

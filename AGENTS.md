@@ -13,6 +13,7 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | `contract/` | Kernel contract `v1alpha1`: Protobuf data contract (`proto/`), semantic rules with errors (`spec/`), conformance vectors (`vectors/`), Go reference (`go/`) and Swift implementation (`swift/`) running the same vectors |
 | `slices/hotel/` | Hotel reference slice (#79): Go tenant server (`server/`, with a channel simulator), Tauri desk client with a Rust K5 outbox that runs the contract's K5 vectors (`client/`), `flows.sh` reproducing timeout, offline, conflict and rejection flows. May not change the kernel |
 | `slices/manufacturing/` | Manufacturing reference slice (#83, Opcenter/SAP ME model): Go plant server with ERP poll and gateway push connectors (`server/`, `cmd/gateway-sim`). May not change the kernel |
+| `slices/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |
 | `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri), `apps/mes` (manufacturing client) |
 | `docs/Platform.md` | The platform design: layers, kernel hypotheses K1–K9, kernel contract rules, validation strategy |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
@@ -36,4 +37,5 @@ scripts/verify.sh contract  # contract vocabulary, buf lint + generated code, Go
 scripts/verify.sh web       # UI kit tests, typecheck and build of every web app (needs node, pnpm)
 scripts/verify.sh hotel     # web build, Hotel server tests, Rust K5 vectors, end-to-end flows (needs cargo)
 scripts/verify.sh manufacturing  # plant server tests (F-5 to F-9 verdicts)
+scripts/verify.sh drills    # evolution drills on the kernel
 ```

@@ -8,7 +8,7 @@ import { Input, Select } from "../primitives/input";
 export type Field<T> = {
   name: Path<T>;
   label: string;
-  kind?: "text" | "number" | "date" | "select";
+  kind?: "text" | "number" | "date" | "datetime" | "select";
   options?: { value: string; label: string }[];
   placeholder?: string;
 };
@@ -38,7 +38,7 @@ export function EntityForm<S extends z.ZodType<FieldValues, FieldValues>>({
             {field.kind === "select" ? (
               <Select {...common}>{field.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
             ) : (
-              <Input {...common} type={field.kind ?? "text"} placeholder={field.placeholder} />
+              <Input {...common} type={field.kind === "datetime" ? "datetime-local" : field.kind ?? "text"} placeholder={field.placeholder} />
             )}
             {error && <p id={`${id}-error`} className="text-xs text-[var(--tone-danger)]">{error}</p>}
           </div>

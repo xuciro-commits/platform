@@ -101,6 +101,22 @@ type Hotel struct {
 type RoomType struct {
 	Rooms       int `json:"rooms"`
 	Overbooking int `json:"overbooking"`
+	// Drill E1: sold per night (hotel rooms, serviced apartments) or per hour
+	// (coworking desks and meeting rooms); MinUnits is the shortest stay.
+	Hourly   bool `json:"hourly,omitempty"`
+	MinUnits int  `json:"minUnits,omitempty"`
+}
+
+// span parses a stay in its room type's unit: dates per night, "YYYY-MM-DDTHH:MM" per hour.
+func (t RoomType) span(s Stay) (in, out time.Time, step time.Duration, ok bool) {
+	layout, step := time.DateOnly, 24*time.Hour
+	if t.Hourly {
+		layout, step = "2006-01-02T15:04", time.Hour
+	}
+	in, err1 := time.Parse(layout, s.CheckIn)
+	out, err2 := time.Parse(layout, s.CheckOut)
+	whole := out.Sub(in)%step == 0
+	return in, out, step, err1 == nil && err2 == nil && out.After(in) && whole && int(out.Sub(in)/step) >= max(t.MinUnits, 1)
 }
 
 func NewHotel(tenant string, rooms map[string]RoomType, policy Policy) *Hotel {
@@ -197,24 +213,24 @@ func (h *Hotel) validate(s *pb.Submission) (func(), *kernel.Error) {
 }
 
 func (h *Hotel) validStay(s Stay) bool {
-	in, err1 := time.Parse(time.DateOnly, s.CheckIn)
-	out, err2 := time.Parse(time.DateOnly, s.CheckOut)
-	return err1 == nil && err2 == nil && out.After(in) && h.rooms[s.RoomType].Rooms > 0
+	t := h.rooms[s.RoomType]
+	_, _, _, ok := t.span(s)
+	return ok && t.Rooms > 0
 }
 
-// fits reports whether every night of the stay has a free room of its type,
+// fits reports whether every unit (night or hour) of the stay has a free room of its type,
 // ignoring the reservation being modified. Capacity allocation is domain code.
 func (h *Hotel) fits(s Stay, ignore string) bool {
-	in, _ := time.Parse(time.DateOnly, s.CheckIn)
-	out, _ := time.Parse(time.DateOnly, s.CheckOut)
-	for night := in; night.Before(out); night = night.AddDate(0, 0, 1) {
+	t := h.rooms[s.RoomType]
+	in, out, step, _ := t.span(s)
+	for slot := in; slot.Before(out); slot = slot.Add(step) {
 		used := 0
 		for id, r := range h.reservations {
-			if id != ignore && !r.Canceled && r.RoomType == s.RoomType && r.CheckIn <= night.Format(time.DateOnly) && night.Format(time.DateOnly) < r.CheckOut {
+			if rIn, rOut, _, _ := t.span(r.Stay); id != ignore && !r.Canceled && r.RoomType == s.RoomType && !slot.Before(rIn) && slot.Before(rOut) {
 				used++
 			}
 		}
-		if t := h.rooms[s.RoomType]; used >= t.Rooms+t.Overbooking {
+		if used >= t.Rooms+t.Overbooking {
 			return false
 		}
 	}

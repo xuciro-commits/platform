@@ -237,6 +237,35 @@ struct ConformanceTests {
             }
         }
     }
+
+    @Test("K5 Migration vectors")
+    func migration() throws {
+        let file: VectorFile<ChangeGiven, MigrationStep> = try load("k5-migration.json")
+        for vector in file.vectors {
+            var log = ChangeLog(schemas: SchemaRegistry(known: vector.given.schemas))
+            for (index, step) in vector.steps.enumerated() {
+                let label = Comment(rawValue: "\(vector.id) step \(index)")
+                do {
+                    if let adopt = step.adopt {
+                        try log.adopt(try adopt.map { ChangeRecord(changeId: $0.changeId, submission: $0.submission,
+                                                                   validTime: try date($0.validTime), recordedTime: try date($0.recordedTime)) })
+                        #expect(step.expect.ok == true, label)
+                    } else if let submission = step.submit, let at = step.at {
+                        let record = try log.submit(submission, at: try date(at))
+                        let expected = try #require(step.expect.accepted, label)
+                        #expect(expected.changeId == nil || record.changeId == expected.changeId, label)
+                        #expect(record.validTime == (try date(expected.validTime)), label)
+                        #expect(record.recordedTime == (try date(expected.recordedTime)), label)
+                    }
+                } catch let error as KernelError {
+                    #expect(step.expect.error == error.rawValue, label)
+                }
+            }
+            for (tenant, count) in vector.expectLog ?? [:] {
+                #expect(log.records(tenant: tenant).count == count, Comment(rawValue: "\(vector.id) log \(tenant)"))
+            }
+        }
+    }
 }
 
 // MARK: - Vector format (see docs/Platform.md, Kernel Contract)
@@ -411,6 +440,24 @@ struct ConnectorExpect: Decodable, Equatable {
     var lastSeen: String?
     var cursor: String?
     var error: String?
+}
+
+struct MigrationStep: Decodable {
+    struct Record: Decodable {
+        let changeId: String
+        let submission: Submission
+        let validTime, recordedTime: String
+    }
+    struct Expect: Decodable {
+        struct Accepted: Decodable { let changeId: String?; let validTime, recordedTime: String }
+        let ok: Bool?
+        let accepted: Accepted?
+        let error: String?
+    }
+    let adopt: [Record]?
+    let submit: Submission?
+    let at: String?
+    let expect: Expect
 }
 
 private let vectorsDirectory = URL(fileURLWithPath: #filePath)
