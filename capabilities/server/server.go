@@ -110,6 +110,22 @@ func (h *Host) Handler() http.Handler {
 	handle("GET /v1/apps", func(w http.ResponseWriter, _ *http.Request, _ Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Apps())
 	})
+	handle("GET /v1/protocols", func(w http.ResponseWriter, _ *http.Request, _ Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, t.Protocols())
+	})
+	handle("POST /v1/protocols/{protocol}/{version}/{action}", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
+		var call struct {
+			Target, IdempotencyKey string
+			Payload                json.RawMessage
+		}
+		if json.NewDecoder(r.Body).Decode(&call) != nil {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		_, record, err := t.Invoke(m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), call.Target, call.Payload, call.IdempotencyKey, h.Now())
+		Reply(w, record, err)
+	})
+	handle("POST /mcp", h.mcp)
 	handle("GET /v1/{read}", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
 		out, err := t.Read(m, r.PathValue("read"))
 		if err != nil {

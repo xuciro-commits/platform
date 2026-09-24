@@ -6,7 +6,6 @@
     "id": "sales-1",
     "roles": {
       "crm": "sales",
-      "crm-hotel": "sales",
       "hotel": "front-desk"
     }
   },
@@ -17,7 +16,6 @@
     "id": "manager-1",
     "roles": {
       "crm": "sales-manager",
-      "crm-hotel": "sales-manager",
       "hotel": "manager",
       "platform": "admin"
     }

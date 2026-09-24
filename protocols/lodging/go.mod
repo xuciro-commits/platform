@@ -1,10 +1,8 @@
-module crmhotel
+module lodging
 
 go 1.27.1
 
 require (
-	crm v0.0.0
-	hotel v0.0.0
 	platformkernel v0.0.0
 	platformserver v0.0.0
 )
@@ -25,7 +23,3 @@ require (
 replace platformkernel => ../../contract/go
 
 replace platformserver => ../../capabilities/server
-
-replace crm => ../crm/server
-
-replace hotel => ../hotel/server

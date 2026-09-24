@@ -1,5 +1,5 @@
 # The platform host's two deployments on their production path, locally (#87, #92):
-# mes-server (manufacturing) and sales-server (CRM + Hotel + bridge).
+# mes-server (manufacturing) and sales-server (the sales solution: CRM and Hotel).
 # PostgreSQL keeps the journal, Rauthy issues identities, mes-server replays the
 # journal on start. `docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.
@@ -47,7 +47,7 @@ services:
     restart: on-failure
 
   sales-server:
-    build: { context: ../.., dockerfile: slices/crm-hotel/Dockerfile }
+    build: { context: ../.., dockerfile: solutions/sales/Dockerfile }
     command:
       - -addr=0.0.0.0:8495
       - -database=postgres://platform:platform-local-only@postgres:5432/platform

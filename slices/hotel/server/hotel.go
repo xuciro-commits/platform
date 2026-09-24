@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"lodging"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver"
@@ -148,10 +149,24 @@ func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Decl
 // Manifest declares the hotel as an app (ADR-0010).
 func (h *Hotel) Manifest() platformserver.Manifest {
 	return platformserver.Manifest{ID: "hotel", Version: "1", Actions: h.ledger.Catalog,
-		Reads: []string{"reservations"}, Inputs: map[string]bool{"channel-bookings": true}}
+		Reads: []string{"reservations", "lodging-bookings"}, Inputs: map[string]bool{"channel-bookings": true},
+		// The hotel sells stays to any app through the lodging protocol (ADR-0011).
+		Provides: []platformserver.Provision{{Protocol: lodging.Protocol(),
+			Actions: map[string]string{"reserve": SchemaCreate, "change": SchemaModify, "cancel": SchemaCancel},
+			Reads:   map[string]string{"bookings": "lodging-bookings"},
+			Events:  map[string]string{"changed": SchemaModify, "canceled": SchemaCancel}}}}
 }
 
-func (h *Hotel) Read(platformserver.Caller, string) (any, *kernel.Error) { return h.Reservations(), nil }
+func (h *Hotel) Read(_ platformserver.Caller, name string) (any, *kernel.Error) {
+	if name == "lodging-bookings" {
+		out := []lodging.Booking{}
+		for _, r := range h.Reservations() {
+			out = append(out, lodging.Booking{ID: r.ID, RoomType: r.RoomType, CheckIn: r.CheckIn, CheckOut: r.CheckOut, Guest: r.Guest, Canceled: r.Canceled})
+		}
+		return out, nil
+	}
+	return h.Reservations(), nil
+}
 
 // Input takes channel bookings; only a channel connector sends them.
 func (h *Hotel) Input(c platformserver.Caller, _ string, body []byte, now time.Time) (any, *kernel.Error) {

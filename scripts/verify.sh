@@ -47,10 +47,11 @@ drills() {
 }
 
 composition() {
-  # Packages know no other package; only the bridge imports both (#91).
-  step package-independence bash -c '! (cd slices/crm/server && go list -deps ./...) | grep -qx hotel && ! (cd slices/hotel/server && go list -deps ./...) | grep -qx crm'
+  # Apps know no other app; they meet through protocols (ADR-0011).
+  step app-independence bash -c '! (cd slices/crm/server && go list -deps ./...) | grep -qx hotel && ! (cd slices/hotel/server && go list -deps ./...) | grep -qx crm'
+  step lodging-protocol bash -c 'cd protocols/lodging && go vet ./... && go test -count=1 ./...'
   step crm-server bash -c 'cd slices/crm/server && go vet ./... && go test -count=1 ./...'
-  step crm-hotel-bridge bash -c 'cd slices/crm-hotel && go vet ./... && go test -count=1 ./...'
+  step sales-solution bash -c 'cd solutions/sales && go vet ./... && go test -count=1 ./...'
 }
 
 deploy() {

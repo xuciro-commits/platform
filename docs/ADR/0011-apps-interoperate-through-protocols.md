@@ -1,6 +1,6 @@
 # ADR-0011: Apps interoperate through protocols; bridges are the exception
 
-**Status:** Proposed (2026-09-24; owner direction, awaiting confirmation of the design). Amends ADR-0009 and ADR-0010 point 3.
+**Status:** Accepted (2026-09-24, owner direction; implemented in #95). Supersedes ADR-0009's bridges as the default; amends ADR-0010 point 3.
 
 **Context.** ADR-0009 joined CRM and Hotel with a bridge package: one app per pair of apps. The owner observed that large software does not interoperate that way:
 - VS Code works with GitHub through its extension and authentication-provider interfaces.

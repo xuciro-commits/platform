@@ -1,15 +1,19 @@
-// Package crm is a customer and opportunity package (#91), modelled on the
+// Package crm is a customer and opportunity app (#91), modelled on the
 // account/opportunity core of Salesforce and Dynamics 365 Sales. It knows no
-// other package; others use its declared actions and its public reads.
+// other app. It consumes the lodging protocol when a tenant has a provider
+// (ADR-0011): stays booked for an opportunity are linked to it through the
+// platform, and the platform's timeline tells what happens to them.
 package crm
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"lodging"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver"
@@ -23,7 +27,7 @@ const (
 	SchemaAccount = "crm.account.create"
 	SchemaOpen    = "crm.opportunity.open"
 	SchemaClose   = "crm.opportunity.close"
-	SchemaNote    = "crm.opportunity.note"
+	SchemaBook    = "crm.opportunity.book"
 
 	Sales   Role = "sales"
 	Manager Role = "sales-manager"
@@ -45,14 +49,6 @@ type Opportunity struct {
 	Owner    string `json:"owner"`
 	Stage    string `json:"stage"` // open, won, lost
 	Revision uint32 `json:"revision"`
-	Notes    []Note `json:"notes"` // the activity timeline, oldest first
-}
-
-// Note is an activity on an opportunity, by a person or by an app's automation.
-type Note struct {
-	At   time.Time `json:"at"`
-	By   string    `json:"by"`
-	Text string    `json:"text"`
 }
 
 // Actions is the CRM catalog (ADR-0008).
@@ -70,9 +66,9 @@ func Actions() *platformserver.Catalog {
 		platformserver.Action{Schema: SchemaClose, Target: OpportunityType, Capability: "opportunities", Title: "Close opportunity",
 			Description: "Close an open opportunity as won or lost; only its owner or a sales manager.",
 			Payload:     []platformserver.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost"}}, Roles: both},
-		platformserver.Action{Schema: SchemaNote, Target: OpportunityType, Capability: "opportunities", Title: "Add note",
-			Description: "Add an activity note to an opportunity's timeline.",
-			Payload:     []platformserver.Field{{Name: "text", Type: "string", Required: true, Description: "What happened"}}, Roles: both},
+		platformserver.Action{Schema: SchemaBook, Target: OpportunityType, Capability: "stays", Title: "Book stay",
+			Description: "Book a stay for an opportunity with the tenant's lodging provider and link it to the opportunity; the provider decides with your role there.",
+			Payload:     lodging.Protocol().Actions[0].Payload, Roles: both, Uses: []string{platformserver.ProtocolAction(lodging.ID, "reserve")}},
 	)
 }
 
@@ -82,11 +78,12 @@ type CRM struct {
 	tenant        string
 	accounts      map[string]*Account
 	opportunities map[string]*Opportunity
+	booked        map[string]int // opportunity → stays booked, for the booking IDs
 	ledger        *platformserver.Ledger
 }
 
 func New(tenant string) *CRM {
-	return &CRM{tenant: tenant, accounts: map[string]*Account{}, opportunities: map[string]*Opportunity{},
+	return &CRM{tenant: tenant, accounts: map[string]*Account{}, opportunities: map[string]*Opportunity{}, booked: map[string]int{},
 		ledger: platformserver.NewLedger(tenant, Authority, Actions(), AccountType, OpportunityType)}
 }
 
@@ -128,20 +125,27 @@ func (c *CRM) Submit(who platformserver.Caller, s *pb.Submission, now time.Time)
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
 			return func(r *pb.ChangeRecord) {
-				c.opportunities[id] = &Opportunity{ID: id, Account: p.Account, Title: p.Title, Owner: who.ID, Stage: "open", Revision: r.GetRevision(), Notes: []Note{}}
+				c.opportunities[id] = &Opportunity{ID: id, Account: p.Account, Title: p.Title, Owner: who.ID, Stage: "open", Revision: r.GetRevision()}
 			}, nil
-		case SchemaNote:
+		case SchemaBook:
+			// The stay is the provider's decision, taken as this decision's rule (K4 C10):
+			// its refusal refuses the booking, and nothing is linked.
 			o := c.opportunities[id]
-			if strings.TrimSpace(p.Text) == "" {
-				return nil, invalid
-			}
 			if o == nil {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 			}
-			return func(r *pb.ChangeRecord) {
-				o.Notes = append(o.Notes, Note{At: r.GetRecordedTime().AsTime(), By: who.ID, Text: p.Text})
-				o.Revision = r.GetRevision()
-			}, nil
+			if o.Stage == "lost" {
+				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+			}
+			booking := fmt.Sprintf("%s-B%d", id, c.booked[id]+1)
+			stay, _, err := who.Invoke(lodging.ID, "reserve", booking, s.GetPayload(), "crm:"+s.GetIdempotencyKey(), s.GetIdempotencyKey(), now)
+			if err != nil {
+				return nil, err
+			}
+			if err := who.Link(&pb.EntityRef{Type: OpportunityType, Id: id}, stay, "crm:link:"+s.GetIdempotencyKey(), now); err != nil {
+				return nil, err
+			}
+			return func(*pb.ChangeRecord) { c.booked[id]++ }, nil
 		case SchemaClose:
 			o := c.opportunities[id]
 			if p.Outcome != "won" && p.Outcome != "lost" {
@@ -163,14 +167,61 @@ func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declar
 
 // Manifest declares the CRM as an app (ADR-0010).
 func (c *CRM) Manifest() platformserver.Manifest {
-	return platformserver.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"accounts", "opportunities"}}
+	return platformserver.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"accounts", "opportunities", "customers"},
+		Consumes: []platformserver.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }
 
-func (c *CRM) Read(_ platformserver.Caller, name string) (any, *kernel.Error) {
-	if name == "accounts" {
+func (c *CRM) Read(who platformserver.Caller, name string) (any, *kernel.Error) {
+	switch name {
+	case "accounts":
 		return c.Accounts(), nil
+	case "opportunities":
+		return c.Opportunities(), nil
 	}
-	return c.Opportunities(), nil
+	return c.customers(who)
+}
+
+// Customer is an account with its opportunities and the stays linked to them
+// that the caller may see (a member without a role at the provider sees none).
+type Customer struct {
+	Account
+	Opportunities []OpportunityStays `json:"opportunities"`
+}
+
+type OpportunityStays struct {
+	Opportunity
+	Stays []lodging.Booking `json:"stays"`
+}
+
+func (c *CRM) customers(who platformserver.Caller) (any, *kernel.Error) {
+	var bookings []lodging.Booking
+	if who.Bound(lodging.ID) {
+		all, err := who.Query(lodging.ID, "bookings")
+		if err != nil {
+			return nil, err
+		}
+		bookings = all.([]lodging.Booking)
+	}
+	out := []Customer{}
+	opportunities := c.Opportunities()
+	for _, a := range c.Accounts() {
+		customer := Customer{Account: a, Opportunities: []OpportunityStays{}}
+		for _, o := range opportunities {
+			if o.Account != a.ID {
+				continue
+			}
+			linked := who.Links(OpportunityType + "/" + o.ID)
+			stays := []lodging.Booking{}
+			for _, b := range bookings {
+				if slices.ContainsFunc(linked, func(e string) bool { return strings.HasSuffix(e, "/"+b.ID) }) {
+					stays = append(stays, b)
+				}
+			}
+			customer.Opportunities = append(customer.Opportunities, OpportunityStays{Opportunity: o, Stays: stays})
+		}
+		out = append(out, customer)
+	}
+	return out, nil
 }
 
 func (c *CRM) Input(platformserver.Caller, string, []byte, time.Time) (any, *kernel.Error) {

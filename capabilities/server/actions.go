@@ -62,6 +62,10 @@ func (c *Catalog) Enabled(schema string) bool {
 	return i >= 0 && !c.disabled[c.actions[i].Capability]
 }
 
+// AnyMember in an action's Roles offers it to every member; the app's attribute
+// conditions then decide (the platform's links and timeline check the entities' apps).
+const AnyMember = "*"
+
 // Permits reports whether role may call the enabled action schema.
 func (c *Catalog) Permits(role, schema string) bool {
 	return slices.ContainsFunc(c.For(role), func(a Action) bool { return a.Schema == schema })
@@ -71,7 +75,7 @@ func (c *Catalog) Permits(role, schema string) bool {
 func (c *Catalog) For(role string) []Action {
 	out := []Action{}
 	for _, a := range c.actions {
-		if !c.disabled[a.Capability] && slices.Contains(a.Roles, role) {
+		if !c.disabled[a.Capability] && (slices.Contains(a.Roles, role) || slices.Contains(a.Roles, AnyMember)) {
 			out = append(out, a)
 		}
 	}

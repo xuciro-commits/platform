@@ -4,8 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **95 · proposed (ADR-0011, owner decides)** | Protocols instead of bridges: protocol declarations with conformance tests; manifests provide and consume protocols, the host binds consumers to providers; platform links and timeline; Hotel provides `lodging.booking/1`, CRM consumes it; the crm-hotel bridge is deleted; Settings shows protocols with providers and consumers; the catalog as an MCP server | The sales software works as today without the bridge; a second lodging provider plugs in with no CRM change; an MCP client lists and calls a member's actions |
-| **96 · proposed** | Platform operations, one deep step (ADR-0010 part 2 rows marked later): server-side work (K9) for scheduled jobs and asynchronous event delivery with retries; connectors managed in Settings (health, cursor, last error, enable); in-app notifications from events; organisational units and typed per-app settings in Settings | Manufacturing's connectors are managed from Settings; an event handler that fails is retried as owned work and shows its state; a supervisor is notified of a new downtime event |
+| **96 · ready** | Platform operations, one deep step (ADR-0010 part 2 rows marked later): server-side work (K9) for scheduled jobs and asynchronous event delivery with retries; connectors managed in Settings (health, cursor, last error, enable); in-app notifications from events; organisational units and typed per-app settings in Settings | Manufacturing's connectors are managed from Settings; an event handler that fails is retried as owned work and shows its state; a supervisor is notified of a new downtime event |
 
 ## Open friction (temporary; delete entries once resolved)
 

@@ -44,7 +44,7 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Kernel | Work ownership (K9) | Generations, checkpoints, stale results, owner close | `kernel.Works` | none on a server yet (MSRU `FeatureHost`) | H |
 | Server | Platform host | Apps per tenant from manifests; routing by action, read and input name; requirement check; per-caller catalog; calls between apps only along requirements (ADR-0010) | `platformserver.Tenant`, `Host` | every server | 4 |
 | Server | Directory | Members (people, services, AI agents) with one role per app and attributes; add, grant, revoke and scope as decisions, effective on the next request; roles checked against the app's own | `platformserver.Directory` (the platform app) | every server | 4 |
-| Server | Events | Subscriptions over accepted decisions, declared in the manifest along requirements, delivered after commit inside the input (so replay rebuilds what handlers decided); handlers act as app:<id>; a failed delivery is recorded and never undoes the decision; cycles stop visibly | `Manifest.Subscribes`, `Subscriber`, `Tenant.Deliveries` | crm-hotel | 1 |
+| Server | Events | Subscriptions over accepted decisions or protocol events, declared in the manifest along requirements or consumed protocols, delivered after commit inside the input (so replay rebuilds what handlers decided); handlers act as app:<id>; a failed delivery is recorded and never undoes the decision; cycles stop visibly | `Manifest.Subscribes`, `Subscriber`, `Tenant.Deliveries` | relations (timeline), tests | 1 |
 | Server | Read authorization | A read is for members holding a role in its app; the app may refuse further; an app's reads of the apps it requires are its own | `Tenant.Read` | every server | 4 |
 | Server | Audit trail | Accepted top-level inputs per tenant, rebuilt by replay; administrators read it | `Tenant.Audit`, read `audit` | every server | 4 |
 | Server | App registry | Each app's roles, capabilities (active or not), reads, inputs, requirements and cross-app uses | `GET /v1/apps` | every server | 4 |
@@ -58,10 +58,13 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Web | Field types | 20 types deciding display, editor, validation, sorting and filters | `@platform/ui` fields | gallery | 1 |
 | Web | Edge client | Persisted outbox, HTTP transport, declarations, action-catalog type | `@platform/kernel` | manufacturing, sales | 2 |
 | Web | Browser sign-in | Authorization code with PKCE | `@platform/kernel` `oidc.ts` | manufacturing | 1 |
-| Web | Settings | The platform app's workspace for any host: members and roles per app, scopes, apps with their requirement graph, the capability matrix, automation (subscriptions, deliveries) and the audit, from the registry | `apps/settings` | sales and plant hosts | 1 |
-| Web | Package UI | A package's views and model for every software that shows its data | `@pkg/hotel` | Hotel Desk, sales | 2 |
+| Web | Settings | The platform app's workspace for any host: members and roles per app, scopes, apps with their requirement graph, the capability matrix, protocols with providers and consumers, automation (subscriptions, deliveries) and the audit, from the registry | `apps/settings` | sales and plant hosts | 1 |
+| Web | Package UI | An app's or a protocol's views and model for every software that shows its data | `@pkg/hotel`, `@pkg/lodging` | Hotel Desk, sales | 2 |
 | Operations | Deployment and rehearsal | Compose stack with PostgreSQL and Rauthy; restart and restore rehearsal | `deploy/local` | manufacturing, sales | 2 |
-| Composition | Bridge packages | Cooperation owned by a bridge that uses both packages' declared actions and reads (ADR-0009) | `slices/crm-hotel` | CRM + Hotel | 1 |
+| Composition | Protocols | Named, versioned interfaces (actions, reads, events) with conformance tests; apps provide and consume them, the host binds a provider per tenant; consumers never name an app (ADR-0011) | `platformserver.Protocol`, `protocols/lodging` | Hotel and the reference memstay provide lodging; CRM consumes it | 2 |
+| Composition | Links and timeline | Relations between any two entities and the activity about an entity, owned by the platform; protocol events are told on the timeline of the entity and of what is linked to it; members see only entities of apps they hold a role in | `platformserver.Relations` | sales solution | 1 |
+| Composition | MCP | A member's catalog and reads as MCP tools, called with the member's grants through the same submission path | `POST /mcp` | every host | 1 |
+| Composition | Solutions | Software composed from apps and protocols without bridges | `solutions/sales` | sales | 1 |
 
 ## 3. Runtimes and languages
 
@@ -237,6 +240,10 @@ ADR-0010 part 3, first areas: members and access, apps with their requirement gr
 ### Events #94
 
 Apps react to each other without knowing each other: the crm-hotel bridge subscribes to the hotel's cancel and modify actions and writes a note on the opportunity's activity timeline (a new CRM action), as `app:crm-hotel`. Delivery runs after commit but inside the input that caused it, so the journal needs no extra entries and replay rebuilds the notes (bridge tests, rehearsal after restart and restore). Handlers are synchronous and not retried; a refusal is a failed delivery shown in Settings. Asynchronous delivery with retries becomes K9 work when a handler must call something slow or external.
+
+### Protocols #95
+
+ADR-0011, on the owner's observation that large software interoperates through protocols (OIDC, MCP, extension interfaces), not pairwise bridges. The crm-hotel bridge is gone. Hotel provides `lodging.booking/1` and passes its conformance tests; so does `lodging.Memory`, a second provider under which the CRM runs unchanged (`solutions/sales` tests). The CRM books a stay through the protocol and links it to the opportunity with the platform's links; the hotel's cancellation reaches the opportunity's timeline as the protocol's event through that link, with no app in between. Replay rebuilds the reservation, the link and the timeline from the CRM's input alone. An MCP client lists and calls a member's tools in the rehearsal. Not yet: choosing between two providers of a protocol in Settings (the first enabled is bound), and protocol versions side by side.
 
 ### Shared capability models (candidates, layer 2)
 

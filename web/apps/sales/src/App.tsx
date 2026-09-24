@@ -1,9 +1,10 @@
-// The sales workspace (#91): software composed of the CRM package, the Hotel
-// package and their bridge. CRM views live here; hotel views come from the
-// Hotel package's UI (@pkg/hotel); what the user may do comes from the server's
-// merged action catalog.
+// The sales workspace: the sales solution (ADR-0011) — the CRM, with stays from
+// whichever app provides the lodging protocol (@pkg/lodging), the hotel's own
+// views (@pkg/hotel), and the platform's timeline. What the user may do comes
+// from the host's catalog for this member.
 import { EdgeClient, type ActionDeclaration } from "@platform/kernel";
 import { newReservation, ReservationCard, ReservationTable, roomTypes, type Reservation } from "@pkg/hotel";
+import { BookingTable, type Booking } from "@pkg/lodging";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, StatusTag, Tag, Workspace,
   defineStatuses, notify, useWorkspace, type ColumnDef, type View,
@@ -22,8 +23,8 @@ const identities = [
 ];
 
 type Account = { id: string; name: string; kind: string; revision: number };
-type Note = { at: string; by: string; text: string };
-type Opportunity = { id: string; account: string; title: string; owner: string; stage: "open" | "won" | "lost"; revision: number; stays: Reservation[]; notes: Note[] };
+type Note = { entity: string; at: string; by: string; text: string };
+type Opportunity = { id: string; account: string; title: string; owner: string; stage: "open" | "won" | "lost"; revision: number; stays: Booking[] };
 type Customer = Account & { opportunities: Opportunity[] };
 type Me = { tenantId: string; principalId: string };
 
@@ -69,7 +70,6 @@ function Customers() {
 function CustomerDetail({ id }: { id: string }) {
   const customer = useRead<Customer[]>("/v1/customers")?.find((c) => c.id === id);
   const { can, decide } = useSales();
-  const { open } = useWorkspace();
   const [opening, setOpening] = useState(false);
   const [booking, setBooking] = useState<Opportunity>();
   if (!customer) return <p className="text-sm text-muted">No account {id}.</p>;
@@ -85,14 +85,14 @@ function CustomerDetail({ id }: { id: string }) {
             <StatusTag status={o.stage} registry={stages} />
             <span className="text-xs text-muted">{o.id} · owner {o.owner}</span>
             <span className="ml-auto flex gap-2">
-              {o.stage !== "lost" && can("crmhotel.opportunity.book") && <Button size="sm" onClick={() => setBooking(o)}><BedDouble />Book stay</Button>}
+              {o.stage !== "lost" && can("crm.opportunity.book") && <Button size="sm" onClick={() => setBooking(o)}><BedDouble />Book stay</Button>}
               {o.stage === "open" && can("crm.opportunity.close") && <>
                 <Button size="sm" onClick={() => decide("crm.opportunity.close", { type: "crm.opportunity", id: o.id }, { outcome: "won" }, o.revision)}>Won</Button>
                 <Button size="sm" variant="danger" onClick={() => decide("crm.opportunity.close", { type: "crm.opportunity", id: o.id }, { outcome: "lost" }, o.revision)}>Lost</Button>
               </>}
             </span>
           </div>
-          <ReservationTable data={o.stays} height="120px" empty="No stays booked" onOpen={(r) => open({ view: "reservation", params: { id: r.id } })} />
+          <BookingTable data={o.stays} empty="No stays booked" />
           <Timeline opportunity={o} />
         </section>
       ))}
@@ -107,33 +107,35 @@ function CustomerDetail({ id }: { id: string }) {
             fields={[{ name: "guest", label: "Guest" }, { name: "roomType", label: "Room type", kind: "select", options: roomTypes },
               { name: "checkIn", label: "Check-in", kind: "date" }, { name: "checkOut", label: "Check-out", kind: "date" }]}
             submitLabel="Book" onCancel={() => setBooking(undefined)}
-            onSubmit={async (v) => { if (await decide("crmhotel.opportunity.book", { type: "crmhotel.stay", id: booking.id }, v)) setBooking(undefined); }} />
+            onSubmit={async (v) => { if (await decide("crm.opportunity.book", { type: "crm.opportunity", id: booking.id }, v)) setBooking(undefined); }} />
         )}
       </Dialog>
     </div>
   );
 }
 
-// The opportunity's activity timeline: people's notes and what apps report
-// through events (a hotel cancellation arrives as a note by app:crm-hotel).
+// The opportunity's timeline, kept by the platform: people's notes, and protocol
+// events of what is linked to it (a hotel cancellation arrives as app:hotel).
 function Timeline({ opportunity: o }: { opportunity: Opportunity }) {
   const { can, decide } = useSales();
   const [text, setText] = useState("");
+  const entity = `crm.opportunity/${o.id}`;
+  const notes = (useRead<Note[]>("/v1/timeline") ?? []).filter((n) => n.entity === entity);
   return (
     <div className="mt-3 grid gap-1.5">
       <h3 className="text-xs uppercase text-muted">Activity</h3>
-      {o.notes.length === 0 && <p className="text-xs text-muted">No activity yet.</p>}
-      {[...o.notes].reverse().map((n, i) => (
+      {notes.length === 0 && <p className="text-xs text-muted">No activity yet.</p>}
+      {[...notes].reverse().map((n, i) => (
         <p key={i} className="text-sm">
           <span className="mr-2 text-xs text-muted">{new Date(n.at).toLocaleString()}</span>
           {n.by.startsWith("app:") ? <Tag label={n.by} tone="info" /> : <span className="text-xs font-medium">{n.by}</span>}
           <span className="ml-2">{n.text}</span>
         </p>
       ))}
-      {can("crm.opportunity.note") && (
+      {can("platform.note") && (
         <form className="mt-1 flex gap-2" onSubmit={(e) => {
           e.preventDefault();
-          if (text.trim()) void decide("crm.opportunity.note", { type: "crm.opportunity", id: o.id }, { text }).then((ok) => ok && setText(""));
+          if (text.trim()) void decide("platform.note", { type: "platform.note", id: crypto.randomUUID() }, { entity, text }).then((ok) => ok && setText(""));
         }}>
           <Input aria-label="Note" placeholder="Add a note" value={text} onChange={(e) => setText(e.target.value)} className="w-96" />
           <Button size="sm" type="submit">Add</Button>

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,9 +50,11 @@ type Manifest struct {
 	Reads    []string
 	Inputs   map[string]bool // connector inputs; true: recorded in the journal
 	Requires []string        // apps whose actions or reads this app uses
-	// Subscribes names actions (of itself or of required apps) whose accepted
-	// decisions are delivered to the app's Handle after commit.
+	// Subscribes names actions (of itself or of required apps), or protocol
+	// events it consumes ("<protocol id>#<event>"), delivered to Handle after commit.
 	Subscribes []string
+	Provides   []Provision   // protocols this app implements (ADR-0011)
+	Consumes   []Consumption // protocols this app uses; the host binds a provider
 }
 
 // Event is an accepted decision, delivered to subscribers after commit.
@@ -102,6 +105,8 @@ type Tenant struct {
 	audit      []AuditEntry
 	deliveries []Delivery
 	events     []Event // published during the current input, delivered after it
+	bindings   map[string]binding
+	relations  *Relations
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -133,7 +138,7 @@ func (t *Tenant) remember(e AuditEntry) {
 
 // NewTenant enables apps for a tenant; it refuses duplicate names and unmet requirements.
 func NewTenant(id string, apps ...App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, owner: map[string]App{}}
+	t := &Tenant{ID: id, apps: apps, owner: map[string]App{}, bindings: map[string]binding{}}
 	claim := func(name string, a App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)
@@ -149,7 +154,19 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 				return nil, fmt.Errorf("tenant %s: %s requires %s, which is not enabled before it", id, m.ID, r)
 			}
 		}
+		if err := t.bind(i, a); err != nil {
+			return nil, err
+		}
+		if r, ok := a.(*Relations); ok {
+			t.relations = r
+		}
 		for _, action := range m.Subscribes {
+			if protocol, _, ok := strings.Cut(action, "#"); ok {
+				if !slices.ContainsFunc(m.Consumes, func(c Consumption) bool { return c.Protocol == protocol }) {
+					return nil, fmt.Errorf("tenant %s: %s subscribes to %s of a protocol it does not consume", id, m.ID, action)
+				}
+				continue
+			}
 			owner := t.owner["action:"+action]
 			if owner == nil || owner != a && !slices.Contains(m.Requires, owner.Manifest().ID) {
 				return nil, fmt.Errorf("tenant %s: %s subscribes to %s of an app it does not require", id, m.ID, action)
@@ -234,7 +251,7 @@ func (t *Tenant) Read(m Member, name string) (any, *kernel.Error) {
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if m.Roles[a.Manifest().ID] == "" {
+	if m.Roles[a.Manifest().ID] == "" && a != App(t.relations) { // links and timeline filter by the entities' apps
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return a.Read(t.caller(m, a, false), name)
@@ -253,9 +270,13 @@ func (t *Tenant) deliver(replaying bool) {
 	for n := 0; len(t.events) > 0 && n < maxEvents; n++ {
 		e := t.events[0]
 		t.events = t.events[1:]
+		names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(e)...)
+		if t.relations != nil {
+			t.relations.observe(t, e, names[1:])
+		}
 		for _, a := range t.apps {
 			sub, ok := a.(Subscriber)
-			if !ok || !slices.Contains(a.Manifest().Subscribes, e.Record.GetSubmission().GetSchema().GetName()) {
+			if !ok || !slices.ContainsFunc(a.Manifest().Subscribes, func(s string) bool { return slices.Contains(names, s) }) {
 				continue
 			}
 			id := a.Manifest().ID
@@ -343,8 +364,11 @@ func (t *Tenant) Catalog(m Member) []Action {
 	for _, a := range t.apps {
 		for _, action := range a.Manifest().Actions.For(m.Roles[a.Manifest().ID]) {
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
-				owner := t.owner["action:"+used]
-				return owner == nil || !owner.Manifest().Actions.Permits(m.Roles[owner.Manifest().ID], used)
+				owner, schema := t.owner["action:"+used], used
+				if strings.Contains(used, "#") {
+					owner, schema, _ = t.provider(used)
+				}
+				return owner == nil || !owner.Manifest().Actions.Permits(m.Roles[owner.Manifest().ID], schema)
 			}) {
 				out = append(out, action)
 			}
@@ -367,12 +391,18 @@ func (t *Tenant) Apps() []AppInfo {
 	out := []AppInfo{}
 	for _, a := range t.apps {
 		m := a.Manifest()
-		info := AppInfo{ID: m.ID, Version: m.Version, Requires: append([]string{}, m.Requires...), Reads: append([]string{}, m.Reads...),
+		info := AppInfo{ID: m.ID, Version: m.Version, Requires: append([]string{}, m.Requires...), Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
 			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...)}
 		for input, journaled := range m.Inputs {
 			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
 		}
 		slices.Sort(info.Inputs)
+		for _, pv := range m.Provides {
+			info.Provides = append(info.Provides, pv.Protocol.ID())
+		}
+		for _, c := range m.Consumes {
+			info.Consumes = append(info.Consumes, c.Protocol+map[bool]string{true: " (optional)", false: ""}[c.Optional])
+		}
 		for _, action := range m.Actions.actions {
 			for _, used := range action.Uses {
 				info.Uses = append(info.Uses, action.Schema+" → "+used)
@@ -393,6 +423,8 @@ type AppInfo struct {
 	Inputs       []string         `json:"inputs"`
 	Uses         []string         `json:"uses"`
 	Subscribes   []string         `json:"subscribes"`
+	Provides     []string         `json:"provides"`
+	Consumes     []string         `json:"consumes"`
 }
 
 // Submit lets an app call another app's action, only along its declared

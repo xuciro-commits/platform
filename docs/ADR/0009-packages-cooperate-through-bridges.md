@@ -1,6 +1,6 @@
 # ADR-0009: Business packages cooperate through bridge packages
 
-**Status:** Accepted (2026-09-24, #91)
+**Status:** Superseded by ADR-0011 (2026-09-24): apps meet through protocols; a bridge remains only for pair-specific logic, and the crm-hotel bridge was removed in #95.
 
 **Context.** The product intent review asks that business capabilities combine into complete software without packages depending on each other's internals. The first composition joined CRM and Hotel: a sales rep books stays for a customer's opportunity and sees them on the customer.
 

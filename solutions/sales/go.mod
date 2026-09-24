@@ -1,9 +1,10 @@
-module hotel
+module sales
 
 go 1.27.1
 
 require (
-	google.golang.org/protobuf v1.36.12
+	crm v0.0.0
+	hotel v0.0.0
 	lodging v0.0.0
 	platformkernel v0.0.0
 	platformserver v0.0.0
@@ -19,10 +20,15 @@ require (
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace platformkernel => ../../../contract/go
+replace platformkernel => ../../contract/go
 
-replace platformserver => ../../../capabilities/server
+replace platformserver => ../../capabilities/server
 
-replace lodging => ../../../protocols/lodging
+replace lodging => ../../protocols/lodging
+
+replace crm => ../../slices/crm/server
+
+replace hotel => ../../slices/hotel/server

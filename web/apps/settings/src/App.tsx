@@ -8,13 +8,14 @@ import {
   notify, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Blocks, Grid3x3, History, Users, Workflow } from "lucide-react";
+import { Blocks, Cable, Grid3x3, History, Users, Workflow } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
 type Member = { id: string; tenant: string; roles: Record<string, string>; attributes?: Record<string, string[]>; subjects: string[] };
 type Capability = { name: string; enabled: boolean; actions: string[] };
-type AppInfo = { id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[] };
+type AppInfo = { id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
+type ProtocolInfo = { id: string; actions: string[]; reads: string[]; events: { name: string; title: string }[]; providers: string[]; consumers: string[]; bound?: string };
 type Delivery = { at: string; app: string; action: string; target: string; subscriber: string; outcome: string };
 type AuditEntry = { at: string; member: string; app: string; action: string; target?: string };
 type Me = { tenantId: string; principalId: string; profile: { roles: Record<string, string> } };
@@ -152,6 +153,8 @@ function Matrix() {
     { id: "roles", header: "Roles", meta: { width: 170 }, accessorFn: (a) => list(a.roles) },
     { id: "reads", header: "Reads", meta: { width: 200 }, accessorFn: (a) => list(a.reads) },
     { id: "inputs", header: "Connector inputs", meta: { width: 200 }, accessorFn: (a) => list(a.inputs) },
+    { id: "provides", header: "Provides", meta: { width: 160 }, accessorFn: (a) => list(a.provides) },
+    { id: "consumes", header: "Consumes", meta: { width: 200 }, accessorFn: (a) => list(a.consumes) },
     { id: "requires", header: "Requires", meta: { width: 120 }, accessorFn: (a) => list(a.requires) },
     { id: "uses", header: "Uses across apps", meta: { width: 300 }, accessorFn: (a) => list(a.uses) },
     { id: "subscribes", header: "Subscribes to", meta: { width: 260 }, accessorFn: (a) => list(a.subscribes) },
@@ -160,6 +163,34 @@ function Matrix() {
     <>
       <PageHeader title="Capability matrix" description="What each app provides and what it uses, read live from the host's registry." />
       <DataTable data={apps} columns={columns} getRowId={(a) => a.id} height="calc(100dvh - 190px)" />
+    </>
+  );
+}
+
+// Protocols (ADR-0011): apps meet through them, not through each other.
+function Protocols() {
+  const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
+  return (
+    <>
+      <PageHeader title="Protocols" description="Interfaces apps provide and consume. A consumer depends on the protocol; the host binds it to a provider." />
+      <div className="grid max-w-5xl gap-3">
+        {protocols.length === 0 && <p className="text-sm text-muted">No protocols in this tenant.</p>}
+        {protocols.map((p) => (
+          <section key={p.id} className="rounded-md border border-border bg-surface p-3 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-semibold">{p.id}</span>
+              {p.bound ? <Tag label={`bound to ${p.bound}`} tone="success" /> : <Tag label="not bound" tone="neutral" />}
+            </div>
+            <div className="mt-2 grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1">
+              <span className="text-muted">Providers</span><span>{p.providers.join(", ") || "—"}</span>
+              <span className="text-muted">Consumers</span><span>{p.consumers.join(", ") || "—"}</span>
+              <span className="text-muted">Actions</span><span className="font-mono text-xs">{p.actions?.join(", ") || "—"}</span>
+              <span className="text-muted">Reads</span><span className="font-mono text-xs">{p.reads?.join(", ") || "—"}</span>
+              <span className="text-muted">Events</span><span>{p.events?.map((e) => e.title).join(", ") || "—"}</span>
+            </div>
+          </section>
+        ))}
+      </div>
     </>
   );
 }
@@ -211,6 +242,7 @@ const views: View[] = [
   { id: "member", title: (p) => p.id ?? "Member", render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "apps", title: () => "Apps", render: () => <Apps /> },
   { id: "matrix", title: () => "Capability matrix", render: () => <Matrix /> },
+  { id: "protocols", title: () => "Protocols", render: () => <Protocols /> },
   { id: "automation", title: () => "Automation", render: () => <Automation /> },
   { id: "audit", title: () => "Audit", render: () => <Audit /> },
 ];
@@ -244,7 +276,7 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
       <Workspace product="Platform Settings" storageKey="settings.layout" views={views} home={{ view: "members" }}
         nav={[
           { label: "Access", items: [nav("Members", <Users />, "members")] },
-          { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("Capability matrix", <Grid3x3 />, "matrix")] },
+          { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] },
           { label: "Data", items: [nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] },
         ]}
         status={<span className="text-xs text-muted">{me ? `${me.tenantId} · ${apps.length} apps` : "host unreachable"}</span>}

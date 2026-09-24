@@ -47,7 +47,7 @@ submit() { # token key schema target-type target-id payload [expected-revision]
   curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$server/v1/submissions" -d "$body"
 }
 state() { { for path in orders sfcs downtime planned-orders; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
-  for path in customers reservations members; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done; } | jq -cS .; }
+  for path in customers reservations members links timeline; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done; } | jq -cS .; }
 
 # Inputs of every kind the journal keeps: a poll page, decisions, a push batch.
 (cd ../../slices/manufacturing/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
@@ -71,23 +71,31 @@ AGENT=$(curl -sf "$IDP/oidc/token" -d grant_type=client_credentials -d client_id
 [[ $(submit "$AGENT" a-1 mes.order.release mes.order WO-9 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "server let the assistant release"
 echo "ok   AI assistant: catalog of one action, acted within line L1, refused outside it"
 
-# The composed sales software on the same host code: a bridge booking, then the
-# platform app revokes a role and the catalog follows on the next request.
+# The sales solution: the CRM books a stay through the lodging protocol and the
+# hotel provides it (ADR-0011); the platform app revokes a role and the catalog
+# follows on the next request; a hotel cancellation reaches the opportunity's
+# timeline through the platform link; an MCP client acts with a member's grants.
 SALES_TOKEN=$(token sales@hotel.test) MGR=$(token manager@hotel.test)
 for _ in $(seq 30); do [[ $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done
 sales() { SERVER=$SALES TENANT=hotel-a AUTHORITY=$1 submit "${@:2}"; }
 sales crm-server "$SALES_TOKEN" s-a crm.account.create crm.account ACME '{"name":"Acme Corp","kind":"company"}' | jq -e .record >/dev/null || fail "account"
 sales crm-server "$SALES_TOKEN" s-o crm.opportunity.open crm.opportunity OPP-1 '{"account":"ACME","title":"Board offsite"}' | jq -e .record >/dev/null || fail "opportunity"
-sales crm-hotel "$SALES_TOKEN" s-b crmhotel.opportunity.book crmhotel.stay OPP-1 '{"roomType":"suite","checkIn":"2026-10-01","checkOut":"2026-10-03","guest":"Acme board"}' | jq -e .record >/dev/null || fail "bridge booking"
+sales crm-server "$SALES_TOKEN" s-b crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"suite","checkIn":"2026-10-01","checkOut":"2026-10-03","guest":"Acme board"}' | jq -e .record >/dev/null || fail "booking through the lodging protocol"
+[[ $(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/protocols" | jq -r '.[] | select(.id == "lodging.booking/1") | "\(.bound) \(.consumers)"') == 'hotel ["crm"]' ]] || fail "protocol binding"
 sales platform "$MGR" s-r platform.member.revoke platform.member sales-1 '{"app":"hotel"}' | jq -e .record >/dev/null || fail "revoke"
-catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/actions" | jq -c '[.[].schema]')
-[[ $catalog == '["crm.account.create","crm.opportunity.open","crm.opportunity.close","crm.opportunity.note"]' ]] || fail "catalog after revocation: $catalog"
-[[ $(sales crm-hotel "$SALES_TOKEN" s-b2 crmhotel.opportunity.book crmhotel.stay OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
-sales hotel-server "$MGR" s-c hotel.reservation.cancel hotel.reservation OPP-1-R1 '{}' | jq -e .record >/dev/null || fail "hotel cancel"
-note=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/customers" | jq -r '.[0].opportunities[0].notes[0] | "\(.by): \(.text)"')
-[[ $note == "app:crm-hotel: The hotel canceled stay OPP-1-R1 (manager-1)." ]] || fail "event note: $note"
+catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/actions" | jq -c '[.[].schema | select(startswith("platform.") | not)]')
+[[ $catalog == '["crm.account.create","crm.opportunity.open","crm.opportunity.close"]' ]] || fail "catalog after revocation: $catalog"
+[[ $(sales crm-server "$SALES_TOKEN" s-b2 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
+sales hotel-server "$MGR" s-c hotel.reservation.cancel hotel.reservation OPP-1-B1 '{}' | jq -e .record >/dev/null || fail "hotel cancel"
+note=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/timeline" | jq -r '.[] | select(.entity == "crm.opportunity/OPP-1") | "\(.by): \(.text)"')
+[[ $note == "app:hotel: Booking canceled (hotel.reservation/OPP-1-B1, by manager-1)" ]] || fail "timeline: $note"
 [[ $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/reservations") == 403 ]] || fail "hotel read without a hotel role"
-echo "ok   sales software: bridge booking; a revocation applies on the next request; a hotel cancellation reaches the opportunity as an event"
+mcp() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$SALES/mcp" -d "$2"; }
+mcp "$MGR" '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' | jq -e '.result.capabilities.tools' >/dev/null || fail "mcp initialize"
+tools=$(mcp "$SALES_TOKEN" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jq -c '[.result.tools[].name]')
+[[ $tools == *crm_opportunity_open* && $tools != *hotel_reservation_create* ]] || fail "mcp tools follow grants: $tools"
+mcp "$SALES_TOKEN" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"crm_opportunity_open","arguments":{"target":"OPP-2","account":"ACME","title":"Spring retreat","idempotencyKey":"mcp-1"}}}' | jq -e '.result.isError == false' >/dev/null || fail "mcp call"
+echo "ok   sales solution: a stay through the lodging protocol; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants"
 
 before=$(state)
 [[ $(jq -s '.[1] | length' <<<"$before") == 2 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
