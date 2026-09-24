@@ -42,6 +42,8 @@ struct ConformanceTests {
         let file: VectorFile<ChangeGiven, ChangeStep> = try load("k4-change-record.json")
         for vector in file.vectors {
             var log = ChangeLog(schemas: SchemaRegistry(known: vector.given.schemas))
+            let facts = Set((vector.given.facts ?? []).map { [$0.tenantId, $0.factId] })
+            log.facts = { tenant, id in facts.contains([tenant, id]) }
             var changeIDs: [Int: String] = [:]
             for (index, step) in vector.steps.enumerated() {
                 let label = Comment(rawValue: "\(vector.id) step \(index)")
@@ -155,11 +157,49 @@ struct ConformanceTests {
                         actual.state = try authorities.enqueue(s).rawValue
                     } else if let t = step.transition {
                         actual.state = try authorities.transition(tenant: t.tenantId, idempotencyKey: t.idempotencyKey, event: t.event).rawValue
+                    } else if let a = step.answer {
+                        actual.state = try authorities.answer(tenant: a.tenantId, idempotencyKey: a.idempotencyKey,
+                                                              code: a.code.flatMap(KernelError.init(rawValue:))).rawValue
                     }
                 } catch {
                     actual.error = error.rawValue
                 }
                 #expect(actual == step.expect, Comment(rawValue: "\(vector.id) step \(index)"))
+            }
+        }
+    }
+
+    @Test("K6 Receive vectors")
+    func receive() throws {
+        let file: VectorFile<ReceiveGiven, ReceiveStep> = try load("k6-receive.json")
+        for vector in file.vectors {
+            var authorities = Authorities(edge: "")
+            for declaration in vector.given.declarations {
+                try authorities.declare(declaration)
+            }
+            let allowed = Set(vector.given.policy.map { [$0.principalId, $0.action] })
+            var receiver = Receiver(changes: ChangeLog(schemas: SchemaRegistry(known: vector.given.schemas)),
+                                    authorities: authorities) { caller, s in allowed.contains([caller.principalId, s.schema.name]) }
+            var changeIDs: [Int: String] = [:]
+            for (index, step) in vector.steps.enumerated() {
+                let label = Comment(rawValue: "\(vector.id) step \(index)")
+                let domainError = step.domain.flatMap(KernelError.init(rawValue:))
+                do {
+                    let record = try receiver.receive(step.caller, step.submit, at: try date(step.at)) { () throws(KernelError) in
+                        if let domainError { throw domainError }
+                    }
+                    changeIDs[index] = record.changeId
+                    let expected = try #require(step.expect.accepted, label)
+                    #expect(record.recordedTime == (try date(expected.recordedTime)), label)
+                    if let original = expected.sameAs {
+                        #expect(record.changeId == changeIDs[original], label)
+                    }
+                } catch let error as KernelError {
+                    #expect(step.expect.error == error.rawValue, label)
+                }
+            }
+            for (tenant, count) in vector.expectLog ?? [:] {
+                #expect(receiver.changes.records(tenant: tenant).count == count, Comment(rawValue: "\(vector.id) log \(tenant)"))
             }
         }
     }
@@ -198,7 +238,9 @@ struct Expect: Decodable, Equatable {
 }
 
 struct ChangeGiven: Decodable {
+    struct Fact: Decodable { let tenantId, factId: String }
     let schemas: [SchemaRef]
+    let facts: [Fact]?
 }
 
 struct ChangeStep: Decodable {
@@ -282,7 +324,13 @@ struct AuthorityStep: Decodable {
     let declare: AuthorityDeclaration?
     let authorize: Submission?
     let enqueue: Submission?
+    struct Answer: Decodable {
+        let tenantId: String
+        let idempotencyKey: String
+        let code: String?
+    }
     let transition: Transition?
+    let answer: Answer?
     let expect: AuthorityExpect
 }
 
@@ -290,6 +338,21 @@ struct AuthorityExpect: Decodable, Equatable {
     var ok: Bool?
     var state: String?
     var error: String?
+}
+
+struct ReceiveGiven: Decodable {
+    struct Allow: Decodable { let principalId, action: String }
+    let schemas: [SchemaRef]
+    let declarations: [AuthorityDeclaration]
+    let policy: [Allow]
+}
+
+struct ReceiveStep: Decodable {
+    let caller: Caller
+    let submit: Submission
+    let at: String
+    let domain: String?
+    let expect: ChangeExpect
 }
 
 private let vectorsDirectory = URL(fileURLWithPath: #filePath)

@@ -114,6 +114,9 @@ func TestChannelDuplicatesCollapse(t *testing.T) {
 	if err != nil || again.GetChangeId() != first.GetChangeId() {
 		t.Fatalf("duplicate delivery was not idempotent: %v", err)
 	}
+	if ev := first.GetSubmission().GetEvidenceFactIds(); len(ev) != 1 || ev[0] != h.facts.Records("hotel-a")[0].GetFactId() {
+		t.Fatalf("booking decision does not name its channel observation: %v", ev)
+	}
 	if n := len(h.facts.Records("hotel-a")); n != 1 || len(h.Reservations()) != 1 {
 		t.Fatalf("facts %d, reservations %d", n, len(h.Reservations()))
 	}

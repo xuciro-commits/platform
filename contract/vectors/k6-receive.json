@@ -1,0 +1,512 @@
+{
+  "contract": "v1alpha1",
+  "concept": "K6",
+  "vectors": [
+    {
+      "id": "k6.caller-binding",
+      "rules": [
+        "T1"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ],
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "tenant-server",
+            "epoch": 1
+          }
+        ],
+        "policy": [
+          {
+            "principalId": "user-1",
+            "action": "test.note"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caller": {
+            "tenantId": "tenant-b",
+            "principalId": "user-1"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_POLICY_DENIED"
+          }
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_POLICY_DENIED"
+          }
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 1
+      }
+    },
+    {
+      "id": "k6.policy",
+      "rules": [
+        "T3"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ],
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "tenant-server",
+            "epoch": 1
+          }
+        ],
+        "policy": [
+          {
+            "principalId": "user-1",
+            "action": "test.note"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_POLICY_DENIED"
+          }
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 1
+      }
+    },
+    {
+      "id": "k6.domain-rules-after-replay",
+      "rules": [
+        "T2",
+        "C10"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ],
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "tenant-server",
+            "epoch": 1
+          }
+        ],
+        "policy": [
+          {
+            "principalId": "user-1",
+            "action": "test.note"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z",
+              "sameAs": 0
+            }
+          },
+          "domain": "ERROR_CODE_CONFLICT"
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-2",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          },
+          "domain": "ERROR_CODE_CONFLICT"
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-3",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:01:00Z",
+              "recordedTime": "2026-01-01T10:01:00Z"
+            }
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 2
+      }
+    },
+    {
+      "id": "k6.order",
+      "rules": [
+        "T2"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ],
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "tenant-server",
+            "epoch": 1
+          }
+        ],
+        "policy": [
+          {
+            "principalId": "user-1",
+            "action": "test.note"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2",
+            "authority": "elsewhere",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_NOT_AUTHORITY"
+          }
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.other",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.unknown",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-2",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_POLICY_DENIED"
+          },
+          "domain": "ERROR_CODE_CONFLICT"
+        },
+        {
+          "caller": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1"
+          },
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 0
+      }
+    }
+  ]
+}

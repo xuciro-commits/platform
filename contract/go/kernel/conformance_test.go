@@ -145,7 +145,8 @@ func TestChangeRecordVectors(t *testing.T) {
 	for _, v := range load(t, "k4-change-record.json").Vectors {
 		t.Run(v.ID, func(t *testing.T) {
 			var given struct {
-				Schemas []json.RawMessage `json:"schemas"`
+				Schemas []json.RawMessage                   `json:"schemas"`
+				Facts   []struct{ TenantID, FactID string } `json:"facts"`
 			}
 			json.Unmarshal(v.Given, &given)
 			var schemas []*pb.SchemaRef
@@ -155,6 +156,9 @@ func TestChangeRecordVectors(t *testing.T) {
 				schemas = append(schemas, s)
 			}
 			log := NewChangeLog(NewSchemaRegistry(schemas, nil))
+			log.Facts = func(tenant, id string) bool {
+				return slices.ContainsFunc(given.Facts, func(f struct{ TenantID, FactID string }) bool { return f.TenantID == tenant && f.FactID == id })
+			}
 			changeIDs := map[int]string{}
 			for i, rawStep := range v.Steps {
 				var step struct {
@@ -406,6 +410,11 @@ func TestAuthorityVectors(t *testing.T) {
 						IdempotencyKey string `json:"idempotencyKey"`
 						Event          string `json:"event"`
 					} `json:"transition"`
+					Answer *struct {
+						TenantID       string `json:"tenantId"`
+						IdempotencyKey string `json:"idempotencyKey"`
+						Code           string `json:"code"`
+					} `json:"answer"`
 					Expect struct {
 						OK    bool   `json:"ok"`
 						State string `json:"state"`
@@ -433,6 +442,9 @@ func TestAuthorityVectors(t *testing.T) {
 				case step.Transition != nil:
 					tr := step.Transition
 					state, err = authorities.Transition(tr.TenantID, tr.IdempotencyKey, tr.Event)
+				case step.Answer != nil:
+					a := step.Answer
+					state, err = authorities.Answer(a.TenantID, a.IdempotencyKey, pb.ErrorCode(pb.ErrorCode_value[a.Code]))
 				}
 				got, want := "ok", "ok"
 				if err != nil {
@@ -447,6 +459,84 @@ func TestAuthorityVectors(t *testing.T) {
 				}
 				if got != want {
 					t.Errorf("step %d: got %s, want %s", i, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestReceiveVectors(t *testing.T) {
+	for _, v := range load(t, "k6-receive.json").Vectors {
+		t.Run(v.ID, func(t *testing.T) {
+			var given struct {
+				Schemas      []json.RawMessage                      `json:"schemas"`
+				Declarations []json.RawMessage                      `json:"declarations"`
+				Policy       []struct{ PrincipalID, Action string } `json:"policy"`
+			}
+			json.Unmarshal(v.Given, &given)
+			var schemas []*pb.SchemaRef
+			for _, raw := range given.Schemas {
+				s := &pb.SchemaRef{}
+				decode(t, raw, s)
+				schemas = append(schemas, s)
+			}
+			authorities := NewAuthorities("")
+			for _, raw := range given.Declarations {
+				d := &pb.AuthorityDeclaration{}
+				decode(t, raw, d)
+				authorities.Declare(d)
+			}
+			receiver := &Receiver{Changes: NewChangeLog(NewSchemaRegistry(schemas, nil)), Authorities: authorities,
+				Policy: func(c Caller, s *pb.Submission) bool {
+					return slices.ContainsFunc(given.Policy, func(p struct{ PrincipalID, Action string }) bool {
+						return p.PrincipalID == c.Principal && p.Action == s.GetSchema().GetName()
+					})
+				}}
+			changeIDs := map[int]string{}
+			for i, rawStep := range v.Steps {
+				var step struct {
+					Caller json.RawMessage `json:"caller"`
+					Submit json.RawMessage `json:"submit"`
+					At     time.Time       `json:"at"`
+					Domain string          `json:"domain"`
+					Expect struct {
+						Accepted *struct {
+							RecordedTime time.Time `json:"recordedTime"`
+							SameAs       *int      `json:"sameAs"`
+						} `json:"accepted"`
+						Error string `json:"error"`
+					} `json:"expect"`
+				}
+				if err := json.Unmarshal(rawStep, &step); err != nil {
+					t.Fatal(err)
+				}
+				caller, s := &pb.Caller{}, &pb.Submission{}
+				decode(t, step.Caller, caller)
+				decode(t, step.Submit, s)
+				var domain func() *Error
+				if step.Domain != "" {
+					domain = func() *Error { return errorf(pb.ErrorCode(pb.ErrorCode_value[step.Domain])) }
+				}
+				record, err := receiver.Receive(Caller{caller.GetTenantId(), caller.GetPrincipalId()}, s, step.At, domain)
+				if a := step.Expect.Accepted; a != nil {
+					if err != nil {
+						t.Errorf("step %d: rejected with %v, want accepted", i, err)
+						continue
+					}
+					changeIDs[i] = record.GetChangeId()
+					if !record.GetRecordedTime().AsTime().Equal(a.RecordedTime) {
+						t.Errorf("step %d: recorded %v, want %v", i, record.GetRecordedTime().AsTime(), a.RecordedTime)
+					}
+					if a.SameAs != nil && record.GetChangeId() != changeIDs[*a.SameAs] {
+						t.Errorf("step %d: replay returned a new change", i)
+					}
+				} else if err == nil || err.Error() != step.Expect.Error {
+					t.Errorf("step %d: got %v, want %s", i, err, step.Expect.Error)
+				}
+			}
+			for tenant, count := range v.ExpectLog {
+				if got := len(receiver.Changes.Records(tenant)); got != count {
+					t.Errorf("log %s: %d records, want %d", tenant, got, count)
 				}
 			}
 		})

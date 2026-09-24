@@ -1017,6 +1017,394 @@
           }
         }
       ]
+    },
+    {
+      "id": "k5.answers",
+      "rules": [
+        "A8",
+        "A5"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-0",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-0",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "answer": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-0"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFIRMED"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "answer": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "code": "ERROR_CODE_CONFLICT"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFLICT"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-2",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-2",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "answer": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-2",
+            "code": "ERROR_CODE_IDEMPOTENCY_CONFLICT"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFLICT"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-3",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-3",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "answer": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-3",
+            "code": "ERROR_CODE_NOT_AUTHORITY"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_REJECTED"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-4",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-4",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "answer": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-4",
+            "code": "ERROR_CODE_POLICY_DENIED"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_REJECTED"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-5",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-5",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "answer": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-5",
+            "code": "ERROR_CODE_INVALID_ARGUMENT"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_REJECTED"
+          }
+        },
+        {
+          "answer": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-0"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.undelivered",
+      "rules": [
+        "A5"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "undelivered"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "undelivered"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "timeout"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_UNKNOWN"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "undelivered"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "retry"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "answer": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFIRMED"
+          }
+        }
+      ]
     }
   ]
 }

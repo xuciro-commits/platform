@@ -23,6 +23,8 @@ message Submission {
   string correlation_id = 8;
   string idempotency_key = 9;
   bytes payload = 10;
+  // Recorded facts (K2) this decision is based on.
+  repeated string evidence_fact_ids = 11;
 }
 
 // An accepted decision. Immutable once recorded.

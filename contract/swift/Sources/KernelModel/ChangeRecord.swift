@@ -22,6 +22,7 @@ public struct Submission: Hashable, Codable, Sendable {
     public var correlationId = ""
     public var idempotencyKey = ""
     public var payload = Data()
+    public var evidenceFactIds: [String] = []
 
     public init() {}
 
@@ -38,6 +39,7 @@ public struct Submission: Hashable, Codable, Sendable {
         correlationId = try c.decodeIfPresent(String.self, forKey: .correlationId) ?? ""
         idempotencyKey = try c.decodeIfPresent(String.self, forKey: .idempotencyKey) ?? ""
         payload = try c.decodeIfPresent(Data.self, forKey: .payload) ?? Data()
+        evidenceFactIds = try c.decodeIfPresent([String].self, forKey: .evidenceFactIds) ?? []
     }
 }
 
@@ -53,6 +55,8 @@ public struct ChangeLog: Sendable {
     private let schemas: SchemaRegistry
     private var logs: [String: [ChangeRecord]] = [:]
     private var byKey: [String: [String: ChangeRecord]] = [:]   // tenant → key → record
+    /// Whether a fact is recorded in a tenant (K2); the default knows none (C11).
+    public var facts: @Sendable (_ tenant: String, _ factId: String) -> Bool = { _, _ in false }
 
     public init(schemas: SchemaRegistry) {
         self.schemas = schemas
@@ -63,6 +67,11 @@ public struct ChangeLog: Sendable {
     }
 
     public mutating func submit(_ s: Submission, at now: Date) throws(KernelError) -> ChangeRecord {
+        try submit(s, at: now, check: nil)
+    }
+
+    /// Runs `check` after replay detection and before the append (C10); a replay skips it.
+    public mutating func submit(_ s: Submission, at now: Date, check: (() throws(KernelError) -> Void)?) throws(KernelError) -> ChangeRecord {
         let required = [s.tenantId, s.principalId, s.authority, s.idempotencyKey, s.target.type, s.target.id, s.schema.name]
         guard !required.contains(where: \.isEmpty) else { throw .invalidArgument }       // C1
         guard schemas.accepts(s.schema) else { throw .unknownSchema }              // C2
@@ -74,6 +83,10 @@ public struct ChangeLog: Sendable {
         if !s.causationId.isEmpty, !log.contains(where: { $0.changeId == s.causationId }) {
             throw .invalidReference                                                      // C3
         }
+        for fact in s.evidenceFactIds where !facts(s.tenantId, fact) {
+            throw .invalidReference                                                      // C11
+        }
+        try check?()                                                                     // C10
         let recorded = max(now, log.last?.recordedTime ?? now)                          // C6
         let record = ChangeRecord(changeId: UUID().uuidString, submission: s,
                                   validTime: s.validTime ?? recorded, recordedTime: recorded) // C7

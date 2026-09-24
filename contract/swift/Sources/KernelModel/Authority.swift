@@ -37,7 +37,7 @@ public enum SubmissionState: String, Codable, Sendable {
 }
 
 public enum OutboxEvent: String, Sendable {
-    case send, confirm, conflict, reject, timeout, retry
+    case send, confirm, conflict, reject, timeout, retry, undelivered
 
     /// The allowed from → to states (A5).
     var transitions: [SubmissionState: SubmissionState] {
@@ -47,6 +47,7 @@ public enum OutboxEvent: String, Sendable {
         case .conflict: [.sending: .conflict]
         case .reject: [.sending: .rejected]
         case .timeout: [.sending: .unknown]
+        case .undelivered: [.sending: .pending]
         case .retry: [.unknown: .sending]
         }
     }
@@ -101,5 +102,15 @@ public struct Authorities: Sendable {
         guard let next = OutboxEvent(rawValue: event)?.transitions[entry.state] else { throw .invalidArgument } // A5
         outbox[key]?.state = next
         return next
+    }
+
+    /// Applies the authority's answer (A8): no code confirms, a conflict code conflicts, any other code rejects.
+    public mutating func answer(tenant: String, idempotencyKey: String, code: KernelError?) throws(KernelError) -> SubmissionState {
+        let event: OutboxEvent = switch code {
+        case nil: .confirm
+        case .conflict?, .idempotencyConflict?: .conflict
+        default: .reject
+        }
+        return try transition(tenant: tenant, idempotencyKey: idempotencyKey, event: event.rawValue)
     }
 }

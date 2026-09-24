@@ -42,6 +42,17 @@ impl App {
 }
 
 impl App {
+/// Takes the tenant's declarations from its authority (K5 A9).
+fn refresh_declarations(&mut self) -> Result<(), String> {
+    let declarations: Vec<Declaration> = serde_json::from_value(self.get("/v1/declarations")?).map_err(|e| e.to_string())?;
+    self.authorities.refresh(declarations);
+    Ok(())
+}
+
+fn authority(&self) -> String {
+    self.authorities.authority_of(&self.tenant, DATA_CLASS).unwrap_or_default()
+}
+
 fn login(&mut self, server: String, token: String) -> Result<Value, String> {
     let app = self;
     app.server = server.trim_end_matches('/').to_string();
@@ -49,10 +60,7 @@ fn login(&mut self, server: String, token: String) -> Result<Value, String> {
     let me = app.get("/v1/me")?;
     app.tenant = me["tenantId"].as_str().unwrap_or_default().to_string();
     app.principal = me["principalId"].as_str().unwrap_or_default().to_string();
-    // The declaration is fixed for this slice (F-17: K5 does not say how edges learn declarations).
-    let declaration = Declaration { tenant_id: app.tenant.clone(), data_class: DATA_CLASS.into(),
-        kind: "AUTHORITY_KIND_TENANT_SERVER".into(), authority_id: "hotel-server".into(), epoch: 1 };
-    let _ = app.authorities.declare(declaration);
+    app.refresh_declarations()?;
     Ok(me)
 }
 
@@ -61,7 +69,7 @@ fn draft(&mut self, schema: String, reservation_id: Option<String>, payload: Val
     let app = self;
     let id = reservation_id.unwrap_or_else(|| format!("res-{}", uuid::Uuid::new_v4()));
     let submission = Submission {
-        tenant_id: app.tenant.clone(), principal_id: app.principal.clone(), authority: "hotel-server".into(),
+        tenant_id: app.tenant.clone(), principal_id: app.principal.clone(), authority: app.authority(),
         target: EntityRef { kind: DATA_CLASS.into(), id },
         schema: SchemaRef { name: format!("hotel.reservation.{schema}"), version: 1 },
         idempotency_key: uuid::Uuid::new_v4().to_string(),
@@ -98,18 +106,28 @@ fn send(&mut self) -> Result<(), String> {
         let response = app.agent().post(&format!("{}/v1/submissions", app.server))
             .set("Authorization", &format!("Bearer {}", app.token))
             .send_json(serde_json::to_value(&s).unwrap());
-        // F-13: the contract does not map authority answers to outbox events.
-        let (event, outcome) = match response {
-            Ok(r) => ("confirm", r.into_json::<Value>().ok()
-                .and_then(|v| v["record"]["changeId"].as_str().map(String::from)).unwrap_or_default()),
-            Err(ureq::Error::Status(code, r)) if code < 500 => {
-                let error = r.into_json::<Value>().ok()
-                    .and_then(|v| v["error"]["code"].as_str().map(String::from)).unwrap_or(code.to_string());
-                (if code == 409 { "conflict" } else { "reject" }, error)
+        // K5 A8: the answer's error code decides the event; no answer is a timeout,
+        // and a request that never left this edge goes back to PENDING.
+        let (state, outcome) = match response {
+            Ok(r) => {
+                let id = r.into_json::<Value>().ok().and_then(|v| v["record"]["changeId"].as_str().map(String::from));
+                (app.authorities.answer(&tenant, &key, None), id.unwrap_or_default())
             }
-            Err(e) => ("timeout", e.to_string()),
+            Err(ureq::Error::Status(_, r)) => {
+                let code = r.into_json::<Value>().ok().and_then(|v| v["error"]["code"].as_str().map(String::from));
+                match code {
+                    Some(code) => (app.authorities.answer(&tenant, &key, Some(&code)), code),
+                    None => (app.authorities.transition(&tenant, &key, "timeout"), "no answer".into()),
+                }
+            }
+            Err(ureq::Error::Transport(t)) if matches!(t.kind(), ureq::ErrorKind::ConnectionFailed | ureq::ErrorKind::Dns) =>
+                (app.authorities.transition(&tenant, &key, "undelivered"), t.to_string()),
+            Err(e) => (app.authorities.transition(&tenant, &key, "timeout"), e.to_string()),
         };
-        app.authorities.transition(&tenant, &key, event).map_err(|e| e.code().to_string())?;
+        state.map_err(|e| e.code().to_string())?;
+        if outcome == "ERROR_CODE_NOT_AUTHORITY" {
+            let _ = app.refresh_declarations();
+        }
         if let Some(entry) = app.authorities.outbox.iter_mut().find(|e| e.submission.idempotency_key == key) {
             entry.outcome = outcome;
         }
@@ -205,15 +223,15 @@ mod flows {
         assert_eq!(state(&app, 0), "CONFIRMED");
         assert_eq!(app.snapshot()["reservations"].as_array().unwrap().len(), 1, "retry applied twice");
 
-        // 2. Offline: drafts wait in the persisted outbox; a send that cannot
-        //    reach the server is UNKNOWN (F-16) and is retried once online.
+        // 2. Offline: drafts wait in the persisted outbox; a send that never
+        //    left the edge goes back to PENDING (K5 undelivered) and is sent once online.
         app.draft("create".into(), None, stay("Grace", "2027-02-01", "2027-02-02")).unwrap();
         assert_eq!(state(&app, 1), "PENDING");
         let saved: Authorities = serde_json::from_slice(&std::fs::read(&app.file).unwrap()).unwrap();
         assert_eq!(saved.outbox.len(), 2, "draft not persisted");
         app.server = "http://127.0.0.1:9".into();
         app.send().unwrap();
-        assert_eq!(state(&app, 1), "UNKNOWN");
+        assert_eq!(state(&app, 1), "PENDING");
         app.server = server.clone();
         app.send().unwrap();
         assert_eq!(state(&app, 1), "CONFIRMED");

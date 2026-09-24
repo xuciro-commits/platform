@@ -22,9 +22,13 @@ Schema: `proto/platform/kernel/v1alpha1/change.proto`. Vectors: `vectors/k4-chan
 | C7 | An absent `valid_time` takes the value of `recorded_time`; a present one is kept as submitted, including times in the past. | — |
 | C8 | A correction or undo is a new change whose `causation_id` names the change it corrects. The corrected record stays unchanged. | — |
 | C9 | A rejected submission appends nothing. | — |
+| C10 | Domain rules are evaluated after C1–C5 and before the append: a replay (C4) returns the original record without evaluating them again; a domain refusal is returned with its own code and appends nothing. | the domain's code |
+| C11 | Every entry of `evidence_fact_ids` names a recorded fact (K2) of the same tenant: the observations and claims the decision is based on. | `INVALID_REFERENCE` |
 
 ## Notes
 
-- Authorization (`POLICY_DENIED`) is K6 and has no v1alpha1 vectors.
+- Authorization and the full receiving order are K6 (`K6-tenancy-policy.md`).
+- A rejection is not remembered: the same key may be submitted again and succeed later (C9). Senders therefore retry a key only after no answer (K5 `UNKNOWN`), never after a rejection.
+- Preconditions such as an expected revision are domain payload checked under C10; the envelope carries none.
 - `correlation_id` groups related changes for tracing; v1alpha1 attaches no rule to it.
 - Grouping several changes atomically is an open question recorded as K4's falsification condition in `docs/Platform.md`.

@@ -71,13 +71,12 @@ type Reservation struct {
 // Payloads, one per schema (version 1).
 type createPayload struct {
 	Stay
-	Guest      string `json:"guest"`
-	SourceFact string `json:"sourceFact,omitempty"` // F-11: causation cannot name a fact
+	Guest string `json:"guest"`
 }
 
 type modifyPayload struct {
 	Stay
-	ExpectedVersion int `json:"expectedVersion"` // F-14: no precondition field in K4
+	ExpectedVersion int `json:"expectedVersion"` // preconditions are domain payload (K4 C10)
 }
 
 type cancelPayload struct {
@@ -94,6 +93,7 @@ type Hotel struct {
 	facts        *kernel.FactLog
 	authorities  *kernel.Authorities
 	policy       Policy
+	declaration  *pb.AuthorityDeclaration
 }
 
 // RoomType is sellable inventory per night: physical rooms plus an overbooking
@@ -109,44 +109,45 @@ func NewHotel(tenant string, rooms map[string]RoomType, policy Policy) *Hotel {
 	h := &Hotel{tenant: tenant, rooms: rooms, reservations: map[string]*Reservation{},
 		changes: kernel.NewChangeLog(registry), authorities: kernel.NewAuthorities(Authority), policy: policy,
 		facts: kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: channelMessageSchema, Version: 1}}, nil))}
-	h.authorities.Declare(&pb.AuthorityDeclaration{TenantId: tenant, DataClass: ReservationType,
-		Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: Authority, Epoch: 1})
+	h.declaration = &pb.AuthorityDeclaration{TenantId: tenant, DataClass: ReservationType,
+		Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: Authority, Epoch: 1}
+	h.authorities.Declare(h.declaration)
+	h.changes.Facts = func(tenant, id string) bool {
+		return slices.ContainsFunc(h.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
+	}
 	return h
 }
 
 func denied() *kernel.Error                { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED} }
 func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
 
-// Submit turns a submission into a change record or rejects it.
+// Submit turns a submission into a change record or rejects it, in the kernel's
+// receiving order (K6 T2); the hotel supplies only its policy and domain rules.
 func (h *Hotel) Submit(p Principal, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	// F-12: the contract does not bind principal_id to the authenticated caller.
-	if s.GetTenantId() != h.tenant || p.Tenant != h.tenant || s.GetPrincipalId() != p.ID {
+	if p.Tenant != h.tenant {
 		return nil, denied()
 	}
-	// F-10: replays must return the original even if the domain would now refuse,
-	// so the slice looks for the key before validating.
-	for _, r := range h.changes.Records(h.tenant) {
-		if r.GetSubmission().GetIdempotencyKey() == s.GetIdempotencyKey() {
-			return h.changes.Submit(s, now)
-		}
-	}
-	if err := h.authorities.Authorize(s); err != nil {
-		return nil, err
-	}
-	if !h.policy(p, s.GetSchema().GetName(), s.GetTarget()) {
-		return nil, denied()
-	}
-	apply, err := h.validate(s)
-	if err != nil {
-		return nil, err
-	}
-	record, err := h.changes.Submit(s, now)
-	if err == nil {
+	receiver := kernel.Receiver{Changes: h.changes, Authorities: h.authorities,
+		Policy: func(_ kernel.Caller, s *pb.Submission) bool {
+			return h.policy(p, s.GetSchema().GetName(), s.GetTarget())
+		}}
+	var apply func()
+	record, err := receiver.Receive(kernel.Caller{Tenant: p.Tenant, Principal: p.ID}, s, now, func() *kernel.Error {
+		var err *kernel.Error
+		apply, err = h.validate(s)
+		return err
+	})
+	if err == nil && apply != nil {
 		apply()
 	}
 	return record, err
+}
+
+// Declarations are the tenant's authority declarations, for edges (K5 A9).
+func (h *Hotel) Declarations() []*pb.AuthorityDeclaration {
+	return []*pb.AuthorityDeclaration{h.declaration}
 }
 
 // validate checks the domain rules and returns how to apply the decision.
@@ -267,10 +268,10 @@ func (h *Hotel) IngestChannelBooking(connector Principal, b ChannelBooking, now 
 	if err != nil {
 		return nil, err
 	}
-	payload, _ := json.Marshal(createPayload{Stay: b.Stay, Guest: b.Guest, SourceFact: fact.GetFactId()})
+	payload, _ := json.Marshal(createPayload{Stay: b.Stay, Guest: b.Guest})
 	return h.Submit(connector, &pb.Submission{TenantId: h.tenant, PrincipalId: connector.ID, Authority: Authority,
 		Target: &pb.EntityRef{Type: ReservationType, Id: b.ReservationID}, Schema: &pb.SchemaRef{Name: SchemaCreate, Version: 1},
-		IdempotencyKey: "channel:" + b.MessageID, Payload: payload}, now)
+		IdempotencyKey: "channel:" + b.MessageID, Payload: payload, EvidenceFactIds: []string{fact.GetFactId()}}, now)
 }
 
 // RecordJSON renders a change record with Protobuf JSON names.

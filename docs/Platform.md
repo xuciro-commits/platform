@@ -49,9 +49,9 @@ Each item is a falsifiable statement. Status: **H** hypothesis · **2D** used in
 | K1 Identity | Entities have platform-assigned, opaque, stable IDs; references are typed IDs; external IDs are claims, not identity; merge/split keeps old IDs resolvable via redirects | A domain must encode meaning in IDs; redirects cannot express a split; cross-runtime references need domain knowledge to resolve | H |
 | K2 Fact kinds | Persistent business data is an **observation** (append-only, source-authoritative), **claim** (coexisting, resolved), **decision** (needs authority, may be rejected, undone only by a new decision) or **derived** (recomputable) | Data that fits none, or needs a fifth conflict semantic | H |
 | K3 Provenance | Every observation/claim/decision records source (principal or connector), time and confidence/authority basis | Provenance cost is unacceptable for high-rate observations even when batched | H |
-| K4 Change record | Every accepted decision yields an envelope: change ID, tenant, principal, authority, target reference, schema version, valid time, recorded time, causation/correlation, idempotency key. History is kept; events and subscriptions build on it | Correctness needs multi-change atomicity the envelope cannot group; audit retention cannot be reconciled with deletion/privacy duties | H |
+| K4 Change record | Every accepted decision yields an envelope: change ID, tenant, principal, authority, target reference, schema version, valid time, recorded time, causation/correlation, idempotency key. History is kept; events and subscriptions build on it | Correctness needs multi-change atomicity the envelope cannot group; audit retention cannot be reconciled with deletion/privacy duties | **2D** (Music corrections, Hotel reservations; C10/C11 added in #81) |
 | K5 Authority & sync | Authority (device / tenant server / external system / negotiated) is declared per data class; sync behaviour is derived from it; authority can migrate | A data class needs two simultaneous authorities; derived sync needs per-domain exceptions | H |
-| K6 Tenancy & policy | A tenant is an isolation boundary (data, keys, config, quota, audit), not an org schema. Every decision records its principal; authorization is one auditable policy evaluation (principal, action, target, context). Org hierarchy is domain data. A personal space is a degenerate tenant (one principal, device authority) | Policy evaluation must understand domain hierarchy; personal apps must carry tenant overhead | H |
+| K6 Tenancy & policy | A tenant is an isolation boundary (data, keys, config, quota, audit), not an org schema. Every decision records its principal; authorization is one auditable policy evaluation (principal, action, target, context). Org hierarchy is domain data. A personal space is a degenerate tenant (one principal, device authority) | Policy evaluation must understand domain hierarchy; personal apps must carry tenant overhead | H (specified in #81: caller binding, receiving order, policy hook; used by Hotel only) |
 | K7 Schema evolution | Every stored or transmitted payload is versioned with an upgrade path; entity types can split/merge through K1 redirects; old clients and new servers can coexist (expand → migrate → contract) | A drill needs a stop-the-world migration | H |
 | K8 Connectors | External systems attach through one descriptor: capabilities, identity mapping (K1), sync cursor, health/auth state; protocols stay in capabilities/domains | Capabilities need parameters a set cannot express; push and poll sources need two descriptor kinds | H |
 | K9 Work ownership | Long-running work has an owner, cancellation, stale-result invalidation and resumable checkpoints; closing an owner never silently reverts committed decisions | Server workflows and client tasks cannot share these semantics | H (client side implemented in MSRU's `FeatureHost`) |
@@ -77,7 +77,7 @@ The kernel is defined by six parts, all in `contract/`. A part never substitutes
 
 **Conformance.** An implementation conforms to a version for the concepts whose vectors it passes in full. Vector format: `{contract, concept, vectors: [{id, rules, given, steps: [{<operation>, expect}], expectLog?}]}`. Schema objects use Protobuf JSON names and are parsed strictly. Values assigned by the implementation are referenced indirectly (`"$step:N"` for the change ID produced by step N; `sameAs: N` for a replay of step N). The authority clock is given per step (`at`), so results are deterministic.
 
-**Current coverage** (`v1alpha1`): K1 Identity, K2 Fact kinds with K3 Provenance, K4 Change record, K5 Authority and sync, K7 Schema evolution. Not yet specified: K6 (principals, policy), K8, K9. Open cases recorded in the specs: atomic groups of changes (K4), batched provenance for high-rate observations (K3), negotiated authority (K5).
+**Current coverage** (`v1alpha1`): K1 Identity, K2 Fact kinds with K3 Provenance, K4 Change record, K5 Authority and sync, K6 Tenancy and policy (receiving order), K7 Schema evolution. Not yet specified: K8, K9. Open cases recorded in the specs: atomic groups of changes (K4), batched provenance for high-rate observations (K3), negotiated authority (K5).
 
 
 ### Fact kinds across domains
@@ -136,6 +136,14 @@ Two tests for every abstraction: **cross-domain comparison** (does either domain
 | E4 | Manufacturing line reorganization or new process | Org structure really is domain data |
 
 Loop: kernel hypotheses → Hotel slice (may not change the kernel; records friction) + Music retrofit slice + manufacturing discovery → compare → revise kernel → refactor both apps → drills → repeat until drills stop touching the kernel. There is no numeric threshold; each kernel change must name the missing cross-domain capability.
+
+### Review #81 (Hotel and Music against the kernel)
+
+Hotel friction F-10 to F-17 was resolved inside `v1alpha1` (breaking changes allowed and listed here):
+
+- **Contract changes.** K4 C10: domain rules run after replay detection and before the append, so replays return the original even when the domain would now refuse. K4 C11: a decision names the facts it is based on (`evidence_fact_ids`), so a channel booking cites its observation and a claim resolution cites its claims. K6 (new): submissions are bound to the authenticated caller, one policy evaluation per new submission, and a fixed receiving order implemented once as `Receiver`; the Hotel server lost its own checks. K5 A8 maps answers to outbox events by error code, A5 adds `undelivered` (SENDING → PENDING) for requests that never left the edge, A9 has edges take declarations from their authority.
+- **Kept in the domain.** Preconditions (an expected revision) stay payload checked under C10 until the manufacturing slice shows every domain needs them (revisit in #83). Rejections are not remembered per key (C9); senders retry only after no answer.
+- **Shared Rust edge core:** not now (ADR-0005).
 
 ### Shared capability models (candidates, layer 2)
 

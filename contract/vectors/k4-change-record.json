@@ -705,6 +705,109 @@
         "tenant-a": 2,
         "tenant-b": 0
       }
+    },
+    {
+      "id": "k4.evidence",
+      "rules": [
+        "C11",
+        "C9"
+      ],
+      "given": {
+        "schemas": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ],
+        "facts": [
+          {
+            "tenantId": "tenant-a",
+            "factId": "fact-1"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30=",
+            "evidenceFactIds": [
+              "fact-1"
+            ]
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "accepted": {
+              "validTime": "2026-01-01T10:00:00Z",
+              "recordedTime": "2026-01-01T10:00:00Z"
+            }
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-2",
+            "payload": "e30=",
+            "evidenceFactIds": [
+              "fact-1",
+              "missing"
+            ]
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_REFERENCE"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-b",
+            "principalId": "user-1",
+            "authority": "tenant-server",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-3",
+            "payload": "e30=",
+            "evidenceFactIds": [
+              "fact-1"
+            ]
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_REFERENCE"
+          }
+        }
+      ],
+      "expectLog": {
+        "tenant-a": 1,
+        "tenant-b": 0
+      }
     }
   ]
 }

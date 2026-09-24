@@ -17,6 +17,8 @@ type ChangeLog struct {
 	logs    map[string][]*pb.ChangeRecord
 	byKey   map[string]map[string]*pb.ChangeRecord
 	next    int
+	// Facts reports whether a fact is recorded in a tenant (K2); nil knows none (C11).
+	Facts func(tenant, factID string) bool
 }
 
 func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
@@ -27,6 +29,12 @@ func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
 func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord { return l.logs[tenant] }
 
 func (l *ChangeLog) Submit(s *pb.Submission, now time.Time) (*pb.ChangeRecord, *Error) {
+	return l.SubmitChecked(s, now, nil)
+}
+
+// SubmitChecked runs check after replay detection and before the append (C10);
+// a replay returns the original record without running it.
+func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() *Error) (*pb.ChangeRecord, *Error) {
 	required := []string{s.GetTenantId(), s.GetPrincipalId(), s.GetAuthority(), s.GetIdempotencyKey(),
 		s.GetTarget().GetType(), s.GetTarget().GetId(), s.GetSchema().GetName()}
 	if slices.Contains(required, "") {
@@ -44,6 +52,16 @@ func (l *ChangeLog) Submit(s *pb.Submission, now time.Time) (*pb.ChangeRecord, *
 	log := l.logs[s.GetTenantId()]
 	if c := s.GetCausationId(); c != "" && !slices.ContainsFunc(log, func(r *pb.ChangeRecord) bool { return r.GetChangeId() == c }) {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE) // C3
+	}
+	for _, fact := range s.GetEvidenceFactIds() {
+		if l.Facts == nil || !l.Facts(s.GetTenantId(), fact) {
+			return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE) // C11
+		}
+	}
+	if check != nil {
+		if err := check(); err != nil {
+			return nil, err // C10
+		}
 	}
 	recorded := now
 	if n := len(log); n > 0 && log[n-1].GetRecordedTime().AsTime().After(now) {

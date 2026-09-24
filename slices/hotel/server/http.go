@@ -44,6 +44,18 @@ func (s *Server) Handler() http.Handler {
 		record, err := h.IngestChannelBooking(p, b, s.Now())
 		s.reply(w, record, err)
 	}))
+	mux.HandleFunc("GET /v1/declarations", s.withPrincipal(func(w http.ResponseWriter, _ *http.Request, _ Principal, h *Hotel) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("["))
+		for i, d := range h.Declarations() {
+			if i > 0 {
+				w.Write([]byte(","))
+			}
+			out, _ := protojson.Marshal(d)
+			w.Write(out)
+		}
+		w.Write([]byte("]"))
+	}))
 	mux.HandleFunc("GET /v1/me", s.withPrincipal(func(w http.ResponseWriter, _ *http.Request, p Principal, _ *Hotel) {
 		json.NewEncoder(w).Encode(map[string]string{"principalId": p.ID, "tenantId": p.Tenant, "role": string(p.Role)})
 	}))

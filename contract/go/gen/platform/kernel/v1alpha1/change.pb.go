@@ -89,8 +89,10 @@ type Submission struct {
 	CorrelationId  string                 `protobuf:"bytes,8,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,9,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	Payload        []byte                 `protobuf:"bytes,10,opt,name=payload,proto3" json:"payload,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Recorded facts (K2) this decision is based on.
+	EvidenceFactIds []string `protobuf:"bytes,11,rep,name=evidence_fact_ids,json=evidenceFactIds,proto3" json:"evidence_fact_ids,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Submission) Reset() {
@@ -193,6 +195,13 @@ func (x *Submission) GetPayload() []byte {
 	return nil
 }
 
+func (x *Submission) GetEvidenceFactIds() []string {
+	if x != nil {
+		return x.EvidenceFactIds
+	}
+	return nil
+}
+
 // An accepted decision. Immutable once recorded.
 type ChangeRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -269,7 +278,7 @@ const file_platform_kernel_v1alpha1_change_proto_rawDesc = "" +
 	"%platform/kernel/v1alpha1/change.proto\x12\x18platform.kernel.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a'platform/kernel/v1alpha1/identity.proto\"9\n" +
 	"\tSchemaRef\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\rR\aversion\"\xac\x03\n" +
+	"\aversion\x18\x02 \x01(\rR\aversion\"\xd8\x03\n" +
 	"\n" +
 	"Submission\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12!\n" +
@@ -283,7 +292,8 @@ const file_platform_kernel_v1alpha1_change_proto_rawDesc = "" +
 	"\x0ecorrelation_id\x18\b \x01(\tR\rcorrelationId\x12'\n" +
 	"\x0fidempotency_key\x18\t \x01(\tR\x0eidempotencyKey\x12\x18\n" +
 	"\apayload\x18\n" +
-	" \x01(\fR\apayload\"\xed\x01\n" +
+	" \x01(\fR\apayload\x12*\n" +
+	"\x11evidence_fact_ids\x18\v \x03(\tR\x0fevidenceFactIds\"\xed\x01\n" +
 	"\fChangeRecord\x12\x1b\n" +
 	"\tchange_id\x18\x01 \x01(\tR\bchangeId\x12D\n" +
 	"\n" +

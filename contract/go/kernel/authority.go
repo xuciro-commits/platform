@@ -23,12 +23,13 @@ type outboxEntry struct {
 
 // transitions lists, per event, the allowed from → to states (A5).
 var transitions = map[string]map[pb.SubmissionState]pb.SubmissionState{
-	"send":     {pb.SubmissionState_SUBMISSION_STATE_PENDING: pb.SubmissionState_SUBMISSION_STATE_SENDING},
-	"confirm":  {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_CONFIRMED},
-	"conflict": {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_CONFLICT},
-	"reject":   {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_REJECTED},
-	"timeout":  {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_UNKNOWN},
-	"retry":    {pb.SubmissionState_SUBMISSION_STATE_UNKNOWN: pb.SubmissionState_SUBMISSION_STATE_SENDING},
+	"send":        {pb.SubmissionState_SUBMISSION_STATE_PENDING: pb.SubmissionState_SUBMISSION_STATE_SENDING},
+	"confirm":     {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_CONFIRMED},
+	"conflict":    {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_CONFLICT},
+	"reject":      {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_REJECTED},
+	"timeout":     {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_UNKNOWN},
+	"undelivered": {pb.SubmissionState_SUBMISSION_STATE_SENDING: pb.SubmissionState_SUBMISSION_STATE_PENDING},
+	"retry":       {pb.SubmissionState_SUBMISSION_STATE_UNKNOWN: pb.SubmissionState_SUBMISSION_STATE_SENDING},
 }
 
 func NewAuthorities(edge string) *Authorities {
@@ -97,4 +98,17 @@ func (a *Authorities) Transition(tenant, idempotencyKey, event string) (pb.Submi
 	}
 	entry.state = next
 	return next, nil
+}
+
+// Answer applies the authority's answer to a sent submission (A8): no code
+// confirms, a conflict code conflicts, any other code rejects.
+func (a *Authorities) Answer(tenant, idempotencyKey string, code pb.ErrorCode) (pb.SubmissionState, *Error) {
+	event := "reject"
+	switch code {
+	case pb.ErrorCode_ERROR_CODE_UNSPECIFIED:
+		event = "confirm"
+	case pb.ErrorCode_ERROR_CODE_CONFLICT, pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT:
+		event = "conflict"
+	}
+	return a.Transition(tenant, idempotencyKey, event)
 }

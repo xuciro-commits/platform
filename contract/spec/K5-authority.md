@@ -17,9 +17,11 @@ Schema: `proto/platform/kernel/v1alpha1/authority.proto`. Vectors: `vectors/k5-a
 | A2 | The first declaration of a data class has epoch 1; each later one has the current epoch + 1. | `CONFLICT` |
 | A3 | A receiver accepts a submission only if the target's data class is declared and the submission's `authority` is the current `authority_id`. | `NOT_FOUND` (undeclared), `NOT_AUTHORITY` |
 | A4 | An edge enqueuing a submission records it `CONFIRMED` if the edge is the current authority for its data class, otherwise `PENDING`. An undeclared data class is rejected. | `NOT_FOUND` |
-| A5 | Outbox transitions: `PENDING`→`SENDING` (send); `SENDING`→`CONFIRMED` (confirm), `CONFLICT` (conflict), `REJECTED` (reject), `UNKNOWN` (timeout); `UNKNOWN`→`SENDING` (retry, with the same idempotency key and fields). Every other transition is refused: `CONFLICT` and `REJECTED` never retry; `CONFIRMED` is final. A transition for an unknown submission fails. | `INVALID_ARGUMENT`, `NOT_FOUND` |
+| A5 | Outbox transitions: `PENDING`→`SENDING` (send); `SENDING`→`CONFIRMED` (confirm), `CONFLICT` (conflict), `REJECTED` (reject), `UNKNOWN` (timeout), `PENDING` (undelivered: the edge knows the request never left it); `UNKNOWN`→`SENDING` (retry, with the same idempotency key and fields). Every other transition is refused: `CONFLICT` and `REJECTED` never retry; `CONFIRMED` is final. A transition for an unknown submission fails. | `INVALID_ARGUMENT`, `NOT_FOUND` |
 | A6 | The outbox is keyed by (`tenant_id`, `idempotency_key`). Enqueuing an identical submission returns the existing state; different fields under the same key are rejected. A user revision is a new submission with a new key. | `IDEMPOTENCY_CONFLICT` |
 | A7 | A rejected operation leaves declarations and the outbox unchanged. | — |
+| A8 | An authority's answer maps to exactly one event: no error → confirm; `CONFLICT` or `IDEMPOTENCY_CONFLICT` → conflict; any other code → reject. No answer is a timeout. | — |
+| A9 | An edge takes its declarations from its tenant's authority and refreshes them after a `NOT_AUTHORITY` answer (the data class migrated, A2). | — |
 
 ## Notes
 

@@ -1,0 +1,10 @@
+// K6 Tenancy and policy — data contract only. Meaning: contract/spec/K6-tenancy-policy.md.
+syntax = "proto3";
+
+package platform.kernel.v1alpha1;
+
+// The principal a receiver authenticated for a request.
+message Caller {
+  string tenant_id = 1;
+  string principal_id = 2;
+}

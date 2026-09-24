@@ -114,6 +114,8 @@ impl Authorities {
         Self { edge: edge.into(), ..Default::default() }
     }
 
+    /// Edges take declarations from their authority (`refresh`); this is the authority's own check.
+    #[allow(dead_code)]
     pub fn declare(&mut self, d: Declaration) -> Result<(), KernelError> {
         if d.tenant_id.is_empty() || d.data_class.is_empty() || d.authority_id.is_empty()
             || d.kind.is_empty() || d.kind == "AUTHORITY_KIND_UNSPECIFIED"
@@ -165,11 +167,32 @@ impl Authorities {
             ("conflict", State::Sending) => State::Conflict,
             ("reject", State::Sending) => State::Rejected,
             ("timeout", State::Sending) => State::Unknown,
+            ("undelivered", State::Sending) => State::Pending,
             ("retry", State::Unknown) => State::Sending,
             _ => return Err(KernelError::InvalidArgument), // A5
         };
         entry.state = next;
         Ok(next)
+    }
+
+    /// Applies the authority's answer (A8): no code confirms, a conflict code
+    /// conflicts, any other code rejects.
+    pub fn answer(&mut self, tenant: &str, idempotency_key: &str, code: Option<&str>) -> Result<State, KernelError> {
+        let event = match code {
+            None | Some("") => "confirm",
+            Some("ERROR_CODE_CONFLICT" | "ERROR_CODE_IDEMPOTENCY_CONFLICT") => "conflict",
+            Some(_) => "reject",
+        };
+        self.transition(tenant, idempotency_key, event)
+    }
+
+    pub fn authority_of(&self, tenant: &str, data_class: &str) -> Option<String> {
+        self.current.get(&key(tenant, data_class)).map(|d| d.authority_id.clone())
+    }
+
+    /// Replaces the declarations with the authority's current ones (A9).
+    pub fn refresh(&mut self, declarations: Vec<Declaration>) {
+        self.current = declarations.into_iter().map(|d| (key(&d.tenant_id, &d.data_class), d)).collect();
     }
 }
 
@@ -198,6 +221,10 @@ mod conformance {
                     a.authorize(&sub("authorize")).map(|_| None)
                 } else if !step["enqueue"].is_null() {
                     a.enqueue(sub("enqueue")).map(Some)
+                } else if !step["answer"].is_null() {
+                    let t = &step["answer"];
+                    a.answer(t["tenantId"].as_str().unwrap(), t["idempotencyKey"].as_str().unwrap(), t["code"].as_str())
+                        .map(Some)
                 } else {
                     let t = &step["transition"];
                     a.transition(t["tenantId"].as_str().unwrap(), t["idempotencyKey"].as_str().unwrap(),
