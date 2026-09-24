@@ -5,7 +5,7 @@
 import { EdgeClient, type ActionDeclaration } from "@platform/kernel";
 import { newReservation, ReservationCard, ReservationTable, roomTypes, type Reservation } from "@pkg/hotel";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, PageHeader, StatusTag, Tag, Workspace,
+  Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, StatusTag, Tag, Workspace,
   defineStatuses, notify, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,7 +22,8 @@ const identities = [
 ];
 
 type Account = { id: string; name: string; kind: string; revision: number };
-type Opportunity = { id: string; account: string; title: string; owner: string; stage: "open" | "won" | "lost"; revision: number; stays: Reservation[] };
+type Note = { at: string; by: string; text: string };
+type Opportunity = { id: string; account: string; title: string; owner: string; stage: "open" | "won" | "lost"; revision: number; stays: Reservation[]; notes: Note[] };
 type Customer = Account & { opportunities: Opportunity[] };
 type Me = { tenantId: string; principalId: string };
 
@@ -92,6 +93,7 @@ function CustomerDetail({ id }: { id: string }) {
             </span>
           </div>
           <ReservationTable data={o.stays} height="120px" empty="No stays booked" onOpen={(r) => open({ view: "reservation", params: { id: r.id } })} />
+          <Timeline opportunity={o} />
         </section>
       ))}
       <Dialog open={opening} onOpenChange={setOpening} title={`New opportunity for ${customer.name}`}>
@@ -108,6 +110,35 @@ function CustomerDetail({ id }: { id: string }) {
             onSubmit={async (v) => { if (await decide("crmhotel.opportunity.book", { type: "crmhotel.stay", id: booking.id }, v)) setBooking(undefined); }} />
         )}
       </Dialog>
+    </div>
+  );
+}
+
+// The opportunity's activity timeline: people's notes and what apps report
+// through events (a hotel cancellation arrives as a note by app:crm-hotel).
+function Timeline({ opportunity: o }: { opportunity: Opportunity }) {
+  const { can, decide } = useSales();
+  const [text, setText] = useState("");
+  return (
+    <div className="mt-3 grid gap-1.5">
+      <h3 className="text-xs uppercase text-muted">Activity</h3>
+      {o.notes.length === 0 && <p className="text-xs text-muted">No activity yet.</p>}
+      {[...o.notes].reverse().map((n, i) => (
+        <p key={i} className="text-sm">
+          <span className="mr-2 text-xs text-muted">{new Date(n.at).toLocaleString()}</span>
+          {n.by.startsWith("app:") ? <Tag label={n.by} tone="info" /> : <span className="text-xs font-medium">{n.by}</span>}
+          <span className="ml-2">{n.text}</span>
+        </p>
+      ))}
+      {can("crm.opportunity.note") && (
+        <form className="mt-1 flex gap-2" onSubmit={(e) => {
+          e.preventDefault();
+          if (text.trim()) void decide("crm.opportunity.note", { type: "crm.opportunity", id: o.id }, { text }).then((ok) => ok && setText(""));
+        }}>
+          <Input aria-label="Note" placeholder="Add a note" value={text} onChange={(e) => setText(e.target.value)} className="w-96" />
+          <Button size="sm" type="submit">Add</Button>
+        </form>
+      )}
     </div>
   );
 }

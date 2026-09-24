@@ -45,7 +45,8 @@ func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declaratio
 // is UNKNOWN_SCHEMA; c's role must be granted and allowed (attribute conditions,
 // may be nil) must hold, except in a replay (ADR-0008); rules (may be nil)
 // returns how to apply the decision, which runs with the new record only when
-// it is accepted (an idempotent replay applies nothing).
+// it is accepted (an idempotent replay applies nothing); a new decision is then
+// published to the tenant's subscribers (ADR-0010).
 func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
 	l.mu.Lock()
@@ -55,7 +56,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}
 	receiver := kernel.Receiver{Changes: l.Changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
-			return c.Replaying || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
+			return c.Replaying || c.Automation || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
 		}}
 	var apply func(*pb.ChangeRecord)
 	record, err := receiver.Receive(kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
@@ -68,6 +69,9 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	})
 	if err == nil && apply != nil {
 		apply(record)
+		if c.tenant != nil {
+			c.tenant.publish(Event{App: c.App, Record: record})
+		}
 	}
 	return record, err
 }

@@ -23,12 +23,15 @@ type Member struct {
 }
 
 // Caller is a member as one app sees it. Replaying marks the journal replay:
-// who could act was decided when the input was accepted (ADR-0008).
+// who could act was decided when the input was accepted (ADR-0008). Automation
+// marks an app acting on its own for a subscribed event, as member "app:<id>";
+// its manifest's subscriptions and requirements are its grant.
 type Caller struct {
 	Member
-	App       string
-	Replaying bool
-	tenant    *Tenant
+	App        string
+	Replaying  bool
+	Automation bool
+	tenant     *Tenant
 }
 
 // Role is the member's role in the app being called ("" for none).
@@ -46,6 +49,31 @@ type Manifest struct {
 	Reads    []string
 	Inputs   map[string]bool // connector inputs; true: recorded in the journal
 	Requires []string        // apps whose actions or reads this app uses
+	// Subscribes names actions (of itself or of required apps) whose accepted
+	// decisions are delivered to the app's Handle after commit.
+	Subscribes []string
+}
+
+// Event is an accepted decision, delivered to subscribers after commit.
+type Event struct {
+	App    string
+	Record *pb.ChangeRecord
+}
+
+// Subscriber is an app that handles the events its manifest subscribes to. A
+// refusal is recorded as a failed delivery; the event's decision stands.
+type Subscriber interface {
+	Handle(c Caller, e Event) *kernel.Error
+}
+
+// Delivery is one event handed to one subscriber.
+type Delivery struct {
+	At         time.Time `json:"at"`
+	App        string    `json:"app"`
+	Action     string    `json:"action"`
+	Target     string    `json:"target"`
+	Subscriber string    `json:"subscriber"`
+	Outcome    string    `json:"outcome"` // "ok" or an error code
 }
 
 // App is one app's instance in one tenant.
@@ -70,8 +98,10 @@ type Tenant struct {
 	owner  map[string]App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
-	auditMu sync.Mutex
-	audit   []AuditEntry
+	auditMu    sync.Mutex
+	audit      []AuditEntry
+	deliveries []Delivery
+	events     []Event // published during the current input, delivered after it
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -119,6 +149,15 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 				return nil, fmt.Errorf("tenant %s: %s requires %s, which is not enabled before it", id, m.ID, r)
 			}
 		}
+		for _, action := range m.Subscribes {
+			owner := t.owner["action:"+action]
+			if owner == nil || owner != a && !slices.Contains(m.Requires, owner.Manifest().ID) {
+				return nil, fmt.Errorf("tenant %s: %s subscribes to %s of an app it does not require", id, m.ID, action)
+			}
+			if _, ok := a.(Subscriber); !ok {
+				return nil, fmt.Errorf("tenant %s: %s subscribes but has no Handle", id, m.ID)
+			}
+		}
 		var names []string
 		for _, r := range m.Reads {
 			names = append(names, "read:"+r)
@@ -160,6 +199,7 @@ func (t *Tenant) Submit(m Member, s *pb.Submission, now time.Time) (*pb.ChangeRe
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	defer t.deliver(false)
 	record, err := a.Submit(t.caller(m, a, false), s, now)
 	if err == nil {
 		t.remember(submitted(m.ID, a, s, now))
@@ -177,6 +217,7 @@ func (t *Tenant) Input(m Member, name string, body []byte, now time.Time) (any, 
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	defer t.deliver(false)
 	out, err := a.Input(t.caller(m, a, false), name, body, now)
 	if err == nil && a.Manifest().Inputs[name] {
 		t.remember(AuditEntry{At: now, Member: m.ID, App: a.Manifest().ID, Action: "input:" + name})
@@ -185,13 +226,69 @@ func (t *Tenant) Input(m Member, name string, body []byte, now time.Time) (any, 
 	return out, err
 }
 
-// Read serves a named read of the app that declares it.
+// Read serves a named read of the app that declares it, to members holding a
+// role in that app; the app may refuse further. Reads an app makes of the apps
+// it requires (Caller.Read) are the app's own and are not checked here.
 func (t *Tenant) Read(m Member, name string) (any, *kernel.Error) {
 	a := t.owner["read:"+name]
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
+	if m.Roles[a.Manifest().ID] == "" {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
 	return a.Read(t.caller(m, a, false), name)
+}
+
+// publish queues an accepted decision for its subscribers (called by Ledger).
+func (t *Tenant) publish(e Event) { t.events = append(t.events, e) }
+
+// maxEvents bounds the events one input may cause (a subscription cycle).
+const maxEvents = 1000
+
+// deliver hands the input's events to their subscribers in order, including
+// events their handlers cause. It runs inside the input, so a replay delivers
+// the same events at the same point and rebuilds what the handlers decided.
+func (t *Tenant) deliver(replaying bool) {
+	for n := 0; len(t.events) > 0 && n < maxEvents; n++ {
+		e := t.events[0]
+		t.events = t.events[1:]
+		for _, a := range t.apps {
+			sub, ok := a.(Subscriber)
+			if !ok || !slices.Contains(a.Manifest().Subscribes, e.Record.GetSubmission().GetSchema().GetName()) {
+				continue
+			}
+			id := a.Manifest().ID
+			c := Caller{Member: Member{ID: "app:" + id, Tenant: t.ID, Roles: map[string]string{}}, App: id, Replaying: replaying, Automation: true, tenant: t}
+			outcome := "ok"
+			if err := sub.Handle(c, e); err != nil {
+				outcome = err.Error()
+			}
+			s := e.Record.GetSubmission()
+			t.auditMu.Lock()
+			t.deliveries = append(t.deliveries, Delivery{At: e.Record.GetRecordedTime().AsTime(), App: e.App, Action: s.GetSchema().GetName(),
+				Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Subscriber: id, Outcome: outcome})
+			if len(t.deliveries) > auditKept {
+				t.deliveries = t.deliveries[len(t.deliveries)-auditKept:]
+			}
+			t.auditMu.Unlock()
+		}
+	}
+	if len(t.events) > 0 { // a subscription cycle: stop it visibly
+		e := t.events[0].Record.GetSubmission()
+		t.auditMu.Lock()
+		t.deliveries = append(t.deliveries, Delivery{App: t.events[0].App, Action: e.GetSchema().GetName(),
+			Target: e.GetTarget().GetType() + "/" + e.GetTarget().GetId(), Outcome: fmt.Sprintf("stopped: more than %d events from one input", maxEvents)})
+		t.auditMu.Unlock()
+	}
+	t.events = nil
+}
+
+// Deliveries is the tenant's recent event deliveries, oldest first.
+func (t *Tenant) Deliveries() []Delivery {
+	t.auditMu.Lock()
+	defer t.auditMu.Unlock()
+	return slices.Clone(t.deliveries)
 }
 
 func (t *Tenant) record(a App, kind string, m Member, body []byte, now time.Time) {
@@ -221,9 +318,11 @@ func (t *Tenant) Replay(entries []Entry) error {
 			}
 			_, err = a.Submit(t.caller(m, a, true), s, e.At)
 			t.remember(submitted(m.ID, a, s, e.At))
+			t.deliver(true)
 		} else {
 			_, err = a.Input(t.caller(m, a, true), e.Kind, e.Body, e.At)
 			t.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + e.Kind})
+			t.deliver(true)
 		}
 		if err != nil {
 			return fmt.Errorf("entry %d (%s %s): %v", i+1, e.App, e.Kind, err)
@@ -269,7 +368,7 @@ func (t *Tenant) Apps() []AppInfo {
 	for _, a := range t.apps {
 		m := a.Manifest()
 		info := AppInfo{ID: m.ID, Version: m.Version, Requires: append([]string{}, m.Requires...), Reads: append([]string{}, m.Reads...),
-			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}}
+			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...)}
 		for input, journaled := range m.Inputs {
 			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
 		}
@@ -293,6 +392,7 @@ type AppInfo struct {
 	Capabilities []CapabilityInfo `json:"capabilities"`
 	Inputs       []string         `json:"inputs"`
 	Uses         []string         `json:"uses"`
+	Subscribes   []string         `json:"subscribes"`
 }
 
 // Submit lets an app call another app's action, only along its declared
@@ -303,7 +403,9 @@ func (c Caller) Submit(app string, s *pb.Submission, now time.Time) (*pb.ChangeR
 	if err != nil {
 		return nil, err
 	}
-	return target.Submit(c.tenant.caller(c.Member, target, c.Replaying), s, now)
+	called := c.tenant.caller(c.Member, target, c.Replaying)
+	called.Automation = c.Automation
+	return target.Submit(called, s, now)
 }
 
 // Read lets an app read another app it requires.
@@ -312,7 +414,9 @@ func (c Caller) Read(app, name string) (any, *kernel.Error) {
 	if err != nil {
 		return nil, err
 	}
-	return target.Read(c.tenant.caller(c.Member, target, c.Replaying), name)
+	called := c.tenant.caller(c.Member, target, c.Replaying)
+	called.Automation = c.Automation
+	return target.Read(called, name)
 }
 
 func (c Caller) peer(app string) (App, *kernel.Error) {

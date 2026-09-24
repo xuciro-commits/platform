@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **94 · ready** | Events: subscriptions over change records, delivered after commit, handlers owned as work (K9); first use: the bridge reacts to a hotel cancellation | A cancellation in Hotel reaches the CRM opportunity without the hotel knowing CRM |
+| **95 · proposed** | Platform operations, one deep step (ADR-0010 part 2 rows marked later): server-side work (K9) for scheduled jobs and asynchronous event delivery with retries; connectors managed in Settings (health, cursor, last error, enable); in-app notifications from events; organisational units and typed per-app settings in Settings | Manufacturing's connectors are managed from Settings; an event handler that fails is retried as owned work and shows its state; a supervisor is notified of a new downtime event |
 
 ## Open friction (temporary; delete entries once resolved)
 

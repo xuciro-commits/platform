@@ -23,6 +23,7 @@ const (
 	SchemaAccount = "crm.account.create"
 	SchemaOpen    = "crm.opportunity.open"
 	SchemaClose   = "crm.opportunity.close"
+	SchemaNote    = "crm.opportunity.note"
 
 	Sales   Role = "sales"
 	Manager Role = "sales-manager"
@@ -44,6 +45,14 @@ type Opportunity struct {
 	Owner    string `json:"owner"`
 	Stage    string `json:"stage"` // open, won, lost
 	Revision uint32 `json:"revision"`
+	Notes    []Note `json:"notes"` // the activity timeline, oldest first
+}
+
+// Note is an activity on an opportunity, by a person or by an app's automation.
+type Note struct {
+	At   time.Time `json:"at"`
+	By   string    `json:"by"`
+	Text string    `json:"text"`
 }
 
 // Actions is the CRM catalog (ADR-0008).
@@ -61,6 +70,9 @@ func Actions() *platformserver.Catalog {
 		platformserver.Action{Schema: SchemaClose, Target: OpportunityType, Capability: "opportunities", Title: "Close opportunity",
 			Description: "Close an open opportunity as won or lost; only its owner or a sales manager.",
 			Payload:     []platformserver.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost"}}, Roles: both},
+		platformserver.Action{Schema: SchemaNote, Target: OpportunityType, Capability: "opportunities", Title: "Add note",
+			Description: "Add an activity note to an opportunity's timeline.",
+			Payload:     []platformserver.Field{{Name: "text", Type: "string", Required: true, Description: "What happened"}}, Roles: both},
 	)
 }
 
@@ -93,7 +105,7 @@ func (c *CRM) Submit(who platformserver.Caller, s *pb.Submission, now time.Time)
 	}
 	return c.ledger.Receive(who, s, now, owns, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		invalid := fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
-		var p struct{ Name, Kind, Account, Title, Outcome string }
+		var p struct{ Name, Kind, Account, Title, Outcome, Text string }
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
 		}
@@ -116,7 +128,19 @@ func (c *CRM) Submit(who platformserver.Caller, s *pb.Submission, now time.Time)
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
 			return func(r *pb.ChangeRecord) {
-				c.opportunities[id] = &Opportunity{ID: id, Account: p.Account, Title: p.Title, Owner: who.ID, Stage: "open", Revision: r.GetRevision()}
+				c.opportunities[id] = &Opportunity{ID: id, Account: p.Account, Title: p.Title, Owner: who.ID, Stage: "open", Revision: r.GetRevision(), Notes: []Note{}}
+			}, nil
+		case SchemaNote:
+			o := c.opportunities[id]
+			if strings.TrimSpace(p.Text) == "" {
+				return nil, invalid
+			}
+			if o == nil {
+				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+			}
+			return func(r *pb.ChangeRecord) {
+				o.Notes = append(o.Notes, Note{At: r.GetRecordedTime().AsTime(), By: who.ID, Text: p.Text})
+				o.Revision = r.GetRevision()
 			}, nil
 		case SchemaClose:
 			o := c.opportunities[id]

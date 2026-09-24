@@ -97,6 +97,11 @@ func TestBookingCrossesAppsThroughTheHost(t *testing.T) {
 	if !w.stays()[0].Canceled {
 		t.Fatal("the cancellation does not show on the customer")
 	}
+	// The bridge subscribed to hotel cancellations: the opportunity's timeline tells.
+	notes := w.read("customers").([]Customer)[0].Opportunities[0].Notes
+	if len(notes) != 1 || notes[0].By != "app:crm-hotel" || notes[0].Text != "The hotel canceled stay OPP-1-R1 (manager-1)." {
+		t.Fatalf("opportunity notes %+v", notes)
+	}
 	w.expect(w.submit("sales", crm.Authority, crm.SchemaClose, crm.OpportunityType, "OPP-1", "l-1", map[string]string{"outcome": "lost"}), "ok")
 	w.expect(w.book("sales", "b-5", "2026-10-06"), "ERROR_CODE_CONFLICT")
 
@@ -124,7 +129,7 @@ func TestMemberCatalogFollowsBothGrants(t *testing.T) {
 		}
 		return out
 	}
-	if got := catalog("sales"); !slices.Equal(got, []string{hotel.SchemaCreate, hotel.SchemaModify, crm.SchemaAccount, crm.SchemaOpen, crm.SchemaClose, SchemaBook}) {
+	if got := catalog("sales"); !slices.Equal(got, []string{hotel.SchemaCreate, hotel.SchemaModify, crm.SchemaAccount, crm.SchemaOpen, crm.SchemaClose, crm.SchemaNote, SchemaBook}) {
 		t.Fatalf("sales catalog %v", got)
 	}
 	if slices.Contains(catalog("sales-only"), SchemaBook) || slices.Contains(catalog("desk"), SchemaBook) {

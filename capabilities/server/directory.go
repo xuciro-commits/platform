@@ -95,7 +95,7 @@ func clone(m *Member) Member {
 }
 
 func (d *Directory) Manifest() Manifest {
-	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog, Reads: []string{"members", "audit"}}
+	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog, Reads: []string{"members", "audit", "deliveries"}}
 }
 
 func (d *Directory) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
@@ -167,13 +167,16 @@ type MemberView struct {
 	Subjects []string `json:"subjects"`
 }
 
-// Read "members" and "audit": for the tenant's administrators only.
+// Read "members", "audit" and "deliveries": for the tenant's administrators only.
 func (d *Directory) Read(c Caller, name string) (any, *kernel.Error) {
 	if c.Role() != Admin || c.tenant == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	if name == "audit" {
+	switch name {
+	case "audit":
 		return c.tenant.Audit(), nil
+	case "deliveries":
+		return c.tenant.Deliveries(), nil
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()

@@ -7,6 +7,7 @@ package crmhotel
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -48,7 +49,8 @@ func New(tenant string) *Bridge {
 }
 
 func (b *Bridge) Manifest() platformserver.Manifest {
-	return platformserver.Manifest{ID: App, Version: "1", Actions: b.ledger.Catalog, Reads: []string{"customers"}, Requires: []string{"crm", "hotel"}}
+	return platformserver.Manifest{ID: App, Version: "1", Actions: b.ledger.Catalog, Reads: []string{"customers"}, Requires: []string{"crm", "hotel"},
+		Subscribes: []string{hotel.SchemaCancel, hotel.SchemaModify}}
 }
 
 func (b *Bridge) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
@@ -97,6 +99,36 @@ func (b *Bridge) Submit(c platformserver.Caller, s *pb.Submission, now time.Time
 		}
 		return func(*pb.ChangeRecord) { b.stays[id] = append(b.stays[id], reservation) }, nil
 	})
+}
+
+// Handle tells the opportunity when the hotel cancels or changes one of its
+// stays: a note on its timeline, by the bridge's automation (#94). The hotel
+// knows nothing of opportunities; a stay the bridge did not book is ignored.
+func (b *Bridge) Handle(c platformserver.Caller, e platformserver.Event) *kernel.Error {
+	s := e.Record.GetSubmission()
+	reservation := s.GetTarget().GetId()
+	b.mu.Lock()
+	opportunity := ""
+	for o, stays := range b.stays {
+		if slices.Contains(stays, reservation) {
+			opportunity = o
+		}
+	}
+	b.mu.Unlock()
+	if opportunity == "" {
+		return nil
+	}
+	text := fmt.Sprintf("The hotel canceled stay %s (%s).", reservation, s.GetPrincipalId())
+	if s.GetSchema().GetName() == hotel.SchemaModify {
+		var stay hotel.Stay
+		json.Unmarshal(s.GetPayload(), &stay)
+		text = fmt.Sprintf("The hotel changed stay %s to %s, %s → %s (%s).", reservation, stay.RoomType, stay.CheckIn, stay.CheckOut, s.GetPrincipalId())
+	}
+	payload, _ := json.Marshal(map[string]string{"text": text})
+	_, err := c.Submit("crm", &pb.Submission{TenantId: b.tenant, PrincipalId: c.ID, Authority: crm.Authority,
+		Target: &pb.EntityRef{Type: crm.OpportunityType, Id: opportunity}, Schema: &pb.SchemaRef{Name: crm.SchemaNote, Version: 1},
+		IdempotencyKey: App + ":event:" + e.Record.GetChangeId(), Payload: payload}, e.Record.GetRecordedTime().AsTime())
+	return err
 }
 
 // Customer is an account with its opportunities and the stays booked for them,

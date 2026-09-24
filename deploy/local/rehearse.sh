@@ -81,9 +81,13 @@ sales crm-server "$SALES_TOKEN" s-o crm.opportunity.open crm.opportunity OPP-1 '
 sales crm-hotel "$SALES_TOKEN" s-b crmhotel.opportunity.book crmhotel.stay OPP-1 '{"roomType":"suite","checkIn":"2026-10-01","checkOut":"2026-10-03","guest":"Acme board"}' | jq -e .record >/dev/null || fail "bridge booking"
 sales platform "$MGR" s-r platform.member.revoke platform.member sales-1 '{"app":"hotel"}' | jq -e .record >/dev/null || fail "revoke"
 catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/actions" | jq -c '[.[].schema]')
-[[ $catalog == '["crm.account.create","crm.opportunity.open","crm.opportunity.close"]' ]] || fail "catalog after revocation: $catalog"
+[[ $catalog == '["crm.account.create","crm.opportunity.open","crm.opportunity.close","crm.opportunity.note"]' ]] || fail "catalog after revocation: $catalog"
 [[ $(sales crm-hotel "$SALES_TOKEN" s-b2 crmhotel.opportunity.book crmhotel.stay OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
-echo "ok   sales software: bridge booking through the host; a revocation applies on the next request"
+sales hotel-server "$MGR" s-c hotel.reservation.cancel hotel.reservation OPP-1-R1 '{}' | jq -e .record >/dev/null || fail "hotel cancel"
+note=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/customers" | jq -r '.[0].opportunities[0].notes[0] | "\(.by): \(.text)"')
+[[ $note == "app:crm-hotel: The hotel canceled stay OPP-1-R1 (manager-1)." ]] || fail "event note: $note"
+[[ $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/reservations") == 403 ]] || fail "hotel read without a hotel role"
+echo "ok   sales software: bridge booking; a revocation applies on the next request; a hotel cancellation reaches the opportunity as an event"
 
 before=$(state)
 [[ $(jq -s '.[1] | length' <<<"$before") == 2 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"

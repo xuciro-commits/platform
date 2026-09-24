@@ -8,13 +8,14 @@ import {
   notify, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Blocks, Grid3x3, History, Users } from "lucide-react";
+import { Blocks, Grid3x3, History, Users, Workflow } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
 type Member = { id: string; tenant: string; roles: Record<string, string>; attributes?: Record<string, string[]>; subjects: string[] };
 type Capability = { name: string; enabled: boolean; actions: string[] };
-type AppInfo = { id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[] };
+type AppInfo = { id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[] };
+type Delivery = { at: string; app: string; action: string; target: string; subscriber: string; outcome: string };
 type AuditEntry = { at: string; member: string; app: string; action: string; target?: string };
 type Me = { tenantId: string; principalId: string; profile: { roles: Record<string, string> } };
 
@@ -153,11 +154,37 @@ function Matrix() {
     { id: "inputs", header: "Connector inputs", meta: { width: 200 }, accessorFn: (a) => list(a.inputs) },
     { id: "requires", header: "Requires", meta: { width: 120 }, accessorFn: (a) => list(a.requires) },
     { id: "uses", header: "Uses across apps", meta: { width: 300 }, accessorFn: (a) => list(a.uses) },
+    { id: "subscribes", header: "Subscribes to", meta: { width: 260 }, accessorFn: (a) => list(a.subscribes) },
   ];
   return (
     <>
       <PageHeader title="Capability matrix" description="What each app provides and what it uses, read live from the host's registry." />
       <DataTable data={apps} columns={columns} getRowId={(a) => a.id} height="calc(100dvh - 190px)" />
+    </>
+  );
+}
+
+// Automation: which app reacts to which decisions, and every delivery with its outcome.
+function Automation() {
+  const { apps } = useAdmin();
+  const deliveries = useRead<Delivery[]>("/v1/deliveries");
+  const subscriptions = apps.flatMap((a) => a.subscribes.map((action) => ({ app: a.id, action })));
+  const columns: ColumnDef<Delivery, any>[] = [
+    { accessorKey: "at", header: "When", meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
+    { accessorKey: "action", header: "Event", cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "target", header: "Target", cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "subscriber", header: "Delivered to", meta: { width: 120 } },
+    { accessorKey: "outcome", header: "Outcome", meta: { width: 200 }, cell: (c) => <Tag label={c.getValue()} tone={c.getValue() === "ok" ? "success" : "danger"} /> },
+  ];
+  return (
+    <>
+      <PageHeader title="Automation" description="Apps react to other apps' decisions through declared subscriptions, after commit, as app:<id>. A failed delivery never undoes the decision." />
+      <div className="mb-3 flex flex-wrap gap-2 text-sm">
+        {subscriptions.length === 0 ? <span className="text-muted">No subscriptions.</span> :
+          subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
+      </div>
+      <DataTable data={[...(deliveries.data ?? [])].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}`}
+        height="calc(100dvh - 240px)" empty="No deliveries yet" />
     </>
   );
 }
@@ -184,6 +211,7 @@ const views: View[] = [
   { id: "member", title: (p) => p.id ?? "Member", render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "apps", title: () => "Apps", render: () => <Apps /> },
   { id: "matrix", title: () => "Capability matrix", render: () => <Matrix /> },
+  { id: "automation", title: () => "Automation", render: () => <Automation /> },
   { id: "audit", title: () => "Audit", render: () => <Audit /> },
 ];
 
@@ -217,7 +245,7 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
         nav={[
           { label: "Access", items: [nav("Members", <Users />, "members")] },
           { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("Capability matrix", <Grid3x3 />, "matrix")] },
-          { label: "Data", items: [nav("Audit", <History />, "audit")] },
+          { label: "Data", items: [nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] },
         ]}
         status={<span className="text-xs text-muted">{me ? `${me.tenantId} · ${apps.length} apps` : "host unreachable"}</span>}
         session={signedIn
