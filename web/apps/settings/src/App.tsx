@@ -486,7 +486,8 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
   const [host, setHost] = useState(hosts[0]!);
   const server = signedIn ? ((import.meta.env.VITE_HOST as string | undefined) ?? hosts[0]!.server) : host.server;
   const client = useMemo(() => new EdgeClient({ server, token: signedIn?.session.accessToken ?? host.token, tenant: "", principal: "" }), [server, host, signedIn]);
-  const me = useQuery({ queryKey: [server, host.token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false }).data;
+  const meQuery = useQuery({ queryKey: [server, host.token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
+  const me = meQuery.data;
   const apps = useQuery({ queryKey: [server, host.token, "apps"], queryFn: () => client.get<AppInfo[]>("/v1/apps") }).data ?? [];
   const queries = useQueryClient();
   useEffect(() => signedIn && keepFresh(signedIn.config, signedIn.session, (s) => { client.connection.token = s.accessToken; }), [client, signedIn]);
@@ -515,7 +516,7 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
           { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("App settings", <SlidersHorizontal />, "app-settings"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] },
           { label: "Operations", items: [nav("Integrations", <PlugZap />, "integrations"), nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] },
         ]}
-        status={<span className="text-xs text-muted">{me ? `${me.tenantId} · ${apps.length} apps` : "host unreachable"}</span>}
+        status={<span className="text-xs text-muted">{me ? `${me.tenantId} · ${apps.length} apps` : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}
         session={signedIn
           ? { tenant: me?.tenantId ?? "…", principal: me?.principalId ?? "…", detail: signedIn.session.email,
               options: [{ id: "signed-in", label: signedIn.session.email }, { id: "sign-out", label: "Sign out" }], current: "signed-in",

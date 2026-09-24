@@ -23,6 +23,11 @@ export class EdgeClient {
     } catch { /* unreadable storage starts empty; the server keeps what was confirmed */ }
   }
 
+  /** Why a read failed, for a status line: a host on its production path refuses development tokens. */
+  static problem(error: unknown): string {
+    return /HTTP 401/.test(String(error)) ? "sign-in required: this host accepts identity-provider tokens only" : "host unreachable";
+  }
+
   async get<T>(path: string): Promise<T> {
     const response = await fetch(this.connection.server + path, { headers: { Authorization: `Bearer ${this.connection.token}` } });
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);

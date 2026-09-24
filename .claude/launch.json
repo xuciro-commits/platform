@@ -47,6 +47,34 @@
         "dev"
       ],
       "port": 5177
+    },
+    {
+      "name": "settings-oidc",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_OIDC_ISSUER=http://localhost:8480/auth/v1/",
+        "VITE_HOST=http://localhost:8495",
+        "pnpm",
+        "--dir",
+        "web/apps/settings",
+        "dev"
+      ],
+      "port": 5177,
+      "url": "http://localhost:5177"
+    },
+    {
+      "name": "sales-oidc",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_OIDC_ISSUER=http://localhost:8480/auth/v1/",
+        "VITE_SALES_SERVER=http://localhost:8495",
+        "pnpm",
+        "--dir",
+        "web/apps/sales",
+        "dev"
+      ],
+      "port": 5176,
+      "url": "http://localhost:5176"
     }
   ]
 }

@@ -2,7 +2,7 @@
 // whichever app provides the lodging protocol (@pkg/lodging), the hotel's own
 // views (@pkg/hotel), and the platform's timeline. What the user may do comes
 // from the host's catalog for this member.
-import { EdgeClient, type ActionDeclaration } from "@platform/kernel";
+import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { newReservation, ReservationCard, ReservationTable, roomTypes, type Reservation } from "@pkg/hotel";
 import { BookingTable, type Booking } from "@pkg/lodging";
 import {
@@ -182,10 +182,12 @@ const views: View[] = [
   { id: "reservation", title: (p) => p.id ?? "Reservation", render: (p) => <ReservationDetail id={p.id ?? ""} /> },
 ];
 
-export function App() {
-  const [token, setToken] = useState("sales");
+export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: OidcSession } }) {
+  const [token, setToken] = useState(signedIn?.session.accessToken ?? "sales");
   const client = useMemo(() => new EdgeClient({ server: SERVER, token, tenant: "hotel-a", principal: "" }), [token]);
-  const me = useQuery({ queryKey: [token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false }).data;
+  const meQuery = useQuery({ queryKey: [token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
+  const me = meQuery.data;
+  useEffect(() => signedIn && keepFresh(signedIn.config, signedIn.session, (s) => { client.connection.token = s.accessToken; }), [client, signedIn]);
   const actions = useQuery({ queryKey: [token, "actions"], queryFn: () => client.get<ActionDeclaration[]>("/v1/actions"), refetchInterval: false }).data;
   const queries = useQueryClient();
   const unread = (useQuery({ queryKey: [token, "/v1/notifications"], queryFn: () => client.get<Notification[]>("/v1/notifications") }).data ?? []).filter((n) => !n.read).length;
@@ -215,9 +217,13 @@ export function App() {
           { label: "CRM", items: [{ label: "Customers", icon: <Building2 />, route: { view: "customers" } }] },
           { label: "Hotel", items: [{ label: "Reservations", icon: <BedDouble />, route: { view: "reservations" } }] },
         ]}
-        status={<span className="text-xs text-muted">{actions ? `${actions.length} actions granted` : "offline"}</span>}
-        session={{ tenant: me?.tenantId ?? "hotel-a", principal: me?.principalId ?? "…", options: identities, current: token,
-          onSwitch: (id) => setToken(id) }} />
+        status={<span className="text-xs text-muted">{actions ? `${actions.length} actions granted` : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}
+        session={signedIn
+          ? { tenant: me?.tenantId ?? "hotel-a", principal: me?.principalId ?? "…", detail: signedIn.session.email,
+              options: [{ id: "signed-in", label: signedIn.session.email }, { id: "sign-out", label: "Sign out" }], current: "signed-in",
+              onSwitch: (id) => { if (id === "sign-out") void signOut(signedIn.config); } }
+          : { tenant: me?.tenantId ?? "hotel-a", principal: me?.principalId ?? "…", options: identities, current: token,
+              onSwitch: (id) => setToken(id) }} />
     </SalesContext.Provider>
   );
 }

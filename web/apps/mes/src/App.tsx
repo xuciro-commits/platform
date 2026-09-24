@@ -235,7 +235,8 @@ const views: View[] = [
 export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: OidcSession } }) {
   const [token, setToken] = useState(signedIn?.session.accessToken ?? "supervisor");
   const client = useMemo(() => new EdgeClient({ server: SERVER, token, tenant: "plant-sz", principal: "" }), [token]);
-  const me = useQuery({ queryKey: [token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false }).data;
+  const meQuery = useQuery({ queryKey: [token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
+  const me = meQuery.data;
   const actions = useQuery({ queryKey: [token, "actions"], queryFn: () => client.get<ActionDeclaration[]>("/v1/actions"), refetchInterval: false }).data;
   const can = (schema: string) => !!actions?.some((a) => a.schema === schema);
   const master = useQuery({ queryKey: [token, "master"], queryFn: () => client.get<Master>("/v1/master"), refetchInterval: false }).data;
@@ -273,7 +274,7 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
           { label: "Sync", items: [nav("Outbox", <Inbox />, "outbox", waiting ? <span className="text-xs text-[var(--tone-warning)]">{waiting}</span> : null)] },
         ]}
         commands={[{ id: "retry", label: "Retry unsent decisions", run: () => void client.send().then(() => setOutbox([...client.authorities.outbox])) }]}
-        status={<span className="text-xs text-muted">{me ? `${me.profile.roles.mes ?? "no role"}${me.profile.attributes?.lines?.length ? ` · ${me.profile.attributes.lines.join(", ")}` : ""}` : "offline"}</span>}
+        status={<span className="text-xs text-muted">{me ? `${me.profile.roles.mes ?? "no role"}${me.profile.attributes?.lines?.length ? ` · ${me.profile.attributes.lines.join(", ")}` : ""}` : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}
         session={signedIn
           ? { tenant: me?.tenantId ?? "plant-sz", principal: me?.principalId ?? "…", detail: signedIn.session.email,
               options: [{ id: "signed-in", label: signedIn.session.email }, { id: "sign-out", label: "Sign out" }], current: "signed-in",
