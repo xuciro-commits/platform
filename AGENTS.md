@@ -20,11 +20,11 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | `slices/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |
 | `deploy/local/` | Infrastructure as code for the production path (ADR-0007): Docker Compose with PostgreSQL, Rauthy (declarative bootstrap) and mes-server; `rehearse.sh` rehearses OIDC principals, restart and restore |
 | `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri), `apps/mes` (manufacturing client), `apps/sales` (the composed CRM + Hotel software), `apps/settings` (the platform app's Settings workspace for any host: members, organisation, apps, app settings, protocols, integrations, automation, audit), `packages/hotel` (`@pkg/hotel`, the Hotel app's UI), `packages/lodging` (`@pkg/lodging`, the lodging protocol's UI) |
-| `docs/Platform.md` | The platform design: layers, the capability matrix packages build on, kernel hypotheses K1–K9, kernel contract rules, validation strategy |
+| `docs/Platform.md` | The platform design: layers; the canonical platform model (capability map by layer, ADR reconciliation, terminology and ownership, effect lifecycle and replay semantics, invariants and their checks); kernel hypotheses K1–K9; kernel contract rules; validation strategy |
 | `docs/ProductIntentReview.md` | Product intent and top-level architectural direction from an external review: advisory, handled (disposition at its top), not an implementation plan or a replacement for accepted ADRs |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
-| `scripts/verify.sh` | All checks |
+| `scripts/verify.sh` | All checks (`scripts/boundaries.sh`: dependency boundaries between apps and the host) |
 
 ## Rules
 
@@ -45,7 +45,7 @@ scripts/verify.sh web       # UI kit tests, typecheck and build of every web app
 scripts/verify.sh hotel     # web build, Hotel server tests, Rust K5 vectors, end-to-end flows (needs cargo)
 scripts/verify.sh manufacturing  # plant server tests (F-5 to F-9 verdicts)
 scripts/verify.sh drills    # evolution drills on the kernel
-scripts/verify.sh composition  # app independence, the lodging protocol, CRM, the sales solution
+scripts/verify.sh composition  # app boundaries (scripts/boundaries.sh), the lodging protocol, CRM, the sales solution
 scripts/verify.sh capabilities  # server capability tests
 scripts/verify.sh deploy    # production-path rehearsal (needs Docker via OrbStack: orb start)
 ```

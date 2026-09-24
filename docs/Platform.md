@@ -28,50 +28,190 @@ Dependencies point downward only; the kernel knows no domain vocabulary; capabil
 
 Placement questions: Would it still hold in a different industry? After a pivot within the same industry? Is it "must be so" or "one of several implementations"? Would operators change it at runtime — and is that a parameter (config) or a change of rules (code)?
 
-### Capability matrix (what a business package builds on)
+### Platform model (convergence gate #103)
 
-A business package (its domain code, UI and bridges) uses these and writes only its business knowledge. Status: **kernel status** (§4) for contract rows; for the others, how many packages use it: **n** in use, **1** proven once, **gap** known missing. Update this table when a capability is added, promoted or found missing.
+Audited across #92–#101 as one platform. This section is canonical: when code, an ADR and this section disagree, this section says which one is current, and the gate items in the work queue say what is still to decide.
 
-| Layer | Capability | A package gets | Code | Used by | Status |
+**Layers.**
+
+| Layer | Meaning | Changes when |
+|---|---|---|
+| **Kernel** | The language-neutral contract (K1–K9): spec, vectors, Go and Swift | A kernel hypothesis is revised (spec and vectors first) |
+| **Host runtime** | `platformserver` code that runs apps: composition, routing, journal and replay, owned work, dispatch, stores for notifications, settings, connectors, endpoints and effects | The platform grows a mechanism |
+| **Platform capability** | Behaviour exposed as a platform app (`platform`, `org`, `relations`) or as a `Caller` method apps use | A cross-industry need appears in a second app |
+| **Industry protocol** | A versioned interface apps provide and consume, with conformance tests | A second provider or consumer appears |
+| **Domain** | An app: its rules, reads, inputs, settings, jobs and effect kinds | Its business changes |
+
+#### Capability map
+
+Status legend:
+- **n**: apps using the capability;
+- **1**: proven once;
+- **gap**: known missing;
+- **H**: a kernel hypothesis under test (kernel status as in §4).
+
+| Capability | Layer | What an app gets | Code | Used by | Status |
 |---|---|---|---|---|---|
-| Kernel | Identity and redirects (K1) | Opaque stable IDs, explicit creation, merge/split redirects | `contract` · `kernel.Identity` | Music, manufacturing | 2D |
-| Kernel | Facts and provenance (K2, K3) | Observations and claims with source and time; decisions cite them as evidence (C11) | `kernel.FactLog` | Music, Hotel, manufacturing | 2D |
-| Kernel | Decisions (K4) | Change records: idempotency, causation, valid/recorded time, revisions that refuse stale screens (C12) | `kernel.ChangeLog` | all | E |
-| Kernel | Authority and outbox (K5) | Authority per data class; edge outbox states in Go, Swift, Rust and TypeScript; migration adopts history | `kernel.Authorities`, edge outboxes | all | 2D |
-| Kernel | Tenancy and policy hook (K6) | Receiving order, caller binding, one policy evaluation per decision | `kernel.Receiver` | all | E |
-| Kernel | Schema versions (K7) | Versioned payloads, upgrade paths, negotiation | `kernel.SchemaRegistry` | declared by all; upgrades only in vectors | H |
-| Kernel | Connectors (K8) | One descriptor for push and poll sources, cursors, health | `kernel.Connectors` (kept by the host) | manufacturing | H |
-| Kernel | Work ownership (K9) | Generations, checkpoints, stale results, owner close | `kernel.Works` | the host's owned work (#97); MSRU `FeatureHost` | H |
-| Server | Platform host | Apps per tenant from manifests; routing by action, read and input name; requirement check; per-caller catalog; calls between apps only along requirements (ADR-0010) | `platformserver.Tenant`, `Host` | every server | 4 |
-| Server | Directory | Members (people, services, AI agents) with one role per app and attributes; add, grant, revoke and scope as decisions, effective on the next request; roles checked against the app's own | `platformserver.Directory` (the platform app) | every server | 4 |
-| Server | Events | Subscriptions over accepted decisions or protocol events, declared in the manifest along requirements or consumed protocols; queued per subscriber after commit and delivered as owned work, retried (2–16 s, five attempts), then failed and retryable by an administrator; every attempt is journaled and replayed with its outcome; handlers act as app:<id>; cycles stop after 100 hops (ADR-0013) | `Manifest.Subscribes`, `Subscriber`, `Tenant.Work`, `Tenant.Deliveries` | relations (timeline, observed inside the input), tests | 1 |
-| Server | Scheduled jobs | Jobs declared in the manifest, run by the host as app:<id>; a run is journaled only when it decided or notified something | `Manifest.Jobs`, `Runner` | manufacturing (reason reminders), Hotel (arrivals list) | 2 |
-| Server | Connectors | The deployment connects K8 descriptors; apps deliver through the caller; the host keeps cursor, last seen and the last refused input; enable and disable are decisions; heartbeat is a platform input | `Tenant.Connect`, `Caller.Deliver`, read `connectors` | manufacturing (gateway, ERP), Hotel (channel manager) | 2 |
-| Server | Notifications | An app tells members, whoever holds a role in a unit or above it in a structure, or whoever holds a role in the app, from any input; deduplicated by key; each member reads and marks their own | `Caller.Notify`, read `notifications` | manufacturing (downtime, by unit), Hotel (oversold nights, channel bookings, arrivals, by app role) | 2 |
-| Server | App settings | Typed values an app declares (boolean, integer, text, choice), set by administrators as decisions, read by the app | `Manifest.Settings`, `Caller.Setting` | manufacturing, Hotel (boolean, choice, integer) | 2 |
-| Server | Outbound effects | Webhook endpoints subscribed to events in Settings; effects sent signed (Standard Webhooks), at least once with a stable key, ordered per endpoint, retried with backoff; outcomes journaled, replay never sends; secrets by name; private addresses refused (ADR-0014) | `Tenant.Dispatch`, `Caller.Emit`, `Answerer`, reads `endpoints`, `effects`, `cmd/webhook-sink` | sales (webhook of the protocol's cancellation), manufacturing (order confirmation to the ERP, its answer as an observation) | 2 |
-| Server | Read authorization | A read is for members holding a role in its app, or for every member when the manifest opens it; the app may refuse further; an app's reads of the apps it requires are its own | `Tenant.Read`, `Manifest.Everyone` | every server | 4 |
-| Server | Organisation | Units of any kind in several structures (legal, management, site, project, governance, community …), memberships of members or other units, all with valid time; rules ask for a member's units in a named structure (ADR-0012) | `platformserver.Organization`, `Caller.Units` | manufacturing (lines), sales solution (demo group) | 2 |
-| Server | Audit trail | Accepted top-level inputs per tenant, rebuilt by replay; administrators read it | `Tenant.Audit`, read `audit` | every server | 4 |
-| Server | App registry | Each app's roles, capabilities (active or not), reads, inputs, requirements and cross-app uses | `GET /v1/apps` | every server | 4 |
-| Server | Deployment | Development tokens or journal plus OIDC from the same flags; replay on start | `platformserver.Deployment` | mes-server, sales-server | 2 |
-| Server | Package ledger | The kernel wired for one app: change log, authority declarations, receiver, catalog role check, no re-authorization in replay | `platformserver.Ledger` | every app | 5 |
-| Server | Action catalog | Actions declared once; each caller (screen, integration, AI agent) receives only what its role may call; capabilities deactivated at start-up | `platformserver.Action`, `Catalog` | manufacturing, Hotel, CRM, crm-hotel | 4 |
-| Server | OIDC subjects | Access-token verification; the directory maps subjects to members | `platformserver.OIDC` | manufacturing, sales | 2 |
-| Server | Durable journal | One journal per tenant across its apps in PostgreSQL; an app's calls to other apps replay with the input that caused them; single-writer fence, fail-stop | `platformserver.Journal` | manufacturing, sales | 2 |
-| Server | Agent adapter | An AI agent lists its own catalog and submits one of its actions | `cmd/mes-agent` | manufacturing | 1 (generic candidate) |
-| Web | UI kit and shell | Components, docking workspace, entity routes, command palette, session menu | `@platform/ui` | all web apps | 4 |
-| Web | Field types | 20 types deciding display, editor, validation, sorting and filters | `@platform/ui` fields | gallery | 1 |
-| Web | Edge client | Persisted outbox, HTTP transport, declarations, action-catalog type | `@platform/kernel` | manufacturing, sales | 2 |
-| Web | Browser sign-in | Authorization code with PKCE | `@platform/kernel` `oidc.ts` | manufacturing | 1 |
-| Web | Settings | The platform app's workspace for any host: members and roles per app, organisation, apps with their requirement graph, app settings, the capability matrix, protocols with providers and consumers, integrations (connectors), automation (owned work, deliveries) and the audit, from the registry | `apps/settings` | sales and plant hosts | 1 |
-| Web | Notifications | A member's notifications with unread state | `@platform/ui` `NotificationList` | manufacturing, sales | 2 |
-| Web | Package UI | An app's or a protocol's views and model for every software that shows its data | `@pkg/hotel`, `@pkg/lodging` | Hotel Desk, sales | 2 |
-| Operations | Deployment and rehearsal | Compose stack with PostgreSQL and Rauthy; restart and restore rehearsal | `deploy/local` | manufacturing, sales | 2 |
-| Composition | Protocols | Named, versioned interfaces (actions, reads, events) with conformance tests; apps provide and consume them, the host binds a provider per tenant; consumers never name an app (ADR-0011) | `platformserver.Protocol`, `protocols/lodging` | Hotel and the reference memstay provide lodging (both in the sales tenant, the administrator chooses); CRM consumes it | 2 |
-| Composition | Links and timeline | Relations between any two entities and the activity about an entity, owned by the platform; protocol events are told on the timeline of the entity and of what is linked to it; members see only entities of apps they hold a role in | `platformserver.Relations` | sales solution | 1 |
-| Composition | MCP | A member's catalog and reads as MCP tools, called with the member's grants through the same submission path | `POST /mcp` | every host | 1 |
-| Composition | Solutions | Software composed from apps and protocols without bridges | `solutions/sales` | sales | 1 |
+| Identity and redirects (K1) | Kernel | Opaque stable IDs, merge/split redirects | `kernel.Identity` | manufacturing, Music | 2D |
+| Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | manufacturing, Hotel, Music | 2D |
+| Decisions (K4) | Kernel | Change records: idempotency, revisions (C12), causation | `kernel.ChangeLog` | all | E |
+| Authority and outbox (K5) | Kernel | Authority per data class; edge outbox in Go, Swift, Rust and TypeScript | `kernel.Authorities` | all | 2D |
+| Tenancy and policy (K6) | Kernel | Receiving order, one policy evaluation per decision | `kernel.Receiver` | all | E |
+| Schema versions (K7) | Kernel | Versioned payloads; webhook bodies carry the version | `kernel.SchemaRegistry` | all (declared) | H |
+| Connectors (K8) | Kernel | One descriptor for push and poll, cursors, health | `kernel.Connectors`, kept by the host | manufacturing, Hotel | H |
+| Work ownership (K9) | Kernel | Generations, stale results, owner close | `kernel.Works`, used by the host for owned work (generations only; checkpoints unused) | host | H |
+| Composition and routing | Host runtime | Manifests checked at start (`checkManifest`); routing by action, read and input name | `NewTenant`, `Tenant` | every host | 4 |
+| Journal and replay | Host runtime | One ordered journal per tenant; fail-stop; replay through the same code | `Journal`, `Tenant.Replay`, `CheckReplay` | every host | 4 |
+| Package ledger | Host runtime | The kernel wired for one app, catalog role check, publishing to subscribers | `Ledger` | every app | 5 |
+| Action catalog | Host runtime | Declared actions; each caller receives only what its role may call; start-up deactivation | `Action`, `Catalog`, `/v1/actions`, MCP | all apps | 4 |
+| Reads and read authorization | Host runtime | Named reads; role in the app, or opened to every member | `Tenant.Read`, `Manifest.Everyone` | all apps | 4 |
+| Events and subscriptions | Host runtime | Accepted decisions queued per subscriber, delivered as owned work with retries | `Manifest.Subscribes`, `Subscriber`, `Tenant.Work` | tests only (no production subscriber since #95) | 1 |
+| Scheduled jobs | Host runtime | Declared jobs, run as the app | `Manifest.Jobs`, `Runner` | manufacturing, Hotel | 2 |
+| Connectors (managed) | Host runtime | Deliveries through the caller; cursor, health, last refused input; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | manufacturing, Hotel | 2 |
+| Outbound effects | Host runtime | Webhooks for events; effect kinds apps emit; at least once with a stable key; answers back to the app | `Tenant.Dispatch`, `Caller.Emit`, `Answerer` | sales (webhook), manufacturing (ERP write-back) | 2 |
+| Deployment | Host runtime | Development tokens or journal plus OIDC from one set of flags; the work runner | `Deployment`, `RunWork` | mes-server, sales-server, hotel-server | 3 |
+| Members, roles, service accounts and AI agents | Platform capability (`platform` app) | Members signing in as subjects, one role per app, grant and revoke as decisions | `Directory` | every host | 4 |
+| Audit and deliveries history | Platform capability (`platform` app) | Accepted inputs and delivery attempts, rebuilt by replay | reads `audit`, `deliveries` | every host | 4 |
+| App settings | Platform capability (`platform` app) | Typed values the app declares; administrators set them as decisions | `Manifest.Settings`, `Caller.Setting` | manufacturing, Hotel | 2 |
+| Notifications | Platform capability (`platform` app) | To members, holders of a unit's role, or holders of an app role; deduplicated by key; read state as a decision | `Caller.Notify` | manufacturing, Hotel | 2 |
+| Protocol binding | Platform capability (`platform` app) | The administrator chooses the provider of new calls; reads span every provider | `platform.protocol.bind`, `Caller.Query` | sales | 1 |
+| Organisation | Platform capability (`org` app) | Units in dated structures, memberships; rules ask for a member's units | `Organization`, `Caller.Units` | manufacturing, sales | 2 |
+| Links and timeline | Platform capability (`relations` app) | Relations between entities; protocol events told on linked timelines | `Relations`, `Caller.Link`, `Caller.Links` | CRM, sales | 1 |
+| Identity provider | Platform capability (deployment) | OIDC subjects; the directory maps them to members | `OIDC`, Rauthy | every deployed host | 3 |
+| Protocols | Industry protocol | Named, versioned actions, reads and events, with conformance tests | `Protocol`, `protocols/lodging` | Hotel and memstay provide lodging; CRM consumes it | 2 |
+| Agent adapters | Platform capability | A caller's catalog as MCP tools and CLI | `POST /mcp`, `cmd/mes-agent` | every host | 2 |
+| UI kit, shell, notification list | Web | Components, docking workspace, entity routes, notifications | `@platform/ui` | all web apps | 4 |
+| Edge client and sign-in | Web | Outbox, HTTP client, OIDC with PKCE, reasons a host refuses | `@platform/kernel` | MES, sales, Settings | 3 |
+| Settings | Web (the `platform` app's workspace) | Members, organisation, apps, app settings, protocols, integrations (connectors, endpoints, effects), automation, audit | `apps/settings` | every host, signed in or with demo tokens | 1 |
+| Package UI | Web | An app's or a protocol's views for any software | `@pkg/hotel`, `@pkg/lodging` | Hotel Desk, sales | 2 |
+| Industry apps | Domain | Manufacturing (`mes`), Hotel (`hotel`), CRM (`crm`), serviced apartments (`memstay`, the protocol's reference provider) | `slices/*`, `protocols/lodging` | — | — |
+
+#### ADR reconciliation
+
+"Accepted" means decided, not built. Each promise has one of four states:
+- **Implemented:** built and tested.
+- **Partial:** built in part; what is missing is named.
+- **Deferred:** waits for its first user.
+- **Superseded:** replaced by a later decision.
+
+| ADR | Promise | State |
+|---|---|---|
+| 0007 | Input journal in PostgreSQL, fail-stop, replay on start; OIDC | Implemented (rehearsed restart and restore) |
+| 0008 | Governed actions and per-caller catalogs; AI as an authorized caller; start-up deactivation; no runtime installation | Implemented |
+| 0008 | Human confirmation before an agent's action takes effect | Deferred (with ADR-0014 D6) |
+| 0008 | Analysis data models and dashboards for customers | Deferred |
+| 0009 | Bridges between packages | Superseded by ADR-0011. What remains, unused: `Manifest.Requires`, `Caller.Submit`, `Caller.Read` (gate item G3) |
+| 0010 | Apps from manifests; routing; requirement check; the platform app with Settings; audit; app registry; public reads | Implemented |
+| 0010 | Enable and disable an app per tenant as a recorded decision | Partial: apps are composed in code; capabilities are deactivated at start-up; no decision |
+| 0010 | Scoped grants by member attributes | Superseded by the organisation (ADR-0012); attributes removed in #103 |
+| 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
+| 0010 | Logs and correlation | Partial: correlation IDs pass through protocol calls; no structured logs |
+| 0010 | Health | Partial: connectors and endpoints have health; apps and the journal do not |
+| 0010 | App launcher and navigation from manifests | Deferred: each web app declares its own navigation |
+| 0010 | Cross-app links in the UI | Partial: links and timeline exist; opening another app's entity view does not |
+| 0010 | Number sequences, files, analysis datasets, retention, preferences | Deferred |
+| 0011 | Protocols with conformance; providers and consumers; binding by protocol; choice in Settings; links and timeline; MCP | Implemented |
+| 0011 | Protocol versions side by side | Deferred |
+| 0011 | Routing an action on an existing entity to the provider that holds it | Deferred (the CRM only reserves) |
+| 0011 | Cross-industry protocols (party, documents, notification, calendar) | Partial: notification, links and timeline are platform capabilities, not protocols; the rest is deferred |
+| 0012 | Units, structures, memberships with valid time; rules read a named structure; Settings | Implemented |
+| 0012 | Rules evaluated at the input's time | Partial: `Caller.Units` reads the wall clock, while notifications resolve at the input's day (gate item G4) |
+| 0012 | Successors of merged or split units; posts; delegation; federation | Deferred |
+| 0013 | Owned deliveries with retries and ordering; jobs; connectors in the host; notifications; typed settings; open reads | Implemented |
+| 0013 | Work kept in K9 `Works` | Partial: generations only; checkpoints unused |
+| 0013 | An app's work stops when it is disabled | Deferred (with per-tenant disable) |
+| 0014 | Intent, attempt and outcome separated; at least once with a stable key; retries and failure; answers as observations; endpoints in Settings; secrets by name; private addresses refused; webhooks without app code; effect kinds apps emit | Implemented |
+| 0014 | Per-endpoint limits (rate, payload size, timeout) | Partial: a fixed 10 s timeout and a 64 KiB answer; no rate |
+| 0014 | A breaker per destination | Partial: the ordered queue per endpoint holds the rest behind a failing head |
+| 0014 | Webhooks filtered by the catalog rules of who may see an event | Not implemented (gate item G5) |
+| 0014 | D6 approval of irreversible effects caused by agents; email | Deferred |
+
+#### Terminology and ownership
+
+| Term | Is | Owned by | Durable as |
+|---|---|---|---|
+| **Action** | A declared operation an app offers: schema, target type, roles, description | The app's manifest (`Catalog`) | Code |
+| **Submission** | A request to take an action on an entity | The caller | — |
+| **Decision** | An accepted submission: a K4 change record in the ledger of the app holding authority over the target's data class | That app's `Ledger` | Journal entry `submission` |
+| **Input** | A top-level entry that is not a submission: a connector's batch or page | The app declaring the input | Journal entry `<input name>`; heartbeats are not journaled |
+| **Fact** | What an app records as true at a source: an **observation** (seen, such as a machine state or an ERP answer) or a **claim** (asserted by a source, such as a planned order) | The app's fact log (K2) | Rebuilt from the input or outcome that recorded it |
+| **Event** | An accepted decision as others see it after commit, named by its action schema or by a protocol event (`<protocol>#<event>`). A domain's own word "event", such as a downtime event, is not this | Host | Rebuilt from the decision |
+| **Subscription** | An app's declared interest in events | The app's manifest | Code |
+| **Delivery** | One event queued for one subscriber, attempted as owned work, in order per subscriber | Host (`Task` of kind delivery) | Journal entry `delivery` per attempt, with its outcome |
+| **Job** | Scheduled work an app declares and runs as `app:<id>` | Declared by the app, run by the host (`Task` of kind job) | Journal entry `job`, only when a run decided or notified something |
+| **Work** | K9 ownership of a delivery or a job: owner, generation, state | Host, through `kernel.Works` | Rebuilt by replay; job counters are volatile |
+| **Connector** | An inbound source: a K8 descriptor whose ID is the member it signs in as | Connected by the deployment, held by the host, switched by the `platform` app | Cursor and switch rebuilt; heartbeat and last refusal volatile |
+| **Endpoint** | An outbound destination: URL, secret name, subscribed events and bound effect kinds | `platform` app decisions, held by the host | Decisions |
+| **Effect kind** | An outbound message an app declares it sends (`Manifest.Emits`) | The app's manifest | Code |
+| **Effect** | One intent for one endpoint: from an event (webhook) or from `Caller.Emit`; its key is its ID | Host | Intent rebuilt from its input; each attempt's outcome is journal entry `effect` |
+| **Answer** | What an endpoint returned for an app's effect; the app records it as an observation | Journaled with the outcome, recorded by the app (`Answerer`) | Journal entry `effect` |
+| **Notification** | A message to a member, resolved on the input's day | Created by apps (`Caller.Notify`), stored by the host; read state is a `platform` decision | Rebuilt from its input |
+| **Setting** | A typed value an app declares | Declared by the app; values set by `platform` decisions, stored by the host | Decisions |
+
+Ownership rule: the host keeps shared runtime state; the `platform` app decides every change an administrator makes; apps decide only about their own data classes and reach the platform through `Caller`.
+
+#### External effects: lifecycle and replay
+
+```
+decision or app input ──emit──▶ pending ──attempt──▶ delivered
+                                  ▲    │            ▶ rejected (4xx except 408/429; private address; bad scheme)
+                          retry   │    └─ 5xx, 408, 429, timeout, network ─▶ retrying ──(12 attempts)──▶ failed
+                        (decision)│                                            │
+                                  └──────────── failed / rejected ◀────────────┘
+  pending or retrying ──discard (decision)──▶ discarded      endpoint removed ─▶ its unsettled effects are discarded
+```
+
+1. **Creation.** Inside an input:
+   - `emit` turns a decision whose event an endpoint subscribes to into an effect. The ID is `<tenant>:<app>:<change id>:<endpoint>`.
+   - `Caller.Emit` turns an app's effect of a bound kind into an effect. The ID is `<tenant>:<app>:<kind>:<key>:<endpoint>`.
+
+   An effect has no journal entry of its own. It is part of the input that caused it, and replay recreates it with the same ID.
+2. **Attempt.** `Dispatch` takes the due head of each endpoint's effects (ordered per endpoint) and sends it outside the tenant's lock.
+   - The request is signed as Standard Webhooks, with `webhook-id` and `Idempotency-Key` both set to the effect ID.
+   - Private addresses are refused at connect time unless the endpoint allows them.
+   - Dispatch is never called during replay.
+3. **Outcome.** Every attempt ends in a journal entry `effect` holding:
+   - the result: delivered, rejected or retry;
+   - the detail;
+   - the digest of the body sent;
+   - for an app's effect, the answer (JSON, up to 64 KiB).
+
+   Then it is applied:
+   - retry sets the next due time: 5 s doubling to 1 h, with jitter derived from the ID;
+   - after 12 attempts since the last manual retry the effect is failed.
+4. **Answer.** For an app's effect, once settled, the host calls the app's `Answer` with the outcome. The app records the answer as an observation and may notify or decide. Replay makes the same call with the journaled answer.
+5. **Idempotency.** At least once:
+   - a crash between an attempt and its entry leaves the effect pending;
+   - after restart it is sent again with the same ID;
+   - receivers keep one copy per ID. The ERP stand-in returns the same confirmation for the same ID.
+6. **Manual retry and discard** are `platform` decisions. A retry makes a failed or rejected effect pending again, with a full schedule. A discard settles a pending or retrying effect.
+7. **Replay** rebuilds intents from their inputs, applies every recorded outcome and hands answers to apps. It calls nothing: `CheckReplay` fails the test on any outbound call. After replay, effects still pending are sent by the running host with their original IDs.
+
+#### Replay semantics for every journal entry kind
+
+| Entry kind | Written when | Replay does |
+|---|---|---|
+| `submission` | A top-level decision is accepted | Runs the same app rules without re-authorizing; queues its events; recreates webhook effects |
+| `<input>` (connector batch or page) | An input declared journaled is accepted | Runs the same app code (cursor checks included) |
+| `delivery` | Each attempt of an event for a subscriber | Attempts again and must reach the same outcome, otherwise replay stops |
+| `job` | A run that decided or notified something | Runs again at the recorded time and must reach the same outcome |
+| `effect` | Each attempt of an outbound effect | Applies the recorded outcome and hands the answer to the app; never sends |
+
+Volatile by design, not rebuilt: heartbeats, a connector's last refused input, endpoint health (it depends on the secret store), and a job's run count and next due time (runs that did nothing are not journaled; after a restart a job is due at once).
+
+Removing an action schema, input or effect kind that a journal already holds needs a migration: replay would meet an entry no code accepts.
+
+#### Invariants and the checks that hold them
+
+| Invariant | Check |
+|---|---|
+| Replay reproduces everything the host shows, and calls nothing outside | `platformserver.CheckReplay` in the tests of the host, manufacturing, Hotel and the sales solution |
+| A manifest the host cannot honour is refused at composition: undescribed actions, settings whose default is not of their type, jobs without an interval, repeated effect kinds, open reads not declared, unmet requirements or protocols | `checkManifest` and `NewTenant`, run by every composition's tests |
+| No app depends on another app; a protocol depends on no app; app code never reaches the host runtime | `scripts/boundaries.sh` (verify step `app-boundaries`) |
+| Every caller receives only the actions its role permits, AI agents included | Catalog tests (host, manufacturing, sales) and the rehearsal |
+| Each accepted top-level input is journaled once, before it is answered | Host tests and the rehearsal (restart and restore) |
+| Kernel vocabulary stays domain-free | verify step `contract-vocabulary` |
+
 
 ## 3. Runtimes and languages
 

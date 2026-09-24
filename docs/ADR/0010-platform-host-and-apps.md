@@ -1,6 +1,6 @@
 # ADR-0010: The platform is a host that runs apps; its own administration is an app
 
-**Status:** Accepted (2026-09-24; direction approved by the owner, host capabilities detailed in this revision)
+**Status:** Accepted (2026-09-24; direction approved by the owner, host capabilities detailed in this revision) What of this is built, partial or deferred is reconciled in `docs/Platform.md` §2 "ADR reconciliation" (#103).
 
 **Context.** Composition #91 worked by hand:
 - each package defines its own principal (F-21);
@@ -103,8 +103,8 @@ The rows below name the capability and what an app gets from it. The "When" colu
 | Events | Subscriptions over change records, delivered after commit, handlers owned as work (K9) | ServiceNow business rules and events, Odoo automated actions | #94; owned work with retries in #97 |
 | Scheduled work | Jobs with owner, checkpoints and cancellation (K9) | Odoo `ir.cron`, ServiceNow scheduled jobs | #97 (ADR-0013) |
 | Connectors | Push and poll sources with cursors and health (K8) | ServiceNow IntegrationHub | exists (manufacturing); managed in Settings in #97 |
-| Outbound API and webhooks | External systems call actions or receive events with the same grants | — | later |
-| Agent adapters | CLI and MCP over a caller's catalog | ADR-0008 | exists (CLI); MCP later |
+| Outbound API and webhooks | External systems call actions or receive events with the same grants | — | #100 (ADR-0014) |
+| Agent adapters | CLI and MCP over a caller's catalog | ADR-0008 | exists (CLI); MCP in #95 |
 
 **F. Operations**
 
