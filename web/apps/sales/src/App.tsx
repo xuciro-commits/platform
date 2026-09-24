@@ -6,11 +6,11 @@ import { EdgeClient, type ActionDeclaration } from "@platform/kernel";
 import { newReservation, ReservationCard, ReservationTable, roomTypes, type Reservation } from "@pkg/hotel";
 import { BookingTable, type Booking } from "@pkg/lodging";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, StatusTag, Tag, Workspace,
+  Button, DataTable, Dialog, EntityCard, EntityForm, Input, NotificationList, PageHeader, StatusTag, Tag, Workspace,
   defineStatuses, notify, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BedDouble, Building2 } from "lucide-react";
+import { BedDouble, Bell, Building2 } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -27,6 +27,7 @@ type Note = { entity: string; at: string; by: string; text: string };
 type Opportunity = { id: string; account: string; title: string; owner: string; stage: "open" | "won" | "lost"; revision: number; stays: Booking[] };
 type Customer = Account & { opportunities: Opportunity[] };
 type Me = { tenantId: string; principalId: string };
+type Notification = { id: string; app: string; title: string; body?: string; ref?: string; at: string; read: boolean };
 
 const stages = defineStatuses({ open: { label: "Open", tone: "info" }, won: { label: "Won", tone: "success" }, lost: { label: "Lost", tone: "neutral" } });
 const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
@@ -161,7 +162,20 @@ function ReservationDetail({ id }: { id: string }) {
   return r ? <div className="max-w-md"><ReservationCard reservation={r} /></div> : <p className="text-sm text-muted">No reservation {id}.</p>;
 }
 
+// What the platform keeps for the signed-in member: channel bookings, oversold nights, arrivals (ADR-0013).
+function Notifications() {
+  const items = useRead<Notification[]>("/v1/notifications") ?? [];
+  const { decide } = useSales();
+  const { open } = useWorkspace();
+  return <>
+    <PageHeader title="Notifications" description="What the hotel and the CRM tell you." />
+    <NotificationList items={items} onRead={(n) => void decide("platform.notification.read", { type: "platform.notification", id: n.id }, {})}
+      onOpen={(n) => n.ref?.startsWith("hotel.reservation/") && open({ view: "reservation", params: { id: n.ref.split("/")[1]! } })} />
+  </>;
+}
+
 const views: View[] = [
+  { id: "notifications", title: () => "Notifications", render: () => <Notifications /> },
   { id: "customers", title: () => "Customers", render: () => <Customers /> },
   { id: "customer", title: (p) => p.id ?? "Customer", render: (p) => <CustomerDetail id={p.id ?? ""} /> },
   { id: "reservations", title: () => "Reservations", render: () => <Reservations /> },
@@ -174,6 +188,7 @@ export function App() {
   const me = useQuery({ queryKey: [token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false }).data;
   const actions = useQuery({ queryKey: [token, "actions"], queryFn: () => client.get<ActionDeclaration[]>("/v1/actions"), refetchInterval: false }).data;
   const queries = useQueryClient();
+  const unread = (useQuery({ queryKey: [token, "/v1/notifications"], queryFn: () => client.get<Notification[]>("/v1/notifications") }).data ?? []).filter((n) => !n.read).length;
   useEffect(() => {
     if (!me) return;
     Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
@@ -195,6 +210,8 @@ export function App() {
     <SalesContext.Provider value={{ client, can, decide }}>
       <Workspace product="Sales Workspace" storageKey="sales.layout" views={views} home={{ view: "customers" }}
         nav={[
+          { label: "You", items: [{ label: "Notifications", icon: <Bell />, route: { view: "notifications" },
+            badge: unread ? <span className="text-xs text-[var(--tone-info)]">{unread}</span> : null }] },
           { label: "CRM", items: [{ label: "Customers", icon: <Building2 />, route: { view: "customers" } }] },
           { label: "Hotel", items: [{ label: "Reservations", icon: <BedDouble />, route: { view: "reservations" } }] },
         ]}

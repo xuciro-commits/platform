@@ -29,9 +29,13 @@ func main() {
 		}
 		return t
 	}
-	host := platformserver.NewHost(platformserver.Tokens(map[string]string{"desk-a": "desk-a", "manager-a": "manager-a", "channel-a": "channel-a", "desk-b": "desk-b"}),
-		tenant("hotel-a", seat("desk-a", "desk-1", hotel.FrontDesk), seat("manager-a", "manager-1", hotel.Manager), seat("channel-a", "channel-sim", hotel.Channel)),
-		tenant("hotel-b", seat("desk-b", "desk-7", hotel.FrontDesk)))
+	a, b := tenant("hotel-a", seat("desk-a", "desk-1", hotel.FrontDesk), seat("manager-a", "manager-1", hotel.Manager), seat("channel-a", "channel-sim", hotel.Channel)),
+		tenant("hotel-b", seat("desk-b", "desk-7", hotel.FrontDesk))
+	if err := a.Connect(hotel.ChannelConnector("channel-sim")); err != nil {
+		log.Fatal(err)
+	}
+	platformserver.RunWork(a, b)
+	host := platformserver.NewHost(platformserver.Tokens(map[string]string{"desk-a": "desk-a", "manager-a": "manager-a", "channel-a": "channel-a", "desk-b": "desk-b"}), a, b)
 	handler, delayed := host.Handler(), 0
 	log.Printf("hotel-server on http://%s (tenants hotel-a, hotel-b)", *addr)
 	log.Fatal(http.ListenAndServe(*addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

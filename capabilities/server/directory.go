@@ -101,6 +101,20 @@ func (d *Directory) Member(subject string) (Member, bool) {
 	return clone(m), true
 }
 
+// holding are the members with role in app, sorted.
+func (d *Directory) holding(app, role string) []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []string
+	for id, m := range d.members {
+		if m.Roles[app] == role {
+			out = append(out, id)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 func clone(m *Member) Member {
 	out := *m
 	out.Roles, out.Attributes = maps.Clone(m.Roles), maps.Clone(m.Attributes)

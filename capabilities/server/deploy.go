@@ -78,6 +78,13 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 		authenticate = OIDC(d.Issuer, d.Keys)
 	}
+	RunWork(tenants...)
+	log.Printf("host on http://%s", d.Addr)
+	return http.ListenAndServe(d.Addr, NewHost(authenticate, tenants...).Handler())
+}
+
+// RunWork runs the tenants' owned work every second, for as long as the process lives (ADR-0013).
+func RunWork(tenants ...*Tenant) {
 	go func() {
 		for range time.Tick(time.Second) {
 			for _, t := range tenants {
@@ -85,6 +92,4 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			}
 		}
 	}()
-	log.Printf("host on http://%s", d.Addr)
-	return http.ListenAndServe(d.Addr, NewHost(authenticate, tenants...).Handler())
 }

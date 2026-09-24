@@ -36,7 +36,7 @@ The constraint is ADR-0007: state is rebuilt by replaying the journal of accepte
    - Enabling and disabling a connector is a decision of the platform app, so it is journaled and survives restarts.
    - Settings shows the connectors under Integrations.
 4. **Notifications are a platform capability.** An app notifies from any input (`Caller.Notify`):
-   - **Recipients:** members, or everyone holding a membership with a role in a unit or above it in a named structure (ADR-0012), resolved on the day of the input and kept as resolved.
+   - **Recipients:** members; everyone holding a membership with a role in a unit or above it in a named structure (ADR-0012); or everyone holding a role in the notifying app (added in #98 for the hotel). They are resolved on the day of the input and kept as resolved.
    - **Deduplication:** a key per recipient.
 
    Each member reads their own notifications (a read open to every member) and marks them read, as a decision. Email and push come later, over the same records.

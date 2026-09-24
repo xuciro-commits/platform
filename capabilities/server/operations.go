@@ -361,11 +361,13 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 
 // Notifications: an app tells members something from any input (ADR-0013).
 
-// Recipient is a member, or whoever holds a membership (with Role, when given)
-// in Unit or in a unit above it in Structure (ADR-0012).
+// Recipient is a member; whoever holds a membership (with Role, when given) in
+// Unit or in a unit above it in Structure (ADR-0012); or whoever holds AppRole
+// in the notifying app (the directory).
 type Recipient struct {
 	Member                string
 	Structure, Unit, Role string
+	AppRole               string
 }
 
 type Notification struct {
@@ -393,6 +395,15 @@ func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string 
 	for _, r := range to {
 		if r.Member != "" && !slices.Contains(members, r.Member) {
 			members = append(members, r.Member)
+		}
+		if r.AppRole != "" {
+			if d, ok := t.app(PlatformApp).(*Directory); ok {
+				for _, m := range d.holding(c.App, r.AppRole) {
+					if !slices.Contains(members, m) {
+						members = append(members, m)
+					}
+				}
+			}
 		}
 		if r.Unit != "" && t.org != nil {
 			for _, m := range t.org.holders(r.Structure, r.Unit, r.Role, now.UTC().Format(time.DateOnly)) {
