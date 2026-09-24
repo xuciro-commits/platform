@@ -4,8 +4,9 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, Search } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
+import type { FieldType } from "../fields/types";
 import { Input } from "../primitives/input";
 
 declare module "@tanstack/react-table" {
@@ -14,6 +15,8 @@ declare module "@tanstack/react-table" {
     /** Numbers and codes align right with tabular figures. */
     align?: "left" | "right";
     width?: number;
+    /** Set by columnsFor: the column's field type, which also edits cells inline. */
+    field?: FieldType<any, TData>;
   }
 }
 
@@ -29,12 +32,17 @@ export type DataTableProps<T> = {
   searchable?: boolean;
   toolbar?: ReactNode;
   empty?: ReactNode;
+  /** Makes cells of editable field types (columnsFor) editable in place: double-click or Enter. */
+  onCellEdit?: (row: T, column: string, value: unknown) => void;
 };
 
 /** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
-  data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = "No rows",
+  data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = "No rows", onCellEdit,
 }: DataTableProps<T>) {
+  const [editing, setEditing] = useState<{ row: string; column: string; draft: unknown }>();
+  // Like a spreadsheet: opening an editor selects the value, so typing replaces it.
+  const selectOnOpen = useCallback((el: HTMLDivElement | null) => el?.querySelector<HTMLInputElement>("input:not([type=checkbox]):not([type=file])")?.select(), []);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const table = useReactTable({
@@ -48,8 +56,10 @@ export function DataTable<T>({
     count: rows.length, estimateSize: () => rowHeight, overscan: 12,
     getScrollElement: () => scroller.current, initialRect: { width: 0, height: typeof height === "number" ? height : 480 },
   });
-  const template = table.getVisibleLeafColumns()
-    .map((c) => (c.columnDef.meta?.width ? `${c.columnDef.meta.width}px` : "minmax(80px, 1fr)")).join(" ");
+  const widths = table.getVisibleLeafColumns().map((c) => c.columnDef.meta?.width);
+  const template = widths.map((w) => (w ? `${w}px` : "minmax(120px, 1fr)")).join(" ");
+  // Wide entities scroll sideways instead of squeezing their columns.
+  const minWidth = widths.reduce<number>((sum, w) => sum + (w ?? 120), 0);
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -68,7 +78,7 @@ export function DataTable<T>({
       )}
       <div ref={scroller} role="table" aria-rowcount={rows.length}
         className="overflow-auto rounded-md border border-border bg-surface" style={{ height }}>
-        <div role="rowgroup" className="sticky top-0 z-10 border-b border-border bg-surface">
+        <div role="rowgroup" className="sticky top-0 z-10 border-b border-border bg-surface" style={{ minWidth }}>
           {table.getHeaderGroups().map((group) => (
             <div role="row" key={group.id} className="grid" style={{ gridTemplateColumns: template }}>
               {group.headers.map((header) => {
@@ -94,7 +104,7 @@ export function DataTable<T>({
         {rows.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted">{empty}</div>
         ) : (
-          <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize() }}>
+          <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize(), minWidth }}>
             {virtualizer.getVirtualItems().map((item) => {
               const row = rows[item.index]!;
               return (
@@ -103,12 +113,32 @@ export function DataTable<T>({
                   className={cn("absolute inset-x-0 grid items-center border-b border-border/60 text-sm hover:bg-row-hover",
                     onRowClick && "cursor-pointer", row.id === selectedId && "bg-row-selected")}
                   style={{ gridTemplateColumns: template, height: rowHeight, transform: `translateY(${item.start}px)` }}>
-                  {row.getVisibleCells().map((cell) => (
-                    <div role="cell" key={cell.id}
-                      className={cn("truncate px-2", cell.column.columnDef.meta?.align === "right" && "text-right tabular-nums")}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </div>
-                  ))}
+                  {row.getVisibleCells().map((cell) => {
+                    const field = cell.column.columnDef.meta?.field;
+                    const editable = !!onCellEdit && !!field?.editor && !field.readOnly;
+                    const isEditing = editing?.row === row.id && editing.column === cell.column.id;
+                    const begin = () => setEditing({ row: row.id, column: cell.column.id, draft: cell.getValue() });
+                    const commit = () => {
+                      if (editing && editing.draft !== cell.getValue()) onCellEdit?.(row.original, cell.column.id, editing.draft);
+                      setEditing(undefined);
+                    };
+                    return (
+                      <div role="cell" key={cell.id} tabIndex={editable ? 0 : undefined}
+                        onDoubleClick={editable ? (e) => { e.stopPropagation(); begin(); } : undefined}
+                        onKeyDown={editable && !isEditing ? (e) => { if (e.key === "Enter") { e.preventDefault(); begin(); } } : undefined}
+                        className={cn("truncate px-2", cell.column.columnDef.meta?.align === "right" && "text-right tabular-nums",
+                          editable && "outline-none focus-visible:ring-1 focus-visible:ring-ring", isEditing && "overflow-visible")}>
+                        {isEditing ? (
+                          <div ref={selectOnOpen} onClick={(e) => e.stopPropagation()}
+                            className="relative z-20 min-w-full rounded-md bg-surface p-0.5 shadow-lg ring-1 ring-border"
+                            onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(undefined); }}
+                            onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) commit(); }}>
+                            {field!.editor!({ value: editing.draft, onChange: (draft) => setEditing({ ...editing, draft }), autoFocus: true })}
+                          </div>
+                        ) : flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}

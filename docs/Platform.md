@@ -188,6 +188,8 @@ Across domains the business differs but the data is organised alike. These are *
 | Devices and data collection | PLC states, counters, gauges | Door access, cameras, temperature/humidity | Device registry (connector, K8) plus reading streams as observations (K2, K3) |
 | Documents with lifecycles | Work order, SFC, nonconformance | Reservation, housekeeping task | A state machine in domain code; decisions as change records (K4) submitted through the outbox (K5) |
 
+Entities are declared with the UI kit's field types (ADR-0004), in code owned by the business package. **Open:** tenant-defined custom fields (users adding a field at runtime, as Airtable allows) would turn field declarations into configuration; decide when a customer needs it, with storage (K7 schema evolution) and policy (K6) in view, not by default.
+
 ### Reference systems (industry state of the art)
 
 Domain slices model their domain on leading systems, not on invention, so that friction comes from real business shape. The kernel still may not borrow their vocabulary.

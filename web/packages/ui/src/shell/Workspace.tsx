@@ -26,7 +26,7 @@ export type Session = {
 type OpenOptions = { window?: "tab" | "float" | "popout" };
 type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; notify: typeof toast };
 
-const WorkspaceContext = createContext<WorkspaceApi | null>(null);
+export const WorkspaceContext = createContext<WorkspaceApi | null>(null);
 
 /** Opens routes as tabs, floats or separate windows, from any view. */
 export function useWorkspace(): WorkspaceApi {
@@ -79,6 +79,8 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
 
   const onReady = useCallback(({ api }: { api: DockviewApi }) => {
     dock.current = api;
+    // Read the link first: restoring the layout rewrites the URL to its active tab.
+    const linked = routeFromHash(location.hash);
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) api.fromJSON(JSON.parse(saved));
@@ -94,7 +96,6 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     };
     api.onDidLayoutChange(sync);
     api.onDidActivePanelChange(sync);
-    const linked = routeFromHash(location.hash);
     if (linked && byId.has(linked.view)) open(linked);
     else if (api.panels.length === 0) open(home);
     sync();

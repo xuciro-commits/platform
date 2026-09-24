@@ -2,8 +2,9 @@ import {
   Button, DataTable, EntityCard, EntityForm, PageHeader, StatusTag, Workspace, defineStatuses, notify, useWorkspace,
   type ColumnDef, type View,
 } from "@platform/ui";
-import { Activity, BedDouble, Factory, Moon, Plus, Sun } from "lucide-react";
+import { Activity, BedDouble, Boxes, Factory, Moon, Plus, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Materials } from "./Materials";
 import { z } from "zod";
 
 // Three industries, one component set: the data shapes differ, the organisation does not.
@@ -127,6 +128,7 @@ function WorkCenterForm() {
 const views: View[] = [
   { id: "workOrders", title: () => "Work orders", render: () => <WorkOrders /> },
   { id: "workOrder", title: (p) => p.id ?? "Work order", render: (p) => <WorkOrder id={p.id ?? ""} /> },
+  { id: "materials", title: () => "Materials", render: () => <Materials /> },
   { id: "workCenterForm", title: () => "New work center", render: () => <WorkCenterForm /> },
   { id: "rooms", title: () => "Rooms", render: () => <>
     <PageHeader title="Rooms" description="Housekeeping status per room" />
@@ -153,6 +155,7 @@ export function Gallery() {
       nav={[
         { label: "Manufacturing", items: [
           { label: "Work orders", icon: <Factory />, route: { view: "workOrders" } },
+          { label: "Materials", icon: <Boxes />, route: { view: "materials" } },
           { label: "New work center", icon: <Plus />, route: { view: "workCenterForm" } },
         ] },
         { label: "Hotel", items: [{ label: "Rooms", icon: <BedDouble />, route: { view: "rooms" } }] },

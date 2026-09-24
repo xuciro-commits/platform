@@ -20,23 +20,25 @@ export const submissionStatuses = defineStatuses({
   SUBMISSION_STATE_UNKNOWN: { label: "Unknown", tone: "warning" },
 });
 
-export function StatusTag({ status, registry, className }: { status: string; registry: StatusRegistry; className?: string }) {
-  const entry = registry[status] ?? { label: status, tone: "neutral" as const };
+/** A coloured label: states, select options, categories. */
+export function Tag({ label, tone = "neutral", className }: { label: string; tone?: Tone; className?: string }) {
   return (
     <span
-      data-tone={entry.tone}
-      className={cn(
-        "inline-flex h-[18px] items-center gap-1 rounded-sm border px-1.5 text-xs font-medium leading-none",
-        className,
-      )}
+      data-tone={tone}
+      className={cn("inline-flex h-[18px] items-center gap-1 rounded-sm border px-1.5 text-xs font-medium leading-none whitespace-nowrap", className)}
       style={{
-        color: `var(--tone-${entry.tone})`,
-        borderColor: `color-mix(in oklch, var(--tone-${entry.tone}) 35%, transparent)`,
-        background: `color-mix(in oklch, var(--tone-${entry.tone}) 10%, transparent)`,
+        color: `var(--tone-${tone})`,
+        borderColor: `color-mix(in oklch, var(--tone-${tone}) 35%, transparent)`,
+        background: `color-mix(in oklch, var(--tone-${tone}) 10%, transparent)`,
       }}
     >
-      <span className="size-1.5 rounded-full" style={{ background: `var(--tone-${entry.tone})` }} aria-hidden />
-      {entry.label}
+      <span className="size-1.5 rounded-full" style={{ background: `var(--tone-${tone})` }} aria-hidden />
+      {label}
     </span>
   );
+}
+
+export function StatusTag({ status, registry, className }: { status: string; registry: StatusRegistry; className?: string }) {
+  const entry = registry[status] ?? { label: status, tone: "neutral" as const };
+  return <Tag label={entry.label} tone={entry.tone} className={className} />;
 }
