@@ -87,6 +87,7 @@
       "client:mes-assistant"
     ],
     "id": "agent-l1",
+    "agent": true,
     "roles": {
       "mes": "assistant"
     },

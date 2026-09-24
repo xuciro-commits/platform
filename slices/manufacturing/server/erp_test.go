@@ -99,4 +99,34 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 		keys = append(keys, e.Key+":"+e.State)
 	}
 	expect(t, fmt.Sprint(keys), "[SO-2#2:delivered SO-2:rejected SO-1:delivered]")
+
+	// D6: the line's AI assistant corrects a refused order. Posting to the ERP
+	// cannot be recalled, so the confirmation waits for a person's approval.
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-3", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ok")
+	run("SO-3-001")
+	p.tenant.Dispatch(t0)
+	expect(t, order("SO-3").ERP, "refused")
+	expect(t, fmt.Sprint(p.DeliverPlanned(erp, PlannedPage{CursorFrom: "page-2", CursorTo: "page-3", Orders: []PlannedOrder{{ERPID: "PO-9003", Product: "P-100", Quantity: 1}}}, t0)), "<nil>")
+	expect(t, submit(p, asst, SchemaResend, OrderType, "SO-3", resend{Planned: "PO-9003"}), "ok")
+	held := p.tenant.Effects(t0)[0]
+	expect(t, held.State+" "+held.Agent, "held agent-l1")
+	p.tenant.Dispatch(t0)
+	expect(t, fmt.Sprint(calls), "4") // not sent
+	inbox, _ := p.tenant.Read(admin, "notifications")
+	expect(t, inbox.([]platform.Notification)[0].Title, "Approve Order confirmation to the ERP for mes.order/SO-3")
+	approve := func(who platform.Member, key string) string {
+		_, err := p.tenant.Submit(who, &pb.Submission{TenantId: tenant, PrincipalId: who.ID, Authority: platformserver.PlatformApp, IdempotencyKey: key,
+			Target: &pb.EntityRef{Type: platformserver.EffectType, Id: held.ID}, Schema: &pb.SchemaRef{Name: platformserver.SchemaEffectApprove, Version: 1}, Payload: []byte("{}")}, t0)
+		if err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+	robot := admin
+	robot.ID, robot.Agent = "admin-bot", true
+	expect(t, approve(robot, "a1"), "ERROR_CODE_POLICY_DENIED") // an agent cannot approve, whatever its role
+	expect(t, approve(admin, "a2"), "ok")
+	p.tenant.Dispatch(t0)
+	o = order("SO-3")
+	expect(t, fmt.Sprint(o.ERP, " ", o.Confirmation, " ", calls), "confirmed CONF-PO-9003-1 5")
 }

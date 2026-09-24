@@ -97,6 +97,29 @@ AGENT=$(curl -sf "$IDP/oidc/token" -d grant_type=client_credentials -d client_id
 [[ $(submit "$AGENT" a-1 mes.order.release mes.order WO-9 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "server let the assistant release"
 echo "ok   AI assistant: catalog of one plant action (and its own notifications), acted within line L1, refused outside it"
 
+# An order the ERP refuses (no planned order) is corrected by the assistant. The
+# posting cannot be recalled and an AI agent caused it, so it waits for a
+# person (ADR-0014 D6); the supervisor approves, and the ERP confirms it.
+submit "$SUP" r-3 mes.order.release mes.order WO-3 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -e .record >/dev/null || fail "release WO-3"
+rev=0
+for resource in FURNACE-1 CNC-11 CMM-1; do
+  submit "$OP1" "w3-s$rev" mes.sfc.start mes.sfc WO-3-001 "{\"resource\":\"$resource\"}" $rev | jq -e .record >/dev/null || fail "start WO-3 at $resource"
+  submit "$OP1" "w3-c$rev" mes.sfc.complete mes.sfc WO-3-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-3 at $resource"
+  rev=$((rev + 2))
+done
+wo3() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/orders" | jq -r '.[] | select(.id == "WO-3") | .erp'; }
+for _ in $(seq 20); do [[ $(wo3) == refused ]] && break; sleep 0.5; done
+[[ $(wo3) == refused ]] || fail "ERP refusal of WO-3: $(wo3)"
+submit "$AGENT" a-2 mes.order.reconfirm mes.order WO-3 '{"planned":"PO-9001"}' | jq -e .record >/dev/null || fail "assistant resend"
+held=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/effects" | jq -r 'first(.[] | select(.key == "WO-3#2")) | .state + " " + .id')
+[[ ${held%% *} == held ]] || fail "the agent's ERP posting was not held: $held"
+sleep 1.5 && [[ $(wo3) == sent ]] || fail "a held effect was sent"
+[[ $(AUTHORITY=platform submit "$AGENT" a-3 platform.effect.approve platform.effect "${held#* }" '{}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "an agent approved"
+AUTHORITY=platform submit "$SUP" a-4 platform.effect.approve platform.effect "${held#* }" '{}' | jq -e .record >/dev/null || fail "approve"
+for _ in $(seq 20); do [[ $(wo3) == confirmed ]] && break; sleep 0.5; done
+[[ $(wo3) == confirmed ]] || fail "WO-3 after approval: $(wo3)"
+echo "ok   ERP correction: a refused order resent by the AI assistant, held until the supervisor approved, then confirmed"
+
 # The sales solution: the CRM books a stay through the lodging protocol and the
 # hotel provides it (ADR-0011); the platform app revokes a role and the catalog
 # follows on the next request; a hotel cancellation reaches the opportunity's
@@ -136,7 +159,7 @@ sales crm-server "$MGR" s-b3 crm.opportunity.book crm.opportunity OPP-1 '{"roomT
 echo "ok   sales solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants; the cancellation reached a webhook endpoint signed, once"
 
 before=$(state)
-[[ $(jq -s '.[1] | length' <<<"$before") == 3 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
+[[ $(jq -s '.[1] | length' <<<"$before") == 4 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
 compose restart mes-server sales-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done

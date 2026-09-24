@@ -18,6 +18,9 @@ type Member struct {
 	ID     string            `json:"id"`
 	Tenant string            `json:"tenant"`
 	Roles  map[string]string `json:"roles"`
+	// Agent marks an AI agent: an irreversible effect it causes waits for a
+	// person's approval, and it cannot give one (ADR-0014 D6).
+	Agent bool `json:"agent,omitempty"`
 }
 
 // Caller is a member as one app sees it. Replaying marks the journal replay:

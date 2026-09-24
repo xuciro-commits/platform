@@ -13,6 +13,10 @@ type EffectKind struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	// Irreversible marks what cannot be recalled once received (a posting, a
+	// payment, an email to people outside): caused by an agent, it is held until
+	// a person approves it (D6).
+	Irreversible bool `json:"irreversible,omitempty"`
 }
 
 // Effect is one intent for one endpoint and what became of it.
@@ -24,7 +28,8 @@ type Effect struct {
 	Key      string    `json:"key,omitempty"` // the app's key for it
 	Target   string    `json:"target"`
 	At       time.Time `json:"at"`
-	State    string    `json:"state"` // pending, retrying, delivered, rejected, failed, discarded
+	State    string    `json:"state"`           // held, pending, retrying, delivered, rejected, failed, discarded
+	Agent    string    `json:"agent,omitempty"` // the AI agent that caused a held effect
 	Attempts int       `json:"attempts"`
 	Last     time.Time `json:"last,omitzero"`
 	Due      time.Time `json:"due,omitzero"`
@@ -46,7 +51,8 @@ type Outcome struct {
 // endpoint bound to it; key names the effect within the app and kind, so the
 // same fact of the business is sent once whatever retries or replays do. It is
 // called inside an input, so replay rebuilds the intent and never sends it.
-// It returns how many endpoints will receive it.
+// It returns how many endpoints will receive it. An irreversible kind emitted
+// for an agent is held until a person approves it (D6).
 func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
 	if c.rt == nil {
 		return 0, notFound()

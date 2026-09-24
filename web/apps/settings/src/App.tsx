@@ -13,7 +13,7 @@ import { Blocks, Cable, Grid3x3, History, Network, PlugZap, SlidersHorizontal, U
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
-type Member = { id: string; tenant: string; roles: Record<string, string>; subjects: string[] };
+type Member = { id: string; tenant: string; roles: Record<string, string>; subjects: string[]; agent?: boolean };
 type Capability = { name: string; enabled: boolean; actions: string[] };
 type AppInfo = { emits?: { name: string; title: string; description: string }[]; id: string; version: string; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
 type ProtocolInfo = { id: string; actions: string[]; reads: string[]; events: { name: string; title: string }[]; providers: string[]; consumers: string[]; bound?: string };
@@ -22,7 +22,7 @@ type Task = { id: string; kind: "delivery" | "job"; app: string; title: string; 
 type Connector = { id: string; direction: string; dataClasses: string[]; heartbeat: string; health: string; lastSeen?: string; cursor?: string; disabled: boolean;
   lastError?: { at: string; input: string; error: string } };
 type EndpointView = { id: string; url: string; secret: string; events?: string[]; effects?: string[]; allowPrivate?: boolean; pending: number; failing: number; health: string; delivered: number };
-type Effect = { id: string; endpoint: string; event: string; target: string; at: string; state: string; attempts: number; last?: string; due?: string; error?: string; digest?: string };
+type Effect = { id: string; endpoint: string; event: string; target: string; at: string; state: string; agent?: string; attempts: number; last?: string; due?: string; error?: string; digest?: string };
 type SettingValue = { name: string; title: string; description: string; type: "boolean" | "integer" | "text" | "choice"; default: string; choices?: string[]; value: string };
 type AppSettings = { app: string; settings: SettingValue[] };
 type AuditEntry = { at: string; member: string; app: string; action: string; target?: string };
@@ -61,7 +61,7 @@ function useRead<T>(path: string, refetchInterval?: number) {
 }
 const when = (at?: string) => (at ? new Date(at).toLocaleString() : "—");
 
-const kind = (m: Member) => (m.subjects.some((s) => s.startsWith("client:")) ? "service or agent" : "person");
+const kind = (m: Member) => (m.agent ? "AI agent" : m.subjects.some((s) => s.startsWith("client:")) ? "service" : "person");
 
 function Members() {
   const members = useRead<Member[]>("/v1/members");
@@ -83,10 +83,11 @@ function Members() {
         <DataTable data={members.data ?? []} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 190px)"
           onRowClick={(m) => open({ view: "member", params: { id: m.id } })} />}
       <Dialog open={adding} onOpenChange={setAdding} title="Add member">
-        <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, "Lower case, digits, dashes"), subject: z.string().regex(/^(user|client):.+/, "user:<email> or client:<id>") })}
-          defaultValues={{ id: "", subject: "" }} submitLabel="Add" onCancel={() => setAdding(false)}
-          fields={[{ name: "id", label: "Member ID" }, { name: "subject", label: "Signs in as (user:<email> or client:<id>)" }]}
-          onSubmit={async (v) => { if (await decide("platform.member.add", v.id, { subject: v.subject })) setAdding(false); }} />
+        <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, "Lower case, digits, dashes"), subject: z.string().regex(/^(user|client):.+/, "user:<email> or client:<id>"), agent: z.boolean() })}
+          defaultValues={{ id: "", subject: "", agent: false }} submitLabel="Add" onCancel={() => setAdding(false)}
+          fields={[{ name: "id", label: "Member ID" }, { name: "subject", label: "Signs in as (user:<email> or client:<id>)" },
+            { name: "agent", label: "AI agent (what it causes that cannot be recalled waits for a person's approval)", kind: "checkbox" }]}
+          onSubmit={async (v) => { if (await decide("platform.member.add", v.id, { subject: v.subject, agent: v.agent })) setAdding(false); }} />
       </Dialog>
     </>
   );
@@ -426,19 +427,21 @@ function Webhooks() {
   const kinds = apps.flatMap((a) => (a.emits ?? []).map((e) => ({ id: `${a.id}/${e.name}`, title: e.title })));
   const events = [...apps.flatMap((a) => a.capabilities.flatMap((c) => c.actions)).filter((x) => !x.startsWith("platform.")),
     ...protocols.flatMap((p) => (p.events ?? []).map((e) => `${p.id}#${e.name}`))];
-  const tone = (s: string) => (({ delivered: "success", retrying: "warning", pending: "info", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
+  const tone = (s: string) => (({ delivered: "success", retrying: "warning", pending: "info", held: "warning", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
   const effectColumns: ColumnDef<Effect, any>[] = [
     { accessorKey: "at", header: "Event at", meta: { width: 160 }, cell: (c) => when(c.getValue()) },
     { accessorKey: "endpoint", header: "Endpoint", meta: { width: 110 } },
     { accessorKey: "event", header: "Event", meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "target", header: "Entity", meta: { width: 200 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    { accessorKey: "state", header: "State", meta: { width: 100 }, cell: (c) => <Tag label={c.getValue()} tone={tone(c.getValue())} /> },
+    { accessorKey: "state", header: "State", meta: { width: 130 }, cell: ({ row: { original: x } }) =>
+      <Tag label={x.state === "held" ? `held · ${x.agent}` : x.state} tone={tone(x.state)} /> },
     { accessorKey: "attempts", header: "Tries", meta: { width: 60, align: "right" } },
     { accessorKey: "due", header: "Next", meta: { width: 160 }, cell: ({ row: { original: x } }) => (x.state === "retrying" ? when(x.due) : "—") },
     { accessorKey: "error", header: "Last answer", meta: { width: 200 }, cell: (c) => <span className="text-xs">{c.getValue() ?? ""}</span> },
     { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
       {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decideOn("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>Retry</Button>}
-      {(x.state === "pending" || x.state === "retrying") &&
+      {x.state === "held" && <Button size="sm" variant="primary" onClick={() => void decideOn("platform.effect.approve", { type: "platform.effect", id: x.id }, {})}>Approve</Button>}
+      {(x.state === "held" || x.state === "pending" || x.state === "retrying") &&
         <Button size="sm" variant="danger" onClick={() => void decideOn("platform.effect.discard", { type: "platform.effect", id: x.id }, {})}>Discard</Button>}
     </span> },
   ];

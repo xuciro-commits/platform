@@ -96,7 +96,7 @@ func TestTenantComposition(t *testing.T) {
 	}
 	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke,
 		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead,
-		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, "a.note", "b.note"}) {
+		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, SchemaEffectApprove, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
 	}
 	if _, err := tn.Input(ana, "a-feed", []byte("tick"), now); err != nil {

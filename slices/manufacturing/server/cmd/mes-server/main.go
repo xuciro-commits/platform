@@ -24,7 +24,11 @@ var demo = []platformserver.Seat{
 	seat("quality-2", "qa-2", mes.Quality),
 	seat("gateway-l1", "gateway-l1", mes.Gateway),
 	seat("erp", "erp", mes.ERP),
+	agent(seat("assistant-l1", "agent-l1", mes.Assistant, "L1")),
 }
+
+// agent marks an AI agent: what it causes that cannot be recalled waits for a person (ADR-0014 D6).
+func agent(s platformserver.Seat) platformserver.Seat { s.Agent = true; return s }
 
 // seat signs in as subject and belongs to units of the site structure (ADR-0012).
 func seat(subject, id string, role mes.Role, units ...string) platformserver.Seat {

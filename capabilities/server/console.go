@@ -63,7 +63,8 @@ func ConsoleActions() *platform.Catalog {
 	return platform.NewCatalog(append([]platform.Action{
 		platform.Action{Schema: SchemaAdd, Target: MemberType, Capability: "members", Title: "Add member",
 			Description: "Add a member who signs in as a subject: user:<email> for a person, client:<id> for a service or AI agent.",
-			Payload:     []platform.Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"}}, Roles: admin},
+			Payload: []platform.Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"},
+				{Name: "agent", Type: "boolean", Description: "An AI agent: its irreversible effects wait for a person's approval"}}, Roles: admin},
 		platform.Action{Schema: SchemaGrant, Target: MemberType, Capability: "members", Title: "Grant role",
 			Description: "Give a member a role in an app, replacing the role held there.",
 			Payload:     []platform.Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
@@ -153,6 +154,7 @@ func (d *Console) decideMember(s *pb.Submission) (func(*pb.ChangeRecord), *kerne
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		Subject, App, Role string
+		Agent              bool
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
 		return nil, invalid
@@ -167,7 +169,7 @@ func (d *Console) decideMember(s *pb.Submission) (func(*pb.ChangeRecord), *kerne
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		return func(*pb.ChangeRecord) {
-			d.members[id] = &platform.Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}}
+			d.members[id] = &platform.Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}, Agent: p.Agent}
 			d.subjects[p.Subject] = id
 		}, nil
 	}

@@ -114,24 +114,43 @@ func (t *Tenant) trimEffects() {
 
 // emitFor makes c's app's effect of kind for every endpoint bound to it (Caller.Emit).
 func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
-	if a := t.app(c.App); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind }) || key == "" {
+	a := t.app(c.App)
+	if a == nil || key == "" {
 		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
+	if i < 0 {
+		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	state, agent := "pending", ""
+	if a.Manifest().Emits[i].Irreversible && c.Agent {
+		state, agent = "held", c.ID
 	}
 	name := c.App + "/" + kind
 	body, _ := json.Marshal(map[string]any{"type": name, "timestamp": now, "data": data})
 	t.opsMu.Lock()
-	defer t.opsMu.Unlock()
-	n := 0
+	n, held := 0, []string{}
 	for _, ep := range t.endpoints {
 		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
 		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id }) {
 			continue
 		}
 		t.outbound = append(t.outbound, &effect{Effect: platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
-			State: "pending", Due: now, Body: string(body)}})
+			State: state, Agent: agent, Due: now, Body: string(body)}})
 		n++
+		if state == "held" {
+			held = append(held, id)
+		}
 	}
 	t.trimEffects()
+	t.opsMu.Unlock()
+	// The tenant's administrators are asked, as the platform app, inside the input: replay asks again.
+	console := platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + PlatformApp, Tenant: t.ID, Roles: map[string]string{}}, PlatformApp, c.Replaying, true)
+	for _, id := range held {
+		t.notify(console, platform.Notification{Title: fmt.Sprintf("Approve %s for %s", a.Manifest().Emits[i].Title, entity),
+			Body: fmt.Sprintf("The AI agent %s caused it, and it cannot be recalled once sent. Approve or discard it in Settings → Integrations.", c.ID),
+			Ref:  EffectType + "/" + id, Key: "approve:" + id}, now, []platform.Recipient{{AppRole: Admin}})
+	}
 	return n, nil
 }
 
@@ -211,7 +230,8 @@ func (t *Tenant) Dispatch(now time.Time) {
 	var jobs []job
 	t.opsMu.Lock()
 	for _, ep := range t.endpoints {
-		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && !settled(x.State) })
+		// A held effect waits for its approval outside the endpoint's order.
+		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && !settled(x.State) && x.State != "held" })
 		if i < 0 || t.outbound[i].sending || t.outbound[i].Due.After(now) {
 			continue
 		}
@@ -359,6 +379,7 @@ const (
 	SchemaEndpointRemove = "platform.endpoint.remove"
 	SchemaEffectRetry    = "platform.effect.retry"
 	SchemaEffectDiscard  = "platform.effect.discard"
+	SchemaEffectApprove  = "platform.effect.approve"
 )
 
 func effectActions() []platform.Action {
@@ -377,6 +398,8 @@ func effectActions() []platform.Action {
 			Description: "Send a failed or rejected effect again, with the same key.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaEffectDiscard, Target: EffectType, Capability: "integrations", Title: "Discard effect",
 			Description: "Give up on an effect not yet delivered.", Payload: []platform.Field{}, Roles: admin},
+		{Schema: SchemaEffectApprove, Target: EffectType, Capability: "integrations", Title: "Approve effect",
+			Description: "Send an irreversible effect an AI agent caused; only a person may approve it (ADR-0014 D6).", Payload: []platform.Field{}, Roles: admin},
 	}
 }
 
@@ -427,8 +450,8 @@ func (t *Tenant) decideEndpoint(_ platform.Caller, s *pb.Submission, _ time.Time
 	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.endpoints = append(t.endpoints, &ep); t.opsMu.Unlock() }, nil
 }
 
-// decideEffect decides retrying and discarding an effect.
-func (t *Tenant) decideEffect(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+// decideEffect decides retrying, discarding and approving an effect.
+func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	t.opsMu.Lock()
@@ -437,6 +460,15 @@ func (t *Tenant) decideEffect(_ platform.Caller, s *pb.Submission, now time.Time
 		x = t.outbound[i]
 	}
 	t.opsMu.Unlock()
+	if s.GetSchema().GetName() == SchemaEffectApprove {
+		if x == nil || x.State != "held" {
+			return nil, notFound
+		}
+		if c.Agent { // D6: a person approves what an agent caused
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		return func(*pb.ChangeRecord) { t.opsMu.Lock(); x.State, x.Due = "pending", now; t.opsMu.Unlock() }, nil
+	}
 	if s.GetSchema().GetName() == SchemaEffectDiscard {
 		if x == nil || settled(x.State) {
 			return nil, notFound

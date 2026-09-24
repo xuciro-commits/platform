@@ -24,9 +24,13 @@ var (
 	qa2    = member("qa-2", Quality)
 	gw     = member("gateway-l1", Gateway)
 	erp    = member("erp", ERP)
+	asst   = agent(member("agent-l1", Assistant, "L1"))
 	t0     = time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 	keys   = 0
 )
+
+// agent marks a member as an AI agent (ADR-0014 D6).
+func agent(c platform.Caller) platform.Caller { c.Agent = true; return c }
 
 // units are the test members' memberships in the site structure.
 var units []platform.Membership
@@ -77,7 +81,8 @@ func plantTenantOf(t *testing.T, seed []platform.Membership, disable ...string) 
 			t.Fatalf("no capability %s", c)
 		}
 	}
-	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant), platformserver.NewOrganization(tenant, DemoOrganization(seed)), p)
+	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, platformserver.Seat{Subjects: []string{"admin"},
+		Member: platform.Member{ID: "admin", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}}), platformserver.NewOrganization(tenant, DemoOrganization(seed)), p)
 	if err == nil {
 		err = tn.Connect(DemoConnectors(tenant)...)
 	}

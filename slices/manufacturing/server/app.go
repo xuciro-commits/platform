@@ -26,7 +26,7 @@ func (p *Plant) Manifest() platform.Manifest {
 		Reads:  []string{"master", "orders", "sfcs", "planned-orders", "downtime"},
 		Inputs: map[string]bool{"states": true, "planned-orders": true},
 		Jobs:   []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
-		Emits: []platform.EffectKind{{Name: EffectConfirmation, Title: "Order confirmation to the ERP",
+		Emits: []platform.EffectKind{{Name: EffectConfirmation, Title: "Order confirmation to the ERP", Irreversible: true,
 			Description: "When the last SFC of an order ends, its yield and scrap are confirmed to the ERP (SAP production order confirmation); the ERP answers with its confirmation number."}},
 		Settings: []platform.Setting{
 			{Name: SettingNotifyDowntime, Title: "Tell supervisors about new downtime", Type: "boolean", Default: "true",
