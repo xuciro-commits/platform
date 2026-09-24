@@ -6,17 +6,21 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 export type Stay = { roomType: string; checkIn: string; checkOut: string };
-export type Reservation = Stay & { id: string; guest: string; version: number; canceled: boolean };
+export type Reservation = Stay & { id: string; guest: string; revision: number; canceled: boolean };
+/** A room type as the host keeps it (ADR-0016): records a manager maintains. */
+export type RoomType = { id: string; name: string; rooms: number; overbooking: number; hourly?: boolean; minUnits?: number; archived?: boolean };
 
 export const reservationStatuses = defineStatuses({
   confirmed: { label: "Confirmed", tone: "success" },
   canceled: { label: "Canceled", tone: "neutral" },
 });
 
-export const roomTypes = [{ value: "standard", label: "Standard" }, { value: "suite", label: "Suite" }, { value: "apartment", label: "Serviced apartment (28+ nights)" }];
+/** Choices for a stay's room type: the nightly types the hotel sells, as its records say. */
+export const roomTypeOptions = (types: RoomType[]) => types.filter((t) => !t.archived && !t.hourly)
+  .map((t) => ({ value: t.id, label: t.minUnits ? `${t.name} (${t.minUnits}+ nights)` : t.name }));
 
 export const stay = z.object({
-  roomType: z.enum(["standard", "suite", "apartment"]),
+  roomType: z.string().min(1, "Pick a room type"),
   checkIn: z.iso.date("Pick a date"),
   checkOut: z.iso.date("Pick a date"),
 }).refine((s) => s.checkOut > s.checkIn, { message: "Check-out must be after check-in", path: ["checkOut"] });
@@ -34,7 +38,7 @@ const columns: ColumnDef<Reservation, any>[] = [
   { accessorKey: "roomType", header: "Room type", meta: { width: 110 } },
   { accessorKey: "checkIn", header: "Check-in", meta: { width: 110 } },
   { accessorKey: "checkOut", header: "Check-out", meta: { width: 110 } },
-  { accessorKey: "version", header: "Ver.", meta: { width: 60, align: "right" } },
+  { accessorKey: "revision", header: "Rev.", meta: { width: 60, align: "right" } },
   { id: "status", accessorFn: (r) => (r.canceled ? "canceled" : "confirmed"), header: "Status", meta: { width: 110 },
     cell: (c) => <StatusTag status={c.getValue()} registry={reservationStatuses} /> },
 ];
@@ -48,6 +52,6 @@ export function ReservationTable({ data, onOpen, height = "calc(100dvh - 190px)"
 export function ReservationCard({ reservation: r, actions }: { reservation: Reservation; actions?: ReactNode }) {
   return (
     <EntityCard title={r.guest} subtitle={r.id} status={<ReservationStatus reservation={r} />}
-      properties={[["Room type", r.roomType], ["Stay", `${r.checkIn} → ${r.checkOut}`], ["Version", r.version]]} actions={actions} />
+      properties={[["Room type", r.roomType], ["Stay", `${r.checkIn} → ${r.checkOut}`], ["Revision", r.revision]]} actions={actions} />
   );
 }

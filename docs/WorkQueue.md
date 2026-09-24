@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **106 · building** | Stage 1, the application model ([ADR-0016](ADR/0016-application-model.md), accepted D1–D8). Done: the entity kit and record store, generic reads with scope and history, the kit's list page, record page and generated forms, CRM moved (its local journal replays), Settings' records browser. Next: Hotel's room types and reservations declared, the Hotel Desk and sales views kept working | Hotel's hand-written lists and forms are gone; its journals replay; `CheckReplay` passes in every composition |
+| **107 · next: architecture gate** | Stage 2 of the capability plan (Platform.md §10.4): lifecycles, approvals, tasks. ADR-0017 compares Odoo's status bar and approvals, ServiceNow's state flows, approvals, tasks and SLAs, Salesforce's paths and approval processes, SAP's release strategies and Oracle's approval engine. It proposes state machines declared on entities (transitions are actions with guards), approval chains from the organisation, and one task inbox with SLA timers, with decision points for the owner. Manufacturing's orders and SFCs move onto it as the proof | The owner has decided the ADR's points; the build items are queued with their done-when |
 | **105 · batch 1 done, owner testing** | AI providers (ADR-0015): providers, catalogs, enabled models with access, calls with journaled usage, Settings (providers, playground, usage) | The owner has tested with OpenRouter; batch 2 (quotas and rate limits, the Anthropic adapter, app calls as effects, streaming) is ordered |
 
 ## Open friction (temporary; delete entries once resolved)

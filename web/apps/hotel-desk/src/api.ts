@@ -2,13 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 
 // Typed wrappers over the Tauri commands (slices/hotel/client/src-tauri/src/main.rs).
 
-import type { Reservation, Stay } from "@pkg/hotel";
+import type { Reservation, RoomType, Stay } from "@pkg/hotel";
 export type OutboxEntry = {
   key: string; state: string; schema: string; reservation: string; outcome: string;
   payload: (Partial<Stay> & { guest?: string }) | null;
 };
 export type Snapshot = {
-  principal: string; tenant: string; online: boolean; outbox: OutboxEntry[]; reservations: Reservation[] | null;
+  principal: string; tenant: string; online: boolean; outbox: OutboxEntry[]; reservations: Reservation[] | null; roomTypes: RoomType[] | null;
 };
 
 export const inTauri = "__TAURI_INTERNALS__" in window;

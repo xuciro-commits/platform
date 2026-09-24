@@ -59,6 +59,10 @@ type Entity struct {
 	// Standard asks for generated create, edit and archive actions (D5),
 	// named <type>.create, <type>.edit and <type>.archive.
 	Standard Standard
+	// Seed are the records the type starts with in a tenant (a deployment's or
+	// a package's configuration, like the organisation's seed); decisions change
+	// them afterwards, and replay starts from them again.
+	Seed []any
 }
 
 // Standard are the generated actions an entity type asks for, and who may call them.

@@ -63,7 +63,7 @@ Status legend:
 | Work ownership (K9) | Kernel | Generations, stale results, owner close | `kernel.Works`, used by the host for owned work (generations only; checkpoints unused) | host | H |
 | Composition and routing | Host runtime | Manifests checked at start (`checkManifest`); routing by action, read and input name | `NewTenant`, `Tenant` | every host | 4 |
 | Journal and replay | Host runtime | One ordered journal per tenant; fail-stop; replay through the same code | `Journal`, `Tenant.Replay`, `CheckReplay` | every host | 4 |
-| Application model | App API and host runtime (ADR-0016) | Entity types declared once as Go structs; records kept by the host; generic reads with domain, search, sort and pages; scope per role; record history; related records; generated create, edit and archive | `platform.Entity`, `Caller.Put`, `platform.Get`/`Find`, `/v1/entities`, `/v1/records` | CRM | 1 |
+| Application model | App API and host runtime (ADR-0016) | Entity types declared once as Go structs; records kept by the host; generic reads with domain, search, sort and pages; scope per role; record history; related records; generated create, edit and archive | `platform.Entity`, `Caller.Put`, `platform.Get`/`Find`, `/v1/entities`, `/v1/records` | CRM, Hotel | 2 |
 | Package ledger | App API | The kernel wired for one app, catalog role check, publishing to subscribers | `platform.Ledger` | every app | 5 |
 | Action catalog | App API, served by the host runtime | Declared actions; each caller receives only what its role may call; start-up deactivation | `platform.Action`, `platform.Catalog`, `/v1/actions`, MCP | all apps | 4 |
 | Reads and read authorization | Host runtime | Named reads; role in the app, or opened to every member | `Tenant.Read`, `Manifest.Everyone` | all apps | 4 |
@@ -556,7 +556,7 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 
 | Capability | What an app gets | Reference | Status |
 |---|---|---|---|
-| Entity declarations | Typed entities with fields (the UI kit's field types), required and validation rules, relations to other entities or across protocols, display name | Odoo fields, Salesforce objects, Dataverse tables, Foundry object types | have (ADR-0016; CRM; Hotel next) |
+| Entity declarations | Typed entities with fields (the UI kit's field types), required and validation rules, relations to other entities or across protocols, display name | Odoo fields, Salesforce objects, Dataverse tables, Foundry object types | have (ADR-0016; CRM, Hotel; manufacturing after stage 2) |
 | Generic reads | List with filter, sort, paging and count; get by ID; related records — one read contract for every entity | Odoo `search_read`, Salesforce SOQL, OData | have (ADR-0016) |
 | Record history and audit | Every entity's decisions as its history, from the journal | Odoo chatter tracking, Salesforce field history | have (ADR-0016: changed fields per decision) |
 | Comments, mentions and followers | A conversation on any record, followers notified | Odoo `mail.thread`, Salesforce Chatter | partial: timeline notes (relations) |

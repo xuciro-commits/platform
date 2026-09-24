@@ -106,5 +106,10 @@ Two things we keep that they mostly do not have:
   - The sales workspace lists accounts and opportunities and opens record pages with edit and archive where the catalog grants them. Its new-account form is generated.
   - Settings has a records browser.
 - **Measured:** a filtered, sorted page of 100 000 records in about 62 ms in memory.
-- **Not yet:** Hotel's types (next build item); references to a protocol's entity type (D3 allows them, none needed yet); a reference picker in generated forms (references show read-only unless the app gives options).
+- **Hotel** declares room types and reservations.
+  - Room types are master data a manager maintains through generated actions. They start from the deployment's configuration as the type's **seed**: records a type starts with, before the journal replays; `Entity.Seed`.
+  - Its capacity rules read reservations through `Find` with a domain. Its maps and its `reservations` read are gone.
+  - The Hotel Desk (the Tauri client's snapshot) and the sales workspace read records. Room-type choices come from the records, not a hard-coded list.
+  - The owner's local sales journal replays into 2 room types and 6 reservations.
+- **Not yet:** references to a protocol's entity type (D3 allows them, none needed yet); a reference picker in generated forms (references show read-only unless the app gives options).
 

@@ -20,7 +20,29 @@ var (
 )
 
 func newHotel() *Hotel {
-	return NewHotel("hotel-a", map[string]RoomType{"standard": {Rooms: 1, Overbooking: 1}, "suite": {Rooms: 1}})
+	return hosted(NewHotel("hotel-a", map[string]RoomType{"standard": {Rooms: 1, Overbooking: 1}, "suite": {Rooms: 1}}))
+}
+
+// tenants hold the hotels the rule tests submit to: the records are the host's.
+var tenants = map[*Hotel]*platformserver.Tenant{}
+
+func hosted(h *Hotel) *Hotel {
+	tn, err := platformserver.NewTenant("hotel-a", platformserver.NewConsole("hotel-a"), h)
+	if err != nil {
+		panic(err)
+	}
+	tenants[h] = tn
+	return h
+}
+
+func submit(h *Hotel, p platform.Caller, s *pb.Submission) (*pb.ChangeRecord, *kernel.Error) {
+	return tenants[h].Submit(p.Member, s, now)
+}
+
+// count is how many reservations the hotel holds.
+func count(h *Hotel) int {
+	page, _ := tenants[h].Records(manager.Member, ReservationType, platform.Query{Archived: true}, now)
+	return page.Total
 }
 
 func submission(p platform.Caller, schema, id, key string, payload any, expectedRevision ...uint32) *pb.Submission {
@@ -35,8 +57,8 @@ func submission(p platform.Caller, schema, id, key string, payload any, expected
 }
 
 func create(h *Hotel, p platform.Caller, id, key, roomType, in, out string) (*pb.ChangeRecord, string) {
-	r, err := h.Submit(p, submission(p, SchemaCreate, id, key,
-		map[string]string{"roomType": roomType, "checkIn": in, "checkOut": out, "guest": "Guest " + id}), now)
+	r, err := submit(h, p, submission(p, SchemaCreate, id, key,
+		map[string]string{"roomType": roomType, "checkIn": in, "checkOut": out, "guest": "Guest " + id}))
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -69,7 +91,7 @@ func TestReplayReturnsOriginalEvenWhenFull(t *testing.T) {
 	first, _ := create(h, desk, "r1", "k1", "suite", "2026-10-01", "2026-10-02")
 	again, got := create(h, desk, "r1", "k1", "suite", "2026-10-01", "2026-10-02")
 	expect(t, got, "ok")
-	if again.GetChangeId() != first.GetChangeId() || len(h.Reservations()) != 1 {
+	if again.GetChangeId() != first.GetChangeId() || count(h) != 1 {
 		t.Fatal("replay applied twice")
 	}
 	_, got = create(h, desk, "r1", "k1", "suite", "2026-10-01", "2026-10-03")
@@ -79,16 +101,16 @@ func TestReplayReturnsOriginalEvenWhenFull(t *testing.T) {
 func TestRolesAndVersions(t *testing.T) {
 	h := newHotel()
 	create(h, desk, "r1", "k1", "suite", "2026-10-01", "2026-10-02")
-	_, err := h.Submit(desk, submission(desk, SchemaCancel, "r1", "k2", map[string]int{}, 1), now)
+	_, err := submit(h, desk, submission(desk, SchemaCancel, "r1", "k2", map[string]int{}, 1))
 	expect(t, err.Error(), "ERROR_CODE_POLICY_DENIED")
-	_, err = h.Submit(desk, submission(desk, SchemaModify, "r1", "k3",
-		map[string]any{"roomType": "suite", "checkIn": "2026-10-01", "checkOut": "2026-10-03"}, 1), now)
+	_, err = submit(h, desk, submission(desk, SchemaModify, "r1", "k3",
+		map[string]any{"roomType": "suite", "checkIn": "2026-10-01", "checkOut": "2026-10-03"}, 1))
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = h.Submit(manager, submission(manager, SchemaCancel, "r1", "k4", map[string]int{}, 1), now)
+	_, err = submit(h, manager, submission(manager, SchemaCancel, "r1", "k4", map[string]int{}, 1))
 	expect(t, err.Error(), "ERROR_CODE_CONFLICT") // stale version
-	if _, err = h.Submit(manager, submission(manager, SchemaCancel, "r1", "k5", map[string]int{}, 2), now); err != nil {
+	if _, err = submit(h, manager, submission(manager, SchemaCancel, "r1", "k5", map[string]int{}, 2)); err != nil {
 		t.Fatal(err)
 	}
 	_, got := create(h, desk, "r2", "k6", "suite", "2026-10-01", "2026-10-03") // canceled stay frees the room
@@ -102,11 +124,11 @@ func TestTenantPrincipalAndAuthorityAreChecked(t *testing.T) {
 	expect(t, got, "ERROR_CODE_POLICY_DENIED")
 	s := submission(desk, SchemaCreate, "r1", "k2", map[string]string{})
 	s.PrincipalId = "manager-1" // claims someone else
-	_, err := h.Submit(desk, s, now)
+	_, err := submit(h, desk, s)
 	expect(t, err.Error(), "ERROR_CODE_POLICY_DENIED")
 	s = submission(desk, SchemaCreate, "r1", "k3", map[string]string{"roomType": "suite", "checkIn": "2026-10-01", "checkOut": "2026-10-02", "guest": "G"})
 	s.Authority = "desk-laptop"
-	_, err = h.Submit(desk, s, now)
+	_, err = submit(h, desk, s)
 	expect(t, err.Error(), "ERROR_CODE_NOT_AUTHORITY")
 }
 
@@ -115,7 +137,7 @@ func hotelTenant(t *testing.T, journal *[]platformserver.Entry) (*Hotel, *platfo
 	seat := func(id string, roles map[string]string) platformserver.Seat {
 		return platformserver.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 	}
-	h := newHotel()
+	h := NewHotel("hotel-a", map[string]RoomType{"standard": {Rooms: 1, Overbooking: 1}, "suite": {Rooms: 1}})
 	tn, err := platformserver.NewTenant("hotel-a", platformserver.NewConsole("hotel-a",
 		seat("desk-1", map[string]string{"hotel": string(FrontDesk)}), seat("desk-2", map[string]string{"hotel": string(FrontDesk)}),
 		seat("manager-1", map[string]string{"hotel": string(Manager), platformserver.PlatformApp: platformserver.Admin}),
@@ -127,6 +149,7 @@ func hotelTenant(t *testing.T, journal *[]platformserver.Entry) (*Hotel, *platfo
 		t.Fatal(err)
 	}
 	tn.Record = func(e platformserver.Entry) { *journal = append(*journal, e) }
+	tenants[h] = tn
 	return h, tn
 }
 
@@ -153,8 +176,8 @@ func TestChannelDuplicatesCollapse(t *testing.T) {
 	if ev := first.GetSubmission().GetEvidenceFactIds(); len(ev) != 1 || ev[0] != h.facts.Records("hotel-a")[0].GetFactId() {
 		t.Fatalf("booking decision does not name its channel observation: %v", ev)
 	}
-	if n := len(h.facts.Records("hotel-a")); n != 1 || len(h.Reservations()) != 1 {
-		t.Fatalf("facts %d, reservations %d", n, len(h.Reservations()))
+	if n := len(h.facts.Records("hotel-a")); n != 1 || count(h) != 1 {
+		t.Fatalf("facts %d, reservations %d", n, count(h))
 	}
 	b.MessageID, b.ReservationID = "ota-779", "r-ota-779"
 	_, err = deliver(tn, b, now)
@@ -251,10 +274,10 @@ func TestHotelUsesPlatformOperations(t *testing.T) {
 // Drill E1: serviced apartments (long stays) and coworking (hourly) reuse the
 // reservation lifecycle; only the domain's capacity unit changed.
 func TestDrillE1ApartmentsAndCoworking(t *testing.T) {
-	h := NewHotel("hotel-a", map[string]RoomType{
+	h := hosted(NewHotel("hotel-a", map[string]RoomType{
 		"apartment":    {Rooms: 1, MinUnits: 28},
 		"meeting-room": {Rooms: 1, Hourly: true},
-	})
+	}))
 	_, got := create(h, desk, "a1", "k1", "apartment", "2026-10-01", "2026-10-04")
 	expect(t, got, "ERROR_CODE_INVALID_ARGUMENT") // shorter than the minimum stay
 	_, got = create(h, desk, "a2", "k2", "apartment", "2026-10-01", "2026-11-01")
@@ -267,7 +290,7 @@ func TestDrillE1ApartmentsAndCoworking(t *testing.T) {
 	expect(t, got, "ERROR_CODE_CONFLICT")
 	_, got = create(h, desk, "m4", "k6", "meeting-room", "2026-10-01T12:30", "2026-10-01T13:00")
 	expect(t, got, "ERROR_CODE_INVALID_ARGUMENT") // not whole hours
-	_, err := h.Submit(manager, submission(manager, SchemaCancel, "m1", "k7", map[string]int{}, 1), now)
+	_, err := submit(h, manager, submission(manager, SchemaCancel, "m1", "k7", map[string]int{}, 1))
 	if err != nil {
 		t.Fatal(err)
 	}

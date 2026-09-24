@@ -137,7 +137,7 @@ fn send(&mut self) -> Result<(), String> {
     Ok(())
 }
 
-/// The outbox (with decoded payloads) and, when reachable, the server's reservations.
+/// The outbox (with decoded payloads) and, when reachable, the server's reservations and room types.
 fn snapshot(&self) -> Value {
     let app = self;
     let outbox: Vec<Value> = app.authorities.outbox.iter().filter(|e| e.submission.tenant_id == app.tenant).map(|e| {
@@ -146,9 +146,12 @@ fn snapshot(&self) -> Value {
         json!({"key": e.submission.idempotency_key, "state": e.state, "schema": e.submission.schema.name,
                "reservation": e.submission.target.id, "payload": payload, "outcome": e.outcome})
     }).collect();
-    let reservations = if app.token.is_empty() { Ok(Value::Null) } else { app.get("/v1/reservations") };
-    json!({"principal": app.principal, "tenant": app.tenant, "outbox": outbox,
-           "online": reservations.is_ok(), "reservations": reservations.unwrap_or(Value::Null)})
+    // Records of the hotel's entity types (ADR-0016): the reservations and the room types a manager maintains.
+    let records = |path: &str| if app.token.is_empty() { Ok(Value::Null) } else { app.get(path).map(|page| page["records"].clone()) };
+    let reservations = records("/v1/records/hotel.reservation?sort=checkIn,id&archived=true&limit=500");
+    let room_types = records("/v1/records/hotel.room-type?sort=name");
+    json!({"principal": app.principal, "tenant": app.tenant, "outbox": outbox, "online": reservations.is_ok(),
+           "reservations": reservations.unwrap_or(Value::Null), "roomTypes": room_types.unwrap_or(Value::Null)})
 }
 }
 

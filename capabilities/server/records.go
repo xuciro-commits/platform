@@ -80,6 +80,21 @@ func (s *recordStore) declare(a platform.App) error {
 		et := &entityType{info: info, rows: map[string]*row{}}
 		s.types[e.Type], s.byGo[info.Go] = et, et
 	}
+	for _, e := range m.Entities { // seeds after every type is known, so references resolve
+		seeder := platform.NewCaller(nil, platform.Member{ID: "seed"}, m.ID, false, false)
+		seed := &pb.ChangeRecord{ChangeId: "seed", Submission: &pb.Submission{PrincipalId: "seed", Schema: &pb.SchemaRef{Name: "seed"}}}
+		for _, v := range e.Seed {
+			if reflect.TypeOf(v) != reflect.TypeOf(e.Model) {
+				return fmt.Errorf("entity %s: a seed record is not a %s", e.Type, reflect.TypeOf(e.Model))
+			}
+			if err := s.check(seeder, v); err != nil {
+				return fmt.Errorf("entity %s: a seed record does not hold: %v", e.Type, err)
+			}
+			if err := s.put(seeder, seed, v); err != nil {
+				return fmt.Errorf("entity %s: seed record: %v", e.Type, err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -419,6 +434,9 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 	var value any
 	if json.Unmarshal(term[2], &value) != nil {
 		return nil, fmt.Errorf("bad value")
+	}
+	if b, ok := value.(bool); ok { // compared as booleans are: 1 and 0
+		value = map[bool]float64{true: 1, false: 0}[b]
 	}
 	if f.Type == "datetime" {
 		if s, ok := value.(string); ok {

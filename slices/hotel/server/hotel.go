@@ -6,6 +6,7 @@ package hotel
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 )
 
 const (
+	RoomTypeType    = "hotel.room-type"
 	ReservationType = "hotel.reservation"
 	Authority       = "hotel-server"
 	SchemaCreate    = "hotel.reservation.create"
@@ -45,7 +47,7 @@ func Actions() *platform.Catalog {
 		{Name: "checkIn", Type: "date", Required: true, Description: "First night (YYYY-MM-DD; hourly types YYYY-MM-DDTHH:MM)"},
 		{Name: "checkOut", Type: "date", Required: true, Description: "Departure, exclusive"}}
 	book := []string{string(FrontDesk), string(Manager), string(Channel)}
-	return platform.NewCatalog(
+	return platform.NewCatalog(append(platform.StandardActions(Entities(nil)[0]),
 		platform.Action{Schema: SchemaCreate, Target: ReservationType, Capability: "reservations", Title: "Create reservation",
 			Description: "Reserve a room type for a stay; refused when the type is sold out for any night.",
 			Payload:     append(stay, platform.Field{Name: "guest", Type: "string", Required: true, Description: "Guest name"}), Roles: book},
@@ -53,7 +55,7 @@ func Actions() *platform.Catalog {
 			Description: "Change the room type or dates of a reservation.", Payload: stay, Roles: book},
 		platform.Action{Schema: SchemaCancel, Target: ReservationType, Capability: "reservations", Title: "Cancel reservation",
 			Description: "Cancel a reservation; the record stays in its history.", Payload: []platform.Field{}, Roles: []string{string(Manager)}},
-	)
+	)...)
 }
 
 // Stay is a half-open range of nights [CheckIn, CheckOut), dates as YYYY-MM-DD.
@@ -63,12 +65,38 @@ type Stay struct {
 	CheckOut string `json:"checkOut"`
 }
 
+// Reservation is a stay of a guest in a room type (ADR-0016: the host keeps the records).
 type Reservation struct {
-	ID       string `json:"id"`
-	Stay            // embedded
-	Guest    string `json:"guest"`
-	Version  int    `json:"version"`
-	Canceled bool   `json:"canceled"`
+	platform.Record
+	RoomType platform.Ref[RoomType] `json:"roomType" field:"required" title:"Room type"`
+	CheckIn  string                 `json:"checkIn" field:"required" title:"Check-in"`
+	CheckOut string                 `json:"checkOut" field:"required" title:"Check-out"`
+	Guest    string                 `json:"guest" field:"required,search"`
+	Canceled bool                   `json:"canceled" field:"readonly"`
+}
+
+func (r Reservation) stay() Stay {
+	return Stay{RoomType: string(r.RoomType), CheckIn: r.CheckIn, CheckOut: r.CheckOut}
+}
+
+// Entities declares the hotel's types: room types are master data a manager
+// maintains (seeded from the deployment's configuration); reservations move by
+// the hotel's actions.
+func Entities(rooms map[string]RoomType) []platform.Entity {
+	var seed []any
+	for _, id := range slices.Sorted(maps.Keys(rooms)) {
+		t := rooms[id]
+		t.ID = id
+		if t.Name == "" {
+			t.Name = id
+		}
+		seed = append(seed, t)
+	}
+	return []platform.Entity{
+		{Type: RoomTypeType, Title: "Room type", Model: RoomType{}, Seed: seed,
+			Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{string(Manager)}, Capability: "room-types"}},
+		{Type: ReservationType, Title: "Reservation", Model: Reservation{}},
+	}
 }
 
 // Payloads, one per schema (version 1).
@@ -80,25 +108,26 @@ type createPayload struct {
 // Modify carries the new Stay; cancel carries nothing. Stale views are refused by
 // the submission's expected revision (K4 C12), not by the payload.
 
-// Hotel is one tenant: its rooms, reservations and kernel logs.
+// Hotel is one tenant's rules and kernel logs; its records are the host's.
 type Hotel struct {
-	mu           sync.Mutex
-	tenant       string
-	rooms        map[string]RoomType
-	reservations map[string]*Reservation
-	facts        *kernel.FactLog
-	ledger       *platform.Ledger
+	mu       sync.Mutex
+	tenant   string
+	entities []platform.Entity
+	facts    *kernel.FactLog
+	ledger   *platform.Ledger
 }
 
 // RoomType is sellable inventory per night: physical rooms plus an overbooking
 // allowance, as property management systems (OPERA, Mews) configure it.
 type RoomType struct {
-	Rooms       int `json:"rooms"`
-	Overbooking int `json:"overbooking"`
+	platform.Record
+	Name        string `json:"name" field:"required,search"`
+	Rooms       int    `json:"rooms" field:"required"`
+	Overbooking int    `json:"overbooking"`
 	// Drill E1: sold per night (hotel rooms, serviced apartments) or per hour
 	// (coworking desks and meeting rooms); MinUnits is the shortest stay.
 	Hourly   bool `json:"hourly,omitempty"`
-	MinUnits int  `json:"minUnits,omitempty"`
+	MinUnits int  `json:"minUnits,omitempty" title:"Minimum stay"`
 }
 
 // span parses a stay in its room type's unit: dates per night, "YYYY-MM-DDTHH:MM" per hour.
@@ -113,9 +142,10 @@ func (t RoomType) span(s Stay) (in, out time.Time, step time.Duration, ok bool) 
 	return in, out, step, err1 == nil && err2 == nil && out.After(in) && whole && int(out.Sub(in)/step) >= max(t.MinUnits, 1)
 }
 
+// NewHotel is a tenant's hotel whose room types start as rooms (keyed by ID).
 func NewHotel(tenant string, rooms map[string]RoomType) *Hotel {
-	h := &Hotel{tenant: tenant, rooms: rooms, reservations: map[string]*Reservation{},
-		ledger: platform.NewLedger(tenant, Authority, Actions(), ReservationType),
+	h := &Hotel{tenant: tenant, entities: Entities(rooms),
+		ledger: platform.NewLedger(tenant, Authority, Actions(), RoomTypeType, ReservationType),
 		facts:  kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: channelMessageSchema, Version: 1}}, nil))}
 	h.ledger.Changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(h.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
@@ -134,17 +164,18 @@ func (h *Hotel) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if c.Tenant != h.tenant {
 		return nil, denied()
 	}
+	if record, err, ok := h.ledger.Standard(c, s, now, nil, h.entities...); ok {
+		return record, err
+	}
 	return h.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		apply, err := h.validate(s, c.Setting(SettingOverbooking) != "false")
+		r, err := h.validate(c, s, c.Setting(SettingOverbooking) != "false")
 		if err != nil {
 			return nil, err
 		}
 		return func(record *pb.ChangeRecord) {
-			apply()
-			r := h.reservations[s.GetTarget().GetId()]
-			r.Version = int(record.GetRevision())
+			c.Put(record, r)
 			if !r.Canceled {
-				h.tellOversold(c, *r, now)
+				h.tellOversold(c, r, now)
 			}
 		}, nil
 	})
@@ -161,11 +192,11 @@ const (
 // tellOversold tells the managers about each unit of the stay sold beyond the
 // physical rooms of its type (the overbooking allowance in use: a walk risk).
 func (h *Hotel) tellOversold(c platform.Caller, r Reservation, now time.Time) {
-	s := r.Stay
-	t := h.rooms[s.RoomType]
+	s := r.stay()
+	t, _ := platform.Get[RoomType](c, s.RoomType)
 	in, out, step, _ := t.span(s)
 	for slot := in; slot.Before(out); slot = slot.Add(step) {
-		if used := h.used(s.RoomType, slot, ""); used > t.Rooms {
+		if used := h.used(c, t, slot, ""); used > t.Rooms {
 			day := slot.Format(map[bool]string{true: "2006-01-02 15:04", false: time.DateOnly}[t.Hourly])
 			c.Notify(platform.Notification{Title: fmt.Sprintf("%s oversold on %s", s.RoomType, day),
 				Body: fmt.Sprintf("%d sold for %d rooms: someone may have to be walked.", used, t.Rooms),
@@ -182,7 +213,7 @@ func (h *Hotel) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 	}
 	day := now.UTC().AddDate(0, 0, lead).Format(time.DateOnly)
 	var lines []string
-	for _, r := range h.Reservations() {
+	for _, r := range reservations(c) {
 		if !r.Canceled && strings.HasPrefix(r.CheckIn, day) {
 			lines = append(lines, fmt.Sprintf("%s · %s · %s", r.ID, r.Guest, r.RoomType))
 		}
@@ -205,8 +236,8 @@ func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Decl
 
 // Manifest declares the hotel as an app (ADR-0010).
 func (h *Hotel) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "hotel", Version: "1", Actions: h.ledger.Catalog,
-		Reads: []string{"reservations", "lodging-bookings"}, Inputs: map[string]bool{"channel-bookings": true},
+	return platform.Manifest{ID: "hotel", Version: "1", Actions: h.ledger.Catalog, Entities: h.entities,
+		Reads: []string{"lodging-bookings"}, Inputs: map[string]bool{"channel-bookings": true},
 		Jobs: []platform.Job{{Name: JobArrivals, Title: "Send the front desk the arrivals list", Every: time.Hour}},
 		Settings: []platform.Setting{
 			{Name: SettingOverbooking, Title: "Sell the overbooking allowance", Type: "boolean", Default: "true",
@@ -223,15 +254,20 @@ func (h *Hotel) Manifest() platform.Manifest {
 			Events:  map[string]string{"changed": SchemaModify, "canceled": SchemaCancel}}}}
 }
 
-func (h *Hotel) Read(_ platform.Caller, name string) (any, *kernel.Error) {
-	if name == "lodging-bookings" {
-		out := []lodging.Booking{}
-		for _, r := range h.Reservations() {
-			out = append(out, lodging.Booking{ID: r.ID, RoomType: r.RoomType, CheckIn: r.CheckIn, CheckOut: r.CheckOut, Guest: r.Guest, Canceled: r.Canceled})
-		}
-		return out, nil
+// Read "lodging-bookings": the reservations as the lodging protocol shows them.
+// Reservations and room types themselves are read as records (/v1/records/<type>).
+func (h *Hotel) Read(c platform.Caller, _ string) (any, *kernel.Error) {
+	out := []lodging.Booking{}
+	for _, r := range reservations(c) {
+		out = append(out, lodging.Booking{ID: r.ID, RoomType: string(r.RoomType), CheckIn: r.CheckIn, CheckOut: r.CheckOut, Guest: r.Guest, Canceled: r.Canceled})
 	}
-	return h.Reservations(), nil
+	return out, nil
+}
+
+// reservations are the tenant's reservations, by check-in, then ID.
+func reservations(c platform.Caller) []Reservation {
+	out, _, _ := platform.Find[Reservation](c, platform.Query{Sort: []string{"checkIn", "id"}, Archived: true})
+	return out
 }
 
 // Input takes channel bookings; only a channel connector sends them.
@@ -243,100 +279,83 @@ func (h *Hotel) Input(c platform.Caller, _ string, body []byte, now time.Time) (
 	return h.IngestChannelBooking(c, b, now)
 }
 
-// validate checks the domain rules and returns how to apply the decision.
-func (h *Hotel) validate(s *pb.Submission, overbooking bool) (func(), *kernel.Error) {
+// validate checks the domain rules and returns the reservation as it will be.
+func (h *Hotel) validate(c platform.Caller, s *pb.Submission, overbooking bool) (Reservation, *kernel.Error) {
 	id := s.GetTarget().GetId()
-	existing := h.reservations[id]
+	existing, known := platform.Get[Reservation](c, id)
 	invalid := fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 	switch s.GetSchema().GetName() {
 	case SchemaCreate:
-		var c createPayload
-		if json.Unmarshal(s.GetPayload(), &c) != nil || c.Guest == "" || !h.validStay(c.Stay) {
-			return nil, invalid
+		var p createPayload
+		if json.Unmarshal(s.GetPayload(), &p) != nil || p.Guest == "" || !h.validStay(c, p.Stay) {
+			return Reservation{}, invalid
 		}
-		if existing != nil {
-			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+		if known {
+			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 		}
-		if !h.fits(c.Stay, "", overbooking) {
-			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+		if !h.fits(c, p.Stay, "", overbooking) {
+			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 		}
-		return func() { h.reservations[id] = &Reservation{ID: id, Stay: c.Stay, Guest: c.Guest} }, nil
+		return Reservation{Record: platform.Record{ID: id}, RoomType: platform.Ref[RoomType](p.RoomType), CheckIn: p.CheckIn, CheckOut: p.CheckOut, Guest: p.Guest}, nil
 	case SchemaModify:
 		var m Stay
-		if json.Unmarshal(s.GetPayload(), &m) != nil || !h.validStay(m) {
-			return nil, invalid
+		if json.Unmarshal(s.GetPayload(), &m) != nil || !h.validStay(c, m) {
+			return Reservation{}, invalid
 		}
-		if existing == nil || existing.Canceled {
-			return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+		if !known || existing.Canceled {
+			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 		}
-		if !h.fits(m, id, overbooking) {
-			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+		if !h.fits(c, m, id, overbooking) {
+			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 		}
-		return func() { existing.Stay = m }, nil
+		existing.RoomType, existing.CheckIn, existing.CheckOut = platform.Ref[RoomType](m.RoomType), m.CheckIn, m.CheckOut
+		return existing, nil
 	case SchemaCancel:
-		if existing == nil || existing.Canceled {
-			return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+		if !known || existing.Canceled {
+			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 		}
-		return func() { existing.Canceled = true }, nil
+		existing.Canceled = true
+		return existing, nil
 	}
-	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
+	return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }
 
-func (h *Hotel) validStay(s Stay) bool {
-	t := h.rooms[s.RoomType]
-	_, _, _, ok := t.span(s)
-	return ok && t.Rooms > 0
+// validStay: an existing, not archived room type, and a stay in its unit.
+func (h *Hotel) validStay(c platform.Caller, s Stay) bool {
+	t, ok := platform.Get[RoomType](c, s.RoomType)
+	_, _, _, whole := t.span(s)
+	return ok && !t.Archived && whole && t.Rooms > 0
 }
 
 // fits reports whether every unit (night or hour) of the stay has a free room of its type,
 // ignoring the reservation being modified; the overbooking allowance counts when
 // the hotel sells it. Capacity allocation is domain code.
-func (h *Hotel) fits(s Stay, ignore string, overbooking bool) bool {
-	t := h.rooms[s.RoomType]
+func (h *Hotel) fits(c platform.Caller, s Stay, ignore string, overbooking bool) bool {
+	t, _ := platform.Get[RoomType](c, s.RoomType)
 	limit := t.Rooms
 	if overbooking {
 		limit += t.Overbooking
 	}
 	in, out, step, _ := t.span(s)
 	for slot := in; slot.Before(out); slot = slot.Add(step) {
-		if h.used(s.RoomType, slot, ignore) >= limit {
+		if h.used(c, t, slot, ignore) >= limit {
 			return false
 		}
 	}
 	return true
 }
 
-// used counts the reservations of roomType holding slot, except ignore.
-func (h *Hotel) used(roomType string, slot time.Time, ignore string) int {
-	t, n := h.rooms[roomType], 0
-	for id, r := range h.reservations {
-		if rIn, rOut, _, _ := t.span(r.Stay); id != ignore && !r.Canceled && r.RoomType == roomType && !slot.Before(rIn) && slot.Before(rOut) {
+// used counts the reservations of room type t holding slot, except ignore.
+func (h *Hotel) used(c platform.Caller, t RoomType, slot time.Time, ignore string) int {
+	domain, _ := json.Marshal([]any{[]any{"roomType", "=", t.ID}, []any{"canceled", "=", false}})
+	held, _, _ := platform.Find[Reservation](c, platform.Query{Domain: domain})
+	n := 0
+	for _, r := range held {
+		if rIn, rOut, _, _ := t.span(r.stay()); r.ID != ignore && !slot.Before(rIn) && slot.Before(rOut) {
 			n++
 		}
 	}
 	return n
-}
-
-func (h *Hotel) Reservations() []Reservation {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	out := make([]Reservation, 0, len(h.reservations))
-	for _, r := range h.reservations {
-		out = append(out, *r)
-	}
-	slices.SortFunc(out, func(a, b Reservation) int {
-		if a.CheckIn != b.CheckIn {
-			if a.CheckIn < b.CheckIn {
-				return -1
-			}
-			return 1
-		}
-		if a.ID < b.ID {
-			return -1
-		}
-		return 1
-	})
-	return out
 }
 
 // Channel connector input (K2 observation, then a decision by the channel principal).

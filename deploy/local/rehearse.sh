@@ -50,7 +50,7 @@ submit() { # token key schema target-type target-id payload [expected-revision]
 state() { { for path in orders sfcs downtime planned-orders notifications; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
   curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -c '[.[] | {id, disabled}]'
   curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage" | jq -c '.totals'
-  for path in customers reservations members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done
+  for path in customers records/hotel.reservation records/hotel.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done
   curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/protocols" | jq -c '[.[] | {id, bound}]'; } | jq -cS .; }
 
 # Inputs of every kind the journal keeps: a poll page, decisions, a push batch.
@@ -167,7 +167,7 @@ note=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/timeline" | jq -r '.[]
 for _ in $(seq 20); do [[ $(curl -s "$SINK/received" | jq '.kept | length') == 1 ]] && break; sleep 0.5; done
 [[ $(curl -s "$SINK/received" | jq -r '.kept[] | .type + " " + .data.entity') == "lodging.booking/1#canceled hotel.reservation/OPP-1-B1" ]] || fail "webhook: $(curl -s "$SINK/received")"
 [[ $(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/effects" | jq -r '.[0].state') == delivered ]] || fail "effect state"
-[[ $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/reservations") == 403 ]] || fail "hotel read without a hotel role"
+[[ $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/records/hotel.reservation") == 403 ]] || fail "hotel read without a hotel role"
 mcp() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$SALES/mcp" -d "$2"; }
 mcp "$MGR" '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' | jq -e '.result.capabilities.tools' >/dev/null || fail "mcp initialize"
 tools=$(mcp "$SALES_TOKEN" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jq -c '[.result.tools[].name]')

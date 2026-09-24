@@ -3,7 +3,7 @@
 // views (@pkg/hotel), and the platform's timeline. What the user may do comes
 // from the host's catalog for this member.
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { newReservation, ReservationCard, ReservationTable, roomTypes, type Reservation } from "@pkg/hotel";
+import { newReservation, ReservationCard, ReservationTable, roomTypeOptions, type Reservation, type RoomType } from "@pkg/hotel";
 import { BookingTable, type Booking } from "@pkg/lodging";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, Input, NotificationList, PageHeader, RecordForm, RecordList, RecordPage, StatusTag, Tag, Workspace,
@@ -72,6 +72,8 @@ function CustomerDetail({ id }: { id: string }) {
   const { can, decide } = useSales();
   const [opening, setOpening] = useState(false);
   const [booking, setBooking] = useState<Opportunity>();
+  // The hotel's room types when this member may read them; otherwise the provider decides what a type means.
+  const roomTypeChoices = roomTypeOptions(useRead<{ records: RoomType[] }>("/v1/records/hotel.room-type?sort=name")?.records ?? []);
   if (!customer) return <p className="text-sm text-muted">No account {id}.</p>;
   return (
     <div className="grid max-w-5xl gap-4">
@@ -103,8 +105,9 @@ function CustomerDetail({ id }: { id: string }) {
       </Dialog>
       <Dialog open={!!booking} onOpenChange={(o) => !o && setBooking(undefined)} title={`Book stay for ${booking?.title ?? ""}`}>
         {booking && (
-          <EntityForm schema={newReservation} defaultValues={{ roomType: "standard", checkIn: "", checkOut: "", guest: customer.name }}
-            fields={[{ name: "guest", label: "Guest" }, { name: "roomType", label: "Room type", kind: "select", options: roomTypes },
+          <EntityForm schema={newReservation} defaultValues={{ roomType: roomTypeChoices[0]?.value ?? "", checkIn: "", checkOut: "", guest: customer.name }}
+            fields={[{ name: "guest", label: "Guest" }, roomTypeChoices.length
+              ? { name: "roomType", label: "Room type", kind: "select", options: roomTypeChoices } : { name: "roomType", label: "Room type (the provider's)" },
               { name: "checkIn", label: "Check-in", kind: "date" }, { name: "checkOut", label: "Check-out", kind: "date" }]}
             submitLabel="Book" onCancel={() => setBooking(undefined)}
             onSubmit={async (v) => { if (await decide("crm.opportunity.book", { type: "crm.opportunity", id: booking.id }, v)) setBooking(undefined); }} />
@@ -145,8 +148,11 @@ function Timeline({ opportunity: o }: { opportunity: Opportunity }) {
   );
 }
 
+// The hotel's records (ADR-0016), read through the host's generic reads.
+const reservationsQuery = "/v1/records/hotel.reservation?sort=checkIn,id&archived=true&limit=500";
+
 function Reservations() {
-  const reservations = useRead<Reservation[]>("/v1/reservations") ?? [];
+  const reservations = useRead<{ records: Reservation[] }>(reservationsQuery)?.records ?? [];
   const { open } = useWorkspace();
   return (
     <>
@@ -157,7 +163,7 @@ function Reservations() {
 }
 
 function ReservationDetail({ id }: { id: string }) {
-  const r = useRead<Reservation[]>("/v1/reservations")?.find((x) => x.id === id);
+  const r = useRead<{ record: Reservation }>(`/v1/records/hotel.reservation/${encodeURIComponent(id)}`)?.record;
   return r ? <div className="max-w-md"><ReservationCard reservation={r} /></div> : <p className="text-sm text-muted">No reservation {id}.</p>;
 }
 

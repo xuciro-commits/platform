@@ -78,6 +78,15 @@ func (w *world) book(who, key, roomType, checkIn string) string {
 		map[string]string{"roomType": roomType, "checkIn": checkIn, "checkOut": "2026-10-03", "guest": "Acme board"})
 }
 
+// reservations are the hotel's reservation records, as the member may read them (ADR-0016).
+func (w *world) reservations(who string) []any {
+	page, err := w.tenant.Records(w.members[who], hotel.ReservationType, platform.Query{Archived: true}, t0)
+	if err != nil {
+		panic(err)
+	}
+	return page.Records
+}
+
 func (w *world) read(who, name string) any {
 	out, err := w.tenant.Read(w.members[who], name)
 	if err != nil {
@@ -112,7 +121,7 @@ func TestStaysThroughTheLodgingProtocol(t *testing.T) {
 	w.setup()
 	w.expect(w.book("sales", "b-1", "suite", "2026-10-01"), "ok")
 	w.expect(w.book("sales", "b-1", "suite", "2026-10-01"), "ok") // a resend
-	if n := len(w.read("manager", "reservations").([]hotel.Reservation)); n != 1 {
+	if n := len(w.reservations("manager")); n != 1 {
 		t.Fatalf("a resend booked again: %d reservations", n)
 	}
 	if s := w.stays("sales"); len(s) != 1 || s[0].ID != "OPP-1-B1" || s[0].Guest != "Acme board" {
@@ -147,7 +156,7 @@ func TestStaysThroughTheLodgingProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 	view := func(w *world) string {
-		return fmt.Sprint(w.read("manager", "customers"), w.read("manager", "reservations"), w.read("manager", "links"), w.timeline("sales", "crm.opportunity/OPP-1"))
+		return fmt.Sprint(w.read("manager", "customers"), w.reservations("manager"), w.read("manager", "links"), w.timeline("sales", "crm.opportunity/OPP-1"))
 	}
 	if view(again) != view(w) {
 		t.Fatalf("replayed tenant differs:\n%s\n%s", view(w), view(again))

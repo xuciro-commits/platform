@@ -5,7 +5,7 @@ import {
 import { BedDouble, Inbox, Plus, Send } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { z } from "zod";
-import { ReservationCard, ReservationTable, newReservation, roomTypes, stay } from "@pkg/hotel";
+import { ReservationCard, ReservationTable, newReservation, roomTypeOptions, stay } from "@pkg/hotel";
 import { api, inTauri, type OutboxEntry, type Snapshot } from "./api";
 
 const workspaceTypes = [{ value: "meeting-room", label: "Meeting room" }, { value: "hot-desk", label: "Hot desk" }];
@@ -40,8 +40,8 @@ function ReservationDetail({ id }: { id: string }) {
       <ReservationCard reservation={r}
         actions={!r.canceled && <>
           <Button onClick={() => run(api.draft("modify", r.id, { roomType: r.roomType, checkIn: r.checkIn,
-            checkOut: nextDay(r.checkOut) }, r.version)).then(() => notify("Extension queued in the outbox"))}>Extend 1 night</Button>
-          <Button variant="danger" onClick={() => run(api.draft("cancel", r.id, {}, r.version)).then(() => notify("Cancellation queued in the outbox"))}>Cancel</Button>
+            checkOut: nextDay(r.checkOut) }, r.revision)).then(() => notify("Extension queued in the outbox"))}>Extend 1 night</Button>
+          <Button variant="danger" onClick={() => run(api.draft("cancel", r.id, {}, r.revision)).then(() => notify("Cancellation queued in the outbox"))}>Cancel</Button>
         </>} />
     </div>
   );
@@ -141,7 +141,7 @@ export function App() {
           defaultValues={{ roomType: "standard", checkIn: "", checkOut: "", guest: "" }}
           fields={[
             { name: "guest", label: "Guest" },
-            { name: "roomType", label: "Room type", kind: "select", options: roomTypes },
+            { name: "roomType", label: "Room type", kind: "select", options: roomTypeOptions(snapshot?.roomTypes ?? []) },
             { name: "checkIn", label: "Check-in", kind: "date" },
             { name: "checkOut", label: "Check-out", kind: "date" },
           ]}
@@ -163,7 +163,7 @@ export function App() {
           <EntityForm schema={stay} submitLabel="Save as new draft" onCancel={() => setRevising(undefined)}
             defaultValues={{ roomType: revising.payload?.roomType as "standard" | "suite" | "apartment", checkIn: revising.payload?.checkIn, checkOut: revising.payload?.checkOut }}
             fields={[
-              { name: "roomType", label: "Room type", kind: "select", options: roomTypes },
+              { name: "roomType", label: "Room type", kind: "select", options: roomTypeOptions(snapshot?.roomTypes ?? []) },
               { name: "checkIn", label: "Check-in", kind: "date" },
               { name: "checkOut", label: "Check-out", kind: "date" },
             ]}
