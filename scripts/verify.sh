@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|capabilities|web|hotel|manufacturing|drills|deploy]   (default: everything)
+# Platform verification. Usage: scripts/verify.sh [contract|capabilities|web|hotel|manufacturing|composition|drills|deploy]   (default: everything)
 # The web step needs node and pnpm (brew install node pnpm); deploy needs a running Docker (orb start), curl and jq.
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
@@ -46,6 +46,13 @@ drills() {
   step drills bash -c 'cd slices/drills && go vet ./... && go test -count=1 ./...'
 }
 
+composition() {
+  # Packages know no other package; only the bridge imports both (#91).
+  step package-independence bash -c '! (cd slices/crm/server && go list -deps ./...) | grep -qx hotel && ! (cd slices/hotel/server && go list -deps ./...) | grep -qx crm'
+  step crm-server bash -c 'cd slices/crm/server && go vet ./... && go test -count=1 ./...'
+  step crm-hotel-bridge bash -c 'cd slices/crm-hotel && go vet ./... && go test -count=1 ./...'
+}
+
 deploy() {
   step deploy-rehearsal deploy/local/rehearse.sh
 }
@@ -63,9 +70,10 @@ case "${1:-all}" in
   capabilities) capabilities ;;
   manufacturing) manufacturing ;;
   drills) drills ;;
+  composition) composition ;;
   deploy) deploy ;;
-  all) contract; capabilities; web; hotel; manufacturing; drills; deploy ;;
-  *) echo "usage: $0 [contract|capabilities|web|hotel|manufacturing|drills|deploy]"; exit 2 ;;
+  all) contract; capabilities; web; hotel; manufacturing; composition; drills; deploy ;;
+  *) echo "usage: $0 [contract|capabilities|web|hotel|manufacturing|composition|drills|deploy]"; exit 2 ;;
 esac
 
 if ((${#failed[@]})); then echo "Failed: ${failed[*]}"; exit 1; fi

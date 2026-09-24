@@ -14,6 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver"
 )
 
 const (
@@ -39,18 +40,22 @@ type Principal struct {
 	Role   Role
 }
 
-// Policy is the policy hook: one evaluation of (principal, action, target).
-type Policy func(p Principal, action string, target *pb.EntityRef) bool
-
-// DefaultPolicy: front desk and channels create and modify; only managers cancel.
-func DefaultPolicy(p Principal, action string, _ *pb.EntityRef) bool {
-	switch action {
-	case SchemaCreate, SchemaModify:
-		return slices.Contains([]Role{FrontDesk, Manager, Channel}, p.Role)
-	case SchemaCancel:
-		return p.Role == Manager
-	}
-	return false
+// Actions is the hotel's action catalog (ADR-0008): front desk and channels
+// create and modify; only managers cancel. Other packages act through it too.
+func Actions() *platformserver.Catalog {
+	stay := []platformserver.Field{{Name: "roomType", Type: "string", Required: true, Description: "Room type"},
+		{Name: "checkIn", Type: "date", Required: true, Description: "First night (YYYY-MM-DD; hourly types YYYY-MM-DDTHH:MM)"},
+		{Name: "checkOut", Type: "date", Required: true, Description: "Departure, exclusive"}}
+	book := []string{string(FrontDesk), string(Manager), string(Channel)}
+	return platformserver.NewCatalog(
+		platformserver.Action{Schema: SchemaCreate, Target: ReservationType, Capability: "reservations", Title: "Create reservation",
+			Description: "Reserve a room type for a stay; refused when the type is sold out for any night.",
+			Payload:     append(stay, platformserver.Field{Name: "guest", Type: "string", Required: true, Description: "Guest name"}), Roles: book},
+		platformserver.Action{Schema: SchemaModify, Target: ReservationType, Capability: "reservations", Title: "Modify stay",
+			Description: "Change the room type or dates of a reservation.", Payload: stay, Roles: book},
+		platformserver.Action{Schema: SchemaCancel, Target: ReservationType, Capability: "reservations", Title: "Cancel reservation",
+			Description: "Cancel a reservation; the record stays in its history.", Payload: []platformserver.Field{}, Roles: []string{string(Manager)}},
+	)
 }
 
 // Stay is a half-open range of nights [CheckIn, CheckOut), dates as YYYY-MM-DD.
@@ -83,11 +88,8 @@ type Hotel struct {
 	tenant       string
 	rooms        map[string]RoomType
 	reservations map[string]*Reservation
-	changes      *kernel.ChangeLog
 	facts        *kernel.FactLog
-	authorities  *kernel.Authorities
-	policy       Policy
-	declaration  *pb.AuthorityDeclaration
+	ledger       *platformserver.Ledger
 }
 
 // RoomType is sellable inventory per night: physical rooms plus an overbooking
@@ -113,16 +115,11 @@ func (t RoomType) span(s Stay) (in, out time.Time, step time.Duration, ok bool) 
 	return in, out, step, err1 == nil && err2 == nil && out.After(in) && whole && int(out.Sub(in)/step) >= max(t.MinUnits, 1)
 }
 
-func NewHotel(tenant string, rooms map[string]RoomType, policy Policy) *Hotel {
-	schemas := []*pb.SchemaRef{{Name: SchemaCreate, Version: 1}, {Name: SchemaModify, Version: 1}, {Name: SchemaCancel, Version: 1}}
-	registry := kernel.NewSchemaRegistry(schemas, nil)
+func NewHotel(tenant string, rooms map[string]RoomType) *Hotel {
 	h := &Hotel{tenant: tenant, rooms: rooms, reservations: map[string]*Reservation{},
-		changes: kernel.NewChangeLog(registry), authorities: kernel.NewAuthorities(Authority), policy: policy,
-		facts: kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: channelMessageSchema, Version: 1}}, nil))}
-	h.declaration = &pb.AuthorityDeclaration{TenantId: tenant, DataClass: ReservationType,
-		Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: Authority, Epoch: 1}
-	h.authorities.Declare(h.declaration)
-	h.changes.Facts = func(tenant, id string) bool {
+		ledger: platformserver.NewLedger(tenant, Authority, Actions(), ReservationType),
+		facts:  kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: channelMessageSchema, Version: 1}}, nil))}
+	h.ledger.Changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(h.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
 	}
 	return h
@@ -132,33 +129,31 @@ func denied() *kernel.Error                { return &kernel.Error{Code: pb.Error
 func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
 
 // Submit turns a submission into a change record or rejects it, in the kernel's
-// receiving order (K6 T2); the hotel supplies only its policy and domain rules.
+// receiving order (K6 T2); the hotel supplies only its rules.
 func (h *Hotel) Submit(p Principal, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if p.Tenant != h.tenant {
 		return nil, denied()
 	}
-	receiver := kernel.Receiver{Changes: h.changes, Authorities: h.authorities,
-		Policy: func(_ kernel.Caller, s *pb.Submission) bool {
-			return h.policy(p, s.GetSchema().GetName(), s.GetTarget())
-		}}
-	var apply func()
-	record, err := receiver.Receive(kernel.Caller{Tenant: p.Tenant, Principal: p.ID}, s, now, func() *kernel.Error {
-		var err *kernel.Error
-		apply, err = h.validate(s)
-		return err
+	return h.ledger.Receive(p.ID, string(p.Role), s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		apply, err := h.validate(s)
+		if err != nil {
+			return nil, err
+		}
+		return func(record *pb.ChangeRecord) {
+			apply()
+			h.reservations[s.GetTarget().GetId()].Version = int(record.GetRevision())
+		}, nil
 	})
-	if err == nil && apply != nil {
-		apply()
-		h.reservations[s.GetTarget().GetId()].Version = int(record.GetRevision())
-	}
-	return record, err
 }
 
 // Declarations are the tenant's authority declarations, for edges (K5 A9).
-func (h *Hotel) Declarations() []*pb.AuthorityDeclaration {
-	return []*pb.AuthorityDeclaration{h.declaration}
+func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Declarations() }
+
+// Catalog is the part of the hotel's actions p may call.
+func (h *Hotel) Catalog(p Principal) []platformserver.Action {
+	return h.ledger.Catalog.For(string(p.Role))
 }
 
 // validate checks the domain rules and returns how to apply the decision.

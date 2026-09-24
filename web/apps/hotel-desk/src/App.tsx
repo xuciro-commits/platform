@@ -1,42 +1,19 @@
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Sheet, StatusTag, Workspace,
-  defineStatuses, notify, submissionStatuses, useWorkspace, type ColumnDef, type View,
+  Button, DataTable, Dialog, EntityForm, Input, PageHeader, Sheet, StatusTag, Workspace,
+  notify, submissionStatuses, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { BedDouble, Inbox, Plus, Send } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { z } from "zod";
-import { api, inTauri, type OutboxEntry, type Reservation, type Snapshot } from "./api";
+import { ReservationCard, ReservationTable, newReservation, roomTypes, stay } from "@pkg/hotel";
+import { api, inTauri, type OutboxEntry, type Snapshot } from "./api";
 
-const reservationStatuses = defineStatuses({
-  confirmed: { label: "Confirmed", tone: "success" },
-  canceled: { label: "Canceled", tone: "neutral" },
-});
-
-const stay = z.object({
-  roomType: z.enum(["standard", "suite", "apartment"]),
-  checkIn: z.iso.date("Pick a date"),
-  checkOut: z.iso.date("Pick a date"),
-}).refine((s) => s.checkOut > s.checkIn, { message: "Check-out must be after check-in", path: ["checkOut"] });
-const newReservation = stay.and(z.object({ guest: z.string().trim().min(1, "Required") }));
-
-const roomTypes = [{ value: "standard", label: "Standard" }, { value: "suite", label: "Suite" }, { value: "apartment", label: "Serviced apartment (28+ nights)" }];
 const workspaceTypes = [{ value: "meeting-room", label: "Meeting room" }, { value: "hot-desk", label: "Hot desk" }];
 const hour = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:00$/, "Whole hours");
 const newBooking = z.object({ roomType: z.enum(["meeting-room", "hot-desk"]), checkIn: hour, checkOut: hour, guest: z.string().trim().min(1, "Required") })
   .refine((s) => s.checkOut > s.checkIn, { message: "End must be after start", path: ["checkOut"] });
 const nextDay = (date: string) => new Date(Date.parse(date + "T00:00:00Z") + 86_400_000).toISOString().slice(0, 10);
 const short = (id: string) => id.slice(0, 12);
-
-const reservationColumns: ColumnDef<Reservation, any>[] = [
-  { accessorKey: "id", header: "Reservation", cell: (c) => <span className="font-mono text-xs">{short(c.getValue())}</span>, meta: { width: 140 } },
-  { accessorKey: "guest", header: "Guest" },
-  { accessorKey: "roomType", header: "Room type", meta: { width: 110 } },
-  { accessorKey: "checkIn", header: "Check-in", meta: { width: 110 } },
-  { accessorKey: "checkOut", header: "Check-out", meta: { width: 110 } },
-  { accessorKey: "version", header: "Ver.", meta: { width: 60, align: "right" } },
-  { id: "status", accessorFn: (r) => (r.canceled ? "canceled" : "confirmed"), header: "Status", meta: { width: 110 },
-    cell: (c) => <StatusTag status={c.getValue()} registry={reservationStatuses} /> },
-];
 
 type Desk = { snapshot: Snapshot | null; run: (action: Promise<unknown>) => Promise<void>; startCreate: () => void; revise: (e: OutboxEntry) => void };
 const DeskContext = createContext<Desk | null>(null);
@@ -49,8 +26,7 @@ function Reservations() {
     <>
       <PageHeader title="Reservations" description={snapshot?.online ? "Confirmed by the hotel server" : "Server unreachable; drafts stay in the outbox"}
         actions={<Button variant="primary" onClick={startCreate} disabled={!snapshot?.principal}><Plus />New reservation</Button>} />
-      <DataTable data={snapshot?.reservations ?? []} columns={reservationColumns} getRowId={(r) => r.id} height="calc(100dvh - 190px)"
-        onRowClick={(r) => open({ view: "reservation", params: { id: r.id } })} empty="No reservations" />
+      <ReservationTable data={snapshot?.reservations ?? []} onOpen={(r) => open({ view: "reservation", params: { id: r.id } })} />
     </>
   );
 }
@@ -61,9 +37,7 @@ function ReservationDetail({ id }: { id: string }) {
   if (!r) return <p className="text-sm text-muted">{snapshot?.online ? `No reservation ${short(id)}.` : "Server unreachable."}</p>;
   return (
     <div className="max-w-md">
-      <EntityCard title={r.guest} subtitle={r.id}
-        status={<StatusTag status={r.canceled ? "canceled" : "confirmed"} registry={reservationStatuses} />}
-        properties={[["Room type", r.roomType], ["Stay", `${r.checkIn} → ${r.checkOut}`], ["Version", r.version]]}
+      <ReservationCard reservation={r}
         actions={!r.canceled && <>
           <Button onClick={() => run(api.draft("modify", r.id, { roomType: r.roomType, checkIn: r.checkIn,
             checkOut: nextDay(r.checkOut) }, r.version)).then(() => notify("Extension queued in the outbox"))}>Extend 1 night</Button>

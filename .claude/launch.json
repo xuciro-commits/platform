@@ -27,6 +27,16 @@
       ],
       "port": 5175,
       "url": "http://localhost:5175"
+    },
+    {
+      "name": "sales",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "web/apps/sales",
+        "dev"
+      ],
+      "port": 5176
     }
   ]
 }

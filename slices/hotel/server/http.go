@@ -37,6 +37,7 @@ func NewServer(hotels map[string]*Hotel, authenticate platformserver.Authenticat
 		record, err := h.IngestChannelBooking(p, b, s.Now())
 		platformserver.Reply(w, record, err)
 	})
+	s.Read("/v1/actions", func(p Principal, h *Hotel) any { return h.Catalog(p) })
 	s.Read("/v1/reservations", func(_ Principal, h *Hotel) any { return h.Reservations() })
 	return s.Handler()
 }

@@ -1,5 +1,5 @@
 {
-  "name": "hotel-desk",
+  "name": "sales",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,6 +7,16 @@
     "typecheck": "tsc -p .",
     "test": "true",
     "build": "vite build"
+  },
+  "dependencies": {
+    "@pkg/hotel": "workspace:*",
+    "@platform/kernel": "workspace:*",
+    "@platform/ui": "workspace:*",
+    "@tanstack/react-query": "^5.103.2",
+    "lucide-react": "^1.47.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -16,14 +26,5 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"
-  },
-  "dependencies": {
-    "@pkg/hotel": "workspace:*",
-    "@platform/ui": "workspace:*",
-    "@tauri-apps/api": "^2.11.1",
-    "lucide-react": "^1.47.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "zod": "^4.6.5"
   }
 }

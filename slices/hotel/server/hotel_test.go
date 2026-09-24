@@ -16,7 +16,7 @@ var (
 )
 
 func newHotel() *Hotel {
-	return NewHotel("hotel-a", map[string]RoomType{"standard": {Rooms: 1, Overbooking: 1}, "suite": {Rooms: 1}}, DefaultPolicy)
+	return NewHotel("hotel-a", map[string]RoomType{"standard": {Rooms: 1, Overbooking: 1}, "suite": {Rooms: 1}})
 }
 
 func submission(p Principal, schema, id, key string, payload any, expectedRevision ...uint32) *pb.Submission {
@@ -138,7 +138,7 @@ func TestDrillE1ApartmentsAndCoworking(t *testing.T) {
 	h := NewHotel("hotel-a", map[string]RoomType{
 		"apartment":    {Rooms: 1, MinUnits: 28},
 		"meeting-room": {Rooms: 1, Hourly: true},
-	}, DefaultPolicy)
+	})
 	_, got := create(h, desk, "a1", "k1", "apartment", "2026-10-01", "2026-10-04")
 	expect(t, got, "ERROR_CODE_INVALID_ARGUMENT") // shorter than the minimum stay
 	_, got = create(h, desk, "a2", "k2", "apartment", "2026-10-01", "2026-11-01")

@@ -2,8 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 // Typed wrappers over the Tauri commands (slices/hotel/client/src-tauri/src/main.rs).
 
-export type Stay = { roomType: string; checkIn: string; checkOut: string };
-export type Reservation = Stay & { id: string; guest: string; version: number; canceled: boolean };
+import type { Reservation, Stay } from "@pkg/hotel";
 export type OutboxEntry = {
   key: string; state: string; schema: string; reservation: string; outcome: string;
   payload: (Partial<Stay> & { guest?: string }) | null;

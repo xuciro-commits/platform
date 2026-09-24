@@ -18,8 +18,8 @@ func main() {
 	rooms := map[string]hotel.RoomType{"standard": {Rooms: 3, Overbooking: 1}, "suite": {Rooms: 1},
 		"apartment": {Rooms: 2, MinUnits: 28}, "meeting-room": {Rooms: 1, Hourly: true}, "hot-desk": {Rooms: 6, Hourly: true}}
 	hotels := map[string]*hotel.Hotel{
-		"hotel-a": hotel.NewHotel("hotel-a", rooms, hotel.DefaultPolicy),
-		"hotel-b": hotel.NewHotel("hotel-b", rooms, hotel.DefaultPolicy),
+		"hotel-a": hotel.NewHotel("hotel-a", rooms),
+		"hotel-b": hotel.NewHotel("hotel-b", rooms),
 	}
 	tokens := platformserver.Tokens(map[string]hotel.Principal{
 		"desk-a":    {ID: "desk-1", Tenant: "hotel-a", Role: hotel.FrontDesk},

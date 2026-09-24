@@ -28,6 +28,36 @@ Dependencies point downward only; the kernel knows no domain vocabulary; capabil
 
 Placement questions: Would it still hold in a different industry? After a pivot within the same industry? Is it "must be so" or "one of several implementations"? Would operators change it at runtime — and is that a parameter (config) or a change of rules (code)?
 
+### Capability matrix (what a business package builds on)
+
+A business package (its domain code, UI and bridges) uses these and writes only its business knowledge. Status: **kernel status** (§4) for contract rows; for the others, how many packages use it: **n** in use, **1** proven once, **gap** known missing. Update this table when a capability is added, promoted or found missing.
+
+| Layer | Capability | A package gets | Code | Used by | Status |
+|---|---|---|---|---|---|
+| Kernel | Identity and redirects (K1) | Opaque stable IDs, explicit creation, merge/split redirects | `contract` · `kernel.Identity` | Music, manufacturing | 2D |
+| Kernel | Facts and provenance (K2, K3) | Observations and claims with source and time; decisions cite them as evidence (C11) | `kernel.FactLog` | Music, Hotel, manufacturing | 2D |
+| Kernel | Decisions (K4) | Change records: idempotency, causation, valid/recorded time, revisions that refuse stale screens (C12) | `kernel.ChangeLog` | all | E |
+| Kernel | Authority and outbox (K5) | Authority per data class; edge outbox states in Go, Swift, Rust and TypeScript; migration adopts history | `kernel.Authorities`, edge outboxes | all | 2D |
+| Kernel | Tenancy and policy hook (K6) | Receiving order, caller binding, one policy evaluation per decision | `kernel.Receiver` | all | E |
+| Kernel | Schema versions (K7) | Versioned payloads, upgrade paths, negotiation | `kernel.SchemaRegistry` | declared by all; upgrades only in vectors | H |
+| Kernel | Connectors (K8) | One descriptor for push and poll sources, cursors, health | `kernel.Connectors` | manufacturing | H |
+| Kernel | Work ownership (K9) | Generations, checkpoints, stale results, owner close | `kernel.Works` | none on a server yet (MSRU `FeatureHost`) | H |
+| Server | Package ledger | The kernel wired for one package: change log, authority declarations, receiver, catalog role check | `platformserver.Ledger` | Hotel, CRM, crm-hotel (manufacturing still wires its own) | 3 |
+| Server | Action catalog | Actions declared once; each caller (screen, integration, AI agent) receives only what its role may call; capabilities deactivated at start-up | `platformserver.Action`, `Catalog` | manufacturing, Hotel, CRM, crm-hotel | 4 |
+| Server | Server shell | Tenant routing, authentication hook, kernel endpoints, one error mapping, JSON reads | `platformserver.Server` | manufacturing, Hotel, sales | 3 |
+| Server | OIDC principals | Access-token verification; the directory maps subjects to principals | `platformserver.OIDC` | manufacturing | 1 |
+| Server | Durable journal | Accepted inputs in PostgreSQL, replay on start, single-writer fence, fail-stop | `platformserver.Journal` | manufacturing | 1 |
+| Server | Agent adapter | An AI agent lists its own catalog and submits one of its actions | `cmd/mes-agent` | manufacturing | 1 (generic candidate) |
+| Web | UI kit and shell | Components, docking workspace, entity routes, command palette, session menu | `@platform/ui` | all web apps | 4 |
+| Web | Field types | 20 types deciding display, editor, validation, sorting and filters | `@platform/ui` fields | gallery | 1 |
+| Web | Edge client | Persisted outbox, HTTP transport, declarations, action-catalog type | `@platform/kernel` | manufacturing, sales | 2 |
+| Web | Browser sign-in | Authorization code with PKCE | `@platform/kernel` `oidc.ts` | manufacturing | 1 |
+| Web | Package UI | A package's views and model for every software that shows its data | `@pkg/hotel` | Hotel Desk, sales | 2 |
+| Operations | Deployment and rehearsal | Compose stack with PostgreSQL and Rauthy; restart and restore rehearsal | `deploy/local` | manufacturing | 1 |
+| Composition | Bridge packages | Cooperation owned by a bridge that uses both packages' declared actions and reads (ADR-0009) | `slices/crm-hotel` | CRM + Hotel | 1 |
+| Composition | Package host | Routing submissions, catalogs and declarations across packages; one member with a role per package (F-21, F-23) | composition code in `crmhotel.NewServer` | sales | gap |
+| Composition | Journal across packages | One ordered journal for a composed tenant, so a bridge's decision and the hotel decision it caused replay together | — | — | gap |
+
 ## 3. Runtimes and languages
 
 ```text
@@ -186,6 +216,10 @@ Decided in ADR-0007: the server journals accepted inputs in PostgreSQL and repla
 ### Governed actions #90 (manufacturing)
 
 Decided in ADR-0008. `platformserver.Action` declares an action once (schema, target, capability, title, description, payload fields, roles); `GET /v1/actions` returns the caller's own catalog. Role checks moved out of the plant's policy and the MES UI into the catalog; line conditions stay in the domain. An AI agent is the client `mes-assistant` with role `assistant` on line L1, acting through `cmd/mes-agent` (list its catalog, submit one of its actions); `rehearse.sh` shows it acting on L1 and refused a release even when it bypasses the adapter. `-disable downtime-reasons` deactivates a capability: its actions leave the catalog and are refused (`UNKNOWN_SCHEMA`), recorded reasons replay and still show. Replay no longer re-authorizes. Not yet shown: deactivation with running work (no manufacturing capability owns K9 work today), and confirmation by a person before an agent's action takes effect. The action shape lives in the capability layer until a second domain uses it; then it becomes a kernel-contract candidate (spec and vectors first).
+
+### Composition #91 (CRM + Hotel)
+
+Decided in ADR-0009. CRM (accounts, opportunities) and Hotel know nothing of each other (checked by `verify.sh composition`); the bridge `crm-hotel` owns the stays booked for an opportunity and books them through the hotel's own create action, so the hotel's roles, availability and revisions decide. The sales workspace shows CRM views and the Hotel package's contributed views (`@pkg/hotel`, also used by the Hotel Desk). Findings: a bridge's actions must target its own entity (K5 allows one authority per data class, so targeting the CRM's opportunity was refused); a bridge action is offered only when every package it calls would accept the caller; F-21 to F-23 below.
 
 ### Shared capability models (candidates, layer 2)
 

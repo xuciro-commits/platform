@@ -14,10 +14,12 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | `capabilities/server/` | Go module `platformserver`: the server capability every domain server uses (authentication hook with OIDC verification, kernel endpoints, error mapping, the PostgreSQL input journal, the action catalog) |
 | `slices/hotel/` | Hotel reference slice (#79): Go tenant server (`server/`, with a channel simulator), Tauri desk client with a Rust K5 outbox that runs the contract's K5 vectors (`client/`), `flows.sh` reproducing timeout, offline, conflict and rejection flows. May not change the kernel |
 | `slices/manufacturing/` | Manufacturing reference slice (#83, Opcenter/SAP ME model): Go plant server with ERP poll and gateway push connectors (`server/`, `cmd/gateway-sim`), declared actions and the agent adapter `cmd/mes-agent` (ADR-0008). May not change the kernel |
+| `slices/crm/` | CRM package (#91): accounts and opportunities on `platformserver.Ledger`; knows no other package |
+| `slices/crm-hotel/` | Bridge between CRM and Hotel (ADR-0009): stays booked for opportunities through the hotel's own action; `cmd/sales-server` serves the composed software |
 | `slices/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |
 | `deploy/local/` | Infrastructure as code for the production path (ADR-0007): Docker Compose with PostgreSQL, Rauthy (declarative bootstrap) and mes-server; `rehearse.sh` rehearses OIDC principals, restart and restore |
-| `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri), `apps/mes` (manufacturing client) |
-| `docs/Platform.md` | The platform design: layers, kernel hypotheses K1–K9, kernel contract rules, validation strategy |
+| `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri), `apps/mes` (manufacturing client), `apps/sales` (the composed CRM + Hotel software), `packages/hotel` (`@pkg/hotel`, the Hotel package's UI) |
+| `docs/Platform.md` | The platform design: layers, the capability matrix packages build on, kernel hypotheses K1–K9, kernel contract rules, validation strategy |
 | `docs/ProductIntentReview.md` | Product intent and top-level architectural direction from an external review: advisory, handled (disposition at its top), not an implementation plan or a replacement for accepted ADRs |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
@@ -42,6 +44,7 @@ scripts/verify.sh web       # UI kit tests, typecheck and build of every web app
 scripts/verify.sh hotel     # web build, Hotel server tests, Rust K5 vectors, end-to-end flows (needs cargo)
 scripts/verify.sh manufacturing  # plant server tests (F-5 to F-9 verdicts)
 scripts/verify.sh drills    # evolution drills on the kernel
+scripts/verify.sh composition  # package independence, CRM, the crm-hotel bridge
 scripts/verify.sh capabilities  # server capability tests
 scripts/verify.sh deploy    # production-path rehearsal (needs Docker via OrbStack: orb start)
 ```

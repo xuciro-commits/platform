@@ -44,6 +44,15 @@ func (c *Catalog) Disable(capability string) bool {
 	return true
 }
 
+// Action is the declaration of schema, active or not.
+func (c *Catalog) Action(schema string) (Action, bool) {
+	i := slices.IndexFunc(c.actions, func(a Action) bool { return a.Schema == schema })
+	if i < 0 {
+		return Action{}, false
+	}
+	return c.actions[i], true
+}
+
 // Enabled reports whether schema is a declared action of an active capability.
 func (c *Catalog) Enabled(schema string) bool {
 	i := slices.IndexFunc(c.actions, func(a Action) bool { return a.Schema == schema })
