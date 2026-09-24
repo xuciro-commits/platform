@@ -6,6 +6,7 @@
 package platform
 
 import (
+	"reflect"
 	"slices"
 	"time"
 
@@ -60,6 +61,11 @@ type Runtime interface {
 	Links(c Caller, entity string) []string
 	Link(c Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error
 	Deliver(c Caller, dataClass, from, to string, now time.Time) *kernel.Error
+	// Records of the app's entity types (ADR-0016).
+	Put(c Caller, r *pb.ChangeRecord, entity any) *kernel.Error
+	Get(c Caller, t reflect.Type, id string) (any, bool)
+	Find(c Caller, t reflect.Type, q Query) ([]any, int, *kernel.Error)
+	Check(c Caller, entity any) *kernel.Error
 }
 
 // Manifest declares an app (ADR-0010). Names of actions, reads and inputs are
@@ -80,6 +86,7 @@ type Manifest struct {
 	Jobs       []Job         // scheduled work (Runner), ADR-0013
 	Settings   []Setting     // typed values administrators set in Settings
 	Emits      []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0014)
+	Entities   []Entity      // entity types whose records the host keeps (ADR-0016)
 	// Roles are roles that grant no action but open something else, such as
 	// models (ADR-0015); the roles its actions grant need not be listed.
 	Roles []string

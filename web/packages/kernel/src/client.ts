@@ -43,6 +43,23 @@ export class EdgeClient {
     return { ok: response.ok, status: response.status, body: (await response.json().catch(() => ({}))) as T };
   }
 
+  /** Records of an entity type (ADR-0016): a domain, a search, sort fields and a page. */
+  records<T = unknown>(type: string, q: { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean } = {}): Promise<T> {
+    const p = new URLSearchParams();
+    if (q.domain?.length) p.set("domain", JSON.stringify(q.domain));
+    if (q.search) p.set("search", q.search);
+    if (q.sort?.length) p.set("sort", q.sort.join(","));
+    if (q.offset) p.set("offset", String(q.offset));
+    if (q.limit) p.set("limit", String(q.limit));
+    if (q.archived) p.set("archived", "true");
+    return this.get<T>(`/v1/records/${encodeURIComponent(type)}?${p}`);
+  }
+
+  /** One record with its history and related records. */
+  record<T = unknown>(type: string, id: string): Promise<T> {
+    return this.get<T>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
+  }
+
   /** Takes the tenant's declarations from its authority (A9). */
   async refreshDeclarations(): Promise<void> {
     this.authorities.refresh(await this.get("/v1/declarations"));

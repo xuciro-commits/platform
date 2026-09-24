@@ -88,7 +88,7 @@ func TestAIProviders(t *testing.T) {
 		want    string
 	}{
 		{bo, "lm", map[string]any{"kind": "local", "baseUrl": server.URL + "/v1"}, "ERROR_CODE_POLICY_DENIED"},
-		{ana, "or", map[string]any{"kind": "vendor", "vendor": "openrouter"}, "ERROR_CODE_INVALID_ARGUMENT"},       // a vendor needs a key
+		{ana, "or", map[string]any{"kind": "vendor", "vendor": "openrouter"}, "ERROR_CODE_INVALID_ARGUMENT"},         // a vendor needs a key
 		{ana, "x", map[string]any{"kind": "vendor", "vendor": "nope", "secret": "k"}, "ERROR_CODE_INVALID_ARGUMENT"}, // unknown vendor
 		{ana, "tp", map[string]any{"kind": "compatible", "baseUrl": "http://api.example.com/v1", "secret": "k"}, "ERROR_CODE_INVALID_ARGUMENT"},
 		{ana, "or", map[string]any{"kind": "vendor", "vendor": "openrouter", "secret": "openrouter"}, "ok"},
@@ -124,7 +124,7 @@ func TestAIProviders(t *testing.T) {
 		return answer.Content
 	}
 	for _, c := range []struct {
-		who          platform.Member
+		who         platform.Member
 		model, want string
 	}{
 		{bo, "lm/echo", "echo: hello"},

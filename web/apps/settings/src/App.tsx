@@ -5,11 +5,11 @@
 // providers and usage (ADR-0015) and the audit trail. Every change is a decision.
 import { EdgeClient, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Select, Tag, Workspace,
-  notify, useWorkspace, type ColumnDef, type View,
+  Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, RecordList, RecordPage, Select, Tag, Workspace,
+  notify, useWorkspace, type ColumnDef, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Blocks, Bot, Cable, Grid3x3, History, MessageSquare, Network, PlugZap, SlidersHorizontal, Users, Workflow } from "lucide-react";
+import { BarChart3, Blocks, Bot, Database, Cable, Grid3x3, History, MessageSquare, Network, PlugZap, SlidersHorizontal, Users, Workflow } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -775,6 +775,43 @@ function AIUsage() {
   );
 }
 
+// Records (ADR-0016): every entity type of the apps the administrator holds a
+// role in, through the host's generic reads, read-only here.
+function useRecordSource(): { source: RecordSource; entities: EntityInfo[] } {
+  const { client } = useAdmin();
+  const entities = useRead<EntityInfo[]>("/v1/entities").data ?? [];
+  const source = useMemo<RecordSource>(() => ({
+    entity: (type) => entities.find((e) => e.type === type),
+    list: (type, q) => client.records<RecordPageData>(type, q),
+    get: (type, id) => client.record<RecordView>(type, id),
+  }), [client, entities]);
+  return { source, entities };
+}
+
+function Records() {
+  const { source, entities } = useRecordSource();
+  const { open } = useWorkspace();
+  const [type, setType] = useState("");
+  const chosen = type || entities[0]?.type || "";
+  return (
+    <>
+      <PageHeader title="Records" description="Every entity type the apps declare (ADR-0016), with the host's search, sort and pages, within your roles. Records change only through their apps' actions." />
+      {entities.length === 0 ? <p className="text-sm text-muted">No entity types in apps you hold a role in.</p> : (
+        <RecordList source={source} type={chosen} height="calc(100dvh - 260px)" onOpen={(r) => open({ view: "record", params: { type: chosen, id: r.id } })}
+          toolbar={<Select aria-label="Entity type" value={chosen} className="w-56" onChange={(e) => setType(e.target.value)}>
+            {entities.map((e) => <option key={e.type} value={e.type}>{e.title} · {e.type}</option>)}
+          </Select>} />
+      )}
+    </>
+  );
+}
+
+function RecordDetail({ type, id }: { type: string; id: string }) {
+  const { source } = useRecordSource();
+  const { open } = useWorkspace();
+  return <RecordPage source={source} type={type} id={id} onOpen={(t, r) => open({ view: "record", params: { type: t, id: r.id } })} />;
+}
+
 const views: View[] = [
   { id: "members", title: () => "Members", render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? "Member", render: (p) => <MemberDetail id={p.id ?? ""} /> },
@@ -786,6 +823,8 @@ const views: View[] = [
   { id: "integrations", title: () => "Integrations", render: () => <Integrations /> },
   { id: "app-settings", title: () => "App settings", render: () => <AppSettingsView /> },
   { id: "audit", title: () => "Audit", render: () => <Audit /> },
+  { id: "records", title: () => "Records", render: () => <Records /> },
+  { id: "record", title: (p) => p.id ?? "Record", render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "ai-providers", title: () => "AI providers", render: () => <AIProviders /> },
   { id: "ai-playground", title: () => "AI playground", render: () => <AIPlayground /> },
   { id: "ai-usage", title: () => "AI usage", render: () => <AIUsage /> },
@@ -823,7 +862,7 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
       <Workspace product="Platform Settings" storageKey="settings.layout" views={views} home={{ view: "members" }}
         nav={[
           { label: "Access", items: [nav("Members", <Users />, "members"), nav("Organisation", <Network />, "organization")] },
-          { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("App settings", <SlidersHorizontal />, "app-settings"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] },
+          { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("App settings", <SlidersHorizontal />, "app-settings"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols"), nav("Records", <Database />, "records")] },
           { label: "AI", items: [nav("Providers and models", <Bot />, "ai-providers"), nav("Playground", <MessageSquare />, "ai-playground"), nav("Usage", <BarChart3 />, "ai-usage")] },
           { label: "Operations", items: [nav("Integrations", <PlugZap />, "integrations"), nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] },
         ]}

@@ -6,11 +6,11 @@ import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type OidcConfig
 import { newReservation, ReservationCard, ReservationTable, roomTypes, type Reservation } from "@pkg/hotel";
 import { BookingTable, type Booking } from "@pkg/lodging";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Input, NotificationList, PageHeader, StatusTag, Tag, Workspace,
-  defineStatuses, notify, useWorkspace, type ColumnDef, type View,
+  Button, DataTable, Dialog, EntityCard, EntityForm, Input, NotificationList, PageHeader, RecordForm, RecordList, RecordPage, StatusTag, Tag, Workspace,
+  defineStatuses, entityFrom, notify, useWorkspace, type ColumnDef, type EntityInfo, type EntityRecord, type RecordPageData, type RecordSource, type RecordView, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BedDouble, Bell, Building2 } from "lucide-react";
+import { BedDouble, Bell, Building2, Handshake, Users } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -32,7 +32,8 @@ type Notification = { id: string; app: string; title: string; body?: string; ref
 const stages = defineStatuses({ open: { label: "Open", tone: "info" }, won: { label: "Won", tone: "success" }, lost: { label: "Lost", tone: "neutral" } });
 const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
-type Sales = { client: EdgeClient; can: (schema: string) => boolean; decide: (schema: string, target: { type: string; id: string }, payload: unknown, expectedRevision?: number) => Promise<boolean> };
+type Sales = { client: EdgeClient; can: (schema: string) => boolean; decide: (schema: string, target: { type: string; id: string }, payload: unknown, expectedRevision?: number) => Promise<boolean>;
+  source: RecordSource; entities: EntityInfo[] };
 const SalesContext = createContext<Sales | null>(null);
 const useSales = () => useContext(SalesContext)!;
 
@@ -59,9 +60,7 @@ function Customers() {
       <DataTable data={customers} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 190px)"
         onRowClick={(c) => open({ view: "customer", params: { id: c.id } })} empty="No accounts yet" />
       <Dialog open={creating} onOpenChange={setCreating} title="New account">
-        <EntityForm schema={z.object({ name: z.string().trim().min(1, "Required"), kind: z.enum(["company", "person"]) })}
-          defaultValues={{ name: "", kind: "company" }} submitLabel="Create" onCancel={() => setCreating(false)}
-          fields={[{ name: "name", label: "Name" }, { name: "kind", label: "Kind", kind: "select", options: [{ value: "company", label: "Company" }, { value: "person", label: "Person" }] }]}
+        <GeneratedForm type="crm.account" submitLabel="Create" onCancel={() => setCreating(false)}
           onSubmit={async (v) => { if (await decide("crm.account.create", { type: "crm.account", id: newId("ACC") }, v, 0)) setCreating(false); }} />
       </Dialog>
     </>
@@ -174,10 +173,62 @@ function Notifications() {
   </>;
 }
 
+// The application model (ADR-0016): forms, lists and record pages generated
+// from the host's entity declarations; generated actions where the catalog grants them.
+function GeneratedForm({ type, record, onSubmit, onCancel, submitLabel }: {
+  type: string; record?: EntityRecord; onSubmit: (values: object) => void | Promise<void>; onCancel: () => void; submitLabel: string;
+}) {
+  const { source } = useSales();
+  const info = source.entity(type);
+  if (!info) return null;
+  const editable = info.fields.filter((f) => !f.readOnly).map((f) => f.name);
+  return <RecordForm entity={entityFrom(info)} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
+    onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
+}
+
+function Records({ type }: { type: string }) {
+  const { source, can } = useSales();
+  const { open } = useWorkspace();
+  const info = source.entity(type);
+  return (
+    <>
+      <PageHeader title={info?.plural ?? type} description="Generated from the entity's declaration: search, sort and pages come from the host, within what you may see." />
+      <RecordList source={source} type={type} onOpen={(r) => open({ view: "record", params: { type, id: r.id } })}
+        toolbar={can(`${type}.create`) && <span className="text-xs text-muted">New ones from Customers</span>} />
+    </>
+  );
+}
+
+function RecordDetail({ type, id }: { type: string; id: string }) {
+  const { source, can, decide } = useSales();
+  const { open } = useWorkspace();
+  const [editing, setEditing] = useState<EntityRecord>();
+  const [reload, setReload] = useState(0);
+  const act = async (schema: string, r: EntityRecord, payload: object) => {
+    if (await decide(schema, { type, id: r.id }, payload, r.revision)) { setEditing(undefined); setReload(reload + 1); }
+  };
+  return (
+    <>
+      <RecordPage source={source} type={type} id={id} reload={reload} onOpen={(t, r) => open({ view: "record", params: { type: t, id: r.id } })}
+        actions={(r) => <>
+          {can(`${type}.edit`) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>Edit</Button>}
+          {can(`${type}.archive`) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>Archive</Button>}
+        </>} />
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={`Edit ${editing?.id ?? ""}`}>
+        {editing && <GeneratedForm type={type} record={editing} submitLabel="Save" onCancel={() => setEditing(undefined)}
+          onSubmit={(v) => act(`${type}.edit`, editing, v)} />}
+      </Dialog>
+    </>
+  );
+}
+
 const views: View[] = [
   { id: "notifications", title: () => "Notifications", render: () => <Notifications /> },
   { id: "customers", title: () => "Customers", render: () => <Customers /> },
   { id: "customer", title: (p) => p.id ?? "Customer", render: (p) => <CustomerDetail id={p.id ?? ""} /> },
+  { id: "accounts", title: () => "Accounts", render: () => <Records type="crm.account" /> },
+  { id: "opportunities", title: () => "Opportunities", render: () => <Records type="crm.opportunity" /> },
+  { id: "record", title: (p) => p.id ?? "Record", render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "reservations", title: () => "Reservations", render: () => <Reservations /> },
   { id: "reservation", title: (p) => p.id ?? "Reservation", render: (p) => <ReservationDetail id={p.id ?? ""} /> },
 ];
@@ -197,6 +248,12 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
     client.refreshDeclarations().catch(() => notify.error("Sales server unreachable"));
   }, [client, me]);
   const can = (schema: string) => !!actions?.some((a) => a.schema === schema);
+  const entities = useQuery({ queryKey: [token, "entities"], queryFn: () => client.get<EntityInfo[]>("/v1/entities"), refetchInterval: false }).data ?? [];
+  const source = useMemo<RecordSource>(() => ({
+    entity: (type) => entities.find((e) => e.type === type),
+    list: (type, q) => client.records<RecordPageData>(type, q),
+    get: (type, id) => client.record<RecordView>(type, id),
+  }), [client, entities]);
   const decide: Sales["decide"] = async (schema, target, payload, expectedRevision) => {
     client.draft(schema, target, payload, [], expectedRevision);
     let ok = false;
@@ -209,12 +266,13 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
     return ok;
   };
   return (
-    <SalesContext.Provider value={{ client, can, decide }}>
+    <SalesContext.Provider value={{ client, can, decide, source, entities }}>
       <Workspace product="Sales Workspace" storageKey="sales.layout" views={views} home={{ view: "customers" }}
         nav={[
           { label: "You", items: [{ label: "Notifications", icon: <Bell />, route: { view: "notifications" },
             badge: unread ? <span className="text-xs text-[var(--tone-info)]">{unread}</span> : null }] },
-          { label: "CRM", items: [{ label: "Customers", icon: <Building2 />, route: { view: "customers" } }] },
+          { label: "CRM", items: [{ label: "Customers", icon: <Building2 />, route: { view: "customers" } },
+            { label: "Accounts", icon: <Users />, route: { view: "accounts" } }, { label: "Opportunities", icon: <Handshake />, route: { view: "opportunities" } }] },
           { label: "Hotel", items: [{ label: "Reservations", icon: <BedDouble />, route: { view: "reservations" } }] },
         ]}
         status={<span className="text-xs text-muted">{actions ? `${actions.length} actions granted` : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}

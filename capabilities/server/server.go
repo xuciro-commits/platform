@@ -6,6 +6,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -155,6 +156,31 @@ func (h *Host) Handler() http.Handler {
 	})
 	handle("GET /v1/ai/vendors", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
 		WriteJSON(w, http.StatusOK, Vendors)
+	})
+	handle("GET /v1/entities", func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, t.Entities(m))
+	})
+	handle("GET /v1/records/{type}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
+		if sort := r.URL.Query().Get("sort"); sort != "" {
+			q.Sort = strings.Split(sort, ",")
+		}
+		fmt.Sscan(r.URL.Query().Get("offset"), &q.Offset)
+		fmt.Sscan(r.URL.Query().Get("limit"), &q.Limit)
+		page, err := t.Records(m, r.PathValue("type"), q, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, page)
+	})
+	handle("GET /v1/records/{type}/{id}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		view, err := t.RecordOf(m, r.PathValue("type"), r.PathValue("id"), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, view)
 	})
 	handle("POST /mcp", h.mcp)
 	handle("GET /v1/{read}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

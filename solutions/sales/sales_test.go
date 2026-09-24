@@ -215,7 +215,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 		}
 		return out
 	}
-	if got := catalog("sales"); !slices.Equal(got, []string{hotel.SchemaCreate, hotel.SchemaModify, crm.SchemaAccount, crm.SchemaOpen, crm.SchemaClose, crm.SchemaBook}) {
+	if got := catalog("sales"); !slices.Equal(got, []string{hotel.SchemaCreate, hotel.SchemaModify, crm.SchemaAccount, "crm.account.edit", "crm.account.archive", crm.SchemaOpen, crm.SchemaClose, crm.SchemaBook}) {
 		t.Fatalf("sales catalog %v", got)
 	}
 	if slices.Contains(catalog("sales-only"), crm.SchemaBook) {

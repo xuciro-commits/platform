@@ -1,6 +1,9 @@
 package platform
 
 import (
+	"encoding/json"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,4 +77,64 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		}
 	}
 	return record, err
+}
+
+// Standard decides an entity type's generated create, edit and archive
+// actions (ADR-0016 D5); ok is false for any other schema. allowed (may be
+// nil) adds the app's conditions to the catalog's role check.
+func (l *Ledger) Standard(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...Entity) (*pb.ChangeRecord, *kernel.Error, bool) {
+	schema := s.GetSchema().GetName()
+	for _, e := range entities {
+		verb, found := strings.CutPrefix(schema, e.Type+".")
+		if !found || !(verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive) {
+			continue
+		}
+		record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+			return standard(c, e, verb, s)
+		})
+		return record, err, true
+	}
+	return nil, nil, false
+}
+
+func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	if c.rt == nil {
+		return nil, notFound()
+	}
+	t := reflect.TypeOf(e.Model)
+	id := s.GetTarget().GetId()
+	existing, known := c.rt.Get(c, t, id)
+	v := reflect.New(t)
+	switch {
+	case verb == "create" && known:
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	case verb != "create" && !known:
+		return nil, notFound()
+	case verb != "create":
+		v.Elem().Set(reflect.ValueOf(existing))
+	}
+	if verb == "archive" {
+		v.Elem().Field(0).Addr().Interface().(*Record).Archived = true
+	} else {
+		var given map[string]json.RawMessage
+		if json.Unmarshal(s.GetPayload(), &given) != nil {
+			return nil, invalid
+		}
+		info, _ := Describe("", e, func(reflect.Type) string { return "?" })
+		for name := range given {
+			if f, ok := info.Field(name); !ok || f.ReadOnly {
+				return nil, invalid // unknown or read-only fields are never set by a generated action
+			}
+		}
+		if json.Unmarshal(s.GetPayload(), v.Interface()) != nil {
+			return nil, invalid
+		}
+		v.Elem().Field(0).Addr().Interface().(*Record).ID = id
+	}
+	value := v.Elem().Interface()
+	if err := c.rt.Check(c, value); err != nil {
+		return nil, err
+	}
+	return func(r *pb.ChangeRecord) { c.rt.Put(c, r, value) }, nil
 }

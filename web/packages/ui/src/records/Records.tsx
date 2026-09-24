@@ -1,0 +1,184 @@
+// The application model's pages (ADR-0016): an entity type described by the
+// host (`GET /v1/entities`) becomes a kit entity, a list page with server-side
+// search, sort and paging, a record page (fields, related records, history) and
+// generated forms. Components take a RecordSource, so the kit knows no client.
+import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { z } from "zod";
+import { DataTable } from "../components/DataTable";
+import { PropertyList } from "../components/EntityCard";
+import { Tag } from "../components/StatusTag";
+import { columnsFor, defineEntity, type Entity } from "../fields/entity";
+import { checkbox, date, datetime, longText, multiSelect, number, singleSelect, text, type FieldType } from "../fields/types";
+import { Button } from "../primitives/button";
+import { Input, Select } from "../primitives/input";
+
+export type FieldInfo = {
+  name: string; title: string; required?: boolean; search?: boolean; readOnly?: boolean; choices?: string[]; ref?: string;
+  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags";
+};
+export type EntityInfo = { type: string; title: string; plural: string; app: string; display: string; fields: FieldInfo[]; standard: string[] };
+export type Stamp = { by?: string; at?: string; change?: string };
+export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;
+export type RecordQuery = { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean };
+export type RecordPageData = { records: EntityRecord[]; total: number };
+export type RecordChange = { change: string; schema: string; by: string; at: string; fields: { field: string; before?: unknown; after?: unknown }[] };
+export type RecordView = { record: EntityRecord; history: RecordChange[]; related: { type: string; field: string; title: string; records: EntityRecord[]; total: number }[] };
+export type Money = { amount: number; currency: string };
+
+/** Where records come from: the host's reads, wired by the app. */
+export type RecordSource = {
+  entity: (type: string) => EntityInfo | undefined;
+  list: (type: string, query: RecordQuery) => Promise<RecordPageData>;
+  get: (type: string, id: string) => Promise<RecordView>;
+};
+
+const money = (o: { label: string; required?: boolean; readOnly?: boolean }): FieldType<Money> => ({
+  type: "money", align: "right", ...o, compare: (a, b) => (a?.amount ?? 0) - (b?.amount ?? 0), operators: [],
+  text: (v) => (v ? `${(v.amount / 100).toFixed(2)} ${v.currency}` : ""),
+  schema: z.object({ amount: z.number().int(), currency: z.string().length(3) }),
+  display: (v) => (v && v.currency ? <span className="tabular-nums">{(v.amount / 100).toLocaleString(undefined, { style: "currency", currency: v.currency })}</span>
+    : <span className="text-muted">—</span>),
+  editor: ({ id, value, onChange }) => (
+    <span className="flex gap-1">
+      <Input id={id} type="number" step={0.01} value={value ? value.amount / 100 : ""} className="flex-1"
+        onChange={(e) => onChange(e.target.value === "" ? undefined : { amount: Math.round(Number(e.target.value) * 100), currency: value?.currency ?? "EUR" })} />
+      <Input aria-label="Currency" value={value?.currency ?? "EUR"} maxLength={3} className="w-16 uppercase"
+        onChange={(e) => onChange({ amount: value?.amount ?? 0, currency: e.target.value.toUpperCase() })} />
+    </span>
+  ),
+});
+
+/** A kit entity from the host's description; `options` gives the choices of reference fields. */
+export function entityFrom(info: EntityInfo, options: Record<string, { value: string; label: string }[]> = {}): Entity<EntityRecord> {
+  const fields: Record<string, FieldType<any, EntityRecord>> = {};
+  for (const f of info.fields) {
+    const common = { label: f.title, required: f.required, readOnly: f.readOnly };
+    fields[f.name] = (() => {
+      switch (f.type) {
+        case "longtext": return longText(common);
+        case "integer": return number(common);
+        case "decimal": return number({ ...common, decimals: 2 });
+        case "money": return money(common);
+        case "date": return date(common);
+        case "datetime": return datetime(common);
+        case "boolean": return checkbox(common);
+        case "choice": return singleSelect({ ...common, options: (f.choices ?? []).map((c) => ({ value: c, label: c })) });
+        case "reference": return options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
+        case "references": case "tags": return multiSelect({ ...common, readOnly: f.type === "references" || f.readOnly, options: options[f.name] ?? [] });
+        default: return text(common);
+      }
+    })();
+  }
+  return defineEntity<EntityRecord>({ name: info.type, fields, primary: info.display === "id" ? "id" : info.display });
+}
+
+const displayOf = (info: EntityInfo, r: EntityRecord) => String((info.display === "id" ? r.id : r[info.display]) ?? r.id);
+
+/** A list of one entity type: server-side search, sort and paging; a row opens the record. */
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100 }: {
+  source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
+}) {
+  const info = source.entity(type);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("-changed");
+  const [offset, setOffset] = useState(0);
+  const [archived, setArchived] = useState(false);
+  const [page, setPage] = useState<RecordPageData>();
+  const [error, setError] = useState<string>();
+  const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
+  useEffect(() => {
+    if (!info) return;
+    const field = sort.replace(/^-/, "");
+    const known = ["id", "created", "changed"].includes(field) || info.fields.some((f) => f.name === field);
+    const handle = setTimeout(() => {
+      source.list(type, { search, sort: known ? [sort] : ["id"], offset, limit: pageSize, archived })
+        .then((p) => { setPage(p); setError(undefined); }, (e) => setError(String(e)));
+    }, 150);
+    return () => clearTimeout(handle);
+  }, [source, type, info, search, sort, offset, archived, pageSize]);
+  if (!info || !entity) return <p className="text-sm text-muted">Unknown entity type {type}.</p>;
+  const columns = [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    ...columnsFor(entity).map((c) => ({ ...c, enableSorting: false }))];
+  const total = page?.total ?? 0;
+  return (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Input aria-label="Search" placeholder={`Search ${info.plural.toLowerCase()}`} value={search} className="w-56"
+          onChange={(e) => { setSearch(e.target.value); setOffset(0); }} />
+        <Select aria-label="Sort" value={sort} className="w-48" onChange={(e) => { setSort(e.target.value); setOffset(0); }}>
+          {[["-changed", "Recently changed"], ["id", "ID"], ...info.fields.filter((f) => f.type !== "references" && f.type !== "tags").flatMap((f) =>
+            [[f.name, `${f.title} ↑`], [`-${f.name}`, `${f.title} ↓`]])].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </Select>
+        <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />archived</label>
+        {toolbar}
+        <span className="ml-auto flex items-center gap-1 text-xs text-muted">
+          {error ?? (total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : "none")}
+          <Button size="sm" variant="ghost" aria-label="Previous page" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}><ChevronLeft /></Button>
+          <Button size="sm" variant="ghost" aria-label="Next page" disabled={offset + pageSize >= total} onClick={() => setOffset(offset + pageSize)}><ChevronRight /></Button>
+        </span>
+      </div>
+      <DataTable data={page?.records ?? []} columns={columns as never} getRowId={(r: EntityRecord) => r.id} height={height} searchable={false}
+        onRowClick={onOpen} empty={page ? `No ${info.plural.toLowerCase()}` : "Loading…"} />
+    </div>
+  );
+}
+
+const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
+
+/** One record: its fields, the records that refer to it, and its history from the journal. */
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0 }: {
+  source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
+  onOpen?: (type: string, r: EntityRecord) => void; reload?: number;
+}) {
+  const info = source.entity(type);
+  const [view, setView] = useState<RecordView>();
+  const [error, setError] = useState<string>();
+  useEffect(() => { source.get(type, id).then(setView, (e) => setError(String(e))); }, [source, type, id, reload]);
+  const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
+  if (error) return <p className="text-sm text-[var(--tone-danger)]">{error}</p>;
+  if (!info || !entity || !view) return <p className="text-sm text-muted">Loading…</p>;
+  const r = view.record;
+  return (
+    <div className="grid max-w-5xl gap-4">
+      <header className="flex flex-wrap items-center gap-2">
+        <h1 className="text-lg font-semibold">{displayOf(info, r)}</h1>
+        <span className="font-mono text-xs text-muted">{info.title} · {r.id} · rev {r.revision}</span>
+        {r.archived && <Tag label="archived" />}
+        <span className="ml-auto flex gap-1">{actions?.(r)}</span>
+      </header>
+      <section className="rounded-md border border-border bg-surface p-3">
+        <PropertyList items={[...info.fields.map((f) => [f.title, entity.fields[f.name]!.display(r[f.name] as never, r)] as [string, ReactNode]),
+          ["Created", `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
+          ["Changed", `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
+      </section>
+      {view.related.map((rel) => {
+        const relInfo = source.entity(rel.type);
+        const relEntity = relInfo && entityFrom(relInfo);
+        return relEntity && (
+          <section key={`${rel.type}.${rel.field}`}>
+            <h2 className="mb-1 text-sm font-semibold">{rel.title} <span className="font-normal text-muted">({rel.total}, by {rel.field})</span></h2>
+            <DataTable data={rel.records} columns={[{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 } }, ...columnsFor(relEntity)] as never}
+              getRowId={(x: EntityRecord) => x.id} height={Math.min(40 + rel.records.length * 28, 260)} searchable={false}
+              onRowClick={onOpen && ((x: EntityRecord) => onOpen(rel.type, x))} empty="None" />
+          </section>
+        );
+      })}
+      <section>
+        <h2 className="mb-1 flex items-center gap-1 text-sm font-semibold"><HistoryIcon className="size-3.5" />History</h2>
+        <ol className="grid gap-2">
+          {view.history.map((h) => (
+            <li key={h.change} className="rounded-md border border-border bg-surface p-2 text-xs">
+              <div className="flex gap-2"><span className="font-mono">{h.schema}</span><span className="text-muted">{h.by} · {new Date(h.at).toLocaleString()}</span></div>
+              {h.fields.length > 0 && (
+                <ul className="mt-1 grid gap-0.5">
+                  {h.fields.map((f) => <li key={f.field}><span className="text-muted">{f.field}</span> {f.before !== undefined && <><s className="text-muted">{shown(f.before)}</s> → </>}{shown(f.after)}</li>)}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+    </div>
+  );
+}

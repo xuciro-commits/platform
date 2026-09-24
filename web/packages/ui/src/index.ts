@@ -16,3 +16,4 @@ export { Sheet } from "./primitives/sheet";
 export { Workspace, useWorkspace, notify, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
+export { RecordList, RecordPage, entityFrom, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";

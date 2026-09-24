@@ -248,6 +248,9 @@ func (o *Organization) units(party, structure string, day platform.Date) []strin
 			}
 		}
 	}
+	if structure == "" { // the units themselves, none below (a record scope of level unit)
+		return out
+	}
 	for i := 0; i < len(out); i++ { // descend: out grows while it is walked
 		for _, e := range o.chart.Edges {
 			if u := o.unit(e.Unit); e.Structure == structure && e.Parent == out[i] && activeOn(e.From, e.Until, day) && u != nil && activeOn(u.From, u.Until, day) {

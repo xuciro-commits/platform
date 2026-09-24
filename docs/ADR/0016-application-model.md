@@ -1,6 +1,6 @@
 # ADR-0016: The application model — declare entities once, get the rest
 
-**Status:** Proposed (2026-09-25, #106, the architecture gate of stage 1 in Platform.md §10.4). The owner decides D1–D8; the build items follow.
+**Status:** Accepted (2026-09-25, #106). The owner accepted D1–D8 as recommended. What is built is under "As built".
 
 ## Context
 
@@ -31,16 +31,16 @@ Two things we keep that they mostly do not have:
    ```go
    type Opportunity struct {
        platform.Record                              // ID, revision, created and changed (by whom, when)
-       Account platform.Ref[Account] `field:"account,required" title:"Account"`
-       Title   string                `field:"title,required,search"`
-       Stage   string                `field:"stage" choices:"new,qualified,won,lost"`
-       Amount  platform.Money        `field:"amount"`
+       Account platform.Ref[Account] `json:"account" field:"required"`
+       Title   string                `json:"title" field:"required,search"`
+       Stage   string                `json:"stage" field:"readonly" choices:"open,won,lost"`
+       Amount  platform.Money        `json:"amount"`
    }
    ```
 
 2. **The host keeps the records; the app keeps the rules.**
-   - A decision's rules read records through the caller: `c.Get`, `c.Find`.
-   - A decision's apply step returns record changes (create, patch, archive). The host applies them to its record store, in the input, so replay rebuilds them exactly as today.
+   - A decision's rules read records through the caller: `platform.Get[T]`, `platform.Find[T]`, and validate them with `c.Check`.
+   - A decision's apply step puts the changed record (`c.Put`). The host stores it, in the input, so replay rebuilds it exactly as today.
    - The kernel logs (change log, facts, identity) stay the app's `Ledger`.
 3. **One read contract for every entity type.**
    - Endpoints:
@@ -89,3 +89,22 @@ Two things we keep that they mostly do not have:
 - An app becomes mostly declarations plus the rules that make its business. Lists, forms, record pages, history, search and API come from the platform.
 - The record store is where stage 3 (read models, snapshots, reports) attaches, and where stage 2 (lifecycles, approvals, tasks) reads state.
 - Replay remains the test: records are rebuilt from decisions, never written directly.
+
+## As built (#106)
+
+- **App API** (`platform/entity.go`):
+  - `Record`, `Ref[T]`, `Money` and `Entity` with `Scope` and `Standard`;
+  - `Describe`, which reads the struct's JSON names and its `field`, `title`, `choices` and `type` tags;
+  - `StandardActions`, `Ledger.Standard`;
+  - for rules: `Caller.Put`, `Caller.Check`, `Get[T]`, `Find[T]`, `Records[T]`;
+  - `Query`, whose domain is in Odoo's prefix form.
+- **Host** (`records.go`): the record store. `put` keeps each record's changed fields as its history. A new record's owner field defaults to its creator.
+  - Reads: `GET /v1/entities`, `GET /v1/records/<type>` (domain, search, sort, offset, limit, archived) and `GET /v1/records/<type>/<id>` (the record, its history, related records).
+  - Scope by own, unit, below or tenant per role. `CheckReplay` compares every record and its history.
+- **CRM** declares accounts (with generated create, edit and archive; `crm.account.create` kept its schema) and opportunities. A sales member sees their own opportunities, a manager all of them. Its maps and its `accounts` and `opportunities` reads are gone. The owner's local sales journal (21 entries) replays unchanged into records.
+- **UI kit** (`records/Records.tsx`): `entityFrom`, `RecordList` (server search, sort and pages), `RecordPage` (fields, related records, history) and generated forms through `RecordForm`.
+  - The sales workspace lists accounts and opportunities and opens record pages with edit and archive where the catalog grants them. Its new-account form is generated.
+  - Settings has a records browser.
+- **Measured:** a filtered, sorted page of 100 000 records in about 62 ms in memory.
+- **Not yet:** Hotel's types (next build item); references to a protocol's entity type (D3 allows them, none needed yet); a reference picker in generated forms (references show read-only unless the app gives options).
+

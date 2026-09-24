@@ -8,7 +8,6 @@ package crm
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -35,30 +34,41 @@ const (
 
 type Role string
 
+// Account and Opportunity are the CRM's entity types (ADR-0016): the host
+// keeps their records and gives them lists, record pages and history.
 type Account struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"` // company, person
-	Revision uint32 `json:"revision"`
+	platform.Record
+	Name string `json:"name" field:"required,search"`
+	Kind string `json:"kind" field:"required" choices:"company,person"`
 }
 
 type Opportunity struct {
-	ID       string `json:"id"`
-	Account  string `json:"account"`
-	Title    string `json:"title"`
-	Owner    string `json:"owner"`
-	Stage    string `json:"stage"` // open, won, lost
-	Revision uint32 `json:"revision"`
+	platform.Record
+	Account platform.Ref[Account] `json:"account" field:"required"`
+	Title   string                `json:"title" field:"required,search"`
+	Owner   string                `json:"owner" field:"readonly"`
+	Stage   string                `json:"stage" field:"readonly" choices:"open,won,lost"`
+	Booked  int                   `json:"booked" field:"readonly" title:"Stays booked"`
+}
+
+// Entities declares the CRM's types. Accounts are master data with generated
+// create, edit and archive actions (crm.account.create keeps its schema, so
+// journals replay); opportunities move by the CRM's own actions, and a sales
+// member sees their own (Salesforce's private default), a manager all of them.
+func Entities() []platform.Entity {
+	both := []string{string(Sales), string(Manager)}
+	return []platform.Entity{
+		{Type: AccountType, Title: "Account", Model: Account{},
+			Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: both, Capability: "accounts"}},
+		{Type: OpportunityType, Title: "Opportunity", Model: Opportunity{},
+			Scope: platform.Scope{Owner: "owner", Levels: map[string]string{string(Sales): platform.ScopeOwn}}},
+	}
 }
 
 // Actions is the CRM catalog (ADR-0008).
 func Actions() *platform.Catalog {
 	both := []string{string(Sales), string(Manager)}
-	return platform.NewCatalog(
-		platform.Action{Schema: SchemaAccount, Target: AccountType, Capability: "accounts", Title: "Create account",
-			Description: "Create a customer account: a company or a person.",
-			Payload: []platform.Field{{Name: "name", Type: "string", Required: true, Description: "Account name"},
-				{Name: "kind", Type: "string", Required: true, Description: "company or person"}}, Roles: both},
+	return platform.NewCatalog(append(platform.StandardActions(Entities()[0]),
 		platform.Action{Schema: SchemaOpen, Target: OpportunityType, Capability: "opportunities", Title: "Open opportunity",
 			Description: "Open a sales opportunity for an account; the caller owns it.",
 			Payload: []platform.Field{{Name: "account", Type: "string", Required: true, Description: "Account ID"},
@@ -69,22 +79,18 @@ func Actions() *platform.Catalog {
 		platform.Action{Schema: SchemaBook, Target: OpportunityType, Capability: "stays", Title: "Book stay",
 			Description: "Book a stay for an opportunity with the tenant's lodging provider and link it to the opportunity; the provider decides with your role there.",
 			Payload:     lodging.Protocol().Actions[0].Payload, Roles: both, Uses: []string{platform.ProtocolAction(lodging.ID, "reserve")}},
-	)
+	)...)
 }
 
-// CRM is one tenant's accounts and opportunities.
+// CRM is one tenant's sales rules; its records are the host's.
 type CRM struct {
-	mu            sync.Mutex
-	tenant        string
-	accounts      map[string]*Account
-	opportunities map[string]*Opportunity
-	booked        map[string]int // opportunity → stays booked, for the booking IDs
-	ledger        *platform.Ledger
+	mu     sync.Mutex
+	tenant string
+	ledger *platform.Ledger
 }
 
 func New(tenant string) *CRM {
-	return &CRM{tenant: tenant, accounts: map[string]*Account{}, opportunities: map[string]*Opportunity{}, booked: map[string]int{},
-		ledger: platform.NewLedger(tenant, Authority, Actions(), AccountType, OpportunityType)}
+	return &CRM{tenant: tenant, ledger: platform.NewLedger(tenant, Authority, Actions(), AccountType, OpportunityType)}
 }
 
 func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
@@ -95,49 +101,39 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if who.Tenant != c.tenant {
 		return nil, fail(pb.ErrorCode_ERROR_CODE_POLICY_DENIED)
 	}
+	if record, err, ok := c.ledger.Standard(who, s, now, nil, Entities()...); ok {
+		return record, err
+	}
 	id := s.GetTarget().GetId()
+	o, known := platform.Get[Opportunity](who, id)
 	owns := func() bool { // closing is for the owner or a manager
-		o := c.opportunities[id]
-		return s.GetSchema().GetName() != SchemaClose || who.Role() == string(Manager) || o != nil && o.Owner == who.ID
+		return s.GetSchema().GetName() != SchemaClose || who.Role() == string(Manager) || known && o.Owner == who.ID
 	}
 	return c.ledger.Receive(who, s, now, owns, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		invalid := fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
-		var p struct{ Name, Kind, Account, Title, Outcome, Text string }
+		var p struct{ Account, Title, Outcome string }
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
 		}
 		switch s.GetSchema().GetName() {
-		case SchemaAccount:
-			if strings.TrimSpace(p.Name) == "" || p.Kind != "company" && p.Kind != "person" {
-				return nil, invalid
-			}
-			if c.accounts[id] != nil {
-				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
-			}
-			return func(r *pb.ChangeRecord) {
-				c.accounts[id] = &Account{ID: id, Name: p.Name, Kind: p.Kind, Revision: r.GetRevision()}
-			}, nil
 		case SchemaOpen:
-			if strings.TrimSpace(p.Title) == "" || c.accounts[p.Account] == nil {
-				return nil, invalid
-			}
-			if c.opportunities[id] != nil {
+			if known {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
-			return func(r *pb.ChangeRecord) {
-				c.opportunities[id] = &Opportunity{ID: id, Account: p.Account, Title: p.Title, Owner: who.ID, Stage: "open", Revision: r.GetRevision()}
-			}, nil
+			o = Opportunity{Record: platform.Record{ID: id}, Account: platform.Ref[Account](p.Account), Title: strings.TrimSpace(p.Title), Owner: who.ID, Stage: "open"}
+			if err := who.Check(o); err != nil {
+				return nil, invalid
+			}
 		case SchemaBook:
 			// The stay is the provider's decision, taken as this decision's rule (K4 C10):
 			// its refusal refuses the booking, and nothing is linked.
-			o := c.opportunities[id]
-			if o == nil {
+			if !known {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 			}
 			if o.Stage == "lost" {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
-			booking := fmt.Sprintf("%s-B%d", id, c.booked[id]+1)
+			booking := fmt.Sprintf("%s-B%d", id, o.Booked+1)
 			stay, _, err := who.Invoke(lodging.ID, "reserve", booking, s.GetPayload(), "crm:"+s.GetIdempotencyKey(), s.GetIdempotencyKey(), now)
 			if err != nil {
 				return nil, err
@@ -145,21 +141,22 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if err := who.Link(&pb.EntityRef{Type: OpportunityType, Id: id}, stay, "crm:link:"+s.GetIdempotencyKey(), now); err != nil {
 				return nil, err
 			}
-			return func(*pb.ChangeRecord) { c.booked[id]++ }, nil
+			o.Booked++
 		case SchemaClose:
-			o := c.opportunities[id]
 			if p.Outcome != "won" && p.Outcome != "lost" {
 				return nil, invalid
 			}
-			if o == nil {
+			if !known {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 			}
 			if o.Stage != "open" {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
-			return func(r *pb.ChangeRecord) { o.Stage, o.Revision = p.Outcome, r.GetRevision() }, nil
+			o.Stage = p.Outcome
+		default:
+			return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 		}
-		return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
+		return func(r *pb.ChangeRecord) { who.Put(r, o) }, nil
 	})
 }
 
@@ -167,17 +164,13 @@ func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declar
 
 // Manifest declares the CRM as an app (ADR-0010).
 func (c *CRM) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"accounts", "opportunities", "customers"},
+	return platform.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
 		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }
 
+// Read "customers": accounts with their opportunities and stays. Plain lists
+// of accounts and opportunities are the platform's (/v1/records/<type>).
 func (c *CRM) Read(who platform.Caller, name string) (any, *kernel.Error) {
-	switch name {
-	case "accounts":
-		return c.Accounts(), nil
-	case "opportunities":
-		return c.Opportunities(), nil
-	}
 	return c.customers(who)
 }
 
@@ -207,11 +200,11 @@ func (c *CRM) customers(who platform.Caller) (any, *kernel.Error) {
 		}
 	}
 	out := []Customer{}
-	opportunities := c.Opportunities()
-	for _, a := range c.Accounts() {
+	opportunities := platform.Records[Opportunity](who)
+	for _, a := range platform.Records[Account](who) {
 		customer := Customer{Account: a, Opportunities: []OpportunityStays{}}
 		for _, o := range opportunities {
-			if o.Account != a.ID {
+			if string(o.Account) != a.ID {
 				continue
 			}
 			stays := []lodging.Booking{}
@@ -229,26 +222,4 @@ func (c *CRM) customers(who platform.Caller) (any, *kernel.Error) {
 
 func (c *CRM) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
-}
-
-// Accounts and Opportunities are the package's public reads, sorted by ID.
-func (c *CRM) Accounts() []Account {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return sorted(c.accounts, func(a Account) string { return a.ID })
-}
-
-func (c *CRM) Opportunities() []Opportunity {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return sorted(c.opportunities, func(o Opportunity) string { return o.ID })
-}
-
-func sorted[T any](m map[string]*T, key func(T) string) []T {
-	out := make([]T, 0, len(m))
-	for _, v := range m {
-		out = append(out, *v)
-	}
-	slices.SortFunc(out, func(a, b T) int { return strings.Compare(key(a), key(b)) })
-	return out
 }

@@ -72,6 +72,7 @@ type Tenant struct {
 	// unless the provider is local); tests replace it (ADR-0015).
 	AIClient func(req *http.Request) (*http.Response, error)
 	ai       *AI
+	records  *recordStore // the apps' entity records (ADR-0016)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -105,7 +106,7 @@ func (t *Tenant) remember(e AuditEntry) {
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	t := &Tenant{ID: id, apps: apps, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
-		connectors: kernel.NewConnectors(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}}
+		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}}
 	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)
@@ -145,6 +146,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			}
 		}
 		if err := checkManifest(a); err != nil {
+			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
+		}
+		if err := t.records.declare(a); err != nil {
 			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
 		for _, j := range m.Jobs {

@@ -79,6 +79,16 @@ func snapshot(t *Tenant) string {
 	for _, p := range t.Protocols() {
 		bindings = append(bindings, []string{p.ID, p.Bound})
 	}
-	raw, _ := json.Marshal([]any{t.Audit(), t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
+	t.records.mu.Lock()
+	records := map[string]any{}
+	for typ, et := range t.records.types {
+		rows := map[string]any{}
+		for id, r := range et.rows {
+			rows[id] = []any{r.value.Interface(), r.history}
+		}
+		records[typ] = rows
+	}
+	t.records.mu.Unlock()
+	raw, _ := json.Marshal([]any{records, t.Audit(), t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
 	return string(raw)
 }
