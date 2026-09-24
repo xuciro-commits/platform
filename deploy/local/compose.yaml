@@ -1,4 +1,5 @@
-# The manufacturing slice on its production path, locally (docs/WorkQueue.md #87):
+# The platform host's two deployments on their production path, locally (#87, #92):
+# mes-server (manufacturing) and sales-server (CRM + Hotel + bridge).
 # PostgreSQL keeps the journal, Rauthy issues identities, mes-server replays the
 # journal on start. `docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.
@@ -8,13 +9,13 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: mes
-      POSTGRES_USER: mes
-      POSTGRES_PASSWORD: mes-local-only
+      POSTGRES_DB: platform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: platform-local-only
     ports: ["127.0.0.1:${PG_PORT:-5433}:5432"]
     volumes: [pgdata:/var/lib/postgresql]
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "mes", "-d", "mes"]
+      test: ["CMD", "pg_isready", "-U", "platform", "-d", "platform"]
       interval: 2s
       retries: 30
 
@@ -34,12 +35,27 @@ services:
     build: { context: ../.., dockerfile: slices/manufacturing/server/Dockerfile }
     command:
       - -addr=0.0.0.0:8490
-      - -database=postgres://mes:mes-local-only@postgres:5432/mes
+      - -database=postgres://platform:platform-local-only@postgres:5432/platform
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -directory=/etc/mes/directory.json
     ports: ["127.0.0.1:${MES_PORT:-8490}:8490"]
     volumes: [./mes/directory.json:/etc/mes/directory.json:ro]
+    depends_on:
+      postgres: { condition: service_healthy }
+      rauthy: { condition: service_started }
+    restart: on-failure
+
+  sales-server:
+    build: { context: ../.., dockerfile: slices/crm-hotel/Dockerfile }
+    command:
+      - -addr=0.0.0.0:8495
+      - -database=postgres://platform:platform-local-only@postgres:5432/platform
+      - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
+      - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
+      - -directory=/etc/sales/directory.json
+    ports: ["127.0.0.1:${SALES_PORT:-8495}:8495"]
+    volumes: [./sales/directory.json:/etc/sales/directory.json:ro]
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }

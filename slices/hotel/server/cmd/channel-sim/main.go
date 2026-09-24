@@ -26,7 +26,7 @@ func main() {
 			Stay: hotel.Stay{RoomType: "suite", CheckIn: "2026-12-01", CheckOut: "2026-12-03"}}
 		for delivery := 1; delivery <= 2; delivery++ {
 			body, _ := json.Marshal(b)
-			req, _ := http.NewRequest(http.MethodPost, *server+"/v1/channel/bookings", bytes.NewReader(body))
+			req, _ := http.NewRequest(http.MethodPost, *server+"/v1/connectors/channel-bookings", bytes.NewReader(body))
 			req.Header.Set("Authorization", "Bearer "+*token)
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {

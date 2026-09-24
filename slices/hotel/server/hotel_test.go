@@ -1,6 +1,8 @@
 package hotel
 
 import (
+	"platformserver"
+
 	"encoding/json"
 	"testing"
 	"time"
@@ -9,9 +11,9 @@ import (
 )
 
 var (
-	desk    = Principal{ID: "desk-1", Tenant: "hotel-a", Role: FrontDesk}
-	manager = Principal{ID: "manager-1", Tenant: "hotel-a", Role: Manager}
-	channel = Principal{ID: "channel-sim", Tenant: "hotel-a", Role: Channel}
+	desk    = as("desk-1", "hotel-a", FrontDesk)
+	manager = as("manager-1", "hotel-a", Manager)
+	channel = as("channel-sim", "hotel-a", Channel)
 	now     = time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
 )
 
@@ -19,7 +21,7 @@ func newHotel() *Hotel {
 	return NewHotel("hotel-a", map[string]RoomType{"standard": {Rooms: 1, Overbooking: 1}, "suite": {Rooms: 1}})
 }
 
-func submission(p Principal, schema, id, key string, payload any, expectedRevision ...uint32) *pb.Submission {
+func submission(p platformserver.Caller, schema, id, key string, payload any, expectedRevision ...uint32) *pb.Submission {
 	raw, _ := json.Marshal(payload)
 	s := &pb.Submission{TenantId: p.Tenant, PrincipalId: p.ID, Authority: Authority,
 		Target: &pb.EntityRef{Type: ReservationType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1},
@@ -30,7 +32,7 @@ func submission(p Principal, schema, id, key string, payload any, expectedRevisi
 	return s
 }
 
-func create(h *Hotel, p Principal, id, key, roomType, in, out string) (*pb.ChangeRecord, string) {
+func create(h *Hotel, p platformserver.Caller, id, key, roomType, in, out string) (*pb.ChangeRecord, string) {
 	r, err := h.Submit(p, submission(p, SchemaCreate, id, key,
 		map[string]string{"roomType": roomType, "checkIn": in, "checkOut": out, "guest": "Guest " + id}), now)
 	if err != nil {
@@ -93,7 +95,7 @@ func TestRolesAndVersions(t *testing.T) {
 
 func TestTenantPrincipalAndAuthorityAreChecked(t *testing.T) {
 	h := newHotel()
-	other := Principal{ID: "desk-9", Tenant: "hotel-b", Role: FrontDesk}
+	other := as("desk-9", "hotel-b", FrontDesk)
 	_, got := create(h, other, "r1", "k1", "suite", "2026-10-01", "2026-10-02")
 	expect(t, got, "ERROR_CODE_POLICY_DENIED")
 	s := submission(desk, SchemaCreate, "r1", "k2", map[string]string{})
@@ -157,4 +159,8 @@ func TestDrillE1ApartmentsAndCoworking(t *testing.T) {
 	}
 	_, got = create(h, desk, "m5", "k8", "meeting-room", "2026-10-01T10:00", "2026-10-01T11:00")
 	expect(t, got, "ok")
+}
+
+func as(id, tenant string, role Role) platformserver.Caller {
+	return platformserver.As("hotel", platformserver.Member{ID: id, Tenant: tenant, Roles: map[string]string{"hotel": string(role)}})
 }

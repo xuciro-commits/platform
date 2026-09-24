@@ -11,7 +11,8 @@ export type SFC = {
 export type Planned = { erpId: string; product: string; quantity: number; due: string; factId: string };
 export type Downtime = { id: string; resource: string; start: string; end?: string; reason?: string; needsCheck?: boolean };
 export type ConnectorView = { id: string; direction: string; health: string; lastSeen?: string; cursor?: string };
-export type Me = { tenantId: string; principalId: string; profile: { role: string; lines: string[] | null } };
+/** The signed-in member (ADR-0010): one role per app, attributes such as lines. */
+export type Me = { tenantId: string; principalId: string; profile: { roles: Record<string, string>; attributes?: { lines?: string[] } } };
 
 export const SERVER = (import.meta.env.VITE_MES_SERVER as string | undefined) ?? "http://127.0.0.1:8490";
 export const identities = [

@@ -1,7 +1,7 @@
-// Package platformserver is the capability every domain server shares (layer 2):
-// callers resolved from bearer credentials, the kernel's submission and
-// declaration endpoints, and one mapping from contract errors to HTTP.
-// Domains add their own reads and connector endpoints on the same mux.
+// Package platformserver is the platform host (layer 2, ADR-0010): it runs a
+// tenant's apps behind one HTTP surface — authentication, the directory, routing
+// by action, read and input name, the per-caller catalog, one journal — and maps
+// contract errors to HTTP once.
 package platformserver
 
 import (
@@ -17,88 +17,107 @@ import (
 	"platformkernel/kernel"
 )
 
-// Principal is a domain's authenticated caller; the platform needs its tenant and ID (K6).
-type Principal interface {
-	TenantID() string
-	PrincipalID() string
-}
+// Authenticate turns a bearer credential into a subject ("user:<email>",
+// "client:<id>"); false rejects the request. See OIDC and Tokens.
+type Authenticate func(credential string) (subject string, ok bool)
 
-// Authenticate turns a bearer credential into a principal; false rejects the request.
-type Authenticate[P Principal] func(credential string) (P, bool)
-
-// Server routes requests to the caller's tenant, of type T.
-type Server[P Principal, T any] struct {
-	Mux          *http.ServeMux
-	Tenants      map[string]T
-	Authenticate Authenticate[P]
-	Now          func() time.Time
-}
-
-func New[P Principal, T any](tenants map[string]T, authenticate Authenticate[P]) *Server[P, T] {
-	return &Server[P, T]{Mux: http.NewServeMux(), Tenants: tenants, Authenticate: authenticate, Now: Now}
+// Tokens authenticates with a fixed token → subject table (development and tests).
+func Tokens(table map[string]string) Authenticate {
+	return func(token string) (string, bool) { s, ok := table[token]; return s, ok }
 }
 
 // Now is the server clock at the journal's precision (PostgreSQL keeps
 // microseconds), so replayed records carry the times first recorded.
 func Now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
-// Tokens authenticates with a fixed token table (development and tests).
-func Tokens[P Principal](table map[string]P) Authenticate[P] {
-	return func(token string) (P, bool) { p, ok := table[token]; return p, ok }
+// Host serves tenants; each tenant's directory resolves its members.
+type Host struct {
+	tenants      []*Tenant
+	directories  map[*Tenant]*Directory
+	authenticate Authenticate
+	Now          func() time.Time
 }
 
-// Handle serves pattern for authenticated callers of a known tenant.
-func (s *Server[P, T]) Handle(pattern string, h func(w http.ResponseWriter, r *http.Request, who P, tenant T)) {
-	s.Mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-		who, ok := s.Authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-		if !ok {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
+// NewHost serves tenants; a tenant's members come from its Directory app.
+func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
+	h := &Host{tenants: tenants, directories: map[*Tenant]*Directory{}, authenticate: authenticate, Now: Now}
+	for _, t := range tenants {
+		if d, ok := t.app(PlatformApp).(*Directory); ok {
+			h.directories[t] = d
 		}
-		tenant, known := s.Tenants[who.TenantID()]
-		if !known {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
+	}
+	return h
+}
+
+func (h *Host) member(r *http.Request) (Member, *Tenant, bool) {
+	subject, ok := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if !ok {
+		return Member{}, nil, false
+	}
+	for _, t := range h.tenants {
+		if d := h.directories[t]; d == nil {
+			continue
+		} else if m, ok := d.Member(subject); ok {
+			return m, t, true
 		}
-		h(w, r, who, tenant)
-	})
+	}
+	return Member{}, nil, false
 }
 
-// Read serves a JSON read model at GET path.
-func (s *Server[P, T]) Read(path string, get func(who P, tenant T) any) {
-	s.Handle("GET "+path, func(w http.ResponseWriter, _ *http.Request, who P, tenant T) {
-		WriteJSON(w, http.StatusOK, get(who, tenant))
-	})
-}
-
-// Kernel serves POST /v1/submissions, GET /v1/declarations (K5 A9) and GET /v1/me.
-func (s *Server[P, T]) Kernel(submit func(who P, tenant T, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error),
-	declarations func(tenant T) []*pb.AuthorityDeclaration) {
-	s.Handle("POST /v1/submissions", func(w http.ResponseWriter, r *http.Request, who P, tenant T) {
+// Handler serves the host's HTTP surface, with CORS for browser clients.
+func (h *Host) Handler() http.Handler {
+	mux := http.NewServeMux()
+	handle := func(pattern string, f func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant)) {
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			m, t, ok := h.member(r)
+			if !ok {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			f(w, r, m, t)
+		})
+	}
+	handle("POST /v1/submissions", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
 		sub := &pb.Submission{}
 		if protojson.Unmarshal(body, sub) != nil {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
-		record, err := submit(who, tenant, sub, s.Now())
+		record, err := t.Submit(m, sub, h.Now())
 		Reply(w, record, err)
 	})
-	s.Handle("GET /v1/declarations", func(w http.ResponseWriter, _ *http.Request, _ P, tenant T) {
+	handle("POST /v1/connectors/{input}", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
+		body, _ := io.ReadAll(r.Body)
+		out, err := t.Input(m, r.PathValue("input"), body, h.Now())
+		record, _ := out.(*pb.ChangeRecord)
+		Reply(w, record, err)
+	})
+	handle("GET /v1/me", func(w http.ResponseWriter, _ *http.Request, m Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, map[string]any{"tenantId": m.Tenant, "principalId": m.ID, "profile": m})
+	})
+	handle("GET /v1/declarations", func(w http.ResponseWriter, _ *http.Request, _ Member, t *Tenant) {
 		out := []json.RawMessage{}
-		for _, d := range declarations(tenant) {
+		for _, d := range t.Declarations() {
 			raw, _ := protojson.Marshal(d)
 			out = append(out, raw)
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	s.Read("/v1/me", func(who P, _ T) any {
-		return map[string]any{"tenantId": who.TenantID(), "principalId": who.PrincipalID(), "profile": who}
+	handle("GET /v1/actions", func(w http.ResponseWriter, _ *http.Request, m Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, t.Catalog(m))
 	})
-}
-
-// Handler adds CORS for browser clients served from another origin.
-func (s *Server[P, T]) Handler() http.Handler {
+	handle("GET /v1/apps", func(w http.ResponseWriter, _ *http.Request, _ Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, t.Apps())
+	})
+	handle("GET /v1/{read}", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
+		out, ok := t.Read(m, r.PathValue("read"))
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
@@ -107,7 +126,7 @@ func (s *Server[P, T]) Handler() http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		s.Mux.ServeHTTP(w, r)
+		mux.ServeHTTP(w, r)
 	})
 }
 

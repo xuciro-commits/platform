@@ -48,5 +48,25 @@
     "roles": [],
     "enabled": true,
     "email_verified": true
+  },
+  {
+    "email": "sales@hotel.test",
+    "given_name": "Sales",
+    "password": {
+      "Plain": "Plant-Local-1"
+    },
+    "roles": [],
+    "enabled": true,
+    "email_verified": true
+  },
+  {
+    "email": "manager@hotel.test",
+    "given_name": "Hotel manager",
+    "password": {
+      "Plain": "Plant-Local-1"
+    },
+    "roles": [],
+    "enabled": true,
+    "email_verified": true
   }
 ]

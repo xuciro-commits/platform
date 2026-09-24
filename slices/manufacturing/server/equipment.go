@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver"
 )
 
 // Sample is one equipment state reading from a PLC (via the edge gateway).
@@ -49,10 +50,10 @@ func (p *Plant) RegisterConnector(d *pb.ConnectorDescriptor) *kernel.Error {
 }
 
 // DeliverStates records a gateway batch as one observation and re-derives downtime.
-func (p *Plant) DeliverStates(gateway Principal, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
+func (p *Plant) DeliverStates(gateway platformserver.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if gateway.Tenant != p.tenant || gateway.Role != Gateway {
+	if gateway.Tenant != p.tenant || roleOf(gateway) != Gateway && !gateway.Replaying {
 		return nil, denied
 	}
 	if b.BatchID == "" || b.Resource == "" || len(b.Samples) == 0 || p.resourceLine(b.Resource) == "" {
@@ -63,7 +64,6 @@ func (p *Plant) DeliverStates(gateway Principal, b StateBatch, now time.Time) (*
 	}
 	slices.SortFunc(b.Samples, func(x, y Sample) int { return x.At.Compare(y.At) })
 	raw, _ := json.Marshal(b)
-	before := p.accepted()
 	fact, err := p.facts.Record(&pb.Fact{TenantId: p.tenant, Kind: pb.FactKind_FACT_KIND_OBSERVATION,
 		Subject: &pb.EntityRef{Type: ResourceType, Id: b.Resource}, Attribute: "state",
 		Schema: &pb.SchemaRef{Name: schemaStates, Version: 1}, IdempotencyKey: gateway.ID + ":" + b.BatchID, Payload: raw,
@@ -72,7 +72,6 @@ func (p *Plant) DeliverStates(gateway Principal, b StateBatch, now time.Time) (*
 		return nil, err
 	}
 	p.deriveDowntime(b.Resource)
-	p.record(p.accepted() > before, "states", gateway, raw, now)
 	return fact, nil
 }
 
@@ -162,7 +161,7 @@ func (p *Plant) Downtime() []Downtime {
 	for _, events := range p.downtime {
 		out = append(out, events...)
 	}
-	for _, r := range p.changes.Records(p.tenant) {
+	for _, r := range p.ledger.Changes.Records(p.tenant) {
 		if r.GetSubmission().GetSchema().GetName() != SchemaReason {
 			continue
 		}
@@ -200,10 +199,10 @@ type PlannedPage struct {
 	Orders     []PlannedOrder `json:"orders"`
 }
 
-func (p *Plant) DeliverPlanned(erp Principal, page PlannedPage, now time.Time) *kernel.Error {
+func (p *Plant) DeliverPlanned(erp platformserver.Caller, page PlannedPage, now time.Time) *kernel.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if erp.Tenant != p.tenant || erp.Role != ERP {
+	if erp.Tenant != p.tenant || roleOf(erp) != ERP && !erp.Replaying {
 		return denied
 	}
 	if err := p.connectors.Deliver(p.tenant, erp.ID, PlannedType, page.CursorFrom, page.CursorTo, now); err != nil {
@@ -216,8 +215,6 @@ func (p *Plant) DeliverPlanned(erp Principal, page PlannedPage, now time.Time) *
 			Schema: &pb.SchemaRef{Name: schemaPlanned, Version: 1}, IdempotencyKey: erp.ID + ":" + o.ERPID + ":" + page.CursorTo, Payload: raw,
 			Provenance: &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: erp.ID}, SourceTime: timestamppb.New(now), Confidence: 1}}, now)
 	}
-	raw, _ := json.Marshal(page)
-	p.record(true, "planned", erp, raw, now) // the cursor moved, even for an empty page
 	return nil
 }
 
@@ -243,7 +240,7 @@ func (p *Plant) Planned() []PlannedOrder {
 	return out
 }
 
-func (p *Plant) Heartbeat(who Principal, now time.Time) *kernel.Error {
+func (p *Plant) Heartbeat(who platformserver.Caller, now time.Time) *kernel.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.connectors.Heartbeat(p.tenant, who.ID, now)

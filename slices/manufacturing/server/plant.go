@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver"
@@ -79,12 +77,10 @@ const (
 	Assistant  Role = "assistant" // an AI agent acting within the lines it is granted
 )
 
-type Principal struct {
-	ID     string   `json:"id"`
-	Tenant string   `json:"tenant"`
-	Role   Role     `json:"role"`
-	Lines  []string `json:"lines"`
-}
+// roleOf and linesOf read a caller's role in this app and the lines it is
+// granted (a directory attribute, ADR-0010).
+func roleOf(c platformserver.Caller) Role      { return Role(c.Role()) }
+func linesOf(c platformserver.Caller) []string { return c.Attributes["lines"] }
 
 // Execution state.
 
@@ -122,56 +118,31 @@ type Order struct {
 
 // Plant is one tenant: master data, execution state and its kernel logs.
 type Plant struct {
-	mu          sync.Mutex
-	tenant      string
-	master      MasterData
-	orders      map[string]*Order
-	sfcs        map[string]*SFC
-	changes     *kernel.ChangeLog
-	facts       *kernel.FactLog
-	authorities *kernel.Authorities
-	identity    *kernel.Identity
-	connectors  *kernel.Connectors
-	declaration *pb.AuthorityDeclaration
-	downtime    map[string][]Downtime // resource → current derived events
-	nextEvent   int
-	catalog     *platformserver.Catalog
-	replaying   bool
-	// Record, when set, makes each accepted input durable before it is answered
-	// (docs/ADR/0007); Replay rebuilds a plant from the recorded inputs.
-	Record func(platformserver.Entry)
+	mu         sync.Mutex
+	tenant     string
+	master     MasterData
+	orders     map[string]*Order
+	sfcs       map[string]*SFC
+	ledger     *platformserver.Ledger
+	facts      *kernel.FactLog
+	identity   *kernel.Identity
+	connectors *kernel.Connectors
+	downtime   map[string][]Downtime // resource → current derived events
+	nextEvent  int
 }
 
 func NewPlant(tenant string, master MasterData) *Plant {
-	schema := func(names ...string) *kernel.SchemaRegistry {
-		var refs []*pb.SchemaRef
-		for _, n := range names {
-			refs = append(refs, &pb.SchemaRef{Name: n, Version: 1})
-		}
-		return kernel.NewSchemaRegistry(refs, nil)
-	}
 	p := &Plant{tenant: tenant, master: master, orders: map[string]*Order{}, sfcs: map[string]*SFC{},
-		changes:     kernel.NewChangeLog(schema(SchemaRelease, SchemaStart, SchemaComplete, SchemaNC, SchemaSign, SchemaReason)),
-		facts:       kernel.NewFactLog(schema(schemaStates, schemaPlanned)),
-		authorities: kernel.NewAuthorities(Authority), identity: kernel.NewIdentity(nil),
-		connectors: kernel.NewConnectors(), downtime: map[string][]Downtime{}, catalog: Actions()}
-	p.changes.Facts = func(tenant, id string) bool {
+		ledger:   platformserver.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
+		facts:    kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}, {Name: schemaPlanned, Version: 1}}, nil)),
+		identity: kernel.NewIdentity(nil), connectors: kernel.NewConnectors(), downtime: map[string][]Downtime{}}
+	p.ledger.Changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(p.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
-	}
-	for _, class := range []string{OrderType, SFCType, DowntimeType} {
-		d := &pb.AuthorityDeclaration{TenantId: tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: Authority, Epoch: 1}
-		p.authorities.Declare(d)
 	}
 	return p
 }
 
-func (p *Plant) Declarations() []*pb.AuthorityDeclaration {
-	var out []*pb.AuthorityDeclaration
-	for _, class := range []string{OrderType, SFCType, DowntimeType} {
-		out = append(out, &pb.AuthorityDeclaration{TenantId: p.tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: Authority, Epoch: 1})
-	}
-	return out
-}
+func (p *Plant) Declarations() []*pb.AuthorityDeclaration { return p.ledger.Declarations() }
 
 func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
 
@@ -220,11 +191,8 @@ func (p *Plant) resourceLine(resource string) string {
 // allowed is the policy hook (K6 T3): the catalog decides which roles may call an
 // action (ADR-0008); the plant hierarchy (lines) is context the domain reads, and
 // the kernel never sees it.
-func (p *Plant) allowed(who Principal, s *pb.Submission) bool {
-	if !p.catalog.Permits(string(who.Role), s.GetSchema().GetName()) {
-		return false
-	}
-	onLine := func(line string) bool { return line != "" && slices.Contains(who.Lines, line) }
+func (p *Plant) allowed(who platformserver.Caller, s *pb.Submission) bool {
+	onLine := func(line string) bool { return line != "" && slices.Contains(linesOf(who), line) }
 	sfc := p.sfcs[s.GetTarget().GetId()]
 	switch s.GetSchema().GetName() {
 	case SchemaRelease:
@@ -235,111 +203,42 @@ func (p *Plant) allowed(who Principal, s *pb.Submission) bool {
 	case SchemaStart, SchemaComplete:
 		return sfc != nil && onLine(p.lineOf(sfc))
 	case SchemaNC:
-		return who.Role == Quality || sfc != nil && onLine(p.lineOf(sfc))
+		return roleOf(who) == Quality || sfc != nil && onLine(p.lineOf(sfc))
 	case SchemaSign:
 		return true
 	case SchemaReason:
 		refs, _ := p.identity.Resolve(&pb.EntityRef{Type: DowntimeType, Id: s.GetTarget().GetId()})
-		return who.Role == Supervisor || len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
+		return roleOf(who) == Supervisor || len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
 	}
 	return false
 }
 
 // Disable deactivates a capability for this plant (start-up configuration): its
 // actions leave the catalog and are refused; its recorded history still replays.
-func (p *Plant) Disable(capability string) bool { return p.catalog.Disable(capability) }
+func (p *Plant) Disable(capability string) bool { return p.ledger.Catalog.Disable(capability) }
 
-// Catalog is the part of the plant's actions who may call.
-func (p *Plant) Catalog(who Principal) []platformserver.Action {
-	return p.catalog.For(string(who.Role))
-}
-
-// Submit receives a decision in the kernel's order (K6 T2) with the plant's policy and rules.
-func (p *Plant) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+// Submit receives a decision in the kernel's order (K6 T2) with the plant's
+// attribute conditions and rules; roles are the catalog's (ADR-0008).
+func (p *Plant) Submit(who platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if who.Tenant != p.tenant {
 		return nil, denied
 	}
-	if !p.replaying && !p.catalog.Enabled(s.GetSchema().GetName()) {
-		return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA) // not an action of an active capability
-	}
-	// Replay does not re-authorize: who could act was decided when the input was accepted.
-	receiver := kernel.Receiver{Changes: p.changes, Authorities: p.authorities,
-		Policy: func(_ kernel.Caller, s *pb.Submission) bool { return p.replaying || p.allowed(who, s) }}
-	var apply func()
-	before := p.accepted()
-	record, err := receiver.Receive(kernel.Caller{Tenant: who.Tenant, Principal: who.ID}, s, now, func() *kernel.Error {
-		var err *kernel.Error
-		apply, err = p.validate(who, s)
-		return err
-	})
-	if err == nil && apply != nil {
-		apply()
-		if sfc := p.sfcs[s.GetTarget().GetId()]; sfc != nil && s.GetTarget().GetType() == SFCType {
-			sfc.Revision = record.GetRevision()
-		}
-	}
-	if err == nil {
-		body, _ := protojson.Marshal(s)
-		p.record(p.accepted() > before, "submission", who, body, now)
-	}
-	return record, err
-}
-
-// accepted counts the records of both kernel logs; an input that adds none (an
-// idempotent replay) is not recorded again.
-func (p *Plant) accepted() int {
-	return len(p.changes.Records(p.tenant)) + len(p.facts.Records(p.tenant))
-}
-
-func (p *Plant) record(fresh bool, kind string, who Principal, body []byte, now time.Time) {
-	if p.Record == nil || !fresh {
-		return
-	}
-	principal, _ := json.Marshal(who)
-	p.Record(platformserver.Entry{Kind: kind, Principal: principal, Body: body, At: now})
-}
-
-// Replay feeds recorded inputs through the code that first accepted them, as
-// the principals they came from; any refusal means the record and the code
-// disagree, and the plant must not serve.
-func (p *Plant) Replay(entries []platformserver.Entry) error {
-	p.replaying = true
-	defer func() { p.replaying = false }()
-	for i, e := range entries {
-		var who Principal
-		if err := json.Unmarshal(e.Principal, &who); err != nil {
-			return fmt.Errorf("entry %d: %w", i+1, err)
-		}
-		var err *kernel.Error
-		switch e.Kind {
-		case "submission":
-			s := &pb.Submission{}
-			if protojson.Unmarshal(e.Body, s) != nil {
-				return fmt.Errorf("entry %d: bad submission", i+1)
-			}
-			_, err = p.Submit(who, s, e.At)
-		case "states":
-			var b StateBatch
-			if json.Unmarshal(e.Body, &b) != nil {
-				return fmt.Errorf("entry %d: bad batch", i+1)
-			}
-			_, err = p.DeliverStates(who, b, e.At)
-		case "planned":
-			var page PlannedPage
-			if json.Unmarshal(e.Body, &page) != nil {
-				return fmt.Errorf("entry %d: bad page", i+1)
-			}
-			err = p.DeliverPlanned(who, page, e.At)
-		default:
-			return fmt.Errorf("entry %d: unknown kind %q", i+1, e.Kind)
-		}
+	return p.ledger.Receive(who, s, now, func() bool { return p.allowed(who, s) }, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		apply, err := p.validate(who, s)
 		if err != nil {
-			return fmt.Errorf("entry %d (%s): %v", i+1, e.Kind, err)
+			return nil, err
 		}
-	}
-	return nil
+		return func(record *pb.ChangeRecord) {
+			if apply != nil {
+				apply()
+			}
+			if sfc := p.sfcs[s.GetTarget().GetId()]; sfc != nil && s.GetTarget().GetType() == SFCType {
+				sfc.Revision = record.GetRevision()
+			}
+		}, nil
+	})
 }
 
 type releasePayload struct {
@@ -367,7 +266,7 @@ type reasonPayload struct {
 }
 
 // validate checks the plant's rules (K4 C10) and returns how to apply the decision.
-func (p *Plant) validate(who Principal, s *pb.Submission) (func(), *kernel.Error) {
+func (p *Plant) validate(who platformserver.Caller, s *pb.Submission) (func(), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	switch s.GetSchema().GetName() {
 	case SchemaRelease:

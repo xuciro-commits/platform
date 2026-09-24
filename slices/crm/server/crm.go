@@ -30,12 +30,6 @@ const (
 
 type Role string
 
-type Principal struct {
-	ID     string `json:"id"`
-	Tenant string `json:"tenant"`
-	Role   Role   `json:"role"`
-}
-
 type Account struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -66,7 +60,7 @@ func Actions() *platformserver.Catalog {
 				{Name: "title", Type: "string", Required: true, Description: "What is being sold"}}, Roles: both},
 		platformserver.Action{Schema: SchemaClose, Target: OpportunityType, Capability: "opportunities", Title: "Close opportunity",
 			Description: "Close an open opportunity as won or lost; only its owner or a sales manager.",
-			Payload: []platformserver.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost"}}, Roles: both},
+			Payload:     []platformserver.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost"}}, Roles: both},
 	)
 }
 
@@ -86,7 +80,7 @@ func New(tenant string) *CRM {
 
 func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
 
-func (c *CRM) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (c *CRM) Submit(who platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if who.Tenant != c.tenant {
@@ -95,9 +89,9 @@ func (c *CRM) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.Change
 	id := s.GetTarget().GetId()
 	owns := func() bool { // closing is for the owner or a manager
 		o := c.opportunities[id]
-		return s.GetSchema().GetName() != SchemaClose || who.Role == Manager || o != nil && o.Owner == who.ID
+		return s.GetSchema().GetName() != SchemaClose || who.Role() == string(Manager) || o != nil && o.Owner == who.ID
 	}
-	return c.ledger.Receive(who.ID, string(who.Role), s, now, owns, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return c.ledger.Receive(who, s, now, owns, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		invalid := fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		var p struct{ Name, Kind, Account, Title, Outcome string }
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
@@ -143,7 +137,21 @@ func (c *CRM) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.Change
 
 func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 
-func (c *CRM) Catalog(who Principal) []platformserver.Action { return c.ledger.Catalog.For(string(who.Role)) }
+// Manifest declares the CRM as an app (ADR-0010).
+func (c *CRM) Manifest() platformserver.Manifest {
+	return platformserver.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"accounts", "opportunities"}}
+}
+
+func (c *CRM) Read(_ platformserver.Caller, name string) any {
+	if name == "accounts" {
+		return c.Accounts()
+	}
+	return c.Opportunities()
+}
+
+func (c *CRM) Input(platformserver.Caller, string, []byte, time.Time) (any, *kernel.Error) {
+	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
+}
 
 // Accounts and Opportunities are the package's public reads, sorted by ID.
 func (c *CRM) Accounts() []Account {
@@ -165,14 +173,4 @@ func sorted[T any](m map[string]*T, key func(T) string) []T {
 	}
 	slices.SortFunc(out, func(a, b T) int { return strings.Compare(key(a), key(b)) })
 	return out
-}
-
-// Opportunity is one opportunity by ID.
-func (c *CRM) Opportunity(id string) (Opportunity, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if o := c.opportunities[id]; o != nil {
-		return *o, true
-	}
-	return Opportunity{}, false
 }

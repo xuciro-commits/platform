@@ -15,7 +15,7 @@ import (
 )
 
 // TestOIDC signs tokens the way Rauthy does (EdDSA, typ Bearer; client
-// credentials without sub) and checks which ones reach the directory.
+// credentials without sub) and checks which ones yield a subject.
 func TestOIDC(t *testing.T) {
 	public, private, _ := ed25519.GenerateKey(rand.Reader)
 	keys := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -34,9 +34,7 @@ func TestOIDC(t *testing.T) {
 		token, _ := jws.CompactSerialize()
 		return token
 	}
-	auth := OIDC(issuer, keys.URL, func(subject string) (who, bool) {
-		return who{subject}, subject == "user:ana@plant.test" || subject == "client:gateway"
-	})
+	auth := OIDC(issuer, keys.URL)
 	_, stranger, _ := ed25519.GenerateKey(rand.Reader)
 	for _, c := range []struct {
 		name  string
@@ -46,7 +44,6 @@ func TestOIDC(t *testing.T) {
 		{"verified user", sign(private, map[string]any{"sub": "u1", "email": "ana@plant.test", "email_verified": true}), "user:ana@plant.test"},
 		{"machine", sign(private, map[string]any{"azp": "gateway"}), "client:gateway"},
 		{"unverified email", sign(private, map[string]any{"sub": "u1", "email": "ana@plant.test"}), ""},
-		{"not in directory", sign(private, map[string]any{"sub": "u2", "email": "bo@plant.test", "email_verified": true}), ""},
 		{"id token", sign(private, map[string]any{"sub": "u1", "email": "ana@plant.test", "email_verified": true, "typ": "Id"}), ""},
 		{"expired", sign(private, map[string]any{"azp": "gateway", "exp": time.Now().Add(-time.Minute).Unix()}), ""},
 		{"other issuer", sign(private, map[string]any{"azp": "gateway", "iss": "http://evil.test/"}), ""},
@@ -54,7 +51,7 @@ func TestOIDC(t *testing.T) {
 		{"garbage", "supervisor", ""},
 	} {
 		got, ok := auth(c.token)
-		if ok != (c.want != "") || ok && got.Tenant != c.want {
+		if ok != (c.want != "") || got != c.want {
 			t.Errorf("%s: got %v %v, want %q", c.name, got, ok, c.want)
 		}
 	}

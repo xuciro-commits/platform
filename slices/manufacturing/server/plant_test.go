@@ -1,7 +1,6 @@
 package mes
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,61 +9,101 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver"
 )
 
 var (
 	tenant = "plant-sz"
-	sup    = Principal{ID: "sup-1", Tenant: tenant, Role: Supervisor, Lines: []string{"L1", "L2"}}
-	op1    = Principal{ID: "op-l1", Tenant: tenant, Role: Operator, Lines: []string{"L1"}}
-	op2    = Principal{ID: "op-l2", Tenant: tenant, Role: Operator, Lines: []string{"L2"}}
-	qa1    = Principal{ID: "qa-1", Tenant: tenant, Role: Quality}
-	qa2    = Principal{ID: "qa-2", Tenant: tenant, Role: Quality}
-	gw     = Principal{ID: "gateway-l1", Tenant: tenant, Role: Gateway}
-	erp    = Principal{ID: "erp", Tenant: tenant, Role: ERP}
+	sup    = member("sup-1", Supervisor, "L1", "L2")
+	op1    = member("op-l1", Operator, "L1")
+	op2    = member("op-l2", Operator, "L2")
+	qa1    = member("qa-1", Quality)
+	qa2    = member("qa-2", Quality)
+	gw     = member("gateway-l1", Gateway)
+	erp    = member("erp", ERP)
 	t0     = time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 	keys   = 0
 )
 
-// newPlant records every accepted input; when the test ends, a second plant
-// replays them and must show the same state and kernel logs (docs/ADR/0007).
-func newPlant(t *testing.T) *Plant {
-	fresh := func() *Plant {
-		p := NewPlant(tenant, DemoMaster())
-		for _, d := range DemoConnectors(tenant) {
-			if err := p.RegisterConnector(d); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return p
+func member(id string, role Role, lines ...string) platformserver.Caller {
+	m := platformserver.Member{ID: id, Tenant: tenant, Roles: map[string]string{"mes": string(role)}}
+	if len(lines) > 0 {
+		m.Attributes = map[string][]string{"lines": lines}
 	}
-	p := fresh()
-	var journal []byte
-	p.Record = func(e platformserver.Entry) {
+	return platformserver.As("mes", m)
+}
+
+// testPlant sends every input through a tenant on the platform host, so it is
+// journaled as in production (ADR-0010).
+type testPlant struct {
+	*Plant
+	tenant  *platformserver.Tenant
+	journal []platformserver.Entry
+}
+
+func (p *testPlant) Submit(who platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	return p.tenant.Submit(who.Member, s, now)
+}
+
+func (p *testPlant) DeliverStates(who platformserver.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
+	raw, _ := json.Marshal(b)
+	out, err := p.tenant.Input(who.Member, "states", raw, now)
+	fact, _ := out.(*pb.FactRecord)
+	return fact, err
+}
+
+func (p *testPlant) DeliverPlanned(who platformserver.Caller, page PlannedPage, now time.Time) *kernel.Error {
+	raw, _ := json.Marshal(page)
+	_, err := p.tenant.Input(who.Member, "planned-orders", raw, now)
+	return err
+}
+
+func plantTenant(t *testing.T, disable ...string) (*Plant, *platformserver.Tenant) {
+	p := NewPlant(tenant, DemoMaster())
+	for _, d := range DemoConnectors(tenant) {
+		if err := p.RegisterConnector(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range disable {
+		if !p.Disable(c) {
+			t.Fatalf("no capability %s", c)
+		}
+	}
+	tn, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p, tn
+}
+
+// newPlant journals every accepted input; when the test ends, a second plant
+// replays the journal and must show the same state and kernel logs (ADR-0007).
+func newPlant(t *testing.T) *testPlant {
+	plant, tn := plantTenant(t)
+	p := &testPlant{Plant: plant, tenant: tn}
+	tn.Record = func(e platformserver.Entry) {
 		raw, _ := json.Marshal(e) // stored as JSON, as the PostgreSQL journal does
-		journal = append(append(journal, raw...), '\n')
+		var stored platformserver.Entry
+		json.Unmarshal(raw, &stored)
+		p.journal = append(p.journal, stored)
 	}
 	t.Cleanup(func() {
-		var entries []platformserver.Entry
-		for line := range bytes.Lines(journal) {
-			var e platformserver.Entry
-			json.Unmarshal(line, &e)
-			entries = append(entries, e)
-		}
-		again := fresh()
-		if err := again.Replay(entries); err != nil {
+		again, tn := plantTenant(t)
+		if err := tn.Replay(p.journal); err != nil {
 			t.Fatalf("replay: %v", err)
 		}
 		view := func(p *Plant) string {
-			raw, _ := json.Marshal([]any{p.Orders(), p.SFCs(), p.Downtime(), p.Planned()}) // heartbeats are not recorded
+			raw, _ := json.Marshal([]any{p.Orders(), p.SFCs(), p.Downtime(), p.Planned()}) // heartbeats are not journaled
 			return string(raw)
 		}
-		if view(again) != view(p) {
-			t.Fatalf("replayed plant differs:\n%s\n%s", view(p), view(again))
+		if view(again) != view(plant) {
+			t.Fatalf("replayed plant differs:\n%s\n%s", view(plant), view(again))
 		}
 		logs := func(p *Plant) []proto.Message {
 			var out []proto.Message
-			for _, r := range p.changes.Records(tenant) {
+			for _, r := range p.ledger.Changes.Records(tenant) {
 				out = append(out, r)
 			}
 			for _, r := range p.facts.Records(tenant) {
@@ -72,7 +111,7 @@ func newPlant(t *testing.T) *Plant {
 			}
 			return out
 		}
-		a, b := logs(p), logs(again)
+		a, b := logs(plant), logs(again)
 		if len(a) != len(b) {
 			t.Fatalf("replayed logs: %d records, want %d", len(b), len(a))
 		}
@@ -85,11 +124,11 @@ func newPlant(t *testing.T) *Plant {
 	return p
 }
 
-func submit(p *Plant, who Principal, schema, targetType, id string, payload any, evidence ...string) string {
+func submit(p *testPlant, who platformserver.Caller, schema, targetType, id string, payload any, evidence ...string) string {
 	return submitAt(p, who, schema, targetType, id, payload, nil, evidence...)
 }
 
-func submitAt(p *Plant, who Principal, schema, targetType, id string, payload any, revision *uint32, evidence ...string) string {
+func submitAt(p *testPlant, who platformserver.Caller, schema, targetType, id string, payload any, revision *uint32, evidence ...string) string {
 	raw, _ := json.Marshal(payload)
 	keys++
 	_, err := p.Submit(who, &pb.Submission{TenantId: who.Tenant, PrincipalId: who.ID, Authority: Authority,
@@ -108,7 +147,7 @@ func expect(t *testing.T, got, want string) {
 	}
 }
 
-func sfc(p *Plant, id string) SFC {
+func sfc(p *testPlant, id string) SFC {
 	for _, s := range p.SFCs() {
 		if s.ID == id {
 			return s
@@ -141,7 +180,7 @@ func TestPolicyScopedByLine(t *testing.T) {
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ok")
 	expect(t, submit(p, op2, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "FURNACE-1"}), "ERROR_CODE_POLICY_DENIED")
 	expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "FURNACE-1"}), "ok")
-	l2only := Principal{ID: "sup-2", Tenant: tenant, Role: Supervisor, Lines: []string{"L2"}}
+	l2only := member("sup-2", Supervisor, "L2")
 	expect(t, submit(p, l2only, SchemaRelease, OrderType, "SO-2", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ERROR_CODE_POLICY_DENIED")
 }
 

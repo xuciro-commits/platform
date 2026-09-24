@@ -42,21 +42,21 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Kernel | Schema versions (K7) | Versioned payloads, upgrade paths, negotiation | `kernel.SchemaRegistry` | declared by all; upgrades only in vectors | H |
 | Kernel | Connectors (K8) | One descriptor for push and poll sources, cursors, health | `kernel.Connectors` | manufacturing | H |
 | Kernel | Work ownership (K9) | Generations, checkpoints, stale results, owner close | `kernel.Works` | none on a server yet (MSRU `FeatureHost`) | H |
-| Server | Package ledger | The kernel wired for one package: change log, authority declarations, receiver, catalog role check | `platformserver.Ledger` | Hotel, CRM, crm-hotel (manufacturing still wires its own) | 3 |
+| Server | Platform host | Apps per tenant from manifests; routing by action, read and input name; requirement check; per-caller catalog; calls between apps only along requirements (ADR-0010) | `platformserver.Tenant`, `Host` | every server | 4 |
+| Server | Directory | Members with one role per app and attributes; grants and revocations as decisions, effective on the next request | `platformserver.Directory` (the platform app) | every server | 4 |
+| Server | Deployment | Development tokens or journal plus OIDC from the same flags; replay on start | `platformserver.Deployment` | mes-server, sales-server | 2 |
+| Server | Package ledger | The kernel wired for one app: change log, authority declarations, receiver, catalog role check, no re-authorization in replay | `platformserver.Ledger` | every app | 5 |
 | Server | Action catalog | Actions declared once; each caller (screen, integration, AI agent) receives only what its role may call; capabilities deactivated at start-up | `platformserver.Action`, `Catalog` | manufacturing, Hotel, CRM, crm-hotel | 4 |
-| Server | Server shell | Tenant routing, authentication hook, kernel endpoints, one error mapping, JSON reads | `platformserver.Server` | manufacturing, Hotel, sales | 3 |
-| Server | OIDC principals | Access-token verification; the directory maps subjects to principals | `platformserver.OIDC` | manufacturing | 1 |
-| Server | Durable journal | Accepted inputs in PostgreSQL, replay on start, single-writer fence, fail-stop | `platformserver.Journal` | manufacturing | 1 |
+| Server | OIDC subjects | Access-token verification; the directory maps subjects to members | `platformserver.OIDC` | manufacturing, sales | 2 |
+| Server | Durable journal | One journal per tenant across its apps in PostgreSQL; an app's calls to other apps replay with the input that caused them; single-writer fence, fail-stop | `platformserver.Journal` | manufacturing, sales | 2 |
 | Server | Agent adapter | An AI agent lists its own catalog and submits one of its actions | `cmd/mes-agent` | manufacturing | 1 (generic candidate) |
 | Web | UI kit and shell | Components, docking workspace, entity routes, command palette, session menu | `@platform/ui` | all web apps | 4 |
 | Web | Field types | 20 types deciding display, editor, validation, sorting and filters | `@platform/ui` fields | gallery | 1 |
 | Web | Edge client | Persisted outbox, HTTP transport, declarations, action-catalog type | `@platform/kernel` | manufacturing, sales | 2 |
 | Web | Browser sign-in | Authorization code with PKCE | `@platform/kernel` `oidc.ts` | manufacturing | 1 |
 | Web | Package UI | A package's views and model for every software that shows its data | `@pkg/hotel` | Hotel Desk, sales | 2 |
-| Operations | Deployment and rehearsal | Compose stack with PostgreSQL and Rauthy; restart and restore rehearsal | `deploy/local` | manufacturing | 1 |
+| Operations | Deployment and rehearsal | Compose stack with PostgreSQL and Rauthy; restart and restore rehearsal | `deploy/local` | manufacturing, sales | 2 |
 | Composition | Bridge packages | Cooperation owned by a bridge that uses both packages' declared actions and reads (ADR-0009) | `slices/crm-hotel` | CRM + Hotel | 1 |
-| Composition | Package host | Routing submissions, catalogs and declarations across packages; one member with a role per package (F-21, F-23) | composition code in `crmhotel.NewServer` | sales | gap |
-| Composition | Journal across packages | One ordered journal for a composed tenant, so a bridge's decision and the hotel decision it caused replay together | — | — | gap |
 
 ## 3. Runtimes and languages
 
@@ -219,7 +219,11 @@ Decided in ADR-0008. `platformserver.Action` declares an action once (schema, ta
 
 ### Composition #91 (CRM + Hotel)
 
-Decided in ADR-0009. CRM (accounts, opportunities) and Hotel know nothing of each other (checked by `verify.sh composition`); the bridge `crm-hotel` owns the stays booked for an opportunity and books them through the hotel's own create action, so the hotel's roles, availability and revisions decide. The sales workspace shows CRM views and the Hotel package's contributed views (`@pkg/hotel`, also used by the Hotel Desk). Findings: a bridge's actions must target its own entity (K5 allows one authority per data class, so targeting the CRM's opportunity was refused); a bridge action is offered only when every package it calls would accept the caller; F-21 to F-23 below.
+Decided in ADR-0009. CRM (accounts, opportunities) and Hotel know nothing of each other (checked by `verify.sh composition`); the bridge `crm-hotel` owns the stays booked for an opportunity and books them through the hotel's own create action, so the hotel's roles, availability and revisions decide. The sales workspace shows CRM views and the Hotel package's contributed views (`@pkg/hotel`, also used by the Hotel Desk). Findings: a bridge's actions must target its own entity (K5 allows one authority per data class, so targeting the CRM's opportunity was refused); a bridge action is offered only when every package it calls would accept the caller; routing and members became the platform host (#92).
+
+### Platform host #92
+
+ADR-0010 step 1. Every server is now a host running apps from manifests: `platform` (the directory), `hotel`, `crm`, `crm-hotel`, `mes`. Per-package principals, `Server[P,T]` and the bridge's composition code are deleted; a member holds one role per app, and a bridge is an app with its own roles. One journal per tenant records only top-level inputs: the hotel reservation a bridge booking causes is rebuilt by replaying the booking, which the bridge tests and the rehearsal check (the sales tenant replays after a restart and a restore, and a revocation made through the platform app survives both). Reads are not yet authorized per caller; the Settings workspace (#93) is the next consumer of the host.
 
 ### Shared capability models (candidates, layer 2)
 

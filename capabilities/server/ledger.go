@@ -41,24 +41,24 @@ func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *L
 // Declarations are the package's authority declarations, for edges (K5 A9).
 func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declarations }
 
-// Receive accepts s from principal id acting with role, or refuses it: an action
-// outside the enabled catalog is UNKNOWN_SCHEMA; the role must be granted and
-// allowed (attribute conditions, may be nil) must hold; rules (may be nil)
+// Receive accepts s from c or refuses it: an action outside the enabled catalog
+// is UNKNOWN_SCHEMA; c's role must be granted and allowed (attribute conditions,
+// may be nil) must hold, except in a replay (ADR-0008); rules (may be nil)
 // returns how to apply the decision, which runs with the new record only when
 // it is accepted (an idempotent replay applies nothing).
-func (l *Ledger) Receive(id, role string, s *pb.Submission, now time.Time,
+func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	allowed func() bool, rules func() (func(*pb.ChangeRecord), *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if !l.Catalog.Enabled(s.GetSchema().GetName()) {
+	if !c.Replaying && !l.Catalog.Enabled(s.GetSchema().GetName()) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 	receiver := kernel.Receiver{Changes: l.Changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
-			return l.Catalog.Permits(role, s.GetSchema().GetName()) && (allowed == nil || allowed())
+			return c.Replaying || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
 		}}
 	var apply func(*pb.ChangeRecord)
-	record, err := receiver.Receive(kernel.Caller{Tenant: l.tenant, Principal: id}, s, now, func() *kernel.Error {
+	record, err := receiver.Receive(kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
 		if rules == nil {
 			return nil
 		}

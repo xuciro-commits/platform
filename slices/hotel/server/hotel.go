@@ -34,12 +34,6 @@ const (
 	Channel   Role = "channel"
 )
 
-type Principal struct {
-	ID     string
-	Tenant string
-	Role   Role
-}
-
 // Actions is the hotel's action catalog (ADR-0008): front desk and channels
 // create and modify; only managers cancel. Other packages act through it too.
 func Actions() *platformserver.Catalog {
@@ -130,13 +124,13 @@ func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
 
 // Submit turns a submission into a change record or rejects it, in the kernel's
 // receiving order (K6 T2); the hotel supplies only its rules.
-func (h *Hotel) Submit(p Principal, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (h *Hotel) Submit(c platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if p.Tenant != h.tenant {
+	if c.Tenant != h.tenant {
 		return nil, denied()
 	}
-	return h.ledger.Receive(p.ID, string(p.Role), s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return h.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		apply, err := h.validate(s)
 		if err != nil {
 			return nil, err
@@ -151,9 +145,21 @@ func (h *Hotel) Submit(p Principal, s *pb.Submission, now time.Time) (*pb.Change
 // Declarations are the tenant's authority declarations, for edges (K5 A9).
 func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Declarations() }
 
-// Catalog is the part of the hotel's actions p may call.
-func (h *Hotel) Catalog(p Principal) []platformserver.Action {
-	return h.ledger.Catalog.For(string(p.Role))
+// Manifest declares the hotel as an app (ADR-0010).
+func (h *Hotel) Manifest() platformserver.Manifest {
+	return platformserver.Manifest{ID: "hotel", Version: "1", Actions: h.ledger.Catalog,
+		Reads: []string{"reservations"}, Inputs: map[string]bool{"channel-bookings": true}}
+}
+
+func (h *Hotel) Read(platformserver.Caller, string) any { return h.Reservations() }
+
+// Input takes channel bookings; only a channel connector sends them.
+func (h *Hotel) Input(c platformserver.Caller, _ string, body []byte, now time.Time) (any, *kernel.Error) {
+	var b ChannelBooking
+	if c.Role() != string(Channel) && !c.Replaying || json.Unmarshal(body, &b) != nil {
+		return nil, denied()
+	}
+	return h.IngestChannelBooking(c, b, now)
 }
 
 // validate checks the domain rules and returns how to apply the decision.
@@ -256,7 +262,7 @@ type ChannelBooking struct {
 
 // IngestChannelBooking records the raw message as an observation (duplicates
 // collapse by message ID) and submits the booking it asks for.
-func (h *Hotel) IngestChannelBooking(connector Principal, b ChannelBooking, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (h *Hotel) IngestChannelBooking(connector platformserver.Caller, b ChannelBooking, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	raw, _ := json.Marshal(b)
 	h.mu.Lock()
 	fact, err := h.facts.Record(&pb.Fact{TenantId: h.tenant, Kind: pb.FactKind_FACT_KIND_OBSERVATION,

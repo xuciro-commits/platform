@@ -14,6 +14,9 @@ type Action struct {
 	Description string   `json:"description"`
 	Payload     []Field  `json:"payload"`
 	Roles       []string `json:"-"`
+	// Uses names other apps' actions this one invokes; a caller is offered it
+	// only when it may call those too (ADR-0009).
+	Uses []string `json:"uses,omitempty"`
 }
 
 // Field describes one payload field of an action.

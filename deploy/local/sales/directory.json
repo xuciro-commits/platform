@@ -1,0 +1,25 @@
+[
+  {
+    "subjects": [
+      "user:sales@hotel.test"
+    ],
+    "id": "sales-1",
+    "roles": {
+      "crm": "sales",
+      "crm-hotel": "sales",
+      "hotel": "front-desk"
+    }
+  },
+  {
+    "subjects": [
+      "user:manager@hotel.test"
+    ],
+    "id": "manager-1",
+    "roles": {
+      "crm": "sales-manager",
+      "crm-hotel": "sales-manager",
+      "hotel": "manager",
+      "platform": "admin"
+    }
+  }
+]

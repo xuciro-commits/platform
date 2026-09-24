@@ -1,55 +1,96 @@
-{
-  "user:sup@plant.test": {
+[
+  {
+    "subjects": [
+      "user:sup@plant.test"
+    ],
     "id": "sup-1",
-    "tenant": "plant-sz",
-    "role": "supervisor",
-    "lines": [
-      "L1",
-      "L2"
-    ]
+    "roles": {
+      "mes": "supervisor",
+      "platform": "admin"
+    },
+    "attributes": {
+      "lines": [
+        "L1",
+        "L2"
+      ]
+    }
   },
-  "user:op1@plant.test": {
+  {
+    "subjects": [
+      "user:op1@plant.test"
+    ],
     "id": "op-l1",
-    "tenant": "plant-sz",
-    "role": "operator",
-    "lines": [
-      "L1"
-    ]
+    "roles": {
+      "mes": "operator"
+    },
+    "attributes": {
+      "lines": [
+        "L1"
+      ]
+    }
   },
-  "user:op2@plant.test": {
+  {
+    "subjects": [
+      "user:op2@plant.test"
+    ],
     "id": "op-l2",
-    "tenant": "plant-sz",
-    "role": "operator",
-    "lines": [
-      "L2"
-    ]
+    "roles": {
+      "mes": "operator"
+    },
+    "attributes": {
+      "lines": [
+        "L2"
+      ]
+    }
   },
-  "user:qa1@plant.test": {
+  {
+    "subjects": [
+      "user:qa1@plant.test"
+    ],
     "id": "qa-1",
-    "tenant": "plant-sz",
-    "role": "quality"
+    "roles": {
+      "mes": "quality"
+    }
   },
-  "user:qa2@plant.test": {
+  {
+    "subjects": [
+      "user:qa2@plant.test"
+    ],
     "id": "qa-2",
-    "tenant": "plant-sz",
-    "role": "quality"
+    "roles": {
+      "mes": "quality"
+    }
   },
-  "client:mes-gateway": {
+  {
+    "subjects": [
+      "client:mes-gateway"
+    ],
     "id": "gateway-l1",
-    "tenant": "plant-sz",
-    "role": "gateway"
+    "roles": {
+      "mes": "gateway"
+    }
   },
-  "client:mes-erp": {
+  {
+    "subjects": [
+      "client:mes-erp"
+    ],
     "id": "erp",
-    "tenant": "plant-sz",
-    "role": "erp"
+    "roles": {
+      "mes": "erp"
+    }
   },
-  "client:mes-assistant": {
+  {
+    "subjects": [
+      "client:mes-assistant"
+    ],
     "id": "agent-l1",
-    "tenant": "plant-sz",
-    "role": "assistant",
-    "lines": [
-      "L1"
-    ]
+    "roles": {
+      "mes": "assistant"
+    },
+    "attributes": {
+      "lines": [
+        "L1"
+      ]
+    }
   }
-}
+]
