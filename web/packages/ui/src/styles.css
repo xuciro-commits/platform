@@ -1,0 +1,82 @@
+/* @platform/ui design tokens: dense, data-first (Palantir-like density on shadcn/Radix).
+   Apps import this file once; Tailwind scans the package through @source. */
+@import "tailwindcss";
+@source "./";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --background: oklch(0.99 0 0);
+  --surface: oklch(1 0 0);
+  --foreground: oklch(0.22 0.01 260);
+  --muted: oklch(0.55 0.01 260);
+  --border: oklch(0.9 0.005 260);
+  --ring: oklch(0.6 0.15 255);
+  --primary: oklch(0.55 0.17 255);
+  --primary-foreground: oklch(0.99 0 0);
+  --row-hover: oklch(0.97 0.005 260);
+  --row-selected: oklch(0.94 0.03 255);
+  --tone-neutral: oklch(0.55 0.01 260);
+  --tone-info: oklch(0.55 0.15 255);
+  --tone-success: oklch(0.55 0.14 150);
+  --tone-warning: oklch(0.62 0.15 70);
+  --tone-danger: oklch(0.56 0.19 25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: oklch(0.17 0.01 260);
+    --surface: oklch(0.21 0.01 260);
+    --foreground: oklch(0.93 0.005 260);
+    --muted: oklch(0.68 0.01 260);
+    --border: oklch(0.3 0.01 260);
+    --row-hover: oklch(0.25 0.01 260);
+    --row-selected: oklch(0.3 0.04 255);
+    --tone-info: oklch(0.72 0.13 255);
+    --tone-success: oklch(0.74 0.14 150);
+    --tone-warning: oklch(0.8 0.13 75);
+    --tone-danger: oklch(0.7 0.17 25);
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: oklch(0.17 0.01 260);
+  --surface: oklch(0.21 0.01 260);
+  --foreground: oklch(0.93 0.005 260);
+  --muted: oklch(0.68 0.01 260);
+  --border: oklch(0.3 0.01 260);
+  --row-hover: oklch(0.25 0.01 260);
+  --row-selected: oklch(0.3 0.04 255);
+  --tone-info: oklch(0.72 0.13 255);
+  --tone-success: oklch(0.74 0.14 150);
+  --tone-warning: oklch(0.8 0.13 75);
+  --tone-danger: oklch(0.7 0.17 25);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-row-hover: var(--row-hover);
+  --color-row-selected: var(--row-selected);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}

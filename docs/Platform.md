@@ -137,6 +137,17 @@ Two tests for every abstraction: **cross-domain comparison** (does either domain
 
 Loop: kernel hypotheses → Hotel slice (may not change the kernel; records friction) + Music retrofit slice + manufacturing discovery → compare → revise kernel → refactor both apps → drills → repeat until drills stop touching the kernel. There is no numeric threshold; each kernel change must name the missing cross-domain capability.
 
+### Shared capability models (candidates, layer 2)
+
+Across domains the business differs but the data is organised alike. These are **capability candidates**, not kernel: they carry domain-like vocabulary and are promoted only when two domains use them without exceptions (§4 rules). The UI kit (`web/packages/ui`, ADR-0004) already gives them one presentation.
+
+| Capability | Manufacturing | Hotel | Shared shape |
+|---|---|---|---|
+| Master data | Product, material, routing (operations), work center | Room type, room, rate plan | Coded entities with versions and effective dates (K1, K7) |
+| Organisation | Plant → area → line; shifts; operators, qualifications | Property → department (front office, housekeeping); staff, roles | A tree of units, people with roles; used as policy context (K6), never as kernel schema |
+| Devices and data collection | PLC states, counters, gauges | Door access, cameras, temperature/humidity | Device registry (connector, K8) plus reading streams as observations (K2, K3) |
+| Documents with lifecycles | Work order, SFC, nonconformance | Reservation, housekeeping task | A state machine in domain code; decisions as change records (K4) submitted through the outbox (K5) |
+
 ### Reference systems (industry state of the art)
 
 Domain slices model their domain on leading systems, not on invention, so that friction comes from real business shape. The kernel still may not borrow their vocabulary.

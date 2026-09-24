@@ -1,0 +1,9 @@
+{
+  "name": "platform-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "pnpm -r run typecheck && pnpm -r run test && pnpm -r run build"
+  },
+  "packageManager": "pnpm@12.5.1"
+}
