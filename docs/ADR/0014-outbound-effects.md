@@ -118,7 +118,15 @@ An outbound effect is the server playing the edge toward an external authority. 
 - #101, the MES write-back:
   - Apps emit their own effects: `Manifest.Emits` declares the kinds, and `Caller.Emit(kind, key, …)` sends to the endpoints an administrator bound to `<app>/<kind>`. The key is the app's, such as the order, so the same business fact is sent once.
   - The receiver's JSON answer is journaled with the outcome and handed to the app (`Answerer`), in replay too. The plant records it as an observation on the order, with the endpoint as provenance (D4), and tells the line's supervisors when the ERP refuses.
-- Waiting for their first use, as decided: approval of irreversible kinds caused by agents (D6), and email.
+- Approval of irreversible effects caused by agents (D6):
+  - A member may be an AI agent (`Member.Agent`), and an effect kind may be irreversible (`EffectKind.Irreversible`).
+  - When an agent's input emits an irreversible kind, the effect is **held**. It waits outside its endpoint's order, the tenant's administrators are notified, and only a person may approve it (`platform.effect.approve`); either may discard it.
+  - First use: the plant's ERP confirmation is irreversible, so a correction the line's AI assistant resends waits for the supervisor.
+  - What an agent's input causes through automation (a subscriber, a job) is caused by the app, not the agent, and is not held.
+- Email (D7, second use): an endpoint of kind `email` is an SMTP server with a sender and the apps whose notifications it mails.
+  - Each notification to a member who signs in as `user:<email>` becomes an effect inside the input that notified. Its ID is the Message-ID; the receiver deduplicates by it.
+  - A 4xx answer is retried, a 5xx answer rejects the effect.
+  - These mails go to members only. Mail to people outside the tenant would be an irreversible kind.
 
 ## Done-when, for the implementation item that follows acceptance
 

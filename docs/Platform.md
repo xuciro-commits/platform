@@ -69,12 +69,12 @@ Status legend:
 | Events and subscriptions | Host runtime | An app's own decisions or a consumed protocol's events, queued per subscriber, delivered as owned work with retries | `Manifest.Subscribes`, `Subscriber`, `Tenant.Work` | tests only (no production subscriber since #95) | 1 |
 | Scheduled jobs | Host runtime | Declared jobs, run as the app | `Manifest.Jobs`, `Runner` | manufacturing, Hotel | 2 |
 | Connectors (managed) | Host runtime | Deliveries through the caller; cursor, health, last refused input; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | manufacturing, Hotel | 2 |
-| Outbound effects | Host runtime | Webhooks for events; effect kinds apps emit; at least once with a stable key; answers back to the app | `Tenant.Dispatch`, `Caller.Emit`, `Answerer` | sales (webhook), manufacturing (ERP write-back) | 2 |
+| Outbound effects | Host runtime | Webhooks for events; effect kinds apps emit; email of notifications; at least once with a stable key; answers back to the app; irreversible kinds an AI agent causes held for a person's approval | `Tenant.Dispatch`, `Caller.Emit`, `Answerer`, `mail.go` | sales (webhook), manufacturing (ERP write-back, email, approval) | 2 |
 | Deployment | Host runtime | Development tokens or journal plus OIDC from one set of flags; the work runner | `Deployment`, `RunWork` | mes-server, sales-server, hotel-server | 3 |
 | Members, roles, service accounts and AI agents | Platform capability (`platform` app) | Members signing in as subjects, one role per app, grant and revoke as decisions | `Console` (its directory area) | every host | 4 |
 | Audit and deliveries history | Platform capability (`platform` app) | Accepted inputs and delivery attempts, rebuilt by replay | reads `audit`, `deliveries` | every host | 4 |
 | App settings | Platform capability (`platform` app) | Typed values the app declares; administrators set them as decisions | `Manifest.Settings`, `Caller.Setting` | manufacturing, Hotel | 2 |
-| Notifications | Platform capability (`platform` app) | To members, holders of a unit's role, or holders of an app role; deduplicated by key; read state as a decision | `Caller.Notify` | manufacturing, Hotel | 2 |
+| Notifications | Platform capability (`platform` app) | To members, holders of a unit's role, or holders of an app role; deduplicated by key; read state as a decision; mailed through an email endpoint | `Caller.Notify` | manufacturing, Hotel, the platform (approvals) | 3 |
 | Protocol binding | Platform capability (`platform` app) | The administrator chooses the provider of new calls; reads span every provider | `platform.protocol.bind`, `Caller.Query` | sales | 1 |
 | Organisation | Platform capability (`org` app) | Units in dated structures, memberships; rules ask for a member's units | `Organization`, `Caller.Units` | manufacturing, sales | 2 |
 | Links and timeline | Platform capability (`relations` app) | Relations between entities; protocol events told on linked timelines | `Relations`, `Caller.Link`, `Caller.Links` | CRM, sales | 1 |
@@ -99,7 +99,7 @@ Status legend:
 |---|---|---|
 | 0007 | Input journal in PostgreSQL, fail-stop, replay on start; OIDC | Implemented (rehearsed restart and restore) |
 | 0008 | Governed actions and per-caller catalogs; AI as an authorized caller; start-up deactivation; no runtime installation | Implemented |
-| 0008 | Human confirmation before an agent's action takes effect | Deferred (with ADR-0014 D6) |
+| 0008 | Human confirmation before an agent's action takes effect | Partial: an irreversible effect an AI agent causes waits for a person (ADR-0014 D6); the agent's decision inside the tenant takes effect, as it can be corrected |
 | 0008 | Analysis data models and dashboards for customers | Deferred |
 | 0009 | Bridges between packages | Superseded by ADR-0011; the unused bridge path (`Manifest.Requires`, `Caller.Submit`, `Caller.Read`) was removed in #104. Apps know no other app |
 | 0010 | Apps from manifests; routing; the platform app with Settings; audit; app registry; public reads | Implemented |
@@ -126,7 +126,7 @@ Status legend:
 | 0014 | Per-endpoint limits (rate, payload size, timeout) | Partial: a fixed 10 s timeout and a 64 KiB answer; no rate |
 | 0014 | A breaker per destination | Partial: the ordered queue per endpoint holds the rest behind a failing head |
 | 0014 | Webhooks filtered by the catalog rules of who may see an event | Amended (#104): an endpoint is the administrator's, so it has the administrator's view — any event the tenant declares; an undeclared event is refused |
-| 0014 | D6 approval of irreversible effects caused by agents; email | Deferred |
+| 0014 | D6 approval of irreversible effects caused by agents; email | Implemented: held effects approved by a person; email endpoints for notifications (SMTP, STARTTLS, PLAIN) |
 
 #### Terminology and ownership
 
@@ -143,9 +143,9 @@ Status legend:
 | **Job** | Scheduled work an app declares and runs as `app:<id>` | Declared by the app, run by the host (`Task` of kind job) | Journal entry `job`, only when a run decided or notified something |
 | **Work** | K9 ownership of a delivery or a job: owner, generation, state | Host, through `kernel.Works` | Rebuilt by replay; job counters are volatile |
 | **Connector** | An inbound source: a K8 descriptor whose ID is the member it signs in as | Connected by the deployment, held by the host, switched by the `platform` app | Cursor and switch rebuilt; heartbeat and last refusal volatile |
-| **Endpoint** | An outbound destination: URL, secret name, subscribed events and bound effect kinds | `platform` app decisions, held by the host | Decisions |
+| **Endpoint** | An outbound destination: a webhook (URL, secret name, subscribed events, bound effect kinds) or an email server (SMTP URL, sender, apps whose notifications it mails) | `platform` app decisions, held by the host | Decisions |
 | **Effect kind** | An outbound message an app declares it sends (`Manifest.Emits`) | The app's manifest | Code |
-| **Effect** | One intent for one endpoint: from an event (webhook) or from `Caller.Emit`; its key is its ID | Host | Intent rebuilt from its input; each attempt's outcome is journal entry `effect` |
+| **Effect** | One intent for one endpoint: from an event (webhook), from `Caller.Emit`, or from a notification (email); its key is its ID. Held while an irreversible kind an AI agent caused waits for a person | Host | Intent rebuilt from its input; approval and discard are decisions; each attempt's outcome is journal entry `effect` |
 | **Answer** | What an endpoint returned for an app's effect; the app records it as an observation | Journaled with the outcome, recorded by the app (`Answerer`) | Journal entry `effect` |
 | **Notification** | A message to a member, resolved on the input's day | Created by apps (`Caller.Notify`), stored by the host; read state is a `platform` decision | Rebuilt from its input |
 | **Setting** | A typed value an app declares | Declared by the app; values set by `platform` decisions, stored by the host | Decisions |
@@ -155,21 +155,24 @@ Ownership rule: the host keeps shared runtime state; the `platform` app (`Consol
 #### External effects: lifecycle and replay
 
 ```
+  agent + irreversible kind ──▶ held ──approve (a person's decision)──▶ pending
 decision or app input ──emit──▶ pending ──attempt──▶ delivered
                                   ▲    │            ▶ rejected (4xx except 408/429; private address; bad scheme)
                           retry   │    └─ 5xx, 408, 429, timeout, network ─▶ retrying ──(12 attempts)──▶ failed
                         (decision)│                                            │
                                   └──────────── failed / rejected ◀────────────┘
-  pending or retrying ──discard (decision)──▶ discarded      endpoint removed ─▶ its unsettled effects are discarded
+  held, pending or retrying ──discard (decision)──▶ discarded      endpoint removed ─▶ its unsettled effects are discarded
 ```
 
 1. **Creation.** Inside an input:
    - `emit` turns a decision whose event an endpoint subscribes to into an effect. The ID is `<tenant>:<app>:<change id>:<endpoint>`.
-   - `Caller.Emit` turns an app's effect of a bound kind into an effect. The ID is `<tenant>:<app>:<kind>:<key>:<endpoint>`.
+   - `Caller.Emit` turns an app's effect of a bound kind into an effect. The ID is `<tenant>:<app>:<kind>:<key>:<endpoint>`. When the kind is irreversible and the caller is an AI agent, the effect is held, and the administrators are notified.
+   - `Caller.Notify` turns a notification to a member with an email address into a mail for each email endpoint carrying that app. The ID is `<tenant>:notice:<notification>:<endpoint>`.
 
    An effect has no journal entry of its own. It is part of the input that caused it, and replay recreates it with the same ID.
-2. **Attempt.** `Dispatch` takes the due head of each endpoint's effects (ordered per endpoint) and sends it outside the tenant's lock.
-   - The request is signed as Standard Webhooks, with `webhook-id` and `Idempotency-Key` both set to the effect ID.
+2. **Attempt.** `Dispatch` takes the due head of each endpoint's effects (ordered per endpoint; held effects wait outside the order) and sends it outside the tenant's lock.
+   - A webhook is signed as Standard Webhooks, with `webhook-id` and `Idempotency-Key` both set to the effect ID.
+   - A mail goes over SMTP (STARTTLS when offered), with the effect ID as its Message-ID.
    - Private addresses are refused at connect time unless the endpoint allows them.
    - Dispatch is never called during replay.
 3. **Outcome.** Every attempt ends in a journal entry `effect` holding:
@@ -186,7 +189,7 @@ decision or app input ──emit──▶ pending ──attempt──▶ deliver
    - a crash between an attempt and its entry leaves the effect pending;
    - after restart it is sent again with the same ID;
    - receivers keep one copy per ID. The ERP stand-in returns the same confirmation for the same ID.
-6. **Manual retry and discard** are `platform` decisions. A retry makes a failed or rejected effect pending again, with a full schedule. A discard settles a pending or retrying effect.
+6. **Approval, manual retry and discard** are `platform` decisions. Only a person approves a held effect; an agent's approval is refused whatever its role. A retry makes a failed or rejected effect pending again, with a full schedule. A discard settles a pending or retrying effect.
 7. **Replay** rebuilds intents from their inputs, applies every recorded outcome and hands answers to apps. It calls nothing: `CheckReplay` fails the test on any outbound call. After replay, effects still pending are sent by the running host with their original IDs.
 
 #### Replay semantics for every journal entry kind
@@ -432,6 +435,15 @@ The audit of #92–#101 as one platform (#103) found no missing capability, but 
 `CheckReplay` in every composition's tests is the lasting guard. When it was added it found two discrepancies:
 - job run counters, now declared volatile;
 - a test harness whose seed drifted.
+
+### ERP correction, approval and email (after #104)
+
+Three things the owner held until the gate closed:
+- **Correction.** An order the ERP refused, or whose confirmation never arrived, is corrected and resent (`mes.order.reconfirm`). The ERP receives the correction as a new message (key `<order>#<n>`). An answer to a superseded confirmation is recorded but changes nothing.
+- **D6.** When the line's AI assistant makes that correction, the posting cannot be recalled, so the effect is held. The supervisor is notified, and by mail, and approves it in Settings. Another AI agent's approval is refused, whatever its role.
+- **Email.** Mail reuses the effect machinery unchanged: intent in the input, attempt outside the lock, outcome journaled, Message-ID as the key.
+
+The rehearsal runs all three through a restart. The sink is also the local mail server, so no mail catcher image was needed.
 
 ### Shared capability models (candidates, layer 2)
 

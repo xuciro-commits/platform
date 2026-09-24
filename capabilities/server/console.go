@@ -116,6 +116,23 @@ func (d *Console) holding(app, role string) []string {
 	return out
 }
 
+// address is the email a member signs in with ("" for services and agents).
+func (d *Console) address(member string) string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var out []string
+	for subject, id := range d.subjects {
+		if email, ok := strings.CutPrefix(subject, "user:"); ok && id == member {
+			out = append(out, email)
+		}
+	}
+	slices.Sort(out)
+	if len(out) == 0 {
+		return ""
+	}
+	return out[0]
+}
+
 func clone(m *platform.Member) platform.Member {
 	out := *m
 	out.Roles = maps.Clone(m.Roles)

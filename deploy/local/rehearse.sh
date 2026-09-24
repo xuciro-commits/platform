@@ -100,6 +100,10 @@ echo "ok   AI assistant: catalog of one plant action (and its own notifications)
 # An order the ERP refuses (no planned order) is corrected by the assistant. The
 # posting cannot be recalled and an AI agent caused it, so it waits for a
 # person (ADR-0014 D6); the supervisor approves, and the ERP confirms it.
+# Email (ADR-0014 D7): the plant's and the platform's notifications are mailed
+# to members who sign in with an email address, through the sink's SMTP server.
+AUTHORITY=platform submit "$SUP" o-3 platform.endpoint.add platform.endpoint mail \
+  '{"kind":"email","url":"smtp://webhook-sink:2525","from":"plant@plant.test","notifications":["mes","platform"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "add email endpoint"
 submit "$SUP" r-3 mes.order.release mes.order WO-3 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -e .record >/dev/null || fail "release WO-3"
 rev=0
 for resource in FURNACE-1 CNC-11 CMM-1; do
@@ -118,7 +122,10 @@ sleep 1.5 && [[ $(wo3) == sent ]] || fail "a held effect was sent"
 AUTHORITY=platform submit "$SUP" a-4 platform.effect.approve platform.effect "${held#* }" '{}' | jq -e .record >/dev/null || fail "approve"
 for _ in $(seq 20); do [[ $(wo3) == confirmed ]] && break; sleep 0.5; done
 [[ $(wo3) == confirmed ]] || fail "WO-3 after approval: $(wo3)"
-echo "ok   ERP correction: a refused order resent by the AI assistant, held until the supervisor approved, then confirmed"
+mailed() { curl -s "$SINK/mail" | jq -r '[.[] | select(.to == "sup@plant.test") | .subject] | join("|")'; }
+for _ in $(seq 20); do [[ $(mailed) == *"Approve Order confirmation"* ]] && break; sleep 0.5; done
+[[ $(mailed) == *"ERP refused the confirmation of WO-3"* && $(mailed) == *"Approve Order confirmation to the ERP for mes.order/WO-3"* ]] || fail "mail: $(curl -s "$SINK/mail")"
+echo "ok   ERP correction: a refused order resent by the AI assistant, held until the supervisor approved, then confirmed; the refusal and the approval request mailed to the supervisor"
 
 # The sales solution: the CRM books a stay through the lodging protocol and the
 # hotel provides it (ADR-0011); the platform app revokes a role and the catalog

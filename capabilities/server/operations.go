@@ -340,6 +340,12 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 			}
 		}
 	}
+	address := map[string]string{} // members who sign in as user:<email> may be mailed (mail.go)
+	if d, ok := t.app(PlatformApp).(*Console); ok {
+		for _, m := range members {
+			address[m] = d.address(m)
+		}
+	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	var out []string
@@ -351,11 +357,13 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 		x := n
 		x.ID, x.Member, x.App, x.At, x.Read = fmt.Sprintf("n-%d", t.noticeSeq), m, c.App, now, false
 		t.notices = append(t.notices, x)
+		t.mailNotice(x, address[m])
 		out = append(out, m)
 	}
 	if len(t.notices) > noticesKept {
 		t.notices = t.notices[len(t.notices)-noticesKept:]
 	}
+	t.trimEffects()
 	t.acted += len(out)
 	return out
 }

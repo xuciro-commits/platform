@@ -37,17 +37,21 @@ import (
 // events in Settings, and the platform app turns each matching event into an
 // effect, signed as Standard Webhooks.
 
-// Endpoint is a destination the tenant's administrator configured. It receives
-// the events it subscribes to (webhooks, no app code) and the effects apps emit
-// of the kinds bound to it ("<app>/<kind>", e.g. "mes/erp-confirmation").
+// Endpoint is a destination the tenant's administrator configured. A webhook
+// receives the events it subscribes to (no app code) and the effects apps emit
+// of the kinds bound to it ("<app>/<kind>", e.g. "mes/erp-confirmation"). An
+// email endpoint is an SMTP server that mails members the notifications of the
+// apps it names (mail.go).
 type Endpoint struct {
-	ID           string   `json:"id"`
-	Kind         string   `json:"kind"` // webhook
-	URL          string   `json:"url"`
-	Secret       string   `json:"secret"`           // a secret's name in the store, never the secret
-	Events       []string `json:"events,omitempty"` // action schemas or "<protocol id>#<event>"
-	Effects      []string `json:"effects,omitempty"`
-	AllowPrivate bool     `json:"allowPrivate,omitempty"`
+	ID            string   `json:"id"`
+	Kind          string   `json:"kind"`             // webhook, email
+	URL           string   `json:"url"`              // https://… or smtp://[user@]host[:port]
+	Secret        string   `json:"secret,omitempty"` // a secret's name in the store, never the secret
+	Events        []string `json:"events,omitempty"` // action schemas or "<protocol id>#<event>"
+	Effects       []string `json:"effects,omitempty"`
+	From          string   `json:"from,omitempty"`          // email: the sender
+	Notifications []string `json:"notifications,omitempty"` // email: apps whose notifications it mails
+	AllowPrivate  bool     `json:"allowPrivate,omitempty"`
 }
 
 // effect is an Effect with the dispatcher's bookkeeping.
@@ -196,7 +200,7 @@ func (t *Tenant) Endpoints() []EndpointView {
 				}
 			}
 		}
-		if _, ok := t.secret(ep.Secret); !ok {
+		if _, ok := t.secret(ep.Secret); !ok && ep.Secret != "" {
 			v.Health = "secret missing"
 		}
 		out = append(out, v)
@@ -248,6 +252,9 @@ func (t *Tenant) Dispatch(now time.Time) {
 // send makes one attempt, signed as Standard Webhooks, with the effect's ID as
 // both webhook-id and Idempotency-Key.
 func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
+	if ep.Kind == "email" {
+		return t.sendMail(ep, x, now)
+	}
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
 	secret, ok := t.secret(ep.Secret)
@@ -303,7 +310,16 @@ var errPrivate = fmt.Errorf("private address refused")
 // guarded sends with a dialer that refuses private, loopback and link-local
 // addresses at connect time (after DNS, so a rebinding name cannot slip through).
 func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
-	dialer := &net.Dialer{Timeout: effectTimeout, Control: func(_, address string, _ syscall.RawConn) error {
+	dialer := guardedDialer(allowPrivate)
+	client := &http.Client{Timeout: effectTimeout, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	ctx, cancel := context.WithTimeout(req.Context(), effectTimeout)
+	defer cancel()
+	return client.Do(req.WithContext(ctx))
+}
+
+func guardedDialer(allowPrivate bool) *net.Dialer {
+	return &net.Dialer{Timeout: effectTimeout, Control: func(_, address string, _ syscall.RawConn) error {
 		host, _, _ := net.SplitHostPort(address)
 		ip := net.ParseIP(host)
 		if !allowPrivate && (ip == nil || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
@@ -311,11 +327,6 @@ func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
 		}
 		return nil
 	}}
-	client := &http.Client{Timeout: effectTimeout, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	ctx, cancel := context.WithTimeout(req.Context(), effectTimeout)
-	defer cancel()
-	return client.Do(req.WithContext(ctx))
 }
 
 // settle journals an attempt's outcome, then applies it.
@@ -385,14 +396,17 @@ const (
 func effectActions() []platform.Action {
 	admin := []string{Admin}
 	return []platform.Action{
-		{Schema: SchemaEndpointAdd, Target: EndpointType, Capability: "integrations", Title: "Add webhook endpoint",
-			Description: "Send the chosen events to a URL, signed with a named secret (Standard Webhooks).",
+		{Schema: SchemaEndpointAdd, Target: EndpointType, Capability: "integrations", Title: "Add endpoint",
+			Description: "Send the chosen events and effects to a URL, signed with a named secret (Standard Webhooks); or mail the chosen apps' notifications to members through an SMTP server.",
 			Payload: []platform.Field{{Name: "url", Type: "string", Required: true, Description: "https URL of the receiver"},
 				{Name: "secret", Type: "string", Required: true, Description: "Name of the signing secret in the secret store"},
 				{Name: "events", Type: "string[]", Description: "Action schemas or <protocol id>#<event> to send as webhooks"},
 				{Name: "effects", Type: "string[]", Description: "Effect kinds apps emit, <app>/<kind>, to send here"},
+				{Name: "kind", Type: "string", Description: "webhook (default) or email"},
+				{Name: "from", Type: "string", Description: "email: the sender address"},
+				{Name: "notifications", Type: "string[]", Description: "email: apps whose notifications are mailed to members"},
 				{Name: "allowPrivate", Type: "boolean", Description: "Allow private addresses and plain http (inside the deployment only)"}}, Roles: admin},
-		{Schema: SchemaEndpointRemove, Target: EndpointType, Capability: "integrations", Title: "Remove webhook endpoint",
+		{Schema: SchemaEndpointRemove, Target: EndpointType, Capability: "integrations", Title: "Remove endpoint",
 			Description: "Stop sending to the endpoint; what it has not received is discarded.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaEffectRetry, Target: EffectType, Capability: "integrations", Title: "Retry effect",
 			Description: "Send a failed or rejected effect again, with the same key.", Payload: []platform.Field{}, Roles: admin},
@@ -426,7 +440,29 @@ func (t *Tenant) decideEndpoint(_ platform.Caller, s *pb.Submission, _ time.Time
 		}, nil
 	}
 	var ep Endpoint
-	if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" || ep.Secret == "" || len(ep.Events)+len(ep.Effects) == 0 {
+	if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" {
+		return nil, invalid
+	}
+	u, err := url.Parse(ep.URL)
+	if err != nil || u.Host == "" {
+		return nil, invalid
+	}
+	switch ep.Kind {
+	case "", "webhook":
+		if ep.Secret == "" || len(ep.Events)+len(ep.Effects) == 0 || len(ep.Notifications) > 0 || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
+			return nil, invalid
+		}
+		ep.Kind = "webhook"
+	case "email":
+		if u.Scheme != "smtp" || !strings.Contains(ep.From, "@") || len(ep.Notifications) == 0 || len(ep.Events)+len(ep.Effects) > 0 || u.User != nil && ep.Secret == "" {
+			return nil, invalid
+		}
+		for _, app := range ep.Notifications {
+			if t.app(app) == nil {
+				return nil, invalid
+			}
+		}
+	default:
 		return nil, invalid
 	}
 	for _, event := range ep.Events { // an administrator's endpoint may receive any event the tenant declares (G5)
@@ -440,13 +476,10 @@ func (t *Tenant) decideEndpoint(_ platform.Caller, s *pb.Submission, _ time.Time
 			return nil, invalid
 		}
 	}
-	if u, err := url.Parse(ep.URL); err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
-		return nil, invalid
-	}
 	if known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	ep.ID, ep.Kind = id, "webhook"
+	ep.ID = id
 	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.endpoints = append(t.endpoints, &ep); t.opsMu.Unlock() }, nil
 }
 

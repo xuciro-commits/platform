@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **next** | Feature work paused by the convergence gate (#103, #104 done): email as a notification channel with D6 approval; correcting an order the ERP refused | The owner picks the first; it gets its own item and done-when |
+| **awaiting owner** | Nothing queued: the convergence gate and the held features (ERP correction, D6 approval, email) are done | The owner names the next item |
 
 ## Open friction (temporary; delete entries once resolved)
 

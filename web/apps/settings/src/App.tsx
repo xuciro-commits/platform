@@ -21,7 +21,7 @@ type Delivery = { at: string; app: string; action: string; target: string; subsc
 type Task = { id: string; kind: "delivery" | "job"; app: string; title: string; state: string; attempts: number; last?: string; due?: string; error?: string };
 type Connector = { id: string; direction: string; dataClasses: string[]; heartbeat: string; health: string; lastSeen?: string; cursor?: string; disabled: boolean;
   lastError?: { at: string; input: string; error: string } };
-type EndpointView = { id: string; url: string; secret: string; events?: string[]; effects?: string[]; allowPrivate?: boolean; pending: number; failing: number; health: string; delivered: number };
+type EndpointView = { id: string; kind: string; url: string; secret?: string; from?: string; notifications?: string[]; events?: string[]; effects?: string[]; allowPrivate?: boolean; pending: number; failing: number; health: string; delivered: number };
 type Effect = { id: string; endpoint: string; event: string; target: string; at: string; state: string; agent?: string; attempts: number; last?: string; due?: string; error?: string; digest?: string };
 type SettingValue = { name: string; title: string; description: string; type: "boolean" | "integer" | "text" | "choice"; default: string; choices?: string[]; value: string };
 type AppSettings = { app: string; settings: SettingValue[] };
@@ -423,7 +423,11 @@ function Webhooks() {
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const { apps, decideOn } = useAdmin();
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ id: "", url: "", secret: "", allowPrivate: false, events: [] as string[], effects: [] as string[] });
+  const blank = { kind: "webhook", id: "", url: "", secret: "", from: "", allowPrivate: false, events: [] as string[], effects: [] as string[], notifications: [] as string[] };
+  const [draft, setDraft] = useState(blank);
+  const email = draft.kind === "email";
+  const toggle = (list: "events" | "effects" | "notifications", x: string, on: boolean) =>
+    setDraft({ ...draft, [list]: on ? [...draft[list], x] : draft[list].filter((y) => y !== x) });
   const kinds = apps.flatMap((a) => (a.emits ?? []).map((e) => ({ id: `${a.id}/${e.name}`, title: e.title })));
   const events = [...apps.flatMap((a) => a.capabilities.flatMap((c) => c.actions)).filter((x) => !x.startsWith("platform.")),
     ...protocols.flatMap((p) => (p.events ?? []).map((e) => `${p.id}#${e.name}`))];
@@ -448,51 +452,70 @@ function Webhooks() {
   return (
     <>
       <div className="mb-1 mt-5 flex items-center gap-2">
-        <h2 className="text-sm font-semibold">Webhook endpoints</h2>
-        <span className="text-xs text-muted">Events sent out signed (Standard Webhooks), at least once, with a key receivers deduplicate by.</span>
-        <Button size="sm" variant="primary" className="ml-auto" onClick={() => setAdding(true)}>Add endpoint</Button>
+        <h2 className="text-sm font-semibold">Endpoints</h2>
+        <span className="text-xs text-muted">Webhooks send events and effects signed (Standard Webhooks); email endpoints mail members their notifications. At least once, with a key receivers deduplicate by.</span>
+        <Button size="sm" variant="primary" className="ml-auto" onClick={() => { setDraft(blank); setAdding(true); }}>Add endpoint</Button>
       </div>
       <div className="grid gap-2">
         {endpoints.data?.length === 0 && <p className="text-sm text-muted">No endpoints.</p>}
         {endpoints.data?.map((ep) => (
           <section key={ep.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2 text-sm">
-            <span className="font-semibold">{ep.id}</span><span className="font-mono text-xs">{ep.url}</span>
+            <span className="font-semibold">{ep.id}</span><Tag label={ep.kind} /><span className="font-mono text-xs">{ep.url}</span>
             <Tag label={ep.health} tone={ep.health === "ok" ? "success" : "danger"} />
-            <span className="text-xs text-muted">secret “{ep.secret}” · {ep.delivered} delivered · {ep.pending} waiting</span>
-            <span className="flex flex-wrap gap-1">{[...(ep.events ?? []), ...(ep.effects ?? [])].map((e) => <Tag key={e} label={e} tone="info" />)}</span>
+            <span className="text-xs text-muted">{ep.kind === "email" ? `from ${ep.from}` : `secret “${ep.secret}”`} · {ep.delivered} delivered · {ep.pending} waiting</span>
+            <span className="flex flex-wrap gap-1">{[...(ep.events ?? []), ...(ep.effects ?? []), ...(ep.notifications ?? []).map((a) => `${a} notifications`)]
+              .map((e) => <Tag key={e} label={e} tone="info" />)}</span>
             <Button size="sm" variant="danger" className="ml-auto" onClick={() => void decideOn("platform.endpoint.remove", { type: "platform.endpoint", id: ep.id }, {})}>Remove</Button>
           </section>
         ))}
       </div>
       <h2 className="mb-1 mt-4 text-sm font-semibold">Outbound effects</h2>
       <DataTable data={effects.data ?? []} columns={effectColumns} getRowId={(x) => x.id} height={260} empty="Nothing sent yet" />
-      <Dialog open={adding} onOpenChange={setAdding} title="Add webhook endpoint">
+      <Dialog open={adding} onOpenChange={setAdding} title="Add endpoint">
         <div className="grid gap-2 text-sm">
+          <Select aria-label="Kind" value={draft.kind} onChange={(e) => setDraft({ ...blank, kind: e.target.value, id: draft.id })}>
+            <option value="webhook">Webhook (events and effects over HTTPS)</option>
+            <option value="email">Email (notifications to members over SMTP)</option>
+          </Select>
           <Input aria-label="ID" placeholder="ID (lower case, dashes)" value={draft.id} onChange={(e) => setDraft({ ...draft, id: e.target.value })} />
-          <Input aria-label="URL" placeholder="https://receiver.example.com/hook" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
-          <Input aria-label="Secret name" placeholder="Name of the signing secret in the secret store" value={draft.secret} onChange={(e) => setDraft({ ...draft, secret: e.target.value })} />
+          <Input aria-label="URL" placeholder={email ? "smtp://user@mail.example.com:587" : "https://receiver.example.com/hook"} value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
+          {email && <Input aria-label="From" placeholder="Sender, e.g. plant@example.com" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />}
+          <Input aria-label="Secret name" placeholder={email ? "Name of the SMTP password in the secret store (when the URL names a user)" : "Name of the signing secret in the secret store"}
+            value={draft.secret} onChange={(e) => setDraft({ ...draft, secret: e.target.value })} />
           <label className="flex items-center gap-2"><input type="checkbox" checked={draft.allowPrivate} onChange={(e) => setDraft({ ...draft, allowPrivate: e.target.checked })} />
-            Receiver inside the deployment (private address, http allowed)</label>
-          {kinds.length > 0 && <>
+            {email ? "Mail server inside the deployment (private address allowed)" : "Receiver inside the deployment (private address, http allowed)"}</label>
+          {email && <>
+            <p className="mt-1 text-xs text-muted">Mail these apps' notifications to members who sign in with an email address</p>
+            {apps.map((a) => (
+              <label key={a.id} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={draft.notifications.includes(a.id)}
+                onChange={(e) => toggle("notifications", a.id, e.target.checked)} /><span className="font-mono">{a.id}</span></label>
+            ))}
+          </>}
+          {!email && kinds.length > 0 && <>
             <p className="mt-1 text-xs text-muted">Effects apps send (the receiver's answer goes back to the app)</p>
             {kinds.map((k) => (
               <label key={k.id} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={draft.effects.includes(k.id)}
-                onChange={(e) => setDraft({ ...draft, effects: e.target.checked ? [...draft.effects, k.id] : draft.effects.filter((x) => x !== k.id) })} />
+                onChange={(e) => toggle("effects", k.id, e.target.checked)} />
                 <span className="font-mono">{k.id}</span> · {k.title}</label>
             ))}
           </>}
-          <p className="mt-1 text-xs text-muted">Events (as webhooks)</p>
-          <div className="grid max-h-48 gap-1 overflow-auto">
-            {events.map((ev) => (
-              <label key={ev} className="flex items-center gap-2 font-mono text-xs"><input type="checkbox" checked={draft.events.includes(ev)}
-                onChange={(e) => setDraft({ ...draft, events: e.target.checked ? [...draft.events, ev] : draft.events.filter((x) => x !== ev) })} />{ev}</label>
-            ))}
-          </div>
+          {!email && <>
+            <p className="mt-1 text-xs text-muted">Events (as webhooks)</p>
+            <div className="grid max-h-48 gap-1 overflow-auto">
+              {events.map((ev) => (
+                <label key={ev} className="flex items-center gap-2 font-mono text-xs"><input type="checkbox" checked={draft.events.includes(ev)}
+                  onChange={(e) => toggle("events", ev, e.target.checked)} />{ev}</label>
+              ))}
+            </div>
+          </>}
           <span className="mt-2 flex justify-end gap-2">
             <Button onClick={() => setAdding(false)}>Cancel</Button>
-            <Button variant="primary" disabled={!draft.id || !draft.url || !draft.secret || draft.events.length + draft.effects.length === 0}
+            <Button variant="primary" disabled={!draft.id || !draft.url || (email ? !draft.from || draft.notifications.length === 0
+              : !draft.secret || draft.events.length + draft.effects.length === 0)}
               onClick={async () => {
-                const { id, ...payload } = draft;
+                const { id, ...all } = draft;
+                const payload = email ? { kind: all.kind, url: all.url, from: all.from, secret: all.secret || undefined, notifications: all.notifications, allowPrivate: all.allowPrivate }
+                  : { url: all.url, secret: all.secret, events: all.events, effects: all.effects, allowPrivate: all.allowPrivate };
                 if (await decideOn("platform.endpoint.add", { type: "platform.endpoint", id }, payload)) setAdding(false);
               }}>Add</Button>
           </span>
