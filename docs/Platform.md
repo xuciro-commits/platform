@@ -28,17 +28,18 @@ Dependencies point downward only; the kernel knows no domain vocabulary; capabil
 
 Placement questions: Would it still hold in a different industry? After a pivot within the same industry? Is it "must be so" or "one of several implementations"? Would operators change it at runtime — and is that a parameter (config) or a change of rules (code)?
 
-### Platform model (convergence gate #103)
+### Platform model (convergence gates #103, #104)
 
-Audited across #92–#101 as one platform. This section is canonical: when code, an ADR and this section disagree, this section says which one is current, and the gate items in the work queue say what is still to decide.
+Audited across #92–#101 as one platform (#103); the owner's decisions on what the audit found were built in #104. This section is canonical: when code, an ADR and this section disagree, this section says which one is current.
 
 **Layers.**
 
 | Layer | Meaning | Changes when |
 |---|---|---|
 | **Kernel** | The language-neutral contract (K1–K9): spec, vectors, Go and Swift | A kernel hypothesis is revised (spec and vectors first) |
-| **Host runtime** | `platformserver` code that runs apps: composition, routing, journal and replay, owned work, dispatch, stores for notifications, settings, connectors, endpoints and effects | The platform grows a mechanism |
-| **Platform capability** | Behaviour exposed as a platform app (`platform`, `org`, `relations`) or as a `Caller` method apps use | A cross-industry need appears in a second app |
+| **Host runtime** | Package `platformserver`: composition, routing, journal and replay, owned work, dispatch, stores for notifications, settings, connectors, endpoints and effects; it implements `platform.Runtime` | The platform grows a mechanism |
+| **App API** | Package `platformserver/platform`: what an app sees — `Member`, `Caller`, `Manifest`, the declarations (actions, protocols, jobs, settings, effect kinds, the organisation's vocabulary) and `Ledger`. A caller reaches the host only through `Runtime`; apps and protocols import this package, never the runtime | An app needs something the host already does |
+| **Platform capability** | Behaviour exposed as a platform app (`platform`, whose type is `Console`; `org`; `relations`) or as a `Caller` method apps use | A cross-industry need appears in a second app |
 | **Industry protocol** | A versioned interface apps provide and consume, with conformance tests | A second provider or consumer appears |
 | **Domain** | An app: its rules, reads, inputs, settings, jobs and effect kinds | Its business changes |
 
@@ -62,15 +63,15 @@ Status legend:
 | Work ownership (K9) | Kernel | Generations, stale results, owner close | `kernel.Works`, used by the host for owned work (generations only; checkpoints unused) | host | H |
 | Composition and routing | Host runtime | Manifests checked at start (`checkManifest`); routing by action, read and input name | `NewTenant`, `Tenant` | every host | 4 |
 | Journal and replay | Host runtime | One ordered journal per tenant; fail-stop; replay through the same code | `Journal`, `Tenant.Replay`, `CheckReplay` | every host | 4 |
-| Package ledger | Host runtime | The kernel wired for one app, catalog role check, publishing to subscribers | `Ledger` | every app | 5 |
-| Action catalog | Host runtime | Declared actions; each caller receives only what its role may call; start-up deactivation | `Action`, `Catalog`, `/v1/actions`, MCP | all apps | 4 |
+| Package ledger | App API | The kernel wired for one app, catalog role check, publishing to subscribers | `platform.Ledger` | every app | 5 |
+| Action catalog | App API, served by the host runtime | Declared actions; each caller receives only what its role may call; start-up deactivation | `platform.Action`, `platform.Catalog`, `/v1/actions`, MCP | all apps | 4 |
 | Reads and read authorization | Host runtime | Named reads; role in the app, or opened to every member | `Tenant.Read`, `Manifest.Everyone` | all apps | 4 |
-| Events and subscriptions | Host runtime | Accepted decisions queued per subscriber, delivered as owned work with retries | `Manifest.Subscribes`, `Subscriber`, `Tenant.Work` | tests only (no production subscriber since #95) | 1 |
+| Events and subscriptions | Host runtime | An app's own decisions or a consumed protocol's events, queued per subscriber, delivered as owned work with retries | `Manifest.Subscribes`, `Subscriber`, `Tenant.Work` | tests only (no production subscriber since #95) | 1 |
 | Scheduled jobs | Host runtime | Declared jobs, run as the app | `Manifest.Jobs`, `Runner` | manufacturing, Hotel | 2 |
 | Connectors (managed) | Host runtime | Deliveries through the caller; cursor, health, last refused input; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | manufacturing, Hotel | 2 |
 | Outbound effects | Host runtime | Webhooks for events; effect kinds apps emit; at least once with a stable key; answers back to the app | `Tenant.Dispatch`, `Caller.Emit`, `Answerer` | sales (webhook), manufacturing (ERP write-back) | 2 |
 | Deployment | Host runtime | Development tokens or journal plus OIDC from one set of flags; the work runner | `Deployment`, `RunWork` | mes-server, sales-server, hotel-server | 3 |
-| Members, roles, service accounts and AI agents | Platform capability (`platform` app) | Members signing in as subjects, one role per app, grant and revoke as decisions | `Directory` | every host | 4 |
+| Members, roles, service accounts and AI agents | Platform capability (`platform` app) | Members signing in as subjects, one role per app, grant and revoke as decisions | `Console` (its directory area) | every host | 4 |
 | Audit and deliveries history | Platform capability (`platform` app) | Accepted inputs and delivery attempts, rebuilt by replay | reads `audit`, `deliveries` | every host | 4 |
 | App settings | Platform capability (`platform` app) | Typed values the app declares; administrators set them as decisions | `Manifest.Settings`, `Caller.Setting` | manufacturing, Hotel | 2 |
 | Notifications | Platform capability (`platform` app) | To members, holders of a unit's role, or holders of an app role; deduplicated by key; read state as a decision | `Caller.Notify` | manufacturing, Hotel | 2 |
@@ -78,7 +79,7 @@ Status legend:
 | Organisation | Platform capability (`org` app) | Units in dated structures, memberships; rules ask for a member's units | `Organization`, `Caller.Units` | manufacturing, sales | 2 |
 | Links and timeline | Platform capability (`relations` app) | Relations between entities; protocol events told on linked timelines | `Relations`, `Caller.Link`, `Caller.Links` | CRM, sales | 1 |
 | Identity provider | Platform capability (deployment) | OIDC subjects; the directory maps them to members | `OIDC`, Rauthy | every deployed host | 3 |
-| Protocols | Industry protocol | Named, versioned actions, reads and events, with conformance tests | `Protocol`, `protocols/lodging` | Hotel and memstay provide lodging; CRM consumes it | 2 |
+| Protocols | Industry protocol | Named, versioned actions, reads and events, with conformance tests apart from the protocol (`lodging/lodgingtest`) | `platform.Protocol`, `protocols/lodging` | Hotel and memstay provide lodging; CRM consumes it | 2 |
 | Agent adapters | Platform capability | A caller's catalog as MCP tools and CLI | `POST /mcp`, `cmd/mes-agent` | every host | 2 |
 | UI kit, shell, notification list | Web | Components, docking workspace, entity routes, notifications | `@platform/ui` | all web apps | 4 |
 | Edge client and sign-in | Web | Outbox, HTTP client, OIDC with PKCE, reasons a host refuses | `@platform/kernel` | MES, sales, Settings | 3 |
@@ -100,9 +101,10 @@ Status legend:
 | 0008 | Governed actions and per-caller catalogs; AI as an authorized caller; start-up deactivation; no runtime installation | Implemented |
 | 0008 | Human confirmation before an agent's action takes effect | Deferred (with ADR-0014 D6) |
 | 0008 | Analysis data models and dashboards for customers | Deferred |
-| 0009 | Bridges between packages | Superseded by ADR-0011. What remains, unused: `Manifest.Requires`, `Caller.Submit`, `Caller.Read` (gate item G3) |
-| 0010 | Apps from manifests; routing; requirement check; the platform app with Settings; audit; app registry; public reads | Implemented |
-| 0010 | Enable and disable an app per tenant as a recorded decision | Partial: apps are composed in code; capabilities are deactivated at start-up; no decision |
+| 0009 | Bridges between packages | Superseded by ADR-0011; the unused bridge path (`Manifest.Requires`, `Caller.Submit`, `Caller.Read`) was removed in #104. Apps know no other app |
+| 0010 | Apps from manifests; routing; the platform app with Settings; audit; app registry; public reads | Implemented |
+| 0010 | Requirement graph between apps | Superseded by ADR-0011: the protocol graph (providers composed before consumers) is checked instead |
+| 0010 | Enable and disable an app per tenant as a recorded decision | Amended (#104): apps are composed per tenant in code and capabilities are deactivated at start-up; a decision waits for a tenant that must change its apps without a release |
 | 0010 | Scoped grants by member attributes | Superseded by the organisation (ADR-0012); attributes removed in #103 |
 | 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
 | 0010 | Logs and correlation | Partial: correlation IDs pass through protocol calls; no structured logs |
@@ -115,7 +117,7 @@ Status legend:
 | 0011 | Routing an action on an existing entity to the provider that holds it | Deferred (the CRM only reserves) |
 | 0011 | Cross-industry protocols (party, documents, notification, calendar) | Partial: notification, links and timeline are platform capabilities, not protocols; the rest is deferred |
 | 0012 | Units, structures, memberships with valid time; rules read a named structure; Settings | Implemented |
-| 0012 | Rules evaluated at the input's time | Partial: `Caller.Units` reads the wall clock, while notifications resolve at the input's day (gate item G4) |
+| 0012 | Rules evaluated at the input's time | Implemented (#104): `Caller.Units` takes the input's time, as notifications do |
 | 0012 | Successors of merged or split units; posts; delegation; federation | Deferred |
 | 0013 | Owned deliveries with retries and ordering; jobs; connectors in the host; notifications; typed settings; open reads | Implemented |
 | 0013 | Work kept in K9 `Works` | Partial: generations only; checkpoints unused |
@@ -123,7 +125,7 @@ Status legend:
 | 0014 | Intent, attempt and outcome separated; at least once with a stable key; retries and failure; answers as observations; endpoints in Settings; secrets by name; private addresses refused; webhooks without app code; effect kinds apps emit | Implemented |
 | 0014 | Per-endpoint limits (rate, payload size, timeout) | Partial: a fixed 10 s timeout and a 64 KiB answer; no rate |
 | 0014 | A breaker per destination | Partial: the ordered queue per endpoint holds the rest behind a failing head |
-| 0014 | Webhooks filtered by the catalog rules of who may see an event | Not implemented (gate item G5) |
+| 0014 | Webhooks filtered by the catalog rules of who may see an event | Amended (#104): an endpoint is the administrator's, so it has the administrator's view — any event the tenant declares; an undeclared event is refused |
 | 0014 | D6 approval of irreversible effects caused by agents; email | Deferred |
 
 #### Terminology and ownership
@@ -136,7 +138,7 @@ Status legend:
 | **Input** | A top-level entry that is not a submission: a connector's batch or page | The app declaring the input | Journal entry `<input name>`; heartbeats are not journaled |
 | **Fact** | What an app records as true at a source: an **observation** (seen, such as a machine state or an ERP answer) or a **claim** (asserted by a source, such as a planned order) | The app's fact log (K2) | Rebuilt from the input or outcome that recorded it |
 | **Event** | An accepted decision as others see it after commit, named by its action schema or by a protocol event (`<protocol>#<event>`). A domain's own word "event", such as a downtime event, is not this | Host | Rebuilt from the decision |
-| **Subscription** | An app's declared interest in events | The app's manifest | Code |
+| **Subscription** | An app's declared interest in its own decisions or in a consumed protocol's events | The app's manifest | Code |
 | **Delivery** | One event queued for one subscriber, attempted as owned work, in order per subscriber | Host (`Task` of kind delivery) | Journal entry `delivery` per attempt, with its outcome |
 | **Job** | Scheduled work an app declares and runs as `app:<id>` | Declared by the app, run by the host (`Task` of kind job) | Journal entry `job`, only when a run decided or notified something |
 | **Work** | K9 ownership of a delivery or a job: owner, generation, state | Host, through `kernel.Works` | Rebuilt by replay; job counters are volatile |
@@ -148,7 +150,7 @@ Status legend:
 | **Notification** | A message to a member, resolved on the input's day | Created by apps (`Caller.Notify`), stored by the host; read state is a `platform` decision | Rebuilt from its input |
 | **Setting** | A typed value an app declares | Declared by the app; values set by `platform` decisions, stored by the host | Decisions |
 
-Ownership rule: the host keeps shared runtime state; the `platform` app decides every change an administrator makes; apps decide only about their own data classes and reach the platform through `Caller`.
+Ownership rule: the host keeps shared runtime state; the `platform` app (`Console`) decides every change an administrator makes, each area deciding its own target type; apps decide only about their own data classes, reach the platform through `Caller` and each other through protocols only.
 
 #### External effects: lifecycle and replay
 
@@ -206,8 +208,9 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | Invariant | Check |
 |---|---|
 | Replay reproduces everything the host shows, and calls nothing outside | `platformserver.CheckReplay` in the tests of the host, manufacturing, Hotel and the sales solution |
-| A manifest the host cannot honour is refused at composition: undescribed actions, settings whose default is not of their type, jobs without an interval, repeated effect kinds, open reads not declared, unmet requirements or protocols | `checkManifest` and `NewTenant`, run by every composition's tests |
-| No app depends on another app; a protocol depends on no app; app code never reaches the host runtime | `scripts/boundaries.sh` (verify step `app-boundaries`) |
+| A manifest the host cannot honour is refused at composition: undescribed actions, settings whose default is not of their type, jobs without an interval, repeated effect kinds, open reads not declared, actions using anything but a consumed protocol's action, subscriptions to another app's actions, protocols no earlier app provides | `checkManifest` and `NewTenant`, run by every composition's tests |
+| No app depends on another app; a protocol depends on no app; app and protocol packages import the app API and never the host runtime (only binaries and `*test` harnesses compose tenants) | `scripts/boundaries.sh` (verify step `app-boundaries`), on imports; the runtime is reachable only through `platform.Runtime` |
+| Rules scope by the input's time, so a replay decides alike | `Caller.Units(structure, now)`; organisation test |
 | Every caller receives only the actions its role permits, AI agents included | Catalog tests (host, manufacturing, sales) and the rehearsal |
 | Each accepted top-level input is journaled once, before it is answered | Host tests and the rehearsal (restart and restore) |
 | Kernel vocabulary stays domain-free | verify step `contract-vocabulary` |
@@ -415,6 +418,20 @@ The plant confirms a finished order to the ERP, as SAP's production order confir
 ### Choosing a provider #99
 
 The sales tenant runs two lodging providers, the hotel and serviced apartments (`memstay`). An administrator chooses in Settings which one receives new calls; the choice is a platform decision (`platform.protocol.bind`), so it replays and survives a restart (rehearsal). Consumers' reads span every provider, and each answer names the type of entities it holds, so the CRM matches its links exactly and a stay booked before the switch stays on the opportunity; the old provider's cancellation still reaches the opportunity's timeline. Not yet: routing an action on an existing entity through the protocol to the provider that holds it (the CRM only reserves; changes and cancellations happen in the provider's own app), and per-consumer bindings.
+
+### Convergence #103, #104
+
+The audit of #92–#101 as one platform (#103) found no missing capability, but boundaries held by convention. The owner's decisions (#104) turned them into structure:
+- the app API is its own package, `platformserver/platform`, and the host is reachable only through `platform.Runtime`, so the boundary is an import rule rather than a list of forbidden names;
+- the platform app is the console, and each of its decisions goes to the area that owns its target type;
+- the bridge path is gone: apps know no other app;
+- rules scope by the input's time;
+- an endpoint has its administrator's view;
+- apps stay composed in code (ADR-0010 amended).
+
+`CheckReplay` in every composition's tests is the lasting guard. When it was added it found two discrepancies:
+- job run counters, now declared volatile;
+- a test harness whose seed drifted.
 
 ### Shared capability models (candidates, layer 2)
 

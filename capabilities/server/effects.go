@@ -406,6 +406,11 @@ func (t *Tenant) decideEndpoint(_ platform.Caller, s *pb.Submission, _ time.Time
 	if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" || ep.Secret == "" || len(ep.Events)+len(ep.Effects) == 0 {
 		return nil, invalid
 	}
+	for _, event := range ep.Events { // an administrator's endpoint may receive any event the tenant declares (G5)
+		if _, declared := t.protocolEvent(event); t.owner["action:"+event] == nil && !declared {
+			return nil, invalid
+		}
+	}
 	for _, kind := range ep.Effects {
 		app, name, _ := strings.Cut(kind, "/")
 		if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == name }) {

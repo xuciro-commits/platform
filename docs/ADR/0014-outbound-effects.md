@@ -1,6 +1,6 @@
 # ADR-0014: Outbound effects — how a decision reaches the world outside
 
-**Status:** Accepted (2026-09-24, #100). The owner accepted D1–D8 as recommended after the architecture gate; webhooks (D7) were built first.
+**Status:** Accepted (2026-09-24, #100). The owner accepted D1–D8 as recommended after the architecture gate; webhooks (D7) were built first. Point 6 amended in #104.
 
 ## Context
 
@@ -66,7 +66,7 @@ An outbound effect is the server playing the edge toward an external authority. 
    - Apps name the effect kinds they emit in their manifest (`Emits`). They can only emit those, only to endpoints bound to them, and never to a URL of their own choosing.
    - K8 stays inbound. Outbound joins the kernel contract only if a second runtime (a Rust edge, for example) must emit effects.
 6. **Webhooks need no app code.**
-   - A tenant subscribes an endpoint to events (actions or protocol events), filtered by the same catalog rules that decide who may see them.
+   - A tenant subscribes an endpoint to events (actions or protocol events). *Amended in #104:* an endpoint is configured by an administrator, so it has the administrator's view: any event the tenant declares, and an undeclared event is refused. Filtering by another member's catalog waits for endpoints that members other than administrators may configure.
    - The platform app turns each matching event into an effect.
    - Payloads are signed under Standard Webhooks and carry the event's schema version (K7).
 7. **Secrets never enter the journal.**

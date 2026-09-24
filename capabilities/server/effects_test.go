@@ -99,6 +99,9 @@ func TestOutboundEffects(t *testing.T) {
 	if got := decide(tn, ana, SchemaEndpointAdd, EndpointType, "plain", map[string]any{"url": "http://example.com/x", "secret": "hook", "events": []string{"a.note"}}); got != "ERROR_CODE_INVALID_ARGUMENT" {
 		t.Fatalf("plain http to a public address was accepted: %s", got)
 	}
+	if got := decide(tn, ana, SchemaEndpointAdd, EndpointType, "typo", map[string]any{"url": server.URL, "secret": "hook", "events": []string{"a.nope"}, "allowPrivate": true}); got != "ERROR_CODE_INVALID_ARGUMENT" {
+		t.Fatalf("an event no app declares was accepted: %s", got)
+	}
 	if got := decide(tn, ana, SchemaEndpointAdd, EndpointType, "crm-sync", endpoint); got != "ok" {
 		t.Fatal(got)
 	}

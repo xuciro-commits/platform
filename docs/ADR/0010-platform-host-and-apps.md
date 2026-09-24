@@ -1,6 +1,6 @@
 # ADR-0010: The platform is a host that runs apps; its own administration is an app
 
-**Status:** Accepted (2026-09-24; direction approved by the owner, host capabilities detailed in this revision) What of this is built, partial or deferred is reconciled in `docs/Platform.md` §2 "ADR reconciliation" (#103).
+**Status:** Accepted (2026-09-24; direction approved by the owner, host capabilities detailed in this revision). Amended by ADR-0011 (protocols replace requirements) and by the owner in #104 (see "Amendments"). What of this is built, partial or deferred is reconciled in `docs/Platform.md` §2 "ADR reconciliation" (#103).
 
 **Context.** Composition #91 worked by hand:
 - each package defines its own principal (F-21);
@@ -151,3 +151,17 @@ The rows below name the capability and what an app gets from it. The "When" colu
 **Revisit when:**
 - an app must run in its own process or be released on its own (the host then becomes a gateway over app processes);
 - third parties build apps (ADR-0008 point 1: isolation, a public manifest API, review).
+
+## Amendments (#104, owner decisions after the convergence audit)
+
+- **Points 2–4, requirements and tiers.** Superseded by ADR-0011:
+  - An app declares the protocols it provides and consumes, never another app. There is no requirement graph and no bridge tier.
+  - Cross-app traffic goes through the host, from a consumer to the bound provider.
+  - The protocol graph is what composition checks: a provider is composed before its consumers.
+  - `Manifest.Requires`, `Caller.Submit` and `Caller.Read` were removed.
+- **Point 6, enable and disable.** Apps are composed per tenant in code, by the solution or the deployment. Capabilities are deactivated at start-up. Enabling or disabling an app as a recorded decision of the platform app is deferred until a tenant must change its apps without a release. That decision then needs:
+  - catalog removal;
+  - stopping the app's work (ADR-0013);
+  - references that keep resolving.
+- **Point 7, the platform app.** Its type is `Console`. The directory of members is one of its areas; connectors, settings, work, protocol bindings, notifications, endpoints and effects are the others. Each decision goes to the area that owns its target type.
+- **The app boundary.** An app sees the package `platformserver/platform`: `Caller`, `Manifest`, the declarations and `Ledger`. The host runtime (`platformserver`) implements `platform.Runtime`, the only way from an app into the host.
