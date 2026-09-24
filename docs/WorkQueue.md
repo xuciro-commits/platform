@@ -7,6 +7,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 | **81 · ready** | Compare and revise: update kernel statuses, resolve friction, decide shared Rust edge core (ADR) | Platform.md updated; refactor tasks for both apps listed here |
 | **82 · after 81** | Evolution drills E1 (Hotel → coworking/serviced apartments) and E2 (Music → shared library) | For each drill, which layer changed; kernel changes carry ADRs |
 | **83 · after 81** | First manufacturing slice from the #78 discovery (Platform.md §8), including edge observations; confirm or refute F-5 to F-9 | Same rules as #79 |
+| **84 · after 81 (parallel with 83)** | Platform shell in `@platform/ui`: app frame, menus, navigation and routing (typed routes addressing entities, K1), command palette, dialogs/sheets/notifications, multi-window workspace with dockable panels and tabs; tenant and principal switching from K6. The gallery and Hotel desk move onto it; the manufacturing slice starts on it | Two apps share one shell without per-app forks; routes open a specific entity; layout survives restart |
 
 ## Open friction (temporary; delete entries once resolved)
 
