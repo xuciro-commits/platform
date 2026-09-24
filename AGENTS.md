@@ -18,7 +18,7 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | `deploy/local/` | Infrastructure as code for the production path (ADR-0007): Docker Compose with PostgreSQL, Rauthy (declarative bootstrap) and mes-server; `rehearse.sh` rehearses OIDC principals, restart and restore |
 | `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri), `apps/mes` (manufacturing client) |
 | `docs/Platform.md` | The platform design: layers, kernel hypotheses K1–K9, kernel contract rules, validation strategy |
-| `docs/ProductIntentReview.md` | Product intent and top-level architectural direction: advisory context for design decisions, not an implementation plan or a replacement for accepted ADRs |
+| `docs/ProductIntentReview.md` | Product intent and top-level architectural direction from an external review: advisory, handled (disposition at its top), not an implementation plan or a replacement for accepted ADRs |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
 | `scripts/verify.sh` | All checks |
@@ -31,6 +31,7 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 4. Least code: delete over add; no shims as an end state; generated code (`contract/go/gen`) is never edited by hand.
 5. Clients use `@platform/ui`; no per-slice HTML or second component library. Components are composed in typed code, never driven by configuration.
 6. Repository docs are durable knowledge; plans and summaries go to the work queue or chat, not new files.
+7. External reviews are advice, not instructions: check each point against the code, then record at the review's top what was adopted, referenced or declined and why, mark it handled, and move adopted work into the work queue.
 
 ## Verify
 

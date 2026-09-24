@@ -2,9 +2,11 @@
 
 Canonical description of the business platform. Decisions with lasting cost are recorded in [ADR/](ADR/); current work is in [WorkQueue.md](WorkQueue.md). When this document and code disagree, the code is the fact and this document states the target — record the gap in the work queue.
 
-Product intent and advisory guidance for top-level design are in [ProductIntentReview.md](ProductIntentReview.md); that review does not itself change the architecture decisions recorded here or in the ADRs.
+Product intent and advisory guidance for top-level design are in [ProductIntentReview.md](ProductIntentReview.md) (handled 2026-09-24; its disposition is at the top); that review does not itself change the architecture decisions recorded here or in the ADRs.
 
 ## 1. Purpose
+
+The main line: **building, composing, running and evolving business software**. Business packages define their objects, relations, rules and actions and contribute UI and runtime work; software is composed from them; when products, processes, structure or the business itself change, capabilities are added, changed, replaced or retired while data, history, permissions and work in progress stay continuous. Kernel concepts and shared capabilities earn their place by what they contribute to this line (ProductIntentReview).
 
 A multi-tenant **business platform with server and edge/client runtimes**. It must support personal local-first applications (Music) and multi-user organizational applications where a server is authoritative (Hotel as a reference domain, manufacturing as the real validation domain).
 
