@@ -2,7 +2,7 @@
 
 Canonical description of the business platform. Decisions with lasting cost are recorded in [ADR/](ADR/); current work is in [WorkQueue.md](WorkQueue.md). When this document and code disagree, the code is the fact and this document states the target — record the gap in the work queue.
 
-Product intent and advisory guidance for top-level design are in [ProductIntentReview.md](ProductIntentReview.md) (handled 2026-09-24; its disposition is at the top); that review does not itself change the architecture decisions recorded here or in the ADRs.
+The owner's intent is in [Intent.md](Intent.md). Advisory guidance for top-level design is in [ProductIntentReview.md](ProductIntentReview.md) (handled 2026-09-24; its disposition is at the top); that review does not itself change the architecture decisions recorded here or in the ADRs. Where the platform is going, capability by capability, is §10.
 
 ## 1. Purpose
 
@@ -506,3 +506,164 @@ Predicted friction, recorded in the work queue (F-5 to F-9): per-sample provenan
 3. The platform pressure in Music lies in professional library management (identity, claims, review, corrections, sources), which recent product work under-invested in.
 4. Inner-platform effect: "supporting change" must not slide into configuring everything. Change is absorbed by quickly modifiable domain code.
 5. The server is not the kernel; treating it as such re-binds the platform to one deployment shape.
+
+## 10. Where we are going (the capability plan, 2026-09-25)
+
+The owner's direction (Intent.md, "How we decide what the platform has"): build the capabilities every business platform needs, grounded in the platforms that already do it well, instead of deepening one product. This section is the long-term target. The work queue takes items from it in the order of §10.4.
+
+### 10.1 Start, now, end
+
+| | Where | What it proved or offers |
+|---|---|---|
+| **Start** (Aug–Sep 2026) | MSRU: an Apple app with a framework (AppFoundation) inside it; a blueprint for a reusable Apple app framework | Ownership of state and tasks, identity apart from views, the need for a platform below any one app |
+| | The kernel contract (K1–K9) and two slices (Hotel, manufacturing), then the drills | Identity, facts, decisions, authority, tenancy and connectors hold across very different domains |
+| **Now** (#105) | A host running apps from manifests: journal and replay, OIDC, the console (members, roles, operations), organisation, relations, protocols, owned work, connectors, outbound effects (webhooks, email, approval), AI providers, MCP, Settings, one UI kit | The runtime and governance half of a business platform. Each app still hand-writes its own entities, lists, lifecycles and screens |
+| **End** | A platform comparable to Odoo, ServiceNow, Salesforce Platform, SAP BTP, Power Platform or Palantir Foundry, in typed code | A team builds a business app mostly by declaring its models, lifecycles, actions and views. The platform gives lists, record pages, search, history, files, comments, approvals, tasks, flows, reports, integration, agents and administration. Apps compose through protocols and evolve without losing data, history or work in progress |
+
+The largest gap between now and the end is the **application half**: how an app declares its data and processes, and what it gets for free.
+
+### 10.2 How the reference platforms are built
+
+They share one skeleton, and it is the one to build toward:
+
+| Layer | Odoo / Frappe | ServiceNow | Salesforce | Palantir Foundry | Ours now |
+|---|---|---|---|---|---|
+| Package and composition | Modules with manifests and dependencies | Scoped apps, update sets | Packages, AppExchange | Marketplace products | Apps with manifests, protocols (ADR-0010, 0011) |
+| Data model | ORM models, typed fields, relations (Frappe: DocType) | Tables, dictionary | Objects, fields, relationships | Ontology: object types, links | **Each app hand-writes state** |
+| Generic views | List, form, kanban, calendar, pivot, graph, Gantt from one model | Lists, forms, workspaces | Record pages, list views, Lightning App Builder | Workshop, Object Explorer | Tables and forms coded per app |
+| Actions and rules | Methods, automated and server actions | Business rules, UI actions | Apex, validation rules | Actions, functions | Declared actions, rules in code (ADR-0008) |
+| Lifecycle and approval | Status bar, workflows, approval module | State flows, approvals, SLAs | Approval processes, Flow | Action validation, AIP | Hand-coded states; approval only for held effects (D6) |
+| Process orchestration | Automated actions, scheduled actions | Flow Designer, IntegrationHub | Flow, Platform Events | Pipelines, automations | Subscriptions, jobs, effects (ADR-0013, 0014) |
+| Work for people | Activities, chatter, followers | Tasks, assignment, inbox, SLAs | Tasks, Chatter | Inbox, notifications | Notifications only |
+| Security | Groups, access rights, record rules, multi-company | Roles, ACLs, domain separation | Profiles, permission sets, sharing rules | Markings, organisations, roles | Roles per app, organisation scope in rules (ADR-0012) |
+| Analytics | Pivot, graph, spreadsheet dashboards | Performance Analytics | Reports, dashboards | Contour, Quiver, pipelines | None |
+| Integration | XML-RPC/JSON-RPC, webhooks | IntegrationHub spokes, REST | REST, events, MuleSoft | Data connection, OSDK | Connectors, webhooks, email, MCP |
+| AI | Odoo AI features | Now Assist | Agentforce | AIP Logic, agents | Providers, metering (ADR-0015) |
+| Admin | Settings, Studio | System administration | Setup | Control panel | Settings |
+
+Where we deliberately differ:
+- **Rules and models stay in typed code, not tenant metadata.** No Studio-style runtime editing of package rules; this is ADR-0008.
+- **Every change is a journaled decision, replayed through the same code** (ADR-0007), where the others write tables directly. This is what makes history, audit, AI approval and replay-safe integration native rather than bolted on.
+- **Apps meet through protocols, not each other's tables** (ADR-0011).
+
+### 10.3 The capability catalog
+
+Status: **have** (built and used), **partial**, **missing**. The reference column names where each is best seen.
+
+**A. Application model: declare once, get the rest.** This is the core of the application half.
+
+| Capability | What an app gets | Reference | Status |
+|---|---|---|---|
+| Entity declarations | Typed entities with fields (the UI kit's field types), required and validation rules, relations to other entities or across protocols, display name | Odoo fields, Salesforce objects, Dataverse tables, Foundry object types | missing: apps keep maps by hand |
+| Generic reads | List with filter, sort, paging and count; get by ID; related records — one read contract for every entity | Odoo `search_read`, Salesforce SOQL, OData | missing: reads return whole lists |
+| Record history and audit | Every entity's decisions as its history, from the journal | Odoo chatter tracking, Salesforce field history | partial: journal and audit exist, no per-entity view |
+| Comments, mentions and followers | A conversation on any record, followers notified | Odoo `mail.thread`, Salesforce Chatter | partial: timeline notes (relations) |
+| Attachments and files | Files on records, object storage, preview, retention | Odoo `ir.attachment`, ServiceNow attachments | missing |
+| Number sequences | Readable document numbers per tenant, unit and year, without gaps across replays | Odoo `ir.sequence` | missing (ADR-0010 deferred) |
+| Tags, favourites, saved views | Per-member saved filters and views | Odoo favourites, Salesforce list views | missing |
+| Global search | One search across the apps a member may read | ServiceNow global search, Foundry search | missing |
+| Import and export | CSV/Excel in and out through the same actions (import is decisions, not table writes) | Odoo import, Salesforce Data Loader | missing |
+| Money, units, calendars | Currency amounts, units of measure, business calendars (shifts, nights, working hours), time zones | Odoo `res.currency`, `uom`, `resource.calendar` | missing |
+
+**B. Process.**
+
+| Capability | What an app gets | Reference | Status |
+|---|---|---|---|
+| Lifecycles (state machines) | States and transitions declared with the entity; transitions are actions with guards; the UI shows a status bar | Odoo status bar, ServiceNow state flows, Salesforce paths | missing: hand-coded per app |
+| Approvals | Approval chains by organisation structure, role, amount or rule; delegation and substitutes; a person's decision journaled | ServiceNow approvals, SAP release strategies, Salesforce approval processes | partial: held effects only (D6) |
+| Tasks and inbox | Work items assigned to members, roles or units, with due dates, SLA timers and escalation; one inbox across apps | ServiceNow task and SLA, Odoo activities | partial: notifications only |
+| Flows (orchestration) | Long-running processes across apps: steps, waits, timers, human tasks, compensation, versioned and replay-safe, built on owned work and effects | ServiceNow Flow Designer, Temporal, Camunda | partial: subscriptions, jobs and effects are the parts |
+| Automation rules | "When X, if Y, do Z" declared in code on entities and events | Odoo automated actions, ServiceNow business rules | partial: subscriptions in code |
+| Scheduling and capacity | Resources, calendars and allocation over time (rooms, machines, people) | Odoo planning, SAP capacity planning | missing (candidate in §8) |
+
+**C. People and access.**
+
+| Capability | What an app gets | Reference | Status |
+|---|---|---|---|
+| Members, roles, service accounts, agents | — | — | have |
+| Organisation structures | — | Odoo multi-company, Workday supervisory organisations | have (ADR-0012) |
+| Record-level access | Row scope from the organisation, generalised: "records of my units" declared, not coded per app | Odoo record rules, Salesforce sharing | partial: each app codes its scope |
+| Field-level access and masking | Sensitive fields hidden by role | Salesforce field-level security | missing |
+| Effective permissions | Who may do what and why, per member | Salesforce permission analysis | partial (ADR-0010) |
+| Delegation and substitutes | Acting for someone for a period | SAP substitution, ServiceNow delegates | missing (ADR-0012 deferred) |
+| Provisioning | Users and groups from the identity provider (SCIM), tenant provisioning | Okta or Entra SCIM | missing |
+
+**D. Integration.**
+
+| Capability | Status |
+|---|---|
+| Inbound connectors (K8), webhooks out, email out, MCP, approval of irreversible effects | have |
+| An API contract generated from manifests (OpenAPI for actions and reads, typed TypeScript clients) | missing |
+| Inbound email and webhooks as connector inputs | missing |
+| Credentials to external services (OAuth client credentials, rotating secrets, a secret store UI) | partial: secrets by name |
+| Bulk data out to analytics (change streams, exports) | missing |
+
+**E. Analytics.**
+
+| Capability | Reference | Status |
+|---|---|---|
+| Read models: projections of decisions into queryable tables (PostgreSQL), rebuilt from the journal | CQRS projections, Foundry datasets | missing |
+| Reports: pivot, group and aggregate over read models | Odoo pivot, Salesforce reports | missing |
+| Dashboards: charts and KPI tiles per role | ServiceNow Performance Analytics, Salesforce dashboards | missing |
+| Customer analysis models beside packages (ADR-0008) | Foundry Contour, Power BI on Dataverse | missing |
+
+**F. AI.**
+
+| Capability | Status |
+|---|---|
+| Providers, models, access, usage (ADR-0015 batch 1) | have |
+| Quotas and rate limits, the Anthropic adapter, streaming, app calls as effects (batch 2) | missing |
+| Agents: a model with the caller's catalog as tools, runs as owned work, approvals for what cannot be recalled (batch 3) | partial: MCP, D6 |
+| Knowledge: documents and records indexed for retrieval, cited answers | missing |
+| AI in the workspace: an assistant panel on any record, with the record as context | missing |
+
+**G. Workspace UI (the kit's families; each is one component set used by every app).**
+
+| Family | Examples | Status |
+|---|---|---|
+| Shell and navigation | Docking workspace, command palette, entity routes, session, hosts | have |
+| Lists and tables | Data table with filter and sort | have; server paging and saved views missing |
+| Record page | Header, status bar, fields in sections, tabs, related lists, history and comments panel | missing (entity cards only) |
+| Forms | Typed fields, validation | have; generated from entity declarations missing |
+| Trees and hierarchies | Organisation chart, unit trees, bills of materials, categories | partial: coded in Settings |
+| Boards | Kanban by state or any field, drag to transition | missing |
+| Time views | Calendar, timeline, Gantt, resource rack (room rack, machine schedule) | missing |
+| Charts and dashboards | Bar, line, pie, KPI tiles, pivot | missing |
+| Inbox and notifications | — | partial: notifications |
+| Files | Upload, preview, attachment list | missing |
+| Mobile and field | Scan, sign, photograph, short tasks, offline queue | missing |
+
+**H. Runtime and operations.**
+
+| Capability | Status |
+|---|---|
+| Journal, replay, backup and restore, OIDC, deployment flags | have |
+| Snapshots and checkpoints, so start-up does not replay all history | missing, needed before any large tenant |
+| Structured logs, metrics, traces with correlation | partial |
+| Health of apps and the journal | partial |
+| Package versions, upgrades and per-tenant enablement (ADR-0010 amended) | partial |
+| Many tenants per process, high availability, tenant provisioning | missing |
+| Developer kit: scaffold an app, a test harness (`CheckReplay` exists), docs, sample apps | partial |
+
+### 10.4 Order
+
+Each stage opens with an architecture gate (an ADR with the owner's decisions), then builds, then proves the capability on at least two reference apps from different industries.
+
+| Stage | Contents | Why this order | Proven when |
+|---|---|---|---|
+| 1. Application model | Entity declarations; generic reads with filter, sort and paging; record history; record page and generated forms in the kit; one reference app moved onto it | Everything in B, E and G depends on the platform knowing an app's entities | CRM and Hotel declare their entities and lose their hand-written lists and forms; paging works on 100k records |
+| 2. Lifecycles, approvals, tasks | State machines on entities; approval chains from the organisation; tasks and one inbox with SLA timers | The most common business shape after the model: documents that move through states | A purchase-request or leave-request reference app built from declarations only, plus the MES order lifecycle moved |
+| 3. Read models and analytics | Projections into PostgreSQL rebuilt from the journal; pivot, charts, dashboards; snapshots for start-up | Scale and reporting need the same projection machinery | Dashboards on plant and hotel data; a restart without full replay |
+| 4. Flows and automation | Orchestrated processes over owned work and effects: waits, timers, human steps, compensation | Needs lifecycles and tasks as its steps | An order-to-delivery flow across two apps through protocols |
+| 5. Agents | Model plus catalog tools, runs as owned work, approvals; knowledge retrieval; the assistant panel | Agents act through everything above, which must exist first | An agent handles a helpdesk ticket end to end under a person's approvals |
+| 6. UI families and field clients | Trees, boards, time views, files, mobile tasks — each family once in the kit | Grows with stages 1–5; listed so none is built twice | Every reference app uses the kit's families, none its own |
+| 7. Scale and delivery | Many tenants per process, provisioning, package upgrades, developer kit | When a second real organisation or team comes | A new team scaffolds an app and ships it without touching the host |
+
+Reference apps are chosen to exercise capabilities, not for depth. The candidates, each thin:
+- **CRM**, exists: parties, opportunities, activities;
+- **Helpdesk**: tickets, SLA, assignment, knowledge — ServiceNow's home ground;
+- **HR basics**: people on the organisation, leave requests with approvals;
+- **Purchasing and inventory**: requests, approvals, stock moves, units, money;
+- **Projects**: tasks, boards, timelines;
+- **Hotel and manufacturing**, which exist.
+

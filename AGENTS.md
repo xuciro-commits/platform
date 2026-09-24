@@ -4,7 +4,7 @@ Start here (Claude Code reaches this file through `CLAUDE.md`).
 
 ## What this repository is
 
-The **business platform**: the kernel contract, and later the Go backend, reference-domain slices and platform-level Rust components (ADR-0003). It is multi-tenant and survives domain change; applications (Music, Hotel, manufacturing) validate it, they are not its source of truth. The goals and collaboration rules are in the MSRU repository's `Docs/Intent.md`; Apple client code and the Music product live there.
+The **business platform**: the kernel contract, the Go host, the web workspaces, reference apps and platform-level Rust components (ADR-0003). It is multi-tenant and survives domain change; it aims at what Odoo, ServiceNow, Salesforce Platform or Palantir Foundry offer, in typed code. Reference apps (Hotel, manufacturing, CRM) exercise and demonstrate capabilities; they are not its source of truth. The owner's goals and collaboration rules are in `docs/Intent.md`; the capability plan is `docs/Platform.md` §10. Apple client code and the Music product live in the MSRU repository.
 
 ## Map
 
@@ -20,7 +20,8 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | `slices/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |
 | `deploy/local/` | Infrastructure as code for the production path (ADR-0007): Docker Compose with PostgreSQL, Rauthy (declarative bootstrap) and mes-server; `rehearse.sh` rehearses OIDC principals, restart and restore; `README.md` is the owner's test guide (addresses, accounts, service accounts, what to enter to connect webhooks, email, the ERP and AI providers) |
 | `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri), `apps/mes` (manufacturing client), `apps/sales` (the composed CRM + Hotel software), `apps/settings` (the platform app's Settings workspace for any host: members, organisation, apps, app settings, protocols, integrations, automation, audit), `packages/hotel` (`@pkg/hotel`, the Hotel app's UI), `packages/lodging` (`@pkg/lodging`, the lodging protocol's UI) |
-| `docs/Platform.md` | The platform design: layers; the canonical platform model (capability map by layer, ADR reconciliation, terminology and ownership, effect lifecycle and replay semantics, invariants and their checks); kernel hypotheses K1–K9; kernel contract rules; validation strategy |
+| `docs/Platform.md` | The platform design: layers; the capability plan (§10: start, now, end; how reference platforms are built; the catalog; the order); the canonical platform model (capability map by layer, ADR reconciliation, terminology and ownership, effect lifecycle and replay semantics, invariants and their checks); kernel hypotheses K1–K9; kernel contract rules; validation strategy |
+| `docs/Intent.md` | The owner's intent and direction: what the platform is, how capabilities are chosen (from reference platforms, not one product's pull), what stays true, working with AI |
 | `docs/ProductIntentReview.md` | Product intent and top-level architectural direction from an external review: advisory, handled (disposition at its top), not an implementation plan or a replacement for accepted ADRs |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
