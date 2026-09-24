@@ -57,7 +57,7 @@ func TestOutboundEffects(t *testing.T) {
 	build := func() *Tenant {
 		dir := NewDirectory("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}},
 			Seat{Subjects: []string{"bo"}, Member: Member{ID: "bo", Roles: map[string]string{"a": "writer"}}})
-		tn, err := NewTenant("t-1", dir, newNotes("t-1", "a", ""))
+		tn, err := NewTenant("t-1", dir, newNotes("t-1", "a"))
 		if err != nil {
 			t.Fatal(err)
 		}

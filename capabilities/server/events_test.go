@@ -11,13 +11,26 @@ import (
 	"platformkernel/kernel"
 )
 
-// watcher logs a's notes by writing its own note for each. A note "fail" is
-// refused every time; "wait:<topic>" is refused until a has that topic.
+// notesProtocol lets apps hear of another app's notes without knowing it.
+var notesProtocol = Protocol{Name: "notes", Version: 1, Reads: []string{"notes"}, Events: []ProtocolEvent{{Name: "noted", Title: "Noted"}}}
+
+// published is a notes app that provides notesProtocol.
+type published struct{ *notes }
+
+func (p published) Manifest() Manifest {
+	m := p.notes.Manifest()
+	m.Provides = []Provision{{Protocol: notesProtocol, Reads: map[string]string{"notes": p.id + "-notes"}, Events: map[string]string{"noted": p.id + ".note"}}}
+	return m
+}
+
+// watcher logs the notes of whichever app provides notesProtocol by writing its
+// own note for each. A note "fail" is refused every time; "wait:<topic>" is
+// refused until the provider has that topic.
 type watcher struct{ *notes }
 
 func (w watcher) Manifest() Manifest {
 	m := w.notes.Manifest()
-	m.Subscribes, m.Requires = []string{"a.note"}, []string{"a"}
+	m.Subscribes, m.Consumes = []string{ProtocolAction(notesProtocol.ID(), "noted")}, []Consumption{{Protocol: notesProtocol.ID()}}
 	return m
 }
 
@@ -27,8 +40,8 @@ func (w watcher) Handle(c Caller, e Event) *kernel.Error {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if topic, ok := strings.CutPrefix(text, "wait:"); ok {
-		seen, _ := c.Read("a", "a-notes")
-		if _, ok := seen.(map[string]string)[topic]; !ok {
+		seen, _ := c.Query(notesProtocol.ID(), "notes")
+		if _, ok := seen[0].Result.(map[string]string)[topic]; !ok {
 			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 	}
@@ -41,14 +54,17 @@ func (n *notes) write(c Caller, key, text string) *kernel.Error {
 }
 
 func TestEventsAreOwnedWork(t *testing.T) {
-	if _, err := NewTenant("t", watcher{newNotes("t", "w", "")}); err == nil {
-		t.Fatal("a subscription to an app that is not required was accepted")
+	if _, err := NewTenant("t", watcher{newNotes("t", "w")}); err == nil {
+		t.Fatal("a protocol no app provides was consumed")
+	}
+	if _, err := NewTenant("t", newNotes("t", "a"), echo{newNotes("t", "w"), ""}.as("a.note")); err == nil {
+		t.Fatal("a subscription to another app's action was accepted: apps meet through protocols only")
 	}
 	var journal []Entry
 	build := func() (*Tenant, *notes) {
 		dir := NewDirectory("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}})
-		w := newNotes("t-1", "w", "")
-		tn, err := NewTenant("t-1", dir, newNotes("t-1", "a", ""), watcher{w})
+		w := newNotes("t-1", "w")
+		tn, err := NewTenant("t-1", dir, published{newNotes("t-1", "a")}, watcher{w})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -152,11 +168,16 @@ func TestEventsAreOwnedWork(t *testing.T) {
 }
 
 // echo answers each of its notes with another: a subscription cycle.
-type echo struct{ *notes }
+type echo struct {
+	*notes
+	subscribes string
+}
+
+func (e echo) as(action string) echo { e.subscribes = action; return e }
 
 func (e echo) Manifest() Manifest {
 	m := e.notes.Manifest()
-	m.Subscribes = []string{"e.note"}
+	m.Subscribes = []string{e.subscribes}
 	return m
 }
 
@@ -166,7 +187,7 @@ func (e echo) Handle(c Caller, ev Event) *kernel.Error {
 
 func TestSubscriptionCycleStops(t *testing.T) {
 	dir := NewDirectory("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"e": "writer"}}})
-	tn, err := NewTenant("t-1", dir, echo{newNotes("t-1", "e", "")})
+	tn, err := NewTenant("t-1", dir, echo{newNotes("t-1", "e"), ""}.as("e.note"))
 	if err != nil {
 		t.Fatal(err)
 	}

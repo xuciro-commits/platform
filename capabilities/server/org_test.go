@@ -96,4 +96,9 @@ func TestOrganizationDecisions(t *testing.T) {
 	if got := o.units("member:bo", "mgmt", "2026-11-02"); slices.Contains(got, "proj") {
 		t.Fatalf("bo left the project: %v", got)
 	}
+	// A rule scopes by the input's day, so a replay years later scopes alike.
+	c := tn.caller(ana, o, false)
+	if in, out := c.Units("mgmt", time.Date(2026, 9, 30, 23, 0, 0, 0, time.UTC)), c.Units("mgmt", time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)); !slices.Contains(in, "factory") || slices.Contains(out, "factory") {
+		t.Fatalf("scope before the move %v, after %v", in, out)
+	}
 }

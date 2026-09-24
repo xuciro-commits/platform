@@ -14,42 +14,26 @@ import (
 	"platformkernel/kernel"
 )
 
-// notes is a minimal app: notes on topics. With a requirement on another notes
-// app it becomes a bridge that copies each note there first.
+// notes is a minimal app: notes on topics.
 type notes struct {
-	id, peer string
-	ledger   *Ledger
-	texts    map[string]string
+	id     string
+	ledger *Ledger
+	texts  map[string]string
 }
 
-func newNotes(tenant, id, peer string) *notes {
-	uses := []string{}
-	if peer != "" {
-		uses = []string{peer + ".note"}
-	}
+func newNotes(tenant, id string) *notes {
 	catalog := NewCatalog(Action{Schema: id + ".note", Target: id + ".topic", Capability: "notes", Title: "Note",
-		Description: "Write a note on a topic.", Payload: []Field{}, Roles: []string{"writer"}, Uses: uses})
-	return &notes{id: id, peer: peer, ledger: NewLedger(tenant, id, catalog, id+".topic"), texts: map[string]string{}}
+		Description: "Write a note on a topic.", Payload: []Field{}, Roles: []string{"writer"}})
+	return &notes{id: id, ledger: NewLedger(tenant, id, catalog, id+".topic"), texts: map[string]string{}}
 }
 
 func (n *notes) Manifest() Manifest {
-	m := Manifest{ID: n.id, Version: "1", Actions: n.ledger.Catalog, Reads: []string{n.id + "-notes"}, Inputs: map[string]bool{n.id + "-feed": true}}
-	if n.peer != "" {
-		m.Requires = []string{n.peer}
-	}
-	return m
+	return Manifest{ID: n.id, Version: "1", Actions: n.ledger.Catalog, Reads: []string{n.id + "-notes"}, Inputs: map[string]bool{n.id + "-feed": true}}
 }
 func (n *notes) Declarations() []*pb.AuthorityDeclaration { return n.ledger.Declarations() }
 func (n *notes) Read(Caller, string) (any, *kernel.Error) { return n.texts, nil }
 func (n *notes) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return n.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		if n.peer != "" {
-			copied := &pb.Submission{TenantId: s.GetTenantId(), PrincipalId: c.ID, Authority: n.peer, IdempotencyKey: "copy:" + s.GetIdempotencyKey(),
-				Target: &pb.EntityRef{Type: n.peer + ".topic", Id: s.GetTarget().GetId()}, Schema: &pb.SchemaRef{Name: n.peer + ".note", Version: 1}, Payload: s.GetPayload()}
-			if _, err := c.Submit(n.peer, copied, now); err != nil {
-				return nil, err
-			}
-		}
 		return func(*pb.ChangeRecord) { n.texts[s.GetTarget().GetId()] = string(s.GetPayload()) }, nil
 	})
 }
@@ -67,7 +51,7 @@ func setup(t *testing.T, record func(Entry)) (*Tenant, *notes, *notes) {
 	dir := NewDirectory("t-1",
 		Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", "b": "writer", PlatformApp: Admin}}},
 		Seat{Subjects: []string{"bo"}, Member: Member{ID: "bo", Roles: map[string]string{"b": "writer"}}})
-	a, b := newNotes("t-1", "a", ""), newNotes("t-1", "b", "a")
+	a, b := newNotes("t-1", "a"), newNotes("t-1", "b")
 	tn, err := NewTenant("t-1", dir, a, b)
 	if err != nil {
 		t.Fatal(err)
@@ -77,10 +61,7 @@ func setup(t *testing.T, record func(Entry)) (*Tenant, *notes, *notes) {
 }
 
 func TestTenantComposition(t *testing.T) {
-	if _, err := NewTenant("t", newNotes("t", "b", "a")); err == nil {
-		t.Error("an unmet requirement was accepted")
-	}
-	if _, err := NewTenant("t", newNotes("t", "a", ""), newNotes("t", "a", "")); err == nil {
+	if _, err := NewTenant("t", newNotes("t", "a"), newNotes("t", "a")); err == nil {
 		t.Error("duplicate names were accepted")
 	}
 	var journal []Entry
@@ -89,15 +70,18 @@ func TestTenantComposition(t *testing.T) {
 	bo, _ := tn.app(PlatformApp).(*Directory).Member("bo")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 
-	// The bridge's call reaches app a with the member's own role there.
-	if _, err := tn.Submit(ana, note("t-1", "ana", "b", "k1", "x", "hello"), now); err != nil {
+	// Each submission reaches the app declaring its action, with the member's role there.
+	if _, err := tn.Submit(ana, note("t-1", "ana", "a", "k1", "x", "hello"), now); err != nil {
 		t.Fatal(err)
 	}
-	if a.texts["x"] != "hello" || b.texts["x"] != "hello" {
-		t.Fatalf("a %v, b %v", a.texts, b.texts)
+	if _, err := tn.Submit(bo, note("t-1", "bo", "b", "k2", "y", "there"), now); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := tn.Submit(bo, note("t-1", "bo", "b", "k2", "y", "no"), now); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-		t.Fatalf("bo has no role in a, so the bridge must be refused: %v", err)
+	if _, err := tn.Submit(bo, note("t-1", "bo", "a", "k3", "z", "no"), now); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+		t.Fatalf("bo has no role in a: %v", err)
+	}
+	if a.texts["x"] != "hello" || b.texts["y"] != "there" || len(a.texts) != 1 {
+		t.Fatalf("a %v, b %v", a.texts, b.texts)
 	}
 	schemas := func(m Member) []string {
 		var out []string
@@ -106,17 +90,13 @@ func TestTenantComposition(t *testing.T) {
 		}
 		return out
 	}
-	if got := schemas(bo); !slices.Equal(got, []string{SchemaNotificationRead}) {
-		t.Fatalf("bo is offered %v; b.note uses a.note, which bo may not call", got)
+	if got := schemas(bo); !slices.Equal(got, []string{SchemaNotificationRead, "b.note"}) {
+		t.Fatalf("bo is offered %v", got)
 	}
 	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke,
 		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead,
 		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
-	}
-	// An app may call only what it requires.
-	if _, err := As("a", ana).Submit("b", note("t-1", "ana", "b", "k3", "z", "x"), now); err == nil {
-		t.Fatal("a call without a host or requirement went through")
 	}
 	if _, err := tn.Input(ana, "a-feed", []byte("tick"), now); err != nil {
 		t.Fatal(err)
@@ -127,7 +107,7 @@ func TestTenantComposition(t *testing.T) {
 	if err := again.Replay(journal); err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(a2.texts, b2.texts) != fmt.Sprint(a.texts, b.texts) || len(journal) != 2 {
+	if fmt.Sprint(a2.texts, b2.texts) != fmt.Sprint(a.texts, b.texts) || len(journal) != 3 {
 		t.Fatalf("replayed %v %v from %d entries", a2.texts, b2.texts, len(journal))
 	}
 }
@@ -161,7 +141,7 @@ func TestHostHTTPAndDirectory(t *testing.T) {
 		{"GET", "/v1/me", "stranger", 401, ``},
 		{"GET", "/v1/a-notes", "ana-token", 200, `{}`},
 		{"GET", "/v1/nothing", "ana-token", 404, ``},
-		{"GET", "/v1/apps", "ana-token", 200, `"id":"b","version":"1","requires":["a"]`},
+		{"GET", "/v1/apps", "ana-token", 200, `"id":"b","version":"1","reads":["b-notes"]`},
 		{"GET", "/v1/declarations", "ana-token", 200, `"dataClass":"a.topic"`},
 		{"OPTIONS", "/v1/submissions", "", http.StatusNoContent, ``},
 	} {
@@ -173,7 +153,7 @@ func TestHostHTTPAndDirectory(t *testing.T) {
 	if status, body := submit("ana-token", "ana", SchemaGrant, MemberType, "g1", `{"app":"a","role":"writer"}`); status != 200 {
 		t.Fatalf("grant: %d %s", status, body)
 	}
-	if _, body := call("GET", "/v1/actions", "bo-token", ""); !strings.Contains(body, `"b.note"`) {
+	if _, body := call("GET", "/v1/actions", "bo-token", ""); !strings.Contains(body, `"a.note"`) || !strings.Contains(body, `"b.note"`) {
 		t.Fatalf("after the grant bo sees %s", body)
 	}
 	if status, _ := submit("bo-token", "bo", SchemaGrant, MemberType, "g2", `{"app":"platform","role":"admin"}`); status != 403 {
@@ -204,7 +184,7 @@ func TestHostHTTPAndDirectory(t *testing.T) {
 	if _, body := call("GET", "/v1/audit", "ana-token", ""); strings.Count(body, `"app":"platform"`) != 3 || !strings.Contains(body, `"target":"platform.member/agent-1"`) {
 		t.Fatalf("audit: %s", body)
 	}
-	if _, body := call("GET", "/v1/apps", "ana-token", ""); !strings.Contains(body, `"roles":["writer"],"capabilities":[{"name":"notes","enabled":true,"actions":["b.note"]}],"inputs":["b-feed"],"uses":["b.note → a.note"]`) {
+	if _, body := call("GET", "/v1/apps", "ana-token", ""); !strings.Contains(body, `"roles":["writer"],"capabilities":[{"name":"notes","enabled":true,"actions":["b.note"]}],"inputs":["b-feed"],"uses":[]`) {
 		t.Fatalf("apps: %s", body)
 	}
 	if _, body := call("GET", "/v1/actions", "bo-token", ""); strings.Contains(body, `"b.note"`) || !strings.Contains(body, `"a.note"`) {

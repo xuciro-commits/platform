@@ -55,7 +55,7 @@ func TestOperations(t *testing.T) {
 			Edges: []Edge{{Structure: "site", Unit: "L1", Parent: "plant"}},
 			Memberships: []Membership{{Party: "member:sup", Unit: "plant", Role: "supervisor"}, {Party: "member:op", Unit: "L1", Role: "operator"},
 				{Party: "member:ana", Unit: "plant", Role: "director", Until: "2026-01-01"}}})
-		tn, err := NewTenant("t-1", dir, org, probe{newNotes("t-1", "p", "")})
+		tn, err := NewTenant("t-1", dir, org, probe{newNotes("t-1", "p")})
 		if err != nil {
 			t.Fatal(err)
 		}

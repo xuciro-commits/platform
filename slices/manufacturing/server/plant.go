@@ -199,8 +199,8 @@ func (p *Plant) resourceLine(resource string) string {
 // allowed is the policy hook (K6 T3): the catalog decides which roles may call an
 // action (ADR-0008); the plant hierarchy (lines) is context the domain reads, and
 // the kernel never sees it.
-func (p *Plant) allowed(who platformserver.Caller, s *pb.Submission) bool {
-	scope := who.Units(SiteStructure)
+func (p *Plant) allowed(who platformserver.Caller, s *pb.Submission, now time.Time) bool {
+	scope := who.Units(SiteStructure, now)
 	onLine := func(line string) bool { return line != "" && slices.Contains(scope, line) }
 	sfc := p.sfcs[s.GetTarget().GetId()]
 	switch s.GetSchema().GetName() {
@@ -234,7 +234,7 @@ func (p *Plant) Submit(who platformserver.Caller, s *pb.Submission, now time.Tim
 	if who.Tenant != p.tenant {
 		return nil, denied
 	}
-	return p.ledger.Receive(who, s, now, func() bool { return p.allowed(who, s) }, func() (func(*pb.ChangeRecord), *kernel.Error) {
+	return p.ledger.Receive(who, s, now, func() bool { return p.allowed(who, s, now) }, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		apply, err := p.validate(who, s)
 		if err != nil {
 			return nil, err

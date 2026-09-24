@@ -320,16 +320,17 @@ func (o *Organization) holders(structure, unit, role string, day Date) []string 
 	return out
 }
 
-// Units are the units c's member belongs to in structure today, with all units
-// below them: the scope a rule reads from a named structure (ADR-0012).
-func (c Caller) Units(structure string) []string {
+// Units are the units c's member belongs to in structure on the input's day
+// (now), with all units below them: the scope a rule reads from a named
+// structure (ADR-0012). A replay passes the recorded time, so it scopes alike.
+func (c Caller) Units(structure string, now time.Time) []string {
 	if c.tenant == nil || c.tenant.org == nil {
 		return nil
 	}
 	o := c.tenant.org
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return o.units("member:"+c.ID, structure, time.Now().UTC().Format(time.DateOnly))
+	return o.units("member:"+c.ID, structure, now.UTC().Format(time.DateOnly))
 }
 
 // Read "organization": the whole chart, for members holding a role in the org app.

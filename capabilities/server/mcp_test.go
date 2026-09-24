@@ -24,12 +24,11 @@ func TestMCP(t *testing.T) {
 	if status, _ := rpc(`{"jsonrpc":"2.0","method":"notifications/initialized"}`); status != 202 {
 		t.Fatalf("notification: %d", status)
 	}
-	// bo holds a role in b only; b.note uses a.note, which bo may not call, so b's
-	// action is not offered; b's read is.
-	if _, body := rpc(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`); strings.Contains(body, `"name":"b_note"`) || !strings.Contains(body, `"name":"read_b-notes"`) {
+	// bo holds a role in b only: b's action and read are offered, a's are not.
+	if _, body := rpc(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`); strings.Contains(body, `"name":"a_note"`) || !strings.Contains(body, `"name":"b_note"`) || !strings.Contains(body, `"name":"read_b-notes"`) {
 		t.Fatalf("tools: %s", body)
 	}
-	if _, body := rpc(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"b_note","arguments":{"target":"x","text":"hi"}}}`); !strings.Contains(body, `"isError":true`) {
+	if _, body := rpc(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"a_note","arguments":{"target":"x","text":"hi"}}}`); !strings.Contains(body, `"isError":true`) {
 		t.Fatalf("a call outside the catalog: %s", body)
 	}
 	tn.app(PlatformApp).(*Directory).members["bo"].Roles["a"] = "writer"

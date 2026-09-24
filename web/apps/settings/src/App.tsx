@@ -15,7 +15,7 @@ import { z } from "zod";
 
 type Member = { id: string; tenant: string; roles: Record<string, string>; subjects: string[] };
 type Capability = { name: string; enabled: boolean; actions: string[] };
-type AppInfo = { emits?: { name: string; title: string; description: string }[]; id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
+type AppInfo = { emits?: { name: string; title: string; description: string }[]; id: string; version: string; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
 type ProtocolInfo = { id: string; actions: string[]; reads: string[]; events: { name: string; title: string }[]; providers: string[]; consumers: string[]; bound?: string };
 type Delivery = { at: string; app: string; action: string; target: string; subscriber: string; outcome: string; attempt?: number };
 type Task = { id: string; kind: "delivery" | "job"; app: string; title: string; state: string; attempts: number; last?: string; due?: string; error?: string };
@@ -243,10 +243,14 @@ function Organization() {
   );
 }
 
-// Tiers of the requirement graph: an app sits one column right of what it requires.
+// Tiers of the protocol graph: an app sits one column right of the providers of
+// the protocols it consumes (providers are enabled before their consumers).
 function tiers(apps: AppInfo[]): AppInfo[][] {
   const depth = new Map<string, number>();
-  for (const a of apps) depth.set(a.id, Math.max(0, ...a.requires.map((r) => (depth.get(r) ?? 0) + 1)));
+  for (const a of apps) {
+    const providers = a.consumes.map((c) => c.replace(" (optional)", "")).flatMap((p) => apps.filter((x) => x.provides.includes(p)));
+    depth.set(a.id, Math.max(0, ...providers.map((x) => (depth.get(x.id) ?? 0) + 1)));
+  }
   const out: AppInfo[][] = [];
   for (const a of apps) (out[depth.get(a.id)!] ??= []).push(a);
   return out;
@@ -256,15 +260,15 @@ function Apps() {
   const { apps } = useAdmin();
   return (
     <>
-      <PageHeader title="Apps" description="Apps this tenant runs, from their manifests. Columns follow requirements: an app requires only apps to its left." />
+      <PageHeader title="Apps" description="Apps this tenant runs, from their manifests. Apps know no other app; columns follow protocols: an app consumes only protocols provided to its left." />
       <div className="flex gap-6 overflow-x-auto">
         {tiers(apps).map((tier, i) => (
           <div key={i} className="grid content-start gap-3">
-            <h2 className="text-xs uppercase text-muted">{["Platform and business apps", "Bridges and solutions", "Further"][i] ?? `Tier ${i + 1}`}</h2>
+            <h2 className="text-xs uppercase text-muted">{["Platform and business apps", "Consumers of their protocols"][i] ?? `Tier ${i + 1}`}</h2>
             {tier.map((a) => (
               <section key={a.id} className="w-64 rounded-md border border-border bg-surface p-3 text-sm">
                 <div className="flex items-center gap-2"><span className="font-semibold">{a.id}</span><span className="text-xs text-muted">v{a.version}</span></div>
-                {a.requires.length > 0 && <p className="mt-1 text-xs text-muted">requires {a.requires.join(", ")}</p>}
+                {a.consumes.length > 0 && <p className="mt-1 text-xs text-muted">consumes {a.consumes.join(", ")}</p>}
                 <div className="mt-2 flex flex-wrap gap-1">
                   {a.capabilities.map((c) => <Tag key={c.name} label={c.name} tone={c.enabled ? "success" : "neutral"} />)}
                 </div>
@@ -291,8 +295,7 @@ function Matrix() {
     { id: "inputs", header: "Connector inputs", meta: { width: 200 }, accessorFn: (a) => list(a.inputs) },
     { id: "provides", header: "Provides", meta: { width: 160 }, accessorFn: (a) => list(a.provides) },
     { id: "consumes", header: "Consumes", meta: { width: 200 }, accessorFn: (a) => list(a.consumes) },
-    { id: "requires", header: "Requires", meta: { width: 120 }, accessorFn: (a) => list(a.requires) },
-    { id: "uses", header: "Uses across apps", meta: { width: 300 }, accessorFn: (a) => list(a.uses) },
+    { id: "uses", header: "Uses protocol actions", meta: { width: 300 }, accessorFn: (a) => list(a.uses) },
     { id: "subscribes", header: "Subscribes to", meta: { width: 260 }, accessorFn: (a) => list(a.subscribes) },
   ];
   return (
@@ -368,7 +371,7 @@ function Automation() {
   ];
   return (
     <>
-      <PageHeader title="Automation" description="Apps react to other apps' decisions after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision." />
+      <PageHeader title="Automation" description="Apps react to their own decisions and to protocol events after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision." />
       <div className="mb-3 flex flex-wrap gap-2 text-sm">
         {subscriptions.length === 0 ? <span className="text-muted">No subscriptions.</span> :
           subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
