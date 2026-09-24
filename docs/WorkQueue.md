@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **89 · ready (MSRU repository)** | Refresh MSRU's pinned K4 vectors for C12: `expected_revision` and `revision` in `user_decisions` (a forward migration), corrections sent with the revision the inspector showed | MusicLibraryTests pass on the refreshed copy |
+| **90 · proposed (owner decides)** | Governed actions and capability lifecycle (ProductIntentReview §4, §7), tested on manufacturing with the least code: the slice declares its actions (schema, target, who may call, confirmation) once; the MES UI and an automation caller with a narrower grant use the same declaration through the same submission path; one capability (downtime reasons) is deactivated with defined behaviour for its UI entries, running work and recorded history | Both callers act through one declaration with different grants, and deactivation leaves no runtime contribution while history keeps resolving |
 
 ## Open friction (temporary; delete entries once resolved)
 
