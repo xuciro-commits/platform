@@ -1,14 +1,15 @@
 // Settings (#93, ADR-0010 part 3): the platform app's workspace. It administers
 // whichever host it connects to — members and their role in each app, the apps
 // a tenant runs with their requirement graph, the capability matrix read from
-// the registry, and the audit trail. Every change is a platform decision.
+// the registry, connectors, app settings, owned work (ADR-0013) and the audit
+// trail. Every change is a platform decision.
 import { EdgeClient, keepFresh, signOut, type OidcConfig, type OidcSession } from "@platform/kernel";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Select, Tag, Workspace,
   notify, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Blocks, Cable, Grid3x3, History, Network, Users, Workflow } from "lucide-react";
+import { Blocks, Cable, Grid3x3, History, Network, PlugZap, SlidersHorizontal, Users, Workflow } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -16,7 +17,12 @@ type Member = { id: string; tenant: string; roles: Record<string, string>; attri
 type Capability = { name: string; enabled: boolean; actions: string[] };
 type AppInfo = { id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
 type ProtocolInfo = { id: string; actions: string[]; reads: string[]; events: { name: string; title: string }[]; providers: string[]; consumers: string[]; bound?: string };
-type Delivery = { at: string; app: string; action: string; target: string; subscriber: string; outcome: string };
+type Delivery = { at: string; app: string; action: string; target: string; subscriber: string; outcome: string; attempt?: number };
+type Task = { id: string; kind: "delivery" | "job"; app: string; title: string; state: string; attempts: number; last?: string; due?: string; error?: string };
+type Connector = { id: string; direction: string; dataClasses: string[]; heartbeat: string; health: string; lastSeen?: string; cursor?: string; disabled: boolean;
+  lastError?: { at: string; input: string; error: string } };
+type SettingValue = { name: string; title: string; description: string; type: "boolean" | "integer" | "text" | "choice"; default: string; choices?: string[]; value: string };
+type AppSettings = { app: string; settings: SettingValue[] };
 type AuditEntry = { at: string; member: string; app: string; action: string; target?: string };
 type Me = { tenantId: string; principalId: string; profile: { roles: Record<string, string> } };
 
@@ -43,10 +49,11 @@ const active = (x: { from?: string; until?: string }, day: string) => (x.from ??
 const AdminContext = createContext<Admin | null>(null);
 const useAdmin = () => useContext(AdminContext)!;
 
-function useRead<T>(path: string) {
+function useRead<T>(path: string, refetchInterval?: number) {
   const { client } = useAdmin();
-  return useQuery({ queryKey: [client.connection.server, client.connection.token, path], queryFn: () => client.get<T>(path) });
+  return useQuery({ queryKey: [client.connection.server, client.connection.token, path], queryFn: () => client.get<T>(path), refetchInterval });
 }
+const when = (at?: string) => (at ? new Date(at).toLocaleString() : "—");
 
 const kind = (m: Member) => (m.subjects.some((s) => s.startsWith("client:")) ? "service or agent" : "person");
 
@@ -60,7 +67,7 @@ function Members() {
     { id: "kind", header: "Kind", meta: { width: 140 }, accessorFn: kind, cell: (c) => <Tag label={c.getValue()} tone={c.getValue() === "person" ? "neutral" : "info"} /> },
     { id: "subjects", header: "Signs in as", accessorFn: (m) => m.subjects.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "roles", header: "Roles", accessorFn: (m) => Object.entries(m.roles).map(([a, r]) => `${a}: ${r}`).join(" "),
-      cell: ({ row: { original: m } }) => <span className="flex flex-wrap gap-1">{Object.entries(m.roles).map(([a, r]) => <Tag key={a} label={`${a}: ${r}`} />)}</span> },
+      cell: ({ row: { original: m } }) => <span className="flex gap-1 overflow-hidden">{Object.entries(m.roles).map(([a, r]) => <Tag key={a} label={`${a}: ${r}`} />)}</span> },
     { id: "attributes", header: "Attributes", meta: { width: 160 }, accessorFn: (m) => Object.entries(m.attributes ?? {}).map(([k, v]) => `${k}: ${v.join(", ")}`).join("; ") },
   ];
   return (
@@ -319,27 +326,121 @@ function Protocols() {
   );
 }
 
-// Automation: which app reacts to which decisions, and every delivery with its outcome.
+// Automation: which app reacts to which decisions, the work the host owns
+// (queued and failed deliveries, scheduled jobs), and every delivery attempt.
 function Automation() {
-  const { apps } = useAdmin();
-  const deliveries = useRead<Delivery[]>("/v1/deliveries");
+  const { apps, decideOn } = useAdmin();
+  const deliveries = useRead<Delivery[]>("/v1/deliveries", 5000);
+  const work = useRead<Task[]>("/v1/work", 5000);
+  const tone = (state: string) => (({ failed: "danger", retrying: "warning", queued: "info" }) as const)[state as "failed"] ?? "neutral";
+  const taskColumns: ColumnDef<Task, any>[] = [
+    { accessorKey: "kind", header: "Kind", meta: { width: 90 } },
+    { accessorKey: "app", header: "App", meta: { width: 100 } },
+    { accessorKey: "title", header: "Work", cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "state", header: "State", meta: { width: 100 }, cell: (c) => <Tag label={c.getValue()} tone={tone(c.getValue())} /> },
+    { accessorKey: "attempts", header: "Runs", meta: { width: 70, align: "right" } },
+    { accessorKey: "last", header: "Last", meta: { width: 170 }, cell: (c) => when(c.getValue()) },
+    { accessorKey: "due", header: "Next", meta: { width: 170 }, cell: ({ row: { original: t } }) => (t.state === "failed" ? "—" : when(t.due)) },
+    { accessorKey: "error", header: "Last error", meta: { width: 170 }, cell: (c) => c.getValue() ? <Tag label={c.getValue()} tone="danger" /> : "" },
+    { id: "retry", header: "", meta: { width: 90 }, cell: ({ row: { original: t } }) => (t.state === "failed" || t.kind === "job") &&
+      <Button size="sm" onClick={() => void decideOn("platform.work.retry", { type: "platform.work", id: t.id }, {})}>{t.kind === "job" ? "Run now" : "Retry"}</Button> },
+  ];
   const subscriptions = apps.flatMap((a) => a.subscribes.map((action) => ({ app: a.id, action })));
   const columns: ColumnDef<Delivery, any>[] = [
     { accessorKey: "at", header: "When", meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
     { accessorKey: "action", header: "Event", cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "target", header: "Target", cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "subscriber", header: "Delivered to", meta: { width: 120 } },
+    { accessorKey: "attempt", header: "Attempt", meta: { width: 80, align: "right" } },
     { accessorKey: "outcome", header: "Outcome", meta: { width: 200 }, cell: (c) => <Tag label={c.getValue()} tone={c.getValue() === "ok" ? "success" : "danger"} /> },
   ];
   return (
     <>
-      <PageHeader title="Automation" description="Apps react to other apps' decisions through declared subscriptions, after commit, as app:<id>. A failed delivery never undoes the decision." />
+      <PageHeader title="Automation" description="Apps react to other apps' decisions after commit, and run scheduled jobs, as app:<id>. The host owns this work: it retries a failed delivery, and a failure never undoes the decision." />
       <div className="mb-3 flex flex-wrap gap-2 text-sm">
         {subscriptions.length === 0 ? <span className="text-muted">No subscriptions.</span> :
           subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
       </div>
-      <DataTable data={[...(deliveries.data ?? [])].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}`}
-        height="calc(100dvh - 240px)" empty="No deliveries yet" />
+      <h2 className="mb-1 text-sm font-semibold">Owned work</h2>
+      <DataTable data={work.data ?? []} columns={taskColumns} getRowId={(t) => t.id} height={200} searchable={false} empty="Nothing queued, no jobs" />
+      <h2 className="mb-1 mt-4 text-sm font-semibold">Delivery attempts</h2>
+      <DataTable data={[...(deliveries.data ?? [])].reverse()} columns={columns} getRowId={(d) => `${d.at}${d.action}${d.target}${d.subscriber}${d.attempt}`}
+        height="calc(100dvh - 480px)" empty="No deliveries yet" />
+    </>
+  );
+}
+
+// Integrations: the tenant's connectors (K8) with health, cursor and the last refused input.
+function Integrations() {
+  const connectors = useRead<Connector[]>("/v1/connectors", 5000);
+  const { decideOn } = useAdmin();
+  const tone = (h: string) => (({ ok: "success", stale: "warning", disabled: "neutral" }) as const)[h as "ok"] ?? "danger";
+  const columns: ColumnDef<Connector, any>[] = [
+    { accessorKey: "id", header: "Connector", meta: { width: 130 } },
+    { accessorKey: "direction", header: "Direction", meta: { width: 90 } },
+    { id: "classes", header: "Delivers", meta: { width: 170 }, accessorFn: (c) => c.dataClasses.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "health", header: "Health", meta: { width: 100 }, cell: (c) => <Tag label={c.getValue()} tone={tone(c.getValue())} /> },
+    { accessorKey: "lastSeen", header: "Last seen", meta: { width: 170 }, cell: (c) => when(c.getValue()) },
+    { accessorKey: "heartbeat", header: "Expected every", meta: { width: 120 } },
+    { accessorKey: "cursor", header: "Cursor", meta: { width: 110 }, cell: (c) => <span className="font-mono text-xs">{c.getValue() ?? ""}</span> },
+    { id: "error", header: "Last refused input", accessorFn: (c) => c.lastError ? `${c.lastError.input}: ${c.lastError.error}` : "",
+      cell: ({ row: { original: c } }) => c.lastError ? <span className="text-xs"><Tag label={c.lastError.error} tone="danger" /> {c.lastError.input} · {when(c.lastError.at)}</span> : "" },
+    { id: "switch", header: "", meta: { width: 90 }, cell: ({ row: { original: c } }) =>
+      <Button size="sm" variant={c.disabled ? "primary" : "default"} onClick={() => void decideOn(c.disabled ? "platform.connector.enable" : "platform.connector.disable", { type: "platform.connector", id: c.id }, {})}>
+        {c.disabled ? "Enable" : "Disable"}</Button> },
+  ];
+  return (
+    <>
+      <PageHeader title="Integrations" description="Connectors deliver facts from other systems: pushed batches or polled pages. A disabled connector is refused and keeps its cursor." />
+      {connectors.error ? <p className="text-sm text-[var(--tone-danger)]">{String(connectors.error)} — administrators only.</p> :
+        <DataTable data={connectors.data ?? []} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 190px)" empty="No connectors in this tenant" />}
+    </>
+  );
+}
+
+// App settings: typed values each app declares; a change is a platform decision.
+function AppSettingsView() {
+  const settings = useRead<AppSettings[]>("/v1/settings");
+  const { decideOn } = useAdmin();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const set = (app: string, s: SettingValue, value: string) =>
+    decideOn("platform.setting.set", { type: "platform.setting", id: `${app}/${s.name}` }, { value });
+  return (
+    <>
+      <PageHeader title="App settings" description="Values within the rules each app's code defines: thresholds, switches, choices. Rules themselves are code." />
+      {settings.data?.length === 0 && <p className="text-sm text-muted">No app in this tenant declares settings.</p>}
+      <div className="grid max-w-3xl gap-3">
+        {settings.data?.map((a) => (
+          <section key={a.app} className="rounded-md border border-border bg-surface p-3">
+            <h2 className="mb-2 font-mono text-sm font-semibold">{a.app}</h2>
+            <div className="grid gap-3">
+              {a.settings.map((s) => {
+                const key = `${a.app}/${s.name}`;
+                return (
+                  <div key={s.name} className="grid grid-cols-[1fr_14rem] items-center gap-3 text-sm">
+                    <div>
+                      <p className="font-medium">{s.title}</p>
+                      <p className="text-xs text-muted">{s.description}{s.value !== s.default ? ` (default ${s.default})` : ""}</p>
+                    </div>
+                    {s.type === "boolean" || s.type === "choice" ? (
+                      <Select aria-label={s.title} value={s.value} onChange={(e) => void set(a.app, s, e.target.value)}>
+                        {(s.type === "boolean" ? ["true", "false"] : s.choices ?? []).map((c) => <option key={c} value={c}>{s.type === "boolean" ? (c === "true" ? "On" : "Off") : c}</option>)}
+                      </Select>
+                    ) : (
+                      <span className="flex gap-2">
+                        <Input aria-label={s.title} type={s.type === "integer" ? "number" : "text"} value={draft[key] ?? s.value}
+                          onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
+                        <Button size="md" disabled={(draft[key] ?? s.value) === s.value}
+                          onClick={async () => { if (await set(a.app, s, draft[key]!)) setDraft(({ [key]: _, ...rest }) => rest); }}>Save</Button>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
     </>
   );
 }
@@ -369,6 +470,8 @@ const views: View[] = [
   { id: "matrix", title: () => "Capability matrix", render: () => <Matrix /> },
   { id: "protocols", title: () => "Protocols", render: () => <Protocols /> },
   { id: "automation", title: () => "Automation", render: () => <Automation /> },
+  { id: "integrations", title: () => "Integrations", render: () => <Integrations /> },
+  { id: "app-settings", title: () => "App settings", render: () => <AppSettingsView /> },
   { id: "audit", title: () => "Audit", render: () => <Audit /> },
 ];
 
@@ -402,8 +505,8 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
       <Workspace product="Platform Settings" storageKey="settings.layout" views={views} home={{ view: "members" }}
         nav={[
           { label: "Access", items: [nav("Members", <Users />, "members"), nav("Organisation", <Network />, "organization")] },
-          { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] },
-          { label: "Data", items: [nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] },
+          { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("App settings", <SlidersHorizontal />, "app-settings"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] },
+          { label: "Operations", items: [nav("Integrations", <PlugZap />, "integrations"), nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] },
         ]}
         status={<span className="text-xs text-muted">{me ? `${me.tenantId} · ${apps.length} apps` : "host unreachable"}</span>}
         session={signedIn

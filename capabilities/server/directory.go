@@ -56,7 +56,7 @@ type Directory struct {
 func DirectoryActions() *Catalog {
 	admin := []string{Admin}
 	app := Field{Name: "app", Type: "string", Required: true, Description: "App ID"}
-	return NewCatalog(
+	return NewCatalog(append([]Action{
 		Action{Schema: SchemaAdd, Target: MemberType, Capability: "members", Title: "Add member",
 			Description: "Add a member who signs in as a subject: user:<email> for a person, client:<id> for a service or AI agent.",
 			Payload:     []Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"}}, Roles: admin},
@@ -69,13 +69,13 @@ func DirectoryActions() *Catalog {
 			Description: "Set the values of an attribute apps scope roles by (lines, properties); no values removes it.",
 			Payload: []Field{{Name: "attribute", Type: "string", Required: true, Description: "Attribute name"},
 				{Name: "values", Type: "string[]", Description: "Values"}}, Roles: admin},
-	)
+	}, operationsActions()...)...)
 }
 
 // NewDirectory seeds a tenant's directory; changes recorded later replay on top.
 func NewDirectory(tenant string, seats ...Seat) *Directory {
 	d := &Directory{tenant: tenant, members: map[string]*Member{}, subjects: map[string]string{},
-		ledger: NewLedger(tenant, PlatformApp, DirectoryActions(), MemberType)}
+		ledger: NewLedger(tenant, PlatformApp, DirectoryActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -108,7 +108,9 @@ func clone(m *Member) Member {
 }
 
 func (d *Directory) Manifest() Manifest {
-	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog, Reads: []string{"members", "audit", "deliveries"}}
+	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog,
+		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications"},
+		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false}}
 }
 
 func (d *Directory) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
@@ -118,6 +120,12 @@ func (d *Directory) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Chang
 	defer d.mu.Unlock()
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		if c.tenant == nil && !strings.HasPrefix(s.GetSchema().GetName(), "platform.member.") {
+			return nil, invalid
+		}
+		if apply, err, ok := operate(c, s, now); ok {
+			return apply, err
+		}
 		var p struct {
 			Subject, App, Role, Attribute string
 			Values                        []string
@@ -180,8 +188,12 @@ type MemberView struct {
 	Subjects []string `json:"subjects"`
 }
 
-// Read "members", "audit" and "deliveries": for the tenant's administrators only.
+// Read "notifications": the caller's own. Every other read is for the tenant's
+// administrators only.
 func (d *Directory) Read(c Caller, name string) (any, *kernel.Error) {
+	if c.tenant != nil && name == "notifications" {
+		return c.tenant.notificationsFor(c.ID), nil
+	}
 	if c.Role() != Admin || c.tenant == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
@@ -190,6 +202,12 @@ func (d *Directory) Read(c Caller, name string) (any, *kernel.Error) {
 		return c.tenant.Audit(), nil
 	case "deliveries":
 		return c.tenant.Deliveries(), nil
+	case "work":
+		return c.tenant.Tasks(), nil
+	case "connectors":
+		return c.tenant.Connectors(time.Now()), nil
+	case "settings":
+		return c.tenant.Settings(), nil
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -208,6 +226,13 @@ func (d *Directory) Read(c Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-func (d *Directory) Input(Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+// Input "heartbeat": a connector reports it is alive (not journaled; health
+// reads stale after a restart until the next one).
+func (d *Directory) Input(c Caller, name string, _ []byte, now time.Time) (any, *kernel.Error) {
+	if name != "heartbeat" || c.tenant == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+	}
+	c.tenant.opsMu.Lock()
+	defer c.tenant.opsMu.Unlock()
+	return nil, c.tenant.connectors.Heartbeat(c.Tenant, c.ID, now)
 }

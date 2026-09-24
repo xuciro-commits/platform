@@ -11,6 +11,7 @@ export type { FieldType, EditorProps, Operator, Option, Attachment } from "./fie
 export { defineEntity, columnsFor, recordSchema, applyFilters, valueOf, FilterBar, type Entity, type Filter } from "./fields/entity";
 export { EntityCard, PropertyList } from "./components/EntityCard";
 export { PageHeader } from "./components/PageHeader";
+export { NotificationList, type NotificationItem } from "./components/NotificationList";
 export { Sheet } from "./primitives/sheet";
 export { Workspace, useWorkspace, notify, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";

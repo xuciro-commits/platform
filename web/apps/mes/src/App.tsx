@@ -1,24 +1,20 @@
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, PageHeader, PropertyList, Select, StatusTag, Workspace,
+  Button, DataTable, Dialog, EntityCard, EntityForm, NotificationList, PageHeader, PropertyList, Select, StatusTag, Workspace,
   defineStatuses, notify, submissionStatuses, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, ClipboardList, Cpu, Factory, Inbox, PlugZap, ShieldAlert } from "lucide-react";
+import { Activity, Bell, ClipboardList, Cpu, Factory, Inbox, ShieldAlert } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { z } from "zod";
 import {
   SERVER, downtimeReasons, identities, ncCodes,
-  type ConnectorView, type Downtime, type Master, type Me, type Order, type Planned, type SFC,
+  type Downtime, type Notification, type Master, type Me, type Order, type Planned, type SFC,
 } from "./model";
 
 const sfcStatus = defineStatuses({
   queued: { label: "Queued", tone: "info" }, active: { label: "In work", tone: "warning" }, hold: { label: "On hold", tone: "danger" },
   done: { label: "Done", tone: "success" }, scrapped: { label: "Scrapped", tone: "neutral" },
-});
-const connectorHealth = defineStatuses({
-  CONNECTOR_HEALTH_OK: { label: "OK", tone: "success" }, CONNECTOR_HEALTH_STALE: { label: "Stale", tone: "warning" },
-  CONNECTOR_HEALTH_DISABLED: { label: "Disabled", tone: "neutral" },
 });
 const downtimeStatus = defineStatuses({
   open: { label: "Down", tone: "danger" }, closed: { label: "Closed", tone: "neutral" }, check: { label: "Needs check", tone: "warning" },
@@ -198,18 +194,16 @@ function Equipment() {
   );
 }
 
-function Connectors() {
-  const connectors = useRead<ConnectorView[]>("/v1/connectors") ?? [];
-  const columns: ColumnDef<ConnectorView, any>[] = [
-    { accessorKey: "id", header: "Connector", meta: { width: 140 } },
-    { accessorKey: "direction", header: "Direction", meta: { width: 120 }, cell: (c) => String(c.getValue()).replace("CONNECTOR_DIRECTION_", "").toLowerCase() },
-    { accessorKey: "health", header: "Health", meta: { width: 110 }, cell: (c) => <StatusTag status={c.getValue()} registry={connectorHealth} /> },
-    { accessorKey: "lastSeen", header: "Last seen", meta: { width: 120 }, cell: (c) => time(c.getValue()) },
-    { accessorKey: "cursor", header: "Cursor" },
-  ];
+// Notifications the platform keeps for the signed-in member (ADR-0013), such as
+// new downtime on a line they supervise. Connectors are managed in Settings.
+function Notifications() {
+  const items = useRead<Notification[]>("/v1/notifications") ?? [];
+  const { decide } = usePlant();
+  const { open } = useWorkspace();
   return <>
-    <PageHeader title="Connectors" description="K8: the line gateway pushes, the ERP is polled page by page." />
-    <DataTable data={connectors} columns={columns} getRowId={(c) => c.id} height={240} searchable={false} />
+    <PageHeader title="Notifications" description="What the plant tells you: downtime on your lines, reasons still missing." />
+    <NotificationList items={items} onRead={(n) => void decide("platform.notification.read", { type: "platform.notification", id: n.id }, {})}
+      onOpen={(n) => n.ref?.startsWith("mes.downtime/") && open({ view: "equipment" })} />
   </>;
 }
 
@@ -234,7 +228,7 @@ const views: View[] = [
   { id: "sfcs", title: () => "All SFCs", render: () => <SFCTable title="All SFCs" description="Every lot of every released order" filter={() => true} /> },
   { id: "sfc", title: (p) => p.id ?? "SFC", render: (p) => <SFCDetail id={p.id ?? ""} /> },
   { id: "equipment", title: () => "Downtime", render: () => <Equipment /> },
-  { id: "connectors", title: () => "Connectors", render: () => <Connectors /> },
+  { id: "notifications", title: () => "Notifications", render: () => <Notifications /> },
   { id: "outbox", title: () => "Outbox", render: () => <Outbox /> },
 ];
 
@@ -263,6 +257,7 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
     setOutbox([...client.authorities.outbox]);
     await queries.invalidateQueries();
   };
+  const unread = (useQuery({ queryKey: [token, "/v1/notifications"], queryFn: () => client.get<Notification[]>("/v1/notifications") }).data ?? []).filter((n) => !n.read).length;
   const waiting = outbox.filter((e) => e.state !== "SUBMISSION_STATE_CONFIRMED").length;
   const nav = (label: string, icon: ReactNode, view: string, badge?: ReactNode) => ({ label, icon, route: { view }, badge });
 
@@ -270,10 +265,11 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
     <PlantContext.Provider value={{ me, client, master, decide, outbox, can }}>
       <Workspace product="Plant Operations" storageKey="mes.layout" views={views} home={{ view: "queue" }}
         nav={[
+          { label: "You", items: [nav("Notifications", <Bell />, "notifications", unread ? <span className="text-xs text-[var(--tone-info)]">{unread}</span> : null)] },
           { label: "Planning", items: [nav("Planned orders", <ClipboardList />, "planned")] },
           { label: "Execution", items: [nav("Work queue", <Factory />, "queue"), nav("All SFCs", <Cpu />, "sfcs")] },
           { label: "Quality", items: [nav("Holds", <ShieldAlert />, "holds")] },
-          { label: "Equipment", items: [nav("Downtime", <Activity />, "equipment"), nav("Connectors", <PlugZap />, "connectors")] },
+          { label: "Equipment", items: [nav("Downtime", <Activity />, "equipment")] },
           { label: "Sync", items: [nav("Outbox", <Inbox />, "outbox", waiting ? <span className="text-xs text-[var(--tone-warning)]">{waiting}</span> : null)] },
         ]}
         commands={[{ id: "retry", label: "Retry unsent decisions", run: () => void client.send().then(() => setOutbox([...client.authorities.outbox])) }]}

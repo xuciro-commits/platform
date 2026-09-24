@@ -98,8 +98,10 @@ func toolsFor(t *Tenant, m Member) []map[string]any {
 func readsFor(t *Tenant, m Member) []string {
 	var out []string
 	for _, a := range t.apps {
-		if m.Roles[a.Manifest().ID] != "" || a == App(t.relations) {
-			out = append(out, a.Manifest().Reads...)
+		for _, read := range a.Manifest().Reads {
+			if m.Roles[a.Manifest().ID] != "" || slices.Contains(a.Manifest().Everyone, read) {
+				out = append(out, read)
+			}
 		}
 	}
 	return out

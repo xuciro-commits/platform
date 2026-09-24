@@ -84,6 +84,9 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) api.fromJSON(JSON.parse(saved));
+      for (const p of [...api.panels]) { // tabs of views a new version removed
+        if (!byId.has((p.params as { route?: Route } | undefined)?.route?.view ?? "")) p.api.close();
+      }
     } catch {
       api.clear(); // a stale or corrupt layout falls back to the home view
     }

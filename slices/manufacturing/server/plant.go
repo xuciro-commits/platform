@@ -120,24 +120,23 @@ type Order struct {
 
 // Plant is one tenant: master data, execution state and its kernel logs.
 type Plant struct {
-	mu         sync.Mutex
-	tenant     string
-	master     MasterData
-	orders     map[string]*Order
-	sfcs       map[string]*SFC
-	ledger     *platformserver.Ledger
-	facts      *kernel.FactLog
-	identity   *kernel.Identity
-	connectors *kernel.Connectors
-	downtime   map[string][]Downtime // resource → current derived events
-	nextEvent  int
+	mu        sync.Mutex
+	tenant    string
+	master    MasterData
+	orders    map[string]*Order
+	sfcs      map[string]*SFC
+	ledger    *platformserver.Ledger
+	facts     *kernel.FactLog
+	identity  *kernel.Identity
+	downtime  map[string][]Downtime // resource → current derived events
+	nextEvent int
 }
 
 func NewPlant(tenant string, master MasterData) *Plant {
 	p := &Plant{tenant: tenant, master: master, orders: map[string]*Order{}, sfcs: map[string]*SFC{},
 		ledger:   platformserver.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
 		facts:    kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}, {Name: schemaPlanned, Version: 1}}, nil)),
-		identity: kernel.NewIdentity(nil), connectors: kernel.NewConnectors(), downtime: map[string][]Downtime{}}
+		identity: kernel.NewIdentity(nil), downtime: map[string][]Downtime{}}
 	p.ledger.Changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(p.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
 	}

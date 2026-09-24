@@ -159,9 +159,9 @@ func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Ch
 		conflict := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		var p struct {
 			Name, Kind, Reason, Structure, Parent, Relation, Party, Role string
-			Legal, External, Matrix, Primary                            bool
-			Share                                                       float64
-			From, Until                                                 Date
+			Legal, External, Matrix, Primary                             bool
+			Share                                                        float64
+			From, Until                                                  Date
 		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
@@ -296,6 +296,25 @@ func (o *Organization) units(party, structure string, day Date) []string {
 			if u := o.unit(e.Unit); e.Structure == structure && e.Parent == out[i] && activeOn(e.From, e.Until, day) && u != nil && activeOn(u.From, u.Until, day) {
 				add(e.Unit)
 			}
+		}
+	}
+	return out
+}
+
+// holders are the members holding a membership (with role, when given) in unit
+// or in a unit above it in structure on day: who answers for the unit.
+func (o *Organization) holders(structure, unit, role string, day Date) []string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	var out []string
+	for _, m := range o.chart.Memberships {
+		id, person := strings.CutPrefix(m.Party, "member:")
+		u := o.unit(m.Unit)
+		if !person || role != "" && m.Role != role || !activeOn(m.From, m.Until, day) || u == nil || !activeOn(u.From, u.Until, day) || slices.Contains(out, id) {
+			continue
+		}
+		if m.Unit == unit || o.below(structure, m.Unit, unit, day) {
+			out = append(out, id)
 		}
 	}
 	return out

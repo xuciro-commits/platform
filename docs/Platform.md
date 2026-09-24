@@ -40,12 +40,16 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Kernel | Authority and outbox (K5) | Authority per data class; edge outbox states in Go, Swift, Rust and TypeScript; migration adopts history | `kernel.Authorities`, edge outboxes | all | 2D |
 | Kernel | Tenancy and policy hook (K6) | Receiving order, caller binding, one policy evaluation per decision | `kernel.Receiver` | all | E |
 | Kernel | Schema versions (K7) | Versioned payloads, upgrade paths, negotiation | `kernel.SchemaRegistry` | declared by all; upgrades only in vectors | H |
-| Kernel | Connectors (K8) | One descriptor for push and poll sources, cursors, health | `kernel.Connectors` | manufacturing | H |
-| Kernel | Work ownership (K9) | Generations, checkpoints, stale results, owner close | `kernel.Works` | none on a server yet (MSRU `FeatureHost`) | H |
+| Kernel | Connectors (K8) | One descriptor for push and poll sources, cursors, health | `kernel.Connectors` (kept by the host) | manufacturing | H |
+| Kernel | Work ownership (K9) | Generations, checkpoints, stale results, owner close | `kernel.Works` | the host's owned work (#97); MSRU `FeatureHost` | H |
 | Server | Platform host | Apps per tenant from manifests; routing by action, read and input name; requirement check; per-caller catalog; calls between apps only along requirements (ADR-0010) | `platformserver.Tenant`, `Host` | every server | 4 |
 | Server | Directory | Members (people, services, AI agents) with one role per app and attributes; add, grant, revoke and scope as decisions, effective on the next request; roles checked against the app's own | `platformserver.Directory` (the platform app) | every server | 4 |
-| Server | Events | Subscriptions over accepted decisions or protocol events, declared in the manifest along requirements or consumed protocols, delivered after commit inside the input (so replay rebuilds what handlers decided); handlers act as app:<id>; a failed delivery is recorded and never undoes the decision; cycles stop visibly | `Manifest.Subscribes`, `Subscriber`, `Tenant.Deliveries` | relations (timeline), tests | 1 |
-| Server | Read authorization | A read is for members holding a role in its app; the app may refuse further; an app's reads of the apps it requires are its own | `Tenant.Read` | every server | 4 |
+| Server | Events | Subscriptions over accepted decisions or protocol events, declared in the manifest along requirements or consumed protocols; queued per subscriber after commit and delivered as owned work, retried (2–16 s, five attempts), then failed and retryable by an administrator; every attempt is journaled and replayed with its outcome; handlers act as app:<id>; cycles stop after 100 hops (ADR-0013) | `Manifest.Subscribes`, `Subscriber`, `Tenant.Work`, `Tenant.Deliveries` | relations (timeline, observed inside the input), tests | 1 |
+| Server | Scheduled jobs | Jobs declared in the manifest, run by the host as app:<id>; a run is journaled only when it decided or notified something | `Manifest.Jobs`, `Runner` | manufacturing (reason reminders) | 1 |
+| Server | Connectors | The deployment connects K8 descriptors; apps deliver through the caller; the host keeps cursor, last seen and the last refused input; enable and disable are decisions; heartbeat is a platform input | `Tenant.Connect`, `Caller.Deliver`, read `connectors` | manufacturing | 1 |
+| Server | Notifications | An app tells members, or whoever holds a role in a unit or above it in a structure, from any input; deduplicated by key; each member reads and marks their own | `Caller.Notify`, read `notifications` | manufacturing (downtime) | 1 |
+| Server | App settings | Typed values an app declares (boolean, integer, text, choice), set by administrators as decisions, read by the app | `Manifest.Settings`, `Caller.Setting` | manufacturing | 1 |
+| Server | Read authorization | A read is for members holding a role in its app, or for every member when the manifest opens it; the app may refuse further; an app's reads of the apps it requires are its own | `Tenant.Read`, `Manifest.Everyone` | every server | 4 |
 | Server | Organisation | Units of any kind in several structures (legal, management, site, project, governance, community …), memberships of members or other units, all with valid time; rules ask for a member's units in a named structure (ADR-0012) | `platformserver.Organization`, `Caller.Units` | manufacturing (lines), sales solution (demo group) | 2 |
 | Server | Audit trail | Accepted top-level inputs per tenant, rebuilt by replay; administrators read it | `Tenant.Audit`, read `audit` | every server | 4 |
 | Server | App registry | Each app's roles, capabilities (active or not), reads, inputs, requirements and cross-app uses | `GET /v1/apps` | every server | 4 |
@@ -59,7 +63,8 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Web | Field types | 20 types deciding display, editor, validation, sorting and filters | `@platform/ui` fields | gallery | 1 |
 | Web | Edge client | Persisted outbox, HTTP transport, declarations, action-catalog type | `@platform/kernel` | manufacturing, sales | 2 |
 | Web | Browser sign-in | Authorization code with PKCE | `@platform/kernel` `oidc.ts` | manufacturing | 1 |
-| Web | Settings | The platform app's workspace for any host: members and roles per app, scopes, apps with their requirement graph, the capability matrix, protocols with providers and consumers, automation (subscriptions, deliveries) and the audit, from the registry | `apps/settings` | sales and plant hosts | 1 |
+| Web | Settings | The platform app's workspace for any host: members and roles per app, organisation, apps with their requirement graph, app settings, the capability matrix, protocols with providers and consumers, integrations (connectors), automation (owned work, deliveries) and the audit, from the registry | `apps/settings` | sales and plant hosts | 1 |
+| Web | Notifications | A member's notifications with unread state | `@platform/ui` `NotificationList` | manufacturing | 1 |
 | Web | Package UI | An app's or a protocol's views and model for every software that shows its data | `@pkg/hotel`, `@pkg/lodging` | Hotel Desk, sales | 2 |
 | Operations | Deployment and rehearsal | Compose stack with PostgreSQL and Rauthy; restart and restore rehearsal | `deploy/local` | manufacturing, sales | 2 |
 | Composition | Protocols | Named, versioned interfaces (actions, reads, events) with conformance tests; apps provide and consume them, the host binds a provider per tenant; consumers never name an app (ADR-0011) | `platformserver.Protocol`, `protocols/lodging` | Hotel and the reference memstay provide lodging; CRM consumes it | 2 |
@@ -240,7 +245,7 @@ ADR-0010 part 3, first areas: members and access, apps with their requirement gr
 
 ### Events #94
 
-Apps react to each other without knowing each other: the crm-hotel bridge subscribes to the hotel's cancel and modify actions and writes a note on the opportunity's activity timeline (a new CRM action), as `app:crm-hotel`. Delivery runs after commit but inside the input that caused it, so the journal needs no extra entries and replay rebuilds the notes (bridge tests, rehearsal after restart and restore). Handlers are synchronous and not retried; a refusal is a failed delivery shown in Settings. Asynchronous delivery with retries becomes K9 work when a handler must call something slow or external.
+Apps react to each other without knowing each other: the crm-hotel bridge subscribes to the hotel's cancel and modify actions and writes a note on the opportunity's activity timeline (a new CRM action), as `app:crm-hotel`. Delivery runs after commit but inside the input that caused it, so the journal needs no extra entries and replay rebuilds the notes (bridge tests, rehearsal after restart and restore). Handlers were synchronous and not retried; #97 made delivery owned work with retries.
 
 ### Protocols #95
 
@@ -249,6 +254,10 @@ ADR-0011, on the owner's observation that large software interoperates through p
 ### Organisation #96
 
 ADR-0012, after the owner's partner asked for organisation beyond departments and teams (groups, subsidiaries, business groups, factories, projects, temporary committees, external partners; one person in several structures). The `org` app holds units, structures and memberships with valid time, as decisions. Manufacturing's line scope now comes from the site structure: a supervisor belongs to the plant and so to both lines; removing the org app fails six plant tests. The sales solution's demo group shows one person as general manager (management), director (legal) and committee chair (governance), and an external partner sitting on a committee. Settings shows each structure as a tree as of a date and each member's units across structures. Directory attributes remain for other uses; posts and delegation wait for a need.
+
+### Operations #97
+
+ADR-0013. The host now owns work: an event is queued per subscriber and delivered after the input, retried, and failed visibly; a scheduled job runs as its app. Both are inputs of the journal, so a replay reaches the same outcomes and rebuilds the queues (a replay whose handler ends otherwise than recorded is refused). Connectors moved from the plant into the host: Settings shows health, cursor, last seen and the last refused input, and disables a connector as a decision the restart keeps (rehearsal). A new downtime notifies the supervisors of its line, resolved through the site structure, never its operators; a job reminds them once of downtime still without a reason after the plant's setting, which administrators change in Settings. Checked in the browser: disabling the ERP connector, changing the reminder minutes, running the job from Automation, and marking a notification read in the MES client. Not yet: registering connectors in Settings, outbound webhooks, email, per-member notification preferences, parallel workers.
 
 ### Shared capability models (candidates, layer 2)
 

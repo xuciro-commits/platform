@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { DataTable, EntityForm, StatusTag, submissionStatuses, type ColumnDef } from "./index";
+import { DataTable, EntityForm, NotificationList, StatusTag, submissionStatuses, type ColumnDef } from "./index";
 
 afterEach(cleanup);
 
@@ -67,4 +67,16 @@ test("routes round-trip through the URL and name one tab per entity", async () =
   expect(routeKey({ view: "workOrder", params: { id: "WO 7/2", tenant: "plant-1" } })).toBe(routeKey(route));
   expect(routeFromHash("#/home")).toEqual({ view: "home" });
   expect(routeFromHash("")).toBeUndefined();
+});
+
+test("NotificationList marks unread notifications and reads them", () => {
+  const read = vi.fn();
+  render(<NotificationList onRead={read} items={[
+    { id: "n-2", title: "Downtime on CNC-11", body: "Line L1", at: "2026-09-24T08:00:00Z", read: false },
+    { id: "n-1", title: "Seen before", at: "2026-09-24T07:00:00Z", read: true },
+  ]} />);
+  const buttons = screen.getAllByRole("button", { name: "Mark read" });
+  expect(buttons).toHaveLength(1);
+  fireEvent.click(buttons[0]!);
+  expect(read).toHaveBeenCalledWith(expect.objectContaining({ id: "n-2" }));
 });

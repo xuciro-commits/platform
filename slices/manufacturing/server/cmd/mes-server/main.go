@@ -42,9 +42,6 @@ func main() {
 	disable := flag.String("disable", "", "comma-separated capabilities to deactivate (ADR-0008)")
 	flag.Parse()
 	plant := mes.NewPlant(tenant, mes.DemoMaster())
-	for _, d := range mes.DemoConnectors(tenant) {
-		plant.RegisterConnector(d)
-	}
 	for _, c := range strings.FieldsFunc(*disable, func(r rune) bool { return r == ',' }) {
 		if !plant.Disable(c) {
 			log.Fatalf("-disable: no capability %q", c)
@@ -53,6 +50,9 @@ func main() {
 	seats := deployment.Seats(demo)
 	t, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant, seats...),
 		platformserver.NewOrganization(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), plant)
+	if err == nil {
+		err = t.Connect(mes.DemoConnectors(tenant)...)
+	}
 	if err == nil {
 		err = deployment.Serve(t)
 	}

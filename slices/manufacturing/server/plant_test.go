@@ -64,17 +64,15 @@ func (p *testPlant) DeliverPlanned(who platformserver.Caller, page PlannedPage, 
 
 func plantTenant(t *testing.T, disable ...string) (*Plant, *platformserver.Tenant) {
 	p := NewPlant(tenant, DemoMaster())
-	for _, d := range DemoConnectors(tenant) {
-		if err := p.RegisterConnector(d); err != nil {
-			t.Fatal(err)
-		}
-	}
 	for _, c := range disable {
 		if !p.Disable(c) {
 			t.Fatalf("no capability %s", c)
 		}
 	}
 	tn, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant), platformserver.NewOrganization(tenant, DemoOrganization(units)), p)
+	if err == nil {
+		err = tn.Connect(DemoConnectors(tenant)...)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,6 +101,14 @@ func newPlant(t *testing.T) *testPlant {
 		}
 		if view(again) != view(plant) {
 			t.Fatalf("replayed plant differs:\n%s\n%s", view(plant), view(again))
+		}
+		inbox := func(tn *platformserver.Tenant) string {
+			out, _ := tn.Read(sup.Member, "notifications")
+			raw, _ := json.Marshal(out)
+			return string(raw)
+		}
+		if inbox(tn) != inbox(p.tenant) {
+			t.Fatalf("replayed notifications differ:\n%s\n%s", inbox(p.tenant), inbox(tn))
 		}
 		logs := func(p *Plant) []proto.Message {
 			var out []proto.Message
@@ -258,6 +264,46 @@ func TestDowntimeReasonSurvivesRecomputation(t *testing.T) {
 	expect(t, submit(p, op2, SchemaReason, DowntimeType, events[0].ID, reasonPayload{Reason: "x"}), "ERROR_CODE_POLICY_DENIED")
 }
 
+// #97: a downtime that starts tells the supervisors of its line; one still
+// without a reason reminds them once, after the plant's setting (ADR-0013).
+func TestDowntimeTellsSupervisors(t *testing.T) {
+	p := newPlant(t)
+	inbox := func(who platformserver.Caller) []string {
+		out, err := p.tenant.Read(who.Member, "notifications")
+		if err != nil {
+			t.Fatal(err)
+		}
+		titles := []string{}
+		for _, n := range out.([]platformserver.Notification) {
+			titles = append(titles, n.Title)
+		}
+		return titles
+	}
+	p.DeliverStates(gw, StateBatch{BatchID: "b-1", Resource: "CNC-11", Samples: states(t0.Add(2*time.Minute), "ddrr")}, t0)
+	p.DeliverStates(gw, StateBatch{BatchID: "b-0", Resource: "CNC-11", Samples: states(t0, "dd")}, t0) // the same stop, begun earlier
+	p.DeliverStates(gw, StateBatch{BatchID: "b-3", Resource: "CNC-21", Samples: states(t0, "rd")}, t0)
+	expect(t, fmt.Sprint(inbox(sup)), "[Downtime on CNC-21 Downtime on CNC-11]")
+	expect(t, fmt.Sprint(inbox(op1), inbox(op2)), "[] []") // operators are not supervisors
+	for _, d := range p.Downtime() {
+		if d.Resource == "CNC-21" {
+			expect(t, submit(p, op2, SchemaReason, DowntimeType, d.ID, reasonPayload{Reason: "Setup"}), "ok")
+		}
+	}
+	p.tenant.Work(t0.Add(10 * time.Minute)) // before the default 15 minutes
+	p.tenant.Work(t0.Add(20 * time.Minute))
+	p.tenant.Work(t0.Add(30 * time.Minute)) // reminded once only
+	expect(t, fmt.Sprint(inbox(sup)), "[Downtime without a reason on CNC-11 Downtime on CNC-21 Downtime on CNC-11]")
+	// An administrator turns the downtime notice off in Settings.
+	admin := platformserver.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}
+	if _, err := p.tenant.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: "admin", Authority: platformserver.PlatformApp, IdempotencyKey: "s1",
+		Target: &pb.EntityRef{Type: platformserver.SettingType, Id: "mes/" + SettingNotifyDowntime}, Schema: &pb.SchemaRef{Name: platformserver.SchemaSettingSet, Version: 1},
+		Payload: []byte(`{"value":"false"}`)}, t0); err != nil {
+		t.Fatal(err)
+	}
+	p.DeliverStates(gw, StateBatch{BatchID: "b-4", Resource: "CNC-12", Samples: states(t0, "d")}, t0)
+	expect(t, fmt.Sprint(len(inbox(sup))), "3")
+}
+
 // F-9 confirmed and resolved by K8: push and poll connectors share one descriptor.
 func TestConnectors(t *testing.T) {
 	p := newPlant(t)
@@ -265,7 +311,7 @@ func TestConnectors(t *testing.T) {
 	expect(t, fmt.Sprint(p.DeliverPlanned(erp, page, t0)), "<nil>")
 	expect(t, fmt.Sprint(p.DeliverPlanned(erp, page, t0)), "ERROR_CODE_CONFLICT") // the same page again
 	expect(t, fmt.Sprint(len(p.Planned())), "1")
-	views := p.Connectors(t0.Add(time.Minute))
-	expect(t, views[0].ID+" "+views[0].Health, "erp CONNECTOR_HEALTH_OK")
-	expect(t, views[1].ID+" "+views[1].Health, "gateway-l1 CONNECTOR_HEALTH_STALE")
+	views := p.tenant.Connectors(t0.Add(time.Minute))
+	expect(t, views[0].ID+" "+views[0].Health+" "+views[0].Cursor, "erp ok page-1")
+	expect(t, views[1].ID+" "+views[1].Health, "gateway-l1 stale")
 }

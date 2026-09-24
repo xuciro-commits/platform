@@ -46,7 +46,8 @@ submit() { # token key schema target-type target-id payload [expected-revision]
      + (if $r == "" then {} else {expectedRevision:($r|tonumber)} end)')
   curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$server/v1/submissions" -d "$body"
 }
-state() { { for path in orders sfcs downtime planned-orders; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
+state() { { for path in orders sfcs downtime planned-orders notifications; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
+  curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -c '[.[] | {id, disabled}]'
   for path in customers reservations members links timeline; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done; } | jq -cS .; }
 
 # Inputs of every kind the journal keeps: a poll page, decisions, a push batch.
@@ -54,6 +55,15 @@ state() { { for path in orders sfcs downtime planned-orders; do curl -s -H "Auth
   MES_ERP_SECRET=erpLocalOnly0000000000000000000000000000000000000000000000000000 \
   go run ./cmd/gateway-sim -server "$MES" -oidc-token "$IDP/oidc/token" -batches 4 -every 200ms >/dev/null)
 submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
+
+# Platform operations (ADR-0013): the gateway's downtime reached the supervisor
+# of the line, not its operators; Settings disables the ERP connector, and that
+# is a decision the restart below keeps.
+curl -s -H "Authorization: Bearer $SUP" "$MES/v1/notifications" | jq -e 'any(.[]; .title | startswith("Downtime on"))' >/dev/null || fail "supervisor not notified"
+[[ $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/notifications" | jq length) == 0 ]] || fail "operator notified"
+AUTHORITY=platform submit "$SUP" o-1 platform.connector.disable platform.connector erp '{}' | jq -e .record >/dev/null || fail "disable connector"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -r '.[] | select(.id == "erp") | .health') == disabled ]] || fail "connector health"
+echo "ok   operations: downtime notified to the line's supervisor only; ERP connector disabled from Settings"
 submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | jq -e .record >/dev/null || fail start
 [[ $(submit "$OP2" s-2 mes.sfc.start mes.sfc WO-1-002 '{"resource":"FURNACE-1"}' 0 | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "line policy"
 
@@ -62,14 +72,14 @@ submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | 
 agent() { (cd ../../slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MES" -oidc-token "$IDP/oidc/token" "$@"); }
-[[ $(agent actions | jq -c '[.[].schema]') == '["mes.downtime.reason"]' ]] || fail "assistant catalog"
+[[ $(agent actions | jq -c '[.[].schema]') == '["platform.notification.read","mes.downtime.reason"]' ]] || fail "assistant catalog"
 event=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"
 AGENT=$(curl -sf "$IDP/oidc/token" -d grant_type=client_credentials -d client_id=mes-assistant \
   -d client_secret=assistantLocalOnly0000000000000000000000000000000000000000000000 | jq -r .access_token)
 [[ $(submit "$AGENT" a-1 mes.order.release mes.order WO-9 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "server let the assistant release"
-echo "ok   AI assistant: catalog of one action, acted within line L1, refused outside it"
+echo "ok   AI assistant: catalog of one plant action (and its own notifications), acted within line L1, refused outside it"
 
 # The sales solution: the CRM books a stay through the lodging protocol and the
 # hotel provides it (ADR-0011); the platform app revokes a role and the catalog

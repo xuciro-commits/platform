@@ -19,15 +19,16 @@ func schemas(actions []platformserver.Action) []string {
 func TestCatalogPerCaller(t *testing.T) {
 	p := newPlant(t)
 	assistant := member("agent-l1", Assistant, "L1")
+	read := platformserver.SchemaNoticeRead
 	for _, c := range []struct {
 		who  platformserver.Caller
 		want []string
 	}{
-		{sup, []string{SchemaRelease, SchemaReason}},
-		{op1, []string{SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
-		{qa1, []string{SchemaNC, SchemaSign}},
-		{assistant, []string{SchemaReason}},
-		{gw, nil},
+		{sup, []string{read, SchemaRelease, SchemaReason}},
+		{op1, []string{read, SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
+		{qa1, []string{read, SchemaNC, SchemaSign}},
+		{assistant, []string{read, SchemaReason}},
+		{gw, []string{read}}, // every member marks its own notifications
 	} {
 		if got := schemas(p.tenant.Catalog(c.who.Member)); !slices.Equal(got, c.want) {
 			t.Errorf("%s: catalog %v, want %v", c.who.ID, got, c.want)

@@ -80,7 +80,7 @@ The rows below name the capability and what an app gets from it. The "When" colu
 |---|---|---|---|
 | Tenants | Isolation of data, journal, members and settings (K6) | SAP BTP subaccount | exists |
 | Organisational units | A tree (group → company → property/plant → line) apps use as policy context, never as kernel schema | Odoo multi-company | #93 |
-| App settings | Typed per-tenant settings declared by the app, edited in Settings | Odoo `res.config.settings` | #93 |
+| App settings | Typed per-tenant settings declared by the app, edited in Settings | Odoo `res.config.settings` | #97 |
 | Number sequences | Readable document numbers (SO-1042) per tenant and unit, without gaps across replays | Odoo `ir.sequence` | later |
 
 **D. Data**
@@ -100,9 +100,9 @@ The rows below name the capability and what an app gets from it. The "When" colu
 |---|---|---|---|
 | Action catalog and invocation | Declared actions; callers receive their own catalog; cross-app calls through the host | ADR-0008 | exists; routing through the host in #92 |
 | Public reads | Named queries other apps and the UI may use | Salesforce OSDK-like APIs | #92 |
-| Events | Subscriptions over change records, delivered after commit, handlers owned as work (K9) | ServiceNow business rules and events, Odoo automated actions | #94 |
-| Scheduled work | Jobs with owner, checkpoints and cancellation (K9) | Odoo `ir.cron`, ServiceNow scheduled jobs | later |
-| Connectors | Push and poll sources with cursors and health (K8) | ServiceNow IntegrationHub | exists (manufacturing); managed in #93 |
+| Events | Subscriptions over change records, delivered after commit, handlers owned as work (K9) | ServiceNow business rules and events, Odoo automated actions | #94; owned work with retries in #97 |
+| Scheduled work | Jobs with owner, checkpoints and cancellation (K9) | Odoo `ir.cron`, ServiceNow scheduled jobs | #97 (ADR-0013) |
+| Connectors | Push and poll sources with cursors and health (K8) | ServiceNow IntegrationHub | exists (manufacturing); managed in Settings in #97 |
 | Outbound API and webhooks | External systems call actions or receive events with the same grants | — | later |
 | Agent adapters | CLI and MCP over a caller's catalog | ADR-0008 | exists (CLI); MCP later |
 
@@ -114,7 +114,7 @@ The rows below name the capability and what an app gets from it. The "When" colu
 | Logs and correlation | Correlation IDs across cross-app calls, no business content | Platform.md §7 floor | #92 |
 | Health | App, connector and journal health | — | #93 |
 | Backup and restore | Rehearsed | ADR-0007 | exists |
-| Notifications | In-app notices from events; email later | — | later |
+| Notifications | In-app notices from events; email later | — | #97 (in-app) |
 
 **G. The UI host**
 

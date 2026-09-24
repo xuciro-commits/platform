@@ -55,16 +55,22 @@ type Manifest struct {
 	Subscribes []string
 	Provides   []Provision   // protocols this app implements (ADR-0011)
 	Consumes   []Consumption // protocols this app uses; the host binds a provider
+	Everyone   []string      // reads any member may use; the app filters by caller
+	Jobs       []Job         // scheduled work (Runner), ADR-0013
+	Settings   []Setting     // typed values administrators set in Settings
 }
 
 // Event is an accepted decision, delivered to subscribers after commit.
 type Event struct {
 	App    string
 	Record *pb.ChangeRecord
+	hops   int // how many deliveries caused it
 }
 
-// Subscriber is an app that handles the events its manifest subscribes to. A
-// refusal is recorded as a failed delivery; the event's decision stands.
+// Subscriber is an app that handles the events its manifest subscribes to, as
+// owned work after the input (ADR-0013). A refusal is retried, then recorded as
+// a failed delivery; the event's decision stands. Handle must depend only on
+// tenant state: a replay runs it again and must reach the same outcome.
 type Subscriber interface {
 	Handle(c Caller, e Event) *kernel.Error
 }
@@ -77,6 +83,7 @@ type Delivery struct {
 	Target     string    `json:"target"`
 	Subscriber string    `json:"subscriber"`
 	Outcome    string    `json:"outcome"` // "ok" or an error code
+	Attempt    int       `json:"attempt,omitempty"`
 }
 
 // App is one app's instance in one tenant.
@@ -104,10 +111,25 @@ type Tenant struct {
 	auditMu    sync.Mutex
 	audit      []AuditEntry
 	deliveries []Delivery
-	events     []Event // published during the current input, delivered after it
+	events     []Event // published during the current input, queued after it
 	bindings   map[string]binding
 	relations  *Relations
 	org        *Organization
+	hops       int // of the event being handled, for the events it causes
+	effects    int // decisions published and notifications given, ever
+	works      *kernel.Works
+	// opsMu guards what reads and the runner share: queues, connectors,
+	// notifications and settings (operations.go). It is never held while t.mu is taken.
+	opsMu       sync.Mutex
+	queues      map[string][]*Task // subscriber → its deliveries, head first
+	failed      []*Task
+	jobs        []*Task
+	connectors  *kernel.Connectors
+	descriptors map[string]*pb.ConnectorDescriptor
+	lastError   map[string]ConnectorError
+	notices     []Notification
+	noticeSeq   int
+	settings    map[string]string // "<app>/<name>" → value
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -139,7 +161,8 @@ func (t *Tenant) remember(e AuditEntry) {
 
 // NewTenant enables apps for a tenant; it refuses duplicate names and unmet requirements.
 func NewTenant(id string, apps ...App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, owner: map[string]App{}, bindings: map[string]binding{}}
+	t := &Tenant{ID: id, apps: apps, owner: map[string]App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
+		connectors: kernel.NewConnectors(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}}
 	claim := func(name string, a App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)
@@ -172,12 +195,21 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 				continue
 			}
 			owner := t.owner["action:"+action]
+			if _, own := m.Actions.Action(action); own {
+				owner = a // its own action, claimed below
+			}
 			if owner == nil || owner != a && !slices.Contains(m.Requires, owner.Manifest().ID) {
 				return nil, fmt.Errorf("tenant %s: %s subscribes to %s of an app it does not require", id, m.ID, action)
 			}
 			if _, ok := a.(Subscriber); !ok {
 				return nil, fmt.Errorf("tenant %s: %s subscribes but has no Handle", id, m.ID)
 			}
+		}
+		if _, ok := a.(Runner); len(m.Jobs) > 0 && !ok {
+			return nil, fmt.Errorf("tenant %s: %s declares jobs but has no Run", id, m.ID)
+		}
+		for _, j := range m.Jobs {
+			t.jobs = append(t.jobs, &Task{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled", job: j})
 		}
 		var names []string
 		for _, r := range m.Reads {
@@ -220,7 +252,7 @@ func (t *Tenant) Submit(m Member, s *pb.Submission, now time.Time) (*pb.ChangeRe
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	defer t.deliver(false)
+	defer t.enqueue(now)
 	record, err := a.Submit(t.caller(m, a, false), s, now)
 	if err == nil {
 		t.remember(submitted(m.ID, a, s, now))
@@ -238,8 +270,11 @@ func (t *Tenant) Input(m Member, name string, body []byte, now time.Time) (any, 
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	defer t.deliver(false)
+	defer t.enqueue(now)
 	out, err := a.Input(t.caller(m, a, false), name, body, now)
+	if err != nil {
+		t.refused(m.ID, name, err, now)
+	}
 	if err == nil && a.Manifest().Inputs[name] {
 		t.remember(AuditEntry{At: now, Member: m.ID, App: a.Manifest().ID, Action: "input:" + name})
 		t.record(a, name, m, body, now)
@@ -248,65 +283,24 @@ func (t *Tenant) Input(m Member, name string, body []byte, now time.Time) (any, 
 }
 
 // Read serves a named read of the app that declares it, to members holding a
-// role in that app; the app may refuse further. Reads an app makes of the apps
+// role in that app or to everyone when the manifest says so; the app may refuse further. Reads an app makes of the apps
 // it requires (Caller.Read) are the app's own and are not checked here.
 func (t *Tenant) Read(m Member, name string) (any, *kernel.Error) {
 	a := t.owner["read:"+name]
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if m.Roles[a.Manifest().ID] == "" && a != App(t.relations) { // links and timeline filter by the entities' apps
+	if m.Roles[a.Manifest().ID] == "" && !slices.Contains(a.Manifest().Everyone, name) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return a.Read(t.caller(m, a, false), name)
 }
 
 // publish queues an accepted decision for its subscribers (called by Ledger).
-func (t *Tenant) publish(e Event) { t.events = append(t.events, e) }
-
-// maxEvents bounds the events one input may cause (a subscription cycle).
-const maxEvents = 1000
-
-// deliver hands the input's events to their subscribers in order, including
-// events their handlers cause. It runs inside the input, so a replay delivers
-// the same events at the same point and rebuilds what the handlers decided.
-func (t *Tenant) deliver(replaying bool) {
-	for n := 0; len(t.events) > 0 && n < maxEvents; n++ {
-		e := t.events[0]
-		t.events = t.events[1:]
-		names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(e)...)
-		if t.relations != nil {
-			t.relations.observe(t, e, names[1:])
-		}
-		for _, a := range t.apps {
-			sub, ok := a.(Subscriber)
-			if !ok || !slices.ContainsFunc(a.Manifest().Subscribes, func(s string) bool { return slices.Contains(names, s) }) {
-				continue
-			}
-			id := a.Manifest().ID
-			c := Caller{Member: Member{ID: "app:" + id, Tenant: t.ID, Roles: map[string]string{}}, App: id, Replaying: replaying, Automation: true, tenant: t}
-			outcome := "ok"
-			if err := sub.Handle(c, e); err != nil {
-				outcome = err.Error()
-			}
-			s := e.Record.GetSubmission()
-			t.auditMu.Lock()
-			t.deliveries = append(t.deliveries, Delivery{At: e.Record.GetRecordedTime().AsTime(), App: e.App, Action: s.GetSchema().GetName(),
-				Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Subscriber: id, Outcome: outcome})
-			if len(t.deliveries) > auditKept {
-				t.deliveries = t.deliveries[len(t.deliveries)-auditKept:]
-			}
-			t.auditMu.Unlock()
-		}
-	}
-	if len(t.events) > 0 { // a subscription cycle: stop it visibly
-		e := t.events[0].Record.GetSubmission()
-		t.auditMu.Lock()
-		t.deliveries = append(t.deliveries, Delivery{App: t.events[0].App, Action: e.GetSchema().GetName(),
-			Target: e.GetTarget().GetType() + "/" + e.GetTarget().GetId(), Outcome: fmt.Sprintf("stopped: more than %d events from one input", maxEvents)})
-		t.auditMu.Unlock()
-	}
-	t.events = nil
+func (t *Tenant) publish(e Event) {
+	e.hops = t.hops
+	t.events = append(t.events, e)
+	t.effects++
 }
 
 // Deliveries is the tenant's recent event deliveries, oldest first.
@@ -336,6 +330,12 @@ func (t *Tenant) Replay(entries []Entry) error {
 			return fmt.Errorf("entry %d: app %q not enabled or member unreadable", i+1, e.App)
 		}
 		var err *kernel.Error
+		if e.Kind == "delivery" || e.Kind == "job" {
+			if err := t.replayWork(e.Kind, e.Body, e.At); err != nil {
+				return fmt.Errorf("entry %d: %v", i+1, err)
+			}
+			continue
+		}
 		if e.Kind == "submission" {
 			s := &pb.Submission{}
 			if protojson.Unmarshal(e.Body, s) != nil {
@@ -343,11 +343,11 @@ func (t *Tenant) Replay(entries []Entry) error {
 			}
 			_, err = a.Submit(t.caller(m, a, true), s, e.At)
 			t.remember(submitted(m.ID, a, s, e.At))
-			t.deliver(true)
+			t.enqueue(e.At)
 		} else {
 			_, err = a.Input(t.caller(m, a, true), e.Kind, e.Body, e.At)
 			t.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + e.Kind})
-			t.deliver(true)
+			t.enqueue(e.At)
 		}
 		if err != nil {
 			return fmt.Errorf("entry %d (%s %s): %v", i+1, e.App, e.Kind, err)

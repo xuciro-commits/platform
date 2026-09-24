@@ -2,6 +2,8 @@ package mes
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -9,13 +11,43 @@ import (
 	"platformserver"
 )
 
+// Settings of the plant (ADR-0013), set by administrators in Settings.
+const (
+	SettingNotifyDowntime = "notify-downtime"
+	SettingReasonMinutes  = "reason-reminder-minutes"
+	JobReasons            = "downtime-reasons"
+)
+
 // Manifest declares the plant as the "mes" app (ADR-0010): its actions, its
-// reads, and its connector inputs; batches and pages are journaled, heartbeats
-// are not (health reads stale after a restart until the next one).
+// reads, its connector inputs (batches and pages, both journaled; the host keeps
+// the connectors), its settings and its scheduled job (ADR-0013).
 func (p *Plant) Manifest() platformserver.Manifest {
 	return platformserver.Manifest{ID: "mes", Version: "1", Actions: p.ledger.Catalog,
-		Reads:  []string{"master", "orders", "sfcs", "planned-orders", "downtime", "connectors"},
-		Inputs: map[string]bool{"states": true, "planned-orders": true, "heartbeat": false}}
+		Reads:  []string{"master", "orders", "sfcs", "planned-orders", "downtime"},
+		Inputs: map[string]bool{"states": true, "planned-orders": true},
+		Jobs:   []platformserver.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
+		Settings: []platformserver.Setting{
+			{Name: SettingNotifyDowntime, Title: "Tell supervisors about new downtime", Type: "boolean", Default: "true",
+				Description: "Each downtime that starts notifies the supervisors of its line."},
+			{Name: SettingReasonMinutes, Title: "Remind about missing reasons after (minutes)", Type: "integer", Default: "15",
+				Description: "Downtime still without a reason after this long reminds the line's supervisors once; 0 turns reminders off."},
+		}}
+}
+
+// Run reminds the supervisors of each line about downtime still without a reason.
+func (p *Plant) Run(c platformserver.Caller, _ string, now time.Time) *kernel.Error {
+	minutes, _ := strconv.Atoi(c.Setting(SettingReasonMinutes))
+	if minutes <= 0 {
+		return nil
+	}
+	for _, d := range p.Downtime() {
+		if d.Reason == "" && !d.Start.After(now.Add(-time.Duration(minutes)*time.Minute)) {
+			c.Notify(platformserver.Notification{Title: "Downtime without a reason on " + d.Resource,
+				Body: fmt.Sprintf("Started %s UTC, still no reason after %d minutes.", d.Start.UTC().Format("15:04"), minutes),
+				Ref:  DowntimeType + "/" + d.ID, Key: "reason:" + d.ID}, now, p.supervisorsOf(d.Resource))
+		}
+	}
+	return nil
 }
 
 func (p *Plant) Read(_ platformserver.Caller, name string) (any, *kernel.Error) {
@@ -28,10 +60,8 @@ func (p *Plant) Read(_ platformserver.Caller, name string) (any, *kernel.Error) 
 		return p.SFCs(), nil
 	case "planned-orders":
 		return p.Planned(), nil
-	case "downtime":
-		return p.Downtime(), nil
 	}
-	return p.Connectors(time.Now()), nil
+	return p.Downtime(), nil
 }
 
 func (p *Plant) Input(c platformserver.Caller, name string, body []byte, now time.Time) (any, *kernel.Error) {
@@ -48,8 +78,6 @@ func (p *Plant) Input(c platformserver.Caller, name string, body []byte, now tim
 			return nil, invalid
 		}
 		return nil, p.DeliverPlanned(c, page, now)
-	case "heartbeat":
-		return nil, p.Heartbeat(c, now)
 	}
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }

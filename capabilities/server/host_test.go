@@ -105,10 +105,11 @@ func TestTenantComposition(t *testing.T) {
 		}
 		return out
 	}
-	if got := schemas(bo); len(got) != 0 {
+	if got := schemas(bo); !slices.Equal(got, []string{SchemaNoticeRead}) {
 		t.Fatalf("bo is offered %v; b.note uses a.note, which bo may not call", got)
 	}
-	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaScope, "a.note", "b.note"}) {
+	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaScope,
+		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaNoticeRead, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
 	}
 	// An app may call only what it requires.

@@ -43,13 +43,9 @@ type Downtime struct {
 // would revive a retired ID when a split recreates an event at the same start.
 func resourceOfEvent(id string) string { resource, _, _ := strings.Cut(id, "#"); return resource }
 
-func (p *Plant) RegisterConnector(d *pb.ConnectorDescriptor) *kernel.Error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.connectors.Register(d)
-}
-
-// DeliverStates records a gateway batch as one observation and re-derives downtime.
+// DeliverStates records a gateway batch as one observation and re-derives
+// downtime; a downtime that starts tells the supervisors of its line, when the
+// plant's setting says so (ADR-0013).
 func (p *Plant) DeliverStates(gateway platformserver.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -59,7 +55,7 @@ func (p *Plant) DeliverStates(gateway platformserver.Caller, b StateBatch, now t
 	if b.BatchID == "" || b.Resource == "" || len(b.Samples) == 0 || p.resourceLine(b.Resource) == "" {
 		return nil, invalid
 	}
-	if err := p.connectors.Deliver(p.tenant, gateway.ID, ResourceType, "", "", now); err != nil {
+	if err := gateway.Deliver(ResourceType, "", "", now); err != nil {
 		return nil, err
 	}
 	slices.SortFunc(b.Samples, func(x, y Sample) int { return x.At.Compare(y.At) })
@@ -71,14 +67,27 @@ func (p *Plant) DeliverStates(gateway platformserver.Caller, b StateBatch, now t
 	if err != nil {
 		return nil, err
 	}
-	p.deriveDowntime(b.Resource)
+	started := p.deriveDowntime(b.Resource)
+	if gateway.Setting(SettingNotifyDowntime) == "true" {
+		for _, d := range started {
+			gateway.Notify(platformserver.Notification{Title: "Downtime on " + d.Resource,
+				Body: fmt.Sprintf("Line %s, since %s UTC. Give it a reason.", p.resourceLine(d.Resource), d.Start.UTC().Format("15:04")),
+				Ref:  DowntimeType + "/" + d.ID, Key: "down:" + d.ID}, now, p.supervisorsOf(d.Resource))
+		}
+	}
 	return fact, nil
+}
+
+// supervisorsOf are whoever supervises the resource's line or a unit above it (ADR-0012).
+func (p *Plant) supervisorsOf(resource string) platformserver.Recipient {
+	return platformserver.Recipient{Structure: SiteStructure, Unit: p.resourceLine(resource), Role: string(Supervisor)}
 }
 
 // deriveDowntime recomputes a resource's downtime from all its samples. Events
 // whose start moved are merged into the new event; events cut in two are split,
-// so decisions made about the old event keep resolving (K1 redirects).
-func (p *Plant) deriveDowntime(resource string) {
+// so decisions made about the old event keep resolving (K1 redirects). It
+// returns the events that started: those overlapping no previous event.
+func (p *Plant) deriveDowntime(resource string) (started []Downtime) {
 	var samples []Sample
 	for _, r := range p.facts.Records(p.tenant) {
 		if r.GetFact().GetSubject().GetId() == resource && r.GetFact().GetSchema().GetName() == schemaStates {
@@ -120,6 +129,9 @@ func (p *Plant) deriveDowntime(resource string) {
 		p.nextEvent++
 		events[i].ID = fmt.Sprintf("%s#%d", resource, p.nextEvent)
 		p.identity.Create(&pb.EntityRef{Type: DowntimeType, Id: events[i].ID}) // fresh opaque IDs never collide
+		if len(overlapping(events[i], old)) == 0 {
+			started = append(started, events[i])
+		}
 	}
 	for _, o := range old {
 		if slices.ContainsFunc(events, func(e Downtime) bool { return e.ID == o.ID }) {
@@ -138,6 +150,7 @@ func (p *Plant) deriveDowntime(resource string) {
 		}
 	}
 	p.downtime[resource] = events
+	return started
 }
 
 func overlaps(a, b Downtime) bool {
@@ -205,7 +218,7 @@ func (p *Plant) DeliverPlanned(erp platformserver.Caller, page PlannedPage, now 
 	if erp.Tenant != p.tenant || roleOf(erp) != ERP && !erp.Replaying {
 		return denied
 	}
-	if err := p.connectors.Deliver(p.tenant, erp.ID, PlannedType, page.CursorFrom, page.CursorTo, now); err != nil {
+	if err := erp.Deliver(PlannedType, page.CursorFrom, page.CursorTo, now); err != nil {
 		return err
 	}
 	for _, o := range page.Orders {
@@ -237,36 +250,5 @@ func (p *Plant) Planned() []PlannedOrder {
 		out = append(out, o)
 	}
 	slices.SortFunc(out, func(a, b PlannedOrder) int { return compare(a.ERPID, b.ERPID) })
-	return out
-}
-
-func (p *Plant) Heartbeat(who platformserver.Caller, now time.Time) *kernel.Error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.connectors.Heartbeat(p.tenant, who.ID, now)
-}
-
-type ConnectorView struct {
-	Descriptor *pb.ConnectorDescriptor `json:"-"`
-	ID         string                  `json:"id"`
-	Direction  string                  `json:"direction"`
-	Health     string                  `json:"health"`
-	LastSeen   *time.Time              `json:"lastSeen,omitempty"`
-	Cursor     string                  `json:"cursor,omitempty"`
-}
-
-func (p *Plant) Connectors(now time.Time) []ConnectorView {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	var out []ConnectorView
-	for _, d := range p.connectors.Descriptors(p.tenant) {
-		s, _ := p.connectors.Status(p.tenant, d.GetConnectorId(), now)
-		v := ConnectorView{ID: d.GetConnectorId(), Direction: d.GetDirection().String(), Health: s.GetHealth().String(), Cursor: s.GetCursor()}
-		if s.GetLastSeen() != nil {
-			t := s.GetLastSeen().AsTime()
-			v.LastSeen = &t
-		}
-		out = append(out, v)
-	}
 	return out
 }

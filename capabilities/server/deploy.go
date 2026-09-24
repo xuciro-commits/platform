@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 // Deployment is how a host binary runs (ADR-0007, ADR-0010): in memory with
@@ -43,7 +44,8 @@ func (d *Deployment) Seats(development []Seat) []Seat {
 	return seats
 }
 
-// Serve replays each tenant's journal, then records into it (fail-stop) and serves.
+// Serve replays each tenant's journal, then records into it (fail-stop), runs
+// the tenants' owned work every second (ADR-0013) and serves.
 func (d *Deployment) Serve(tenants ...*Tenant) error {
 	if d.Database != "" {
 		ctx := context.Background()
@@ -76,6 +78,13 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 		authenticate = OIDC(d.Issuer, d.Keys)
 	}
+	go func() {
+		for range time.Tick(time.Second) {
+			for _, t := range tenants {
+				t.Work(Now())
+			}
+		}
+	}()
 	log.Printf("host on http://%s", d.Addr)
 	return http.ListenAndServe(d.Addr, NewHost(authenticate, tenants...).Handler())
 }

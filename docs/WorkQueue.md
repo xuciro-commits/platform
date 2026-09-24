@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **97 · ready** | Platform operations, one deep step (ADR-0010 part 2 rows marked later): server-side work (K9) for scheduled jobs and asynchronous event delivery with retries; connectors managed in Settings (health, cursor, last error, enable); in-app notifications from events; typed per-app settings in Settings; notifications addressed to units (ADR-0012) | Manufacturing's connectors are managed from Settings; an event handler that fails is retried as owned work and shows its state; a supervisor is notified of a new downtime event |
+| **98 · proposed** | Choose next with the owner: (a) outbound work — webhooks and external calls as journaled work, the first handler that leaves the process; (b) a second industry app on the host (Hotel as a host app with its own settings, jobs and notifications) to prove #97 is not manufacturing-shaped; (c) choosing between two providers of a protocol in Settings | The owner picks one; it gets its own done-when |
 
 ## Open friction (temporary; delete entries once resolved)
 
