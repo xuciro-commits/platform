@@ -71,16 +71,38 @@ func (t *Tenant) bind(i int, a App) error {
 			if b, ok := t.bindings[c.Protocol]; ok && b.provider != found[0].provider {
 				continue // bound for an earlier consumer; one provider per protocol per tenant
 			}
-			t.bindings[c.Protocol] = found[0] // the first provider; a choice in Settings comes with a second one
+			t.bindings[c.Protocol] = found[0] // the first provider, until an administrator chooses another
 		}
 	}
 	return nil
 }
 
+// bound is the provider the tenant binds protocol to; an administrator may
+// choose another (platform.protocol.bind), so it is read under opsMu.
+func (t *Tenant) bound(protocol string) (binding, bool) {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	b, ok := t.bindings[protocol]
+	return b, ok
+}
+
+// providers are every enabled provision of protocol, in the tenant's app order.
+func (t *Tenant) providers(protocol string) []binding {
+	var out []binding
+	for _, a := range t.apps {
+		for _, pv := range a.Manifest().Provides {
+			if pv.Protocol.ID() == protocol {
+				out = append(out, binding{a, pv})
+			}
+		}
+	}
+	return out
+}
+
 // resolve is the tenant's provider of a protocol: the bound one, or the first
 // provider when no consumer has bound it yet.
 func (t *Tenant) resolve(protocol string) (binding, bool) {
-	if b, ok := t.bindings[protocol]; ok {
+	if b, ok := t.bound(protocol); ok {
 		return b, true
 	}
 	for _, a := range t.apps {
@@ -136,18 +158,47 @@ func (t *Tenant) invoke(c Caller, protocol, action, id string, payload []byte, k
 	return target, record, err
 }
 
-// Query reads a protocol read from the tenant's provider (nil when none is bound).
-func (c Caller) Query(protocol, read string) (any, *kernel.Error) {
+// Answer is one provider's result of a protocol read, with the type of the
+// entities it holds, so consumers match their links exactly.
+type Answer struct {
+	Provider string
+	Type     string // e.g. "hotel.reservation"
+	Result   any
+}
+
+// Query reads a protocol read from every provider of the tenant, the bound one
+// first: switching the binding sends new calls elsewhere, but what the other
+// providers hold stays visible (#99). None when no app provides it.
+func (c Caller) Query(protocol, read string) ([]Answer, *kernel.Error) {
 	if c.tenant == nil || !c.consumes(protocol) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	b, bound := c.tenant.bindings[protocol]
-	if !bound {
-		return nil, nil
+	all := c.tenant.providers(protocol)
+	if b, ok := c.tenant.bound(protocol); ok {
+		first := func(x binding) int { return map[bool]int{true: 0, false: 1}[x.provider == b.provider] }
+		slices.SortStableFunc(all, func(x, y binding) int { return first(x) - first(y) })
 	}
-	called := c.tenant.caller(c.Member, b.provider, c.Replaying)
-	called.Automation = c.Automation
-	return b.provider.Read(called, b.provision.Reads[read])
+	var out []Answer
+	for _, b := range all {
+		called := c.tenant.caller(c.Member, b.provider, c.Replaying)
+		called.Automation = c.Automation
+		result, err := b.provider.Read(called, b.provision.Reads[read])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, Answer{Provider: b.provider.Manifest().ID, Type: b.entityType(), Result: result})
+	}
+	return out, nil
+}
+
+// entityType is the type of the entities the provider's protocol actions act on.
+func (b binding) entityType() string {
+	for _, schema := range b.provision.Actions {
+		if a, ok := b.provider.Manifest().Actions.Action(schema); ok {
+			return a.Target
+		}
+	}
+	return ""
 }
 
 // Bound reports whether the tenant has a provider for protocol.
@@ -155,8 +206,21 @@ func (c Caller) Bound(protocol string) bool {
 	if c.tenant == nil {
 		return false
 	}
-	_, ok := c.tenant.bindings[protocol]
+	_, ok := c.tenant.bound(protocol)
 	return ok
+}
+
+// rebind makes provider the tenant's provider of protocol (a platform decision).
+func (t *Tenant) rebind(protocol, provider string) bool {
+	for _, b := range t.providers(protocol) {
+		if b.provider.Manifest().ID == provider {
+			t.opsMu.Lock()
+			t.bindings[protocol] = b
+			t.opsMu.Unlock()
+			return true
+		}
+	}
+	return false
 }
 
 // Invoke calls a protocol action as a member (HTTP, MCP, conformance tests),
@@ -268,7 +332,7 @@ func (t *Tenant) Protocols() []ProtocolInfo {
 	}
 	out := []ProtocolInfo{}
 	for _, id := range order {
-		if b, ok := t.bindings[id]; ok {
+		if b, ok := t.bound(id); ok {
 			byID[id].Bound = b.provider.Manifest().ID
 		}
 		out = append(out, *byID[id])

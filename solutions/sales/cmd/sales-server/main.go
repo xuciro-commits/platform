@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"hotel"
+	"lodging"
 	"platformserver"
 	"sales"
 )
@@ -17,11 +18,11 @@ func seat(token, id string, roles map[string]string) platformserver.Seat {
 
 // demo is the directory without -directory; a development token is the subject.
 var demo = []platformserver.Seat{
-	withUnits(seat("sales", "sales-1", map[string]string{"crm": "sales", "hotel": "front-desk"}),
+	withUnits(seat("sales", "sales-1", map[string]string{"crm": "sales", "hotel": "front-desk", "memstay": lodging.Keeper}),
 		platformserver.Membership{Unit: "sales-team", Role: "account executive", Primary: true},
 		platformserver.Membership{Unit: "offsite-2026", Role: "project lead"}),
 	seat("sales-only", "sales-2", map[string]string{"crm": "sales"}),
-	withUnits(seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "hotel": "manager", "platform": "admin", "org": "admin"}),
+	withUnits(seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper, "platform": "admin", "org": "admin"}),
 		platformserver.Membership{Unit: "hotel-a", Role: "general manager", Primary: true},
 		platformserver.Membership{Unit: "hotel-a-co", Role: "director"},
 		platformserver.Membership{Unit: "guest-committee", Role: "chair"}),

@@ -75,7 +75,7 @@ func DirectoryActions() *Catalog {
 // NewDirectory seeds a tenant's directory; changes recorded later replay on top.
 func NewDirectory(tenant string, seats ...Seat) *Directory {
 	d := &Directory{tenant: tenant, members: map[string]*Member{}, subjects: map[string]string{},
-		ledger: NewLedger(tenant, PlatformApp, DirectoryActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType)}
+		ledger: NewLedger(tenant, PlatformApp, DirectoryActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)

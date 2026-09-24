@@ -6,20 +6,23 @@ package sales
 import (
 	"crm"
 	"hotel"
+	"lodging"
 	"platformserver"
 )
 
-// NewTenant composes the software for one tenant with the hotel as lodging provider.
+// NewTenant composes the software for one tenant with two lodging providers:
+// the hotel, bound first, and serviced apartments (the protocol's reference
+// provider); an administrator chooses between them in Settings (#99).
 func NewTenant(id string, rooms map[string]hotel.RoomType, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
-	return Compose(id, hotel.NewHotel(id, rooms), seats...)
+	return Compose(id, []platformserver.App{hotel.NewHotel(id, rooms), lodging.NewMemory(id)}, seats...)
 }
 
-// Compose puts any lodging provider under the CRM.
-func Compose(id string, lodging platformserver.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
+// Compose puts any lodging providers under the CRM; the first is bound until an administrator chooses another.
+func Compose(id string, providers []platformserver.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	org := DemoOrganization()
 	org.Memberships = append(org.Memberships, platformserver.Memberships(seats)...)
-	return platformserver.NewTenant(id, platformserver.NewDirectory(id, seats...), platformserver.NewOrganization(id, org),
-		platformserver.NewRelations(id), lodging, crm.New(id))
+	apps := append([]platformserver.App{platformserver.NewDirectory(id, seats...), platformserver.NewOrganization(id, org), platformserver.NewRelations(id)}, providers...)
+	return platformserver.NewTenant(id, append(apps, crm.New(id))...)
 }
 
 // DemoOrganization is a hospitality group as ADR-0012 sees it: the same units in

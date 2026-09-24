@@ -28,7 +28,7 @@ What is missing is a way to depend on *a capability* rather than on *an app*.
    - A manifest says which protocols the app **provides**, each mapped onto its own actions, reads and events.
    - A manifest says which protocols the app **consumes**, marking each as required or optional.
    - Requirements name protocols, not apps. When the tenant starts, the host binds each consumed protocol to an enabled provider, and discovery lists providers by protocol.
-   - A tenant with two providers of one protocol chooses in Settings.
+   - A tenant with two providers of one protocol chooses in Settings (#99): the choice is a decision of the platform app and decides where new calls go. Reads span every provider, each answer carrying the type of the entities it holds, so what the other provider holds stays visible and its events still reach linked entities.
 3. **Shared relations are platform capabilities, not bridge data.**
    - **Links:** typed references between any two entities (K1 references, like Salesforce related records or Notion relations). An opportunity links to a booking without either app owning the link.
    - **Timeline:** notes and activities about any entity, posted by people or by apps through events.

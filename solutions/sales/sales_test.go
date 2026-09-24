@@ -33,8 +33,12 @@ type world struct {
 	journal []platformserver.Entry
 }
 
-func newWorld(t *testing.T, provider func(string) platformserver.App) *world {
-	tn, err := Compose("hotel-a", provider("hotel-a"), seats...)
+func newWorld(t *testing.T, providers ...func(string) platformserver.App) *world {
+	var apps []platformserver.App
+	for _, p := range providers {
+		apps = append(apps, p("hotel-a"))
+	}
+	tn, err := Compose("hotel-a", apps, seats...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,6 +47,7 @@ func newWorld(t *testing.T, provider func(string) platformserver.App) *world {
 	for _, s := range seats {
 		w.members[s.Subjects[0]] = platformserver.Member{ID: s.ID, Tenant: "hotel-a", Roles: s.Roles}
 	}
+	w.members["admin"] = platformserver.Member{ID: "admin-1", Tenant: "hotel-a", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}
 	return w
 }
 
@@ -159,6 +164,41 @@ func TestAnyLodgingProviderServesTheCRM(t *testing.T) {
 	w.expect(w.submit("manager", "memstay", "memstay.cancel", "memstay.booking", "OPP-1-B1", "c-1", struct{}{}), "ok")
 	if told := w.timeline("sales", "crm.opportunity/OPP-1"); len(told) != 1 || !strings.HasPrefix(told[0], "app:memstay: Booking canceled") {
 		t.Fatalf("timeline %v", told)
+	}
+}
+
+// #99: with two providers an administrator chooses where new stays go; the stays
+// the other provider holds stay on the opportunity, and the choice replays.
+func TestAdministratorChoosesTheProvider(t *testing.T) {
+	w := newWorld(t, hotelProvider, memoryProvider)
+	w.setup()
+	w.expect(w.book("sales", "b-1", "suite", "2026-10-01"), "ok") // the hotel is bound first
+	bind := func(who, key, provider string) string {
+		return w.submit(who, platformserver.PlatformApp, platformserver.SchemaProtocolBind, platformserver.ProtocolType, lodging.ID, key,
+			map[string]string{"provider": provider})
+	}
+	w.expect(bind("manager", "p-1", "memstay"), "ERROR_CODE_POLICY_DENIED")
+	w.expect(bind("admin", "p-2", "crm"), "ERROR_CODE_INVALID_ARGUMENT")
+	w.expect(bind("admin", "p-3", "memstay"), "ok")
+	w.expect(w.book("sales", "b-2", "loft", "2026-10-01"), "ok") // the hotel sells no lofts: this went to memstay
+	stays := func(w *world) string {
+		var out []string
+		for _, s := range w.stays("sales") {
+			out = append(out, s.ID+" "+s.RoomType)
+		}
+		return fmt.Sprint(out)
+	}
+	w.expect(stays(w), "[OPP-1-B1 suite OPP-1-B2 loft]") // in the order they were linked, from both providers
+	w.expect(w.submit("manager", hotel.Authority, hotel.SchemaCancel, hotel.ReservationType, "OPP-1-B1", "c-1", struct{}{}), "ok")
+	if told := w.timeline("sales", "crm.opportunity/OPP-1"); len(told) != 1 || !strings.HasPrefix(told[0], "app:hotel: Booking canceled") {
+		t.Fatalf("the earlier provider's event no longer reaches the opportunity: %v", told)
+	}
+	again := newWorld(t, hotelProvider, memoryProvider)
+	if err := again.tenant.Replay(w.journal); err != nil {
+		t.Fatal(err)
+	}
+	if p := again.tenant.Protocols()[0]; p.ID != lodging.ID || p.Bound != "memstay" || stays(again) != stays(w) {
+		t.Fatalf("after replay: bound %s, stays %s", p.Bound, stays(again))
 	}
 }
 

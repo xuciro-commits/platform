@@ -301,9 +301,10 @@ function Matrix() {
 // Protocols (ADR-0011): apps meet through them, not through each other.
 function Protocols() {
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
+  const { decideOn } = useAdmin();
   return (
     <>
-      <PageHeader title="Protocols" description="Interfaces apps provide and consume. A consumer depends on the protocol; the host binds it to a provider." />
+      <PageHeader title="Protocols" description="Interfaces apps provide and consume. A consumer depends on the protocol; new calls go to the chosen provider, and what every provider holds stays readable." />
       <div className="grid max-w-5xl gap-3">
         {protocols.length === 0 && <p className="text-sm text-muted">No protocols in this tenant.</p>}
         {protocols.map((p) => (
@@ -311,6 +312,12 @@ function Protocols() {
             <div className="flex items-center gap-2">
               <span className="font-mono font-semibold">{p.id}</span>
               {p.bound ? <Tag label={`bound to ${p.bound}`} tone="success" /> : <Tag label="not bound" tone="neutral" />}
+              {p.providers.length > 1 && (
+                <Select aria-label={`Provider of ${p.id}`} className="ml-auto w-48" value={p.bound ?? ""}
+                  onChange={(e) => void decideOn("platform.protocol.bind", { type: "platform.protocol", id: p.id }, { provider: e.target.value })}>
+                  {p.providers.map((x) => <option key={x} value={x}>New calls to {x}</option>)}
+                </Select>
+              )}
             </div>
             <div className="mt-2 grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1">
               <span className="text-muted">Providers</span><span>{p.providers.join(", ") || "—"}</span>

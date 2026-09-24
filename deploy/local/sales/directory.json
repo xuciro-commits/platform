@@ -6,7 +6,8 @@
     "id": "sales-1",
     "roles": {
       "crm": "sales",
-      "hotel": "front-desk"
+      "hotel": "front-desk",
+      "memstay": "keeper"
     },
     "units": [
       {
@@ -29,7 +30,8 @@
       "crm": "sales-manager",
       "hotel": "manager",
       "platform": "admin",
-      "org": "admin"
+      "org": "admin",
+      "memstay": "keeper"
     },
     "units": [
       {

@@ -67,7 +67,7 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Web | Notifications | A member's notifications with unread state | `@platform/ui` `NotificationList` | manufacturing, sales | 2 |
 | Web | Package UI | An app's or a protocol's views and model for every software that shows its data | `@pkg/hotel`, `@pkg/lodging` | Hotel Desk, sales | 2 |
 | Operations | Deployment and rehearsal | Compose stack with PostgreSQL and Rauthy; restart and restore rehearsal | `deploy/local` | manufacturing, sales | 2 |
-| Composition | Protocols | Named, versioned interfaces (actions, reads, events) with conformance tests; apps provide and consume them, the host binds a provider per tenant; consumers never name an app (ADR-0011) | `platformserver.Protocol`, `protocols/lodging` | Hotel and the reference memstay provide lodging; CRM consumes it | 2 |
+| Composition | Protocols | Named, versioned interfaces (actions, reads, events) with conformance tests; apps provide and consume them, the host binds a provider per tenant; consumers never name an app (ADR-0011) | `platformserver.Protocol`, `protocols/lodging` | Hotel and the reference memstay provide lodging (both in the sales tenant, the administrator chooses); CRM consumes it | 2 |
 | Composition | Links and timeline | Relations between any two entities and the activity about an entity, owned by the platform; protocol events are told on the timeline of the entity and of what is linked to it; members see only entities of apps they hold a role in | `platformserver.Relations` | sales solution | 1 |
 | Composition | MCP | A member's catalog and reads as MCP tools, called with the member's grants through the same submission path | `POST /mcp` | every host | 1 |
 | Composition | Solutions | Software composed from apps and protocols without bridges | `solutions/sales` | sales | 1 |
@@ -249,7 +249,7 @@ Apps react to each other without knowing each other: the crm-hotel bridge subscr
 
 ### Protocols #95
 
-ADR-0011, on the owner's observation that large software interoperates through protocols (OIDC, MCP, extension interfaces), not pairwise bridges. The crm-hotel bridge is gone. Hotel provides `lodging.booking/1` and passes its conformance tests; so does `lodging.Memory`, a second provider under which the CRM runs unchanged (`solutions/sales` tests). The CRM books a stay through the protocol and links it to the opportunity with the platform's links; the hotel's cancellation reaches the opportunity's timeline as the protocol's event through that link, with no app in between. Replay rebuilds the reservation, the link and the timeline from the CRM's input alone. An MCP client lists and calls a member's tools in the rehearsal. Not yet: choosing between two providers of a protocol in Settings (the first enabled is bound), and protocol versions side by side.
+ADR-0011, on the owner's observation that large software interoperates through protocols (OIDC, MCP, extension interfaces), not pairwise bridges. The crm-hotel bridge is gone. Hotel provides `lodging.booking/1` and passes its conformance tests; so does `lodging.Memory`, a second provider under which the CRM runs unchanged (`solutions/sales` tests). The CRM books a stay through the protocol and links it to the opportunity with the platform's links; the hotel's cancellation reaches the opportunity's timeline as the protocol's event through that link, with no app in between. Replay rebuilds the reservation, the link and the timeline from the CRM's input alone. An MCP client lists and calls a member's tools in the rehearsal. Not yet: protocol versions side by side (choosing between providers came in #99).
 
 ### Organisation #96
 
@@ -262,6 +262,10 @@ ADR-0013. The host now owns work: an event is queued per subscriber and delivere
 ### Hotel on the operations #98
 
 The hotel is the second app on ADR-0013, chosen to test that #97 was not shaped by manufacturing. Its channel manager is a host connector (the hotel's own K8 handling is gone; a refused booking shows on the connector). Three settings of three types: whether the overbooking allowance is sold, who hears of channel bookings (a choice), and how many days ahead the arrivals list goes. Managers are told of each night sold beyond the physical rooms, and the front desk receives the arrivals list once a day from a job. Friction found and resolved: a hotel addresses people by their role in the app, not by a unit (its managers may sit in any organisation, or none), so `Recipient.AppRole` joined unit-based recipients. Not moved: the Hotel Desk client (Tauri) has no notifications yet; the sales workspace shows them.
+
+### Choosing a provider #99
+
+The sales tenant runs two lodging providers, the hotel and serviced apartments (`memstay`). An administrator chooses in Settings which one receives new calls; the choice is a platform decision (`platform.protocol.bind`), so it replays and survives a restart (rehearsal). Consumers' reads span every provider, and each answer names the type of entities it holds, so the CRM matches its links exactly and a stay booked before the switch stays on the opportunity; the old provider's cancellation still reaches the opportunity's timeline. Not yet: routing an action on an existing entity through the protocol to the provider that holds it (the CRM only reserves; changes and cancellations happen in the provider's own app), and per-consumer bindings.
 
 ### Shared capability models (candidates, layer 2)
 

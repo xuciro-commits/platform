@@ -513,6 +513,8 @@ const (
 	SchemaSettingSet   = "platform.setting.set"
 	SchemaWorkRetry    = "platform.work.retry"
 	SchemaNoticeRead   = "platform.notification.read"
+	ProtocolType       = "platform.protocol"
+	SchemaProtocolBind = "platform.protocol.bind"
 )
 
 func operationsActions() []Action {
@@ -527,6 +529,9 @@ func operationsActions() []Action {
 			Payload:     []Field{{Name: "value", Type: "string", Required: true, Description: "true/false, a whole number, one of the choices, or text"}}, Roles: admin},
 		{Schema: SchemaWorkRetry, Target: WorkType, Capability: "automation", Title: "Retry work",
 			Description: "Queue a failed event delivery again, or run a scheduled job now.", Payload: []Field{}, Roles: admin},
+		{Schema: SchemaProtocolBind, Target: ProtocolType, Capability: "apps", Title: "Choose protocol provider",
+			Description: "Send the tenant's new calls of a protocol (target <name>/<version>) to another app that provides it; what every provider holds stays readable.",
+			Payload:     []Field{{Name: "provider", Type: "string", Required: true, Description: "App ID of a provider"}}, Roles: admin},
 		{Schema: SchemaNoticeRead, Target: NotificationType, Capability: "notifications", Title: "Mark notification read",
 			Description: "Mark one of your notifications as read.", Payload: []Field{}, Roles: []string{AnyMember}},
 	}
@@ -564,6 +569,13 @@ func operate(c Caller, s *pb.Submission, now time.Time) (apply func(*pb.ChangeRe
 			return nil, invalid, true
 		}
 		return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.settings[id] = p.Value; t.opsMu.Unlock() }, nil, true
+	case SchemaProtocolBind:
+		var p struct{ Provider string }
+		json.Unmarshal(s.GetPayload(), &p)
+		if !slices.ContainsFunc(t.providers(id), func(b binding) bool { return b.provider.Manifest().ID == p.Provider }) {
+			return nil, invalid, true
+		}
+		return func(*pb.ChangeRecord) { t.rebind(id, p.Provider) }, nil, true
 	case SchemaWorkRetry:
 		t.opsMu.Lock()
 		known := slices.ContainsFunc(t.failed, func(x *Task) bool { return x.ID == id }) || slices.ContainsFunc(t.jobs, func(x *Task) bool { return x.ID == id })

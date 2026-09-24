@@ -4,7 +4,6 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **99 · in progress** | Choose between providers of a protocol in Settings (ADR-0011 point 2): binding as a platform decision, consumers reading across every provider | The sales tenant runs the hotel and a second lodging provider; an administrator switches the binding in Settings; new stays go to the chosen provider, stays at the other stay visible and cancellable; the choice survives a restart |
 | **100 · gate** | Outbound effects architecture gate (before any code): how an app's decision reaches an external system (webhooks, calls to other systems, email) without breaking replay, with the owner's review | The owner accepts or amends the proposed ADR; implementation then gets its own item |
 
 ## Open friction (temporary; delete entries once resolved)

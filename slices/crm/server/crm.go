@@ -193,14 +193,18 @@ type OpportunityStays struct {
 	Stays []lodging.Booking `json:"stays"`
 }
 
+// customers shows each opportunity with the stays linked to it, from whichever
+// provider holds them: a stay booked before the tenant switched providers stays.
 func (c *CRM) customers(who platformserver.Caller) (any, *kernel.Error) {
-	var bookings []lodging.Booking
-	if who.Bound(lodging.ID) {
-		all, err := who.Query(lodging.ID, "bookings")
-		if err != nil {
-			return nil, err
+	answers, err := who.Query(lodging.ID, "bookings")
+	if err != nil {
+		return nil, err
+	}
+	bookings := map[string]lodging.Booking{} // "<type>/<id>" → booking
+	for _, a := range answers {
+		for _, b := range a.Result.([]lodging.Booking) {
+			bookings[a.Type+"/"+b.ID] = b
 		}
-		bookings = all.([]lodging.Booking)
 	}
 	out := []Customer{}
 	opportunities := c.Opportunities()
@@ -210,10 +214,9 @@ func (c *CRM) customers(who platformserver.Caller) (any, *kernel.Error) {
 			if o.Account != a.ID {
 				continue
 			}
-			linked := who.Links(OpportunityType + "/" + o.ID)
 			stays := []lodging.Booking{}
-			for _, b := range bookings {
-				if slices.ContainsFunc(linked, func(e string) bool { return strings.HasSuffix(e, "/"+b.ID) }) {
+			for _, e := range who.Links(OpportunityType + "/" + o.ID) {
+				if b, ok := bookings[e]; ok {
 					stays = append(stays, b)
 				}
 			}
