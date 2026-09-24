@@ -66,7 +66,11 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time) (ChatAn
 		return ChatAnswer{}, err, nil
 	}
 	started := time.Now()
-	content, u, failure := t.complete(pv, model.Model, req)
+	complete := t.complete
+	if pv.Wire == "anthropic" {
+		complete = t.completeAnthropic
+	}
+	content, u, failure := complete(pv, model.Model, req)
 	u.At, u.Member, u.Agent, u.Model, u.Millis, u.Outcome = now, m.ID, m.Agent, model.Name(), time.Since(started).Milliseconds(), "ok"
 	if failure != nil {
 		u.Outcome = failure.Detail
@@ -149,14 +153,7 @@ func (t *Tenant) aiRequest(pv Provider, method, path string, body []byte, timeou
 	if pv.Vendor == "openrouter" {
 		req.Header.Set("X-Title", "Platform") // OpenRouter's app attribution
 	}
-	send := t.AIClient
-	if send == nil {
-		dialer := guardedDialer(pv.Kind == "local")
-		client := &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-		send = client.Do
-	}
-	resp, err := send(req)
+	resp, err := t.aiHTTP(pv).Do(req)
 	if err != nil {
 		return 0, nil, &AIError{Detail: "no answer: " + err.Error()}
 	}
@@ -164,6 +161,23 @@ func (t *Tenant) aiRequest(pv Provider, method, path string, body []byte, timeou
 	answer, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	return resp.StatusCode, answer, nil
 }
+
+// aiHTTP is the client model calls go through: the test's, or one whose dialer
+// refuses private addresses unless the provider is local.
+func (t *Tenant) aiHTTP(pv Provider) interface {
+	Do(*http.Request) (*http.Response, error)
+} {
+	if t.AIClient != nil {
+		return doer(t.AIClient)
+	}
+	dialer := guardedDialer(pv.Kind == "local")
+	return &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+type doer func(*http.Request) (*http.Response, error)
+
+func (d doer) Do(r *http.Request) (*http.Response, error) { return d(r) }
 
 // CatalogModel is a model a provider offers.
 type CatalogModel struct {
@@ -204,6 +218,16 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	catalogs.Unlock()
 	if cached && !refresh && time.Since(c.at) < 10*time.Minute {
 		return c.models, nil, nil
+	}
+	if pv.Wire == "anthropic" {
+		models, failure := t.anthropicModels(pv)
+		if failure != nil {
+			return nil, nil, failure
+		}
+		catalogs.Lock()
+		catalogs.byKey[key] = cachedCatalog{at: time.Now(), models: models}
+		catalogs.Unlock()
+		return models, nil, nil
 	}
 	status, answer, failure := t.aiRequest(pv, http.MethodGet, "/models", nil, 30*time.Second)
 	if failure != nil {

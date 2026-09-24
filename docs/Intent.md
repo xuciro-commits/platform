@@ -13,7 +13,8 @@ Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, wit
    - Salesforce Platform;
    - SAP BTP and CAP;
    - Microsoft Power Platform and Dataverse;
-   - Palantir Foundry and AIP.
+   - Palantir Foundry and AIP;
+   - Oracle Fusion Cloud and APEX.
 
    The comparison is not with one vertical application. A team should be able to build a CRM, an MES, a PMS or a HIS on it mostly by writing business knowledge.
 3. **Music (MSRU)** remains a real product and the long-term validation domain for local-first, personal, edge-side capabilities.

@@ -52,7 +52,7 @@ Status legend:
 - **H**: a kernel hypothesis under test (kernel status as in §4).
 
 | Capability | Layer | What an app gets | Code | Used by | Status |
-|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|
 | Identity and redirects (K1) | Kernel | Opaque stable IDs, merge/split redirects | `kernel.Identity` | manufacturing, Music | 2D |
 | Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | manufacturing, Hotel, Music | 2D |
 | Decisions (K4) | Kernel | Change records: idempotency, revisions (C12), causation | `kernel.ChangeLog` | all | E |
@@ -128,7 +128,8 @@ Status legend:
 | 0014 | A breaker per destination | Partial: the ordered queue per endpoint holds the rest behind a failing head |
 | 0014 | Webhooks filtered by the catalog rules of who may see an event | Amended (#104): an endpoint is the administrator's, so it has the administrator's view — any event the tenant declares; an undeclared event is refused |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
-| 0015 | Quotas and rate limits; the Anthropic adapter (SDK dependency); app calls as effects; streaming | Deferred (batch 2) |
+| 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
+| 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
 | 0014 | D6 approval of irreversible effects caused by agents; email | Implemented: held effects approved by a person; email endpoints for notifications (SMTP, STARTTLS, PLAIN) |
 
 #### Terminology and ownership
@@ -459,7 +460,7 @@ ADR-0015, batch 1. The `ai` platform app holds providers and enabled models as d
 - **Checked live** against OpenRouter's free models: the catalog (458 models, 20 free), enabling in Settings, a call from the playground, and usage per member.
 - **Rehearsal:** the sink stands in for a local model server, so the rehearsal runs offline.
 - **Found:** free models are often rate-limited upstream (429). Such calls end as failed, with the provider's reason recorded in their usage.
-- **Waiting:** the Anthropic adapter waits for the owner's approval of the official SDK dependency.
+- **Anthropic** came after the owner approved the SDK dependency: its native Messages and Models APIs through the official Go SDK, tested against a stand-in (no key yet).
 
 ### Shared capability models (candidates, layer 2)
 
@@ -518,7 +519,7 @@ The owner's direction (Intent.md, "How we decide what the platform has"): build 
 | **Start** (Aug–Sep 2026) | MSRU: an Apple app with a framework (AppFoundation) inside it; a blueprint for a reusable Apple app framework | Ownership of state and tasks, identity apart from views, the need for a platform below any one app |
 | | The kernel contract (K1–K9) and two slices (Hotel, manufacturing), then the drills | Identity, facts, decisions, authority, tenancy and connectors hold across very different domains |
 | **Now** (#105) | A host running apps from manifests: journal and replay, OIDC, the console (members, roles, operations), organisation, relations, protocols, owned work, connectors, outbound effects (webhooks, email, approval), AI providers, MCP, Settings, one UI kit | The runtime and governance half of a business platform. Each app still hand-writes its own entities, lists, lifecycles and screens |
-| **End** | A platform comparable to Odoo, ServiceNow, Salesforce Platform, SAP BTP, Power Platform or Palantir Foundry, in typed code | A team builds a business app mostly by declaring its models, lifecycles, actions and views. The platform gives lists, record pages, search, history, files, comments, approvals, tasks, flows, reports, integration, agents and administration. Apps compose through protocols and evolve without losing data, history or work in progress |
+| **End** | A platform comparable to Odoo, ServiceNow, Salesforce Platform, Oracle Fusion Cloud and APEX, SAP BTP, Power Platform or Palantir Foundry, in typed code | A team builds a business app mostly by declaring its models, lifecycles, actions and views. The platform gives lists, record pages, search, history, files, comments, approvals, tasks, flows, reports, integration, agents and administration. Apps compose through protocols and evolve without losing data, history or work in progress |
 
 The largest gap between now and the end is the **application half**: how an app declares its data and processes, and what it gets for free.
 
@@ -526,20 +527,20 @@ The largest gap between now and the end is the **application half**: how an app 
 
 They share one skeleton, and it is the one to build toward:
 
-| Layer | Odoo / Frappe | ServiceNow | Salesforce | Palantir Foundry | Ours now |
+| Layer | Odoo / Frappe | ServiceNow | Salesforce | Palantir Foundry | Oracle (Fusion Cloud, APEX) | Ours now |
 |---|---|---|---|---|---|
-| Package and composition | Modules with manifests and dependencies | Scoped apps, update sets | Packages, AppExchange | Marketplace products | Apps with manifests, protocols (ADR-0010, 0011) |
-| Data model | ORM models, typed fields, relations (Frappe: DocType) | Tables, dictionary | Objects, fields, relationships | Ontology: object types, links | **Each app hand-writes state** |
-| Generic views | List, form, kanban, calendar, pivot, graph, Gantt from one model | Lists, forms, workspaces | Record pages, list views, Lightning App Builder | Workshop, Object Explorer | Tables and forms coded per app |
-| Actions and rules | Methods, automated and server actions | Business rules, UI actions | Apex, validation rules | Actions, functions | Declared actions, rules in code (ADR-0008) |
-| Lifecycle and approval | Status bar, workflows, approval module | State flows, approvals, SLAs | Approval processes, Flow | Action validation, AIP | Hand-coded states; approval only for held effects (D6) |
-| Process orchestration | Automated actions, scheduled actions | Flow Designer, IntegrationHub | Flow, Platform Events | Pipelines, automations | Subscriptions, jobs, effects (ADR-0013, 0014) |
-| Work for people | Activities, chatter, followers | Tasks, assignment, inbox, SLAs | Tasks, Chatter | Inbox, notifications | Notifications only |
-| Security | Groups, access rights, record rules, multi-company | Roles, ACLs, domain separation | Profiles, permission sets, sharing rules | Markings, organisations, roles | Roles per app, organisation scope in rules (ADR-0012) |
-| Analytics | Pivot, graph, spreadsheet dashboards | Performance Analytics | Reports, dashboards | Contour, Quiver, pipelines | None |
-| Integration | XML-RPC/JSON-RPC, webhooks | IntegrationHub spokes, REST | REST, events, MuleSoft | Data connection, OSDK | Connectors, webhooks, email, MCP |
-| AI | Odoo AI features | Now Assist | Agentforce | AIP Logic, agents | Providers, metering (ADR-0015) |
-| Admin | Settings, Studio | System administration | Setup | Control panel | Settings |
+| Package and composition | Modules with manifests and dependencies | Scoped apps, update sets | Packages, AppExchange | Marketplace products | Fusion product families; APEX applications; extensions in Visual Builder Studio, tried in sandboxes | Apps with manifests, protocols (ADR-0010, 0011) |
+| Data model | ORM models, typed fields, relations (Frappe: DocType) | Tables, dictionary | Objects, fields, relationships | Ontology: object types, links | Application Composer custom objects and fields; APEX on database tables | **Each app hand-writes state** |
+| Generic views | List, form, kanban, calendar, pivot, graph, Gantt from one model | Lists, forms, workspaces | Record pages, list views, Lightning App Builder | Workshop, Object Explorer | APEX interactive reports and grids, forms; Redwood pages | Tables and forms coded per app |
+| Actions and rules | Methods, automated and server actions | Business rules, UI actions | Apex, validation rules | Actions, functions | Groovy triggers and validations (Application Composer) | Declared actions, rules in code (ADR-0008) |
+| Lifecycle and approval | Status bar, workflows, approval module | State flows, approvals, SLAs | Approval processes, Flow | Action validation, AIP | Approval Management (AME), BPM approvals | Hand-coded states; approval only for held effects (D6) |
+| Process orchestration | Automated actions, scheduled actions | Flow Designer, IntegrationHub | Flow, Platform Events | Pipelines, automations | Oracle Integration (OIC) processes | Subscriptions, jobs, effects (ADR-0013, 0014) |
+| Work for people | Activities, chatter, followers | Tasks, assignment, inbox, SLAs | Tasks, Chatter | Inbox, notifications | BPM worklist, notifications | Notifications only |
+| Security | Groups, access rights, record rules, multi-company | Roles, ACLs, domain separation | Profiles, permission sets, sharing rules | Markings, organisations, roles | Role-based access, data security policies, business units | Roles per app, organisation scope in rules (ADR-0012) |
+| Analytics | Pivot, graph, spreadsheet dashboards | Performance Analytics | Reports, dashboards | Contour, Quiver, pipelines | OTBI, Oracle Analytics | None |
+| Integration | XML-RPC/JSON-RPC, webhooks | IntegrationHub spokes, REST | REST, events, MuleSoft | Data connection, OSDK | OIC adapters, REST APIs for every object | Connectors, webhooks, email, MCP |
+| AI | Odoo AI features | Now Assist | Agentforce | AIP Logic, agents | OCI Generative AI, AI agents in Fusion | Providers, metering (ADR-0015) |
+| Admin | Settings, Studio | System administration | Setup | Control panel | Setup and Maintenance | Settings |
 
 Where we deliberately differ:
 - **Rules and models stay in typed code, not tenant metadata.** No Studio-style runtime editing of package rules; this is ADR-0008.
@@ -612,7 +613,8 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 | Capability | Status |
 |---|---|
 | Providers, models, access, usage (ADR-0015 batch 1) | have |
-| Quotas and rate limits, the Anthropic adapter, streaming, app calls as effects (batch 2) | missing |
+| The Anthropic adapter (official Go SDK) | have |
+| Quotas and rate limits, streaming, app calls as effects (batch 2) | missing |
 | Agents: a model with the caller's catalog as tools, runs as owned work, approvals for what cannot be recalled (batch 3) | partial: MCP, D6 |
 | Knowledge: documents and records indexed for retrieval, cited answers | missing |
 | AI in the workspace: an assistant panel on any record, with the record as context | missing |

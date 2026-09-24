@@ -34,11 +34,13 @@ type Vendor struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	BaseURL string `json:"baseUrl"`
-	Wire    string `json:"wire"` // openai
+	Wire    string `json:"wire"` // openai, anthropic
 }
 
-// Vendors are the fixed providers (Anthropic joins with its adapter, ADR-0015 point 3).
+// Vendors are the fixed providers. Anthropic speaks its own Messages API
+// through its official SDK (anthropic.go); the others speak the OpenAI wire.
 var Vendors = []Vendor{
+	{"anthropic", "Anthropic (Claude)", "https://api.anthropic.com", "anthropic"},
 	{"openai", "OpenAI", "https://api.openai.com/v1", "openai"},
 	{"gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "openai"},
 	{"moonshot", "Moonshot AI (Kimi)", "https://api.moonshot.cn/v1", "openai"},
@@ -99,7 +101,7 @@ func NewAI(tenant string) *AI {
 	}
 	return &AI{ledger: platform.NewLedger(tenant, AIApp, platform.NewCatalog(
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
-			Description: "Add a source of models: a vendor (OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
+			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
 				f("baseUrl", "string", "For compatible and local: the API's base URL, e.g. http://host.docker.internal:1234/v1", false),
 				f("secret", "string", "Name of the API key in the secret store (optional for local)", false)}},

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -169,5 +170,80 @@ func TestAIProviders(t *testing.T) {
 	}
 	if got := chat(ana, "lm/echo", "again"); got != "ERROR_CODE_NOT_FOUND" {
 		t.Fatalf("after removal: %s", got)
+	}
+}
+
+// The Anthropic adapter (ADR-0015 point 3): the official SDK against a stand-in
+// of the Messages and Models APIs, reached through the host's client.
+func TestAnthropicProvider(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Header.Get("x-api-key") != "sk-ant-test" || r.Header.Get("anthropic-version") == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`)
+			return
+		}
+		switch r.URL.Path {
+		case "/v1/models":
+			fmt.Fprint(w, `{"data":[{"type":"model","id":"claude-opus-5","display_name":"Claude Opus 5","created_at":"2026-01-01T00:00:00Z","max_input_tokens":1000000}],"has_more":false,"first_id":"claude-opus-5","last_id":"claude-opus-5"}`)
+		case "/v1/messages":
+			var req struct {
+				Model     string
+				MaxTokens int `json:"max_tokens"`
+				System    []struct{ Text string }
+				Messages  []struct {
+					Role    string
+					Content []struct{ Text string }
+				}
+			}
+			json.NewDecoder(r.Body).Decode(&req)
+			if req.Model == "claude-busy" {
+				w.WriteHeader(http.StatusTooManyRequests)
+				fmt.Fprint(w, `{"type":"error","error":{"type":"rate_limit_error","message":"rate limited"}}`)
+				return
+			}
+			text := fmt.Sprintf("%s|%s|%d|%d", req.System[0].Text, req.Messages[len(req.Messages)-1].Content[0].Text, len(req.Messages), req.MaxTokens)
+			fmt.Fprintf(w, `{"id":"msg_1","type":"message","role":"assistant","model":%q,"content":[{"type":"text","text":%q}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":12,"output_tokens":7}}`, req.Model, text)
+		}
+	}))
+	defer api.Close()
+	target, _ := url.Parse(api.URL)
+	console := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{AIApp: AIAdmin}}})
+	tn, err := NewTenant("t-1", console, NewAI("t-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tn.Secrets = func(name string) ([]byte, bool) { return []byte("sk-ant-test"), name == "anthropic" }
+	tn.AIClient = func(r *http.Request) (*http.Response, error) { // the vendor's fixed URL, answered by the stand-in
+		if r.URL.Host != "api.anthropic.com" {
+			return nil, fmt.Errorf("called %s", r.URL.Host)
+		}
+		r.URL.Scheme, r.URL.Host = target.Scheme, target.Host
+		return http.DefaultTransport.RoundTrip(r)
+	}
+	ana, _ := console.Member("ana")
+	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
+	decide := func(schema, typ, id, payload, key string) {
+		t.Helper()
+		if _, err := tn.Submit(ana, &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: AIApp, IdempotencyKey: key,
+			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	decide(SchemaProviderAdd, ProviderType, "claude", `{"kind":"vendor","vendor":"anthropic","secret":"anthropic"}`, "k1")
+	decide(SchemaModelEnable, ModelType, "claude/claude-opus-5", `{"access":"everyone"}`, "k2")
+	decide(SchemaModelEnable, ModelType, "claude/claude-busy", `{"access":"everyone"}`, "k3")
+	catalog, kerr, failure := tn.ProviderModels(ana, "claude", true)
+	if kerr != nil || failure != nil || len(catalog) != 1 || catalog[0].Name != "Claude Opus 5" || catalog[0].Context != 1000000 {
+		t.Fatalf("catalog %+v %v %v", catalog, kerr, failure)
+	}
+	answer, kerr, failure := tn.Chat(ana, ChatRequest{Model: "claude/claude-opus-5", Messages: []Message{
+		{Role: "system", Content: "be brief"}, {Role: "user", Content: "hi"}, {Role: "assistant", Content: "hello"}, {Role: "user", Content: "again"}}}, now)
+	if kerr != nil || failure != nil || answer.Content != "be brief|again|3|16000" || answer.Usage.Input != 12 || answer.Usage.Output != 7 {
+		t.Fatalf("answer %+v %v %v", answer, kerr, failure)
+	}
+	if _, _, failure := tn.Chat(ana, ChatRequest{Model: "claude/claude-busy", Messages: []Message{{Role: "user", Content: "x"}}}, now); failure == nil ||
+		failure.Status != 429 || failure.Detail != "rate limited" {
+		t.Fatalf("a rate limit: %+v", failure)
 	}
 }

@@ -1,6 +1,6 @@
 # ADR-0015: AI providers — models as a platform capability
 
-**Status:** Accepted (2026-09-25, owner direction: "first the whole provider set-up, then agents"). Built in #105; quotas, app-side calls and the Anthropic adapter follow (see "Batches").
+**Status:** Accepted (2026-09-25, owner direction: "first the whole provider set-up, then agents"). Built in #105 and after it (the Anthropic adapter); quotas, app-side calls and streaming follow (see "Batches").
 
 ## Context
 
@@ -17,10 +17,10 @@ AI agents are already members (ADR-0008, ADR-0014 D6), but the platform gives no
    - The calls are made by the host runtime.
    - It joins the kernel contract only if a second runtime (a Rust edge, a Swift client) must call models under the same rules.
 2. **Providers are of three kinds.**
-   - **Vendor:** a fixed base URL and wire. OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter; Anthropic once its adapter exists.
+   - **Vendor:** a fixed base URL and wire. Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter.
    - **Compatible:** any third-party OpenAI-compatible API at an https URL.
    - **Local:** a model server inside the deployment (LM Studio, Ollama, llama.cpp). Private addresses and plain http are allowed, and a key is optional.
-3. **One wire, adapters only where a vendor needs one.** OpenAI Chat Completions is the platform's wire. The Anthropic Messages adapter uses Anthropic's official Go SDK and is added when that dependency is approved.
+3. **One wire, adapters only where a vendor needs one.** OpenAI Chat Completions is the platform's wire. The Anthropic Messages adapter uses Anthropic's official Go SDK (approved by the owner 2026-09-25): no SDK retries, so one call is one metered attempt, and the host's guarded HTTP client. Server-side model fallbacks are not enabled: the administrator enabled a specific model, and another one answering would bypass that decision.
 4. **Keys by name in the secret store (ADR-0014 D5).** A provider names its key; the key never enters the journal, a decision or Settings. Entering keys in Settings waits for an encrypted secret store.
 5. **Models are enabled, not assumed.**
    - The catalog is read live from the provider (`GET /models`). It is volatile and cached, never journaled.
@@ -40,7 +40,7 @@ AI agents are already members (ADR-0008, ADR-0014 D6), but the platform gives no
 | Batch | Contents |
 |---|---|
 | 1 (#105) | The `ai` app; vendor, compatible and local providers; live catalogs; enabling models with access; chat calls with journaled usage; Settings (providers, models, a playground, usage); the rehearsal against a local stand-in |
-| 2 | Quotas and rate limits per member, app and model; the Anthropic adapter (SDK dependency); app calls as effects; streaming |
+| 2 | The Anthropic adapter (built: official Go SDK, `anthropic.go`); quotas and rate limits per member, app and model; app calls as effects; streaming |
 | 3 | Agents: orchestration, tools over the caller's catalog, D6 approvals in the loop |
 
 ## Consequences
