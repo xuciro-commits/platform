@@ -1,0 +1,27 @@
+# Rauthy for local development (docs/ADR/0007). Every secret here is local-only;
+# a real deployment passes its own through the environment variables Rauthy
+# documents (HQL_SECRET_RAFT, HQL_SECRET_API, ENC_KEYS, BOOTSTRAP_ADMIN_PASSWORD_PLAIN …).
+
+[bootstrap]
+admin_email = 'admin@platform.test'
+password_plain = 'Admin-Local-Only-1'
+
+[cluster]
+node_id = 1
+nodes = ["1 localhost:8100 localhost:8200"]
+secret_raft = 'local-raft-secret-0001'
+secret_api = 'local-api-secret-00001'
+insecure_cookie = true
+
+[encryption]
+keys = ['k1/r7sKqFSJT4eVewKRUIPS7FmNLS3H3ZNE0w75kXSjN7c=']
+key_active = 'k1'
+
+[server]
+scheme = 'http'
+port_http = 8080
+pub_url = 'localhost:8480'
+
+[webauthn]
+rp_id = 'localhost'
+rp_origin = 'http://localhost:8480'

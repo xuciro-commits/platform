@@ -1,0 +1,47 @@
+{
+  "user:sup@plant.test": {
+    "id": "sup-1",
+    "tenant": "plant-sz",
+    "role": "supervisor",
+    "lines": [
+      "L1",
+      "L2"
+    ]
+  },
+  "user:op1@plant.test": {
+    "id": "op-l1",
+    "tenant": "plant-sz",
+    "role": "operator",
+    "lines": [
+      "L1"
+    ]
+  },
+  "user:op2@plant.test": {
+    "id": "op-l2",
+    "tenant": "plant-sz",
+    "role": "operator",
+    "lines": [
+      "L2"
+    ]
+  },
+  "user:qa1@plant.test": {
+    "id": "qa-1",
+    "tenant": "plant-sz",
+    "role": "quality"
+  },
+  "user:qa2@plant.test": {
+    "id": "qa-2",
+    "tenant": "plant-sz",
+    "role": "quality"
+  },
+  "client:mes-gateway": {
+    "id": "gateway-l1",
+    "tenant": "plant-sz",
+    "role": "gateway"
+  },
+  "client:mes-erp": {
+    "id": "erp",
+    "tenant": "plant-sz",
+    "role": "erp"
+  }
+}

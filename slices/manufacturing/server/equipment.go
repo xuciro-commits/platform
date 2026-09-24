@@ -62,6 +62,7 @@ func (p *Plant) DeliverStates(gateway Principal, b StateBatch, now time.Time) (*
 	}
 	slices.SortFunc(b.Samples, func(x, y Sample) int { return x.At.Compare(y.At) })
 	raw, _ := json.Marshal(b)
+	before := p.accepted()
 	fact, err := p.facts.Record(&pb.Fact{TenantId: p.tenant, Kind: pb.FactKind_FACT_KIND_OBSERVATION,
 		Subject: &pb.EntityRef{Type: ResourceType, Id: b.Resource}, Attribute: "state",
 		Schema: &pb.SchemaRef{Name: schemaStates, Version: 1}, IdempotencyKey: gateway.ID + ":" + b.BatchID, Payload: raw,
@@ -70,6 +71,7 @@ func (p *Plant) DeliverStates(gateway Principal, b StateBatch, now time.Time) (*
 		return nil, err
 	}
 	p.deriveDowntime(b.Resource)
+	p.record(p.accepted() > before, "states", gateway, raw, now)
 	return fact, nil
 }
 
@@ -213,6 +215,8 @@ func (p *Plant) DeliverPlanned(erp Principal, page PlannedPage, now time.Time) *
 			Schema: &pb.SchemaRef{Name: schemaPlanned, Version: 1}, IdempotencyKey: erp.ID + ":" + o.ERPID + ":" + page.CursorTo, Payload: raw,
 			Provenance: &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: erp.ID}, SourceTime: timestamppb.New(now), Confidence: 1}}, now)
 	}
+	raw, _ := json.Marshal(page)
+	p.record(true, "planned", erp, raw, now) // the cursor moved, even for an empty page
 	return nil
 }
 

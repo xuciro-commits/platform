@@ -12,8 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver"
 )
 
 const (
@@ -131,6 +134,9 @@ type Plant struct {
 	declaration *pb.AuthorityDeclaration
 	downtime    map[string][]Downtime // resource → current derived events
 	nextEvent   int
+	// Record, when set, makes each accepted input durable before it is answered
+	// (docs/ADR/0007); Replay rebuilds a plant from the recorded inputs.
+	Record func(platformserver.Entry)
 }
 
 func NewPlant(tenant string, master MasterData) *Plant {
@@ -243,6 +249,7 @@ func (p *Plant) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.Chan
 	receiver := kernel.Receiver{Changes: p.changes, Authorities: p.authorities,
 		Policy: func(_ kernel.Caller, s *pb.Submission) bool { return p.allowed(who, s) }}
 	var apply func()
+	before := p.accepted()
 	record, err := receiver.Receive(kernel.Caller{Tenant: who.Tenant, Principal: who.ID}, s, now, func() *kernel.Error {
 		var err *kernel.Error
 		apply, err = p.validate(who, s)
@@ -254,7 +261,62 @@ func (p *Plant) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.Chan
 			sfc.Revision = record.GetRevision()
 		}
 	}
+	if err == nil {
+		body, _ := protojson.Marshal(s)
+		p.record(p.accepted() > before, "submission", who, body, now)
+	}
 	return record, err
+}
+
+// accepted counts the records of both kernel logs; an input that adds none (an
+// idempotent replay) is not recorded again.
+func (p *Plant) accepted() int { return len(p.changes.Records(p.tenant)) + len(p.facts.Records(p.tenant)) }
+
+func (p *Plant) record(fresh bool, kind string, who Principal, body []byte, now time.Time) {
+	if p.Record == nil || !fresh {
+		return
+	}
+	principal, _ := json.Marshal(who)
+	p.Record(platformserver.Entry{Kind: kind, Principal: principal, Body: body, At: now})
+}
+
+// Replay feeds recorded inputs through the code that first accepted them, as
+// the principals they came from; any refusal means the record and the code
+// disagree, and the plant must not serve.
+func (p *Plant) Replay(entries []platformserver.Entry) error {
+	for i, e := range entries {
+		var who Principal
+		if err := json.Unmarshal(e.Principal, &who); err != nil {
+			return fmt.Errorf("entry %d: %w", i+1, err)
+		}
+		var err *kernel.Error
+		switch e.Kind {
+		case "submission":
+			s := &pb.Submission{}
+			if protojson.Unmarshal(e.Body, s) != nil {
+				return fmt.Errorf("entry %d: bad submission", i+1)
+			}
+			_, err = p.Submit(who, s, e.At)
+		case "states":
+			var b StateBatch
+			if json.Unmarshal(e.Body, &b) != nil {
+				return fmt.Errorf("entry %d: bad batch", i+1)
+			}
+			_, err = p.DeliverStates(who, b, e.At)
+		case "planned":
+			var page PlannedPage
+			if json.Unmarshal(e.Body, &page) != nil {
+				return fmt.Errorf("entry %d: bad page", i+1)
+			}
+			err = p.DeliverPlanned(who, page, e.At)
+		default:
+			return fmt.Errorf("entry %d: unknown kind %q", i+1, e.Kind)
+		}
+		if err != nil {
+			return fmt.Errorf("entry %d (%s): %v", i+1, e.Kind, err)
+		}
+	}
+	return nil
 }
 
 type releasePayload struct {

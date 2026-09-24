@@ -1,12 +1,16 @@
 package mes
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver"
 )
 
 var (
@@ -22,13 +26,62 @@ var (
 	keys   = 0
 )
 
+// newPlant records every accepted input; when the test ends, a second plant
+// replays them and must show the same state and kernel logs (docs/ADR/0007).
 func newPlant(t *testing.T) *Plant {
-	p := NewPlant(tenant, DemoMaster())
-	for _, d := range DemoConnectors(tenant) {
-		if err := p.RegisterConnector(d); err != nil {
-			t.Fatal(err)
+	fresh := func() *Plant {
+		p := NewPlant(tenant, DemoMaster())
+		for _, d := range DemoConnectors(tenant) {
+			if err := p.RegisterConnector(d); err != nil {
+				t.Fatal(err)
+			}
 		}
+		return p
 	}
+	p := fresh()
+	var journal []byte
+	p.Record = func(e platformserver.Entry) {
+		raw, _ := json.Marshal(e) // stored as JSON, as the PostgreSQL journal does
+		journal = append(append(journal, raw...), '\n')
+	}
+	t.Cleanup(func() {
+		var entries []platformserver.Entry
+		for line := range bytes.Lines(journal) {
+			var e platformserver.Entry
+			json.Unmarshal(line, &e)
+			entries = append(entries, e)
+		}
+		again := fresh()
+		if err := again.Replay(entries); err != nil {
+			t.Fatalf("replay: %v", err)
+		}
+		view := func(p *Plant) string {
+			raw, _ := json.Marshal([]any{p.Orders(), p.SFCs(), p.Downtime(), p.Planned()}) // heartbeats are not recorded
+			return string(raw)
+		}
+		if view(again) != view(p) {
+			t.Fatalf("replayed plant differs:\n%s\n%s", view(p), view(again))
+		}
+		logs := func(p *Plant) []proto.Message {
+			var out []proto.Message
+			for _, r := range p.changes.Records(tenant) {
+				out = append(out, r)
+			}
+			for _, r := range p.facts.Records(tenant) {
+				out = append(out, r)
+			}
+			return out
+		}
+		a, b := logs(p), logs(again)
+		if len(a) != len(b) {
+			t.Fatalf("replayed logs: %d records, want %d", len(b), len(a))
+		}
+		for i := range a {
+			if !proto.Equal(a[i], b[i]) {
+				t.Fatalf("replayed record %d differs:\n%v\n%v", i, a[i], b[i])
+			}
+		}
+	})
 	return p
 }
 

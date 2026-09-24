@@ -13,7 +13,7 @@ export type Downtime = { id: string; resource: string; start: string; end?: stri
 export type ConnectorView = { id: string; direction: string; health: string; lastSeen?: string; cursor?: string };
 export type Me = { tenantId: string; principalId: string; profile: { role: string; lines: string[] | null } };
 
-export const SERVER = "http://127.0.0.1:8490";
+export const SERVER = (import.meta.env.VITE_MES_SERVER as string | undefined) ?? "http://127.0.0.1:8490";
 export const identities = [
   { id: "supervisor", label: "Supervisor · lines L1, L2" },
   { id: "operator-l1", label: "Operator · line L1" },

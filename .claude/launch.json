@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mes-oidc",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["VITE_OIDC_ISSUER=http://localhost:8480/auth/v1/", "VITE_MES_SERVER=http://localhost:8490", "pnpm", "--dir", "web/apps/mes", "dev"],
+      "port": 5175,
+      "url": "http://localhost:5175"
+    }
+  ]
+}

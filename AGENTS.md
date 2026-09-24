@@ -11,10 +11,11 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | Path | Contents |
 |---|---|
 | `contract/` | Kernel contract `v1alpha1`: Protobuf data contract (`proto/`), semantic rules with errors (`spec/`), conformance vectors (`vectors/`), Go reference (`go/`) and Swift implementation (`swift/`) running the same vectors |
-| `capabilities/server/` | Go module `platformserver`: the server capability every domain server uses (authentication hook, kernel endpoints, error mapping) |
+| `capabilities/server/` | Go module `platformserver`: the server capability every domain server uses (authentication hook with OIDC verification, kernel endpoints, error mapping, the PostgreSQL input journal) |
 | `slices/hotel/` | Hotel reference slice (#79): Go tenant server (`server/`, with a channel simulator), Tauri desk client with a Rust K5 outbox that runs the contract's K5 vectors (`client/`), `flows.sh` reproducing timeout, offline, conflict and rejection flows. May not change the kernel |
 | `slices/manufacturing/` | Manufacturing reference slice (#83, Opcenter/SAP ME model): Go plant server with ERP poll and gateway push connectors (`server/`, `cmd/gateway-sim`). May not change the kernel |
 | `slices/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |
+| `deploy/local/` | Infrastructure as code for the production path (ADR-0007): Docker Compose with PostgreSQL, Rauthy (declarative bootstrap) and mes-server; `rehearse.sh` rehearses OIDC principals, restart and restore |
 | `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri), `apps/mes` (manufacturing client) |
 | `docs/Platform.md` | The platform design: layers, kernel hypotheses K1–K9, kernel contract rules, validation strategy |
 | `docs/ProductIntentReview.md` | Product intent and top-level architectural direction: advisory context for design decisions, not an implementation plan or a replacement for accepted ADRs |
@@ -41,4 +42,5 @@ scripts/verify.sh hotel     # web build, Hotel server tests, Rust K5 vectors, en
 scripts/verify.sh manufacturing  # plant server tests (F-5 to F-9 verdicts)
 scripts/verify.sh drills    # evolution drills on the kernel
 scripts/verify.sh capabilities  # server capability tests
+scripts/verify.sh deploy    # production-path rehearsal (needs Docker via OrbStack: orb start)
 ```

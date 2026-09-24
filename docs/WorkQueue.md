@@ -5,7 +5,6 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 | # · Status | Task | Done when |
 |---|---|---|
 | **89 · ready (MSRU repository)** | Refresh MSRU's pinned K4 vectors for C12: `expected_revision` and `revision` in `user_decisions` (a forward migration), corrections sent with the revision the inspector showed | MusicLibraryTests pass on the refreshed copy |
-| **87 · ready** | Production path for one slice (infrastructure as code, OrbStack locally; OIDC by Rauthy behind `platformserver.Authenticate`): PostgreSQL persistence behind the kernel logs, OIDC principals, deployment, backup and restore rehearsal (Platform.md §7 operations floor) | One slice survives a server restart and a restore; principals come from an identity provider |
 
 ## Open friction (temporary; delete entries once resolved)
 

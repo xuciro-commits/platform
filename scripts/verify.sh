@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|capabilities|web|hotel|manufacturing|drills]   (default: everything)
-# The web step needs node and pnpm (brew install node pnpm).
+# Platform verification. Usage: scripts/verify.sh [contract|capabilities|web|hotel|manufacturing|drills|deploy]   (default: everything)
+# The web step needs node and pnpm (brew install node pnpm); deploy needs a running Docker (orb start), curl and jq.
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -46,6 +46,10 @@ drills() {
   step drills bash -c 'cd slices/drills && go vet ./... && go test -count=1 ./...'
 }
 
+deploy() {
+  step deploy-rehearsal deploy/local/rehearse.sh
+}
+
 hotel() {
   step hotel-server bash -c 'cd slices/hotel/server && go vet ./... && go test -count=1 ./...'
   step hotel-client-k5 cargo test --manifest-path slices/hotel/client/src-tauri/Cargo.toml
@@ -59,8 +63,9 @@ case "${1:-all}" in
   capabilities) capabilities ;;
   manufacturing) manufacturing ;;
   drills) drills ;;
-  all) contract; capabilities; web; hotel; manufacturing; drills ;;
-  *) echo "usage: $0 [contract|capabilities|web|hotel|manufacturing|drills]"; exit 2 ;;
+  deploy) deploy ;;
+  all) contract; capabilities; web; hotel; manufacturing; drills; deploy ;;
+  *) echo "usage: $0 [contract|capabilities|web|hotel|manufacturing|drills|deploy]"; exit 2 ;;
 esac
 
 if ((${#failed[@]})); then echo "Failed: ${failed[*]}"; exit 1; fi

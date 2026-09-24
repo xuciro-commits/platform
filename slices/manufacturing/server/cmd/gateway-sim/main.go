@@ -1,6 +1,7 @@
 // Command gateway-sim plays the plant's edge: a line gateway pushing equipment
 // state batches (with a stop now and then) and the ERP poller importing planned
-// orders page by page.
+// orders page by page. With -oidc-token it authenticates as the OIDC clients
+// mes-gateway and mes-erp (secrets in MES_GATEWAY_SECRET and MES_ERP_SECRET).
 package main
 
 import (
@@ -10,10 +11,34 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
 	"mes"
 )
+
+var tokenURL = flag.String("oidc-token", "", "token endpoint for client credentials (empty: demo tokens)")
+
+// credential is the demo token, or a fresh client-credentials access token.
+func credential(demo, client, secretEnv string) string {
+	if *tokenURL == "" {
+		return demo
+	}
+	resp, err := http.PostForm(*tokenURL, url.Values{"grant_type": {"client_credentials"},
+		"client_id": {client}, "client_secret": {os.Getenv(secretEnv)}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var t struct {
+		AccessToken string `json:"access_token"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&t) != nil || t.AccessToken == "" {
+		log.Fatalf("no token for %s (%s)", client, resp.Status)
+	}
+	return t.AccessToken
+}
 
 func post(server, token, path string, body any) int {
 	raw, _ := json.Marshal(body)
@@ -41,11 +66,12 @@ func main() {
 	cursor := ""
 	for i, page := range orders {
 		next := fmt.Sprintf("page-%d", i+1)
-		fmt.Println("erp page", next, post(*server, "erp", "/v1/connectors/planned-orders",
+		fmt.Println("erp page", next, post(*server, credential("erp", "mes-erp", "MES_ERP_SECRET"), "/v1/connectors/planned-orders",
 			mes.PlannedPage{CursorFrom: cursor, CursorTo: next, Orders: page}))
 		cursor = next
 	}
 
+	gateway := credential("gateway-l1", "mes-gateway", "MES_GATEWAY_SECRET")
 	resources := []string{"FURNACE-1", "CNC-11", "CNC-12", "CMM-1"}
 	for n := 1; *batches == 0 || n <= *batches; n++ {
 		start := time.Now().Add(-*every)
@@ -60,11 +86,12 @@ func main() {
 				}
 				samples = append(samples, mes.Sample{At: start.Add(time.Duration(s) * *every / 10), State: state})
 			}
-			fmt.Println("batch", n, resource, post(*server, "gateway-l1", "/v1/connectors/states",
+			fmt.Println("batch", n, resource, post(*server, gateway, "/v1/connectors/states",
 				mes.StateBatch{BatchID: fmt.Sprintf("%s-%d", resource, n), Resource: resource, Samples: samples}))
 		}
 		if *batches == 0 || n < *batches {
 			time.Sleep(*every)
+			gateway = credential("gateway-l1", "mes-gateway", "MES_GATEWAY_SECRET") // tokens expire
 		}
 	}
 }

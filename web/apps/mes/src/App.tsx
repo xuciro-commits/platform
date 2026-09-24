@@ -1,4 +1,4 @@
-import { EdgeClient, type Entry } from "@platform/kernel";
+import { EdgeClient, keepFresh, signOut, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, PageHeader, PropertyList, Select, StatusTag, Workspace,
   defineStatuses, notify, submissionStatuses, useWorkspace, type ColumnDef, type View,
@@ -237,13 +237,14 @@ const views: View[] = [
   { id: "outbox", title: () => "Outbox", render: () => <Outbox /> },
 ];
 
-export function App() {
-  const [token, setToken] = useState("supervisor");
+export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: OidcSession } }) {
+  const [token, setToken] = useState(signedIn?.session.accessToken ?? "supervisor");
   const client = useMemo(() => new EdgeClient({ server: SERVER, token, tenant: "plant-sz", principal: "" }), [token]);
   const me = useQuery({ queryKey: [token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false }).data;
   const master = useQuery({ queryKey: [token, "master"], queryFn: () => client.get<Master>("/v1/master"), refetchInterval: false }).data;
   const [outbox, setOutbox] = useState<Entry[]>([]);
   const queries = useQueryClient();
+  useEffect(() => signedIn && keepFresh(signedIn.config, signedIn.session, (s) => { client.connection.token = s.accessToken; }), [client, signedIn]);
   useEffect(() => {
     if (!me) return;
     Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
@@ -274,8 +275,12 @@ export function App() {
         ]}
         commands={[{ id: "retry", label: "Retry unsent decisions", run: () => void client.send().then(() => setOutbox([...client.authorities.outbox])) }]}
         status={<span className="text-xs text-muted">{me ? `${me.profile.role}${me.profile.lines?.length ? ` · ${me.profile.lines.join(", ")}` : ""}` : "offline"}</span>}
-        session={{ tenant: me?.tenantId ?? "plant-sz", principal: me?.principalId ?? "…", options: identities, current: token,
-          onSwitch: (id) => { setToken(id); setOutbox([]); } }} />
+        session={signedIn
+          ? { tenant: me?.tenantId ?? "plant-sz", principal: me?.principalId ?? "…", detail: signedIn.session.email,
+              options: [{ id: "signed-in", label: signedIn.session.email }, { id: "sign-out", label: "Sign out" }], current: "signed-in",
+              onSwitch: (id) => { if (id === "sign-out") void signOut(signedIn.config); } }
+          : { tenant: me?.tenantId ?? "plant-sz", principal: me?.principalId ?? "…", options: identities, current: token,
+              onSwitch: (id) => { setToken(id); setOutbox([]); } }} />
     </PlantContext.Provider>
   );
 }

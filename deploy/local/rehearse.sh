@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Operations rehearsal for the manufacturing slice (docs/WorkQueue.md #87,
+# Platform.md §7): principals from Rauthy, state that survives a restart, and a
+# PostgreSQL backup restored into a new volume. Runs a disposable compose
+# project on its own ports and removes it afterwards. Needs docker, curl, jq.
+set -euo pipefail
+cd "$(dirname "$0")"
+export PG_PORT=55433 IDP_PORT=58480 MES_PORT=58490
+compose() { docker compose -p platform-rehearsal -f compose.yaml "$@"; }
+IDP=http://localhost:$IDP_PORT/auth/v1 MES=http://localhost:$MES_PORT
+backup=$(mktemp -d)
+trap 'compose down -v --remove-orphans >/dev/null 2>&1; rm -rf "$backup"' EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+wait_for() { for _ in $(seq 60); do curl -sf -o /dev/null "$1" && return; sleep 1; done; fail "$1 never answered"; }
+
+compose down -v --remove-orphans >/dev/null 2>&1 || true
+compose up -d --build --quiet-pull >/dev/null 2>&1
+wait_for "$IDP/.well-known/openid-configuration"
+[[ $(curl -s "$IDP/.well-known/openid-configuration" | jq -r .issuer) == "http://localhost:$IDP_PORT/auth/v1/" ]] || fail "issuer"
+
+token() { # user → access token (password grant on the operations client)
+  curl -sf "$IDP/oidc/token" -d grant_type=password -d client_id=platform-cli \
+    -d client_secret=cliLocalOnly0000000000000000000000000000000000000000000000000000 \
+    -d username="$1@plant.test" -d password=Plant-Local-1 | jq -r .access_token
+}
+SUP=$(token sup) OP1=$(token op1) OP2=$(token op2)
+code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" "$MES/v1/me"; }
+for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/me" | jq -r .principalId) == sup-1 ]] || fail "OIDC principal"
+[[ $(code supervisor) == 401 ]] || fail "demo token accepted in production mode"
+IFS=. read -r head claims sig <<<"$OP2"
+while (( ${#claims} % 4 )); do claims+="="; done
+forged=$(printf %s "$claims" | tr _- /+ | base64 -d | jq -c '.email = "sup@plant.test"' | base64 | tr +/ -_ | tr -d '=\n')
+[[ -n $forged ]] || fail "could not forge"
+[[ $(code "$head.$forged.$sig") == 401 ]] || fail "forged claims accepted"
+echo "ok   principals come from Rauthy (demo tokens and forged claims refused)"
+
+submit() { # token key schema target-type target-id payload [expected-revision]
+  local body who
+  who=$(curl -s -H "Authorization: Bearer $1" "$MES/v1/me" | jq -r .principalId)
+  body=$(jq -n --arg w "$who" --arg k "$2" --arg s "$3" --arg tt "$4" --arg ti "$5" --arg p "$(printf %s "$6" | base64)" --arg r "${7:-}" \
+    '{tenantId:"plant-sz", principalId:$w, authority:"plant-server", idempotencyKey:$k,
+      schema:{name:$s, version:1}, target:{type:$tt, id:$ti}, payload:$p}
+     + (if $r == "" then {} else {expectedRevision:($r|tonumber)} end)')
+  curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$MES/v1/submissions" -d "$body"
+}
+state() { for path in orders sfcs downtime planned-orders; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done | jq -cS .; }
+
+# Inputs of every kind the journal keeps: a poll page, decisions, a push batch.
+(cd ../../slices/manufacturing/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
+  MES_ERP_SECRET=erpLocalOnly0000000000000000000000000000000000000000000000000000 \
+  go run ./cmd/gateway-sim -server "$MES" -oidc-token "$IDP/oidc/token" -batches 4 -every 200ms >/dev/null)
+submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
+submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | jq -e .record >/dev/null || fail start
+[[ $(submit "$OP2" s-2 mes.sfc.start mes.sfc WO-1-002 '{"resource":"FURNACE-1"}' 0 | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "line policy"
+before=$(state)
+[[ $(jq -s '.[1] | length' <<<"$before") == 2 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
+
+compose restart mes-server >/dev/null 2>&1
+for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
+[[ $(state) == "$before" ]] || fail "state after restart differs"
+echo "ok   restart: $(compose logs mes-server | grep -o 'replayed [0-9]* entries' | tail -1), same state"
+
+compose exec -T postgres pg_dump -U mes -d mes -Fc >"$backup/mes.dump"
+submit "$OP1" c-1 mes.sfc.complete mes.sfc WO-1-001 '{}' 1 | jq -e .record >/dev/null || fail complete
+after=$(state)
+[[ $after != "$before" ]] || fail "completion changed nothing"
+
+# Disaster: the database volume is lost. Restore the backup into a new one.
+compose stop mes-server >/dev/null 2>&1
+compose rm -sf postgres >/dev/null 2>&1
+docker volume rm platform-rehearsal_pgdata >/dev/null
+compose up -d --wait postgres >/dev/null 2>&1
+compose exec -T postgres pg_restore -U mes -d mes --no-owner <"$backup/mes.dump"
+compose start mes-server >/dev/null 2>&1
+for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
+[[ $(state) == "$before" ]] || fail "restored state is not the backup's"
+echo "ok   restore: new volume, state as of the backup"
+
+# What happened after the backup is lost on the server, not at the edge: the
+# operator's outbox still holds the completion and resends it with its key.
+submit "$OP1" c-1 mes.sfc.complete mes.sfc WO-1-001 '{}' 1 | jq -e .record >/dev/null || fail resend
+[[ $(state) == "$after" ]] || fail "resent completion did not restore the later state"
+echo "ok   the edge outbox resends what the backup missed; state matches again"
+
+compose exec -T postgres createdb -U mes journal_test
+(cd ../../capabilities/server && PLATFORM_TEST_DATABASE=postgres://mes:mes-local-only@localhost:$PG_PORT/journal_test \
+  go test -count=1 -run TestJournal . >/dev/null) || fail "journal test"
+echo "ok   journal numbering refuses a second writer (capabilities/server TestJournal)"

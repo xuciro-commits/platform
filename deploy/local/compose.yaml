@@ -1,0 +1,50 @@
+# The manufacturing slice on its production path, locally (docs/WorkQueue.md #87):
+# PostgreSQL keeps the journal, Rauthy issues identities, mes-server replays the
+# journal on start. `docker compose -f deploy/local/compose.yaml up -d --build`
+# Ports are parameters so rehearse.sh can run a second, disposable project.
+name: platform
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: mes
+      POSTGRES_USER: mes
+      POSTGRES_PASSWORD: mes-local-only
+    ports: ["127.0.0.1:${PG_PORT:-5433}:5432"]
+    volumes: [pgdata:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mes", "-d", "mes"]
+      interval: 2s
+      retries: 30
+
+  rauthy:
+    image: ghcr.io/sebadob/rauthy:0.36.2
+    command: ["serve"]
+    environment:
+      PUB_URL: localhost:${IDP_PORT:-8480}
+      RP_ORIGIN: http://localhost:${IDP_PORT:-8480}
+    ports: ["127.0.0.1:${IDP_PORT:-8480}:8080"]
+    volumes:
+      - ./rauthy/config.toml:/app/config.toml:ro
+      - ./rauthy/bootstrap:/app/bootstrap:ro
+      - rauthy:/app/data
+
+  mes-server:
+    build: { context: ../.., dockerfile: slices/manufacturing/server/Dockerfile }
+    command:
+      - -addr=0.0.0.0:8490
+      - -database=postgres://mes:mes-local-only@postgres:5432/mes
+      - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
+      - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
+      - -directory=/etc/mes/directory.json
+    ports: ["127.0.0.1:${MES_PORT:-8490}:8490"]
+    volumes: [./mes/directory.json:/etc/mes/directory.json:ro]
+    depends_on:
+      postgres: { condition: service_healthy }
+      rauthy: { condition: service_started }
+    restart: on-failure
+
+volumes:
+  pgdata:
+  rauthy:

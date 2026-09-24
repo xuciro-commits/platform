@@ -177,6 +177,10 @@ E2 is exercised by `slices/drills` with Music-shaped decisions on the kernel alo
 - **F-18 → capability `capabilities/server`** (Go module `platformserver`): bearer authentication as a swappable function, the kernel's submission, declaration and `me` endpoints, one error-to-HTTP mapping, CORS. Both slice servers now keep only their domain reads and connector endpoints (about 45 lines each instead of 120). Authentication is where OIDC plugs in (#87).
 - **K9 specified** with vectors in Go and Swift.
 
+### Production path #87 (manufacturing)
+
+Decided in ADR-0007: the server journals accepted inputs in PostgreSQL and replays them on start; principals come from Rauthy through `platformserver.OIDC`. Every manufacturing test ends by replaying its journal into a second plant and comparing state and kernel logs; that check found a real gap (decisions without a state change, such as downtime reasons, were not journaled). `deploy/local/rehearse.sh` covers the operations floor items "backups are restorable and restore is rehearsed" and "cross-tenant access is rejected" for principals from a provider, plus a restart. Still open on the floor: permission revocation while a token is valid (directory reload), correlation IDs in logs, and backup of the identity provider's own data (users created at runtime; bootstrap files recreate the rest).
+
 ### Shared capability models (candidates, layer 2)
 
 Across domains the business differs but the data is organised alike. These are **capability candidates**, not kernel: they carry domain-like vocabulary and are promoted only when two domains use them without exceptions (§4 rules). The UI kit (`web/packages/ui`, ADR-0004) already gives them one presentation.

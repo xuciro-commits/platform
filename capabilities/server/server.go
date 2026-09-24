@@ -35,8 +35,12 @@ type Server[P Principal, T any] struct {
 }
 
 func New[P Principal, T any](tenants map[string]T, authenticate Authenticate[P]) *Server[P, T] {
-	return &Server[P, T]{Mux: http.NewServeMux(), Tenants: tenants, Authenticate: authenticate, Now: time.Now}
+	return &Server[P, T]{Mux: http.NewServeMux(), Tenants: tenants, Authenticate: authenticate, Now: Now}
 }
+
+// Now is the server clock at the journal's precision (PostgreSQL keeps
+// microseconds), so replayed records carry the times first recorded.
+func Now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
 // Tokens authenticates with a fixed token table (development and tests).
 func Tokens[P Principal](table map[string]P) Authenticate[P] {
