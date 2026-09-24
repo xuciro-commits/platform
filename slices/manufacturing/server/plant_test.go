@@ -15,7 +15,7 @@ import (
 
 var (
 	tenant = "plant-sz"
-	sup    = member("sup-1", Supervisor, "L1", "L2")
+	sup    = member("sup-1", Supervisor, "plant-sz") // the plant, so both lines below it
 	op1    = member("op-l1", Operator, "L1")
 	op2    = member("op-l2", Operator, "L2")
 	qa1    = member("qa-1", Quality)
@@ -26,12 +26,15 @@ var (
 	keys   = 0
 )
 
-func member(id string, role Role, lines ...string) platformserver.Caller {
-	m := platformserver.Member{ID: id, Tenant: tenant, Roles: map[string]string{"mes": string(role)}}
-	if len(lines) > 0 {
-		m.Attributes = map[string][]string{"lines": lines}
+// units are the test members' memberships in the site structure.
+var units []platformserver.Membership
+
+// member is a member with a role in the plant, belonging to units (lines or the plant).
+func member(id string, role Role, in ...string) platformserver.Caller {
+	for _, u := range in {
+		units = append(units, platformserver.Membership{Party: "member:" + id, Unit: u, Role: string(role)})
 	}
-	return platformserver.As("mes", m)
+	return platformserver.As("mes", platformserver.Member{ID: id, Tenant: tenant, Roles: map[string]string{"mes": string(role)}})
 }
 
 // testPlant sends every input through a tenant on the platform host, so it is
@@ -71,7 +74,7 @@ func plantTenant(t *testing.T, disable ...string) (*Plant, *platformserver.Tenan
 			t.Fatalf("no capability %s", c)
 		}
 	}
-	tn, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant), p)
+	tn, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant), platformserver.NewOrganization(tenant, DemoOrganization(units)), p)
 	if err != nil {
 		t.Fatal(err)
 	}

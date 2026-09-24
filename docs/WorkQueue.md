@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **96 · ready** | Platform operations, one deep step (ADR-0010 part 2 rows marked later): server-side work (K9) for scheduled jobs and asynchronous event delivery with retries; connectors managed in Settings (health, cursor, last error, enable); in-app notifications from events; organisational units and typed per-app settings in Settings | Manufacturing's connectors are managed from Settings; an event handler that fails is retried as owned work and shows its state; a supervisor is notified of a new downtime event |
+| **97 · ready** | Platform operations, one deep step (ADR-0010 part 2 rows marked later): server-side work (K9) for scheduled jobs and asynchronous event delivery with retries; connectors managed in Settings (health, cursor, last error, enable); in-app notifications from events; typed per-app settings in Settings; notifications addressed to units (ADR-0012) | Manufacturing's connectors are managed from Settings; an event handler that fails is retried as owned work and shows its state; a supervisor is notified of a new downtime event |
 
 ## Open friction (temporary; delete entries once resolved)
 

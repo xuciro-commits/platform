@@ -7,7 +7,18 @@
     "roles": {
       "crm": "sales",
       "hotel": "front-desk"
-    }
+    },
+    "units": [
+      {
+        "unit": "sales-team",
+        "role": "account executive",
+        "primary": true
+      },
+      {
+        "unit": "offsite-2026",
+        "role": "project lead"
+      }
+    ]
   },
   {
     "subjects": [
@@ -17,7 +28,23 @@
     "roles": {
       "crm": "sales-manager",
       "hotel": "manager",
-      "platform": "admin"
-    }
+      "platform": "admin",
+      "org": "admin"
+    },
+    "units": [
+      {
+        "unit": "hotel-a",
+        "role": "general manager",
+        "primary": true
+      },
+      {
+        "unit": "hotel-a-co",
+        "role": "director"
+      },
+      {
+        "unit": "guest-committee",
+        "role": "chair"
+      }
+    ]
   }
 ]

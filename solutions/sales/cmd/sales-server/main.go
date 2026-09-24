@@ -17,10 +17,20 @@ func seat(token, id string, roles map[string]string) platformserver.Seat {
 
 // demo is the directory without -directory; a development token is the subject.
 var demo = []platformserver.Seat{
-	seat("sales", "sales-1", map[string]string{"crm": "sales", "hotel": "front-desk"}),
+	withUnits(seat("sales", "sales-1", map[string]string{"crm": "sales", "hotel": "front-desk"}),
+		platformserver.Membership{Unit: "sales-team", Role: "account executive", Primary: true},
+		platformserver.Membership{Unit: "offsite-2026", Role: "project lead"}),
 	seat("sales-only", "sales-2", map[string]string{"crm": "sales"}),
-	seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "hotel": "manager", "platform": "admin"}),
-	seat("desk", "desk-1", map[string]string{"hotel": "front-desk"}),
+	withUnits(seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "hotel": "manager", "platform": "admin", "org": "admin"}),
+		platformserver.Membership{Unit: "hotel-a", Role: "general manager", Primary: true},
+		platformserver.Membership{Unit: "hotel-a-co", Role: "director"},
+		platformserver.Membership{Unit: "guest-committee", Role: "chair"}),
+	withUnits(seat("desk", "desk-1", map[string]string{"hotel": "front-desk"}), platformserver.Membership{Unit: "front-office", Role: "receptionist", Primary: true}),
+}
+
+func withUnits(s platformserver.Seat, units ...platformserver.Membership) platformserver.Seat {
+	s.Units = units
+	return s
 }
 
 func main() {

@@ -16,5 +16,42 @@ func NewTenant(id string, rooms map[string]hotel.RoomType, seats ...platformserv
 
 // Compose puts any lodging provider under the CRM.
 func Compose(id string, lodging platformserver.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
-	return platformserver.NewTenant(id, platformserver.NewDirectory(id, seats...), platformserver.NewRelations(id), lodging, crm.New(id))
+	org := DemoOrganization()
+	org.Memberships = append(org.Memberships, platformserver.Memberships(seats)...)
+	return platformserver.NewTenant(id, platformserver.NewDirectory(id, seats...), platformserver.NewOrganization(id, org),
+		platformserver.NewRelations(id), lodging, crm.New(id))
+}
+
+// DemoOrganization is a hospitality group as ADR-0012 sees it: the same units in
+// a legal, a management and a governance structure, a temporary project and
+// committee, and an external partner that sits on the committee.
+func DemoOrganization() platformserver.OrgSeed {
+	unit := func(id, name, kind string) platformserver.Unit {
+		return platformserver.Unit{ID: id, Name: name, Kind: kind}
+	}
+	edge := func(structure, u, parent, relation string) platformserver.Edge {
+		return platformserver.Edge{Structure: structure, Unit: u, Parent: parent, Relation: relation}
+	}
+	group, company := unit("group", "Harbour Hospitality Group", "group"), unit("hotel-a-co", "Hotel A Ltd.", "subsidiary")
+	group.Legal, company.Legal = true, true
+	offsite := unit("offsite-2026", "Autumn offsite programme", "project")
+	offsite.Until = "2027-01-01"
+	committee := unit("guest-committee", "Guest experience committee", "committee")
+	committee.Until = "2027-07-01"
+	acme := unit("acme", "Acme Corp", "partner")
+	acme.Legal, acme.External = true, true
+	return platformserver.OrgSeed{
+		Structures: []platformserver.Structure{{ID: "legal", Name: "Legal entities", Kind: "legal"},
+			{ID: "management", Name: "Management", Kind: "management"}, {ID: "governance", Name: "Committees", Kind: "governance"},
+			{ID: "projects", Name: "Projects", Kind: "project"}},
+		Units: []platformserver.Unit{group, company, unit("hospitality", "Hospitality business group", "business group"),
+			unit("hotel-a", "Hotel A", "property"), unit("front-office", "Front office", "department"), unit("sales-team", "Sales", "team"),
+			offsite, committee, acme},
+		Edges: []platformserver.Edge{
+			{Structure: "legal", Unit: "hotel-a-co", Parent: "group", Relation: "owned by", Share: 1},
+			edge("management", "hospitality", "group", "part of"), edge("management", "hotel-a", "hospitality", "reports to"),
+			edge("management", "front-office", "hotel-a", "part of"), edge("management", "sales-team", "hotel-a", "part of"),
+			edge("governance", "guest-committee", "group", "part of"), edge("projects", "offsite-2026", "sales-team", "run by")},
+		Memberships: []platformserver.Membership{{Party: "unit:acme", Unit: "guest-committee", Role: "observer"}},
+	}
 }

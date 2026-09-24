@@ -77,10 +77,12 @@ const (
 	Assistant  Role = "assistant" // an AI agent acting within the lines it is granted
 )
 
-// roleOf and linesOf read a caller's role in this app and the lines it is
-// granted (a directory attribute, ADR-0010).
-func roleOf(c platformserver.Caller) Role      { return Role(c.Role()) }
-func linesOf(c platformserver.Caller) []string { return c.Attributes["lines"] }
+// roleOf is a caller's role in this app.
+func roleOf(c platformserver.Caller) Role { return Role(c.Role()) }
+
+// SiteStructure is the organisation structure the plant's rules read (ADR-0012):
+// a member works on the lines it belongs to there, directly or through the plant.
+const SiteStructure = "site"
 
 // Execution state.
 
@@ -192,7 +194,8 @@ func (p *Plant) resourceLine(resource string) string {
 // action (ADR-0008); the plant hierarchy (lines) is context the domain reads, and
 // the kernel never sees it.
 func (p *Plant) allowed(who platformserver.Caller, s *pb.Submission) bool {
-	onLine := func(line string) bool { return line != "" && slices.Contains(linesOf(who), line) }
+	scope := who.Units(SiteStructure)
+	onLine := func(line string) bool { return line != "" && slices.Contains(scope, line) }
 	sfc := p.sfcs[s.GetTarget().GetId()]
 	switch s.GetSchema().GetName() {
 	case SchemaRelease:

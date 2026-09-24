@@ -46,6 +46,7 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Server | Directory | Members (people, services, AI agents) with one role per app and attributes; add, grant, revoke and scope as decisions, effective on the next request; roles checked against the app's own | `platformserver.Directory` (the platform app) | every server | 4 |
 | Server | Events | Subscriptions over accepted decisions or protocol events, declared in the manifest along requirements or consumed protocols, delivered after commit inside the input (so replay rebuilds what handlers decided); handlers act as app:<id>; a failed delivery is recorded and never undoes the decision; cycles stop visibly | `Manifest.Subscribes`, `Subscriber`, `Tenant.Deliveries` | relations (timeline), tests | 1 |
 | Server | Read authorization | A read is for members holding a role in its app; the app may refuse further; an app's reads of the apps it requires are its own | `Tenant.Read` | every server | 4 |
+| Server | Organisation | Units of any kind in several structures (legal, management, site, project, governance, community …), memberships of members or other units, all with valid time; rules ask for a member's units in a named structure (ADR-0012) | `platformserver.Organization`, `Caller.Units` | manufacturing (lines), sales solution (demo group) | 2 |
 | Server | Audit trail | Accepted top-level inputs per tenant, rebuilt by replay; administrators read it | `Tenant.Audit`, read `audit` | every server | 4 |
 | Server | App registry | Each app's roles, capabilities (active or not), reads, inputs, requirements and cross-app uses | `GET /v1/apps` | every server | 4 |
 | Server | Deployment | Development tokens or journal plus OIDC from the same flags; replay on start | `platformserver.Deployment` | mes-server, sales-server | 2 |
@@ -245,6 +246,10 @@ Apps react to each other without knowing each other: the crm-hotel bridge subscr
 
 ADR-0011, on the owner's observation that large software interoperates through protocols (OIDC, MCP, extension interfaces), not pairwise bridges. The crm-hotel bridge is gone. Hotel provides `lodging.booking/1` and passes its conformance tests; so does `lodging.Memory`, a second provider under which the CRM runs unchanged (`solutions/sales` tests). The CRM books a stay through the protocol and links it to the opportunity with the platform's links; the hotel's cancellation reaches the opportunity's timeline as the protocol's event through that link, with no app in between. Replay rebuilds the reservation, the link and the timeline from the CRM's input alone. An MCP client lists and calls a member's tools in the rehearsal. Not yet: choosing between two providers of a protocol in Settings (the first enabled is bound), and protocol versions side by side.
 
+### Organisation #96
+
+ADR-0012, after the owner's partner asked for organisation beyond departments and teams (groups, subsidiaries, business groups, factories, projects, temporary committees, external partners; one person in several structures). The `org` app holds units, structures and memberships with valid time, as decisions. Manufacturing's line scope now comes from the site structure: a supervisor belongs to the plant and so to both lines; removing the org app fails six plant tests. The sales solution's demo group shows one person as general manager (management), director (legal) and committee chair (governance), and an external partner sitting on a committee. Settings shows each structure as a tree as of a date and each member's units across structures. Directory attributes remain for other uses; posts and delegation wait for a need.
+
 ### Shared capability models (candidates, layer 2)
 
 Across domains the business differs but the data is organised alike. These are **capability candidates**, not kernel: they carry domain-like vocabulary and are promoted only when two domains use them without exceptions (§4 rules). The UI kit (`web/packages/ui`, ADR-0004) already gives them one presentation.
@@ -252,7 +257,7 @@ Across domains the business differs but the data is organised alike. These are *
 | Capability | Manufacturing | Hotel | Shared shape |
 |---|---|---|---|
 | Master data | Product, material, routing (operations), work center | Room type, room, rate plan | Coded entities with versions and effective dates (K1, K7) |
-| Organisation | Plant → area → line; shifts; operators, qualifications | Property → department (front office, housekeeping); staff, roles | A tree of units, people with roles; used as policy context (K6), never as kernel schema |
+| Organisation | Plant → area → line; shifts; operators, qualifications | Property → department (front office, housekeeping); staff, roles | Promoted to the platform (ADR-0012): units in several dated structures, memberships; policy context (K6), never kernel schema |
 | Devices and data collection | PLC states, counters, gauges | Door access, cameras, temperature/humidity | Device registry (connector, K8) plus reading streams as observations (K2, K3) |
 | Documents with lifecycles | Work order, SFC, nonconformance | Reservation, housekeeping task | A state machine in domain code; decisions as change records (K4) submitted through the outbox (K5) |
 

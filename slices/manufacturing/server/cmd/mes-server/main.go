@@ -16,7 +16,7 @@ const tenant = "plant-sz"
 
 // demo is the directory without -directory; a development token is the subject.
 var demo = []platformserver.Seat{
-	seat("supervisor", "sup-1", mes.Supervisor, "L1", "L2"),
+	seat("supervisor", "sup-1", mes.Supervisor, "plant-sz"),
 	seat("operator-l1", "op-l1", mes.Operator, "L1"),
 	seat("operator-l2", "op-l2", mes.Operator, "L2"),
 	seat("quality-1", "qa-1", mes.Quality),
@@ -25,13 +25,14 @@ var demo = []platformserver.Seat{
 	seat("erp", "erp", mes.ERP),
 }
 
-func seat(subject, id string, role mes.Role, lines ...string) platformserver.Seat {
+// seat signs in as subject and belongs to units of the site structure (ADR-0012).
+func seat(subject, id string, role mes.Role, units ...string) platformserver.Seat {
 	s := platformserver.Seat{Subjects: []string{subject}, Member: platformserver.Member{ID: id, Roles: map[string]string{"mes": string(role)}}}
 	if subject == "supervisor" {
-		s.Roles[platformserver.PlatformApp] = platformserver.Admin
+		s.Roles[platformserver.PlatformApp], s.Roles[platformserver.OrgApp] = platformserver.Admin, platformserver.OrgAdmin
 	}
-	if len(lines) > 0 {
-		s.Attributes = map[string][]string{"lines": lines}
+	for _, u := range units {
+		s.Units = append(s.Units, platformserver.Membership{Unit: u, Role: string(role)})
 	}
 	return s
 }
@@ -49,7 +50,9 @@ func main() {
 			log.Fatalf("-disable: no capability %q", c)
 		}
 	}
-	t, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant, deployment.Seats(demo)...), plant)
+	seats := deployment.Seats(demo)
+	t, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant, seats...),
+		platformserver.NewOrganization(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), plant)
 	if err == nil {
 		err = deployment.Serve(t)
 	}

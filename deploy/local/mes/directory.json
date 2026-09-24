@@ -6,14 +6,15 @@
     "id": "sup-1",
     "roles": {
       "mes": "supervisor",
-      "platform": "admin"
+      "platform": "admin",
+      "org": "admin"
     },
-    "attributes": {
-      "lines": [
-        "L1",
-        "L2"
-      ]
-    }
+    "units": [
+      {
+        "unit": "plant-sz",
+        "role": "supervisor"
+      }
+    ]
   },
   {
     "subjects": [
@@ -23,11 +24,12 @@
     "roles": {
       "mes": "operator"
     },
-    "attributes": {
-      "lines": [
-        "L1"
-      ]
-    }
+    "units": [
+      {
+        "unit": "L1",
+        "role": "operator"
+      }
+    ]
   },
   {
     "subjects": [
@@ -37,11 +39,12 @@
     "roles": {
       "mes": "operator"
     },
-    "attributes": {
-      "lines": [
-        "L2"
-      ]
-    }
+    "units": [
+      {
+        "unit": "L2",
+        "role": "operator"
+      }
+    ]
   },
   {
     "subjects": [
@@ -87,10 +90,11 @@
     "roles": {
       "mes": "assistant"
     },
-    "attributes": {
-      "lines": [
-        "L1"
-      ]
-    }
+    "units": [
+      {
+        "unit": "L1",
+        "role": "assistant"
+      }
+    ]
   }
 ]

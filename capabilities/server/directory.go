@@ -30,6 +30,19 @@ const (
 type Seat struct {
 	Subjects []string `json:"subjects"` // "user:<email>", "client:<id>", or a development token's subject
 	Member
+	Units []Membership `json:"units,omitempty"` // the member's starting memberships (ADR-0012); Party is filled in
+}
+
+// Memberships are the seats' starting memberships, for the org app's seed.
+func Memberships(seats []Seat) []Membership {
+	var out []Membership
+	for _, s := range seats {
+		for _, m := range s.Units {
+			m.Party = "member:" + s.ID
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 type Directory struct {

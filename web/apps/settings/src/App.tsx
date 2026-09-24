@@ -8,7 +8,7 @@ import {
   notify, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Blocks, Cable, Grid3x3, History, Users, Workflow } from "lucide-react";
+import { Blocks, Cable, Grid3x3, History, Network, Users, Workflow } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -26,7 +26,20 @@ const hosts = [
   { id: "mes", label: "Plant host · plant-sz (supervisor)", server: "http://127.0.0.1:8490", token: "supervisor" },
 ];
 
-type Admin = { client: EdgeClient; apps: AppInfo[]; decide: (schema: string, member: string, payload: unknown) => Promise<boolean> };
+type Admin = {
+  client: EdgeClient; apps: AppInfo[];
+  decide: (schema: string, member: string, payload: unknown) => Promise<boolean>;
+  decideOn: (schema: string, target: { type: string; id: string }, payload: unknown) => Promise<boolean>;
+};
+
+// The organisation (ADR-0012): units in several structures, memberships, all dated.
+type Unit = { id: string; name: string; kind: string; legal?: boolean; external?: boolean; from?: string; until?: string; closed?: string };
+type Structure = { id: string; name: string; kind: string; matrix?: boolean };
+type Edge = { structure: string; unit: string; parent: string; relation?: string; share?: number; from?: string; until?: string };
+type Membership = { party: string; unit: string; role: string; primary?: boolean; from?: string; until?: string };
+type Chart = { structures: Structure[]; units: Unit[]; edges: Edge[]; memberships: Membership[] };
+const today = () => new Date().toISOString().slice(0, 10);
+const active = (x: { from?: string; until?: string }, day: string) => (x.from ?? "") <= day && (!x.until || day < x.until);
 const AdminContext = createContext<Admin | null>(null);
 const useAdmin = () => useContext(AdminContext)!;
 
@@ -70,7 +83,6 @@ function Members() {
 function MemberDetail({ id }: { id: string }) {
   const member = useRead<Member[]>("/v1/members").data?.find((m) => m.id === id);
   const { apps, decide } = useAdmin();
-  const [lines, setLines] = useState<string>();
   if (!member) return <p className="text-sm text-muted">No member {id}.</p>;
   return (
     <div className="grid max-w-3xl gap-4">
@@ -94,16 +106,128 @@ function MemberDetail({ id }: { id: string }) {
           ))}
         </div>
       </section>
-      <section className="rounded-md border border-border bg-surface p-3">
-        <h2 className="mb-2 text-sm font-semibold">Scope</h2>
-        <p className="mb-2 text-xs text-muted">Attributes apps scope roles by, such as the lines an operator or agent works on.</p>
-        <div className="flex gap-2">
-          <Input aria-label="Lines" placeholder="lines, e.g. L1, L2" value={lines ?? member.attributes?.lines?.join(", ") ?? ""} onChange={(e) => setLines(e.target.value)} className="w-64" />
-          <Button onClick={() => void decide("platform.member.scope", member.id,
-            { attribute: "lines", values: (lines ?? "").split(",").map((l) => l.trim()).filter(Boolean) }).then(() => setLines(undefined))}>Save lines</Button>
-        </div>
-      </section>
+      <MemberUnits member={member.id} />
     </div>
+  );
+}
+
+// A member's units in every structure, as of today (a person often belongs to several).
+function MemberUnits({ member }: { member: string }) {
+  const chart = useRead<Chart>("/v1/organization").data;
+  if (!chart) return null;
+  const day = today();
+  const mine = chart.memberships.filter((m) => m.party === `member:${member}` && active(m, day));
+  const name = (id: string) => chart.units.find((u) => u.id === id)?.name ?? id;
+  const structuresOf = (unit: string) => chart.structures.filter((s) => chart.edges.some((e) => e.structure === s.id && (e.unit === unit || e.parent === unit) && active(e, day)));
+  return (
+    <section className="rounded-md border border-border bg-surface p-3">
+      <h2 className="mb-2 text-sm font-semibold">Organisation</h2>
+      {mine.length === 0 && <p className="text-xs text-muted">Belongs to no unit.</p>}
+      <div className="grid gap-1.5 text-sm">
+        {mine.map((m) => (
+          <p key={m.unit + m.role} className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{name(m.unit)}</span><span className="text-muted">{m.role}</span>
+            {m.primary && <Tag label="primary" tone="info" />}
+            {structuresOf(m.unit).map((s) => <Tag key={s.id} label={s.name} />)}
+            {m.until && <span className="text-xs text-muted">until {m.until}</span>}
+          </p>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Organisation: one structure at a time as a tree, as of a date; a unit with its members.
+function Organization() {
+  const chart = useRead<Chart>("/v1/organization");
+  const members = useRead<Member[]>("/v1/members").data ?? [];
+  const { decideOn } = useAdmin();
+  const [structure, setStructure] = useState<string>();
+  const [day, setDay] = useState(today());
+  const [selected, setSelected] = useState<string>();
+  const [adding, setAdding] = useState<"unit" | "member">();
+  if (chart.error) return <p className="text-sm text-[var(--tone-danger)]">{String(chart.error)} — needs a role in the org app.</p>;
+  const c = chart.data;
+  if (!c) return null;
+  const s = structure ?? c.structures[0]?.id ?? "";
+  const edges = c.edges.filter((e) => e.structure === s && active(e, day));
+  const unit = (id: string) => c.units.find((u) => u.id === id);
+  const children = (id: string) => edges.filter((e) => e.parent === id);
+  const roots = [...new Set(edges.map((e) => e.parent))].filter((p) => !edges.some((e) => e.unit === p));
+  const Node = ({ id, edge, depth }: { id: string; edge?: Edge; depth: number }) => {
+    const u = unit(id);
+    if (!u || !active(u, day)) return null;
+    const count = c.memberships.filter((m) => m.unit === id && active(m, day)).length;
+    return (
+      <>
+        <button type="button" onClick={() => setSelected(id)} style={{ paddingLeft: 8 + depth * 18 }}
+          className={`flex w-full items-center gap-2 rounded-sm py-1 pr-2 text-left text-sm hover:bg-row-hover ${selected === id ? "bg-row-selected" : ""}`}>
+          <span className="font-medium">{u.name}</span><Tag label={u.kind} />
+          {u.legal && <Tag label="legal entity" tone="info" />}{u.external && <Tag label="external" tone="warning" />}
+          {u.until && <span className="text-xs text-muted">until {u.until}</span>}
+          {edge?.relation && <span className="text-xs text-muted">{edge.relation}{edge.share ? ` ${Math.round(edge.share * 100)}%` : ""}</span>}
+          <span className="ml-auto text-xs text-muted">{count || ""}</span>
+        </button>
+        {children(id).map((e) => <Node key={e.unit} id={e.unit} edge={e} depth={depth + 1} />)}
+      </>
+    );
+  };
+  const sel = selected ? unit(selected) : undefined;
+  const people = sel ? c.memberships.filter((m) => m.unit === sel.id && active(m, day)) : [];
+  return (
+    <>
+      <PageHeader title="Organisation" description="Units in several structures at once — legal, management, projects, committees — with dated memberships. Rules read the structure they name."
+        actions={<span className="flex items-center gap-2">
+          <Select aria-label="Structure" value={s} onChange={(e) => setStructure(e.target.value)}>
+            {c.structures.map((x) => <option key={x.id} value={x.id}>{x.name} · {x.kind}</option>)}
+          </Select>
+          <Input aria-label="As of" type="date" value={day} onChange={(e) => setDay(e.target.value || today())} className="w-40" />
+        </span>} />
+      <div className="grid grid-cols-[minmax(320px,1fr)_minmax(280px,1fr)] gap-4">
+        <section className="rounded-md border border-border bg-surface p-2">
+          {roots.length === 0 && <p className="p-2 text-sm text-muted">No units in this structure on {day}.</p>}
+          {roots.map((r) => <Node key={r} id={r} depth={0} />)}
+        </section>
+        <section className="rounded-md border border-border bg-surface p-3">
+          {!sel ? <p className="text-sm text-muted">Select a unit.</p> : <>
+            <div className="mb-2 flex items-center gap-2">
+              <h2 className="text-sm font-semibold">{sel.name}</h2><Tag label={sel.kind} />
+              <span className="ml-auto flex gap-2">
+                <Button size="sm" onClick={() => setAdding("unit")}>Add unit below</Button>
+                <Button size="sm" onClick={() => setAdding("member")}>Add member</Button>
+              </span>
+            </div>
+            {people.length === 0 && <p className="text-xs text-muted">No members on {day}.</p>}
+            {people.map((m) => (
+              <p key={m.party + m.role} className="flex items-center gap-2 text-sm">
+                <span className="font-mono text-xs">{m.party.replace(/^(member|unit):/, "")}</span><span className="text-muted">{m.role}</span>
+                {m.party.startsWith("unit:") && <Tag label="organisation" tone="warning" />}
+                {m.until && <span className="text-xs text-muted">until {m.until}</span>}
+                <Button size="sm" variant="danger" className="ml-auto" onClick={() => void decideOn("org.membership.end", { type: "org.unit", id: sel.id }, { party: m.party, role: m.role })}>End</Button>
+              </p>
+            ))}
+          </>}
+        </section>
+      </div>
+      <Dialog open={adding === "unit"} onOpenChange={(o) => !o && setAdding(undefined)} title={`New unit below ${sel?.name ?? ""}`}>
+        <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, "Lower case, digits, dashes"), name: z.string().min(1), kind: z.string().min(1), relation: z.string() })}
+          defaultValues={{ id: "", name: "", kind: "", relation: "part of" }} submitLabel="Add" onCancel={() => setAdding(undefined)}
+          fields={[{ name: "id", label: "ID" }, { name: "name", label: "Name" }, { name: "kind", label: "Kind (team, project, committee, partner …)" }, { name: "relation", label: "Relation" }]}
+          onSubmit={async (v) => {
+            if (await decideOn("org.unit.add", { type: "org.unit", id: v.id }, { name: v.name, kind: v.kind })
+              && await decideOn("org.unit.place", { type: "org.unit", id: v.id }, { structure: s, parent: sel!.id, relation: v.relation })) setAdding(undefined);
+          }} />
+      </Dialog>
+      <Dialog open={adding === "member"} onOpenChange={(o) => !o && setAdding(undefined)} title={`Add to ${sel?.name ?? ""}`}>
+        <EntityForm schema={z.object({ party: z.string().min(1), role: z.string().min(1), until: z.string() })}
+          defaultValues={{ party: "", role: "", until: "" }} submitLabel="Add" onCancel={() => setAdding(undefined)}
+          fields={[{ name: "party", label: "Member or organisation", kind: "select", options: [
+              ...members.map((m) => ({ value: `member:${m.id}`, label: m.id })),
+              ...c.units.filter((u) => u.id !== sel?.id).map((u) => ({ value: `unit:${u.id}`, label: `${u.name} (organisation)` }))] },
+            { name: "role", label: "Role (employee, chair, volunteer …)" }, { name: "until", label: "Until (YYYY-MM-DD, optional)" }]}
+          onSubmit={async (v) => { if (await decideOn("org.membership.add", { type: "org.unit", id: sel!.id }, { party: v.party, role: v.role, until: v.until })) setAdding(undefined); }} />
+      </Dialog>
+    </>
   );
 }
 
@@ -240,6 +364,7 @@ function Audit() {
 const views: View[] = [
   { id: "members", title: () => "Members", render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? "Member", render: (p) => <MemberDetail id={p.id ?? ""} /> },
+  { id: "organization", title: () => "Organisation", render: () => <Organization /> },
   { id: "apps", title: () => "Apps", render: () => <Apps /> },
   { id: "matrix", title: () => "Capability matrix", render: () => <Matrix /> },
   { id: "protocols", title: () => "Protocols", render: () => <Protocols /> },
@@ -260,22 +385,23 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
     Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
     client.refreshDeclarations().catch(() => notify.error("Host unreachable"));
   }, [client, me]);
-  const decide: Admin["decide"] = async (schema, member, payload) => {
-    client.draft(schema, { type: "platform.member", id: member }, payload);
+  const decide: Admin["decide"] = (schema, member, payload) => decideOn(schema, { type: "platform.member", id: member }, payload);
+  const decideOn: Admin["decideOn"] = async (schema, target, payload) => {
+    client.draft(schema, target, payload);
     let ok = false;
     for (const entry of await client.send()) {
       ok = entry.state === "SUBMISSION_STATE_CONFIRMED";
-      (ok ? notify.success : notify.error)(`${schema.replace("platform.member.", "")} ${member}: ${ok ? "done" : entry.outcome}`);
+      (ok ? notify.success : notify.error)(`${schema.split(".").slice(1).join(" ")} ${target.id}: ${ok ? "done" : entry.outcome}`);
     }
     await queries.invalidateQueries();
     return ok;
   };
   const nav = (label: string, icon: React.ReactNode, view: string) => ({ label, icon, route: { view } });
   return (
-    <AdminContext.Provider value={{ client, apps, decide }}>
+    <AdminContext.Provider value={{ client, apps, decide, decideOn }}>
       <Workspace product="Platform Settings" storageKey="settings.layout" views={views} home={{ view: "members" }}
         nav={[
-          { label: "Access", items: [nav("Members", <Users />, "members")] },
+          { label: "Access", items: [nav("Members", <Users />, "members"), nav("Organisation", <Network />, "organization")] },
           { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] },
           { label: "Data", items: [nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] },
         ]}

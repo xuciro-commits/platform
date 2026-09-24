@@ -107,6 +107,7 @@ type Tenant struct {
 	events     []Event // published during the current input, delivered after it
 	bindings   map[string]binding
 	relations  *Relations
+	org        *Organization
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -159,6 +160,9 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 		}
 		if r, ok := a.(*Relations); ok {
 			t.relations = r
+		}
+		if o, ok := a.(*Organization); ok {
+			t.org = o
 		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {
