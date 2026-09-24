@@ -1,0 +1,141 @@
+# 本地环境与测试资料
+
+这里是本地测试环境的全部资料：怎么启动、地址、账号密码、服务账号、接入外部系统要填什么，以及常用的测试路线。
+
+本页的密码和密钥都只用于本地环境，而且早已写在仓库的其他文件里（Rauthy 的初始数据、`rehearse.sh`）。**唯一不进仓库的是真实供应商的 API Key**，比如 OpenRouter：它放在 `deploy/local/.env`，该文件已被 git 忽略。
+
+## 启动与停止
+
+需要先有 Docker（OrbStack：`orb start`）。
+
+```bash
+cd deploy/local && docker compose up -d --build
+```
+
+```bash
+cd deploy/local && docker compose ps
+```
+
+- 停止：`docker compose stop`。数据保存在 Docker 卷 `pgdata` 和 `rauthy` 里，下次启动会重放日志，数据还在。
+- 只重建主机：`docker compose up -d --build mes-server sales-server webhook-sink`。
+- 灌 sales 演示数据：`./seed-sales.sh`。可以重复执行，结果不变。
+- 完整演练：在仓库根目录运行 `scripts/verify.sh deploy`。它用另一组端口和一套全新的数据，不会动你的本地数据。
+
+真实供应商的密钥放在 `deploy/local/.env`，compose 启动时自动读取。一行一个：
+
+```
+OPENROUTER_API_KEY=sk-or-...
+```
+
+主机按名字取密钥（ADR-0014 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `mes-server` / `sales-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
+
+## 地址
+
+| 服务 | 地址 | 说明 |
+|---|---|---|
+| 身份认证 Rauthy | http://localhost:8480/auth/v1/ | OIDC 签发方；管理后台是 http://localhost:8480/auth/v1/admin |
+| MES 主机（租户 `plant-sz`） | http://localhost:8490 | 生产路径：PostgreSQL 日志 + OIDC |
+| Sales 主机（租户 `hotel-a`） | http://localhost:8495 | 同上 |
+| webhook-sink | http://localhost:8497 | 本地的外部系统替身：webhook 接收方、ERP、邮件服务器、本地模型 |
+| PostgreSQL | `localhost:5433`，库 `platform`，用户 `platform`，密码 `platform-local-only` | 两个租户的日志表 `journal` |
+| MES 前端 | http://localhost:5175 | 启动配置 `mes-oidc`（登录）或 `mes-demo`（开发令牌） |
+| Sales 前端 | http://localhost:5176 | `sales-oidc`（登录）或 `sales`（开发令牌） |
+| Settings 前端 | http://localhost:5177 | `settings-oidc`（登录，右上角切换 sales / plant 主机）或 `settings`（开发令牌） |
+
+前端用 `pnpm --dir web/apps/<app> dev` 启动，或者在 Claude 桌面应用里用 `.claude/launch.json` 里的配置启动。登录模式要先启动本地环境。
+
+## 人员账号（登录用）
+
+所有人的密码都是 **`Plant-Local-1`**。
+
+| 邮箱 | 主机 / 租户 | 成员 ID | 角色 | 组织 |
+|---|---|---|---|---|
+| `sup@plant.test` | MES `plant-sz` | `sup-1` | mes 主管；platform、org、ai 管理员 | 工厂 `plant-sz`（管两条线） |
+| `op1@plant.test` | MES | `op-l1` | mes 操作员；ai 用户 | 产线 `L1` |
+| `op2@plant.test` | MES | `op-l2` | mes 操作员；ai 用户 | 产线 `L2` |
+| `qa1@plant.test` | MES | `qa-1` | mes 质量；ai 用户 | — |
+| `qa2@plant.test` | MES | `qa-2` | mes 质量；ai 用户（报废需要两个质量签名） | — |
+| `sales@hotel.test` | Sales `hotel-a` | `sales-1` | crm 销售、hotel 前台、memstay 管家；ai 用户 | 销售组、2026 年会项目 |
+| `manager@hotel.test` | Sales | `manager-1` | crm 销售经理、hotel 经理、memstay 管家；platform、org、ai 管理员 | 酒店总经理等 |
+
+- Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
+- 成员名单来自 `mes/directory.json` 和 `sales/directory.json`。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
+
+## 服务账号与 AI 代理（client credentials）
+
+令牌地址是 `http://localhost:8480/auth/v1/oidc/token`，用 `grant_type=client_credentials`。
+
+| client_id | 密钥 | 成员 | 用途 |
+|---|---|---|---|
+| `mes-gateway` | `gatewayLocalOnly000000000000000000000000000000000000000000000000` | `gateway-l1` | 产线网关，推送设备状态（`cmd/gateway-sim`） |
+| `mes-erp` | `erpLocalOnly0000000000000000000000000000000000000000000000000000` | `erp` | ERP 计划订单轮询 |
+| `mes-assistant` | `assistantLocalOnly0000000000000000000000000000000000000000000000` | `agent-l1` | **AI 代理**：产线 L1 的助手；它做的不可撤回外发要人批准（D6） |
+| `platform-cli` | `cliLocalOnly0000000000000000000000000000000000000000000000000000` | — | 脚本用密码模式为人员换令牌（`rehearse.sh`、`seed-sales.sh`） |
+
+以 AI 助手身份操作：
+
+```bash
+cd slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 go run ./cmd/mes-agent -server http://localhost:8490 -oidc-token http://localhost:8480/auth/v1/oidc/token actions
+```
+
+把末尾的 `actions` 换成 `do <动作> <目标> '<JSON>'` 就是执行动作，例如 `do mes.order.reconfirm WO-3 '{"planned":"PO-9001"}'`。
+
+## 开发令牌（不登录的演示模式）
+
+用 `go run ./cmd/<server>` 直接启动的主机（不带 `-oidc-issuer`）接受开发令牌：令牌就是登录名。
+- sales：`manager`、`sales`、`sales-only`、`desk`
+- MES：`supervisor`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`erp`、`assistant-l1`（AI 代理）
+
+Settings 和 Sales 的演示模式连 8495 / 8490。这两个端口被 Docker 占着时，先 `docker compose stop sales-server`（或 `mes-server`），再在 `solutions/sales` 下运行 `go run ./cmd/sales-server`。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
+
+## 接入外部系统时填什么
+
+这些都在 Settings 里添加（登录 `sup@plant.test` 或 `manager@hotel.test`）。
+
+**Webhook 接收地址**（Integrations → Add endpoint → Webhook）
+
+| 用途 | URL | 密钥名 | 勾选 |
+|---|---|---|---|
+| 通用 webhook | `http://webhook-sink:8080/hook` | `sink` | 勾"内部地址"；事件任选，如 `lodging.booking/1#canceled` |
+| ERP 确认回写（MES） | `http://webhook-sink:8080/erp` | `sink` | 勾"内部地址"；外发类型 `mes/erp-confirmation` |
+
+sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。ERP 替身在确认里没写计划订单时返回 422，用来测试 ERP 拒绝和纠正。
+
+**邮件接收地址**（Integrations → Add endpoint → Email）
+
+| URL | 发件人 | 密钥名 | 勾选 |
+|---|---|---|---|
+| `smtp://webhook-sink:2525` | 任意，如 `plant@plant.test` | 留空 | 勾"内部地址"；应用勾 `mes`、`platform` |
+
+收到的邮件在 http://localhost:8497/mail 查看。只有以邮箱登录的成员会收到邮件，服务账号和 AI 代理不会。真实 SMTP 服务器的写法是 `smtp://用户名@smtp.example.com:587`，密码放在密钥里（密钥名填在"密钥名"一栏）。
+
+**AI 供应商**（AI → Providers and models → Add provider）
+
+| 类型 | 填写 | 密钥名 |
+|---|---|---|
+| 供应商 OpenRouter | ID `openrouter`，供应商选 OpenRouter | `openrouter`（`.env` 里的 `OPENROUTER_API_KEY`） |
+| 供应商 OpenAI / Gemini / Moonshot / DeepSeek / Qwen / 智谱 | 选对应供应商 | 自定义名字，并按"启动与停止"一节加上对应的环境变量 |
+| 第三方兼容接口 | Base URL `https://…/v1` | 必填 |
+| 本地模型：LM Studio / Ollama / llama.cpp | `http://host.docker.internal:1234/v1`、`:11434/v1`、`:8080/v1` | 可留空 |
+| 本地替身（无需安装） | `http://webhook-sink:8080/v1`，模型 `echo` | 留空 |
+
+- 添加后点 Models 读取模型目录。勾 "free only" 只看免费模型：OpenRouter 目前有约 20 个免费模型，常被上游限流（429），换一个就行。
+- 选 everyone 或 ai users 启用，然后在 Playground 调用，在 Usage 看用量。
+- 没有 `ai` 角色的成员（例如 AI 助手 `agent-l1`）只能用开放给 everyone 的模型。
+
+**MCP**：`POST http://localhost:8490/mcp`（或 8495），带 `Authorization: Bearer <该成员的令牌>`。工具列表就是这个成员的动作目录和可读数据。
+
+## 常用测试路线
+
+1. **ERP 回写、纠正、D6 批准、邮件**（MES，`sup@plant.test`）：
+   1. 添加 ERP 和邮件两个接收地址；
+   2. 在 MES 下达一张不带计划订单的订单，`op1` 做完三道工序；
+   3. ERP 会拒绝，主管收到通知和邮件；
+   4. 在计划订单页"Correct and resend"，或者用 AI 助手执行 `mes.order.reconfirm`；
+   5. 助手重发的那条外发会被扣住，在 Integrations 批准后 ERP 确认。
+2. **协议与供应商切换**（Sales，`manager@hotel.test`）：
+   1. 用 CRM 订房（走 lodging 协议）；
+   2. 在 Protocols 把供应商从 hotel 切到 memstay 后再订一次；
+   3. 两个供应商的入住记录都挂在同一个商机上。
+3. **AI**（任一主机的管理员）：添加 OpenRouter → 启用一个免费模型 → Playground 提问 → Usage 看用量；再换 `op1` 或 `sales` 登录，看不同访问范围的效果。
+4. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
