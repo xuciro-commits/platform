@@ -19,11 +19,15 @@ func newHotel() *Hotel {
 	return NewHotel("hotel-a", map[string]RoomType{"standard": {Rooms: 1, Overbooking: 1}, "suite": {Rooms: 1}}, DefaultPolicy)
 }
 
-func submission(p Principal, schema, id, key string, payload any) *pb.Submission {
+func submission(p Principal, schema, id, key string, payload any, expectedRevision ...uint32) *pb.Submission {
 	raw, _ := json.Marshal(payload)
-	return &pb.Submission{TenantId: p.Tenant, PrincipalId: p.ID, Authority: Authority,
+	s := &pb.Submission{TenantId: p.Tenant, PrincipalId: p.ID, Authority: Authority,
 		Target: &pb.EntityRef{Type: ReservationType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1},
 		IdempotencyKey: key, Payload: raw}
+	if len(expectedRevision) > 0 {
+		s.ExpectedRevision = &expectedRevision[0]
+	}
+	return s
 }
 
 func create(h *Hotel, p Principal, id, key, roomType, in, out string) (*pb.ChangeRecord, string) {
@@ -71,16 +75,16 @@ func TestReplayReturnsOriginalEvenWhenFull(t *testing.T) {
 func TestRolesAndVersions(t *testing.T) {
 	h := newHotel()
 	create(h, desk, "r1", "k1", "suite", "2026-10-01", "2026-10-02")
-	_, err := h.Submit(desk, submission(desk, SchemaCancel, "r1", "k2", map[string]int{"expectedVersion": 1}), now)
+	_, err := h.Submit(desk, submission(desk, SchemaCancel, "r1", "k2", map[string]int{}, 1), now)
 	expect(t, err.Error(), "ERROR_CODE_POLICY_DENIED")
 	_, err = h.Submit(desk, submission(desk, SchemaModify, "r1", "k3",
-		map[string]any{"roomType": "suite", "checkIn": "2026-10-01", "checkOut": "2026-10-03", "expectedVersion": 1}), now)
+		map[string]any{"roomType": "suite", "checkIn": "2026-10-01", "checkOut": "2026-10-03"}, 1), now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = h.Submit(manager, submission(manager, SchemaCancel, "r1", "k4", map[string]int{"expectedVersion": 1}), now)
+	_, err = h.Submit(manager, submission(manager, SchemaCancel, "r1", "k4", map[string]int{}, 1), now)
 	expect(t, err.Error(), "ERROR_CODE_CONFLICT") // stale version
-	if _, err = h.Submit(manager, submission(manager, SchemaCancel, "r1", "k5", map[string]int{"expectedVersion": 2}), now); err != nil {
+	if _, err = h.Submit(manager, submission(manager, SchemaCancel, "r1", "k5", map[string]int{}, 2), now); err != nil {
 		t.Fatal(err)
 	}
 	_, got := create(h, desk, "r2", "k6", "suite", "2026-10-01", "2026-10-03") // canceled stay frees the room
@@ -147,7 +151,7 @@ func TestDrillE1ApartmentsAndCoworking(t *testing.T) {
 	expect(t, got, "ERROR_CODE_CONFLICT")
 	_, got = create(h, desk, "m4", "k6", "meeting-room", "2026-10-01T12:30", "2026-10-01T13:00")
 	expect(t, got, "ERROR_CODE_INVALID_ARGUMENT") // not whole hours
-	_, err := h.Submit(manager, submission(manager, SchemaCancel, "m1", "k7", map[string]int{"expectedVersion": 1}), now)
+	_, err := h.Submit(manager, submission(manager, SchemaCancel, "m1", "k7", map[string]int{}, 1), now)
 	if err != nil {
 		t.Fatal(err)
 	}

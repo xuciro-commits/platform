@@ -25,6 +25,8 @@ message Submission {
   bytes payload = 10;
   // Recorded facts (K2) this decision is based on.
   repeated string evidence_fact_ids = 11;
+  // Precondition: the target's revision the submitter saw (C12). Absent: no check.
+  optional uint32 expected_revision = 12;
 }
 
 // An accepted decision. Immutable once recorded.
@@ -33,4 +35,6 @@ message ChangeRecord {
   Submission submission = 2;
   google.protobuf.Timestamp valid_time = 3;
   google.protobuf.Timestamp recorded_time = 4;
+  // The target's revision after this change: accepted changes naming it so far (C12).
+  uint32 revision = 5;
 }

@@ -11,6 +11,7 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | Path | Contents |
 |---|---|
 | `contract/` | Kernel contract `v1alpha1`: Protobuf data contract (`proto/`), semantic rules with errors (`spec/`), conformance vectors (`vectors/`), Go reference (`go/`) and Swift implementation (`swift/`) running the same vectors |
+| `capabilities/server/` | Go module `platformserver`: the server capability every domain server uses (authentication hook, kernel endpoints, error mapping) |
 | `slices/hotel/` | Hotel reference slice (#79): Go tenant server (`server/`, with a channel simulator), Tauri desk client with a Rust K5 outbox that runs the contract's K5 vectors (`client/`), `flows.sh` reproducing timeout, offline, conflict and rejection flows. May not change the kernel |
 | `slices/manufacturing/` | Manufacturing reference slice (#83, Opcenter/SAP ME model): Go plant server with ERP poll and gateway push connectors (`server/`, `cmd/gateway-sim`). May not change the kernel |
 | `slices/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |
@@ -38,4 +39,5 @@ scripts/verify.sh web       # UI kit tests, typecheck and build of every web app
 scripts/verify.sh hotel     # web build, Hotel server tests, Rust K5 vectors, end-to-end flows (needs cargo)
 scripts/verify.sh manufacturing  # plant server tests (F-5 to F-9 verdicts)
 scripts/verify.sh drills    # evolution drills on the kernel
+scripts/verify.sh capabilities  # server capability tests
 ```

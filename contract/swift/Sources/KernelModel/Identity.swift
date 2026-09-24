@@ -48,6 +48,12 @@ public struct IdentityRegistry: Sendable {
         self.entities = Set(entities)
     }
 
+    /// Brings a new entity into existence (I10); IDs are never reused.
+    public mutating func create(_ ref: EntityRef) throws(KernelError) {
+        guard !ref.type.isEmpty, !ref.id.isEmpty else { throw .invalidArgument }
+        guard entities.insert(ref).inserted else { throw .conflict }
+    }
+
     public mutating func add(_ redirect: Redirect) throws(KernelError) {
         let arityOK = switch redirect.kind {
         case .merge: redirect.to.count == 1

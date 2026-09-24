@@ -83,6 +83,7 @@ func TestIdentityVectors(t *testing.T) {
 				var step struct {
 					Resolve     json.RawMessage `json:"resolve"`
 					AddRedirect json.RawMessage `json:"addRedirect"`
+					Create      json.RawMessage `json:"create"`
 					Expect      struct {
 						OK        bool              `json:"ok"`
 						Resolved  json.RawMessage   `json:"resolved"`
@@ -93,6 +94,14 @@ func TestIdentityVectors(t *testing.T) {
 				json.Unmarshal(rawStep, &step)
 				var got, want string
 				switch {
+				case step.Create != nil:
+					r := &pb.EntityRef{}
+					decode(t, step.Create, r)
+					if err := id.Create(r); err != nil {
+						got = err.Error()
+					} else {
+						got = "ok"
+					}
 				case step.AddRedirect != nil:
 					r := &pb.Redirect{}
 					decode(t, step.AddRedirect, r)
@@ -169,6 +178,7 @@ func TestChangeRecordVectors(t *testing.T) {
 							ValidTime    time.Time `json:"validTime"`
 							RecordedTime time.Time `json:"recordedTime"`
 							SameAs       *int      `json:"sameAs"`
+							Revision     *uint32   `json:"revision"`
 						} `json:"accepted"`
 						Error string `json:"error"`
 					} `json:"expect"`
@@ -196,6 +206,9 @@ func TestChangeRecordVectors(t *testing.T) {
 					}
 					if a.SameAs != nil && record.GetChangeId() != changeIDs[*a.SameAs] {
 						t.Errorf("%s: replay returned a new change", label)
+					}
+					if a.Revision != nil && record.GetRevision() != *a.Revision {
+						t.Errorf("%s: revision %d, want %d", label, record.GetRevision(), *a.Revision)
 					}
 				} else if err == nil || err.Error() != step.Expect.Error {
 					t.Errorf("%s: got %v, want %s", label, err, step.Expect.Error)
@@ -671,6 +684,73 @@ func TestMigrationVectors(t *testing.T) {
 			for tenant, count := range v.ExpectLog {
 				if got := len(log.Records(tenant)); got != count {
 					t.Errorf("log %s: %d records, want %d", tenant, got, count)
+				}
+			}
+		})
+	}
+}
+
+func TestWorkVectors(t *testing.T) {
+	for _, v := range load(t, "k9-work.json").Vectors {
+		t.Run(v.ID, func(t *testing.T) {
+			works := NewWorks()
+			for i, rawStep := range v.Steps {
+				type ref struct {
+					WorkID     string `json:"workId"`
+					OwnerID    string `json:"ownerId"`
+					Generation uint32 `json:"generation"`
+					Progress   uint32 `json:"progress"`
+					Checkpoint string `json:"checkpoint"`
+				}
+				var step struct {
+					Start, Checkpoint, Complete, Fail, Cancel, CloseOwner, State *ref
+					Expect                                                       json.RawMessage `json:"expect"`
+				}
+				if err := json.Unmarshal(rawStep, &step); err != nil {
+					t.Fatal(err)
+				}
+				var got any = map[string]bool{"ok": true}
+				var err *Error
+				switch {
+				case step.Start != nil:
+					var gen uint32
+					var resume string
+					if gen, resume, err = works.Start(step.Start.WorkID, step.Start.OwnerID); err == nil {
+						out := map[string]any{"generation": gen}
+						if resume != "" {
+							out["resumeFrom"] = resume
+						}
+						got = out
+					}
+				case step.Checkpoint != nil:
+					c := step.Checkpoint
+					err = works.Checkpoint(c.WorkID, c.Generation, c.Progress, c.Checkpoint)
+				case step.Complete != nil:
+					err = works.Finish(step.Complete.WorkID, step.Complete.Generation, false)
+				case step.Fail != nil:
+					err = works.Finish(step.Fail.WorkID, step.Fail.Generation, true)
+				case step.Cancel != nil:
+					err = works.Cancel(step.Cancel.WorkID)
+				case step.CloseOwner != nil:
+					works.CloseOwner(step.CloseOwner.OwnerID)
+				case step.State != nil:
+					var work *pb.Work
+					if work, err = works.Get(step.State.WorkID); err == nil {
+						raw, _ := protojson.Marshal(work)
+						got = map[string]json.RawMessage{"work": raw}
+					}
+				}
+				if err != nil {
+					got = map[string]string{"error": err.Error()}
+				}
+				var want, have any
+				json.Unmarshal(step.Expect, &want)
+				raw, _ := json.Marshal(got)
+				json.Unmarshal(raw, &have)
+				wantJSON, _ := json.Marshal(want)
+				haveJSON, _ := json.Marshal(have)
+				if string(wantJSON) != string(haveJSON) {
+					t.Errorf("step %d: got %s, want %s", i, haveJSON, wantJSON)
 				}
 			}
 		})

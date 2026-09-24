@@ -74,14 +74,8 @@ type createPayload struct {
 	Guest string `json:"guest"`
 }
 
-type modifyPayload struct {
-	Stay
-	ExpectedVersion int `json:"expectedVersion"` // preconditions are domain payload (K4 C10)
-}
-
-type cancelPayload struct {
-	ExpectedVersion int `json:"expectedVersion"`
-}
+// Modify carries the new Stay; cancel carries nothing. Stale views are refused by
+// the submission's expected revision (K4 C12), not by the payload.
 
 // Hotel is one tenant: its rooms, reservations and kernel logs.
 type Hotel struct {
@@ -157,6 +151,7 @@ func (h *Hotel) Submit(p Principal, s *pb.Submission, now time.Time) (*pb.Change
 	})
 	if err == nil && apply != nil {
 		apply()
+		h.reservations[s.GetTarget().GetId()].Version = int(record.GetRevision())
 	}
 	return record, err
 }
@@ -183,31 +178,24 @@ func (h *Hotel) validate(s *pb.Submission) (func(), *kernel.Error) {
 		if !h.fits(c.Stay, "") {
 			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 		}
-		return func() { h.reservations[id] = &Reservation{ID: id, Stay: c.Stay, Guest: c.Guest, Version: 1} }, nil
+		return func() { h.reservations[id] = &Reservation{ID: id, Stay: c.Stay, Guest: c.Guest} }, nil
 	case SchemaModify:
-		var m modifyPayload
-		if json.Unmarshal(s.GetPayload(), &m) != nil || !h.validStay(m.Stay) {
+		var m Stay
+		if json.Unmarshal(s.GetPayload(), &m) != nil || !h.validStay(m) {
 			return nil, invalid
 		}
 		if existing == nil || existing.Canceled {
 			return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 		}
-		if m.ExpectedVersion != existing.Version || !h.fits(m.Stay, id) {
+		if !h.fits(m, id) {
 			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 		}
-		return func() { existing.Stay, existing.Version = m.Stay, existing.Version+1 }, nil
+		return func() { existing.Stay = m }, nil
 	case SchemaCancel:
-		var c cancelPayload
-		if json.Unmarshal(s.GetPayload(), &c) != nil {
-			return nil, invalid
-		}
 		if existing == nil || existing.Canceled {
 			return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 		}
-		if c.ExpectedVersion != existing.Version {
-			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
-		}
-		return func() { existing.Canceled, existing.Version = true, existing.Version+1 }, nil
+		return func() { existing.Canceled = true }, nil
 	}
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }

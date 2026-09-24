@@ -1,0 +1,26 @@
+// K9 Work ownership — data contract only. Meaning: contract/spec/K9-work-ownership.md.
+syntax = "proto3";
+
+package platform.kernel.v1alpha1;
+
+enum WorkState {
+  WORK_STATE_UNSPECIFIED = 0;
+  WORK_STATE_RUNNING = 1;
+  WORK_STATE_COMPLETED = 2;
+  WORK_STATE_FAILED = 3;
+  WORK_STATE_CANCELLED = 4;
+}
+
+// Long-running work (an import, a recomputation, a batch release) and its owner.
+message Work {
+  string work_id = 1;
+  // Whoever keeps the work alive: a session, a window, a server job runner.
+  string owner_id = 2;
+  // Increases on every start; results of older generations are stale.
+  uint32 generation = 3;
+  WorkState state = 4;
+  // Monotonic within a generation.
+  uint32 progress = 5;
+  // Opaque resume point, kept across generations.
+  string checkpoint = 6;
+}

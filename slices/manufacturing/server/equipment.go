@@ -117,7 +117,7 @@ func (p *Plant) deriveDowntime(resource string) {
 		}
 		p.nextEvent++
 		events[i].ID = fmt.Sprintf("%s#%d", resource, p.nextEvent)
-		p.identity.Register(&pb.EntityRef{Type: DowntimeType, Id: events[i].ID})
+		p.identity.Create(&pb.EntityRef{Type: DowntimeType, Id: events[i].ID}) // fresh opaque IDs never collide
 	}
 	for _, o := range old {
 		if slices.ContainsFunc(events, func(e Downtime) bool { return e.ID == o.ID }) {

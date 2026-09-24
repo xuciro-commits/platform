@@ -17,7 +17,10 @@ struct ConformanceTests {
                 let label = Comment(rawValue: "\(vector.id) step \(index)")
                 let actual: Expect
                 do {
-                    if let redirect = step.addRedirect {
+                    if let ref = step.create {
+                        try registry.create(ref)
+                        actual = Expect(ok: true)
+                    } else if let redirect = step.addRedirect {
                         try registry.add(redirect)
                         actual = Expect(ok: true)
                     } else if let ref = step.resolve {
@@ -59,6 +62,9 @@ struct ConformanceTests {
                     #expect(record.recordedTime == (try date(expected.recordedTime)), label)
                     if let original = expected.sameAs {
                         #expect(record.changeId == changeIDs[original], label)
+                    }
+                    if let revision = expected.revision {
+                        #expect(record.revision == revision, label)
                     }
                 } catch let error as KernelError {
                     #expect(step.expect.error == error.rawValue, label)
@@ -266,6 +272,46 @@ struct ConformanceTests {
             }
         }
     }
+
+    @Test("K9 Work vectors")
+    func works() throws {
+        let file: VectorFile<Empty, WorkStep> = try load("k9-work.json")
+        for vector in file.vectors {
+            var works = Works()
+            for (index, step) in vector.steps.enumerated() {
+                var actual = WorkExpect()
+                do throws(KernelError) {
+                    if let r = step.start {
+                        let (generation, resume) = try works.start(r.workId ?? "", owner: r.ownerId ?? "")
+                        actual.generation = generation
+                        actual.resumeFrom = resume.isEmpty ? nil : resume
+                    } else if let r = step.checkpoint {
+                        try works.checkpoint(r.workId ?? "", generation: r.generation ?? 0, progress: r.progress ?? 0, checkpoint: r.checkpoint ?? "")
+                        actual.ok = true
+                    } else if let r = step.complete {
+                        try works.finish(r.workId ?? "", generation: r.generation ?? 0)
+                        actual.ok = true
+                    } else if let r = step.fail {
+                        try works.finish(r.workId ?? "", generation: r.generation ?? 0, failed: true)
+                        actual.ok = true
+                    } else if let r = step.cancel {
+                        try works.cancel(r.workId ?? "")
+                        actual.ok = true
+                    } else if let r = step.closeOwner {
+                        works.closeOwner(r.ownerId ?? "")
+                        actual.ok = true
+                    } else if let r = step.state {
+                        let w = try works.work(r.workId ?? "")
+                        actual.work = WorkJSON(workId: w.workId, ownerId: w.ownerId, generation: w.generation, state: w.state.rawValue,
+                                               progress: w.progress == 0 ? nil : w.progress, checkpoint: w.checkpoint.isEmpty ? nil : w.checkpoint)
+                    }
+                } catch {
+                    actual.error = error.rawValue
+                }
+                #expect(actual == step.expect, Comment(rawValue: "\(vector.id) step \(index)"))
+            }
+        }
+    }
 }
 
 // MARK: - Vector format (see docs/Platform.md, Kernel Contract)
@@ -290,6 +336,7 @@ struct IdentityGiven: Decodable {
 struct IdentityStep: Decodable {
     let resolve: EntityRef?
     let addRedirect: Redirect?
+    let create: EntityRef?
     let expect: Expect
 }
 
@@ -317,6 +364,7 @@ struct ChangeExpect: Decodable {
         let validTime: String
         let recordedTime: String
         let sameAs: Int?
+        let revision: UInt32?
     }
     let accepted: Accepted?
     let error: String?
@@ -458,6 +506,33 @@ struct MigrationStep: Decodable {
     let submit: Submission?
     let at: String?
     let expect: Expect
+}
+
+struct WorkStep: Decodable {
+    struct Ref: Decodable {
+        let workId: String?
+        let ownerId: String?
+        let generation, progress: UInt32?
+        let checkpoint: String?
+    }
+    let start, checkpoint, complete, fail, cancel, closeOwner, state: Ref?
+    let expect: WorkExpect
+}
+
+struct WorkJSON: Decodable, Equatable {
+    let workId, ownerId: String
+    let generation: UInt32
+    let state: String
+    let progress: UInt32?
+    let checkpoint: String?
+}
+
+struct WorkExpect: Decodable, Equatable {
+    var ok: Bool?
+    var generation: UInt32?
+    var resumeFrom: String?
+    var work: WorkJSON?
+    var error: String?
 }
 
 private let vectorsDirectory = URL(fileURLWithPath: #filePath)

@@ -37,6 +37,8 @@ pub struct Submission {
     pub correlation_id: String,
     pub idempotency_key: String,
     pub payload: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_revision: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

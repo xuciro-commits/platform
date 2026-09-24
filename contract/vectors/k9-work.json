@@ -1,0 +1,387 @@
+{
+  "contract": "v1alpha1",
+  "concept": "K9",
+  "vectors": [
+    {
+      "id": "k9.lifecycle",
+      "rules": [
+        "W1",
+        "W2",
+        "W3"
+      ],
+      "given": {},
+      "steps": [
+        {
+          "start": {
+            "workId": "",
+            "ownerId": "win-1"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "start": {
+            "workId": "import",
+            "ownerId": ""
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "start": {
+            "workId": "import",
+            "ownerId": "win-1"
+          },
+          "expect": {
+            "generation": 1
+          }
+        },
+        {
+          "start": {
+            "workId": "import",
+            "ownerId": "win-1"
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "checkpoint": {
+            "workId": "import",
+            "generation": 1,
+            "progress": 10,
+            "checkpoint": "file-10"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "checkpoint": {
+            "workId": "import",
+            "generation": 1,
+            "progress": 40,
+            "checkpoint": "file-40"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "checkpoint": {
+            "workId": "import",
+            "generation": 1,
+            "progress": 30
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "state": {
+            "workId": "import"
+          },
+          "expect": {
+            "work": {
+              "workId": "import",
+              "ownerId": "win-1",
+              "generation": 1,
+              "state": "WORK_STATE_RUNNING",
+              "progress": 40,
+              "checkpoint": "file-40"
+            }
+          }
+        },
+        {
+          "complete": {
+            "workId": "import",
+            "generation": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "state": {
+            "workId": "import"
+          },
+          "expect": {
+            "work": {
+              "workId": "import",
+              "ownerId": "win-1",
+              "generation": 1,
+              "state": "WORK_STATE_COMPLETED",
+              "progress": 40,
+              "checkpoint": "file-40"
+            }
+          }
+        },
+        {
+          "checkpoint": {
+            "workId": "import",
+            "generation": 1,
+            "progress": 50
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "complete": {
+            "workId": "import",
+            "generation": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k9.stale-generation",
+      "rules": [
+        "W1",
+        "W2",
+        "W4"
+      ],
+      "given": {},
+      "steps": [
+        {
+          "start": {
+            "workId": "search",
+            "ownerId": "win-1"
+          },
+          "expect": {
+            "generation": 1
+          }
+        },
+        {
+          "checkpoint": {
+            "workId": "search",
+            "generation": 1,
+            "progress": 5,
+            "checkpoint": "q=ab"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "cancel": {
+            "workId": "search"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "cancel": {
+            "workId": "search"
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "start": {
+            "workId": "search",
+            "ownerId": "win-1"
+          },
+          "expect": {
+            "generation": 2,
+            "resumeFrom": "q=ab"
+          }
+        },
+        {
+          "complete": {
+            "workId": "search",
+            "generation": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "checkpoint": {
+            "workId": "search",
+            "generation": 1,
+            "progress": 9
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "checkpoint": {
+            "workId": "search",
+            "generation": 2,
+            "progress": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "state": {
+            "workId": "search"
+          },
+          "expect": {
+            "work": {
+              "workId": "search",
+              "ownerId": "win-1",
+              "generation": 2,
+              "state": "WORK_STATE_RUNNING",
+              "progress": 1,
+              "checkpoint": "q=ab"
+            }
+          }
+        },
+        {
+          "fail": {
+            "workId": "search",
+            "generation": 2
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "state": {
+            "workId": "search"
+          },
+          "expect": {
+            "work": {
+              "workId": "search",
+              "ownerId": "win-1",
+              "generation": 2,
+              "state": "WORK_STATE_FAILED",
+              "progress": 1,
+              "checkpoint": "q=ab"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "k9.close-owner",
+      "rules": [
+        "W5",
+        "W6"
+      ],
+      "given": {},
+      "steps": [
+        {
+          "start": {
+            "workId": "scan",
+            "ownerId": "win-1"
+          },
+          "expect": {
+            "generation": 1
+          }
+        },
+        {
+          "start": {
+            "workId": "export",
+            "ownerId": "win-1"
+          },
+          "expect": {
+            "generation": 1
+          }
+        },
+        {
+          "start": {
+            "workId": "report",
+            "ownerId": "win-2"
+          },
+          "expect": {
+            "generation": 1
+          }
+        },
+        {
+          "complete": {
+            "workId": "export",
+            "generation": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "closeOwner": {
+            "ownerId": "win-1"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "state": {
+            "workId": "scan"
+          },
+          "expect": {
+            "work": {
+              "workId": "scan",
+              "ownerId": "win-1",
+              "generation": 1,
+              "state": "WORK_STATE_CANCELLED"
+            }
+          }
+        },
+        {
+          "state": {
+            "workId": "export"
+          },
+          "expect": {
+            "work": {
+              "workId": "export",
+              "ownerId": "win-1",
+              "generation": 1,
+              "state": "WORK_STATE_COMPLETED"
+            }
+          }
+        },
+        {
+          "state": {
+            "workId": "report"
+          },
+          "expect": {
+            "work": {
+              "workId": "report",
+              "ownerId": "win-2",
+              "generation": 1,
+              "state": "WORK_STATE_RUNNING"
+            }
+          }
+        },
+        {
+          "cancel": {
+            "workId": "nothing"
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "checkpoint": {
+            "workId": "nothing",
+            "generation": 1,
+            "progress": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "state": {
+            "workId": "nothing"
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    }
+  ]
+}

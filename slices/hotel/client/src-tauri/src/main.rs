@@ -65,7 +65,7 @@ fn login(&mut self, server: String, token: String) -> Result<Value, String> {
 }
 
 /// Queues a decision: `schema` is create, modify or cancel; `payload` is its JSON.
-fn draft(&mut self, schema: String, reservation_id: Option<String>, payload: Value) -> Result<(), String> {
+fn draft(&mut self, schema: String, reservation_id: Option<String>, payload: Value, expected_revision: Option<u32>) -> Result<(), String> {
     let app = self;
     let id = reservation_id.unwrap_or_else(|| format!("res-{}", uuid::Uuid::new_v4()));
     let submission = Submission {
@@ -74,6 +74,7 @@ fn draft(&mut self, schema: String, reservation_id: Option<String>, payload: Val
         schema: SchemaRef { name: format!("hotel.reservation.{schema}"), version: 1 },
         idempotency_key: uuid::Uuid::new_v4().to_string(),
         payload: STANDARD.encode(payload.to_string()),
+        expected_revision,
         ..Default::default()
     };
     app.authorities.enqueue(submission).map_err(|e| e.code().to_string())?;
@@ -157,8 +158,8 @@ fn login(app: TauriState<Mutex<App>>, server: String, token: String) -> Result<V
 }
 
 #[tauri::command]
-fn draft(app: TauriState<Mutex<App>>, schema: String, reservation_id: Option<String>, payload: Value) -> Result<(), String> {
-    app.lock().unwrap().draft(schema, reservation_id, payload)
+fn draft(app: TauriState<Mutex<App>>, schema: String, reservation_id: Option<String>, payload: Value, expected_revision: Option<u32>) -> Result<(), String> {
+    app.lock().unwrap().draft(schema, reservation_id, payload, expected_revision)
 }
 
 #[tauri::command]
@@ -216,7 +217,7 @@ mod flows {
         // 1. Timeout: the first response is delayed past the client timeout. The
         //    server applied it, the client cannot tell: UNKNOWN, then a retry
         //    with the same key returns the original record.
-        app.draft("create".into(), None, stay("Ada", "2027-01-10", "2027-01-12")).unwrap();
+        app.draft("create".into(), None, stay("Ada", "2027-01-10", "2027-01-12"), Some(0)).unwrap();
         app.send().unwrap();
         assert_eq!(state(&app, 0), "UNKNOWN");
         app.send().unwrap();
@@ -225,7 +226,7 @@ mod flows {
 
         // 2. Offline: drafts wait in the persisted outbox; a send that never
         //    left the edge goes back to PENDING (K5 undelivered) and is sent once online.
-        app.draft("create".into(), None, stay("Grace", "2027-02-01", "2027-02-02")).unwrap();
+        app.draft("create".into(), None, stay("Grace", "2027-02-01", "2027-02-02"), Some(0)).unwrap();
         assert_eq!(state(&app, 1), "PENDING");
         let saved: Authorities = serde_json::from_slice(&std::fs::read(&app.file).unwrap()).unwrap();
         assert_eq!(saved.outbox.len(), 2, "draft not persisted");
@@ -238,7 +239,7 @@ mod flows {
 
         // 3. Conflict: the only suite is taken; the draft is kept, never retried,
         //    and a user revision is a new submission.
-        app.draft("create".into(), None, stay("Linus", "2027-01-11", "2027-01-13")).unwrap();
+        app.draft("create".into(), None, stay("Linus", "2027-01-11", "2027-01-13"), Some(0)).unwrap();
         app.send().unwrap();
         assert_eq!(state(&app, 2), "CONFLICT");
         app.send().unwrap();
@@ -250,7 +251,7 @@ mod flows {
 
         // 4. Rejection: front desk may not cancel; the draft stays REJECTED.
         let id = app.snapshot()["reservations"][0]["id"].as_str().unwrap().to_string();
-        app.draft("cancel".into(), Some(id), json!({"expectedVersion": 1})).unwrap();
+        app.draft("cancel".into(), Some(id), json!({}), Some(1)).unwrap();
         app.send().unwrap();
         assert_eq!(state(&app, 4), "REJECTED");
         assert_eq!(app.snapshot()["outbox"][4]["outcome"], "ERROR_CODE_POLICY_DENIED");

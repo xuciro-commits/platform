@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file platform/kernel/v1alpha1/change.proto.
  */
 export const file_platform_kernel_v1alpha1_change: GenFile = /*@__PURE__*/
-  fileDesc("CiVwbGF0Zm9ybS9rZXJuZWwvdjFhbHBoYTEvY2hhbmdlLnByb3RvEhhwbGF0Zm9ybS5rZXJuZWwudjFhbHBoYTEiKgoJU2NoZW1hUmVmEgwKBG5hbWUYASABKAkSDwoHdmVyc2lvbhgCIAEoDSLVAgoKU3VibWlzc2lvbhIRCgl0ZW5hbnRfaWQYASABKAkSFAoMcHJpbmNpcGFsX2lkGAIgASgJEhEKCWF1dGhvcml0eRgDIAEoCRIzCgZ0YXJnZXQYBCABKAsyIy5wbGF0Zm9ybS5rZXJuZWwudjFhbHBoYTEuRW50aXR5UmVmEjMKBnNjaGVtYRgFIAEoCzIjLnBsYXRmb3JtLmtlcm5lbC52MWFscGhhMS5TY2hlbWFSZWYSLgoKdmFsaWRfdGltZRgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFAoMY2F1c2F0aW9uX2lkGAcgASgJEhYKDmNvcnJlbGF0aW9uX2lkGAggASgJEhcKD2lkZW1wb3RlbmN5X2tleRgJIAEoCRIPCgdwYXlsb2FkGAogASgMEhkKEWV2aWRlbmNlX2ZhY3RfaWRzGAsgAygJIr4BCgxDaGFuZ2VSZWNvcmQSEQoJY2hhbmdlX2lkGAEgASgJEjgKCnN1Ym1pc3Npb24YAiABKAsyJC5wbGF0Zm9ybS5rZXJuZWwudjFhbHBoYTEuU3VibWlzc2lvbhIuCgp2YWxpZF90aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIxCg1yZWNvcmRlZF90aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcGIGcHJvdG8z", [file_google_protobuf_timestamp, file_platform_kernel_v1alpha1_identity]);
+  fileDesc("CiVwbGF0Zm9ybS9rZXJuZWwvdjFhbHBoYTEvY2hhbmdlLnByb3RvEhhwbGF0Zm9ybS5rZXJuZWwudjFhbHBoYTEiKgoJU2NoZW1hUmVmEgwKBG5hbWUYASABKAkSDwoHdmVyc2lvbhgCIAEoDSKLAwoKU3VibWlzc2lvbhIRCgl0ZW5hbnRfaWQYASABKAkSFAoMcHJpbmNpcGFsX2lkGAIgASgJEhEKCWF1dGhvcml0eRgDIAEoCRIzCgZ0YXJnZXQYBCABKAsyIy5wbGF0Zm9ybS5rZXJuZWwudjFhbHBoYTEuRW50aXR5UmVmEjMKBnNjaGVtYRgFIAEoCzIjLnBsYXRmb3JtLmtlcm5lbC52MWFscGhhMS5TY2hlbWFSZWYSLgoKdmFsaWRfdGltZRgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFAoMY2F1c2F0aW9uX2lkGAcgASgJEhYKDmNvcnJlbGF0aW9uX2lkGAggASgJEhcKD2lkZW1wb3RlbmN5X2tleRgJIAEoCRIPCgdwYXlsb2FkGAogASgMEhkKEWV2aWRlbmNlX2ZhY3RfaWRzGAsgAygJEh4KEWV4cGVjdGVkX3JldmlzaW9uGAwgASgNSACIAQFCFAoSX2V4cGVjdGVkX3JldmlzaW9uItABCgxDaGFuZ2VSZWNvcmQSEQoJY2hhbmdlX2lkGAEgASgJEjgKCnN1Ym1pc3Npb24YAiABKAsyJC5wbGF0Zm9ybS5rZXJuZWwudjFhbHBoYTEuU3VibWlzc2lvbhIuCgp2YWxpZF90aW1lGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIxCg1yZWNvcmRlZF90aW1lGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghyZXZpc2lvbhgFIAEoDWIGcHJvdG8z", [file_google_protobuf_timestamp, file_platform_kernel_v1alpha1_identity]);
 
 /**
  * @generated from message platform.kernel.v1alpha1.SchemaRef
@@ -117,6 +117,13 @@ export type Submission = Message<"platform.kernel.v1alpha1.Submission"> & {
    * @generated from field: repeated string evidence_fact_ids = 11;
    */
   evidenceFactIds: string[];
+
+  /**
+   * Precondition: the target's revision the submitter saw (C12). Absent: no check.
+   *
+   * @generated from field: optional uint32 expected_revision = 12;
+   */
+  expectedRevision?: number | undefined;
 };
 
 /**
@@ -181,6 +188,13 @@ export type SubmissionJson = {
    * @generated from field: repeated string evidence_fact_ids = 11;
    */
   evidenceFactIds?: string[];
+
+  /**
+   * Precondition: the target's revision the submitter saw (C12). Absent: no check.
+   *
+   * @generated from field: optional uint32 expected_revision = 12;
+   */
+  expectedRevision?: number;
 };
 
 /**
@@ -215,6 +229,13 @@ export type ChangeRecord = Message<"platform.kernel.v1alpha1.ChangeRecord"> & {
    * @generated from field: google.protobuf.Timestamp recorded_time = 4;
    */
   recordedTime?: Timestamp | undefined;
+
+  /**
+   * The target's revision after this change: accepted changes naming it so far (C12).
+   *
+   * @generated from field: uint32 revision = 5;
+   */
+  revision: number;
 };
 
 /**
@@ -242,6 +263,13 @@ export type ChangeRecordJson = {
    * @generated from field: google.protobuf.Timestamp recorded_time = 4;
    */
   recordedTime?: TimestampJson;
+
+  /**
+   * The target's revision after this change: accepted changes naming it so far (C12).
+   *
+   * @generated from field: uint32 revision = 5;
+   */
+  revision?: number;
 };
 
 /**

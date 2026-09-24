@@ -22,6 +22,7 @@ Schema: `proto/platform/kernel/v1alpha1/identity.proto`. Vectors: `vectors/k1-id
 | I7 | A redirect must not make any reference reachable from itself, including a redirect to itself. | `REDIRECT_CYCLE` |
 | I8 | Resolution follows redirects transitively. If every path ends at one terminal reference, the result is `resolved`; otherwise it is `ambiguous` with the distinct terminal references in depth-first order of the declared targets. | — |
 | I9 | A rejected operation leaves state unchanged. | — |
+| I10 | An entity exists once it is created: by the decision (K4) or derivation (K2) that makes it. Creating a reference that exists or was retired by a redirect fails; IDs are never reused (Model). | `CONFLICT`, `INVALID_ARGUMENT` (empty type or ID) |
 
 ## Notes
 

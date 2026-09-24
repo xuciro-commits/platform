@@ -103,6 +103,7 @@ type SFC struct {
 	Step       int         `json:"step"`  // index into the product's operations
 	State      string      `json:"state"` // queued, active, hold, done, scrapped
 	Resource   string      `json:"resource,omitempty"`
+	Revision   uint32      `json:"revision"` // K4 C12: accepted changes naming this SFC
 	NCs        []NC        `json:"ncs"`
 	Signatures []Signature `json:"signatures"`
 }
@@ -249,6 +250,9 @@ func (p *Plant) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.Chan
 	})
 	if err == nil && apply != nil {
 		apply()
+		if sfc := p.sfcs[s.GetTarget().GetId()]; sfc != nil && s.GetTarget().GetType() == SFCType {
+			sfc.Revision = record.GetRevision()
+		}
 	}
 	return record, err
 }
@@ -260,8 +264,9 @@ type releasePayload struct {
 	Planned  string `json:"planned,omitempty"` // the ERP planned order it fulfils (its claim is the evidence)
 }
 
-type stepPayload struct {
-	Step     int    `json:"step"`
+// sfcPayload acts on the SFC's current operation; a stale screen is refused by
+// the submission's expected revision (K4 C12).
+type sfcPayload struct {
 	Resource string `json:"resource,omitempty"`
 	Code     string `json:"code,omitempty"`
 }
@@ -295,13 +300,13 @@ func (p *Plant) validate(who Principal, s *pb.Submission) (func(), *kernel.Error
 				sfc := &SFC{ID: fmt.Sprintf("%s-%03d", id, n), Order: id, Product: prod.ID, State: "queued", NCs: []NC{}, Signatures: []Signature{}}
 				p.sfcs[sfc.ID] = sfc
 				o.SFCs = append(o.SFCs, sfc.ID)
-				p.identity.Register(&pb.EntityRef{Type: SFCType, Id: sfc.ID})
+				p.identity.Create(&pb.EntityRef{Type: SFCType, Id: sfc.ID})
 			}
 			p.orders[id] = o
-			p.identity.Register(&pb.EntityRef{Type: OrderType, Id: id})
+			p.identity.Create(&pb.EntityRef{Type: OrderType, Id: id})
 		}, nil
 	case SchemaStart, SchemaComplete, SchemaNC:
-		var st stepPayload
+		var st sfcPayload
 		sfc := p.sfcs[id]
 		if json.Unmarshal(s.GetPayload(), &st) != nil {
 			return nil, invalid
@@ -310,9 +315,6 @@ func (p *Plant) validate(who Principal, s *pb.Submission) (func(), *kernel.Error
 			return nil, notFound
 		}
 		prod := p.product(sfc.Product)
-		if st.Step != sfc.Step {
-			return nil, conflict // stale screen: the SFC has moved on
-		}
 		switch s.GetSchema().GetName() {
 		case SchemaStart:
 			wc := p.workCenter(prod.Operations[sfc.Step].WorkCenter)
@@ -344,7 +346,7 @@ func (p *Plant) validate(who Principal, s *pb.Submission) (func(), *kernel.Error
 			}
 			return func() {
 				sfc.State, sfc.Resource = "hold", ""
-				sfc.NCs = append(sfc.NCs, NC{Step: st.Step, Code: st.Code, By: who.ID})
+				sfc.NCs = append(sfc.NCs, NC{Step: sfc.Step, Code: st.Code, By: who.ID})
 			}, nil
 		}
 	case SchemaSign:

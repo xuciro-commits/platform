@@ -5,9 +5,9 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"time"
 
 	"hotel"
+	"platformserver"
 )
 
 func main() {
@@ -17,21 +17,16 @@ func main() {
 	flag.Parse()
 	rooms := map[string]hotel.RoomType{"standard": {Rooms: 3, Overbooking: 1}, "suite": {Rooms: 1},
 		"apartment": {Rooms: 2, MinUnits: 28}, "meeting-room": {Rooms: 1, Hourly: true}, "hot-desk": {Rooms: 6, Hourly: true}}
-	server := &hotel.Server{
-		Hotels: map[string]*hotel.Hotel{
-			"hotel-a": hotel.NewHotel("hotel-a", rooms, hotel.DefaultPolicy),
-			"hotel-b": hotel.NewHotel("hotel-b", rooms, hotel.DefaultPolicy),
-		},
-		Tokens: map[string]hotel.Principal{
-			"desk-a":    {ID: "desk-1", Tenant: "hotel-a", Role: hotel.FrontDesk},
-			"manager-a": {ID: "manager-1", Tenant: "hotel-a", Role: hotel.Manager},
-			"channel-a": {ID: "channel-sim", Tenant: "hotel-a", Role: hotel.Channel},
-			"desk-b":    {ID: "desk-7", Tenant: "hotel-b", Role: hotel.FrontDesk},
-		},
-		ResponseDelay: *delay,
-		DelayCount:    *delayCount,
-		Now:           time.Now,
+	hotels := map[string]*hotel.Hotel{
+		"hotel-a": hotel.NewHotel("hotel-a", rooms, hotel.DefaultPolicy),
+		"hotel-b": hotel.NewHotel("hotel-b", rooms, hotel.DefaultPolicy),
 	}
+	tokens := platformserver.Tokens(map[string]hotel.Principal{
+		"desk-a":    {ID: "desk-1", Tenant: "hotel-a", Role: hotel.FrontDesk},
+		"manager-a": {ID: "manager-1", Tenant: "hotel-a", Role: hotel.Manager},
+		"channel-a": {ID: "channel-sim", Tenant: "hotel-a", Role: hotel.Channel},
+		"desk-b":    {ID: "desk-7", Tenant: "hotel-b", Role: hotel.FrontDesk},
+	})
 	log.Printf("hotel-server on http://%s (tenants hotel-a, hotel-b)", *addr)
-	log.Fatal(http.ListenAndServe(*addr, server.Handler()))
+	log.Fatal(http.ListenAndServe(*addr, hotel.NewServer(hotels, tokens, *delay, *delayCount)))
 }

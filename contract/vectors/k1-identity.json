@@ -859,6 +859,109 @@
           }
         }
       ]
+    },
+    {
+      "id": "k1.create",
+      "rules": [
+        "I10",
+        "I1",
+        "I9"
+      ],
+      "given": {
+        "entities": [
+          {
+            "type": "test.item",
+            "id": "a"
+          },
+          {
+            "type": "test.item",
+            "id": "b"
+          }
+        ],
+        "redirects": [
+          {
+            "from": {
+              "type": "test.item",
+              "id": "b"
+            },
+            "to": [
+              {
+                "type": "test.item",
+                "id": "a"
+              }
+            ],
+            "kind": "REDIRECT_KIND_MERGE"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "c"
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "create": {
+            "type": "test.item",
+            "id": "c"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "resolve": {
+            "type": "test.item",
+            "id": "c"
+          },
+          "expect": {
+            "resolved": {
+              "type": "test.item",
+              "id": "c"
+            }
+          }
+        },
+        {
+          "create": {
+            "type": "test.item",
+            "id": "a"
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "create": {
+            "type": "test.item",
+            "id": "b"
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "create": {
+            "type": "test.other",
+            "id": "a"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "create": {
+            "type": "test.item",
+            "id": ""
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        }
+      ]
     }
   ]
 }

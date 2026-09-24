@@ -66,8 +66,8 @@ function ReservationDetail({ id }: { id: string }) {
         properties={[["Room type", r.roomType], ["Stay", `${r.checkIn} → ${r.checkOut}`], ["Version", r.version]]}
         actions={!r.canceled && <>
           <Button onClick={() => run(api.draft("modify", r.id, { roomType: r.roomType, checkIn: r.checkIn,
-            checkOut: nextDay(r.checkOut), expectedVersion: r.version })).then(() => notify("Extension queued in the outbox"))}>Extend 1 night</Button>
-          <Button variant="danger" onClick={() => run(api.draft("cancel", r.id, { expectedVersion: r.version })).then(() => notify("Cancellation queued in the outbox"))}>Cancel</Button>
+            checkOut: nextDay(r.checkOut) }, r.version)).then(() => notify("Extension queued in the outbox"))}>Extend 1 night</Button>
+          <Button variant="danger" onClick={() => run(api.draft("cancel", r.id, {}, r.version)).then(() => notify("Cancellation queued in the outbox"))}>Cancel</Button>
         </>} />
     </div>
   );
@@ -80,7 +80,7 @@ function Outbox() {
     { accessorKey: "schema", header: "Decision", meta: { width: 100 }, cell: (c) => String(c.getValue()).replace("hotel.reservation.", "") },
     { accessorKey: "reservation", header: "Reservation", meta: { width: 140 }, cell: (c) => <span className="font-mono text-xs">{short(c.getValue())}</span> },
     { id: "details", header: "Details", accessorFn: (e) => e.payload?.roomType
-        ? `${e.payload.roomType} ${e.payload.checkIn} → ${e.payload.checkOut} ${e.payload.guest ?? ""}` : `version ${e.payload?.expectedVersion}` },
+        ? `${e.payload.roomType} ${e.payload.checkIn} → ${e.payload.checkOut} ${e.payload.guest ?? ""}` : "cancel" },
     { accessorKey: "state", header: "State", meta: { width: 120 }, cell: (c) => <StatusTag status={c.getValue()} registry={submissionStatuses} /> },
     { accessorKey: "outcome", header: "Answer", meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs text-muted">{c.getValue()}</span> },
     { id: "actions", header: "", meta: { width: 90 }, enableSorting: false, cell: ({ row: { original: e } }) =>
@@ -171,7 +171,7 @@ export function App() {
             { name: "checkIn", label: "Check-in", kind: "date" },
             { name: "checkOut", label: "Check-out", kind: "date" },
           ]}
-          onSubmit={(values) => run(api.draft("create", null, values)).then(() => { setCreating(false); notify("Draft saved in the outbox"); })} />
+          onSubmit={(values) => run(api.draft("create", null, values, 0)).then(() => { setCreating(false); notify("Draft saved in the outbox"); })} />
       </Dialog>
       <Dialog open={booking} onOpenChange={setBooking} title="Book workspace">
         <EntityForm schema={newBooking} submitLabel="Save draft" onCancel={() => setBooking(false)}
@@ -182,7 +182,7 @@ export function App() {
             { name: "checkIn", label: "From", kind: "datetime" },
             { name: "checkOut", label: "Until", kind: "datetime" },
           ]}
-          onSubmit={(values) => run(api.draft("create", null, values)).then(() => { setBooking(false); notify("Draft saved in the outbox"); })} />
+          onSubmit={(values) => run(api.draft("create", null, values, 0)).then(() => { setBooking(false); notify("Draft saved in the outbox"); })} />
       </Dialog>
       <Dialog open={!!revising} onOpenChange={(open) => !open && setRevising(undefined)} title="Revise dates">
         {revising && (

@@ -16,6 +16,7 @@ type ChangeLog struct {
 	schemas *SchemaRegistry
 	logs    map[string][]*pb.ChangeRecord
 	byKey   map[string]map[string]*pb.ChangeRecord
+	revs    map[[3]string]uint32 // (tenant, target type, target id) → revision (C12)
 	next    int
 	// Facts reports whether a fact is recorded in a tenant (K2); nil knows none (C11).
 	Facts func(tenant, factID string) bool
@@ -23,7 +24,7 @@ type ChangeLog struct {
 
 func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
 	return &ChangeLog{schemas: schemas, logs: map[string][]*pb.ChangeRecord{},
-		byKey: map[string]map[string]*pb.ChangeRecord{}}
+		byKey: map[string]map[string]*pb.ChangeRecord{}, revs: map[[3]string]uint32{}}
 }
 
 func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord { return l.logs[tenant] }
@@ -58,6 +59,10 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 			return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE) // C11
 		}
 	}
+	target := [3]string{s.GetTenantId(), s.GetTarget().GetType(), s.GetTarget().GetId()}
+	if s.ExpectedRevision != nil && s.GetExpectedRevision() != l.revs[target] {
+		return nil, errorf(pb.ErrorCode_ERROR_CODE_CONFLICT) // C12
+	}
 	if check != nil {
 		if err := check(); err != nil {
 			return nil, err // C10
@@ -72,8 +77,9 @@ func (l *ChangeLog) SubmitChecked(s *pb.Submission, now time.Time, check func() 
 		valid = timestamppb.New(recorded) // C7
 	}
 	l.next++
+	l.revs[target]++
 	record := &pb.ChangeRecord{ChangeId: fmt.Sprintf("chg-%d", l.next), Submission: s,
-		ValidTime: valid, RecordedTime: timestamppb.New(recorded)}
+		ValidTime: valid, RecordedTime: timestamppb.New(recorded), Revision: l.revs[target]}
 	l.logs[s.GetTenantId()] = append(log, record)
 	if l.byKey[s.GetTenantId()] == nil {
 		l.byKey[s.GetTenantId()] = map[string]*pb.ChangeRecord{}
@@ -108,6 +114,7 @@ func (l *ChangeLog) Adopt(records []*pb.ChangeRecord) *Error {
 	l.byKey[tenant] = map[string]*pb.ChangeRecord{}
 	for _, r := range records {
 		l.byKey[tenant][r.GetSubmission().GetIdempotencyKey()] = r
+		l.revs[[3]string{tenant, r.GetSubmission().GetTarget().GetType(), r.GetSubmission().GetTarget().GetId()}]++
 	}
 	return nil
 }

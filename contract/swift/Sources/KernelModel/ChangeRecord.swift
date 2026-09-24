@@ -23,6 +23,8 @@ public struct Submission: Hashable, Codable, Sendable {
     public var idempotencyKey = ""
     public var payload = Data()
     public var evidenceFactIds: [String] = []
+    /// Precondition on the target's revision (C12); nil: no check.
+    public var expectedRevision: UInt32?
 
     public init() {}
 
@@ -40,6 +42,7 @@ public struct Submission: Hashable, Codable, Sendable {
         idempotencyKey = try c.decodeIfPresent(String.self, forKey: .idempotencyKey) ?? ""
         payload = try c.decodeIfPresent(Data.self, forKey: .payload) ?? Data()
         evidenceFactIds = try c.decodeIfPresent([String].self, forKey: .evidenceFactIds) ?? []
+        expectedRevision = try c.decodeIfPresent(UInt32.self, forKey: .expectedRevision)
     }
 }
 
@@ -48,12 +51,15 @@ public struct ChangeRecord: Equatable, Sendable {
     public let submission: Submission
     public let validTime: Date
     public let recordedTime: Date
+    /// The target's revision after this change (C12).
+    public let revision: UInt32
 
-    public init(changeId: String, submission: Submission, validTime: Date, recordedTime: Date) {
+    public init(changeId: String, submission: Submission, validTime: Date, recordedTime: Date, revision: UInt32 = 0) {
         self.changeId = changeId
         self.submission = submission
         self.validTime = validTime
         self.recordedTime = recordedTime
+        self.revision = revision
     }
 }
 
@@ -62,6 +68,7 @@ public struct ChangeLog: Sendable {
     private let schemas: SchemaRegistry
     private var logs: [String: [ChangeRecord]] = [:]
     private var byKey: [String: [String: ChangeRecord]] = [:]   // tenant → key → record
+    private var revisions: [[String]: UInt32] = [:]                 // [tenant, type, id] → revision (C12)
     /// Whether a fact is recorded in a tenant (K2); the default knows none (C11).
     public var facts: @Sendable (_ tenant: String, _ factId: String) -> Bool = { _, _ in false }
 
@@ -93,10 +100,14 @@ public struct ChangeLog: Sendable {
         for fact in s.evidenceFactIds where !facts(s.tenantId, fact) {
             throw .invalidReference                                                      // C11
         }
+        let target = [s.tenantId, s.target.type, s.target.id]
+        if let expected = s.expectedRevision, expected != revisions[target, default: 0] { throw .conflict } // C12
         try check?()                                                                     // C10
         let recorded = max(now, log.last?.recordedTime ?? now)                          // C6
+        revisions[target, default: 0] += 1
         let record = ChangeRecord(changeId: UUID().uuidString, submission: s,
-                                  validTime: s.validTime ?? recorded, recordedTime: recorded) // C7
+                                  validTime: s.validTime ?? recorded, recordedTime: recorded,  // C7
+                                  revision: revisions[target, default: 0])
         logs[s.tenantId, default: []].append(record)
         byKey[s.tenantId, default: [:]][s.idempotencyKey] = record
         return record
@@ -113,5 +124,6 @@ public struct ChangeLog: Sendable {
               zip(records, records.dropFirst()).allSatisfy({ $0.recordedTime <= $1.recordedTime }) else { throw .conflict }
         logs[tenant] = records
         byKey[tenant] = Dictionary(uniqueKeysWithValues: records.map { ($0.submission.idempotencyKey, $0) })
+        for r in records { revisions[[tenant, r.submission.target.type, r.submission.target.id], default: 0] += 1 }
     }
 }

@@ -23,12 +23,13 @@ Schema: `proto/platform/kernel/v1alpha1/change.proto`. Vectors: `vectors/k4-chan
 | C8 | A correction or undo is a new change whose `causation_id` names the change it corrects. The corrected record stays unchanged. | — |
 | C9 | A rejected submission appends nothing. | — |
 | C10 | Domain rules are evaluated after C1–C5 and before the append: a replay (C4) returns the original record without evaluating them again; a domain refusal is returned with its own code and appends nothing. | the domain's code |
+| C12 | A target's **revision** is the number of accepted changes naming it (0 before the first); each record carries the revision it produced. A submission with `expected_revision` is accepted only if the target's current revision equals it, so a decision made on a stale view is refused instead of overwriting. A replay (C4) returns the original record regardless. | `CONFLICT` |
 | C11 | Every entry of `evidence_fact_ids` names a recorded fact (K2) of the same tenant: the observations and claims the decision is based on. | `INVALID_REFERENCE` |
 
 ## Notes
 
 - Authorization and the full receiving order are K6 (`K6-tenancy-policy.md`).
 - A rejection is not remembered: the same key may be submitted again and succeed later (C9). Senders therefore retry a key only after no answer (K5 `UNKNOWN`), never after a rejection.
-- Preconditions such as an expected revision are domain payload checked under C10; the envelope carries none.
+- C12 replaces the preconditions two domain slices each carried in their payloads (friction F-20). Domain-specific conditions still belong to C10.
 - `correlation_id` groups related changes for tracing; v1alpha1 attaches no rule to it.
 - Grouping several changes atomically is an open question recorded as K4's falsification condition in `docs/Platform.md`.

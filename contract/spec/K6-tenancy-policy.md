@@ -14,7 +14,7 @@ Schema: `proto/platform/kernel/v1alpha1/tenancy.proto`. Vectors: `vectors/k6-rec
 | # | Rule | Error when violated |
 |---|---|---|
 | T1 | A submission's `tenant_id` and `principal_id` equal the caller's. | `POLICY_DENIED` |
-| T2 | Receiving order: T1; K4 C1, C2; replay detection (C4, C5); C3, C11; K5 A3; policy (T3); domain rules (C10); append (C6, C7). The first failing rule decides the error. A replay returns the original record without evaluating A3, policy or domain rules. | — |
+| T2 | Receiving order: T1; K4 C1, C2; replay detection (C4, C5); C3, C11, C12; K5 A3; policy (T3); domain rules (C10); append (C6, C7). The first failing rule decides the error. A replay returns the original record without evaluating A3, policy or domain rules. | — |
 | T3 | Policy is evaluated for every new submission; a denial rejects it. | `POLICY_DENIED` |
 | T4 | Every read is scoped to the caller's tenant; no operation returns or references another tenant's records (K4 C3, C11). | — |
 

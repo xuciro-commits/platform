@@ -32,8 +32,9 @@ export class EdgeClient {
     try { localStorage.setItem(this.storageKey, JSON.stringify(this.authorities.outbox)); } catch { /* storage unavailable */ }
   }
 
-  /** Builds and queues a decision about `target`; returns its idempotency key. */
-  draft(schema: string, target: { type: string; id: string }, payload: unknown, evidenceFactIds: string[] = []): string {
+  /** Builds and queues a decision about `target`; returns its idempotency key. `expectedRevision`
+   *  is the target's revision the user saw (K4 C12): a stale screen is refused, not applied. */
+  draft(schema: string, target: { type: string; id: string }, payload: unknown, evidenceFactIds: string[] = [], expectedRevision?: number): string {
     const key = crypto.randomUUID();
     const submission: SubmissionJson = {
       tenantId: this.connection.tenant, principalId: this.connection.principal,
@@ -41,6 +42,7 @@ export class EdgeClient {
       target, schema: { name: schema, version: 1 }, idempotencyKey: key,
       payload: btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload)))),
       ...(evidenceFactIds.length ? { evidenceFactIds } : {}),
+      ...(expectedRevision === undefined ? {} : { expectedRevision }),
     };
     this.authorities.enqueue(submission);
     this.save();

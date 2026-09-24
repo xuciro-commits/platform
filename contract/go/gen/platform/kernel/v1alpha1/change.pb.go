@@ -91,8 +91,10 @@ type Submission struct {
 	Payload        []byte                 `protobuf:"bytes,10,opt,name=payload,proto3" json:"payload,omitempty"`
 	// Recorded facts (K2) this decision is based on.
 	EvidenceFactIds []string `protobuf:"bytes,11,rep,name=evidence_fact_ids,json=evidenceFactIds,proto3" json:"evidence_fact_ids,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Precondition: the target's revision the submitter saw (C12). Absent: no check.
+	ExpectedRevision *uint32 `protobuf:"varint,12,opt,name=expected_revision,json=expectedRevision,proto3,oneof" json:"expected_revision,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Submission) Reset() {
@@ -202,13 +204,22 @@ func (x *Submission) GetEvidenceFactIds() []string {
 	return nil
 }
 
+func (x *Submission) GetExpectedRevision() uint32 {
+	if x != nil && x.ExpectedRevision != nil {
+		return *x.ExpectedRevision
+	}
+	return 0
+}
+
 // An accepted decision. Immutable once recorded.
 type ChangeRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ChangeId      string                 `protobuf:"bytes,1,opt,name=change_id,json=changeId,proto3" json:"change_id,omitempty"`
-	Submission    *Submission            `protobuf:"bytes,2,opt,name=submission,proto3" json:"submission,omitempty"`
-	ValidTime     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=valid_time,json=validTime,proto3" json:"valid_time,omitempty"`
-	RecordedTime  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=recorded_time,json=recordedTime,proto3" json:"recorded_time,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ChangeId     string                 `protobuf:"bytes,1,opt,name=change_id,json=changeId,proto3" json:"change_id,omitempty"`
+	Submission   *Submission            `protobuf:"bytes,2,opt,name=submission,proto3" json:"submission,omitempty"`
+	ValidTime    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=valid_time,json=validTime,proto3" json:"valid_time,omitempty"`
+	RecordedTime *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=recorded_time,json=recordedTime,proto3" json:"recorded_time,omitempty"`
+	// The target's revision after this change: accepted changes naming it so far (C12).
+	Revision      uint32 `protobuf:"varint,5,opt,name=revision,proto3" json:"revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -271,6 +282,13 @@ func (x *ChangeRecord) GetRecordedTime() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ChangeRecord) GetRevision() uint32 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
 var File_platform_kernel_v1alpha1_change_proto protoreflect.FileDescriptor
 
 const file_platform_kernel_v1alpha1_change_proto_rawDesc = "" +
@@ -278,7 +296,7 @@ const file_platform_kernel_v1alpha1_change_proto_rawDesc = "" +
 	"%platform/kernel/v1alpha1/change.proto\x12\x18platform.kernel.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a'platform/kernel/v1alpha1/identity.proto\"9\n" +
 	"\tSchemaRef\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\rR\aversion\"\xd8\x03\n" +
+	"\aversion\x18\x02 \x01(\rR\aversion\"\xa0\x04\n" +
 	"\n" +
 	"Submission\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12!\n" +
@@ -293,7 +311,9 @@ const file_platform_kernel_v1alpha1_change_proto_rawDesc = "" +
 	"\x0fidempotency_key\x18\t \x01(\tR\x0eidempotencyKey\x12\x18\n" +
 	"\apayload\x18\n" +
 	" \x01(\fR\apayload\x12*\n" +
-	"\x11evidence_fact_ids\x18\v \x03(\tR\x0fevidenceFactIds\"\xed\x01\n" +
+	"\x11evidence_fact_ids\x18\v \x03(\tR\x0fevidenceFactIds\x120\n" +
+	"\x11expected_revision\x18\f \x01(\rH\x00R\x10expectedRevision\x88\x01\x01B\x14\n" +
+	"\x12_expected_revision\"\x89\x02\n" +
 	"\fChangeRecord\x12\x1b\n" +
 	"\tchange_id\x18\x01 \x01(\tR\bchangeId\x12D\n" +
 	"\n" +
@@ -301,7 +321,8 @@ const file_platform_kernel_v1alpha1_change_proto_rawDesc = "" +
 	"submission\x129\n" +
 	"\n" +
 	"valid_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tvalidTime\x12?\n" +
-	"\rrecorded_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\frecordedTimeB\xe9\x01\n" +
+	"\rrecorded_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\frecordedTime\x12\x1a\n" +
+	"\brevision\x18\x05 \x01(\rR\brevisionB\xe9\x01\n" +
 	"\x1ccom.platform.kernel.v1alpha1B\vChangeProtoP\x01Z:platformkernel/gen/platform/kernel/v1alpha1;kernelv1alpha1\xa2\x02\x03PKX\xaa\x02\x18Platform.Kernel.V1alpha1\xca\x02\x18Platform\\Kernel\\V1alpha1\xe2\x02$Platform\\Kernel\\V1alpha1\\GPBMetadata\xea\x02\x1aPlatform::Kernel::V1alpha1b\x06proto3"
 
 var (
@@ -344,6 +365,7 @@ func file_platform_kernel_v1alpha1_change_proto_init() {
 		return
 	}
 	file_platform_kernel_v1alpha1_identity_proto_init()
+	file_platform_kernel_v1alpha1_change_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

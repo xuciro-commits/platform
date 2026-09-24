@@ -27,9 +27,18 @@ func NewIdentity(entities []*pb.EntityRef) *Identity {
 	return id
 }
 
-// Register makes a new entity resolvable. K1 leaves creation to the decisions
-// that create entities; this is the implementation's hook for them.
-func (id *Identity) Register(r *pb.EntityRef) { id.entities[RefOf(r)] = true }
+// Create brings a new entity into existence (I10); IDs are never reused.
+func (id *Identity) Create(r *pb.EntityRef) *Error {
+	ref := RefOf(r)
+	if ref.Type == "" || ref.ID == "" {
+		return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	}
+	if id.entities[ref] {
+		return errorf(pb.ErrorCode_ERROR_CODE_CONFLICT)
+	}
+	id.entities[ref] = true
+	return nil
+}
 
 func (id *Identity) AddRedirect(r *pb.Redirect) *Error {
 	from, to := RefOf(r.GetFrom()), make([]Ref, 0, len(r.GetTo()))

@@ -6,12 +6,12 @@ export type Master = { products: Product[]; workCenters: WorkCenter[] };
 export type Order = { id: string; product: string; quantity: number; sfcs: string[]; planned?: string };
 export type SFC = {
   id: string; order: string; product: string; step: number; state: "queued" | "active" | "hold" | "done" | "scrapped";
-  resource?: string; ncs: { step: number; code: string; by: string }[]; signatures: { action: string; meaning: string; by: string }[];
+  resource?: string; revision: number; ncs: { step: number; code: string; by: string }[]; signatures: { action: string; meaning: string; by: string }[];
 };
 export type Planned = { erpId: string; product: string; quantity: number; due: string; factId: string };
 export type Downtime = { id: string; resource: string; start: string; end?: string; reason?: string; needsCheck?: boolean };
 export type ConnectorView = { id: string; direction: string; health: string; lastSeen?: string; cursor?: string };
-export type Me = { id: string; tenant: string; role: string; lines: string[] | null };
+export type Me = { tenantId: string; principalId: string; profile: { role: string; lines: string[] | null } };
 
 export const SERVER = "http://127.0.0.1:8490";
 export const identities = [

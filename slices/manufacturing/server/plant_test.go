@@ -33,11 +33,15 @@ func newPlant(t *testing.T) *Plant {
 }
 
 func submit(p *Plant, who Principal, schema, targetType, id string, payload any, evidence ...string) string {
+	return submitAt(p, who, schema, targetType, id, payload, nil, evidence...)
+}
+
+func submitAt(p *Plant, who Principal, schema, targetType, id string, payload any, revision *uint32, evidence ...string) string {
 	raw, _ := json.Marshal(payload)
 	keys++
 	_, err := p.Submit(who, &pb.Submission{TenantId: who.Tenant, PrincipalId: who.ID, Authority: Authority,
 		Target: &pb.EntityRef{Type: targetType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1},
-		IdempotencyKey: fmt.Sprint("k", keys), Payload: raw, EvidenceFactIds: evidence}, t0)
+		IdempotencyKey: fmt.Sprint("k", keys), Payload: raw, EvidenceFactIds: evidence, ExpectedRevision: revision}, t0)
 	if err != nil {
 		return err.Error()
 	}
@@ -67,21 +71,23 @@ func TestOrderFromERPClaimThroughRouting(t *testing.T) {
 	claim := p.Planned()[0].FactID
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 2, SFCs: 2, Planned: "PO-9001"}, claim), "ok")
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-2", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}, "no-such-claim"), "ERROR_CODE_INVALID_REFERENCE")
-	for step, resource := range []string{"FURNACE-1", "CNC-11", "CMM-1"} {
-		expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-001", stepPayload{Step: step, Resource: resource}), "ok")
-		expect(t, submit(p, op1, SchemaComplete, SFCType, "SO-1-001", stepPayload{Step: step}), "ok")
+	for _, resource := range []string{"FURNACE-1", "CNC-11", "CMM-1"} {
+		expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: resource}), "ok")
+		expect(t, submit(p, op1, SchemaComplete, SFCType, "SO-1-001", sfcPayload{}), "ok")
 	}
 	expect(t, sfc(p, "SO-1-001").State, "done")
-	expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-002", stepPayload{Step: 1, Resource: "CNC-11"}), "ERROR_CODE_CONFLICT") // stale step
-	expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-002", stepPayload{Step: 0, Resource: "CNC-11"}), "ERROR_CODE_INVALID_ARGUMENT")
+	stale := uint32(1)
+	expect(t, submitAt(p, op1, SchemaStart, SFCType, "SO-1-002", sfcPayload{Resource: "FURNACE-1"}, &stale), "ERROR_CODE_CONFLICT") // stale screen (C12)
+	expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-002", sfcPayload{Resource: "CNC-11"}), "ERROR_CODE_INVALID_ARGUMENT")
+	expect(t, fmt.Sprint(sfc(p, "SO-1-001").Revision), "6")
 }
 
 // F-8 refuted: plant hierarchy is policy context; the kernel needed no change.
 func TestPolicyScopedByLine(t *testing.T) {
 	p := newPlant(t)
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ok")
-	expect(t, submit(p, op2, SchemaStart, SFCType, "SO-1-001", stepPayload{Step: 0, Resource: "FURNACE-1"}), "ERROR_CODE_POLICY_DENIED")
-	expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-001", stepPayload{Step: 0, Resource: "FURNACE-1"}), "ok")
+	expect(t, submit(p, op2, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "FURNACE-1"}), "ERROR_CODE_POLICY_DENIED")
+	expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "FURNACE-1"}), "ok")
 	l2only := Principal{ID: "sup-2", Tenant: tenant, Role: Supervisor, Lines: []string{"L2"}}
 	expect(t, submit(p, l2only, SchemaRelease, OrderType, "SO-2", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ERROR_CODE_POLICY_DENIED")
 }
@@ -90,9 +96,9 @@ func TestPolicyScopedByLine(t *testing.T) {
 func TestDispositionNeedsTwoSignatures(t *testing.T) {
 	p := newPlant(t)
 	submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1})
-	submit(p, op1, SchemaStart, SFCType, "SO-1-001", stepPayload{Step: 0, Resource: "FURNACE-1"})
-	submit(p, op1, SchemaComplete, SFCType, "SO-1-001", stepPayload{Step: 0})
-	expect(t, submit(p, op1, SchemaNC, SFCType, "SO-1-001", stepPayload{Step: 1, Code: "POROSITY"}), "ok")
+	submit(p, op1, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: "FURNACE-1"})
+	submit(p, op1, SchemaComplete, SFCType, "SO-1-001", sfcPayload{})
+	expect(t, submit(p, op1, SchemaNC, SFCType, "SO-1-001", sfcPayload{Code: "POROSITY"}), "ok")
 	expect(t, sfc(p, "SO-1-001").State, "hold")
 	expect(t, submit(p, op1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "reviewed"}), "ERROR_CODE_POLICY_DENIED")
 	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-001", signPayload{Action: "rework", Meaning: "reviewed", ReworkStep: 0}), "ok")

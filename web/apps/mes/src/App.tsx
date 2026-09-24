@@ -27,7 +27,7 @@ const time = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString() : "—"
 
 // The session: who is signed in and the edge client carrying their outbox.
 type Plant = { me: Me | undefined; client: EdgeClient; master: Master | undefined; decide: Decide; outbox: Entry[] };
-type Decide = (schema: string, target: { type: string; id: string }, payload: unknown, evidence?: string[]) => Promise<void>;
+type Decide = (schema: string, target: { type: string; id: string }, payload: unknown, evidence?: string[], expectedRevision?: number) => Promise<void>;
 const PlantContext = createContext<Plant | null>(null);
 const usePlant = () => useContext(PlantContext)!;
 
@@ -54,7 +54,7 @@ function PlannedOrders() {
     { accessorKey: "due", header: "Due", meta: { width: 110 } },
     { accessorKey: "released", header: "Released as", meta: { width: 120 } },
     { id: "act", header: "", meta: { width: 90 }, enableSorting: false, cell: ({ row: { original: p } }) =>
-        p.released || me?.role !== "supervisor" ? null
+        p.released || me?.profile.role !== "supervisor" ? null
           : <Button size="sm" onClick={() => setReleasing(p)}>Release</Button> },
   ];
   return (
@@ -121,16 +121,16 @@ function SFCDetail({ id }: { id: string }) {
             <Select aria-label="Resource" value={resource} onChange={(e) => setResource(e.target.value)} className="w-32">
               <option value="">Resource…</option>{wc?.resources.map((r) => <option key={r}>{r}</option>)}
             </Select>
-            <Button variant="primary" disabled={!resource} onClick={() => decide("mes.sfc.start", target, { step: sfc.step, resource })}>Start</Button>
+            <Button variant="primary" disabled={!resource} onClick={() => decide("mes.sfc.start", target, { resource }, [], sfc.revision)}>Start</Button>
           </>}
-          {sfc.state === "active" && <Button variant="primary" onClick={() => decide("mes.sfc.complete", target, { step: sfc.step })}>Complete</Button>}
+          {sfc.state === "active" && <Button variant="primary" onClick={() => decide("mes.sfc.complete", target, {}, [], sfc.revision)}>Complete</Button>}
           {(sfc.state === "queued" || sfc.state === "active") && <>
             <Select aria-label="NC code" value={code} onChange={(e) => setCode(e.target.value)} className="w-32">
               {ncCodes.map((c) => <option key={c}>{c}</option>)}
             </Select>
-            <Button variant="danger" onClick={() => decide("mes.sfc.nc", target, { step: sfc.step, code })}>Log NC</Button>
+            <Button variant="danger" onClick={() => decide("mes.sfc.nc", target, { code }, [], sfc.revision)}>Log NC</Button>
           </>}
-          {sfc.state === "hold" && me?.role === "quality" && <Button variant="primary" onClick={() => setSigning(true)}>Sign disposition…</Button>}
+          {sfc.state === "hold" && me?.profile.role === "quality" && <Button variant="primary" onClick={() => setSigning(true)}>Sign disposition…</Button>}
         </>} />
       <div className="grid content-start gap-4">
         <section className="rounded-md border border-border bg-surface p-3">
@@ -161,7 +161,7 @@ function SFCDetail({ id }: { id: string }) {
             { name: "reworkStep", label: "Rework from operation (index)", kind: "number" },
           ]}
           submitLabel="Sign" onCancel={() => setSigning(false)}
-          onSubmit={async (v) => { await decide("mes.sfc.sign", target, v); setSigning(false); }} />
+          onSubmit={async (v) => { await decide("mes.sfc.sign", target, v, [], sfc.revision); setSigning(false); }} />
       </Dialog>
     </div>
   );
@@ -246,12 +246,12 @@ export function App() {
   const queries = useQueryClient();
   useEffect(() => {
     if (!me) return;
-    Object.assign(client.connection, { principal: me.id, tenant: me.tenant });
+    Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
     client.refreshDeclarations().catch(() => notify.error("Plant server unreachable"));
   }, [client, me]);
 
-  const decide: Decide = async (schema, target, payload, evidence) => {
-    client.draft(schema, target, payload, evidence);
+  const decide: Decide = async (schema, target, payload, evidence, expectedRevision) => {
+    client.draft(schema, target, payload, evidence, expectedRevision);
     for (const entry of await client.send()) {
       const ok = entry.state === "SUBMISSION_STATE_CONFIRMED";
       (ok ? notify.success : notify.error)(`${schema.split(".").slice(1).join(" ")} ${target.id}: ${ok ? "confirmed" : entry.outcome}`);
@@ -273,8 +273,8 @@ export function App() {
           { label: "Sync", items: [nav("Outbox", <Inbox />, "outbox", waiting ? <span className="text-xs text-[var(--tone-warning)]">{waiting}</span> : null)] },
         ]}
         commands={[{ id: "retry", label: "Retry unsent decisions", run: () => void client.send().then(() => setOutbox([...client.authorities.outbox])) }]}
-        status={<span className="text-xs text-muted">{me ? `${me.role}${me.lines?.length ? ` · ${me.lines.join(", ")}` : ""}` : "offline"}</span>}
-        session={{ tenant: me?.tenant ?? "plant-sz", principal: me?.id ?? "…", options: identities, current: token,
+        status={<span className="text-xs text-muted">{me ? `${me.profile.role}${me.profile.lines?.length ? ` · ${me.profile.lines.join(", ")}` : ""}` : "offline"}</span>}
+        session={{ tenant: me?.tenantId ?? "plant-sz", principal: me?.principalId ?? "…", options: identities, current: token,
           onSwitch: (id) => { setToken(id); setOutbox([]); } }} />
     </PlantContext.Provider>
   );

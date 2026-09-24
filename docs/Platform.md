@@ -46,7 +46,7 @@ Each item is a falsifiable statement. Status: **H** hypothesis · **2D** used in
 
 | # | Statement | Falsified if | Status |
 |---|---|---|---|
-| K1 Identity | Entities have platform-assigned, opaque, stable IDs; references are typed IDs; external IDs are claims, not identity; merge/split keeps old IDs resolvable via redirects | A domain must encode meaning in IDs; redirects cannot express a split; cross-runtime references need domain knowledge to resolve | H (Music redirects; manufacturing downtime entities with merge/split redirects. Open: K1 has no rule for creating entities, F-19) |
+| K1 Identity | Entities have platform-assigned, opaque, stable IDs; references are typed IDs; external IDs are claims, not identity; merge/split keeps old IDs resolvable via redirects | A domain must encode meaning in IDs; redirects cannot express a split; cross-runtime references need domain knowledge to resolve | **2D** (Music redirects; manufacturing SFCs and derived downtime entities; creation rule I10 added in #86) |
 | K2 Fact kinds | Persistent business data is an **observation** (append-only, source-authoritative), **claim** (coexisting, resolved), **decision** (needs authority, may be rejected, undone only by a new decision) or **derived** (recomputable) | Data that fits none, or needs a fifth conflict semantic | **2D** (Hotel channel observations; manufacturing state batches, ERP claims, derived downtime) |
 | K3 Provenance | Every observation/claim/decision records source (principal or connector), time and confidence/authority basis | Provenance cost is unacceptable for high-rate observations even when batched | **2D** (Hotel, manufacturing: one provenance per 600-sample batch is enough, F-5 refuted) |
 | K4 Change record | Every accepted decision yields an envelope: change ID, tenant, principal, authority, target reference, schema version, valid time, recorded time, causation/correlation, idempotency key. History is kept; events and subscriptions build on it | Correctness needs multi-change atomicity the envelope cannot group; audit retention cannot be reconciled with deletion/privacy duties | **E** (Music corrections, Hotel reservations; unchanged through drills E1 and E2) |
@@ -54,7 +54,7 @@ Each item is a falsifiable statement. Status: **H** hypothesis · **2D** used in
 | K6 Tenancy & policy | A tenant is an isolation boundary (data, keys, config, quota, audit), not an org schema. Every decision records its principal; authorization is one auditable policy evaluation (principal, action, target, context). Org hierarchy is domain data. A personal space is a degenerate tenant (one principal, device authority) | Policy evaluation must understand domain hierarchy; personal apps must carry tenant overhead | **E** (Hotel roles, manufacturing lines; family roles in drill E2 needed no change) |
 | K7 Schema evolution | Every stored or transmitted payload is versioned with an upgrade path; entity types can split/merge through K1 redirects; old clients and new servers can coexist (expand → migrate → contract) | A drill needs a stop-the-world migration | H |
 | K8 Connectors | External systems attach through one descriptor: capabilities, identity mapping (K1), sync cursor, health/auth state; protocols stay in capabilities/domains | Capabilities need parameters a set cannot express; push and poll sources need two descriptor kinds | H (specified in #83: push gateway and polled ERP in one descriptor; Hotel's channel still ad hoc) |
-| K9 Work ownership | Long-running work has an owner, cancellation, stale-result invalidation and resumable checkpoints; closing an owner never silently reverts committed decisions | Server workflows and client tasks cannot share these semantics | H (client side implemented in MSRU's `FeatureHost`) |
+| K9 Work ownership | Long-running work has an owner, cancellation, stale-result invalidation and resumable checkpoints; closing an owner never silently reverts committed decisions | Server workflows and client tasks cannot share these semantics | H (specified in #86: generations, stale-result invalidation, checkpoints, owner close; client side in MSRU's `FeatureHost`) |
 
 Explicitly **not** kernel today: capacity allocation over time (candidate capability — Hotel, manufacturing scheduling), a workflow engine (compare Music import review, Hotel reservation lifecycle and a manufacturing work order first, all as code state machines), money/ledger, organizational hierarchy, UI shells and routes, matching toolkits, media playback.
 
@@ -167,6 +167,13 @@ New friction: F-18 (both slices wrote the same HTTP adapter), F-19 (K1 has no cr
 | E2 Music personal → shared family library | Authority moves from Ada's Mac to a family server; more principals with roles; corrections cite provider claims | **changed:** K5 A10 adoption of the old authority's history (ADR-0006) | new vectors `k5-migration.json` | none | Family roles as policy data; Music app work listed in the MSRU queue (unique tenant ID, outbox, upload of its log) |
 
 E2 is exercised by `slices/drills` with Music-shaped decisions on the kernel alone; the MSRU implementation is future work, so E2 proves the kernel path, not the app.
+
+### Review #86 (after manufacturing and the drills)
+
+- **F-20 → K4 C12.** Every target has a revision (accepted changes naming it); a submission may state the revision its user saw and is refused with `CONFLICT` when stale. Hotel's expected version and manufacturing's expected step left their payloads; each domain lost its own stale-view check, and records now carry `revision`.
+- **F-19 → K1 I10.** Entities exist once the decision or derivation that makes them is recorded; creating an existing or retired reference fails, so IDs are never reused.
+- **F-18 → capability `capabilities/server`** (Go module `platformserver`): bearer authentication as a swappable function, the kernel's submission, declaration and `me` endpoints, one error-to-HTTP mapping, CORS. Both slice servers now keep only their domain reads and connector endpoints (about 45 lines each instead of 120). Authentication is where OIDC plugs in (#87).
+- **K9 specified** with vectors in Go and Swift.
 
 ### Shared capability models (candidates, layer 2)
 
