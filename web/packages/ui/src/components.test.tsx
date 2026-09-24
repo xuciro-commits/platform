@@ -59,3 +59,12 @@ test("EntityForm validates with the schema before submitting", async () => {
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
   expect(submit).toHaveBeenCalledWith({ guest: "Ada", nights: 2 }, expect.anything());
 });
+
+test("routes round-trip through the URL and name one tab per entity", async () => {
+  const { routeFromHash, routeKey, routeToHash } = await import("./shell/route");
+  const route = { view: "workOrder", params: { tenant: "plant-1", id: "WO 7/2" } };
+  expect(routeFromHash(routeToHash(route))).toEqual(route);
+  expect(routeKey({ view: "workOrder", params: { id: "WO 7/2", tenant: "plant-1" } })).toBe(routeKey(route));
+  expect(routeFromHash("#/home")).toEqual({ view: "home" });
+  expect(routeFromHash("")).toBeUndefined();
+});

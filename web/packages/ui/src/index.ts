@@ -7,5 +7,8 @@ export { StatusTag, defineStatuses, submissionStatuses, type StatusRegistry, typ
 export { DataTable, type DataTableProps } from "./components/DataTable";
 export { EntityForm, type Field } from "./components/EntityForm";
 export { EntityCard, PropertyList } from "./components/EntityCard";
-export { AppShell, PageHeader, type NavItem } from "./components/AppShell";
+export { PageHeader } from "./components/PageHeader";
+export { Sheet } from "./primitives/sheet";
+export { Workspace, useWorkspace, notify, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
+export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";

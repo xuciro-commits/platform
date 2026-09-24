@@ -1,6 +1,7 @@
 /* @platform/ui design tokens: dense, data-first (Palantir-like density on shadcn/Radix).
    Apps import this file once; Tailwind scans the package through @source. */
 @import "tailwindcss";
+@import "dockview-react/dist/styles/dockview.css";
 @source "./";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -79,4 +80,29 @@ body {
   font-family: var(--font-sans);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Docking workspace (dockview) on the platform tokens. */
+.platform-dock .dockview-theme-light {
+  --dv-group-view-background-color: var(--background);
+  --dv-tabs-and-actions-container-background-color: var(--surface);
+  --dv-tabs-and-actions-container-height: 30px;
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-activegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--surface);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--surface);
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted);
+  --dv-separator-border: var(--border);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-tab-divider-color: var(--border);
+  --dv-active-sash-color: var(--primary);
+  --dv-drag-over-background-color: color-mix(in oklch, var(--primary) 18%, transparent);
+  --dv-drag-over-border-color: var(--primary);
+  --dv-floating-box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
+  --dv-icon-hover-background-color: var(--row-hover);
+  font-family: var(--font-sans);
 }
