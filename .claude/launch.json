@@ -53,7 +53,6 @@
       "runtimeExecutable": "env",
       "runtimeArgs": [
         "VITE_OIDC_ISSUER=http://localhost:8480/auth/v1/",
-        "VITE_HOST=http://localhost:8495",
         "pnpm",
         "--dir",
         "web/apps/settings",

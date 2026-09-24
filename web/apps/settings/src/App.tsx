@@ -28,11 +28,15 @@ type AppSettings = { app: string; settings: SettingValue[] };
 type AuditEntry = { at: string; member: string; app: string; action: string; target?: string };
 type Me = { tenantId: string; principalId: string; profile: { roles: Record<string, string> } };
 
-// Development hosts from deploy/local; with OIDC the host is VITE_HOST.
+// Development hosts from deploy/local, each with a demo token. Signed in at the
+// identity provider, the same person switches between the hosts of VITE_HOSTS
+// ("sales=http://…,plant=http://…"); each host decides whether they are a member.
 const hosts = [
   { id: "sales", label: "Sales host · hotel-a (manager)", server: "http://127.0.0.1:8495", token: "manager" },
   { id: "mes", label: "Plant host · plant-sz (supervisor)", server: "http://127.0.0.1:8490", token: "supervisor" },
 ];
+const signedInHosts = ((import.meta.env.VITE_HOSTS as string | undefined) ?? "sales=http://localhost:8495,plant=http://localhost:8490")
+  .split(",").map((pair) => { const [id = "", server = ""] = pair.split("="); return { id, label: `${id} host · ${server.replace(/^https?:\/\//, "")}`, server, token: "" }; });
 
 type Admin = {
   client: EdgeClient; apps: AppInfo[];
@@ -571,8 +575,9 @@ const views: View[] = [
 ];
 
 export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: OidcSession } }) {
-  const [host, setHost] = useState(hosts[0]!);
-  const server = signedIn ? ((import.meta.env.VITE_HOST as string | undefined) ?? hosts[0]!.server) : host.server;
+  const choices = signedIn ? signedInHosts : hosts;
+  const [host, setHost] = useState(choices[0]!);
+  const server = host.server;
   const client = useMemo(() => new EdgeClient({ server, token: signedIn?.session.accessToken ?? host.token, tenant: "", principal: "" }), [server, host, signedIn]);
   const meQuery = useQuery({ queryKey: [server, host.token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false });
   const me = meQuery.data;
@@ -604,11 +609,13 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
           { label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("App settings", <SlidersHorizontal />, "app-settings"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] },
           { label: "Operations", items: [nav("Integrations", <PlugZap />, "integrations"), nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] },
         ]}
-        status={<span className="text-xs text-muted">{me ? `${me.tenantId} · ${apps.length} apps` : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}
+        status={<span className="text-xs text-muted">{me ? `${me.tenantId} · ${apps.length} apps`
+          : meQuery.error && signedIn && /HTTP 401/.test(String(meQuery.error)) ? `${signedIn.session.email} is not a member of this host`
+          : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}
         session={signedIn
           ? { tenant: me?.tenantId ?? "…", principal: me?.principalId ?? "…", detail: signedIn.session.email,
-              options: [{ id: "signed-in", label: signedIn.session.email }, { id: "sign-out", label: "Sign out" }], current: "signed-in",
-              onSwitch: (id) => { if (id === "sign-out") void signOut(signedIn.config); } }
+              options: [...signedInHosts, { id: "sign-out", label: `Sign out ${signedIn.session.email}` }], current: host.id,
+              onSwitch: (id) => { if (id === "sign-out") void signOut(signedIn.config); else setHost(signedInHosts.find((h) => h.id === id)!); } }
           : { tenant: me?.tenantId ?? "…", principal: me?.principalId ?? "…", options: hosts, current: host.id,
               onSwitch: (id) => setHost(hosts.find((h) => h.id === id)!) }} />
     </AdminContext.Provider>
