@@ -116,6 +116,36 @@
       "profile"
     ],
     "force_mfa": false,
+    "id": "mes-assistant",
+    "name": "Plant assistant AI agent line L1",
+    "confidential": true,
+    "secret": {
+      "Plain": "assistantLocalOnly0000000000000000000000000000000000000000000000"
+    },
+    "flows_enabled": [
+      "client_credentials"
+    ]
+  },
+  {
+    "enabled": true,
+    "redirect_uris": [
+      "http://localhost/unused"
+    ],
+    "access_token_alg": "EdDSA",
+    "id_token_alg": "EdDSA",
+    "auth_code_lifetime": 60,
+    "access_token_lifetime": 900,
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ],
+    "default_scopes": [
+      "openid",
+      "email",
+      "profile"
+    ],
+    "force_mfa": false,
     "id": "platform-cli",
     "name": "Rehearsal and operations scripts",
     "confidential": true,

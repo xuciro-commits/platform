@@ -8,5 +8,5 @@ port=18480
 .build/hotel-server -addr 127.0.0.1:$port -response-delay 4s -delay-count 1 &
 server=$!
 trap 'kill $server' EXIT
-sleep 1
+for _ in $(seq 100); do curl -s -o /dev/null http://127.0.0.1:$port/v1/me && break; sleep 0.1; done
 HOTEL_SERVER=http://127.0.0.1:$port cargo test --manifest-path client/src-tauri/Cargo.toml -- --ignored flows

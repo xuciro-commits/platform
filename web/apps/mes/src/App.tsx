@@ -1,4 +1,4 @@
-import { EdgeClient, keepFresh, signOut, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
+import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, PageHeader, PropertyList, Select, StatusTag, Workspace,
   defineStatuses, notify, submissionStatuses, useWorkspace, type ColumnDef, type View,
@@ -26,7 +26,8 @@ const downtimeStatus = defineStatuses({
 const time = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString() : "—");
 
 // The session: who is signed in and the edge client carrying their outbox.
-type Plant = { me: Me | undefined; client: EdgeClient; master: Master | undefined; decide: Decide; outbox: Entry[] };
+// `can` answers from the caller's action catalog: the server decides who may do what.
+type Plant = { me: Me | undefined; client: EdgeClient; master: Master | undefined; decide: Decide; outbox: Entry[]; can: (schema: string) => boolean };
 type Decide = (schema: string, target: { type: string; id: string }, payload: unknown, evidence?: string[], expectedRevision?: number) => Promise<void>;
 const PlantContext = createContext<Plant | null>(null);
 const usePlant = () => useContext(PlantContext)!;
@@ -45,7 +46,7 @@ function PlannedOrders() {
   // Joined into the rows: the table caches accessor values per row object.
   const planned = (useRead<Planned[]>("/v1/planned-orders") ?? [])
     .map((p) => ({ ...p, released: orders.find((o) => o.planned === p.erpId)?.id ?? "" }));
-  const { me, decide, master } = usePlant();
+  const { can, decide, master } = usePlant();
   const [releasing, setReleasing] = useState<Planned>();
   const columns: ColumnDef<Planned & { released: string }, any>[] = [
     { accessorKey: "erpId", header: "ERP order", meta: { width: 110 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
@@ -54,7 +55,7 @@ function PlannedOrders() {
     { accessorKey: "due", header: "Due", meta: { width: 110 } },
     { accessorKey: "released", header: "Released as", meta: { width: 120 } },
     { id: "act", header: "", meta: { width: 90 }, enableSorting: false, cell: ({ row: { original: p } }) =>
-        p.released || me?.profile.role !== "supervisor" ? null
+        p.released || !can("mes.order.release") ? null
           : <Button size="sm" onClick={() => setReleasing(p)}>Release</Button> },
   ];
   return (
@@ -101,7 +102,7 @@ function SFCTable({ filter, title, description }: { filter: (s: SFC) => boolean;
 
 function SFCDetail({ id }: { id: string }) {
   const sfc = useRead<SFC[]>("/v1/sfcs")?.find((s) => s.id === id);
-  const { master, decide, me } = usePlant();
+  const { master, decide, can } = usePlant();
   const [resource, setResource] = useState("");
   const [code, setCode] = useState(ncCodes[0]!);
   const [signing, setSigning] = useState(false);
@@ -117,20 +118,20 @@ function SFCDetail({ id }: { id: string }) {
         properties={[["Operation", op ? `${op.step} ${op.name}` : "—"], ["Work center", wc ? `${wc.id} · line ${wc.line}` : "—"],
           ["Resource", sfc.resource ?? "—"], ["Nonconformances", sfc.ncs.map((n) => `${n.code} (${n.by})`).join(", ") || "none"]]}
         actions={<>
-          {sfc.state === "queued" && <>
+          {sfc.state === "queued" && can("mes.sfc.start") && <>
             <Select aria-label="Resource" value={resource} onChange={(e) => setResource(e.target.value)} className="w-32">
               <option value="">Resource…</option>{wc?.resources.map((r) => <option key={r}>{r}</option>)}
             </Select>
             <Button variant="primary" disabled={!resource} onClick={() => decide("mes.sfc.start", target, { resource }, [], sfc.revision)}>Start</Button>
           </>}
-          {sfc.state === "active" && <Button variant="primary" onClick={() => decide("mes.sfc.complete", target, {}, [], sfc.revision)}>Complete</Button>}
-          {(sfc.state === "queued" || sfc.state === "active") && <>
+          {sfc.state === "active" && can("mes.sfc.complete") && <Button variant="primary" onClick={() => decide("mes.sfc.complete", target, {}, [], sfc.revision)}>Complete</Button>}
+          {(sfc.state === "queued" || sfc.state === "active") && can("mes.sfc.nc") && <>
             <Select aria-label="NC code" value={code} onChange={(e) => setCode(e.target.value)} className="w-32">
               {ncCodes.map((c) => <option key={c}>{c}</option>)}
             </Select>
             <Button variant="danger" onClick={() => decide("mes.sfc.nc", target, { code }, [], sfc.revision)}>Log NC</Button>
           </>}
-          {sfc.state === "hold" && me?.profile.role === "quality" && <Button variant="primary" onClick={() => setSigning(true)}>Sign disposition…</Button>}
+          {sfc.state === "hold" && can("mes.sfc.sign") && <Button variant="primary" onClick={() => setSigning(true)}>Sign disposition…</Button>}
         </>} />
       <div className="grid content-start gap-4">
         <section className="rounded-md border border-border bg-surface p-3">
@@ -169,7 +170,7 @@ function SFCDetail({ id }: { id: string }) {
 
 function Equipment() {
   const events = useRead<Downtime[]>("/v1/downtime") ?? [];
-  const { decide } = usePlant();
+  const { decide, can } = usePlant();
   const [assigning, setAssigning] = useState<Downtime>();
   const columns: ColumnDef<Downtime, any>[] = [
     { accessorKey: "resource", header: "Resource", meta: { width: 110 } },
@@ -179,7 +180,7 @@ function Equipment() {
       cell: (c) => <StatusTag status={c.getValue()} registry={downtimeStatus} /> },
     { accessorKey: "reason", header: "Reason" },
     { id: "act", header: "", meta: { width: 110 }, enableSorting: false, cell: ({ row: { original: d } }) =>
-        <Button size="sm" onClick={() => setAssigning(d)}>{d.reason ? "Change" : "Set reason"}</Button> },
+        can("mes.downtime.reason") && <Button size="sm" onClick={() => setAssigning(d)}>{d.reason ? "Change" : "Set reason"}</Button> },
   ];
   return (
     <>
@@ -241,6 +242,8 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
   const [token, setToken] = useState(signedIn?.session.accessToken ?? "supervisor");
   const client = useMemo(() => new EdgeClient({ server: SERVER, token, tenant: "plant-sz", principal: "" }), [token]);
   const me = useQuery({ queryKey: [token, "me"], queryFn: () => client.get<Me>("/v1/me"), refetchInterval: false }).data;
+  const actions = useQuery({ queryKey: [token, "actions"], queryFn: () => client.get<ActionDeclaration[]>("/v1/actions"), refetchInterval: false }).data;
+  const can = (schema: string) => !!actions?.some((a) => a.schema === schema);
   const master = useQuery({ queryKey: [token, "master"], queryFn: () => client.get<Master>("/v1/master"), refetchInterval: false }).data;
   const [outbox, setOutbox] = useState<Entry[]>([]);
   const queries = useQueryClient();
@@ -264,7 +267,7 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
   const nav = (label: string, icon: ReactNode, view: string, badge?: ReactNode) => ({ label, icon, route: { view }, badge });
 
   return (
-    <PlantContext.Provider value={{ me, client, master, decide, outbox }}>
+    <PlantContext.Provider value={{ me, client, master, decide, outbox, can }}>
       <Workspace product="Plant Operations" storageKey="mes.layout" views={views} home={{ view: "queue" }}
         nav={[
           { label: "Planning", items: [nav("Planned orders", <ClipboardList />, "planned")] },

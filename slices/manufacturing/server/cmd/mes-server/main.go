@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"mes"
 	"platformserver"
@@ -21,9 +22,15 @@ func main() {
 	issuer := flag.String("oidc-issuer", "", "OpenID issuer whose access tokens are accepted (empty: demo tokens)")
 	keys := flag.String("oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
 	directory := flag.String("directory", "", "JSON file: subject (user:<email>, client:<id>) → principal")
+	disable := flag.String("disable", "", "comma-separated capabilities to deactivate (ADR-0008)")
 	flag.Parse()
 	const tenant = "plant-sz"
 	plant := mes.NewPlant(tenant, mes.DemoMaster())
+	for _, c := range strings.FieldsFunc(*disable, func(r rune) bool { return r == ',' }) {
+		if !plant.Disable(c) {
+			log.Fatalf("-disable: no capability %q", c)
+		}
+	}
 	for _, d := range mes.DemoConnectors(tenant) {
 		plant.RegisterConnector(d)
 	}

@@ -1,6 +1,7 @@
 package mes
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -178,7 +179,7 @@ func (p *Plant) Downtime() []Downtime {
 			}
 		}
 	}
-	slices.SortFunc(out, func(a, b Downtime) int { return a.Start.Compare(b.Start) })
+	slices.SortFunc(out, func(a, b Downtime) int { return cmp.Or(a.Start.Compare(b.Start), compare(a.ID, b.ID)) }) // deterministic: events can start together
 	return out
 }
 

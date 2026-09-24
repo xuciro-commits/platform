@@ -183,6 +183,10 @@ E2 is exercised by `slices/drills` with Music-shaped decisions on the kernel alo
 
 Decided in ADR-0007: the server journals accepted inputs in PostgreSQL and replays them on start; principals come from Rauthy through `platformserver.OIDC`. Every manufacturing test ends by replaying its journal into a second plant and comparing state and kernel logs; that check found a real gap (decisions without a state change, such as downtime reasons, were not journaled). `deploy/local/rehearse.sh` covers the operations floor items "backups are restorable and restore is rehearsed" and "cross-tenant access is rejected" for principals from a provider, plus a restart. Still open on the floor: permission revocation while a token is valid (directory reload), correlation IDs in logs, and backup of the identity provider's own data (users created at runtime; bootstrap files recreate the rest).
 
+### Governed actions #90 (manufacturing)
+
+Decided in ADR-0008. `platformserver.Action` declares an action once (schema, target, capability, title, description, payload fields, roles); `GET /v1/actions` returns the caller's own catalog. Role checks moved out of the plant's policy and the MES UI into the catalog; line conditions stay in the domain. An AI agent is the client `mes-assistant` with role `assistant` on line L1, acting through `cmd/mes-agent` (list its catalog, submit one of its actions); `rehearse.sh` shows it acting on L1 and refused a release even when it bypasses the adapter. `-disable downtime-reasons` deactivates a capability: its actions leave the catalog and are refused (`UNKNOWN_SCHEMA`), recorded reasons replay and still show. Replay no longer re-authorizes. Not yet shown: deactivation with running work (no manufacturing capability owns K9 work today), and confirmation by a person before an agent's action takes effect. The action shape lives in the capability layer until a second domain uses it; then it becomes a kernel-contract candidate (spec and vectors first).
+
 ### Shared capability models (candidates, layer 2)
 
 Across domains the business differs but the data is organised alike. These are **capability candidates**, not kernel: they carry domain-like vocabulary and are promoted only when two domains use them without exceptions (§4 rules). The UI kit (`web/packages/ui`, ADR-0004) already gives them one presentation.
@@ -194,7 +198,7 @@ Across domains the business differs but the data is organised alike. These are *
 | Devices and data collection | PLC states, counters, gauges | Door access, cameras, temperature/humidity | Device registry (connector, K8) plus reading streams as observations (K2, K3) |
 | Documents with lifecycles | Work order, SFC, nonconformance | Reservation, housekeeping task | A state machine in domain code; decisions as change records (K4) submitted through the outbox (K5) |
 
-Entities are declared with the UI kit's field types (ADR-0004), in code owned by the business package. **Open:** tenant-defined custom fields (users adding a field at runtime, as Airtable allows) would turn field declarations into configuration; decide when a customer needs it, with storage (K7 schema evolution) and policy (K6) in view, not by default.
+Entities are declared with the UI kit's field types (ADR-0004), in code owned by the business package. Tenant-defined fields inside a package's rules are ruled out (ADR-0008): customers add their own data models for analysis and their own dashboards beside the package. **Open:** where those customer models and front-end logic live and how they survive package upgrades; design with the first customer who needs it.
 
 ### Reference systems (industry state of the art)
 

@@ -43,5 +43,13 @@
     "id": "erp",
     "tenant": "plant-sz",
     "role": "erp"
+  },
+  "client:mes-assistant": {
+    "id": "agent-l1",
+    "tenant": "plant-sz",
+    "role": "assistant",
+    "lines": [
+      "L1"
+    ]
   }
 }

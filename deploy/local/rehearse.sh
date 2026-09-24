@@ -53,6 +53,21 @@ state() { for path in orders sfcs downtime planned-orders; do curl -s -H "Author
 submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
 submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | jq -e .record >/dev/null || fail start
 [[ $(submit "$OP2" s-2 mes.sfc.start mes.sfc WO-1-002 '{"resource":"FURNACE-1"}' 0 | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "line policy"
+
+# An AI agent is a client with a role and lines: its catalog holds only what it
+# may call, and the server refuses the rest even when the adapter is bypassed.
+agent() { (cd ../../slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
+  MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
+  go run ./cmd/mes-agent -server "$MES" -oidc-token "$IDP/oidc/token" "$@"); }
+[[ $(agent actions | jq -c '[.[].schema]') == '["mes.downtime.reason"]' ]] || fail "assistant catalog"
+event=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
+agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
+! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"
+AGENT=$(curl -sf "$IDP/oidc/token" -d grant_type=client_credentials -d client_id=mes-assistant \
+  -d client_secret=assistantLocalOnly0000000000000000000000000000000000000000000000 | jq -r .access_token)
+[[ $(submit "$AGENT" a-1 mes.order.release mes.order WO-9 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "server let the assistant release"
+echo "ok   AI assistant: catalog of one action, acted within line L1, refused outside it"
+
 before=$(state)
 [[ $(jq -s '.[1] | length' <<<"$before") == 2 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
@@ -80,7 +95,7 @@ echo "ok   restore: new volume, state as of the backup"
 # What happened after the backup is lost on the server, not at the edge: the
 # operator's outbox still holds the completion and resends it with its key.
 submit "$OP1" c-1 mes.sfc.complete mes.sfc WO-1-001 '{}' 1 | jq -e .record >/dev/null || fail resend
-[[ $(state) == "$after" ]] || fail "resent completion did not restore the later state"
+now=$(state); [[ $now == "$after" ]] || { diff <(jq . <<<"$after") <(jq . <<<"$now") >&2; fail "resent completion did not restore the later state"; }
 echo "ok   the edge outbox resends what the backup missed; state matches again"
 
 compose exec -T postgres createdb -U mes journal_test

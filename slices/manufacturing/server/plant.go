@@ -76,6 +76,7 @@ const (
 	Supervisor Role = "supervisor"
 	Gateway    Role = "gateway"
 	ERP        Role = "erp"
+	Assistant  Role = "assistant" // an AI agent acting within the lines it is granted
 )
 
 type Principal struct {
@@ -134,6 +135,8 @@ type Plant struct {
 	declaration *pb.AuthorityDeclaration
 	downtime    map[string][]Downtime // resource → current derived events
 	nextEvent   int
+	catalog     *platformserver.Catalog
+	replaying   bool
 	// Record, when set, makes each accepted input durable before it is answered
 	// (docs/ADR/0007); Replay rebuilds a plant from the recorded inputs.
 	Record func(platformserver.Entry)
@@ -151,7 +154,7 @@ func NewPlant(tenant string, master MasterData) *Plant {
 		changes:     kernel.NewChangeLog(schema(SchemaRelease, SchemaStart, SchemaComplete, SchemaNC, SchemaSign, SchemaReason)),
 		facts:       kernel.NewFactLog(schema(schemaStates, schemaPlanned)),
 		authorities: kernel.NewAuthorities(Authority), identity: kernel.NewIdentity(nil),
-		connectors: kernel.NewConnectors(), downtime: map[string][]Downtime{}}
+		connectors: kernel.NewConnectors(), downtime: map[string][]Downtime{}, catalog: Actions()}
 	p.changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(p.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
 	}
@@ -214,29 +217,41 @@ func (p *Plant) resourceLine(resource string) string {
 	return ""
 }
 
-// allowed is the policy hook (K6 T3). The plant hierarchy (lines) is context the
-// domain reads; the kernel never sees it.
+// allowed is the policy hook (K6 T3): the catalog decides which roles may call an
+// action (ADR-0008); the plant hierarchy (lines) is context the domain reads, and
+// the kernel never sees it.
 func (p *Plant) allowed(who Principal, s *pb.Submission) bool {
+	if !p.catalog.Permits(string(who.Role), s.GetSchema().GetName()) {
+		return false
+	}
 	onLine := func(line string) bool { return line != "" && slices.Contains(who.Lines, line) }
+	sfc := p.sfcs[s.GetTarget().GetId()]
 	switch s.GetSchema().GetName() {
 	case SchemaRelease:
 		var r releasePayload
 		json.Unmarshal(s.GetPayload(), &r)
 		prod := p.product(r.Product)
-		return who.Role == Supervisor && prod != nil && len(prod.Operations) > 0 && onLine(p.workCenter(prod.Operations[0].WorkCenter).Line)
+		return prod != nil && len(prod.Operations) > 0 && onLine(p.workCenter(prod.Operations[0].WorkCenter).Line)
 	case SchemaStart, SchemaComplete:
-		sfc := p.sfcs[s.GetTarget().GetId()]
-		return who.Role == Operator && sfc != nil && onLine(p.lineOf(sfc))
+		return sfc != nil && onLine(p.lineOf(sfc))
 	case SchemaNC:
-		sfc := p.sfcs[s.GetTarget().GetId()]
-		return who.Role == Quality || who.Role == Operator && sfc != nil && onLine(p.lineOf(sfc))
+		return who.Role == Quality || sfc != nil && onLine(p.lineOf(sfc))
 	case SchemaSign:
-		return who.Role == Quality
+		return true
 	case SchemaReason:
 		refs, _ := p.identity.Resolve(&pb.EntityRef{Type: DowntimeType, Id: s.GetTarget().GetId()})
-		return who.Role == Supervisor || who.Role == Operator && len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
+		return who.Role == Supervisor || len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
 	}
 	return false
+}
+
+// Disable deactivates a capability for this plant (start-up configuration): its
+// actions leave the catalog and are refused; its recorded history still replays.
+func (p *Plant) Disable(capability string) bool { return p.catalog.Disable(capability) }
+
+// Catalog is the part of the plant's actions who may call.
+func (p *Plant) Catalog(who Principal) []platformserver.Action {
+	return p.catalog.For(string(who.Role))
 }
 
 // Submit receives a decision in the kernel's order (K6 T2) with the plant's policy and rules.
@@ -246,8 +261,12 @@ func (p *Plant) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.Chan
 	if who.Tenant != p.tenant {
 		return nil, denied
 	}
+	if !p.replaying && !p.catalog.Enabled(s.GetSchema().GetName()) {
+		return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA) // not an action of an active capability
+	}
+	// Replay does not re-authorize: who could act was decided when the input was accepted.
 	receiver := kernel.Receiver{Changes: p.changes, Authorities: p.authorities,
-		Policy: func(_ kernel.Caller, s *pb.Submission) bool { return p.allowed(who, s) }}
+		Policy: func(_ kernel.Caller, s *pb.Submission) bool { return p.replaying || p.allowed(who, s) }}
 	var apply func()
 	before := p.accepted()
 	record, err := receiver.Receive(kernel.Caller{Tenant: who.Tenant, Principal: who.ID}, s, now, func() *kernel.Error {
@@ -270,7 +289,9 @@ func (p *Plant) Submit(who Principal, s *pb.Submission, now time.Time) (*pb.Chan
 
 // accepted counts the records of both kernel logs; an input that adds none (an
 // idempotent replay) is not recorded again.
-func (p *Plant) accepted() int { return len(p.changes.Records(p.tenant)) + len(p.facts.Records(p.tenant)) }
+func (p *Plant) accepted() int {
+	return len(p.changes.Records(p.tenant)) + len(p.facts.Records(p.tenant))
+}
 
 func (p *Plant) record(fresh bool, kind string, who Principal, body []byte, now time.Time) {
 	if p.Record == nil || !fresh {
@@ -284,6 +305,8 @@ func (p *Plant) record(fresh bool, kind string, who Principal, body []byte, now 
 // the principals they came from; any refusal means the record and the code
 // disagree, and the plant must not serve.
 func (p *Plant) Replay(entries []platformserver.Entry) error {
+	p.replaying = true
+	defer func() { p.replaying = false }()
 	for i, e := range entries {
 		var who Principal
 		if err := json.Unmarshal(e.Principal, &who); err != nil {

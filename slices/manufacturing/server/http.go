@@ -41,6 +41,7 @@ func NewServer(plants map[string]*Plant, authenticate platformserver.Authenticat
 	s.Handle("POST /v1/connectors/heartbeat", func(w http.ResponseWriter, _ *http.Request, who Principal, p *Plant) {
 		platformserver.Reply(w, nil, p.Heartbeat(who, s.Now()))
 	})
+	s.Read("/v1/actions", func(who Principal, p *Plant) any { return p.Catalog(who) })
 	s.Read("/v1/master", func(_ Principal, p *Plant) any { return p.Master() })
 	s.Read("/v1/orders", func(_ Principal, p *Plant) any { return p.Orders() })
 	s.Read("/v1/sfcs", func(_ Principal, p *Plant) any { return p.SFCs() })

@@ -1,0 +1,15 @@
+# ADR-0008: First-party packages assembled at build time; customers customize around industry rules; every caller acts through declared, granted actions
+
+**Status:** Accepted (2026-09-24, owner decisions on ProductIntentReview §8)
+
+**Context.** The product intent review left four questions to the owner: who business packages are for, how deep customers may change them, how far AI may act, and whether packages are installed at runtime.
+
+**Decision.**
+1. **Audience.** Business packages serve our own teams first; third parties come after the packages have matured in our own use. Until then there is no public package API, marketplace or sandbox.
+2. **Customization depth.** The industry-standard part of a package (hotel operations, shop-floor execution: its objects, rules and actions) is not customer-changeable. Customers may change their front-end and operating logic (which screens, which steps, in which order), add their own data models for analysis, and build their own dashboards. Customer additions read the package's data and call its declared actions; they never change its rules.
+3. **Callers, including AI.** Every caller (a person at a screen, an integration, an AI agent) is a principal with a role and attributes from the tenant's directory (RBAC with attribute conditions such as the lines a principal works on). A package declares its actions once (`platformserver.Action`: schema, target, capability, description, payload fields, roles). A caller asks for its catalog and receives only the actions its role may call, so an agent's context holds only what it can use; every submission is checked again, because seeing a description is not permission. An agent is exposed through a thin adapter (CLI or MCP) over its own catalog; it gets no other path to the domain.
+4. **Assembly.** No runtime installation or independent release. A package enters a deployment when the server is rebuilt with it and restarted; the journal replay (ADR-0007) carries state across. Per-tenant activation is start-up configuration: a deactivated capability's actions leave the catalog and are refused, while its recorded history still replays and resolves.
+
+**Consequences.** Replay does not re-check authorization: who could do what was decided when the input was accepted, and a later change of roles or capabilities must not make history unreplayable. UIs render their actions from the catalog instead of duplicating role checks. Customer customization (point 2) still needs its own design when the first customer asks for it: where customer front-end logic and analysis models live, and how they survive package upgrades. The tenant custom-fields decision in Platform.md is narrowed by point 2: customer data models are for analysis beside the package, not new fields inside its rules.
+
+**Revisit when** a third party builds a package (a public API, versioning and isolation become necessary), or restart-to-deploy no longer meets an availability requirement.
