@@ -90,6 +90,7 @@ func (t *Tenant) enqueue(now time.Time) {
 		if t.relations != nil {
 			t.relations.observe(t, e, names[1:])
 		}
+		t.emit(e, names)
 		for _, a := range t.apps {
 			if !slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
 				continue

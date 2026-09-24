@@ -5,9 +5,9 @@
 # project on its own ports and removes it afterwards. Needs docker, curl, jq.
 set -euo pipefail
 cd "$(dirname "$0")"
-export PG_PORT=55433 IDP_PORT=58480 MES_PORT=58490 SALES_PORT=58495
+export PG_PORT=55433 IDP_PORT=58480 MES_PORT=58490 SALES_PORT=58495 SINK_PORT=58497
 compose() { docker compose -p platform-rehearsal -f compose.yaml "$@"; }
-IDP=http://localhost:$IDP_PORT/auth/v1 MES=http://localhost:$MES_PORT SALES=http://localhost:$SALES_PORT
+IDP=http://localhost:$IDP_PORT/auth/v1 MES=http://localhost:$MES_PORT SALES=http://localhost:$SALES_PORT SINK=http://localhost:$SINK_PORT
 backup=$(mktemp -d)
 trap 'compose down -v --remove-orphans >/dev/null 2>&1; rm -rf "$backup"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -97,9 +97,16 @@ sales platform "$MGR" s-r platform.member.revoke platform.member sales-1 '{"app"
 catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/actions" | jq -c '[.[].schema | select(startswith("crm.") or startswith("hotel."))]')
 [[ $catalog == '["crm.account.create","crm.opportunity.open","crm.opportunity.close"]' ]] || fail "catalog after revocation: $catalog"
 [[ $(sales crm-server "$SALES_TOKEN" s-b2 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
+# Outbound effects (ADR-0014): the administrator subscribes a webhook endpoint to
+# the protocol's cancellation; the cancellation below reaches the sink signed, once.
+SERVER=$SALES TENANT=hotel-a AUTHORITY=platform submit "$MGR" w-1 platform.endpoint.add platform.endpoint sink \
+  '{"url":"http://webhook-sink:8080/hook","secret":"sink","events":["lodging.booking/1#canceled"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "add endpoint"
 sales hotel-server "$MGR" s-c hotel.reservation.cancel hotel.reservation OPP-1-B1 '{}' | jq -e .record >/dev/null || fail "hotel cancel"
 note=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/timeline" | jq -r '.[] | select(.entity == "crm.opportunity/OPP-1") | "\(.by): \(.text)"')
 [[ $note == "app:hotel: Booking canceled (hotel.reservation/OPP-1-B1, by manager-1)" ]] || fail "timeline: $note"
+for _ in $(seq 20); do [[ $(curl -s "$SINK/received" | jq '.kept | length') == 1 ]] && break; sleep 0.5; done
+[[ $(curl -s "$SINK/received" | jq -r '.kept[] | .type + " " + .data.entity') == "lodging.booking/1#canceled hotel.reservation/OPP-1-B1" ]] || fail "webhook: $(curl -s "$SINK/received")"
+[[ $(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/effects" | jq -r '.[0].state') == delivered ]] || fail "effect state"
 [[ $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/reservations") == 403 ]] || fail "hotel read without a hotel role"
 mcp() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$SALES/mcp" -d "$2"; }
 mcp "$MGR" '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' | jq -e '.result.capabilities.tools' >/dev/null || fail "mcp initialize"
@@ -111,7 +118,7 @@ mcp "$SALES_TOKEN" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"nam
 SERVER=$SALES TENANT=hotel-a AUTHORITY=platform submit "$MGR" p-1 platform.protocol.bind platform.protocol lodging.booking/1 '{"provider":"memstay"}' | jq -e .record >/dev/null || fail "choose provider"
 sales crm-server "$MGR" s-b3 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"loft","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -e .record >/dev/null || fail "book at the chosen provider"
 [[ $(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/customers" | jq -c '[.[].opportunities[] | select(.id == "OPP-1") | .stays[].roomType]') == '["suite","loft"]' ]] || fail "stays across providers"
-echo "ok   sales solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants"
+echo "ok   sales solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants; the cancellation reached a webhook endpoint signed, once"
 
 before=$(state)
 [[ $(jq -s '.[1] | length' <<<"$before") == 2 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
@@ -119,6 +126,7 @@ before=$(state)
 compose restart mes-server sales-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done
 [[ $(state) == "$before" ]] || fail "state after restart differs"
+sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == 1 ]] || fail "a delivered webhook was sent again after the restart"
 echo "ok   restart: mes $(compose logs mes-server | grep -o 'replayed [0-9]* entries' | tail -1), sales $(compose logs sales-server | grep -o 'replayed [0-9]* entries' | tail -1); same state, revocation kept"
 
 compose exec -T postgres pg_dump -U platform -d platform -Fc >"$backup/platform.dump"

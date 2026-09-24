@@ -56,10 +56,18 @@ services:
       - -directory=/etc/sales/directory.json
     ports: ["127.0.0.1:${SALES_PORT:-8495}:8495"]
     volumes: [./sales/directory.json:/etc/sales/directory.json:ro]
+    # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.
+    environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000 }
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }
     restart: on-failure
+
+  # A webhook receiver for local endpoints and the rehearsal (ADR-0014).
+  webhook-sink:
+    build: { context: ../.., dockerfile: capabilities/server/cmd/webhook-sink/Dockerfile }
+    environment: { WEBHOOK_SECRET: sinkLocalOnly0000000000000000000000000000000000000000000000000000 }
+    ports: ["127.0.0.1:${SINK_PORT:-8497}:8080"]
 
 volumes:
   pgdata:

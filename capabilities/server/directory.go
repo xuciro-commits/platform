@@ -69,13 +69,13 @@ func DirectoryActions() *Catalog {
 			Description: "Set the values of an attribute apps scope roles by (lines, properties); no values removes it.",
 			Payload: []Field{{Name: "attribute", Type: "string", Required: true, Description: "Attribute name"},
 				{Name: "values", Type: "string[]", Description: "Values"}}, Roles: admin},
-	}, operationsActions()...)...)
+	}, append(operationsActions(), effectActions()...)...)...)
 }
 
 // NewDirectory seeds a tenant's directory; changes recorded later replay on top.
 func NewDirectory(tenant string, seats ...Seat) *Directory {
 	d := &Directory{tenant: tenant, members: map[string]*Member{}, subjects: map[string]string{},
-		ledger: NewLedger(tenant, PlatformApp, DirectoryActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType)}
+		ledger: NewLedger(tenant, PlatformApp, DirectoryActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -123,7 +123,7 @@ func clone(m *Member) Member {
 
 func (d *Directory) Manifest() Manifest {
 	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog,
-		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications"},
+		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects"},
 		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false}}
 }
 
@@ -138,6 +138,9 @@ func (d *Directory) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Chang
 			return nil, invalid
 		}
 		if apply, err, ok := operate(c, s, now); ok {
+			return apply, err
+		}
+		if apply, err, ok := decideEffects(c, s, now); ok {
 			return apply, err
 		}
 		var p struct {
@@ -222,6 +225,10 @@ func (d *Directory) Read(c Caller, name string) (any, *kernel.Error) {
 		return c.tenant.Connectors(time.Now()), nil
 	case "settings":
 		return c.tenant.Settings(), nil
+	case "endpoints":
+		return c.tenant.Endpoints(), nil
+	case "effects":
+		return c.tenant.Effects(time.Now()), nil
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()

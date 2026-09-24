@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **100 · gate: awaiting owner** | Outbound effects architecture gate: `docs/ADR/0014-outbound-effects.md` (proposed) with decision points D1–D8. No code before the owner's answer | The owner accepts or amends D1–D8; the ADR is marked accepted and the implementation gets its own item with the ADR's done-when |
+| **101 · proposed** | Next outbound uses (ADR-0014 D7 order): email as a notification channel (with the approval of D6 for external recipients), then MES order confirmation written back to the ERP with its answer as an observation (D4); apps emit their own effects (`Manifest.Emits`) | The owner picks the next one |
 
 ## Open friction (temporary; delete entries once resolved)
 

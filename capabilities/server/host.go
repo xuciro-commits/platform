@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
@@ -130,6 +131,13 @@ type Tenant struct {
 	notices     []Notification
 	noticeSeq   int
 	settings    map[string]string // "<app>/<name>" → value
+	endpoints   []*Endpoint
+	outbound    []*Effect
+	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
+	// PLATFORM_SECRET_<NAME>); Outbound sends an effect's request (default: a
+	// client refusing private addresses). Tests replace both (ADR-0014).
+	Secrets  func(name string) ([]byte, bool)
+	Outbound func(req *http.Request, allowPrivate bool) (*http.Response, error)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -330,6 +338,13 @@ func (t *Tenant) Replay(entries []Entry) error {
 			return fmt.Errorf("entry %d: app %q not enabled or member unreadable", i+1, e.App)
 		}
 		var err *kernel.Error
+		if e.Kind == "effect" { // an outbound attempt's outcome: applied, never sent again
+			var o Outcome
+			if json.Unmarshal(e.Body, &o) != nil || !t.apply(o, e.At) {
+				return fmt.Errorf("entry %d: effect outcome for an effect the replay did not create", i+1)
+			}
+			continue
+		}
 		if e.Kind == "delivery" || e.Kind == "job" {
 			if err := t.replayWork(e.Kind, e.Body, e.At); err != nil {
 				return fmt.Errorf("entry %d: %v", i+1, err)

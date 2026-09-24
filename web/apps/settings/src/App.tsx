@@ -21,6 +21,8 @@ type Delivery = { at: string; app: string; action: string; target: string; subsc
 type Task = { id: string; kind: "delivery" | "job"; app: string; title: string; state: string; attempts: number; last?: string; due?: string; error?: string };
 type Connector = { id: string; direction: string; dataClasses: string[]; heartbeat: string; health: string; lastSeen?: string; cursor?: string; disabled: boolean;
   lastError?: { at: string; input: string; error: string } };
+type EndpointView = { id: string; url: string; secret: string; events: string[]; allowPrivate?: boolean; pending: number; failing: number; health: string; delivered: number };
+type Effect = { id: string; endpoint: string; event: string; target: string; at: string; state: string; attempts: number; last?: string; due?: string; error?: string; digest?: string };
 type SettingValue = { name: string; title: string; description: string; type: "boolean" | "integer" | "text" | "choice"; default: string; choices?: string[]; value: string };
 type AppSettings = { app: string; settings: SettingValue[] };
 type AuditEntry = { at: string; member: string; app: string; action: string; target?: string };
@@ -398,9 +400,86 @@ function Integrations() {
   ];
   return (
     <>
-      <PageHeader title="Integrations" description="Connectors deliver facts from other systems: pushed batches or polled pages. A disabled connector is refused and keeps its cursor." />
+      <PageHeader title="Integrations" description="Connectors bring facts in (pushed batches or polled pages; a disabled one is refused and keeps its cursor). Webhook endpoints send events out." />
       {connectors.error ? <p className="text-sm text-[var(--tone-danger)]">{String(connectors.error)} — administrators only.</p> :
-        <DataTable data={connectors.data ?? []} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 190px)" empty="No connectors in this tenant" />}
+        <DataTable data={connectors.data ?? []} columns={columns} getRowId={(c) => c.id} height={180} searchable={false} empty="No connectors in this tenant" />}
+      <Webhooks />
+    </>
+  );
+}
+
+// Webhook endpoints and their effects (ADR-0014): events go out signed, at least
+// once with a stable key; outcomes are journaled, a replay never sends.
+function Webhooks() {
+  const endpoints = useRead<EndpointView[]>("/v1/endpoints", 5000);
+  const effects = useRead<Effect[]>("/v1/effects", 5000);
+  const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
+  const { apps, decideOn } = useAdmin();
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ id: "", url: "", secret: "", allowPrivate: false, events: [] as string[] });
+  const events = [...apps.flatMap((a) => a.capabilities.flatMap((c) => c.actions)).filter((x) => !x.startsWith("platform.")),
+    ...protocols.flatMap((p) => (p.events ?? []).map((e) => `${p.id}#${e.name}`))];
+  const tone = (s: string) => (({ delivered: "success", retrying: "warning", pending: "info", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
+  const effectColumns: ColumnDef<Effect, any>[] = [
+    { accessorKey: "at", header: "Event at", meta: { width: 160 }, cell: (c) => when(c.getValue()) },
+    { accessorKey: "endpoint", header: "Endpoint", meta: { width: 110 } },
+    { accessorKey: "event", header: "Event", meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "target", header: "Entity", meta: { width: 200 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "state", header: "State", meta: { width: 100 }, cell: (c) => <Tag label={c.getValue()} tone={tone(c.getValue())} /> },
+    { accessorKey: "attempts", header: "Tries", meta: { width: 60, align: "right" } },
+    { accessorKey: "due", header: "Next", meta: { width: 160 }, cell: ({ row: { original: x } }) => (x.state === "retrying" ? when(x.due) : "—") },
+    { accessorKey: "error", header: "Last answer", meta: { width: 200 }, cell: (c) => <span className="text-xs">{c.getValue() ?? ""}</span> },
+    { id: "act", header: "", meta: { width: 150 }, cell: ({ row: { original: x } }) => <span className="flex gap-1">
+      {(x.state === "failed" || x.state === "rejected") && <Button size="sm" onClick={() => void decideOn("platform.effect.retry", { type: "platform.effect", id: x.id }, {})}>Retry</Button>}
+      {(x.state === "pending" || x.state === "retrying") &&
+        <Button size="sm" variant="danger" onClick={() => void decideOn("platform.effect.discard", { type: "platform.effect", id: x.id }, {})}>Discard</Button>}
+    </span> },
+  ];
+  return (
+    <>
+      <div className="mb-1 mt-5 flex items-center gap-2">
+        <h2 className="text-sm font-semibold">Webhook endpoints</h2>
+        <span className="text-xs text-muted">Events sent out signed (Standard Webhooks), at least once, with a key receivers deduplicate by.</span>
+        <Button size="sm" variant="primary" className="ml-auto" onClick={() => setAdding(true)}>Add endpoint</Button>
+      </div>
+      <div className="grid gap-2">
+        {endpoints.data?.length === 0 && <p className="text-sm text-muted">No endpoints.</p>}
+        {endpoints.data?.map((ep) => (
+          <section key={ep.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2 text-sm">
+            <span className="font-semibold">{ep.id}</span><span className="font-mono text-xs">{ep.url}</span>
+            <Tag label={ep.health} tone={ep.health === "ok" ? "success" : "danger"} />
+            <span className="text-xs text-muted">secret “{ep.secret}” · {ep.delivered} delivered · {ep.pending} waiting</span>
+            <span className="flex flex-wrap gap-1">{ep.events.map((e) => <Tag key={e} label={e} tone="info" />)}</span>
+            <Button size="sm" variant="danger" className="ml-auto" onClick={() => void decideOn("platform.endpoint.remove", { type: "platform.endpoint", id: ep.id }, {})}>Remove</Button>
+          </section>
+        ))}
+      </div>
+      <h2 className="mb-1 mt-4 text-sm font-semibold">Outbound effects</h2>
+      <DataTable data={effects.data ?? []} columns={effectColumns} getRowId={(x) => x.id} height={260} empty="Nothing sent yet" />
+      <Dialog open={adding} onOpenChange={setAdding} title="Add webhook endpoint">
+        <div className="grid gap-2 text-sm">
+          <Input aria-label="ID" placeholder="ID (lower case, dashes)" value={draft.id} onChange={(e) => setDraft({ ...draft, id: e.target.value })} />
+          <Input aria-label="URL" placeholder="https://receiver.example.com/hook" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
+          <Input aria-label="Secret name" placeholder="Name of the signing secret in the secret store" value={draft.secret} onChange={(e) => setDraft({ ...draft, secret: e.target.value })} />
+          <label className="flex items-center gap-2"><input type="checkbox" checked={draft.allowPrivate} onChange={(e) => setDraft({ ...draft, allowPrivate: e.target.checked })} />
+            Receiver inside the deployment (private address, http allowed)</label>
+          <p className="mt-1 text-xs text-muted">Events</p>
+          <div className="grid max-h-48 gap-1 overflow-auto">
+            {events.map((ev) => (
+              <label key={ev} className="flex items-center gap-2 font-mono text-xs"><input type="checkbox" checked={draft.events.includes(ev)}
+                onChange={(e) => setDraft({ ...draft, events: e.target.checked ? [...draft.events, ev] : draft.events.filter((x) => x !== ev) })} />{ev}</label>
+            ))}
+          </div>
+          <span className="mt-2 flex justify-end gap-2">
+            <Button onClick={() => setAdding(false)}>Cancel</Button>
+            <Button variant="primary" disabled={!draft.id || !draft.url || !draft.secret || draft.events.length === 0}
+              onClick={async () => {
+                const { id, ...payload } = draft;
+                if (await decideOn("platform.endpoint.add", { type: "platform.endpoint", id }, payload)) setAdding(false);
+              }}>Add</Button>
+          </span>
+        </div>
+      </Dialog>
     </>
   );
 }

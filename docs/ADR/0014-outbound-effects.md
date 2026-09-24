@@ -1,6 +1,6 @@
 # ADR-0014: Outbound effects — how a decision reaches the world outside
 
-**Status:** Proposed — architecture gate (#100). No code until the owner accepts or amends the decision points below.
+**Status:** Accepted (2026-09-24, #100). The owner accepted D1–D8 as recommended after the architecture gate; webhooks (D7) were built first.
 
 ## Context
 
@@ -40,7 +40,7 @@ The platform already has the state machine for "I asked an authority I do not co
 
 An outbound effect is the server playing the edge toward an external authority. The design below reuses that semantics rather than inventing a second one.
 
-## Proposed decision
+## Decision
 
 1. **Intent, attempt and outcome are separate.**
    - **Intent:** created by an app inside an input (`Caller.Emit`), such as "tell endpoint E that booking B was canceled". It is part of the input's deterministic result, so replay recreates it. Replay never sends it.
@@ -107,6 +107,19 @@ An outbound effect is the server playing the edge toward an external authority. 
 | D6 | Irreversible effects caused by AI agents | Effect kinds marked irreversible (payment, email to external people) wait for a person's approval when the causing input came from an agent |
 | D7 | First use | Outbound webhooks for events: generic, no app code, and they prove the mechanism. Then email for notifications, then an industry write-back (MES order confirmation to ERP) |
 | D8 | Retention of effect bodies | Keep digests in the journal; bodies kept for 30 days for support, then only digests |
+
+## As built (#100)
+
+- `platformserver` `effects.go`: endpoints and effects are platform decisions (`platform.endpoint.add|remove`, `platform.effect.retry|discard`). Intents come from events as they are queued, so replay rebuilds them. `Tenant.Dispatch` attempts outside the tenant's lock, and each outcome is a journal entry of kind `effect` that replay applies without sending.
+- Keys are `<tenant>:<app>:<change id>:<endpoint>`. The backoff runs from 5 s to 1 h over 12 attempts, with jitter derived from the key so replay computes the same due time.
+- Secrets are resolved by name from `PLATFORM_SECRETS_DIR` or `PLATFORM_SECRET_<NAME>`. A dialer refuses private addresses at connect time unless the endpoint allows them.
+- `cmd/webhook-sink` is a receiver that checks signatures and keeps one copy per key, for the local stack and the rehearsal.
+- The per-destination breaker is, for now, the endpoint's ordered queue: its head retries with backoff and holds the rest, and the endpoint shows as failing. A pause of its own comes when an endpoint serves several kinds.
+- Waiting for their first use, as decided:
+  - apps emitting their own effects (`Caller.Emit`, `Manifest.Emits`);
+  - answers as observations (D4);
+  - approval of irreversible kinds caused by agents (D6);
+  - email, and the MES write-back.
 
 ## Done-when, for the implementation item that follows acceptance
 

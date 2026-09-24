@@ -83,12 +83,14 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	return http.ListenAndServe(d.Addr, NewHost(authenticate, tenants...).Handler())
 }
 
-// RunWork runs the tenants' owned work every second, for as long as the process lives (ADR-0013).
+// RunWork runs the tenants' owned work (ADR-0013) and sends their outbound
+// effects (ADR-0014) every second, for as long as the process lives.
 func RunWork(tenants ...*Tenant) {
 	go func() {
 		for range time.Tick(time.Second) {
 			for _, t := range tenants {
 				t.Work(Now())
+				t.Dispatch(Now()) // outbound effects, outside the tenant's lock (ADR-0014)
 			}
 		}
 	}()
