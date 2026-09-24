@@ -23,7 +23,7 @@ Schema: `proto/platform/kernel/v1alpha1/fact.proto`. Vectors: `vectors/k2-k3-fac
 | # | Rule | Error when violated |
 |---|---|---|
 | F1 | `tenant_id`, `subject.type`, `subject.id`, `attribute`, `schema.name` and `idempotency_key` are required; `kind` is not `UNSPECIFIED`. | `INVALID_ARGUMENT` |
-| F2 | The receiver must know `schema` (name and version) or be able to upgrade it. | `UNKNOWN_SCHEMA` |
+| F2 | The receiver must accept `schema` (K7 S1). | `UNKNOWN_SCHEMA` |
 | F3 | Idempotency is scoped to (`tenant_id`, `idempotency_key`) in the fact log: an identical fact returns the original record and appends nothing; any different field is rejected. | `IDEMPOTENCY_CONFLICT` |
 | F4 | Observations never conflict: a valid observation is always appended. | — |
 | F5 | The current claims for (`subject`, `attribute`) are, per source, the claim with the latest `source_time` (ties: the later recorded). A claim older than its source's current one is recorded but does not become current. Claims of different sources never replace each other. Current claims are listed in recorded order. | — |

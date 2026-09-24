@@ -13,19 +13,15 @@ import (
 
 // ChangeLog implements K4 (Contract/spec/K4-change-record.md) for one authority.
 type ChangeLog struct {
-	schemas map[string]bool
+	schemas *SchemaRegistry
 	logs    map[string][]*pb.ChangeRecord
 	byKey   map[string]map[string]*pb.ChangeRecord
 	next    int
 }
 
-func NewChangeLog(schemas []*pb.SchemaRef) *ChangeLog {
-	l := &ChangeLog{schemas: map[string]bool{}, logs: map[string][]*pb.ChangeRecord{},
+func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
+	return &ChangeLog{schemas: schemas, logs: map[string][]*pb.ChangeRecord{},
 		byKey: map[string]map[string]*pb.ChangeRecord{}}
-	for _, s := range schemas {
-		l.schemas[schemaKey(s)] = true
-	}
-	return l
 }
 
 func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord { return l.logs[tenant] }
@@ -36,7 +32,7 @@ func (l *ChangeLog) Submit(s *pb.Submission, now time.Time) (*pb.ChangeRecord, *
 	if slices.Contains(required, "") {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // C1
 	}
-	if !l.schemas[schemaKey(s.GetSchema())] {
+	if !l.schemas.Accepts(s.GetSchema()) {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA) // C2
 	}
 	if existing := l.byKey[s.GetTenantId()][s.GetIdempotencyKey()]; existing != nil {

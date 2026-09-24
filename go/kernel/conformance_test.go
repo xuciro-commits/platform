@@ -154,7 +154,7 @@ func TestChangeRecordVectors(t *testing.T) {
 				decode(t, raw, s)
 				schemas = append(schemas, s)
 			}
-			log := NewChangeLog(schemas)
+			log := NewChangeLog(NewSchemaRegistry(schemas, nil))
 			changeIDs := map[int]string{}
 			for i, rawStep := range v.Steps {
 				var step struct {
@@ -219,7 +219,7 @@ func TestFactVectors(t *testing.T) {
 				decode(t, raw, s)
 				schemas = append(schemas, s)
 			}
-			log := NewFactLog(schemas)
+			log := NewFactLog(NewSchemaRegistry(schemas, nil))
 			factIDs := map[int]string{}
 			for i, rawStep := range v.Steps {
 				var step struct {
@@ -286,6 +286,94 @@ func TestFactVectors(t *testing.T) {
 			for tenant, count := range v.ExpectLog {
 				if got := len(log.Records(tenant)); got != count {
 					t.Errorf("log %s: %d records, want %d", tenant, got, count)
+				}
+			}
+		})
+	}
+}
+
+func TestSchemaEvolutionVectors(t *testing.T) {
+	for _, v := range load(t, "k7-schema-evolution.json").Vectors {
+		t.Run(v.ID, func(t *testing.T) {
+			var given struct {
+				Known    []json.RawMessage `json:"known"`
+				Upgrades []json.RawMessage `json:"upgrades"`
+				Stored   []json.RawMessage `json:"stored"`
+			}
+			json.Unmarshal(v.Given, &given)
+			refs := func(raws []json.RawMessage) (out []*pb.SchemaRef) {
+				for _, raw := range raws {
+					s := &pb.SchemaRef{}
+					decode(t, raw, s)
+					out = append(out, s)
+				}
+				return out
+			}
+			var upgrades []*pb.UpgradeStep
+			for _, raw := range given.Upgrades {
+				u := &pb.UpgradeStep{}
+				decode(t, raw, u)
+				upgrades = append(upgrades, u)
+			}
+			registry, stored := NewSchemaRegistry(refs(given.Known), upgrades), refs(given.Stored)
+			for i, rawStep := range v.Steps {
+				var step struct {
+					Accepts    json.RawMessage `json:"accepts"`
+					AddUpgrade json.RawMessage `json:"addUpgrade"`
+					Retire     json.RawMessage `json:"retire"`
+					Upgrade    *struct {
+						From      json.RawMessage `json:"from"`
+						ToVersion uint32          `json:"toVersion"`
+					} `json:"upgrade"`
+					Negotiate *struct {
+						Name     string   `json:"name"`
+						Versions []uint32 `json:"versions"`
+					} `json:"negotiate"`
+					Expect json.RawMessage `json:"expect"`
+				}
+				if err := json.Unmarshal(rawStep, &step); err != nil {
+					t.Fatal(err)
+				}
+				result := func(value any, err *Error) string {
+					if err != nil {
+						return fmt.Sprintf(`{"error":%q}`, err.Error())
+					}
+					out, _ := json.Marshal(value)
+					return string(out)
+				}
+				ok := map[string]bool{"ok": true}
+				var got string
+				switch {
+				case step.Accepts != nil:
+					s := &pb.SchemaRef{}
+					decode(t, step.Accepts, s)
+					var err *Error
+					if !registry.Accepts(s) {
+						err = errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
+					}
+					got = result(ok, err)
+				case step.AddUpgrade != nil:
+					u := &pb.UpgradeStep{}
+					decode(t, step.AddUpgrade, u)
+					got = result(ok, registry.AddUpgrade(u))
+				case step.Retire != nil:
+					s := &pb.SchemaRef{}
+					decode(t, step.Retire, s)
+					got = result(ok, registry.Retire(s, stored))
+				case step.Upgrade != nil:
+					s := &pb.SchemaRef{}
+					decode(t, step.Upgrade.From, s)
+					path, err := registry.Path(s, step.Upgrade.ToVersion)
+					got = result(map[string][]uint32{"path": path}, err)
+				case step.Negotiate != nil:
+					version, err := registry.Negotiate(step.Negotiate.Name, step.Negotiate.Versions)
+					got = result(map[string]uint32{"version": version}, err)
+				}
+				var want any
+				json.Unmarshal(step.Expect, &want)
+				wantJSON, _ := json.Marshal(want)
+				if got != string(wantJSON) {
+					t.Errorf("step %d: got %s, want %s", i, got, wantJSON)
 				}
 			}
 		})

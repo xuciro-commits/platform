@@ -41,7 +41,7 @@ struct ConformanceTests {
     func changeRecord() throws {
         let file: VectorFile<ChangeGiven, ChangeStep> = try load("k4-change-record.json")
         for vector in file.vectors {
-            var log = ChangeLog(knownSchemas: vector.given.schemas)
+            var log = ChangeLog(schemas: SchemaRegistry(known: vector.given.schemas))
             var changeIDs: [Int: String] = [:]
             for (index, step) in vector.steps.enumerated() {
                 let label = Comment(rawValue: "\(vector.id) step \(index)")
@@ -72,7 +72,7 @@ struct ConformanceTests {
     func facts() throws {
         let file: VectorFile<ChangeGiven, FactStep> = try load("k2-k3-facts.json")
         for vector in file.vectors {
-            var log = FactLog(knownSchemas: vector.given.schemas)
+            var log = FactLog(schemas: SchemaRegistry(known: vector.given.schemas))
             var factIDs: [Int: String] = [:]
             for (index, step) in vector.steps.enumerated() {
                 let label = Comment(rawValue: "\(vector.id) step \(index)")
@@ -100,6 +100,36 @@ struct ConformanceTests {
             }
             for (tenant, count) in vector.expectLog ?? [:] {
                 #expect(log.records(tenant: tenant).count == count, Comment(rawValue: "\(vector.id) log \(tenant)"))
+            }
+        }
+    }
+
+    @Test("K7 Schema evolution vectors")
+    func schemaEvolution() throws {
+        let file: VectorFile<SchemaGiven, SchemaStep> = try load("k7-schema-evolution.json")
+        for vector in file.vectors {
+            var registry = SchemaRegistry(known: vector.given.known, upgrades: vector.given.upgrades)
+            for (index, step) in vector.steps.enumerated() {
+                var actual = SchemaExpect()
+                do throws(KernelError) {
+                    if let s = step.accepts {
+                        guard registry.accepts(s) else { throw .unknownSchema }
+                        actual.ok = true
+                    } else if let u = step.addUpgrade {
+                        try registry.add(u)
+                        actual.ok = true
+                    } else if let s = step.retire {
+                        try registry.retire(s, stored: vector.given.stored)
+                        actual.ok = true
+                    } else if let u = step.upgrade {
+                        actual.path = try registry.path(from: u.from, to: u.toVersion)
+                    } else if let n = step.negotiate {
+                        actual.version = try registry.negotiate(name: n.name, offered: n.versions)
+                    }
+                } catch {
+                    actual.error = error.rawValue
+                }
+                #expect(actual == step.expect, Comment(rawValue: "\(vector.id) step \(index)"))
             }
         }
     }
@@ -176,6 +206,36 @@ struct FactStep: Decodable {
     let claims: ClaimsQuery?
     let at: String?
     let expect: Expect
+}
+
+struct SchemaGiven: Decodable {
+    let known: [SchemaRef]
+    let upgrades: [UpgradeStep]
+    let stored: [SchemaRef]
+}
+
+struct SchemaStep: Decodable {
+    struct Upgrade: Decodable {
+        let from: SchemaRef
+        let toVersion: UInt32
+    }
+    struct Negotiate: Decodable {
+        let name: String
+        let versions: [UInt32]
+    }
+    let accepts: SchemaRef?
+    let addUpgrade: UpgradeStep?
+    let retire: SchemaRef?
+    let upgrade: Upgrade?
+    let negotiate: Negotiate?
+    let expect: SchemaExpect
+}
+
+struct SchemaExpect: Decodable, Equatable {
+    var ok: Bool?
+    var path: [UInt32]?
+    var version: UInt32?
+    var error: String?
 }
 
 private let vectorsDirectory = URL(fileURLWithPath: #filePath)

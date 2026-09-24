@@ -67,12 +67,12 @@ public struct FactRecord: Equatable, Sendable {
 
 /// Accepts facts; one append-only fact log per tenant.
 public struct FactLog: Sendable {
-    private let knownSchemas: Set<SchemaRef>
+    private let schemas: SchemaRegistry
     private var logs: [String: [FactRecord]] = [:]
     private var byKey: [String: [String: FactRecord]] = [:]   // tenant → key → record
 
-    public init(knownSchemas: some Sequence<SchemaRef>) {
-        self.knownSchemas = Set(knownSchemas)
+    public init(schemas: SchemaRegistry) {
+        self.schemas = schemas
     }
 
     public func records(tenant: String) -> [FactRecord] {
@@ -86,7 +86,7 @@ public struct FactLog: Sendable {
         let confidence = f.provenance.confidence ?? 0
         guard f.kind == .claim ? (confidence > 0 && confidence <= 1) : confidence == 0 else { throw .invalidArgument } // P2
         guard (f.kind == .derived) == !f.derivedFrom.isEmpty else { throw .invalidArgument }          // F6
-        guard knownSchemas.contains(f.schema) else { throw .unknownSchema }                           // F2
+        guard schemas.accepts(f.schema) else { throw .unknownSchema }                           // F2
         if let existing = byKey[f.tenantId]?[f.idempotencyKey] {
             guard existing.fact == f else { throw .idempotencyConflict }                              // F3
             return existing

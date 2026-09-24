@@ -1,0 +1,19 @@
+// K7 Schema evolution — data contract only. Meaning: Contract/spec/K7-schema-evolution.md.
+syntax = "proto3";
+
+package platform.kernel.v1alpha1;
+
+import "platform/kernel/v1alpha1/change.proto";
+
+// Upgrades a payload of schema `name` from `from_version` to `from_version + 1`.
+// The transformation itself is domain code; the kernel knows only that it exists.
+message UpgradeStep {
+  string name = 1;
+  uint32 from_version = 2;
+}
+
+// What a receiver can read, advertised so writers can choose a version.
+message SchemaRegistry {
+  repeated SchemaRef known = 1;
+  repeated UpgradeStep upgrades = 2;
+}

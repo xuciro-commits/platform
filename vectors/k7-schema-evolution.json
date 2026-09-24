@@ -1,0 +1,585 @@
+{
+  "contract": "v1alpha1",
+  "concept": "K7",
+  "vectors": [
+    {
+      "id": "k7.accept",
+      "rules": [
+        "S1"
+      ],
+      "given": {
+        "known": [
+          {
+            "name": "test.note",
+            "version": 2
+          },
+          {
+            "name": "test.note",
+            "version": 3
+          }
+        ],
+        "upgrades": [
+          {
+            "name": "test.note",
+            "fromVersion": 1
+          }
+        ],
+        "stored": []
+      },
+      "steps": [
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 2
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 4
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 0
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.other",
+            "version": 2
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k7.add-upgrade",
+      "rules": [
+        "S2",
+        "S6"
+      ],
+      "given": {
+        "known": [
+          {
+            "name": "test.note",
+            "version": 1
+          },
+          {
+            "name": "test.note",
+            "version": 2
+          }
+        ],
+        "upgrades": [],
+        "stored": []
+      },
+      "steps": [
+        {
+          "addUpgrade": {
+            "name": "",
+            "fromVersion": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "addUpgrade": {
+            "name": "test.note"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "addUpgrade": {
+            "name": "test.note",
+            "fromVersion": 2
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_REFERENCE"
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 0
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        },
+        {
+          "addUpgrade": {
+            "name": "test.note",
+            "fromVersion": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "addUpgrade": {
+            "name": "test.note",
+            "fromVersion": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "upgrade": {
+            "from": {
+              "name": "test.note",
+              "version": 1
+            },
+            "toVersion": 2
+          },
+          "expect": {
+            "path": [
+              1,
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "k7.upgrade-path",
+      "rules": [
+        "S3"
+      ],
+      "given": {
+        "known": [
+          {
+            "name": "test.note",
+            "version": 1
+          },
+          {
+            "name": "test.note",
+            "version": 2
+          },
+          {
+            "name": "test.note",
+            "version": 3
+          }
+        ],
+        "upgrades": [
+          {
+            "name": "test.note",
+            "fromVersion": 1
+          },
+          {
+            "name": "test.note",
+            "fromVersion": 2
+          }
+        ],
+        "stored": []
+      },
+      "steps": [
+        {
+          "upgrade": {
+            "from": {
+              "name": "test.note",
+              "version": 1
+            },
+            "toVersion": 3
+          },
+          "expect": {
+            "path": [
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        {
+          "upgrade": {
+            "from": {
+              "name": "test.note",
+              "version": 2
+            },
+            "toVersion": 2
+          },
+          "expect": {
+            "path": [
+              2
+            ]
+          }
+        },
+        {
+          "upgrade": {
+            "from": {
+              "name": "test.note",
+              "version": 3
+            },
+            "toVersion": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "upgrade": {
+            "from": {
+              "name": "test.note",
+              "version": 1
+            },
+            "toVersion": 4
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k7.upgrade-missing-step",
+      "rules": [
+        "S1",
+        "S3"
+      ],
+      "given": {
+        "known": [
+          {
+            "name": "test.note",
+            "version": 1
+          },
+          {
+            "name": "test.note",
+            "version": 3
+          }
+        ],
+        "upgrades": [
+          {
+            "name": "test.note",
+            "fromVersion": 2
+          }
+        ],
+        "stored": []
+      },
+      "steps": [
+        {
+          "upgrade": {
+            "from": {
+              "name": "test.note",
+              "version": 1
+            },
+            "toVersion": 3
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        },
+        {
+          "upgrade": {
+            "from": {
+              "name": "test.note",
+              "version": 2
+            },
+            "toVersion": 3
+          },
+          "expect": {
+            "path": [
+              2,
+              3
+            ]
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 2
+          },
+          "expect": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "k7.negotiate-old-receiver",
+      "rules": [
+        "S4"
+      ],
+      "given": {
+        "known": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ],
+        "upgrades": [],
+        "stored": []
+      },
+      "steps": [
+        {
+          "negotiate": {
+            "name": "test.note",
+            "versions": [
+              1,
+              2
+            ]
+          },
+          "expect": {
+            "version": 1
+          }
+        },
+        {
+          "negotiate": {
+            "name": "test.note",
+            "versions": [
+              2
+            ]
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k7.negotiate-new-receiver",
+      "rules": [
+        "S4"
+      ],
+      "given": {
+        "known": [
+          {
+            "name": "test.note",
+            "version": 2
+          }
+        ],
+        "upgrades": [
+          {
+            "name": "test.note",
+            "fromVersion": 1
+          }
+        ],
+        "stored": []
+      },
+      "steps": [
+        {
+          "negotiate": {
+            "name": "test.note",
+            "versions": [
+              1
+            ]
+          },
+          "expect": {
+            "version": 1
+          }
+        },
+        {
+          "negotiate": {
+            "name": "test.note",
+            "versions": [
+              2,
+              1
+            ]
+          },
+          "expect": {
+            "version": 2
+          }
+        },
+        {
+          "negotiate": {
+            "name": "test.note",
+            "versions": [
+              3
+            ]
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k7.retire-with-upgrade",
+      "rules": [
+        "S5",
+        "S6",
+        "S1"
+      ],
+      "given": {
+        "known": [
+          {
+            "name": "test.note",
+            "version": 1
+          },
+          {
+            "name": "test.note",
+            "version": 2
+          }
+        ],
+        "upgrades": [
+          {
+            "name": "test.note",
+            "fromVersion": 1
+          }
+        ],
+        "stored": [
+          {
+            "name": "test.note",
+            "version": 1
+          },
+          {
+            "name": "test.note",
+            "version": 2
+          }
+        ]
+      },
+      "steps": [
+        {
+          "retire": {
+            "name": "test.note",
+            "version": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "retire": {
+            "name": "test.note",
+            "version": 2
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 2
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "retire": {
+            "name": "test.note",
+            "version": 3
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "retire": {
+            "name": "test.note",
+            "version": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k7.retire-stored",
+      "rules": [
+        "S5",
+        "S6"
+      ],
+      "given": {
+        "known": [
+          {
+            "name": "test.note",
+            "version": 1
+          },
+          {
+            "name": "test.note",
+            "version": 2
+          }
+        ],
+        "upgrades": [],
+        "stored": [
+          {
+            "name": "test.note",
+            "version": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "retire": {
+            "name": "test.note",
+            "version": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "retire": {
+            "name": "test.note",
+            "version": 2
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "accepts": {
+            "name": "test.note",
+            "version": 2
+          },
+          "expect": {
+            "error": "ERROR_CODE_UNKNOWN_SCHEMA"
+          }
+        }
+      ]
+    }
+  ]
+}

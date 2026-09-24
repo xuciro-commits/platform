@@ -13,19 +13,15 @@ import (
 
 // FactLog implements K2 and K3 (Contract/spec/K2-K3-facts.md).
 type FactLog struct {
-	schemas map[string]bool
+	schemas *SchemaRegistry
 	logs    map[string][]*pb.FactRecord
 	byKey   map[string]map[string]*pb.FactRecord
 	next    int
 }
 
-func NewFactLog(schemas []*pb.SchemaRef) *FactLog {
-	l := &FactLog{schemas: map[string]bool{}, logs: map[string][]*pb.FactRecord{},
+func NewFactLog(schemas *SchemaRegistry) *FactLog {
+	return &FactLog{schemas: schemas, logs: map[string][]*pb.FactRecord{},
 		byKey: map[string]map[string]*pb.FactRecord{}}
-	for _, s := range schemas {
-		l.schemas[schemaKey(s)] = true
-	}
-	return l
 }
 
 func (l *FactLog) Records(tenant string) []*pb.FactRecord { return l.logs[tenant] }
@@ -48,7 +44,7 @@ func (l *FactLog) Record(f *pb.Fact, now time.Time) (*pb.FactRecord, *Error) {
 	if isDerived != (len(f.GetDerivedFrom()) > 0) {
 		return nil, invalid // F6
 	}
-	if !l.schemas[schemaKey(f.GetSchema())] {
+	if !l.schemas.Accepts(f.GetSchema()) {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA) // F2
 	}
 	if existing := l.byKey[f.GetTenantId()][f.GetIdempotencyKey()]; existing != nil {
