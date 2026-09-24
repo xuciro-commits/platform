@@ -172,6 +172,7 @@ func TestOutboundEffects(t *testing.T) {
 		t.Fatalf("replayed effects %s, recorded %s", states(again), states(tn))
 	}
 
+	CheckReplay(t, tn, journal, build)
 	// An endpoint on a private address without permission is refused at connect time.
 	if got := decide(tn, ana, SchemaEndpointAdd, EndpointType, "strict", map[string]any{"url": "https://127.0.0.1:1/x", "secret": "hook", "events": []string{"a.note"}}); got != "ok" {
 		t.Fatal(got)

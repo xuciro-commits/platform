@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -382,8 +381,3 @@ func (h *Hotel) IngestChannelBooking(connector platformserver.Caller, b ChannelB
 	return record, err
 }
 
-// RecordJSON renders a change record with Protobuf JSON names.
-func RecordJSON(r *pb.ChangeRecord) json.RawMessage {
-	out, _ := protojson.Marshal(r)
-	return out
-}

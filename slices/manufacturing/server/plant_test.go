@@ -3,6 +3,7 @@ package mes
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -63,13 +64,19 @@ func (p *testPlant) DeliverPlanned(who platformserver.Caller, page PlannedPage, 
 }
 
 func plantTenant(t *testing.T, disable ...string) (*Plant, *platformserver.Tenant) {
+	return plantTenantOf(t, slices.Clone(units), disable...)
+}
+
+// plantTenantOf composes the plant with the given memberships, so a replay gets
+// the organisation its live tenant started with.
+func plantTenantOf(t *testing.T, seed []platformserver.Membership, disable ...string) (*Plant, *platformserver.Tenant) {
 	p := NewPlant(tenant, DemoMaster())
 	for _, c := range disable {
 		if !p.Disable(c) {
 			t.Fatalf("no capability %s", c)
 		}
 	}
-	tn, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant), platformserver.NewOrganization(tenant, DemoOrganization(units)), p)
+	tn, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant), platformserver.NewOrganization(tenant, DemoOrganization(seed)), p)
 	if err == nil {
 		err = tn.Connect(DemoConnectors(tenant)...)
 	}
@@ -82,7 +89,8 @@ func plantTenant(t *testing.T, disable ...string) (*Plant, *platformserver.Tenan
 // newPlant journals every accepted input; when the test ends, a second plant
 // replays the journal and must show the same state and kernel logs (ADR-0007).
 func newPlant(t *testing.T) *testPlant {
-	plant, tn := plantTenant(t)
+	seed := slices.Clone(units)
+	plant, tn := plantTenantOf(t, seed)
 	p := &testPlant{Plant: plant, tenant: tn}
 	tn.Record = func(e platformserver.Entry) {
 		raw, _ := json.Marshal(e) // stored as JSON, as the PostgreSQL journal does
@@ -91,7 +99,8 @@ func newPlant(t *testing.T) *testPlant {
 		p.journal = append(p.journal, stored)
 	}
 	t.Cleanup(func() {
-		again, tn := plantTenant(t)
+		platformserver.CheckReplay(t, p.tenant, p.journal, func() *platformserver.Tenant { _, tn := plantTenantOf(t, seed); return tn })
+		again, tn := plantTenantOf(t, seed)
 		if err := tn.Replay(p.journal); err != nil {
 			t.Fatalf("replay: %v", err)
 		}

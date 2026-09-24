@@ -233,6 +233,7 @@ func TestHotelUsesPlatformOperations(t *testing.T) {
 	tn.Work(time.Date(2026, 9, 30, 6, 0, 0, 0, time.UTC))
 	tn.Work(time.Date(2026, 9, 30, 9, 0, 0, 0, time.UTC))
 	expect(t, fmt.Sprint(inbox(tn, "desk-2")), "[3 arrivals on 2026-10-01 Channel booking ota-1]")
+	platformserver.CheckReplay(t, tn, journal, func() *platformserver.Tenant { var j []platformserver.Entry; _, x := hotelTenant(t, &j); return x })
 	// A replay of the journal tells everyone the same.
 	var again []platformserver.Entry
 	_, replayed := hotelTenant(t, &again)

@@ -13,7 +13,7 @@ import (
 )
 
 // The platform app (ADR-0010): the tenant's directory of members, their role in
-// each app and their attributes, and what administrators see of the tenant.
+// each app, and what administrators see of the tenant.
 // Every change is one of its decisions, so the directory has history, survives
 // restarts through the journal, and takes effect on the next request.
 const (
@@ -22,7 +22,6 @@ const (
 	SchemaAdd    = "platform.member.add"
 	SchemaGrant  = "platform.member.grant"
 	SchemaRevoke = "platform.member.revoke"
-	SchemaScope  = "platform.member.scope"
 	Admin        = "admin"
 )
 
@@ -65,10 +64,6 @@ func DirectoryActions() *Catalog {
 			Payload:     []Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
 		Action{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
 			Description: "Remove a member's role in an app.", Payload: []Field{app}, Roles: admin},
-		Action{Schema: SchemaScope, Target: MemberType, Capability: "members", Title: "Set attribute",
-			Description: "Set the values of an attribute apps scope roles by (lines, properties); no values removes it.",
-			Payload: []Field{{Name: "attribute", Type: "string", Required: true, Description: "Attribute name"},
-				{Name: "values", Type: "string[]", Description: "Values"}}, Roles: admin},
 	}, append(operationsActions(), effectActions()...)...)...)
 }
 
@@ -117,7 +112,7 @@ func (d *Directory) holding(app, role string) []string {
 
 func clone(m *Member) Member {
 	out := *m
-	out.Roles, out.Attributes = maps.Clone(m.Roles), maps.Clone(m.Attributes)
+	out.Roles = maps.Clone(m.Roles)
 	return out
 }
 
@@ -144,8 +139,7 @@ func (d *Directory) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Chang
 			return apply, err
 		}
 		var p struct {
-			Subject, App, Role, Attribute string
-			Values                        []string
+			Subject, App, Role string
 		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
@@ -183,19 +177,7 @@ func (d *Directory) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Chang
 			}
 			return func(*pb.ChangeRecord) { delete(m.Roles, p.App) }, nil
 		}
-		if p.Attribute == "" {
-			return nil, invalid
-		}
-		return func(*pb.ChangeRecord) {
-			if len(p.Values) == 0 {
-				delete(m.Attributes, p.Attribute)
-				return
-			}
-			if m.Attributes == nil {
-				m.Attributes = map[string][]string{}
-			}
-			m.Attributes[p.Attribute] = p.Values
-		}, nil
+		return nil, invalid
 	})
 }
 

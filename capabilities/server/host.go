@@ -15,13 +15,12 @@ import (
 	"platformkernel/kernel"
 )
 
-// Member is a person, service or AI agent of a tenant (ADR-0010): one role per
-// app, and attributes (lines, properties) apps may scope their rules by.
+// Member is a person, service or AI agent of a tenant (ADR-0010) with one role
+// per app. What a rule scopes by is the member's organisation (ADR-0012).
 type Member struct {
-	ID         string              `json:"id"`
-	Tenant     string              `json:"tenant"`
-	Roles      map[string]string   `json:"roles"`
-	Attributes map[string][]string `json:"attributes,omitempty"`
+	ID     string            `json:"id"`
+	Tenant string            `json:"tenant"`
+	Roles  map[string]string `json:"roles"`
 }
 
 // Caller is a member as one app sees it. Replaying marks the journal replay:
@@ -59,7 +58,7 @@ type Manifest struct {
 	Everyone   []string      // reads any member may use; the app filters by caller
 	Jobs       []Job         // scheduled work (Runner), ADR-0013
 	Settings   []Setting     // typed values administrators set in Settings
-	Emits      []Emit        // outbound effects it sends to endpoints the tenant binds (ADR-0014)
+	Emits      []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0014)
 }
 
 // Event is an accepted decision, delivered to subscribers after commit.
@@ -118,7 +117,7 @@ type Tenant struct {
 	relations  *Relations
 	org        *Organization
 	hops       int // of the event being handled, for the events it causes
-	effects    int // decisions published and notifications given, ever
+	acted      int // decisions published and notifications given, ever
 	works      *kernel.Works
 	// opsMu guards what reads and the runner share: queues, connectors,
 	// notifications and settings (operations.go). It is never held while t.mu is taken.
@@ -214,8 +213,8 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 				return nil, fmt.Errorf("tenant %s: %s subscribes but has no Handle", id, m.ID)
 			}
 		}
-		if _, ok := a.(Runner); len(m.Jobs) > 0 && !ok {
-			return nil, fmt.Errorf("tenant %s: %s declares jobs but has no Run", id, m.ID)
+		if err := checkManifest(a); err != nil {
+			return nil, fmt.Errorf("tenant %s: %s: %v", id, m.ID, err)
 		}
 		for _, j := range m.Jobs {
 			t.jobs = append(t.jobs, &Task{ID: "job:" + m.ID + "/" + j.Name, Kind: "job", App: m.ID, Title: j.Title, State: "scheduled", job: j})
@@ -309,7 +308,7 @@ func (t *Tenant) Read(m Member, name string) (any, *kernel.Error) {
 func (t *Tenant) publish(e Event) {
 	e.hops = t.hops
 	t.events = append(t.events, e)
-	t.effects++
+	t.acted++
 }
 
 // Deliveries is the tenant's recent event deliveries, oldest first.
@@ -412,7 +411,7 @@ func (t *Tenant) Apps() []AppInfo {
 	for _, a := range t.apps {
 		m := a.Manifest()
 		info := AppInfo{ID: m.ID, Version: m.Version, Requires: append([]string{}, m.Requires...), Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
-			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]Emit{}, m.Emits...)}
+			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]EffectKind{}, m.Emits...)}
 		for input, journaled := range m.Inputs {
 			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
 		}
@@ -445,7 +444,7 @@ type AppInfo struct {
 	Subscribes   []string         `json:"subscribes"`
 	Provides     []string         `json:"provides"`
 	Consumes     []string         `json:"consumes"`
-	Emits        []Emit           `json:"emits"`
+	Emits        []EffectKind     `json:"emits"`
 }
 
 // Submit lets an app call another app's action, only along its declared
@@ -482,4 +481,43 @@ func (c Caller) peer(app string) (App, *kernel.Error) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED} // undeclared requirement
 	}
 	return target, nil
+}
+
+// checkManifest refuses a manifest the host could not honour: every app's
+// declarations are validated where it is composed, so each composition's
+// tests check them (#103).
+func checkManifest(a App) error {
+	m := a.Manifest()
+	if m.ID == "" || m.Actions == nil {
+		return fmt.Errorf("manifest without ID or action catalog")
+	}
+	for _, action := range m.Actions.actions {
+		if action.Title == "" || action.Description == "" || action.Target == "" || action.Payload == nil || len(action.Roles) == 0 {
+			return fmt.Errorf("action %s lacks a title, description, target, payload fields or roles", action.Schema)
+		}
+	}
+	if _, ok := a.(Runner); len(m.Jobs) > 0 && !ok {
+		return fmt.Errorf("declares jobs but has no Run")
+	}
+	for _, j := range m.Jobs {
+		if j.Name == "" || j.Every <= 0 {
+			return fmt.Errorf("job %q needs a name and a positive interval", j.Name)
+		}
+	}
+	for i, s := range m.Settings {
+		if s.Name == "" || !s.accepts(s.Default) || slices.ContainsFunc(m.Settings[:i], func(x Setting) bool { return x.Name == s.Name }) {
+			return fmt.Errorf("setting %q: unnamed, repeated, or its default is not a %s", s.Name, s.Type)
+		}
+	}
+	for i, e := range m.Emits {
+		if e.Name == "" || strings.Contains(e.Name, "/") || slices.ContainsFunc(m.Emits[:i], func(x EffectKind) bool { return x.Name == e.Name }) {
+			return fmt.Errorf("effect kind %q: unnamed, repeated or containing '/'", e.Name)
+		}
+	}
+	for _, r := range m.Everyone {
+		if !slices.Contains(m.Reads, r) {
+			return fmt.Errorf("read %q is opened to everyone but not declared", r)
+		}
+	}
+	return nil
 }

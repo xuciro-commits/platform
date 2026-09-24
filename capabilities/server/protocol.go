@@ -158,9 +158,9 @@ func (t *Tenant) invoke(c Caller, protocol, action, id string, payload []byte, k
 	return target, record, err
 }
 
-// Answer is one provider's result of a protocol read, with the type of the
-// entities it holds, so consumers match their links exactly.
-type Answer struct {
+// ProviderResult is one provider's result of a protocol read, with the type of
+// the entities it holds, so consumers match their links exactly.
+type ProviderResult struct {
 	Provider string
 	Type     string // e.g. "hotel.reservation"
 	Result   any
@@ -169,7 +169,7 @@ type Answer struct {
 // Query reads a protocol read from every provider of the tenant, the bound one
 // first: switching the binding sends new calls elsewhere, but what the other
 // providers hold stays visible (#99). None when no app provides it.
-func (c Caller) Query(protocol, read string) ([]Answer, *kernel.Error) {
+func (c Caller) Query(protocol, read string) ([]ProviderResult, *kernel.Error) {
 	if c.tenant == nil || !c.consumes(protocol) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
@@ -178,7 +178,7 @@ func (c Caller) Query(protocol, read string) ([]Answer, *kernel.Error) {
 		first := func(x binding) int { return map[bool]int{true: 0, false: 1}[x.provider == b.provider] }
 		slices.SortStableFunc(all, func(x, y binding) int { return first(x) - first(y) })
 	}
-	var out []Answer
+	var out []ProviderResult
 	for _, b := range all {
 		called := c.tenant.caller(c.Member, b.provider, c.Replaying)
 		called.Automation = c.Automation
@@ -186,7 +186,7 @@ func (c Caller) Query(protocol, read string) ([]Answer, *kernel.Error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, Answer{Provider: b.provider.Manifest().ID, Type: b.entityType(), Result: result})
+		out = append(out, ProviderResult{Provider: b.provider.Manifest().ID, Type: b.entityType(), Result: result})
 	}
 	return out, nil
 }
@@ -199,15 +199,6 @@ func (b binding) entityType() string {
 		}
 	}
 	return ""
-}
-
-// Bound reports whether the tenant has a provider for protocol.
-func (c Caller) Bound(protocol string) bool {
-	if c.tenant == nil {
-		return false
-	}
-	_, ok := c.tenant.bound(protocol)
-	return ok
 }
 
 // rebind makes provider the tenant's provider of protocol (a platform decision).

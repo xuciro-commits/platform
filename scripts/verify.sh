@@ -48,7 +48,7 @@ drills() {
 
 composition() {
   # Apps know no other app; they meet through protocols (ADR-0011).
-  step app-independence bash -c '! (cd slices/crm/server && go list -deps ./...) | grep -qx hotel && ! (cd slices/hotel/server && go list -deps ./...) | grep -qx crm'
+  step app-boundaries scripts/boundaries.sh
   step lodging-protocol bash -c 'cd protocols/lodging && go vet ./... && go test -count=1 ./...'
   step crm-server bash -c 'cd slices/crm/server && go vet ./... && go test -count=1 ./...'
   step sales-solution bash -c 'cd solutions/sales && go vet ./... && go test -count=1 ./...'

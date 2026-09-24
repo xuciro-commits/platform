@@ -75,6 +75,7 @@ type Task struct {
 	Last     time.Time `json:"last,omitzero"`
 	Due      time.Time `json:"due,omitzero"`
 	Error    string    `json:"error,omitempty"`
+	since    int       // attempts before the last manual retry: each retry gets a full schedule
 	event    *Event
 	job      Job
 }
@@ -173,7 +174,7 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 		Outcome: outcome, Attempt: int(generation)})
 	t.opsMu.Lock()
 	task.Attempts, task.Last = int(generation), now
-	done := outcome == "ok" || task.Attempts >= maxAttempts
+	done := outcome == "ok" || task.Attempts-task.since >= maxAttempts
 	if done {
 		t.queues[task.App] = slices.DeleteFunc(t.queues[task.App], func(x *Task) bool { return x == task })
 	}
@@ -184,7 +185,7 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 		task.State, task.Error = "failed", outcome
 		t.failed = append(t.failed, task)
 	default:
-		task.State, task.Error, task.Due = "retrying", outcome, now.Add(backoff(task.Attempts))
+		task.State, task.Error, task.Due = "retrying", outcome, now.Add(backoff(task.Attempts-task.since))
 	}
 	t.opsMu.Unlock()
 	if !replaying {
@@ -197,7 +198,7 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 
 // run runs a job once; it is journaled when it decided or notified something.
 func (t *Tenant) run(task *Task, now time.Time, replaying bool) string {
-	before := t.effects
+	before := t.acted
 	generation, _, _ := t.works.Start(task.ID, "host")
 	outcome := "ok"
 	if err := t.app(task.App).(Runner).Run(t.automation(task.App, replaying), task.job.Name, now); err != nil {
@@ -207,7 +208,7 @@ func (t *Tenant) run(task *Task, now time.Time, replaying bool) string {
 	t.opsMu.Lock()
 	task.Attempts, task.Last, task.Due, task.Error = int(generation), now, now.Add(task.job.Every), map[bool]string{true: "", false: outcome}[outcome == "ok"]
 	t.opsMu.Unlock()
-	if !replaying && t.effects != before {
+	if !replaying && t.acted != before {
 		body, _ := json.Marshal(workBody{Work: task.ID, Outcome: outcome})
 		t.record(t.app(task.App), "job", t.automation(task.App, false).Member, body, now)
 	}
@@ -271,7 +272,7 @@ func (t *Tenant) retry(id string, now time.Time) bool {
 	if i := slices.IndexFunc(t.failed, func(x *Task) bool { return x.ID == id }); i >= 0 {
 		task := t.failed[i]
 		t.failed = slices.Delete(t.failed, i, i+1)
-		task.State, task.Due = "queued", now
+		task.State, task.Due, task.since = "queued", now, task.Attempts
 		t.queues[task.App] = append([]*Task{task}, t.queues[task.App]...)
 		return true
 	}
@@ -430,7 +431,7 @@ func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string 
 	if len(t.notices) > noticesKept {
 		t.notices = t.notices[len(t.notices)-noticesKept:]
 	}
-	t.effects += len(out)
+	t.acted += len(out)
 	return out
 }
 
@@ -505,17 +506,17 @@ func (t *Tenant) Settings() []AppSettings {
 
 // The platform app's operations decisions: connectors, settings, work, notifications.
 const (
-	ConnectorType      = "platform.connector"
-	SettingType        = "platform.setting"
-	WorkType           = "platform.work"
-	NotificationType   = "platform.notification"
-	SchemaConnectorOn  = "platform.connector.enable"
-	SchemaConnectorOff = "platform.connector.disable"
-	SchemaSettingSet   = "platform.setting.set"
-	SchemaWorkRetry    = "platform.work.retry"
-	SchemaNoticeRead   = "platform.notification.read"
-	ProtocolType       = "platform.protocol"
-	SchemaProtocolBind = "platform.protocol.bind"
+	ConnectorType          = "platform.connector"
+	SettingType            = "platform.setting"
+	WorkType               = "platform.work"
+	NotificationType       = "platform.notification"
+	SchemaConnectorOn      = "platform.connector.enable"
+	SchemaConnectorOff     = "platform.connector.disable"
+	SchemaSettingSet       = "platform.setting.set"
+	SchemaWorkRetry        = "platform.work.retry"
+	SchemaNotificationRead = "platform.notification.read"
+	ProtocolType           = "platform.protocol"
+	SchemaProtocolBind     = "platform.protocol.bind"
 )
 
 func operationsActions() []Action {
@@ -533,7 +534,7 @@ func operationsActions() []Action {
 		{Schema: SchemaProtocolBind, Target: ProtocolType, Capability: "apps", Title: "Choose protocol provider",
 			Description: "Send the tenant's new calls of a protocol (target <name>/<version>) to another app that provides it; what every provider holds stays readable.",
 			Payload:     []Field{{Name: "provider", Type: "string", Required: true, Description: "App ID of a provider"}}, Roles: admin},
-		{Schema: SchemaNoticeRead, Target: NotificationType, Capability: "notifications", Title: "Mark notification read",
+		{Schema: SchemaNotificationRead, Target: NotificationType, Capability: "notifications", Title: "Mark notification read",
 			Description: "Mark one of your notifications as read.", Payload: []Field{}, Roles: []string{AnyMember}},
 	}
 }
@@ -585,7 +586,7 @@ func operate(c Caller, s *pb.Submission, now time.Time) (apply func(*pb.ChangeRe
 			return nil, notFound, true
 		}
 		return func(*pb.ChangeRecord) { t.retry(id, now) }, nil, true
-	case SchemaNoticeRead:
+	case SchemaNotificationRead:
 		t.opsMu.Lock()
 		i := slices.IndexFunc(t.notices, func(x Notification) bool { return x.ID == id })
 		mine := i >= 0 && t.notices[i].Member == c.ID

@@ -12,8 +12,8 @@ export type SFC = {
 export type Planned = { erpId: string; product: string; quantity: number; due: string; factId: string };
 export type Downtime = { id: string; resource: string; start: string; end?: string; reason?: string; needsCheck?: boolean };
 export type Notification = { id: string; app: string; title: string; body?: string; ref?: string; at: string; read: boolean };
-/** The signed-in member (ADR-0010): one role per app, attributes such as lines. */
-export type Me = { tenantId: string; principalId: string; profile: { roles: Record<string, string>; attributes?: { lines?: string[] } } };
+/** The signed-in member (ADR-0010): one role per app; lines come from the organisation (ADR-0012). */
+export type Me = { tenantId: string; principalId: string; profile: { roles: Record<string, string> } };
 
 export const SERVER = (import.meta.env.VITE_MES_SERVER as string | undefined) ?? "http://127.0.0.1:8490";
 export const identities = [

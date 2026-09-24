@@ -13,7 +13,7 @@ import { Blocks, Cable, Grid3x3, History, Network, PlugZap, SlidersHorizontal, U
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
-type Member = { id: string; tenant: string; roles: Record<string, string>; attributes?: Record<string, string[]>; subjects: string[] };
+type Member = { id: string; tenant: string; roles: Record<string, string>; subjects: string[] };
 type Capability = { name: string; enabled: boolean; actions: string[] };
 type AppInfo = { emits?: { name: string; title: string; description: string }[]; id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
 type ProtocolInfo = { id: string; actions: string[]; reads: string[]; events: { name: string; title: string }[]; providers: string[]; consumers: string[]; bound?: string };
@@ -74,7 +74,6 @@ function Members() {
     { id: "subjects", header: "Signs in as", accessorFn: (m) => m.subjects.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "roles", header: "Roles", accessorFn: (m) => Object.entries(m.roles).map(([a, r]) => `${a}: ${r}`).join(" "),
       cell: ({ row: { original: m } }) => <span className="flex gap-1 overflow-hidden">{Object.entries(m.roles).map(([a, r]) => <Tag key={a} label={`${a}: ${r}`} />)}</span> },
-    { id: "attributes", header: "Attributes", meta: { width: 160 }, accessorFn: (m) => Object.entries(m.attributes ?? {}).map(([k, v]) => `${k}: ${v.join(", ")}`).join("; ") },
   ];
   return (
     <>
@@ -100,7 +99,7 @@ function MemberDetail({ id }: { id: string }) {
   return (
     <div className="grid max-w-3xl gap-4">
       <EntityCard title={member.id} subtitle={member.subjects.join(", ")} status={<Tag label={kind(member)} />}
-        properties={Object.entries(member.attributes ?? {}).map(([k, v]) => [k, v.join(", ")])} />
+        properties={[["Apps with a role", Object.keys(member.roles).join(", ") || "none"]]} />
       <section className="rounded-md border border-border bg-surface p-3">
         <h2 className="mb-2 text-sm font-semibold">Role in each app</h2>
         <div className="grid grid-cols-[10rem_1fr_auto] items-center gap-2 text-sm">

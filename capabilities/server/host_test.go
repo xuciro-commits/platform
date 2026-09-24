@@ -27,7 +27,8 @@ func newNotes(tenant, id, peer string) *notes {
 	if peer != "" {
 		uses = []string{peer + ".note"}
 	}
-	catalog := NewCatalog(Action{Schema: id + ".note", Target: id + ".topic", Capability: "notes", Title: "Note", Roles: []string{"writer"}, Uses: uses})
+	catalog := NewCatalog(Action{Schema: id + ".note", Target: id + ".topic", Capability: "notes", Title: "Note",
+		Description: "Write a note on a topic.", Payload: []Field{}, Roles: []string{"writer"}, Uses: uses})
 	return &notes{id: id, peer: peer, ledger: NewLedger(tenant, id, catalog, id+".topic"), texts: map[string]string{}}
 }
 
@@ -105,11 +106,11 @@ func TestTenantComposition(t *testing.T) {
 		}
 		return out
 	}
-	if got := schemas(bo); !slices.Equal(got, []string{SchemaNoticeRead}) {
+	if got := schemas(bo); !slices.Equal(got, []string{SchemaNotificationRead}) {
 		t.Fatalf("bo is offered %v; b.note uses a.note, which bo may not call", got)
 	}
-	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaScope,
-		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNoticeRead,
+	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke,
+		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead,
 		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
 	}
@@ -185,7 +186,6 @@ func TestHostHTTPAndDirectory(t *testing.T) {
 	}{
 		{"x1", SchemaGrant, `{"app":"a","role":"owner"}`, 400},     // a role app a does not define
 		{"x2", SchemaGrant, `{"app":"nope","role":"writer"}`, 400}, // an app the tenant does not run
-		{"x3", SchemaScope, `{"attribute":"lines","values":["L1"]}`, 200},
 		{"x4", SchemaAdd, `{"subject":"client:agent"}`, 200},
 		{"x5", SchemaAdd, `{"subject":"client:agent"}`, 409},
 		{"x6", SchemaAdd, `{"subject":"agent"}`, 400},
@@ -195,13 +195,13 @@ func TestHostHTTPAndDirectory(t *testing.T) {
 		}
 	}
 	if status, body := call("GET", "/v1/members", "ana-token", ""); status != 200 ||
-		!strings.Contains(body, `"id":"agent-1","tenant":"t-1","roles":{},"subjects":["client:agent"]`) || !strings.Contains(body, `"attributes":{"lines":["L1"]}`) {
+		!strings.Contains(body, `"id":"agent-1","tenant":"t-1","roles":{},"subjects":["client:agent"]`) {
 		t.Fatalf("members: %d %s", status, body)
 	}
 	if status, _ := call("GET", "/v1/members", "bo-token", ""); status != 403 {
 		t.Fatalf("a member without the admin role read the directory: %d", status)
 	}
-	if _, body := call("GET", "/v1/audit", "ana-token", ""); strings.Count(body, `"app":"platform"`) != 4 || !strings.Contains(body, `"target":"platform.member/agent-1"`) {
+	if _, body := call("GET", "/v1/audit", "ana-token", ""); strings.Count(body, `"app":"platform"`) != 3 || !strings.Contains(body, `"target":"platform.member/agent-1"`) {
 		t.Fatalf("audit: %s", body)
 	}
 	if _, body := call("GET", "/v1/apps", "ana-token", ""); !strings.Contains(body, `"roles":["writer"],"capabilities":[{"name":"notes","enabled":true,"actions":["b.note"]}],"inputs":["b-feed"],"uses":["b.note → a.note"]`) {

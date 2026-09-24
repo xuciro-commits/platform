@@ -132,10 +132,10 @@ func TestOperations(t *testing.T) {
 		t.Fatal("a member without the platform role read its work")
 	}
 	first := inbox(sup)[1].ID
-	if err := decide(op, SchemaNoticeRead, NotificationType, first, "{}"); code(err) != "ERROR_CODE_POLICY_DENIED" {
+	if err := decide(op, SchemaNotificationRead, NotificationType, first, "{}"); code(err) != "ERROR_CODE_POLICY_DENIED" {
 		t.Fatalf("op marked sup's notification: %v", err)
 	}
-	if err := decide(sup, SchemaNoticeRead, NotificationType, first, "{}"); err != nil {
+	if err := decide(sup, SchemaNotificationRead, NotificationType, first, "{}"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -167,6 +167,7 @@ func TestOperations(t *testing.T) {
 		t.Fatalf("settings %+v", s)
 	}
 
+	CheckReplay(t, tn, journal, build)
 	// A replay rebuilds connectors, notifications, what was read and the settings.
 	again := build()
 	if err := again.Replay(journal); err != nil {

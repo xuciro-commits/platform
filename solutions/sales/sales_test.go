@@ -193,6 +193,7 @@ func TestAdministratorChoosesTheProvider(t *testing.T) {
 	if told := w.timeline("sales", "crm.opportunity/OPP-1"); len(told) != 1 || !strings.HasPrefix(told[0], "app:hotel: Booking canceled") {
 		t.Fatalf("the earlier provider's event no longer reaches the opportunity: %v", told)
 	}
+	platformserver.CheckReplay(t, w.tenant, w.journal, func() *platformserver.Tenant { return newWorld(t, hotelProvider, memoryProvider).tenant })
 	again := newWorld(t, hotelProvider, memoryProvider)
 	if err := again.tenant.Replay(w.journal); err != nil {
 		t.Fatal(err)

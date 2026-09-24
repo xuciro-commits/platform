@@ -108,15 +108,21 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	if r := w.ledger.Changes.Records("t-1")[0]; r.GetSubmission().GetPrincipalId() != "app:w" {
 		t.Fatalf("the handler's decision is attributed to %s", r.GetSubmission().GetPrincipalId())
 	}
-	// An administrator retries the failed delivery; it is attempted once more.
+	// An administrator retries the failed delivery: a full schedule of attempts again.
 	retry := &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: PlatformApp, IdempotencyKey: "r1",
 		Target: &pb.EntityRef{Type: WorkType, Id: failed[0].ID}, Schema: &pb.SchemaRef{Name: SchemaWorkRetry, Version: 1}, Payload: []byte("{}")}
 	if _, err := tn.Submit(ana, retry, at(50)); err != nil {
 		t.Fatal(err)
 	}
 	tn.Work(at(50))
-	if got := tn.Tasks(); len(got) != 1 || got[0].Attempts != maxAttempts+1 || got[0].State != "failed" {
+	if got := tn.Tasks(); len(got) != 1 || got[0].Attempts != maxAttempts+1 || got[0].State != "retrying" {
 		t.Fatalf("after retry %+v", got)
+	}
+	for s := 51; s <= 90; s++ {
+		tn.Work(at(s))
+	}
+	if got := tn.Tasks(); len(got) != 1 || got[0].Attempts != 2*maxAttempts || got[0].State != "failed" {
+		t.Fatalf("after the retried schedule %+v", got)
 	}
 	// The journal holds the inputs and every attempt; a replay rebuilds the
 	// handlers' decisions, the deliveries and the owned work.
@@ -124,9 +130,10 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	if err := again.Replay(journal); err != nil {
 		t.Fatal(err)
 	}
-	if w2.texts["log"] != "saw why" || !slices.Equal(outcomes(again), outcomes(tn)) || len(again.Tasks()) != 1 || again.Tasks()[0].Attempts != maxAttempts+1 {
+	if w2.texts["log"] != "saw why" || !slices.Equal(outcomes(again), outcomes(tn)) || len(again.Tasks()) != 1 || again.Tasks()[0].Attempts != 2*maxAttempts {
 		t.Fatalf("replay: %v, %v, %+v", w2.texts, outcomes(again), again.Tasks())
 	}
+	CheckReplay(t, tn, journal, func() *Tenant { tn, _ := build(); return tn })
 	// A replay whose handler ends differently than recorded is refused.
 	tampered := slices.Clone(journal)
 	for i, e := range tampered {

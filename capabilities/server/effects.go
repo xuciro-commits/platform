@@ -49,8 +49,8 @@ type Endpoint struct {
 	AllowPrivate bool     `json:"allowPrivate,omitempty"`
 }
 
-// Emit declares an effect kind an app sends to whatever endpoint the tenant binds to it.
-type Emit struct {
+// EffectKind declares an effect an app sends to whatever endpoint the tenant binds to it.
+type EffectKind struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -80,6 +80,7 @@ type Effect struct {
 	Error    string    `json:"error,omitempty"`
 	Digest   string    `json:"digest,omitempty"` // sha256 of the body last sent
 	Body     string    `json:"body,omitempty"`   // kept 30 days for support (D8)
+	since    int       // attempts before the last manual retry: each retry gets a full schedule
 	sending  bool
 }
 
@@ -120,7 +121,7 @@ func (t *Tenant) emit(e Event, names []string) {
 		}
 		at := e.Record.GetRecordedTime().AsTime()
 		body, _ := json.Marshal(map[string]any{"type": names[i], "timestamp": at, "data": map[string]any{
-			"app": e.App, "action": s.GetSchema().GetName(), "entity": target(s), "changeId": e.Record.GetChangeId(),
+			"app": e.App, "action": s.GetSchema().GetName(), "schemaVersion": s.GetSchema().GetVersion(), "entity": target(s), "changeId": e.Record.GetChangeId(),
 			"principal": s.GetPrincipalId(), "revision": e.Record.GetRevision(), "payload": payload}})
 		t.outbound = append(t.outbound, &Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
 			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)})
@@ -148,7 +149,7 @@ func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *k
 	if t == nil {
 		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if a := t.app(c.App); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e Emit) bool { return e.Name == kind }) || key == "" {
+	if a := t.app(c.App); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e EffectKind) bool { return e.Name == kind }) || key == "" {
 		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	name := c.App + "/" + kind
@@ -386,10 +387,10 @@ func (t *Tenant) mark(o Outcome, at time.Time) (Effect, bool) {
 		x.State = "delivered"
 	case o.Result == "rejected":
 		x.State = "rejected"
-	case x.Attempts >= effectAttempts:
+	case x.Attempts-x.since >= effectAttempts:
 		x.State = "failed"
 	default:
-		x.State, x.Due = "retrying", at.Add(effectBackoff(x.ID, x.Attempts))
+		x.State, x.Due = "retrying", at.Add(effectBackoff(x.ID, x.Attempts-x.since))
 	}
 	return *x, true
 }
@@ -444,7 +445,7 @@ func decideEffects(c Caller, s *pb.Submission, now time.Time) (apply func(*pb.Ch
 		}
 		for _, kind := range ep.Effects {
 			app, name, _ := strings.Cut(kind, "/")
-			if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e Emit) bool { return e.Name == name }) {
+			if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e EffectKind) bool { return e.Name == name }) {
 				return nil, invalid, true
 			}
 		}
@@ -476,7 +477,7 @@ func decideEffects(c Caller, s *pb.Submission, now time.Time) (apply func(*pb.Ch
 		}
 		return func(*pb.ChangeRecord) {
 			t.opsMu.Lock()
-			effect.State, effect.Due = "pending", now
+			effect.State, effect.Due, effect.since = "pending", now, effect.Attempts
 			t.opsMu.Unlock()
 		}, nil, true
 	case SchemaEffectDiscard:

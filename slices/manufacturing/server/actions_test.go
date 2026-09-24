@@ -19,7 +19,7 @@ func schemas(actions []platformserver.Action) []string {
 func TestCatalogPerCaller(t *testing.T) {
 	p := newPlant(t)
 	assistant := member("agent-l1", Assistant, "L1")
-	read := platformserver.SchemaNoticeRead
+	read := platformserver.SchemaNotificationRead
 	for _, c := range []struct {
 		who  platformserver.Caller
 		want []string

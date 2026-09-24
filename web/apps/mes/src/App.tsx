@@ -284,7 +284,7 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
           { label: "Sync", items: [nav("Outbox", <Inbox />, "outbox", waiting ? <span className="text-xs text-[var(--tone-warning)]">{waiting}</span> : null)] },
         ]}
         commands={[{ id: "retry", label: "Retry unsent decisions", run: () => void client.send().then(() => setOutbox([...client.authorities.outbox])) }]}
-        status={<span className="text-xs text-muted">{me ? `${me.profile.roles.mes ?? "no role"}${me.profile.attributes?.lines?.length ? ` · ${me.profile.attributes.lines.join(", ")}` : ""}` : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}
+        status={<span className="text-xs text-muted">{me ? me.profile.roles.mes ?? "no role" : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}
         session={signedIn
           ? { tenant: me?.tenantId ?? "plant-sz", principal: me?.principalId ?? "…", detail: signedIn.session.email,
               options: [{ id: "signed-in", label: signedIn.session.email }, { id: "sign-out", label: "Sign out" }], current: "signed-in",

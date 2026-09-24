@@ -196,12 +196,12 @@ type OpportunityStays struct {
 // customers shows each opportunity with the stays linked to it, from whichever
 // provider holds them: a stay booked before the tenant switched providers stays.
 func (c *CRM) customers(who platformserver.Caller) (any, *kernel.Error) {
-	answers, err := who.Query(lodging.ID, "bookings")
+	results, err := who.Query(lodging.ID, "bookings")
 	if err != nil {
 		return nil, err
 	}
 	bookings := map[string]lodging.Booking{} // "<type>/<id>" → booking
-	for _, a := range answers {
+	for _, a := range results {
 		for _, b := range a.Result.([]lodging.Booking) {
 			bookings[a.Type+"/"+b.ID] = b
 		}
