@@ -1,4 +1,4 @@
-package platformserver
+package platform
 
 import (
 	"sync"
@@ -69,8 +69,8 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	})
 	if err == nil && apply != nil {
 		apply(record)
-		if c.tenant != nil {
-			c.tenant.publish(Event{App: c.App, Record: record})
+		if c.rt != nil {
+			c.rt.Publish(c, record)
 		}
 	}
 	return record, err

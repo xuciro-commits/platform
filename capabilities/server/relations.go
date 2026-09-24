@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // Relations is the platform's links and timeline (ADR-0011): relations between
@@ -40,45 +41,46 @@ type Note struct {
 }
 
 type Relations struct {
+	t      *Tenant // the tenant running it, once composed (NewTenant)
 	mu     sync.Mutex
 	links  []Link
 	notes  []Note
-	ledger *Ledger
+	ledger *platform.Ledger
 }
 
 func NewRelations(tenant string) *Relations {
-	any := []string{AnyMember}
-	ref := func(name string) Field {
-		return Field{Name: name, Type: "entity", Required: true, Description: "<type>/<id> of an entity of an app you hold a role in"}
+	any := []string{platform.AnyMember}
+	ref := func(name string) platform.Field {
+		return platform.Field{Name: name, Type: "entity", Required: true, Description: "<type>/<id> of an entity of an app you hold a role in"}
 	}
-	return &Relations{ledger: NewLedger(tenant, RelationsApp, NewCatalog(
-		Action{Schema: SchemaLink, Target: LinkType, Capability: "links", Title: "Link entities",
-			Description: "Relate two entities, of the same or of different apps.", Payload: []Field{ref("from"), ref("to")}, Roles: any},
-		Action{Schema: SchemaUnlink, Target: LinkType, Capability: "links", Title: "Unlink entities",
-			Description: "Remove the relation between two entities.", Payload: []Field{ref("from"), ref("to")}, Roles: any},
-		Action{Schema: SchemaNote, Target: NoteType, Capability: "timeline", Title: "Add note",
+	return &Relations{ledger: platform.NewLedger(tenant, RelationsApp, platform.NewCatalog(
+		platform.Action{Schema: SchemaLink, Target: LinkType, Capability: "links", Title: "Link entities",
+			Description: "Relate two entities, of the same or of different apps.", Payload: []platform.Field{ref("from"), ref("to")}, Roles: any},
+		platform.Action{Schema: SchemaUnlink, Target: LinkType, Capability: "links", Title: "Unlink entities",
+			Description: "Remove the relation between two entities.", Payload: []platform.Field{ref("from"), ref("to")}, Roles: any},
+		platform.Action{Schema: SchemaNote, Target: NoteType, Capability: "timeline", Title: "Add note",
 			Description: "Add a note to an entity's activity timeline.",
-			Payload:     []Field{ref("entity"), {Name: "text", Type: "string", Required: true, Description: "What happened"}}, Roles: any},
+			Payload:     []platform.Field{ref("entity"), {Name: "text", Type: "string", Required: true, Description: "What happened"}}, Roles: any},
 	), LinkType, NoteType)}
 }
 
-func (r *Relations) Manifest() Manifest {
-	return Manifest{ID: RelationsApp, Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"}}
+func (r *Relations) Manifest() platform.Manifest {
+	return platform.Manifest{ID: RelationsApp, Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"}}
 }
 
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
 
-func (r *Relations) Input(Caller, string, []byte, time.Time) (any, *kernel.Error) {
+func (r *Relations) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
 // sees reports whether c holds a role in the app owning entity "<type>/<id>".
-func (r *Relations) sees(c Caller, entity string) bool {
+func (r *Relations) sees(c platform.Caller, entity string) bool {
 	class, _, ok := strings.Cut(entity, "/")
-	if !ok || c.tenant == nil {
+	if !ok || r.t == nil {
 		return false
 	}
-	for _, a := range c.tenant.apps {
+	for _, a := range r.t.apps {
 		if slices.ContainsFunc(a.Declarations(), func(d *pb.AuthorityDeclaration) bool { return d.GetDataClass() == class }) {
 			return c.Roles[a.Manifest().ID] != ""
 		}
@@ -86,7 +88,7 @@ func (r *Relations) sees(c Caller, entity string) bool {
 	return false
 }
 
-func (r *Relations) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var p struct{ From, To, Entity, Text string }
@@ -128,7 +130,7 @@ func (r *Relations) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Chang
 }
 
 // Read "links" or "timeline" (newest last), limited to entities the caller sees.
-func (r *Relations) Read(c Caller, name string) (any, *kernel.Error) {
+func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if name == "links" {
@@ -151,7 +153,7 @@ func (r *Relations) Read(c Caller, name string) (any, *kernel.Error) {
 
 // observe tells protocol events on the timeline of their entity and of the
 // entities linked to it. It runs during delivery, so replay tells them again.
-func (r *Relations) observe(t *Tenant, e Event, events []string) {
+func (r *Relations) observe(t *Tenant, e platform.Event, events []string) {
 	s := e.Record.GetSubmission()
 	entity := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()
 	r.mu.Lock()
@@ -174,12 +176,12 @@ func (r *Relations) observe(t *Tenant, e Event, events []string) {
 	}
 }
 
-// Links are the entities linked to entity ("<type>/<id>") that c sees.
-func (c Caller) Links(entity string) []string {
-	if c.tenant == nil || c.tenant.relations == nil {
+// linksOf are the entities linked to entity that c sees (Caller.Links).
+func (t *Tenant) linksOf(c platform.Caller, entity string) []string {
+	r := t.relations
+	if r == nil {
 		return nil
 	}
-	r := c.tenant.relations
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []string
@@ -194,15 +196,14 @@ func (c Caller) Links(entity string) []string {
 	return out
 }
 
-// Link relates two entities for c (an app linking what it just did, for example).
-func (c Caller) Link(from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
-	if c.tenant == nil || c.tenant.relations == nil {
+// link relates two entities for c (Caller.Link).
+func (t *Tenant) link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
+	if t.relations == nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	payload, _ := json.Marshal(map[string]string{"from": from.GetType() + "/" + from.GetId(), "to": to.GetType() + "/" + to.GetId()})
-	called := c.tenant.caller(c.Member, c.tenant.relations, c.Replaying)
-	called.Automation = c.Automation
-	_, err := c.tenant.relations.Submit(called, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: RelationsApp,
+	called := platform.NewCaller(runtime{t}, c.Member, RelationsApp, c.Replaying, c.Automation)
+	_, err := t.relations.Submit(called, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: RelationsApp,
 		Target: &pb.EntityRef{Type: LinkType, Id: key}, Schema: &pb.SchemaRef{Name: SchemaLink, Version: 1}, IdempotencyKey: key, Payload: payload}, now)
 	return err
 }

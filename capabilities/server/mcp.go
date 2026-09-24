@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"platformserver/platform"
 	"slices"
 	"strings"
 
@@ -18,7 +19,7 @@ import (
 // External agents (Claude Code, other MCP clients) discover and act with the
 // member's own grants through the same submission path as every other caller.
 // JSON-RPC over HTTP POST; answers are plain JSON (no streaming needed).
-func (h *Host) mcp(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
+func (h *Host) mcp(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 	var req struct {
 		ID     json.RawMessage `json:"id"`
 		Method string          `json:"method"`
@@ -67,7 +68,7 @@ func toolName(schema string) string {
 	return strings.NewReplacer(".", "_", "/", "_", "#", "_").Replace(schema)
 }
 
-func toolsFor(t *Tenant, m Member) []map[string]any {
+func toolsFor(t *Tenant, m platform.Member) []map[string]any {
 	tools := []map[string]any{}
 	for _, a := range t.Catalog(m) {
 		properties := map[string]any{"target": map[string]any{"type": "string", "description": "ID of the " + a.Target + " to act on (a new ID creates one)"}}
@@ -95,7 +96,7 @@ func toolsFor(t *Tenant, m Member) []map[string]any {
 	return tools
 }
 
-func readsFor(t *Tenant, m Member) []string {
+func readsFor(t *Tenant, m platform.Member) []string {
 	var out []string
 	for _, a := range t.apps {
 		for _, read := range a.Manifest().Reads {
@@ -107,7 +108,7 @@ func readsFor(t *Tenant, m Member) []string {
 	return out
 }
 
-func callTool(t *Tenant, m Member, name string, args map[string]any, h *Host) map[string]any {
+func callTool(t *Tenant, m platform.Member, name string, args map[string]any, h *Host) map[string]any {
 	text := func(v any, isError bool) map[string]any {
 		raw, _ := json.Marshal(v)
 		return map[string]any{"content": []map[string]any{{"type": "text", "text": string(raw)}}, "isError": isError}
@@ -124,7 +125,7 @@ func callTool(t *Tenant, m Member, name string, args map[string]any, h *Host) ma
 		return text(out, false)
 	}
 	catalog := t.Catalog(m)
-	i := slices.IndexFunc(catalog, func(a Action) bool { return toolName(a.Schema) == name })
+	i := slices.IndexFunc(catalog, func(a platform.Action) bool { return toolName(a.Schema) == name })
 	if i < 0 {
 		return text(map[string]string{"error": "not in your catalog"}, true)
 	}

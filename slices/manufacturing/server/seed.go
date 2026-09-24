@@ -4,7 +4,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver"
+	"platformserver/platform"
 )
 
 // DemoMaster is a small plant with two lines: a pump housing on L1 and a valve body on L2.
@@ -31,12 +31,12 @@ func DemoMaster() MasterData {
 
 // DemoOrganization is the demo plant in the site structure: the plant and its
 // two lines, each line a unit whose ID is the line code the master data uses.
-func DemoOrganization(members []platformserver.Membership) platformserver.OrgSeed {
-	return platformserver.OrgSeed{
-		Structures: []platformserver.Structure{{ID: SiteStructure, Name: "Sites", Kind: "site"}},
-		Units: []platformserver.Unit{{ID: "plant-sz", Name: "Plant Shenzhen", Kind: "plant"},
+func DemoOrganization(members []platform.Membership) platform.OrgSeed {
+	return platform.OrgSeed{
+		Structures: []platform.Structure{{ID: SiteStructure, Name: "Sites", Kind: "site"}},
+		Units: []platform.Unit{{ID: "plant-sz", Name: "Plant Shenzhen", Kind: "plant"},
 			{ID: "L1", Name: "Line 1 · pump housings", Kind: "line"}, {ID: "L2", Name: "Line 2 · valve bodies", Kind: "line"}},
-		Edges: []platformserver.Edge{{Structure: SiteStructure, Unit: "L1", Parent: "plant-sz", Relation: "part of"},
+		Edges: []platform.Edge{{Structure: SiteStructure, Unit: "L1", Parent: "plant-sz", Relation: "part of"},
 			{Structure: SiteStructure, Unit: "L2", Parent: "plant-sz", Relation: "part of"}},
 		Memberships: members,
 	}

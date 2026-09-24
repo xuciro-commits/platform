@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	"platformserver"
+	"platformserver/platform"
 )
 
-func schemas(actions []platformserver.Action) []string {
+func schemas(actions []platform.Action) []string {
 	var out []string
 	for _, a := range actions {
 		out = append(out, a.Schema)
@@ -21,7 +22,7 @@ func TestCatalogPerCaller(t *testing.T) {
 	assistant := member("agent-l1", Assistant, "L1")
 	read := platformserver.SchemaNotificationRead
 	for _, c := range []struct {
-		who  platformserver.Caller
+		who  platform.Caller
 		want []string
 	}{
 		{sup, []string{read, SchemaRelease, SchemaReason}},

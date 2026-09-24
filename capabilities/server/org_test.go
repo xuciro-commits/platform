@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"platformserver/platform"
 	"slices"
 	"testing"
 	"time"
@@ -12,20 +13,20 @@ import (
 // A group with a subsidiary that owns a factory, a business group that manages
 // the same factory, a temporary committee and an external partner; one person
 // in three structures at once (ADR-0012).
-func groupSeed() OrgSeed {
-	return OrgSeed{
-		Structures: []Structure{{ID: "legal", Name: "Legal", Kind: "legal"}, {ID: "mgmt", Name: "Management", Kind: "management"},
+func groupSeed() platform.OrgSeed {
+	return platform.OrgSeed{
+		Structures: []platform.Structure{{ID: "legal", Name: "Legal", Kind: "legal"}, {ID: "mgmt", Name: "Management", Kind: "management"},
 			{ID: "gov", Name: "Governance", Kind: "governance"}},
-		Units: []Unit{{ID: "group", Name: "Group", Kind: "group", Legal: true}, {ID: "sub-a", Name: "Subsidiary A", Kind: "subsidiary", Legal: true},
+		Units: []platform.Unit{{ID: "group", Name: "Group", Kind: "group", Legal: true}, {ID: "sub-a", Name: "Subsidiary A", Kind: "subsidiary", Legal: true},
 			{ID: "bg-x", Name: "Business group X", Kind: "business group"}, {ID: "factory", Name: "Factory SZ", Kind: "factory"},
 			{ID: "line-1", Name: "Line 1", Kind: "line"}, {ID: "safety", Name: "Safety committee", Kind: "committee", Until: "2027-01-01"},
 			{ID: "acme", Name: "Acme", Kind: "partner", External: true, Legal: true}},
-		Edges: []Edge{{Structure: "legal", Unit: "sub-a", Parent: "group", Relation: "owned by", Share: 1},
+		Edges: []platform.Edge{{Structure: "legal", Unit: "sub-a", Parent: "group", Relation: "owned by", Share: 1},
 			{Structure: "legal", Unit: "factory", Parent: "sub-a", Relation: "owned by", Share: 1},
 			{Structure: "mgmt", Unit: "factory", Parent: "bg-x", Relation: "reports to"},
 			{Structure: "mgmt", Unit: "line-1", Parent: "factory", Relation: "part of"},
 			{Structure: "gov", Unit: "safety", Parent: "group", Relation: "part of"}},
-		Memberships: []Membership{{Party: "member:ana", Unit: "bg-x", Role: "director", Primary: true},
+		Memberships: []platform.Membership{{Party: "member:ana", Unit: "bg-x", Role: "director", Primary: true},
 			{Party: "member:ana", Unit: "safety", Role: "chair"}, {Party: "member:ana", Unit: "sub-a", Role: "board member"},
 			{Party: "unit:acme", Unit: "safety", Role: "observer"}, {Party: "member:bo", Unit: "acme", Role: "employee"}},
 	}
@@ -52,7 +53,7 @@ func TestOrganizationStructures(t *testing.T) {
 }
 
 func TestOrganizationDecisions(t *testing.T) {
-	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{OrgApp: OrgAdmin}}})
+	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{OrgApp: OrgAdmin}}})
 	o := NewOrganization("t-1", groupSeed())
 	tn, err := NewTenant("t-1", dir, o)
 	if err != nil {

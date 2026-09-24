@@ -10,7 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver"
+	"platformserver/platform"
 )
 
 // Writing back to the ERP (#101, ADR-0014): when the last SFC of an order is
@@ -34,7 +34,7 @@ type Confirmation struct {
 }
 
 // confirmIfFinished emits the order's confirmation once all its SFCs have ended.
-func (p *Plant) confirmIfFinished(who platformserver.Caller, order string, now time.Time) {
+func (p *Plant) confirmIfFinished(who platform.Caller, order string, now time.Time) {
 	o := p.orders[order]
 	if o == nil || o.ERP != "" {
 		return
@@ -64,7 +64,7 @@ type answer struct {
 
 // Answer records how the ERP answered as an observation on the order, with the
 // endpoint as provenance, and tells the line's supervisors when it was refused.
-func (p *Plant) Answer(c platformserver.Caller, e platformserver.Effect, o platformserver.Outcome, now time.Time) *kernel.Error {
+func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome, now time.Time) *kernel.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	order := p.orders[e.Key]
@@ -93,15 +93,15 @@ func (p *Plant) Answer(c platformserver.Caller, e platformserver.Effect, o platf
 	}
 	order.ERP, order.Confirmation, order.ERPDetail = a.State, a.Confirmation, a.Detail
 	if a.State != "confirmed" {
-		c.Notify(platformserver.Notification{Title: fmt.Sprintf("ERP %s the confirmation of %s", a.State, order.ID), Body: a.Detail,
+		c.Notify(platform.Notification{Title: fmt.Sprintf("ERP %s the confirmation of %s", a.State, order.ID), Body: a.Detail,
 			Ref: OrderType + "/" + order.ID, Key: "erp:" + e.ID + ":" + strconv.Itoa(e.Attempts)}, now, p.supervisorsOfOrder(order))
 	}
 	return nil
 }
 
 // supervisorsOfOrder are the supervisors of the line where the order's routing starts.
-func (p *Plant) supervisorsOfOrder(o *Order) platformserver.Recipient {
-	r := platformserver.Recipient{Structure: SiteStructure, Role: string(Supervisor)}
+func (p *Plant) supervisorsOfOrder(o *Order) platform.Recipient {
+	r := platform.Recipient{Structure: SiteStructure, Role: string(Supervisor)}
 	if prod := p.product(o.Product); prod != nil && len(prod.Operations) > 0 {
 		r.Unit = p.workCenter(prod.Operations[0].WorkCenter).Line
 	}

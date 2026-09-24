@@ -12,6 +12,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver"
+	"platformserver/platform"
 )
 
 var (
@@ -28,14 +29,14 @@ var (
 )
 
 // units are the test members' memberships in the site structure.
-var units []platformserver.Membership
+var units []platform.Membership
 
 // member is a member with a role in the plant, belonging to units (lines or the plant).
-func member(id string, role Role, in ...string) platformserver.Caller {
+func member(id string, role Role, in ...string) platform.Caller {
 	for _, u := range in {
-		units = append(units, platformserver.Membership{Party: "member:" + id, Unit: u, Role: string(role)})
+		units = append(units, platform.Membership{Party: "member:" + id, Unit: u, Role: string(role)})
 	}
-	return platformserver.As("mes", platformserver.Member{ID: id, Tenant: tenant, Roles: map[string]string{"mes": string(role)}})
+	return platform.As("mes", platform.Member{ID: id, Tenant: tenant, Roles: map[string]string{"mes": string(role)}})
 }
 
 // testPlant sends every input through a tenant on the platform host, so it is
@@ -46,18 +47,18 @@ type testPlant struct {
 	journal []platformserver.Entry
 }
 
-func (p *testPlant) Submit(who platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (p *testPlant) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return p.tenant.Submit(who.Member, s, now)
 }
 
-func (p *testPlant) DeliverStates(who platformserver.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
+func (p *testPlant) DeliverStates(who platform.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
 	raw, _ := json.Marshal(b)
 	out, err := p.tenant.Input(who.Member, "states", raw, now)
 	fact, _ := out.(*pb.FactRecord)
 	return fact, err
 }
 
-func (p *testPlant) DeliverPlanned(who platformserver.Caller, page PlannedPage, now time.Time) *kernel.Error {
+func (p *testPlant) DeliverPlanned(who platform.Caller, page PlannedPage, now time.Time) *kernel.Error {
 	raw, _ := json.Marshal(page)
 	_, err := p.tenant.Input(who.Member, "planned-orders", raw, now)
 	return err
@@ -69,7 +70,7 @@ func plantTenant(t *testing.T, disable ...string) (*Plant, *platformserver.Tenan
 
 // plantTenantOf composes the plant with the given memberships, so a replay gets
 // the organisation its live tenant started with.
-func plantTenantOf(t *testing.T, seed []platformserver.Membership, disable ...string) (*Plant, *platformserver.Tenant) {
+func plantTenantOf(t *testing.T, seed []platform.Membership, disable ...string) (*Plant, *platformserver.Tenant) {
 	p := NewPlant(tenant, DemoMaster())
 	for _, c := range disable {
 		if !p.Disable(c) {
@@ -142,11 +143,11 @@ func newPlant(t *testing.T) *testPlant {
 	return p
 }
 
-func submit(p *testPlant, who platformserver.Caller, schema, targetType, id string, payload any, evidence ...string) string {
+func submit(p *testPlant, who platform.Caller, schema, targetType, id string, payload any, evidence ...string) string {
 	return submitAt(p, who, schema, targetType, id, payload, nil, evidence...)
 }
 
-func submitAt(p *testPlant, who platformserver.Caller, schema, targetType, id string, payload any, revision *uint32, evidence ...string) string {
+func submitAt(p *testPlant, who platform.Caller, schema, targetType, id string, payload any, revision *uint32, evidence ...string) string {
 	raw, _ := json.Marshal(payload)
 	keys++
 	_, err := p.Submit(who, &pb.Submission{TenantId: who.Tenant, PrincipalId: who.ID, Authority: Authority,
@@ -277,13 +278,13 @@ func TestDowntimeReasonSurvivesRecomputation(t *testing.T) {
 // without a reason reminds them once, after the plant's setting (ADR-0013).
 func TestDowntimeTellsSupervisors(t *testing.T) {
 	p := newPlant(t)
-	inbox := func(who platformserver.Caller) []string {
+	inbox := func(who platform.Caller) []string {
 		out, err := p.tenant.Read(who.Member, "notifications")
 		if err != nil {
 			t.Fatal(err)
 		}
 		titles := []string{}
-		for _, n := range out.([]platformserver.Notification) {
+		for _, n := range out.([]platform.Notification) {
 			titles = append(titles, n.Title)
 		}
 		return titles
@@ -303,7 +304,7 @@ func TestDowntimeTellsSupervisors(t *testing.T) {
 	p.tenant.Work(t0.Add(30 * time.Minute)) // reminded once only
 	expect(t, fmt.Sprint(inbox(sup)), "[Downtime without a reason on CNC-11 Downtime on CNC-21 Downtime on CNC-11]")
 	// An administrator turns the downtime notice off in Settings.
-	admin := platformserver.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}
+	admin := platform.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}
 	if _, err := p.tenant.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: "admin", Authority: platformserver.PlatformApp, IdempotencyKey: "s1",
 		Target: &pb.EntityRef{Type: platformserver.SettingType, Id: "mes/" + SettingNotifyDowntime}, Schema: &pb.SchemaRef{Name: platformserver.SchemaSettingSet, Version: 1},
 		Payload: []byte(`{"value":"false"}`)}, t0); err != nil {

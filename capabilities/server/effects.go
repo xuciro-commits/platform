@@ -24,6 +24,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // Outbound effects (ADR-0014). An intent is created inside an input, so replay
@@ -49,39 +50,11 @@ type Endpoint struct {
 	AllowPrivate bool     `json:"allowPrivate,omitempty"`
 }
 
-// EffectKind declares an effect an app sends to whatever endpoint the tenant binds to it.
-type EffectKind struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-}
-
-// Answerer is an app that hears how its effects ended: delivered with the
-// receiver's answer, rejected, or failed. The answer comes from outside, so it is
-// journaled with the outcome, and replay hands the app the same answer (D4): the
-// app records it as an observation and decides on it; it never changes state by itself.
-type Answerer interface {
-	Answer(c Caller, e Effect, o Outcome, now time.Time) *kernel.Error
-}
-
-// Effect is one intent for one endpoint and what became of it.
-type Effect struct {
-	ID       string    `json:"id"` // the idempotency key: <tenant>:<app>:<change id or key>:<endpoint>
-	Endpoint string    `json:"endpoint"`
-	Event    string    `json:"event"`         // the event or effect kind
-	App      string    `json:"app,omitempty"` // the app that emitted it; empty for webhooks
-	Key      string    `json:"key,omitempty"` // the app's key for it
-	Target   string    `json:"target"`
-	At       time.Time `json:"at"`
-	State    string    `json:"state"` // pending, retrying, delivered, rejected, failed, discarded
-	Attempts int       `json:"attempts"`
-	Last     time.Time `json:"last,omitzero"`
-	Due      time.Time `json:"due,omitzero"`
-	Error    string    `json:"error,omitempty"`
-	Digest   string    `json:"digest,omitempty"` // sha256 of the body last sent
-	Body     string    `json:"body,omitempty"`   // kept 30 days for support (D8)
-	since    int       // attempts before the last manual retry: each retry gets a full schedule
-	sending  bool
+// effect is an Effect with the dispatcher's bookkeeping.
+type effect struct {
+	platform.Effect
+	since   int // attempts before the last manual retry: each retry gets a full schedule
+	sending bool
 }
 
 const (
@@ -106,7 +79,7 @@ func settled(state string) bool {
 
 // emit turns an accepted decision into effects for every endpoint subscribed to
 // one of its names. It runs inside the input and inside replay.
-func (t *Tenant) emit(e Event, names []string) {
+func (t *Tenant) emit(e platform.Event, names []string) {
 	s := e.Record.GetSubmission()
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
@@ -123,15 +96,15 @@ func (t *Tenant) emit(e Event, names []string) {
 		body, _ := json.Marshal(map[string]any{"type": names[i], "timestamp": at, "data": map[string]any{
 			"app": e.App, "action": s.GetSchema().GetName(), "schemaVersion": s.GetSchema().GetVersion(), "entity": target(s), "changeId": e.Record.GetChangeId(),
 			"principal": s.GetPrincipalId(), "revision": e.Record.GetRevision(), "payload": payload}})
-		t.outbound = append(t.outbound, &Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
-			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)})
+		t.outbound = append(t.outbound, &effect{Effect: platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
+			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)}})
 	}
 	t.trimEffects()
 }
 
 func (t *Tenant) trimEffects() {
 	for len(t.outbound) > effectsKept {
-		i := slices.IndexFunc(t.outbound, func(x *Effect) bool { return settled(x.State) })
+		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return settled(x.State) })
 		if i < 0 {
 			return
 		}
@@ -139,17 +112,9 @@ func (t *Tenant) trimEffects() {
 	}
 }
 
-// Emit sends data as an effect of kind (declared in the app's manifest) to every
-// endpoint bound to it; key names the effect within the app and kind, so the
-// same fact of the business is sent once whatever retries or replays do. It is
-// called inside an input, so replay rebuilds the intent and never sends it.
-// It returns how many endpoints will receive it.
-func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
-	t := c.tenant
-	if t == nil {
-		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	if a := t.app(c.App); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e EffectKind) bool { return e.Name == kind }) || key == "" {
+// emitFor makes c's app's effect of kind for every endpoint bound to it (Caller.Emit).
+func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
+	if a := t.app(c.App); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind }) || key == "" {
 		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	name := c.App + "/" + kind
@@ -159,11 +124,11 @@ func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *k
 	n := 0
 	for _, ep := range t.endpoints {
 		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
-		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *Effect) bool { return x.ID == id }) {
+		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id }) {
 			continue
 		}
-		t.outbound = append(t.outbound, &Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
-			State: "pending", Due: now, Body: string(body)})
+		t.outbound = append(t.outbound, &effect{Effect: platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
+			State: "pending", Due: now, Body: string(body)}})
 		n++
 	}
 	t.trimEffects()
@@ -171,12 +136,12 @@ func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *k
 }
 
 // Effects lists the tenant's effects, newest first; bodies older than 30 days are dropped.
-func (t *Tenant) Effects(now time.Time) []Effect {
+func (t *Tenant) Effects(now time.Time) []platform.Effect {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	out := []Effect{}
+	out := []platform.Effect{}
 	for i := len(t.outbound) - 1; i >= 0; i-- {
-		x := *t.outbound[i]
+		x := t.outbound[i].Effect
 		if now.Sub(x.At) > bodyKept {
 			x.Body = ""
 		}
@@ -240,18 +205,18 @@ func (t *Tenant) secret(name string) ([]byte, bool) {
 // each outcome. The host calls it every second; it is never called in replay.
 func (t *Tenant) Dispatch(now time.Time) {
 	type job struct {
-		effect   Effect
+		effect   platform.Effect
 		endpoint Endpoint
 	}
 	var jobs []job
 	t.opsMu.Lock()
 	for _, ep := range t.endpoints {
-		i := slices.IndexFunc(t.outbound, func(x *Effect) bool { return x.Endpoint == ep.ID && !settled(x.State) })
+		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && !settled(x.State) })
 		if i < 0 || t.outbound[i].sending || t.outbound[i].Due.After(now) {
 			continue
 		}
 		t.outbound[i].sending = true
-		jobs = append(jobs, job{*t.outbound[i], *ep})
+		jobs = append(jobs, job{t.outbound[i].Effect, *ep})
 	}
 	t.opsMu.Unlock()
 	for _, j := range jobs {
@@ -260,20 +225,11 @@ func (t *Tenant) Dispatch(now time.Time) {
 	}
 }
 
-// Outcome is what an attempt learned; it is the journal entry of the attempt.
-type Outcome struct {
-	Effect string          `json:"effect"`
-	Result string          `json:"result"` // delivered, rejected, retry
-	Detail string          `json:"detail,omitempty"`
-	Digest string          `json:"digest,omitempty"`
-	Answer json.RawMessage `json:"answer,omitempty"` // the receiver's body, for app effects (up to 64 KiB of JSON)
-}
-
 // send makes one attempt, signed as Standard Webhooks, with the effect's ID as
 // both webhook-id and Idempotency-Key.
-func (t *Tenant) send(ep Endpoint, x Effect, now time.Time) Outcome {
+func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
 	sum := sha256.Sum256([]byte(x.Body))
-	out := Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
+	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
 	secret, ok := t.secret(ep.Secret)
 	if !ok {
 		out.Result, out.Detail = "retry", "secret "+ep.Secret+" missing"
@@ -343,7 +299,7 @@ func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
 }
 
 // settle journals an attempt's outcome, then applies it.
-func (t *Tenant) settle(effect string, o Outcome, now time.Time) {
+func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	body, _ := json.Marshal(o)
@@ -355,13 +311,13 @@ func (t *Tenant) settle(effect string, o Outcome, now time.Time) {
 
 // apply records an outcome on its effect and, once the effect is settled, tells
 // the app that emitted it; replay calls it with the journaled outcome.
-func (t *Tenant) apply(o Outcome, at time.Time, replaying bool) bool {
+func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	x, ok := t.mark(o, at)
 	if !ok {
 		return false
 	}
 	if x.App != "" && settled(x.State) && x.State != "discarded" {
-		if a, ok := t.app(x.App).(Answerer); ok {
+		if a, ok := t.app(x.App).(platform.Answerer); ok {
 			a.Answer(t.automation(x.App, replaying), x, o, at)
 			t.enqueue(at)
 		}
@@ -369,17 +325,17 @@ func (t *Tenant) apply(o Outcome, at time.Time, replaying bool) bool {
 	return true
 }
 
-func (t *Tenant) mark(o Outcome, at time.Time) (Effect, bool) {
+func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	i := slices.IndexFunc(t.outbound, func(x *Effect) bool { return x.ID == o.Effect })
+	i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == o.Effect })
 	if i < 0 {
-		return Effect{}, false
+		return platform.Effect{}, false
 	}
 	x := t.outbound[i]
 	x.sending, x.Last, x.Digest, x.Error = false, at, o.Digest, o.Detail
 	if x.State == "discarded" {
-		return *x, true // discarded while its attempt was on the way
+		return x.Effect, true // discarded while its attempt was on the way
 	}
 	x.Attempts++
 	switch {
@@ -392,7 +348,7 @@ func (t *Tenant) mark(o Outcome, at time.Time) (Effect, bool) {
 	default:
 		x.State, x.Due = "retrying", at.Add(effectBackoff(x.ID, x.Attempts-x.since))
 	}
-	return *x, true
+	return x.Effect, true
 }
 
 // The console's actions about endpoints and effects.
@@ -405,27 +361,27 @@ const (
 	SchemaEffectDiscard  = "platform.effect.discard"
 )
 
-func effectActions() []Action {
+func effectActions() []platform.Action {
 	admin := []string{Admin}
-	return []Action{
+	return []platform.Action{
 		{Schema: SchemaEndpointAdd, Target: EndpointType, Capability: "integrations", Title: "Add webhook endpoint",
 			Description: "Send the chosen events to a URL, signed with a named secret (Standard Webhooks).",
-			Payload: []Field{{Name: "url", Type: "string", Required: true, Description: "https URL of the receiver"},
+			Payload: []platform.Field{{Name: "url", Type: "string", Required: true, Description: "https URL of the receiver"},
 				{Name: "secret", Type: "string", Required: true, Description: "Name of the signing secret in the secret store"},
 				{Name: "events", Type: "string[]", Description: "Action schemas or <protocol id>#<event> to send as webhooks"},
 				{Name: "effects", Type: "string[]", Description: "Effect kinds apps emit, <app>/<kind>, to send here"},
 				{Name: "allowPrivate", Type: "boolean", Description: "Allow private addresses and plain http (inside the deployment only)"}}, Roles: admin},
 		{Schema: SchemaEndpointRemove, Target: EndpointType, Capability: "integrations", Title: "Remove webhook endpoint",
-			Description: "Stop sending to the endpoint; what it has not received is discarded.", Payload: []Field{}, Roles: admin},
+			Description: "Stop sending to the endpoint; what it has not received is discarded.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaEffectRetry, Target: EffectType, Capability: "integrations", Title: "Retry effect",
-			Description: "Send a failed or rejected effect again, with the same key.", Payload: []Field{}, Roles: admin},
+			Description: "Send a failed or rejected effect again, with the same key.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaEffectDiscard, Target: EffectType, Capability: "integrations", Title: "Discard effect",
-			Description: "Give up on an effect not yet delivered.", Payload: []Field{}, Roles: admin},
+			Description: "Give up on an effect not yet delivered.", Payload: []platform.Field{}, Roles: admin},
 	}
 }
 
 // decideEndpoint decides adding and removing an endpoint.
-func (t *Tenant) decideEndpoint(_ Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideEndpoint(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	t.opsMu.Lock()
@@ -452,7 +408,7 @@ func (t *Tenant) decideEndpoint(_ Caller, s *pb.Submission, _ time.Time) (func(*
 	}
 	for _, kind := range ep.Effects {
 		app, name, _ := strings.Cut(kind, "/")
-		if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e EffectKind) bool { return e.Name == name }) {
+		if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == name }) {
 			return nil, invalid
 		}
 	}
@@ -467,27 +423,27 @@ func (t *Tenant) decideEndpoint(_ Caller, s *pb.Submission, _ time.Time) (func(*
 }
 
 // decideEffect decides retrying and discarding an effect.
-func (t *Tenant) decideEffect(_ Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideEffect(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	t.opsMu.Lock()
-	var effect *Effect
-	if i := slices.IndexFunc(t.outbound, func(x *Effect) bool { return x.ID == id }); i >= 0 {
-		effect = t.outbound[i]
+	var x *effect
+	if i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.ID == id }); i >= 0 {
+		x = t.outbound[i]
 	}
 	t.opsMu.Unlock()
 	if s.GetSchema().GetName() == SchemaEffectDiscard {
-		if effect == nil || settled(effect.State) {
+		if x == nil || settled(x.State) {
 			return nil, notFound
 		}
-		return func(*pb.ChangeRecord) { t.opsMu.Lock(); effect.State = "discarded"; t.opsMu.Unlock() }, nil
+		return func(*pb.ChangeRecord) { t.opsMu.Lock(); x.State = "discarded"; t.opsMu.Unlock() }, nil
 	}
-	if effect == nil || (effect.State != "failed" && effect.State != "rejected") {
+	if x == nil || (x.State != "failed" && x.State != "rejected") {
 		return nil, notFound
 	}
 	return func(*pb.ChangeRecord) {
 		t.opsMu.Lock()
-		effect.State, effect.Due, effect.since = "pending", now, effect.Attempts
+		x.State, x.Due, x.since = "pending", now, x.Attempts
 		t.opsMu.Unlock()
 	}, nil
 }

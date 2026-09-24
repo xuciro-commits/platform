@@ -24,7 +24,7 @@ import (
 	"os"
 	"slices"
 
-	"platformserver"
+	"platformserver/platform"
 )
 
 func main() {
@@ -50,14 +50,14 @@ func main() {
 		}
 		return out
 	}
-	var actions []platformserver.Action
+	var actions []platform.Action
 	json.Unmarshal(call("GET", "/v1/actions", nil), &actions)
 	switch args := flag.Args(); {
 	case len(args) == 1 && args[0] == "actions":
 		out, _ := json.MarshalIndent(actions, "", "  ")
 		fmt.Println(string(out))
 	case len(args) == 4 && args[0] == "do":
-		i := slices.IndexFunc(actions, func(a platformserver.Action) bool { return a.Schema == args[1] })
+		i := slices.IndexFunc(actions, func(a platform.Action) bool { return a.Schema == args[1] })
 		if i < 0 {
 			log.Fatalf("%s is not in your catalog", args[1]) // the server would refuse it too
 		}

@@ -8,53 +8,16 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
-// Protocol is a named, versioned interface apps provide and consume (ADR-0011):
-// actions (payload fields and meaning), reads (result shape, by convention the
-// protocol package's types) and events. Consumers depend on a protocol, never on
-// the app that provides it.
-type Protocol struct {
-	Name    string
-	Version int
-	Actions []Action // Schema is the protocol action's short name; Roles stay the provider's
-	Reads   []string
-	Events  []ProtocolEvent
-}
-
-type ProtocolEvent struct {
-	Name  string `json:"name"`
-	Title string `json:"title"` // how the timeline tells it, e.g. "Booking canceled"
-}
-
-// ID is "<name>/<version>", e.g. "lodging.booking/1".
-func (p Protocol) ID() string { return fmt.Sprintf("%s/%d", p.Name, p.Version) }
-
-// Provision maps a protocol onto the provider's own actions, reads and events
-// (each keyed by the protocol's name, valued by the provider's).
-type Provision struct {
-	Protocol Protocol
-	Actions  map[string]string // protocol action → provider action schema (same payload)
-	Reads    map[string]string // protocol read → provider read (returning the protocol's types)
-	Events   map[string]string // protocol event → provider action schema whose decisions are that event
-}
-
-// Consumption declares a protocol an app uses; an optional one may have no provider.
-type Consumption struct {
-	Protocol string // ID
-	Optional bool
-}
-
-// ProtocolAction names a protocol action in Action.Uses: "<protocol id>#<action>".
-func ProtocolAction(protocol, action string) string { return protocol + "#" + action }
-
 type binding struct {
-	provider  App
-	provision Provision
+	provider  platform.App
+	provision platform.Provision
 }
 
 // bind resolves consumed protocols to providers enabled before the consumer.
-func (t *Tenant) bind(i int, a App) error {
+func (t *Tenant) bind(i int, a platform.App) error {
 	for _, c := range a.Manifest().Consumes {
 		var found []binding
 		for _, p := range t.apps[:i] {
@@ -116,7 +79,7 @@ func (t *Tenant) resolve(protocol string) (binding, bool) {
 }
 
 // provider resolves "<protocol id>#<action>" to the provider and its action schema.
-func (t *Tenant) provider(used string) (App, string, bool) {
+func (t *Tenant) provider(used string) (platform.App, string, bool) {
 	protocol, action, ok := strings.Cut(used, "#")
 	if !ok {
 		return nil, "", false
@@ -129,64 +92,47 @@ func (t *Tenant) provider(used string) (App, string, bool) {
 	return b.provider, schema, mapped
 }
 
-func (c Caller) consumes(protocol string) bool {
-	self := c.tenant.app(c.App)
-	return self != nil && slices.ContainsFunc(self.Manifest().Consumes, func(x Consumption) bool { return x.Protocol == protocol })
+// consumes reports whether c's app consumes protocol.
+func (t *Tenant) consumes(c platform.Caller, protocol string) bool {
+	self := t.app(c.App)
+	return self != nil && slices.ContainsFunc(self.Manifest().Consumes, func(x platform.Consumption) bool { return x.Protocol == protocol })
 }
 
-// Invoke calls a protocol action on the tenant's provider, as the member with its
-// role there; id names the new or existing entity. It returns the entity the
-// provider acted on. Only a consumer of the protocol may invoke it.
-func (c Caller) Invoke(protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
-	if c.tenant == nil || !c.consumes(protocol) {
+// invoke calls a protocol action for a consumer (Caller.Invoke).
+func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+	if !t.consumes(c, protocol) {
 		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	return c.tenant.invoke(c, protocol, action, id, payload, key, correlation, now)
-}
-
-func (t *Tenant) invoke(c Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
-	provider, schema, ok := t.provider(ProtocolAction(protocol, action))
+	provider, schema, ok := t.provider(platform.ProtocolAction(protocol, action))
 	if !ok {
 		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND} // no provider bound
 	}
 	declared, _ := provider.Manifest().Actions.Action(schema)
 	target := &pb.EntityRef{Type: declared.Target, Id: id}
-	called := t.caller(c.Member, provider, c.Replaying)
-	called.Automation = c.Automation
+	called := platform.NewCaller(runtime{t}, c.Member, provider.Manifest().ID, c.Replaying, c.Automation)
 	record, err := provider.Submit(called, &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(declared.Target),
 		Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}, now)
 	return target, record, err
 }
 
-// ProviderResult is one provider's result of a protocol read, with the type of
-// the entities it holds, so consumers match their links exactly.
-type ProviderResult struct {
-	Provider string
-	Type     string // e.g. "hotel.reservation"
-	Result   any
-}
-
-// Query reads a protocol read from every provider of the tenant, the bound one
-// first: switching the binding sends new calls elsewhere, but what the other
-// providers hold stays visible (#99). None when no app provides it.
-func (c Caller) Query(protocol, read string) ([]ProviderResult, *kernel.Error) {
-	if c.tenant == nil || !c.consumes(protocol) {
+// query reads a protocol read from every provider, the bound one first (Caller.Query).
+func (t *Tenant) query(c platform.Caller, protocol, read string) ([]platform.ProviderResult, *kernel.Error) {
+	if !t.consumes(c, protocol) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	all := c.tenant.providers(protocol)
-	if b, ok := c.tenant.bound(protocol); ok {
+	all := t.providers(protocol)
+	if b, ok := t.bound(protocol); ok {
 		first := func(x binding) int { return map[bool]int{true: 0, false: 1}[x.provider == b.provider] }
 		slices.SortStableFunc(all, func(x, y binding) int { return first(x) - first(y) })
 	}
-	var out []ProviderResult
+	var out []platform.ProviderResult
 	for _, b := range all {
-		called := c.tenant.caller(c.Member, b.provider, c.Replaying)
-		called.Automation = c.Automation
+		called := platform.NewCaller(runtime{t}, c.Member, b.provider.Manifest().ID, c.Replaying, c.Automation)
 		result, err := b.provider.Read(called, b.provision.Reads[read])
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ProviderResult{Provider: b.provider.Manifest().ID, Type: b.entityType(), Result: result})
+		out = append(out, platform.ProviderResult{Provider: b.provider.Manifest().ID, Type: b.entityType(), Result: result})
 	}
 	return out, nil
 }
@@ -216,8 +162,8 @@ func (t *Tenant) rebind(protocol, provider string) bool {
 
 // Invoke calls a protocol action as a member (HTTP, MCP, conformance tests),
 // through the tenant's provider; it is journaled as the provider's submission.
-func (t *Tenant) Invoke(m Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
-	provider, schema, ok := t.provider(ProtocolAction(protocol, action))
+func (t *Tenant) Invoke(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+	provider, schema, ok := t.provider(platform.ProtocolAction(protocol, action))
 	if !ok {
 		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -229,7 +175,7 @@ func (t *Tenant) Invoke(m Member, protocol, action, id string, payload []byte, k
 }
 
 // Query reads a protocol read as a member holding a role in the bound provider.
-func (t *Tenant) Query(m Member, protocol, read string) (any, *kernel.Error) {
+func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *kernel.Error) {
 	b, bound := t.resolve(protocol)
 	if !bound {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -251,13 +197,13 @@ func (t *Tenant) authorityOf(dataClass string) string {
 
 // protocolEvents are the protocol events a provider's accepted decision is,
 // whether or not anyone consumes them.
-func (t *Tenant) protocolEvents(e Event) []string {
+func (t *Tenant) protocolEvents(e platform.Event) []string {
 	var out []string
 	if a := t.app(e.App); a != nil {
 		for _, pv := range a.Manifest().Provides {
 			for event, schema := range pv.Events {
 				if schema == e.Record.GetSubmission().GetSchema().GetName() {
-					out = append(out, ProtocolAction(pv.Protocol.ID(), event))
+					out = append(out, platform.ProtocolAction(pv.Protocol.ID(), event))
 				}
 			}
 		}
@@ -267,7 +213,7 @@ func (t *Tenant) protocolEvents(e Event) []string {
 }
 
 // protocolEvent finds a protocol event's declaration by "<protocol id>#<event>".
-func (t *Tenant) protocolEvent(name string) (ProtocolEvent, bool) {
+func (t *Tenant) protocolEvent(name string) (platform.ProtocolEvent, bool) {
 	protocol, event, _ := strings.Cut(name, "#")
 	for _, a := range t.apps {
 		for _, pv := range a.Manifest().Provides {
@@ -280,24 +226,24 @@ func (t *Tenant) protocolEvent(name string) (ProtocolEvent, bool) {
 			}
 		}
 	}
-	return ProtocolEvent{}, false
+	return platform.ProtocolEvent{}, false
 }
 
 // ProtocolInfo describes a protocol in a tenant: who provides it, who consumes it, which provider is bound.
 type ProtocolInfo struct {
-	ID        string          `json:"id"`
-	Actions   []string        `json:"actions"`
-	Reads     []string        `json:"reads"`
-	Events    []ProtocolEvent `json:"events"`
-	Providers []string        `json:"providers"`
-	Consumers []string        `json:"consumers"`
-	Bound     string          `json:"bound,omitempty"`
+	ID        string                   `json:"id"`
+	Actions   []string                 `json:"actions"`
+	Reads     []string                 `json:"reads"`
+	Events    []platform.ProtocolEvent `json:"events"`
+	Providers []string                 `json:"providers"`
+	Consumers []string                 `json:"consumers"`
+	Bound     string                   `json:"bound,omitempty"`
 }
 
 func (t *Tenant) Protocols() []ProtocolInfo {
 	byID := map[string]*ProtocolInfo{}
 	var order []string
-	info := func(p Protocol) *ProtocolInfo {
+	info := func(p platform.Protocol) *ProtocolInfo {
 		if byID[p.ID()] == nil {
 			i := &ProtocolInfo{ID: p.ID(), Reads: p.Reads, Events: p.Events, Providers: []string{}, Consumers: []string{}}
 			for _, a := range p.Actions {

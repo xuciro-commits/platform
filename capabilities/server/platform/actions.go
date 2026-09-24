@@ -1,4 +1,4 @@
-package platformserver
+package platform
 
 import "slices"
 
@@ -46,6 +46,9 @@ func (c *Catalog) Disable(capability string) bool {
 	c.disabled[capability] = true
 	return true
 }
+
+// All are the declared actions, active or not.
+func (c *Catalog) All() []Action { return slices.Clone(c.actions) }
 
 // Action is the declaration of schema, active or not.
 func (c *Catalog) Action(schema string) (Action, bool) {

@@ -15,6 +15,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // Authenticate turns a bearer credential into a subject ("user:<email>",
@@ -49,10 +50,10 @@ func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
 	return h
 }
 
-func (h *Host) member(r *http.Request) (Member, *Tenant, bool) {
+func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	subject, ok := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	if !ok {
-		return Member{}, nil, false
+		return platform.Member{}, nil, false
 	}
 	for _, t := range h.tenants {
 		if d := h.consoles[t]; d == nil {
@@ -61,13 +62,13 @@ func (h *Host) member(r *http.Request) (Member, *Tenant, bool) {
 			return m, t, true
 		}
 	}
-	return Member{}, nil, false
+	return platform.Member{}, nil, false
 }
 
 // Handler serves the host's HTTP surface, with CORS for browser clients.
 func (h *Host) Handler() http.Handler {
 	mux := http.NewServeMux()
-	handle := func(pattern string, f func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant)) {
+	handle := func(pattern string, f func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant)) {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			m, t, ok := h.member(r)
 			if !ok {
@@ -77,7 +78,7 @@ func (h *Host) Handler() http.Handler {
 			f(w, r, m, t)
 		})
 	}
-	handle("POST /v1/submissions", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
+	handle("POST /v1/submissions", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
 		sub := &pb.Submission{}
 		if protojson.Unmarshal(body, sub) != nil {
@@ -87,16 +88,16 @@ func (h *Host) Handler() http.Handler {
 		record, err := t.Submit(m, sub, h.Now())
 		Reply(w, record, err)
 	})
-	handle("POST /v1/connectors/{input}", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
+	handle("POST /v1/connectors/{input}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
 		out, err := t.Input(m, r.PathValue("input"), body, h.Now())
 		record, _ := out.(*pb.ChangeRecord)
 		Reply(w, record, err)
 	})
-	handle("GET /v1/me", func(w http.ResponseWriter, _ *http.Request, m Member, t *Tenant) {
+	handle("GET /v1/me", func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, map[string]any{"tenantId": m.Tenant, "principalId": m.ID, "profile": m})
 	})
-	handle("GET /v1/declarations", func(w http.ResponseWriter, _ *http.Request, _ Member, t *Tenant) {
+	handle("GET /v1/declarations", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}
 		for _, d := range t.Declarations() {
 			raw, _ := protojson.Marshal(d)
@@ -104,16 +105,16 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	handle("GET /v1/actions", func(w http.ResponseWriter, _ *http.Request, m Member, t *Tenant) {
+	handle("GET /v1/actions", func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Catalog(m))
 	})
-	handle("GET /v1/apps", func(w http.ResponseWriter, _ *http.Request, _ Member, t *Tenant) {
+	handle("GET /v1/apps", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Apps())
 	})
-	handle("GET /v1/protocols", func(w http.ResponseWriter, _ *http.Request, _ Member, t *Tenant) {
+	handle("GET /v1/protocols", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Protocols())
 	})
-	handle("POST /v1/protocols/{protocol}/{version}/{action}", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
+	handle("POST /v1/protocols/{protocol}/{version}/{action}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var call struct {
 			Target, IdempotencyKey string
 			Payload                json.RawMessage
@@ -126,7 +127,7 @@ func (h *Host) Handler() http.Handler {
 		Reply(w, record, err)
 	})
 	handle("POST /mcp", h.mcp)
-	handle("GET /v1/{read}", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
+	handle("GET /v1/{read}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, err := t.Read(m, r.PathValue("read"))
 		if err != nil {
 			Reply(w, nil, err)

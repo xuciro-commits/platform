@@ -12,32 +12,33 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // notes is a minimal app: notes on topics.
 type notes struct {
 	id     string
-	ledger *Ledger
+	ledger *platform.Ledger
 	texts  map[string]string
 }
 
 func newNotes(tenant, id string) *notes {
-	catalog := NewCatalog(Action{Schema: id + ".note", Target: id + ".topic", Capability: "notes", Title: "Note",
-		Description: "Write a note on a topic.", Payload: []Field{}, Roles: []string{"writer"}})
-	return &notes{id: id, ledger: NewLedger(tenant, id, catalog, id+".topic"), texts: map[string]string{}}
+	catalog := platform.NewCatalog(platform.Action{Schema: id + ".note", Target: id + ".topic", Capability: "notes", Title: "Note",
+		Description: "Write a note on a topic.", Payload: []platform.Field{}, Roles: []string{"writer"}})
+	return &notes{id: id, ledger: platform.NewLedger(tenant, id, catalog, id+".topic"), texts: map[string]string{}}
 }
 
-func (n *notes) Manifest() Manifest {
-	return Manifest{ID: n.id, Version: "1", Actions: n.ledger.Catalog, Reads: []string{n.id + "-notes"}, Inputs: map[string]bool{n.id + "-feed": true}}
+func (n *notes) Manifest() platform.Manifest {
+	return platform.Manifest{ID: n.id, Version: "1", Actions: n.ledger.Catalog, Reads: []string{n.id + "-notes"}, Inputs: map[string]bool{n.id + "-feed": true}}
 }
-func (n *notes) Declarations() []*pb.AuthorityDeclaration { return n.ledger.Declarations() }
-func (n *notes) Read(Caller, string) (any, *kernel.Error) { return n.texts, nil }
-func (n *notes) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (n *notes) Declarations() []*pb.AuthorityDeclaration          { return n.ledger.Declarations() }
+func (n *notes) Read(platform.Caller, string) (any, *kernel.Error) { return n.texts, nil }
+func (n *notes) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return n.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		return func(*pb.ChangeRecord) { n.texts[s.GetTarget().GetId()] = string(s.GetPayload()) }, nil
 	})
 }
-func (n *notes) Input(c Caller, _ string, body []byte, _ time.Time) (any, *kernel.Error) {
+func (n *notes) Input(c platform.Caller, _ string, body []byte, _ time.Time) (any, *kernel.Error) {
 	n.texts["feed"] = string(body)
 	return nil, nil
 }
@@ -49,8 +50,8 @@ func note(tenant, member, app, key, topic, text string) *pb.Submission {
 
 func setup(t *testing.T, record func(Entry)) (*Tenant, *notes, *notes) {
 	dir := NewConsole("t-1",
-		Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", "b": "writer", PlatformApp: Admin}}},
-		Seat{Subjects: []string{"bo"}, Member: Member{ID: "bo", Roles: map[string]string{"b": "writer"}}})
+		Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", "b": "writer", PlatformApp: Admin}}},
+		Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"b": "writer"}}})
 	a, b := newNotes("t-1", "a"), newNotes("t-1", "b")
 	tn, err := NewTenant("t-1", dir, a, b)
 	if err != nil {
@@ -83,7 +84,7 @@ func TestTenantComposition(t *testing.T) {
 	if a.texts["x"] != "hello" || b.texts["y"] != "there" || len(a.texts) != 1 {
 		t.Fatalf("a %v, b %v", a.texts, b.texts)
 	}
-	schemas := func(m Member) []string {
+	schemas := func(m platform.Member) []string {
 		var out []string
 		for _, x := range tn.Catalog(m) {
 			out = append(out, x.Schema)

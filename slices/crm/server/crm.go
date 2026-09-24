@@ -16,7 +16,7 @@ import (
 	"lodging"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver"
+	"platformserver/platform"
 )
 
 const (
@@ -52,23 +52,23 @@ type Opportunity struct {
 }
 
 // Actions is the CRM catalog (ADR-0008).
-func Actions() *platformserver.Catalog {
+func Actions() *platform.Catalog {
 	both := []string{string(Sales), string(Manager)}
-	return platformserver.NewCatalog(
-		platformserver.Action{Schema: SchemaAccount, Target: AccountType, Capability: "accounts", Title: "Create account",
+	return platform.NewCatalog(
+		platform.Action{Schema: SchemaAccount, Target: AccountType, Capability: "accounts", Title: "Create account",
 			Description: "Create a customer account: a company or a person.",
-			Payload: []platformserver.Field{{Name: "name", Type: "string", Required: true, Description: "Account name"},
+			Payload: []platform.Field{{Name: "name", Type: "string", Required: true, Description: "Account name"},
 				{Name: "kind", Type: "string", Required: true, Description: "company or person"}}, Roles: both},
-		platformserver.Action{Schema: SchemaOpen, Target: OpportunityType, Capability: "opportunities", Title: "Open opportunity",
+		platform.Action{Schema: SchemaOpen, Target: OpportunityType, Capability: "opportunities", Title: "Open opportunity",
 			Description: "Open a sales opportunity for an account; the caller owns it.",
-			Payload: []platformserver.Field{{Name: "account", Type: "string", Required: true, Description: "Account ID"},
+			Payload: []platform.Field{{Name: "account", Type: "string", Required: true, Description: "Account ID"},
 				{Name: "title", Type: "string", Required: true, Description: "What is being sold"}}, Roles: both},
-		platformserver.Action{Schema: SchemaClose, Target: OpportunityType, Capability: "opportunities", Title: "Close opportunity",
+		platform.Action{Schema: SchemaClose, Target: OpportunityType, Capability: "opportunities", Title: "Close opportunity",
 			Description: "Close an open opportunity as won or lost; only its owner or a sales manager.",
-			Payload:     []platformserver.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost"}}, Roles: both},
-		platformserver.Action{Schema: SchemaBook, Target: OpportunityType, Capability: "stays", Title: "Book stay",
+			Payload:     []platform.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost"}}, Roles: both},
+		platform.Action{Schema: SchemaBook, Target: OpportunityType, Capability: "stays", Title: "Book stay",
 			Description: "Book a stay for an opportunity with the tenant's lodging provider and link it to the opportunity; the provider decides with your role there.",
-			Payload:     lodging.Protocol().Actions[0].Payload, Roles: both, Uses: []string{platformserver.ProtocolAction(lodging.ID, "reserve")}},
+			Payload:     lodging.Protocol().Actions[0].Payload, Roles: both, Uses: []string{platform.ProtocolAction(lodging.ID, "reserve")}},
 	)
 }
 
@@ -79,17 +79,17 @@ type CRM struct {
 	accounts      map[string]*Account
 	opportunities map[string]*Opportunity
 	booked        map[string]int // opportunity → stays booked, for the booking IDs
-	ledger        *platformserver.Ledger
+	ledger        *platform.Ledger
 }
 
 func New(tenant string) *CRM {
 	return &CRM{tenant: tenant, accounts: map[string]*Account{}, opportunities: map[string]*Opportunity{}, booked: map[string]int{},
-		ledger: platformserver.NewLedger(tenant, Authority, Actions(), AccountType, OpportunityType)}
+		ledger: platform.NewLedger(tenant, Authority, Actions(), AccountType, OpportunityType)}
 }
 
 func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
 
-func (c *CRM) Submit(who platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if who.Tenant != c.tenant {
@@ -166,12 +166,12 @@ func (c *CRM) Submit(who platformserver.Caller, s *pb.Submission, now time.Time)
 func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 
 // Manifest declares the CRM as an app (ADR-0010).
-func (c *CRM) Manifest() platformserver.Manifest {
-	return platformserver.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"accounts", "opportunities", "customers"},
-		Consumes: []platformserver.Consumption{{Protocol: lodging.ID, Optional: true}}}
+func (c *CRM) Manifest() platform.Manifest {
+	return platform.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"accounts", "opportunities", "customers"},
+		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }
 
-func (c *CRM) Read(who platformserver.Caller, name string) (any, *kernel.Error) {
+func (c *CRM) Read(who platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case "accounts":
 		return c.Accounts(), nil
@@ -195,7 +195,7 @@ type OpportunityStays struct {
 
 // customers shows each opportunity with the stays linked to it, from whichever
 // provider holds them: a stay booked before the tenant switched providers stays.
-func (c *CRM) customers(who platformserver.Caller) (any, *kernel.Error) {
+func (c *CRM) customers(who platform.Caller) (any, *kernel.Error) {
 	results, err := who.Query(lodging.ID, "bookings")
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ func (c *CRM) customers(who platformserver.Caller) (any, *kernel.Error) {
 	return out, nil
 }
 
-func (c *CRM) Input(platformserver.Caller, string, []byte, time.Time) (any, *kernel.Error) {
+func (c *CRM) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }
 

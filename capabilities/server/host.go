@@ -13,68 +13,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
-
-// Member is a person, service or AI agent of a tenant (ADR-0010) with one role
-// per app. What a rule scopes by is the member's organisation (ADR-0012).
-type Member struct {
-	ID     string            `json:"id"`
-	Tenant string            `json:"tenant"`
-	Roles  map[string]string `json:"roles"`
-}
-
-// Caller is a member as one app sees it. Replaying marks the journal replay:
-// who could act was decided when the input was accepted (ADR-0008). Automation
-// marks an app acting on its own (a subscribed event, a job, an effect's
-// answer), as member "app:<id>"; its manifest is its grant.
-type Caller struct {
-	Member
-	App        string
-	Replaying  bool
-	Automation bool
-	tenant     *Tenant
-}
-
-// Role is the member's role in the app being called ("" for none).
-func (c Caller) Role() string { return c.Roles[c.App] }
-
-// As views member from app, without a host (tests of one app).
-func As(app string, m Member) Caller { return Caller{Member: m, App: app} }
-
-// Manifest declares an app (ADR-0010). Names of actions, reads and inputs are
-// unique within a tenant; the host routes by them.
-type Manifest struct {
-	ID      string
-	Version string
-	Actions *Catalog
-	Reads   []string
-	Inputs  map[string]bool // connector inputs; true: recorded in the journal
-	// Subscribes names its own actions, or events of protocols it consumes
-	// ("<protocol id>#<event>"), delivered to Handle after commit. Apps know no
-	// other app: they reach each other through protocols only (ADR-0011).
-	Subscribes []string
-	Provides   []Provision   // protocols this app implements (ADR-0011)
-	Consumes   []Consumption // protocols this app uses; the host binds a provider
-	Everyone   []string      // reads any member may use; the app filters by caller
-	Jobs       []Job         // scheduled work (Runner), ADR-0013
-	Settings   []Setting     // typed values administrators set in Settings
-	Emits      []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0014)
-}
-
-// Event is an accepted decision, delivered to subscribers after commit.
-type Event struct {
-	App    string
-	Record *pb.ChangeRecord
-	hops   int // how many deliveries caused it
-}
-
-// Subscriber is an app that handles the events its manifest subscribes to, as
-// owned work after the input (ADR-0013). A refusal is retried, then recorded as
-// a failed delivery; the event's decision stands. Handle must depend only on
-// tenant state: a replay runs it again and must reach the same outcome.
-type Subscriber interface {
-	Handle(c Caller, e Event) *kernel.Error
-}
 
 // Delivery is one event handed to one subscriber.
 type Delivery struct {
@@ -87,16 +27,6 @@ type Delivery struct {
 	Attempt    int       `json:"attempt,omitempty"`
 }
 
-// App is one app's instance in one tenant.
-type App interface {
-	Manifest() Manifest
-	Declarations() []*pb.AuthorityDeclaration
-	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
-	// Read serves a named read; the app refuses callers it does not show it to.
-	Read(c Caller, name string) (any, *kernel.Error)
-	Input(c Caller, name string, body []byte, now time.Time) (any, *kernel.Error)
-}
-
 // Tenant runs a tenant's apps: routing by name, one ordered journal, and calls
 // between apps only through the protocols they provide and consume.
 type Tenant struct {
@@ -105,14 +35,14 @@ type Tenant struct {
 	// a failure must stop the server (ADR-0007).
 	Record func(Entry)
 	mu     sync.Mutex
-	apps   []App
-	owner  map[string]App // "action:", "read:" and "input:" names → app
+	apps   []platform.App
+	owner  map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	auditMu    sync.Mutex
 	audit      []AuditEntry
 	deliveries []Delivery
-	events     []Event // published during the current input, queued after it
+	events     []caused // published during the current input, queued after it
 	bindings   map[string]binding
 	relations  *Relations
 	org        *Organization
@@ -128,11 +58,11 @@ type Tenant struct {
 	connectors  *kernel.Connectors
 	descriptors map[string]*pb.ConnectorDescriptor
 	lastError   map[string]ConnectorError
-	notices     []Notification
+	notices     []platform.Notification
 	noticeSeq   int
 	settings    map[string]string // "<app>/<name>" → value
 	endpoints   []*Endpoint
-	outbound    []*Effect
+	outbound    []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
 	// PLATFORM_SECRET_<NAME>); Outbound sends an effect's request (default: a
 	// client refusing private addresses). Tests replace both (ADR-0014).
@@ -169,10 +99,10 @@ func (t *Tenant) remember(e AuditEntry) {
 
 // NewTenant enables apps for a tenant; it refuses duplicate names, consumed
 // protocols no earlier app provides, and manifests the host could not honour.
-func NewTenant(id string, apps ...App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, owner: map[string]App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
+func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
+	t := &Tenant{ID: id, apps: apps, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
 		connectors: kernel.NewConnectors(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}}
-	claim := func(name string, a App) error {
+	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)
 		}
@@ -185,7 +115,7 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 			return nil, err
 		}
 		if r, ok := a.(*Relations); ok {
-			t.relations = r
+			t.relations, r.t = r, t
 		}
 		if o, ok := a.(*Organization); ok {
 			t.org = o
@@ -195,7 +125,7 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {
-				if !slices.ContainsFunc(m.Consumes, func(c Consumption) bool { return c.Protocol == protocol }) {
+				if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
 					return nil, fmt.Errorf("tenant %s: %s subscribes to %s of a protocol it does not consume", id, m.ID, action)
 				}
 				continue
@@ -203,7 +133,7 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 			if _, own := m.Actions.Action(action); !own {
 				return nil, fmt.Errorf("tenant %s: %s subscribes to %s, neither its own action nor a protocol event", id, m.ID, action)
 			}
-			if _, ok := a.(Subscriber); !ok {
+			if _, ok := a.(platform.Subscriber); !ok {
 				return nil, fmt.Errorf("tenant %s: %s subscribes but has no Handle", id, m.ID)
 			}
 		}
@@ -217,7 +147,7 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 		for _, r := range m.Reads {
 			names = append(names, "read:"+r)
 		}
-		for _, action := range m.Actions.actions {
+		for _, action := range m.Actions.All() {
 			names = append(names, "action:"+action.Schema)
 		}
 		for input := range m.Inputs {
@@ -232,22 +162,22 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 	return t, nil
 }
 
-func (t *Tenant) app(id string) App {
-	i := slices.IndexFunc(t.apps, func(a App) bool { return a.Manifest().ID == id })
+func (t *Tenant) app(id string) platform.App {
+	i := slices.IndexFunc(t.apps, func(a platform.App) bool { return a.Manifest().ID == id })
 	if i < 0 {
 		return nil
 	}
 	return t.apps[i]
 }
 
-func (t *Tenant) caller(m Member, app App, replaying bool) Caller {
-	return Caller{Member: m, App: app.Manifest().ID, Replaying: replaying, tenant: t}
+func (t *Tenant) caller(m platform.Member, app platform.App, replaying bool) platform.Caller {
+	return platform.NewCaller(runtime{t}, m, app.Manifest().ID, replaying, false)
 }
 
 func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
 
 // Submit routes a submission to the app declaring its action and records it when accepted.
-func (t *Tenant) Submit(m Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	a := t.owner["action:"+s.GetSchema().GetName()]
 	if a == nil {
 		return nil, unknown()
@@ -265,7 +195,7 @@ func (t *Tenant) Submit(m Member, s *pb.Submission, now time.Time) (*pb.ChangeRe
 }
 
 // Input routes a connector input (push batch, poll page, heartbeat) to its app.
-func (t *Tenant) Input(m Member, name string, body []byte, now time.Time) (any, *kernel.Error) {
+func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (any, *kernel.Error) {
 	a := t.owner["input:"+name]
 	if a == nil {
 		return nil, unknown()
@@ -286,7 +216,7 @@ func (t *Tenant) Input(m Member, name string, body []byte, now time.Time) (any, 
 
 // Read serves a named read of the app that declares it, to members holding a
 // role in that app or to everyone when the manifest says so; the app may refuse further.
-func (t *Tenant) Read(m Member, name string) (any, *kernel.Error) {
+func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
 	a := t.owner["read:"+name]
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -297,10 +227,15 @@ func (t *Tenant) Read(m Member, name string) (any, *kernel.Error) {
 	return a.Read(t.caller(m, a, false), name)
 }
 
-// publish queues an accepted decision for its subscribers (called by Ledger).
-func (t *Tenant) publish(e Event) {
-	e.hops = t.hops
-	t.events = append(t.events, e)
+// caused is an accepted decision with how many deliveries caused it.
+type caused struct {
+	platform.Event
+	hops int
+}
+
+// publish queues an accepted decision for its subscribers (Ledger, through Runtime).
+func (t *Tenant) publish(e platform.Event) {
+	t.events = append(t.events, caused{e, t.hops})
 	t.acted++
 }
 
@@ -311,7 +246,7 @@ func (t *Tenant) Deliveries() []Delivery {
 	return slices.Clone(t.deliveries)
 }
 
-func (t *Tenant) record(a App, kind string, m Member, body []byte, now time.Time) {
+func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []byte, now time.Time) {
 	if t.Record == nil {
 		return
 	}
@@ -325,14 +260,14 @@ func (t *Tenant) Replay(entries []Entry) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for i, e := range entries {
-		var m Member
+		var m platform.Member
 		a := t.app(e.App)
 		if a == nil || json.Unmarshal(e.Principal, &m) != nil {
 			return fmt.Errorf("entry %d: app %q not enabled or member unreadable", i+1, e.App)
 		}
 		var err *kernel.Error
 		if e.Kind == "effect" { // an outbound attempt's outcome: applied, never sent again
-			var o Outcome
+			var o platform.Outcome
 			if json.Unmarshal(e.Body, &o) != nil || !t.apply(o, e.At, true) {
 				return fmt.Errorf("entry %d: effect outcome for an effect the replay did not create", i+1)
 			}
@@ -364,15 +299,15 @@ func (t *Tenant) Replay(entries []Entry) error {
 	return nil
 }
 
-func submitted(member string, a App, s *pb.Submission, at time.Time) AuditEntry {
+func submitted(member string, a platform.App, s *pb.Submission, at time.Time) AuditEntry {
 	return AuditEntry{At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
 		Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId()}
 }
 
 // Catalog is what m may call: each app's actions for m's role there, and an
 // action that uses protocol actions only when m may call the bound provider's.
-func (t *Tenant) Catalog(m Member) []Action {
-	out := []Action{}
+func (t *Tenant) Catalog(m platform.Member) []platform.Action {
+	out := []platform.Action{}
 	for _, a := range t.apps {
 		for _, action := range a.Manifest().Actions.For(m.Roles[a.Manifest().ID]) {
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
@@ -401,7 +336,7 @@ func (t *Tenant) Apps() []AppInfo {
 	for _, a := range t.apps {
 		m := a.Manifest()
 		info := AppInfo{ID: m.ID, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
-			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]EffectKind{}, m.Emits...)}
+			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...)}
 		for input, journaled := range m.Inputs {
 			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
 		}
@@ -412,7 +347,7 @@ func (t *Tenant) Apps() []AppInfo {
 		for _, c := range m.Consumes {
 			info.Consumes = append(info.Consumes, c.Protocol+map[bool]string{true: " (optional)", false: ""}[c.Optional])
 		}
-		for _, action := range m.Actions.actions {
+		for _, action := range m.Actions.All() {
 			for _, used := range action.Uses {
 				info.Uses = append(info.Uses, action.Schema+" → "+used)
 			}
@@ -423,33 +358,33 @@ func (t *Tenant) Apps() []AppInfo {
 }
 
 type AppInfo struct {
-	ID           string           `json:"id"`
-	Version      string           `json:"version"`
-	Reads        []string         `json:"reads"`
-	Roles        []string         `json:"roles"`
-	Capabilities []CapabilityInfo `json:"capabilities"`
-	Inputs       []string         `json:"inputs"`
-	Uses         []string         `json:"uses"`
-	Subscribes   []string         `json:"subscribes"`
-	Provides     []string         `json:"provides"`
-	Consumes     []string         `json:"consumes"`
-	Emits        []EffectKind     `json:"emits"`
+	ID           string                    `json:"id"`
+	Version      string                    `json:"version"`
+	Reads        []string                  `json:"reads"`
+	Roles        []string                  `json:"roles"`
+	Capabilities []platform.CapabilityInfo `json:"capabilities"`
+	Inputs       []string                  `json:"inputs"`
+	Uses         []string                  `json:"uses"`
+	Subscribes   []string                  `json:"subscribes"`
+	Provides     []string                  `json:"provides"`
+	Consumes     []string                  `json:"consumes"`
+	Emits        []platform.EffectKind     `json:"emits"`
 }
 
 // checkManifest refuses a manifest the host could not honour: every app's
 // declarations are validated where it is composed, so each composition's
 // tests check them (#103).
-func checkManifest(a App) error {
+func checkManifest(a platform.App) error {
 	m := a.Manifest()
 	if m.ID == "" || m.Actions == nil {
 		return fmt.Errorf("manifest without ID or action catalog")
 	}
-	for _, action := range m.Actions.actions {
+	for _, action := range m.Actions.All() {
 		if action.Title == "" || action.Description == "" || action.Target == "" || action.Payload == nil || len(action.Roles) == 0 {
 			return fmt.Errorf("action %s lacks a title, description, target, payload fields or roles", action.Schema)
 		}
 	}
-	if _, ok := a.(Runner); len(m.Jobs) > 0 && !ok {
+	if _, ok := a.(platform.Runner); len(m.Jobs) > 0 && !ok {
 		return fmt.Errorf("declares jobs but has no Run")
 	}
 	for _, j := range m.Jobs {
@@ -458,19 +393,19 @@ func checkManifest(a App) error {
 		}
 	}
 	for i, s := range m.Settings {
-		if s.Name == "" || !s.accepts(s.Default) || slices.ContainsFunc(m.Settings[:i], func(x Setting) bool { return x.Name == s.Name }) {
+		if s.Name == "" || !s.Accepts(s.Default) || slices.ContainsFunc(m.Settings[:i], func(x platform.Setting) bool { return x.Name == s.Name }) {
 			return fmt.Errorf("setting %q: unnamed, repeated, or its default is not a %s", s.Name, s.Type)
 		}
 	}
 	for i, e := range m.Emits {
-		if e.Name == "" || strings.Contains(e.Name, "/") || slices.ContainsFunc(m.Emits[:i], func(x EffectKind) bool { return x.Name == e.Name }) {
+		if e.Name == "" || strings.Contains(e.Name, "/") || slices.ContainsFunc(m.Emits[:i], func(x platform.EffectKind) bool { return x.Name == e.Name }) {
 			return fmt.Errorf("effect kind %q: unnamed, repeated or containing '/'", e.Name)
 		}
 	}
-	for _, action := range m.Actions.actions {
+	for _, action := range m.Actions.All() {
 		for _, used := range action.Uses {
 			protocol, _, ok := strings.Cut(used, "#")
-			if !ok || !slices.ContainsFunc(m.Consumes, func(c Consumption) bool { return c.Protocol == protocol }) {
+			if !ok || !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
 				return fmt.Errorf("action %s uses %s, not an action of a protocol it consumes", action.Schema, used)
 			}
 		}

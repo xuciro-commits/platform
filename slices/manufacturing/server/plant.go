@@ -14,7 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver"
+	"platformserver/platform"
 )
 
 const (
@@ -79,7 +79,7 @@ const (
 )
 
 // roleOf is a caller's role in this app.
-func roleOf(c platformserver.Caller) Role { return Role(c.Role()) }
+func roleOf(c platform.Caller) Role { return Role(c.Role()) }
 
 // SiteStructure is the organisation structure the plant's rules read (ADR-0012):
 // a member works on the lines it belongs to there, directly or through the plant.
@@ -131,7 +131,7 @@ type Plant struct {
 	master    MasterData
 	orders    map[string]*Order
 	sfcs      map[string]*SFC
-	ledger    *platformserver.Ledger
+	ledger    *platform.Ledger
 	facts     *kernel.FactLog
 	identity  *kernel.Identity
 	downtime  map[string][]Downtime // resource → current derived events
@@ -140,7 +140,7 @@ type Plant struct {
 
 func NewPlant(tenant string, master MasterData) *Plant {
 	p := &Plant{tenant: tenant, master: master, orders: map[string]*Order{}, sfcs: map[string]*SFC{},
-		ledger: platformserver.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
+		ledger: platform.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
 		facts: kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}, {Name: schemaPlanned, Version: 1},
 			{Name: schemaAnswer, Version: 1}}, nil)),
 		identity: kernel.NewIdentity(nil), downtime: map[string][]Downtime{}}
@@ -199,7 +199,7 @@ func (p *Plant) resourceLine(resource string) string {
 // allowed is the policy hook (K6 T3): the catalog decides which roles may call an
 // action (ADR-0008); the plant hierarchy (lines) is context the domain reads, and
 // the kernel never sees it.
-func (p *Plant) allowed(who platformserver.Caller, s *pb.Submission, now time.Time) bool {
+func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bool {
 	scope := who.Units(SiteStructure, now)
 	onLine := func(line string) bool { return line != "" && slices.Contains(scope, line) }
 	sfc := p.sfcs[s.GetTarget().GetId()]
@@ -228,7 +228,7 @@ func (p *Plant) Disable(capability string) bool { return p.ledger.Catalog.Disabl
 
 // Submit receives a decision in the kernel's order (K6 T2) with the plant's
 // attribute conditions and rules; roles are the catalog's (ADR-0008).
-func (p *Plant) Submit(who platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (p *Plant) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if who.Tenant != p.tenant {
@@ -276,7 +276,7 @@ type reasonPayload struct {
 }
 
 // validate checks the plant's rules (K4 C10) and returns how to apply the decision.
-func (p *Plant) validate(who platformserver.Caller, s *pb.Submission) (func(), *kernel.Error) {
+func (p *Plant) validate(who platform.Caller, s *pb.Submission) (func(), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	switch s.GetSchema().GetName() {
 	case SchemaRelease:

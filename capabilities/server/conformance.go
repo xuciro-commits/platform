@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"net/http"
+	"platformserver/platform"
 	"slices"
 	"testing"
 	"time"
@@ -43,9 +44,9 @@ func snapshot(t *Tenant) string {
 	for _, c := range t.Connectors(at) {
 		connectors = append(connectors, []any{c.ID, c.Cursor, c.Disabled})
 	}
-	everyone := Member{ID: "conformance", Tenant: t.ID, Roles: map[string]string{}}
+	everyone := platform.Member{ID: "conformance", Tenant: t.ID, Roles: map[string]string{}}
 	for _, a := range t.apps {
-		if roles := a.Manifest().Actions.Roles(); len(roles) > 0 && !slices.Contains(roles, AnyMember) {
+		if roles := a.Manifest().Actions.Roles(); len(roles) > 0 && !slices.Contains(roles, platform.AnyMember) {
 			everyone.Roles[a.Manifest().ID] = roles[0]
 		}
 	}

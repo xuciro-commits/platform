@@ -14,27 +14,28 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/platform"
 )
 
 var (
 	t0    = time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	seats = []platformserver.Seat{
-		{Subjects: []string{"sales"}, Member: platformserver.Member{ID: "sales-1", Roles: map[string]string{"crm": "sales", "hotel": "front-desk", "memstay": lodging.Keeper}}},
-		{Subjects: []string{"sales-only"}, Member: platformserver.Member{ID: "sales-2", Roles: map[string]string{"crm": "sales"}}},
-		{Subjects: []string{"desk"}, Member: platformserver.Member{ID: "desk-1", Roles: map[string]string{"hotel": "front-desk"}}},
-		{Subjects: []string{"manager"}, Member: platformserver.Member{ID: "manager-1", Roles: map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper}}},
+		{Subjects: []string{"sales"}, Member: platform.Member{ID: "sales-1", Roles: map[string]string{"crm": "sales", "hotel": "front-desk", "memstay": lodging.Keeper}}},
+		{Subjects: []string{"sales-only"}, Member: platform.Member{ID: "sales-2", Roles: map[string]string{"crm": "sales"}}},
+		{Subjects: []string{"desk"}, Member: platform.Member{ID: "desk-1", Roles: map[string]string{"hotel": "front-desk"}}},
+		{Subjects: []string{"manager"}, Member: platform.Member{ID: "manager-1", Roles: map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper}}},
 	}
 )
 
 type world struct {
 	t       *testing.T
 	tenant  *platformserver.Tenant
-	members map[string]platformserver.Member
+	members map[string]platform.Member
 	journal []platformserver.Entry
 }
 
-func newWorld(t *testing.T, providers ...func(string) platformserver.App) *world {
-	var apps []platformserver.App
+func newWorld(t *testing.T, providers ...func(string) platform.App) *world {
+	var apps []platform.App
 	for _, p := range providers {
 		apps = append(apps, p("hotel-a"))
 	}
@@ -42,20 +43,20 @@ func newWorld(t *testing.T, providers ...func(string) platformserver.App) *world
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := &world{t: t, tenant: tn, members: map[string]platformserver.Member{}}
+	w := &world{t: t, tenant: tn, members: map[string]platform.Member{}}
 	tn.Record = func(e platformserver.Entry) { w.journal = append(w.journal, e) }
 	for _, s := range seats {
-		w.members[s.Subjects[0]] = platformserver.Member{ID: s.ID, Tenant: "hotel-a", Roles: s.Roles}
+		w.members[s.Subjects[0]] = platform.Member{ID: s.ID, Tenant: "hotel-a", Roles: s.Roles}
 	}
-	w.members["admin"] = platformserver.Member{ID: "admin-1", Tenant: "hotel-a", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}
+	w.members["admin"] = platform.Member{ID: "admin-1", Tenant: "hotel-a", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}
 	return w
 }
 
-func hotelProvider(id string) platformserver.App {
+func hotelProvider(id string) platform.App {
 	return hotel.NewHotel(id, map[string]hotel.RoomType{"suite": {Rooms: 1}})
 }
 
-func memoryProvider(id string) platformserver.App { return lodging.NewMemory(id) }
+func memoryProvider(id string) platform.App { return lodging.NewMemory(id) }
 
 func (w *world) submit(who, app, schema, targetType, id, key string, payload any) string {
 	raw, _ := json.Marshal(payload)
@@ -225,7 +226,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, a := range bare.Catalog(platformserver.Member{ID: "x", Tenant: "t", Roles: map[string]string{"crm": "sales"}}) {
+	for _, a := range bare.Catalog(platform.Member{ID: "x", Tenant: "t", Roles: map[string]string{"crm": "sales"}}) {
 		if a.Schema == crm.SchemaBook {
 			t.Fatal("booking offered with no lodging provider")
 		}

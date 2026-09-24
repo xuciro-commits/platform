@@ -8,32 +8,33 @@ import (
 	"hotel"
 	"lodging"
 	"platformserver"
+	"platformserver/platform"
 )
 
 // NewTenant composes the software for one tenant with two lodging providers:
 // the hotel, bound first, and serviced apartments (the protocol's reference
 // provider); an administrator chooses between them in Settings (#99).
 func NewTenant(id string, rooms map[string]hotel.RoomType, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
-	return Compose(id, []platformserver.App{hotel.NewHotel(id, rooms), lodging.NewMemory(id)}, seats...)
+	return Compose(id, []platform.App{hotel.NewHotel(id, rooms), lodging.NewMemory(id)}, seats...)
 }
 
 // Compose puts any lodging providers under the CRM; the first is bound until an administrator chooses another.
-func Compose(id string, providers []platformserver.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
+func Compose(id string, providers []platform.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	org := DemoOrganization()
 	org.Memberships = append(org.Memberships, platformserver.Memberships(seats)...)
-	apps := append([]platformserver.App{platformserver.NewConsole(id, seats...), platformserver.NewOrganization(id, org), platformserver.NewRelations(id)}, providers...)
+	apps := append([]platform.App{platformserver.NewConsole(id, seats...), platformserver.NewOrganization(id, org), platformserver.NewRelations(id)}, providers...)
 	return platformserver.NewTenant(id, append(apps, crm.New(id))...)
 }
 
 // DemoOrganization is a hospitality group as ADR-0012 sees it: the same units in
 // a legal, a management and a governance structure, a temporary project and
 // committee, and an external partner that sits on the committee.
-func DemoOrganization() platformserver.OrgSeed {
-	unit := func(id, name, kind string) platformserver.Unit {
-		return platformserver.Unit{ID: id, Name: name, Kind: kind}
+func DemoOrganization() platform.OrgSeed {
+	unit := func(id, name, kind string) platform.Unit {
+		return platform.Unit{ID: id, Name: name, Kind: kind}
 	}
-	edge := func(structure, u, parent, relation string) platformserver.Edge {
-		return platformserver.Edge{Structure: structure, Unit: u, Parent: parent, Relation: relation}
+	edge := func(structure, u, parent, relation string) platform.Edge {
+		return platform.Edge{Structure: structure, Unit: u, Parent: parent, Relation: relation}
 	}
 	group, company := unit("group", "Harbour Hospitality Group", "group"), unit("hotel-a-co", "Hotel A Ltd.", "subsidiary")
 	group.Legal, company.Legal = true, true
@@ -43,18 +44,18 @@ func DemoOrganization() platformserver.OrgSeed {
 	committee.Until = "2027-07-01"
 	acme := unit("acme", "Acme Corp", "partner")
 	acme.Legal, acme.External = true, true
-	return platformserver.OrgSeed{
-		Structures: []platformserver.Structure{{ID: "legal", Name: "Legal entities", Kind: "legal"},
+	return platform.OrgSeed{
+		Structures: []platform.Structure{{ID: "legal", Name: "Legal entities", Kind: "legal"},
 			{ID: "management", Name: "Management", Kind: "management"}, {ID: "governance", Name: "Committees", Kind: "governance"},
 			{ID: "projects", Name: "Projects", Kind: "project"}},
-		Units: []platformserver.Unit{group, company, unit("hospitality", "Hospitality business group", "business group"),
+		Units: []platform.Unit{group, company, unit("hospitality", "Hospitality business group", "business group"),
 			unit("hotel-a", "Hotel A", "property"), unit("front-office", "Front office", "department"), unit("sales-team", "Sales", "team"),
 			offsite, committee, acme},
-		Edges: []platformserver.Edge{
+		Edges: []platform.Edge{
 			{Structure: "legal", Unit: "hotel-a-co", Parent: "group", Relation: "owned by", Share: 1},
 			edge("management", "hospitality", "group", "part of"), edge("management", "hotel-a", "hospitality", "reports to"),
 			edge("management", "front-office", "hotel-a", "part of"), edge("management", "sales-team", "hotel-a", "part of"),
 			edge("governance", "guest-committee", "group", "part of"), edge("projects", "offsite-2026", "sales-team", "run by")},
-		Memberships: []platformserver.Membership{{Party: "unit:acme", Unit: "guest-committee", Role: "observer"}},
+		Memberships: []platform.Membership{{Party: "unit:acme", Unit: "guest-committee", Role: "observer"}},
 	}
 }

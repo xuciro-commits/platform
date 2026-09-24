@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Dependency boundaries across all apps (#103, Platform.md "Platform model"):
+# Dependency boundaries across all apps (#103, #104 G1; Platform.md "Platform model"):
 #   1. an app never depends on another app; a protocol depends on no app;
-#   2. an app's own code (not its cmd/ binaries or tests) uses the app-facing
-#      platform API only: Caller, Manifest and the declarations, never the host
-#      runtime (tenants, hosts, journals, deployment, the platform apps' types).
-# A protocol's conformance harness drives a tenant and is the one exception.
+#   2. an app's and a protocol's own packages import the app API
+#      (platformserver/platform) and never the host runtime (platformserver):
+#      the runtime is reachable only through platform.Runtime, which the host
+#      hands each caller. Their binaries (cmd/) compose tenants and may import
+#      it, and so may test harnesses (packages named *test, like httptest).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
@@ -20,12 +21,7 @@ for x in "${apps[@]}" "${protocols[@]}"; do
     [[ $other == "$self" ]] && continue
     grep -qx "$other" <<<"$deps" && fail "$self depends on the app $other"
   done
-done
-
-host='NewTenant|Tenant|NewHost|Host|Journal|OpenJournal|Entry|Deployment|Flags|RunWork|Tokens|OIDC|NewDirectory|Directory|NewOrganization|Organization|NewRelations|Relations|Seat|Memberships|Reply|WriteJSON'
-for x in "${apps[@]}" "${protocols[@]}"; do
-  dir=${x%%:*}
-  hits=$(grep -rnE "platformserver\.($host)\b" "$dir" --include='*.go' --exclude='*_test.go' --exclude='conformance.go' | grep -v '/cmd/' || true)
-  [[ -z $hits ]] || fail "app code reaches the host runtime:"$'\n'"$hits"
+  hits=$(cd "$dir" && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./... | grep -vE '/cmd/|test:' | grep -E ' platformserver( |$)' || true)
+  [[ -z $hits ]] || fail "app code imports the host runtime, not the app API:"$'\n'"$hits"
 done
 echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocol"

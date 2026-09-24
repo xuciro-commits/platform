@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // Organization is the platform's organisation capability (ADR-0012): units of
@@ -30,127 +31,81 @@ const (
 	OrgAdmin        = "admin"
 )
 
-// Date is a calendar day "YYYY-MM-DD"; "" means unbounded.
-type Date = string
-
-func activeOn(from, until Date, day Date) bool { return from <= day && (until == "" || day < until) }
-
-type Unit struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"` // open vocabulary: group, subsidiary, factory, line, committee, partner …
-	Legal    bool   `json:"legal,omitempty"`
-	External bool   `json:"external,omitempty"`
-	From     Date   `json:"from,omitempty"`
-	Until    Date   `json:"until,omitempty"`
-	Closed   string `json:"closed,omitempty"` // why it ended: dissolved, merged into <unit> …
-}
-
-type Structure struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Kind   string `json:"kind"`             // legal, management, finance, site, project, governance, community, custom
-	Matrix bool   `json:"matrix,omitempty"` // a unit may have several parents at once
-}
-
-type Edge struct {
-	Structure string  `json:"structure"`
-	Unit      string  `json:"unit"`
-	Parent    string  `json:"parent"`
-	Relation  string  `json:"relation,omitempty"` // part of, owned by, reports to, located at …
-	Share     float64 `json:"share,omitempty"`    // ownership share in a legal structure
-	From      Date    `json:"from,omitempty"`
-	Until     Date    `json:"until,omitempty"`
-}
-
-type Membership struct {
-	Party   string `json:"party"` // "member:<id>" or "unit:<id>"
-	Unit    string `json:"unit"`
-	Role    string `json:"role"` // open vocabulary: employee, volunteer, maintainer, chair, delegate …
-	Primary bool   `json:"primary,omitempty"`
-	From    Date   `json:"from,omitempty"`
-	Until   Date   `json:"until,omitempty"`
-}
-
-// OrgSeed is an organisation's starting shape (an industry package's, or a deployment's).
-type OrgSeed struct {
-	Structures  []Structure  `json:"structures"`
-	Units       []Unit       `json:"units"`
-	Edges       []Edge       `json:"edges"`
-	Memberships []Membership `json:"memberships"`
+func activeOn(from, until platform.Date, day platform.Date) bool {
+	return from <= day && (until == "" || day < until)
 }
 
 type Organization struct {
 	mu     sync.Mutex
-	chart  OrgSeed
-	ledger *Ledger
+	chart  platform.OrgSeed
+	ledger *platform.Ledger
 }
 
-func NewOrganization(tenant string, seed OrgSeed) *Organization {
+func NewOrganization(tenant string, seed platform.OrgSeed) *Organization {
 	admin := []string{OrgAdmin}
-	f := func(name, typ, description string, required bool) Field {
-		return Field{Name: name, Type: typ, Required: required, Description: description}
+	f := func(name, typ, description string, required bool) platform.Field {
+		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
 	from, until := f("from", "date", "Valid from (YYYY-MM-DD; empty: today)", false), f("until", "date", "Valid until, exclusive (empty: open)", false)
-	catalog := NewCatalog(
-		Action{Schema: SchemaUnitAdd, Target: UnitType, Capability: "units", Title: "Add unit", Roles: admin,
+	catalog := platform.NewCatalog(
+		platform.Action{Schema: SchemaUnitAdd, Target: UnitType, Capability: "units", Title: "Add unit", Roles: admin,
 			Description: "Add a unit of any kind: a company, factory, line, team, project, committee, or an external organisation.",
-			Payload: []Field{f("name", "string", "Name", true), f("kind", "string", "Kind, e.g. subsidiary, factory, committee, partner", true),
+			Payload: []platform.Field{f("name", "string", "Name", true), f("kind", "string", "Kind, e.g. subsidiary, factory, committee, partner", true),
 				f("legal", "boolean", "A legal entity", false), f("external", "boolean", "Outside the tenant's own organisation", false), from, until}},
-		Action{Schema: SchemaUnitClose, Target: UnitType, Capability: "units", Title: "Close unit", Roles: admin,
+		platform.Action{Schema: SchemaUnitClose, Target: UnitType, Capability: "units", Title: "Close unit", Roles: admin,
 			Description: "End a unit (dissolved, merged into another); its history stays.",
-			Payload:     []Field{f("until", "date", "Last day + 1", true), f("reason", "string", "e.g. merged into <unit>", false)}},
-		Action{Schema: SchemaStructure, Target: StructureType, Capability: "structures", Title: "Add structure", Roles: admin,
+			Payload:     []platform.Field{f("until", "date", "Last day + 1", true), f("reason", "string", "e.g. merged into <unit>", false)}},
+		platform.Action{Schema: SchemaStructure, Target: StructureType, Capability: "structures", Title: "Add structure", Roles: admin,
 			Description: "Add a way units relate: legal, management, finance, site, project, governance, community or custom.",
-			Payload:     []Field{f("name", "string", "Name", true), f("kind", "string", "Kind", true), f("matrix", "boolean", "Units may have several parents", false)}},
-		Action{Schema: SchemaPlace, Target: UnitType, Capability: "structures", Title: "Place unit", Roles: admin,
+			Payload:     []platform.Field{f("name", "string", "Name", true), f("kind", "string", "Kind", true), f("matrix", "boolean", "Units may have several parents", false)}},
+		platform.Action{Schema: SchemaPlace, Target: UnitType, Capability: "structures", Title: "Place unit", Roles: admin,
 			Description: "Put the unit under a parent in a structure; in a tree this ends its previous parent there.",
-			Payload: []Field{f("structure", "string", "Structure ID", true), f("parent", "string", "Parent unit ID", true),
+			Payload: []platform.Field{f("structure", "string", "Structure ID", true), f("parent", "string", "Parent unit ID", true),
 				f("relation", "string", "e.g. part of, owned by, reports to", false), f("share", "number", "Ownership share", false), from}},
-		Action{Schema: SchemaUnplace, Target: UnitType, Capability: "structures", Title: "Remove from structure", Roles: admin,
+		platform.Action{Schema: SchemaUnplace, Target: UnitType, Capability: "structures", Title: "Remove from structure", Roles: admin,
 			Description: "End the unit's edge to a parent in a structure.",
-			Payload:     []Field{f("structure", "string", "Structure ID", true), f("parent", "string", "Parent unit ID", true), until}},
-		Action{Schema: SchemaJoin, Target: UnitType, Capability: "memberships", Title: "Add membership", Roles: admin,
+			Payload:     []platform.Field{f("structure", "string", "Structure ID", true), f("parent", "string", "Parent unit ID", true), until}},
+		platform.Action{Schema: SchemaJoin, Target: UnitType, Capability: "memberships", Title: "Add membership", Roles: admin,
 			Description: "Make a member (member:<id>) or another unit (unit:<id>) a member of this unit, with a role and a period.",
-			Payload: []Field{f("party", "string", "member:<id> or unit:<id>", true), f("role", "string", "e.g. employee, chair, volunteer", true),
+			Payload: []platform.Field{f("party", "string", "member:<id> or unit:<id>", true), f("role", "string", "e.g. employee, chair, volunteer", true),
 				f("primary", "boolean", "The party's primary unit", false), from, until}},
-		Action{Schema: SchemaLeave, Target: UnitType, Capability: "memberships", Title: "End membership", Roles: admin,
+		platform.Action{Schema: SchemaLeave, Target: UnitType, Capability: "memberships", Title: "End membership", Roles: admin,
 			Description: "End a party's membership of this unit in a role.",
-			Payload:     []Field{f("party", "string", "member:<id> or unit:<id>", true), f("role", "string", "Role", true), until}},
+			Payload:     []platform.Field{f("party", "string", "member:<id> or unit:<id>", true), f("role", "string", "Role", true), until}},
 	)
-	var chart OrgSeed // a copy: decisions change it, the seed stays as given
+	var chart platform.OrgSeed // a copy: decisions change it, the seed stays as given
 	raw, _ := json.Marshal(seed)
 	json.Unmarshal(raw, &chart)
-	return &Organization{chart: chart, ledger: NewLedger(tenant, OrgApp, catalog, UnitType, StructureType)}
+	return &Organization{chart: chart, ledger: platform.NewLedger(tenant, OrgApp, catalog, UnitType, StructureType)}
 }
 
-func (o *Organization) Manifest() Manifest {
-	return Manifest{ID: OrgApp, Version: "1", Actions: o.ledger.Catalog, Reads: []string{"organization"}}
+func (o *Organization) Manifest() platform.Manifest {
+	return platform.Manifest{ID: OrgApp, Version: "1", Actions: o.ledger.Catalog, Reads: []string{"organization"}}
 }
 
 func (o *Organization) Declarations() []*pb.AuthorityDeclaration { return o.ledger.Declarations() }
 
-func (o *Organization) Input(Caller, string, []byte, time.Time) (any, *kernel.Error) {
+func (o *Organization) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-func (o *Organization) unit(id string) *Unit {
-	i := slices.IndexFunc(o.chart.Units, func(u Unit) bool { return u.ID == id })
+func (o *Organization) unit(id string) *platform.Unit {
+	i := slices.IndexFunc(o.chart.Units, func(u platform.Unit) bool { return u.ID == id })
 	if i < 0 {
 		return nil
 	}
 	return &o.chart.Units[i]
 }
 
-func (o *Organization) structure(id string) *Structure {
-	i := slices.IndexFunc(o.chart.Structures, func(s Structure) bool { return s.ID == id })
+func (o *Organization) structure(id string) *platform.Structure {
+	i := slices.IndexFunc(o.chart.Structures, func(s platform.Structure) bool { return s.ID == id })
 	if i < 0 {
 		return nil
 	}
 	return &o.chart.Structures[i]
 }
 
-func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (o *Organization) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
@@ -161,7 +116,7 @@ func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Ch
 			Name, Kind, Reason, Structure, Parent, Relation, Party, Role string
 			Legal, External, Matrix, Primary                             bool
 			Share                                                        float64
-			From, Until                                                  Date
+			From, Until                                                  platform.Date
 		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
@@ -179,7 +134,7 @@ func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Ch
 				return nil, conflict
 			}
 			return func(*pb.ChangeRecord) {
-				o.chart.Units = append(o.chart.Units, Unit{ID: id, Name: p.Name, Kind: p.Kind, Legal: p.Legal, External: p.External, From: p.From, Until: p.Until})
+				o.chart.Units = append(o.chart.Units, platform.Unit{ID: id, Name: p.Name, Kind: p.Kind, Legal: p.Legal, External: p.External, From: p.From, Until: p.Until})
 			}, nil
 		case SchemaStructure:
 			if p.Name == "" || p.Kind == "" {
@@ -189,7 +144,7 @@ func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Ch
 				return nil, conflict
 			}
 			return func(*pb.ChangeRecord) {
-				o.chart.Structures = append(o.chart.Structures, Structure{ID: id, Name: p.Name, Kind: p.Kind, Matrix: p.Matrix})
+				o.chart.Structures = append(o.chart.Structures, platform.Structure{ID: id, Name: p.Name, Kind: p.Kind, Matrix: p.Matrix})
 			}, nil
 		}
 		u := o.unit(id)
@@ -216,7 +171,7 @@ func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Ch
 						o.chart.Edges[i].Until = p.From
 					}
 				}
-				o.chart.Edges = append(o.chart.Edges, Edge{Structure: p.Structure, Unit: id, Parent: p.Parent, Relation: p.Relation, Share: p.Share, From: p.From})
+				o.chart.Edges = append(o.chart.Edges, platform.Edge{Structure: p.Structure, Unit: id, Parent: p.Parent, Relation: p.Relation, Share: p.Share, From: p.From})
 			}, nil
 		case SchemaUnplace, SchemaLeave:
 			day := p.Until
@@ -224,7 +179,7 @@ func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Ch
 				day = now.UTC().Format(time.DateOnly)
 			}
 			if s.GetSchema().GetName() == SchemaUnplace {
-				i := slices.IndexFunc(o.chart.Edges, func(e Edge) bool {
+				i := slices.IndexFunc(o.chart.Edges, func(e platform.Edge) bool {
 					return e.Structure == p.Structure && e.Unit == id && e.Parent == p.Parent && activeOn(e.From, e.Until, day)
 				})
 				if i < 0 {
@@ -232,7 +187,7 @@ func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Ch
 				}
 				return func(*pb.ChangeRecord) { o.chart.Edges[i].Until = day }, nil
 			}
-			i := slices.IndexFunc(o.chart.Memberships, func(m Membership) bool {
+			i := slices.IndexFunc(o.chart.Memberships, func(m platform.Membership) bool {
 				return m.Party == p.Party && m.Unit == id && m.Role == p.Role && activeOn(m.From, m.Until, day)
 			})
 			if i < 0 {
@@ -248,16 +203,18 @@ func (o *Organization) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Ch
 			return nil, notFound
 		}
 		return func(*pb.ChangeRecord) {
-			o.chart.Memberships = append(o.chart.Memberships, Membership{Party: p.Party, Unit: id, Role: p.Role, Primary: p.Primary, From: p.From, Until: p.Until})
+			o.chart.Memberships = append(o.chart.Memberships, platform.Membership{Party: p.Party, Unit: id, Role: p.Role, Primary: p.Primary, From: p.From, Until: p.Until})
 		}, nil
 	})
 }
 
 // below reports whether unit sits (transitively) under ancestor in structure on day.
-func (o *Organization) below(structure, ancestor, unit string, day Date) bool {
+func (o *Organization) below(structure, ancestor, unit string, day platform.Date) bool {
 	for seen := map[string]bool{}; unit != "" && !seen[unit]; {
 		seen[unit] = true
-		i := slices.IndexFunc(o.chart.Edges, func(e Edge) bool { return e.Structure == structure && e.Unit == unit && activeOn(e.From, e.Until, day) })
+		i := slices.IndexFunc(o.chart.Edges, func(e platform.Edge) bool {
+			return e.Structure == structure && e.Unit == unit && activeOn(e.From, e.Until, day)
+		})
 		if i < 0 {
 			return false
 		}
@@ -272,7 +229,7 @@ func (o *Organization) below(structure, ancestor, unit string, day Date) bool {
 // units are the units party belongs to on day, directly or as a member of a
 // member unit, and every unit below them in structure; closed units count for
 // nothing after they close.
-func (o *Organization) units(party, structure string, day Date) []string {
+func (o *Organization) units(party, structure string, day platform.Date) []string {
 	var out []string
 	add := func(u string) bool {
 		if slices.Contains(out, u) {
@@ -303,7 +260,7 @@ func (o *Organization) units(party, structure string, day Date) []string {
 
 // holders are the members holding a membership (with role, when given) in unit
 // or in a unit above it in structure on day: who answers for the unit.
-func (o *Organization) holders(structure, unit, role string, day Date) []string {
+func (o *Organization) holders(structure, unit, role string, day platform.Date) []string {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	var out []string
@@ -320,25 +277,23 @@ func (o *Organization) holders(structure, unit, role string, day Date) []string 
 	return out
 }
 
-// Units are the units c's member belongs to in structure on the input's day
-// (now), with all units below them: the scope a rule reads from a named
-// structure (ADR-0012). A replay passes the recorded time, so it scopes alike.
-func (c Caller) Units(structure string, now time.Time) []string {
-	if c.tenant == nil || c.tenant.org == nil {
+// unitsOf are c's member's units in structure on now's day (Caller.Units).
+func (t *Tenant) unitsOf(c platform.Caller, structure string, now time.Time) []string {
+	if t.org == nil {
 		return nil
 	}
-	o := c.tenant.org
+	o := t.org
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.units("member:"+c.ID, structure, now.UTC().Format(time.DateOnly))
 }
 
 // Read "organization": the whole chart, for members holding a role in the org app.
-func (o *Organization) Read(Caller, string) (any, *kernel.Error) {
+func (o *Organization) Read(platform.Caller, string) (any, *kernel.Error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	raw, _ := json.Marshal(o.chart)
-	out := OrgSeed{Structures: []Structure{}, Units: []Unit{}, Edges: []Edge{}, Memberships: []Membership{}}
+	out := platform.OrgSeed{Structures: []platform.Structure{}, Units: []platform.Unit{}, Edges: []platform.Edge{}, Memberships: []platform.Membership{}}
 	json.Unmarshal(raw, &out) // a deep copy, with empty lists rather than null
 	return out, nil
 }

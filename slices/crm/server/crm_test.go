@@ -2,14 +2,14 @@ package crm
 
 import (
 	"encoding/json"
-	"platformserver"
+	"platformserver/platform"
 	"testing"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 )
 
-func submit(c *CRM, who platformserver.Caller, schema, targetType, id, key string, payload map[string]string) string {
+func submit(c *CRM, who platform.Caller, schema, targetType, id, key string, payload map[string]string) string {
 	raw, _ := json.Marshal(payload)
 	_, err := c.Submit(who, &pb.Submission{TenantId: "t", PrincipalId: who.ID, Authority: Authority,
 		Target: &pb.EntityRef{Type: targetType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1},
@@ -22,8 +22,8 @@ func submit(c *CRM, who platformserver.Caller, schema, targetType, id, key strin
 
 func TestOpportunityOwnership(t *testing.T) {
 	c := New("t")
-	as := func(id string, role Role) platformserver.Caller {
-		return platformserver.As("crm", platformserver.Member{ID: id, Tenant: "t", Roles: map[string]string{"crm": string(role)}})
+	as := func(id string, role Role) platform.Caller {
+		return platform.As("crm", platform.Member{ID: id, Tenant: "t", Roles: map[string]string{"crm": string(role)}})
 	}
 	ana, bo, lead := as("ana", Sales), as("bo", Sales), as("lead", Manager)
 	for _, step := range []struct {

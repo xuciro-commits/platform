@@ -9,17 +9,18 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // notesProtocol lets apps hear of another app's notes without knowing it.
-var notesProtocol = Protocol{Name: "notes", Version: 1, Reads: []string{"notes"}, Events: []ProtocolEvent{{Name: "noted", Title: "Noted"}}}
+var notesProtocol = platform.Protocol{Name: "notes", Version: 1, Reads: []string{"notes"}, Events: []platform.ProtocolEvent{{Name: "noted", Title: "Noted"}}}
 
 // published is a notes app that provides notesProtocol.
 type published struct{ *notes }
 
-func (p published) Manifest() Manifest {
+func (p published) Manifest() platform.Manifest {
 	m := p.notes.Manifest()
-	m.Provides = []Provision{{Protocol: notesProtocol, Reads: map[string]string{"notes": p.id + "-notes"}, Events: map[string]string{"noted": p.id + ".note"}}}
+	m.Provides = []platform.Provision{{Protocol: notesProtocol, Reads: map[string]string{"notes": p.id + "-notes"}, Events: map[string]string{"noted": p.id + ".note"}}}
 	return m
 }
 
@@ -28,13 +29,13 @@ func (p published) Manifest() Manifest {
 // refused until the provider has that topic.
 type watcher struct{ *notes }
 
-func (w watcher) Manifest() Manifest {
+func (w watcher) Manifest() platform.Manifest {
 	m := w.notes.Manifest()
-	m.Subscribes, m.Consumes = []string{ProtocolAction(notesProtocol.ID(), "noted")}, []Consumption{{Protocol: notesProtocol.ID()}}
+	m.Subscribes, m.Consumes = []string{platform.ProtocolAction(notesProtocol.ID(), "noted")}, []platform.Consumption{{Protocol: notesProtocol.ID()}}
 	return m
 }
 
-func (w watcher) Handle(c Caller, e Event) *kernel.Error {
+func (w watcher) Handle(c platform.Caller, e platform.Event) *kernel.Error {
 	text := string(e.Record.GetSubmission().GetPayload())
 	if text == "fail" {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -48,7 +49,7 @@ func (w watcher) Handle(c Caller, e Event) *kernel.Error {
 	return w.notes.write(c, "seen:"+e.Record.GetChangeId(), "saw "+text)
 }
 
-func (n *notes) write(c Caller, key, text string) *kernel.Error {
+func (n *notes) write(c platform.Caller, key, text string) *kernel.Error {
 	_, err := n.Submit(c, note(c.Tenant, c.ID, n.id, key, "log", text), time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC))
 	return err
 }
@@ -62,7 +63,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	}
 	var journal []Entry
 	build := func() (*Tenant, *notes) {
-		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}})
+		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}})
 		w := newNotes("t-1", "w")
 		tn, err := NewTenant("t-1", dir, published{newNotes("t-1", "a")}, watcher{w})
 		if err != nil {
@@ -175,18 +176,18 @@ type echo struct {
 
 func (e echo) as(action string) echo { e.subscribes = action; return e }
 
-func (e echo) Manifest() Manifest {
+func (e echo) Manifest() platform.Manifest {
 	m := e.notes.Manifest()
 	m.Subscribes = []string{e.subscribes}
 	return m
 }
 
-func (e echo) Handle(c Caller, ev Event) *kernel.Error {
+func (e echo) Handle(c platform.Caller, ev platform.Event) *kernel.Error {
 	return e.notes.write(c, "echo:"+ev.Record.GetChangeId(), "again")
 }
 
 func TestSubscriptionCycleStops(t *testing.T) {
-	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"e": "writer"}}})
+	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"e": "writer"}}})
 	tn, err := NewTenant("t-1", dir, echo{newNotes("t-1", "e"), ""}.as("e.note"))
 	if err != nil {
 		t.Fatal(err)

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -12,49 +11,13 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // Platform operations (ADR-0013): work the host owns (event deliveries and
 // scheduled jobs, K9), the tenant's connectors (K8), notifications and typed app
 // settings. Everything the host runs on its own is an input: it is journaled
 // and a replay runs it again through the same code (ADR-0007).
-
-// Job is work an app runs on a schedule, as "app:<id>" (manifest).
-type Job struct {
-	Name  string        `json:"name"`
-	Title string        `json:"title"`
-	Every time.Duration `json:"every"`
-}
-
-// Runner is an app with scheduled jobs. A run acts only through decisions and
-// notifications, so a run that did neither needs no journal entry.
-type Runner interface {
-	Run(c Caller, job string, now time.Time) *kernel.Error
-}
-
-// Setting is a typed per-tenant value an app declares and administrators set in
-// Settings; a value within the app's rules, never a rule (ADR-0008 point 2).
-type Setting struct {
-	Name        string   `json:"name"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Type        string   `json:"type"` // boolean, integer, text, choice
-	Default     string   `json:"default"`
-	Choices     []string `json:"choices,omitempty"`
-}
-
-func (s Setting) accepts(v string) bool {
-	switch s.Type {
-	case "boolean":
-		return v == "true" || v == "false"
-	case "integer":
-		_, err := strconv.Atoi(v)
-		return err == nil
-	case "choice":
-		return slices.Contains(s.Choices, v)
-	}
-	return s.Type == "text"
-}
 
 const (
 	maxAttempts = 5   // a delivery then fails and its queue moves on
@@ -76,8 +39,8 @@ type Task struct {
 	Due      time.Time `json:"due,omitzero"`
 	Error    string    `json:"error,omitempty"`
 	since    int       // attempts before the last manual retry: each retry gets a full schedule
-	event    *Event
-	job      Job
+	event    *caused
+	job      platform.Job
 }
 
 // enqueue queues the input's events for their subscribers, after the platform's
@@ -87,11 +50,11 @@ func (t *Tenant) enqueue(now time.Time) {
 		e := t.events[0]
 		t.events = t.events[1:]
 		s := e.Record.GetSubmission()
-		names := append([]string{s.GetSchema().GetName()}, t.protocolEvents(e)...)
+		names := append([]string{s.GetSchema().GetName()}, t.protocolEvents(e.Event)...)
 		if t.relations != nil {
-			t.relations.observe(t, e, names[1:])
+			t.relations.observe(t, e.Event, names[1:])
 		}
-		t.emit(e, names)
+		t.emit(e.Event, names)
 		for _, a := range t.apps {
 			if !slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
 				continue
@@ -122,8 +85,8 @@ func (t *Tenant) delivered(d Delivery) {
 	}
 }
 
-func (t *Tenant) automation(app string, replaying bool) Caller {
-	return Caller{Member: Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, App: app, Replaying: replaying, Automation: true, tenant: t}
+func (t *Tenant) automation(app string, replaying bool) platform.Caller {
+	return platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, app, replaying, true)
 }
 
 type workBody struct {
@@ -160,11 +123,11 @@ func (t *Tenant) Work(now time.Time) {
 
 // attempt hands a queued event to its subscriber once; the outcome is journaled.
 func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
-	sub := t.app(task.App).(Subscriber)
+	sub := t.app(task.App).(platform.Subscriber)
 	generation, _, _ := t.works.Start(task.ID, "host")
 	t.hops = task.event.hops + 1
 	outcome := "ok"
-	if err := sub.Handle(t.automation(task.App, replaying), *task.event); err != nil {
+	if err := sub.Handle(t.automation(task.App, replaying), task.event.Event); err != nil {
 		outcome = err.Error()
 	}
 	t.hops = 0
@@ -201,7 +164,7 @@ func (t *Tenant) run(task *Task, now time.Time, replaying bool) string {
 	before := t.acted
 	generation, _, _ := t.works.Start(task.ID, "host")
 	outcome := "ok"
-	if err := t.app(task.App).(Runner).Run(t.automation(task.App, replaying), task.job.Name, now); err != nil {
+	if err := t.app(task.App).(platform.Runner).Run(t.automation(task.App, replaying), task.job.Name, now); err != nil {
 		outcome = err.Error()
 	}
 	t.works.Finish(task.ID, generation, outcome != "ok")
@@ -321,17 +284,6 @@ func (t *Tenant) Connect(descriptors ...*pb.ConnectorDescriptor) error {
 	return nil
 }
 
-// Deliver accepts one batch from the calling connector about dataClass; a poll
-// page moves the cursor from → to (K8).
-func (c Caller) Deliver(dataClass, from, to string, now time.Time) *kernel.Error {
-	if c.tenant == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	c.tenant.opsMu.Lock()
-	defer c.tenant.opsMu.Unlock()
-	return c.tenant.connectors.Deliver(c.Tenant, c.ID, dataClass, from, to, now)
-}
-
 func (t *Tenant) refused(member, input string, err *kernel.Error, now time.Time) {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
@@ -363,36 +315,9 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 
 // Notifications: an app tells members something from any input (ADR-0013).
 
-// Recipient is a member; whoever holds a membership (with Role, when given) in
-// Unit or in a unit above it in Structure (ADR-0012); or whoever holds AppRole
-// in the notifying app (the directory).
-type Recipient struct {
-	Member                string
-	Structure, Unit, Role string
-	AppRole               string
-}
-
-type Notification struct {
-	ID     string    `json:"id"`
-	Member string    `json:"member"`
-	App    string    `json:"app"`
-	Title  string    `json:"title"`
-	Body   string    `json:"body,omitempty"`
-	Ref    string    `json:"ref,omitempty"` // the entity it is about, "<type>/<id>"
-	Key    string    `json:"key,omitempty"` // one notification per member, app and key
-	At     time.Time `json:"at"`
-	Read   bool      `json:"read"`
-}
-
 const noticesKept = 2000
 
-// Notify resolves recipients on now's day and gives each one n, unless it has
-// one with n's key from this app already; it returns who received it.
-func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string {
-	t := c.tenant
-	if t == nil {
-		return nil
-	}
+func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
 	var members []string
 	for _, r := range to {
 		if r.Member != "" && !slices.Contains(members, r.Member) {
@@ -419,7 +344,7 @@ func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string 
 	defer t.opsMu.Unlock()
 	var out []string
 	for _, m := range members {
-		if n.Key != "" && slices.ContainsFunc(t.notices, func(x Notification) bool { return x.Member == m && x.App == c.App && x.Key == n.Key }) {
+		if n.Key != "" && slices.ContainsFunc(t.notices, func(x platform.Notification) bool { return x.Member == m && x.App == c.App && x.Key == n.Key }) {
 			continue
 		}
 		t.noticeSeq++
@@ -436,10 +361,10 @@ func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string 
 }
 
 // notificationsFor is member's notifications, newest first.
-func (t *Tenant) notificationsFor(member string) []Notification {
+func (t *Tenant) notificationsFor(member string) []platform.Notification {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	out := []Notification{}
+	out := []platform.Notification{}
 	for i := len(t.notices) - 1; i >= 0; i-- {
 		if t.notices[i].Member == member {
 			out = append(out, t.notices[i])
@@ -450,22 +375,18 @@ func (t *Tenant) notificationsFor(member string) []Notification {
 
 // App settings.
 
-// Setting is the current value of the calling app's setting (its default until set).
-func (c Caller) Setting(name string) string {
-	if c.tenant == nil {
-		return ""
-	}
-	a := c.tenant.app(c.App)
+func (t *Tenant) setting(c platform.Caller, name string) string {
+	a := t.app(c.App)
 	if a == nil {
 		return ""
 	}
-	i := slices.IndexFunc(a.Manifest().Settings, func(s Setting) bool { return s.Name == name })
+	i := slices.IndexFunc(a.Manifest().Settings, func(s platform.Setting) bool { return s.Name == name })
 	if i < 0 {
 		return ""
 	}
-	c.tenant.opsMu.Lock()
-	defer c.tenant.opsMu.Unlock()
-	if v, ok := c.tenant.settings[c.App+"/"+name]; ok {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	if v, ok := t.settings[c.App+"/"+name]; ok {
 		return v
 	}
 	return a.Manifest().Settings[i].Default
@@ -478,7 +399,7 @@ type AppSettings struct {
 }
 
 type SettingValue struct {
-	Setting
+	platform.Setting
 	Value string `json:"value"`
 }
 
@@ -519,29 +440,29 @@ const (
 	SchemaProtocolBind     = "platform.protocol.bind"
 )
 
-func operationsActions() []Action {
+func operationsActions() []platform.Action {
 	admin := []string{Admin}
-	return []Action{
+	return []platform.Action{
 		{Schema: SchemaConnectorOn, Target: ConnectorType, Capability: "integrations", Title: "Enable connector",
-			Description: "Accept the connector's deliveries again.", Payload: []Field{}, Roles: admin},
+			Description: "Accept the connector's deliveries again.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaConnectorOff, Target: ConnectorType, Capability: "integrations", Title: "Disable connector",
-			Description: "Refuse the connector's deliveries until it is enabled; its cursor is kept.", Payload: []Field{}, Roles: admin},
+			Description: "Refuse the connector's deliveries until it is enabled; its cursor is kept.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaSettingSet, Target: SettingType, Capability: "settings", Title: "Change app setting",
 			Description: "Set an app's setting (target <app>/<name>) to a value of its type.",
-			Payload:     []Field{{Name: "value", Type: "string", Required: true, Description: "true/false, a whole number, one of the choices, or text"}}, Roles: admin},
+			Payload:     []platform.Field{{Name: "value", Type: "string", Required: true, Description: "true/false, a whole number, one of the choices, or text"}}, Roles: admin},
 		{Schema: SchemaWorkRetry, Target: WorkType, Capability: "automation", Title: "Retry work",
-			Description: "Queue a failed event delivery again, or run a scheduled job now.", Payload: []Field{}, Roles: admin},
+			Description: "Queue a failed event delivery again, or run a scheduled job now.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaProtocolBind, Target: ProtocolType, Capability: "apps", Title: "Choose protocol provider",
 			Description: "Send the tenant's new calls of a protocol (target <name>/<version>) to another app that provides it; what every provider holds stays readable.",
-			Payload:     []Field{{Name: "provider", Type: "string", Required: true, Description: "App ID of a provider"}}, Roles: admin},
+			Payload:     []platform.Field{{Name: "provider", Type: "string", Required: true, Description: "App ID of a provider"}}, Roles: admin},
 		{Schema: SchemaNotificationRead, Target: NotificationType, Capability: "notifications", Title: "Mark notification read",
-			Description: "Mark one of your notifications as read.", Payload: []Field{}, Roles: []string{AnyMember}},
+			Description: "Mark one of your notifications as read.", Payload: []platform.Field{}, Roles: []string{platform.AnyMember}},
 	}
 }
 
 // The console's decisions about operations, one area per target type.
 
-func (t *Tenant) decideConnector(_ Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideConnector(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	t.opsMu.Lock()
 	d := t.descriptors[s.GetTarget().GetId()]
 	t.opsMu.Unlock()
@@ -552,7 +473,7 @@ func (t *Tenant) decideConnector(_ Caller, s *pb.Submission, _ time.Time) (func(
 	return func(*pb.ChangeRecord) { t.opsMu.Lock(); d.Disabled = off; t.opsMu.Unlock() }, nil
 }
 
-func (t *Tenant) decideSetting(_ Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideSetting(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	var p struct{ Value string }
 	json.Unmarshal(s.GetPayload(), &p)
@@ -561,17 +482,17 @@ func (t *Tenant) decideSetting(_ Caller, s *pb.Submission, _ time.Time) (func(*p
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	i := slices.IndexFunc(a.Manifest().Settings, func(x Setting) bool { return x.Name == name })
+	i := slices.IndexFunc(a.Manifest().Settings, func(x platform.Setting) bool { return x.Name == name })
 	if i < 0 {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	if !a.Manifest().Settings[i].accepts(p.Value) {
+	if !a.Manifest().Settings[i].Accepts(p.Value) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.settings[id] = p.Value; t.opsMu.Unlock() }, nil
 }
 
-func (t *Tenant) decideBinding(_ Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	var p struct{ Provider string }
 	json.Unmarshal(s.GetPayload(), &p)
@@ -581,7 +502,7 @@ func (t *Tenant) decideBinding(_ Caller, s *pb.Submission, _ time.Time) (func(*p
 	return func(*pb.ChangeRecord) { t.rebind(id, p.Provider) }, nil
 }
 
-func (t *Tenant) decideWork(_ Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideWork(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	t.opsMu.Lock()
 	known := slices.ContainsFunc(t.failed, func(x *Task) bool { return x.ID == id }) || slices.ContainsFunc(t.jobs, func(x *Task) bool { return x.ID == id })
@@ -592,10 +513,10 @@ func (t *Tenant) decideWork(_ Caller, s *pb.Submission, now time.Time) (func(*pb
 	return func(*pb.ChangeRecord) { t.retry(id, now) }, nil
 }
 
-func (t *Tenant) decideNotification(c Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideNotification(c platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	t.opsMu.Lock()
-	i := slices.IndexFunc(t.notices, func(x Notification) bool { return x.ID == id })
+	i := slices.IndexFunc(t.notices, func(x platform.Notification) bool { return x.ID == id })
 	mine := i >= 0 && t.notices[i].Member == c.ID
 	t.opsMu.Unlock()
 	if i < 0 {
@@ -607,7 +528,7 @@ func (t *Tenant) decideNotification(c Caller, s *pb.Submission, _ time.Time) (fu
 	return func(*pb.ChangeRecord) {
 		t.opsMu.Lock()
 		defer t.opsMu.Unlock()
-		if i := slices.IndexFunc(t.notices, func(x Notification) bool { return x.ID == id }); i >= 0 {
+		if i := slices.IndexFunc(t.notices, func(x platform.Notification) bool { return x.ID == id }); i >= 0 {
 			t.notices[i].Read = true
 		}
 	}, nil

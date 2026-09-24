@@ -18,7 +18,7 @@ import (
 	"lodging"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver"
+	"platformserver/platform"
 )
 
 const (
@@ -40,19 +40,19 @@ const (
 
 // Actions is the hotel's action catalog (ADR-0008): front desk and channels
 // create and modify; only managers cancel. Other packages act through it too.
-func Actions() *platformserver.Catalog {
-	stay := []platformserver.Field{{Name: "roomType", Type: "string", Required: true, Description: "Room type"},
+func Actions() *platform.Catalog {
+	stay := []platform.Field{{Name: "roomType", Type: "string", Required: true, Description: "Room type"},
 		{Name: "checkIn", Type: "date", Required: true, Description: "First night (YYYY-MM-DD; hourly types YYYY-MM-DDTHH:MM)"},
 		{Name: "checkOut", Type: "date", Required: true, Description: "Departure, exclusive"}}
 	book := []string{string(FrontDesk), string(Manager), string(Channel)}
-	return platformserver.NewCatalog(
-		platformserver.Action{Schema: SchemaCreate, Target: ReservationType, Capability: "reservations", Title: "Create reservation",
+	return platform.NewCatalog(
+		platform.Action{Schema: SchemaCreate, Target: ReservationType, Capability: "reservations", Title: "Create reservation",
 			Description: "Reserve a room type for a stay; refused when the type is sold out for any night.",
-			Payload:     append(stay, platformserver.Field{Name: "guest", Type: "string", Required: true, Description: "Guest name"}), Roles: book},
-		platformserver.Action{Schema: SchemaModify, Target: ReservationType, Capability: "reservations", Title: "Modify stay",
+			Payload:     append(stay, platform.Field{Name: "guest", Type: "string", Required: true, Description: "Guest name"}), Roles: book},
+		platform.Action{Schema: SchemaModify, Target: ReservationType, Capability: "reservations", Title: "Modify stay",
 			Description: "Change the room type or dates of a reservation.", Payload: stay, Roles: book},
-		platformserver.Action{Schema: SchemaCancel, Target: ReservationType, Capability: "reservations", Title: "Cancel reservation",
-			Description: "Cancel a reservation; the record stays in its history.", Payload: []platformserver.Field{}, Roles: []string{string(Manager)}},
+		platform.Action{Schema: SchemaCancel, Target: ReservationType, Capability: "reservations", Title: "Cancel reservation",
+			Description: "Cancel a reservation; the record stays in its history.", Payload: []platform.Field{}, Roles: []string{string(Manager)}},
 	)
 }
 
@@ -87,7 +87,7 @@ type Hotel struct {
 	rooms        map[string]RoomType
 	reservations map[string]*Reservation
 	facts        *kernel.FactLog
-	ledger       *platformserver.Ledger
+	ledger       *platform.Ledger
 }
 
 // RoomType is sellable inventory per night: physical rooms plus an overbooking
@@ -115,7 +115,7 @@ func (t RoomType) span(s Stay) (in, out time.Time, step time.Duration, ok bool) 
 
 func NewHotel(tenant string, rooms map[string]RoomType) *Hotel {
 	h := &Hotel{tenant: tenant, rooms: rooms, reservations: map[string]*Reservation{},
-		ledger: platformserver.NewLedger(tenant, Authority, Actions(), ReservationType),
+		ledger: platform.NewLedger(tenant, Authority, Actions(), ReservationType),
 		facts:  kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: channelMessageSchema, Version: 1}}, nil))}
 	h.ledger.Changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(h.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
@@ -128,7 +128,7 @@ func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
 
 // Submit turns a submission into a change record or rejects it, in the kernel's
 // receiving order (K6 T2); the hotel supplies only its rules.
-func (h *Hotel) Submit(c platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (h *Hotel) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if c.Tenant != h.tenant {
@@ -160,22 +160,22 @@ const (
 
 // tellOversold tells the managers about each unit of the stay sold beyond the
 // physical rooms of its type (the overbooking allowance in use: a walk risk).
-func (h *Hotel) tellOversold(c platformserver.Caller, r Reservation, now time.Time) {
+func (h *Hotel) tellOversold(c platform.Caller, r Reservation, now time.Time) {
 	s := r.Stay
 	t := h.rooms[s.RoomType]
 	in, out, step, _ := t.span(s)
 	for slot := in; slot.Before(out); slot = slot.Add(step) {
 		if used := h.used(s.RoomType, slot, ""); used > t.Rooms {
 			day := slot.Format(map[bool]string{true: "2006-01-02 15:04", false: time.DateOnly}[t.Hourly])
-			c.Notify(platformserver.Notification{Title: fmt.Sprintf("%s oversold on %s", s.RoomType, day),
+			c.Notify(platform.Notification{Title: fmt.Sprintf("%s oversold on %s", s.RoomType, day),
 				Body: fmt.Sprintf("%d sold for %d rooms: someone may have to be walked.", used, t.Rooms),
-				Ref:  ReservationType + "/" + r.ID, Key: "oversold:" + s.RoomType + ":" + day}, now, platformserver.Recipient{AppRole: string(Manager)})
+				Ref:  ReservationType + "/" + r.ID, Key: "oversold:" + s.RoomType + ":" + day}, now, platform.Recipient{AppRole: string(Manager)})
 		}
 	}
 }
 
 // Run sends the front desk the arrivals of the day the lead setting names, once per day.
-func (h *Hotel) Run(c platformserver.Caller, _ string, now time.Time) *kernel.Error {
+func (h *Hotel) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 	lead, err := strconv.Atoi(c.Setting(SettingArrivalsLead))
 	if err != nil || lead <= 0 {
 		return nil
@@ -188,8 +188,8 @@ func (h *Hotel) Run(c platformserver.Caller, _ string, now time.Time) *kernel.Er
 		}
 	}
 	if len(lines) > 0 {
-		c.Notify(platformserver.Notification{Title: fmt.Sprintf("%d arrivals on %s", len(lines), day), Body: strings.Join(lines, "\n"),
-			Key: "arrivals:" + day}, now, platformserver.Recipient{AppRole: string(FrontDesk)})
+		c.Notify(platform.Notification{Title: fmt.Sprintf("%d arrivals on %s", len(lines), day), Body: strings.Join(lines, "\n"),
+			Key: "arrivals:" + day}, now, platform.Recipient{AppRole: string(FrontDesk)})
 	}
 	return nil
 }
@@ -204,11 +204,11 @@ func ChannelConnector(id string) *pb.ConnectorDescriptor {
 func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Declarations() }
 
 // Manifest declares the hotel as an app (ADR-0010).
-func (h *Hotel) Manifest() platformserver.Manifest {
-	return platformserver.Manifest{ID: "hotel", Version: "1", Actions: h.ledger.Catalog,
+func (h *Hotel) Manifest() platform.Manifest {
+	return platform.Manifest{ID: "hotel", Version: "1", Actions: h.ledger.Catalog,
 		Reads: []string{"reservations", "lodging-bookings"}, Inputs: map[string]bool{"channel-bookings": true},
-		Jobs: []platformserver.Job{{Name: JobArrivals, Title: "Send the front desk the arrivals list", Every: time.Hour}},
-		Settings: []platformserver.Setting{
+		Jobs: []platform.Job{{Name: JobArrivals, Title: "Send the front desk the arrivals list", Every: time.Hour}},
+		Settings: []platform.Setting{
 			{Name: SettingOverbooking, Title: "Sell the overbooking allowance", Type: "boolean", Default: "true",
 				Description: "Sell rooms beyond the physical count up to each room type's allowance; managers are told when it is used."},
 			{Name: SettingChannelNotes, Title: "Tell about channel bookings", Type: "choice", Default: "front-desk", Choices: []string{"off", "front-desk", "manager"},
@@ -217,13 +217,13 @@ func (h *Hotel) Manifest() platformserver.Manifest {
 				Description: "The front desk receives the arrivals of the day this far ahead; 0 turns the list off."},
 		},
 		// The hotel sells stays to any app through the lodging protocol (ADR-0011).
-		Provides: []platformserver.Provision{{Protocol: lodging.Protocol(),
+		Provides: []platform.Provision{{Protocol: lodging.Protocol(),
 			Actions: map[string]string{"reserve": SchemaCreate, "change": SchemaModify, "cancel": SchemaCancel},
 			Reads:   map[string]string{"bookings": "lodging-bookings"},
 			Events:  map[string]string{"changed": SchemaModify, "canceled": SchemaCancel}}}}
 }
 
-func (h *Hotel) Read(_ platformserver.Caller, name string) (any, *kernel.Error) {
+func (h *Hotel) Read(_ platform.Caller, name string) (any, *kernel.Error) {
 	if name == "lodging-bookings" {
 		out := []lodging.Booking{}
 		for _, r := range h.Reservations() {
@@ -235,7 +235,7 @@ func (h *Hotel) Read(_ platformserver.Caller, name string) (any, *kernel.Error) 
 }
 
 // Input takes channel bookings; only a channel connector sends them.
-func (h *Hotel) Input(c platformserver.Caller, _ string, body []byte, now time.Time) (any, *kernel.Error) {
+func (h *Hotel) Input(c platform.Caller, _ string, body []byte, now time.Time) (any, *kernel.Error) {
 	var b ChannelBooking
 	if c.Role() != string(Channel) && !c.Replaying || json.Unmarshal(body, &b) != nil {
 		return nil, denied()
@@ -355,7 +355,7 @@ type ChannelBooking struct {
 // the host), records the raw message as an observation (duplicates collapse by
 // message ID), submits the booking it asks for, and tells whom the hotel's
 // setting names.
-func (h *Hotel) IngestChannelBooking(connector platformserver.Caller, b ChannelBooking, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (h *Hotel) IngestChannelBooking(connector platform.Caller, b ChannelBooking, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if err := connector.Deliver(ReservationType, "", "", now); err != nil {
 		return nil, err
 	}
@@ -374,9 +374,9 @@ func (h *Hotel) IngestChannelBooking(connector platformserver.Caller, b ChannelB
 		Target: &pb.EntityRef{Type: ReservationType, Id: b.ReservationID}, Schema: &pb.SchemaRef{Name: SchemaCreate, Version: 1},
 		IdempotencyKey: "channel:" + b.MessageID, Payload: payload, EvidenceFactIds: []string{fact.GetFactId()}}, now)
 	if to := connector.Setting(SettingChannelNotes); err == nil && to != "off" && to != "" {
-		connector.Notify(platformserver.Notification{Title: "Channel booking " + b.ReservationID,
+		connector.Notify(platform.Notification{Title: "Channel booking " + b.ReservationID,
 			Body: fmt.Sprintf("%s · %s · %s to %s", b.Guest, b.RoomType, b.CheckIn, b.CheckOut),
-			Ref:  ReservationType + "/" + b.ReservationID, Key: "channel:" + b.ReservationID}, now, platformserver.Recipient{AppRole: to})
+			Ref:  ReservationType + "/" + b.ReservationID, Key: "channel:" + b.ReservationID}, now, platform.Recipient{AppRole: to})
 	}
 	return record, err
 }

@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/platform"
 )
 
 // #101: a finished order is confirmed to the ERP as an outbound effect; the
@@ -34,7 +35,7 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	defer erpAPI.Close()
 	p := newPlant(t)
 	p.tenant.Secrets = func(string) ([]byte, bool) { return []byte("s3cret"), true }
-	admin := platformserver.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}
+	admin := platform.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}
 	raw, _ := json.Marshal(map[string]any{"url": erpAPI.URL, "secret": "erp", "effects": []string{"mes/" + EffectConfirmation}, "allowPrivate": true})
 	if _, err := p.tenant.Submit(admin, &pb.Submission{TenantId: tenant, PrincipalId: "admin", Authority: platformserver.PlatformApp, IdempotencyKey: "e1",
 		Target: &pb.EntityRef{Type: platformserver.EndpointType, Id: "erp-api"}, Schema: &pb.SchemaRef{Name: platformserver.SchemaEndpointAdd, Version: 1}, Payload: raw}, t0); err != nil {
@@ -75,7 +76,7 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	o = order("SO-2")
 	expect(t, o.ERP+": "+o.ERPDetail, "refused: no planned order to confirm against")
 	notes, _ := p.tenant.Read(sup.Member, "notifications")
-	expect(t, notes.([]platformserver.Notification)[0].Title, "ERP refused the confirmation of SO-2")
+	expect(t, notes.([]platform.Notification)[0].Title, "ERP refused the confirmation of SO-2")
 	p.tenant.Dispatch(t0) // settled effects are not sent again
 	expect(t, fmt.Sprint(calls), "2")
 }

@@ -12,7 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver"
+	"platformserver/platform"
 )
 
 // Sample is one equipment state reading from a PLC (via the edge gateway).
@@ -46,7 +46,7 @@ func resourceOfEvent(id string) string { resource, _, _ := strings.Cut(id, "#");
 // DeliverStates records a gateway batch as one observation and re-derives
 // downtime; a downtime that starts tells the supervisors of its line, when the
 // plant's setting says so (ADR-0013).
-func (p *Plant) DeliverStates(gateway platformserver.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
+func (p *Plant) DeliverStates(gateway platform.Caller, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if gateway.Tenant != p.tenant || roleOf(gateway) != Gateway && !gateway.Replaying {
@@ -70,7 +70,7 @@ func (p *Plant) DeliverStates(gateway platformserver.Caller, b StateBatch, now t
 	started := p.deriveDowntime(b.Resource)
 	if gateway.Setting(SettingNotifyDowntime) == "true" {
 		for _, d := range started {
-			gateway.Notify(platformserver.Notification{Title: "Downtime on " + d.Resource,
+			gateway.Notify(platform.Notification{Title: "Downtime on " + d.Resource,
 				Body: fmt.Sprintf("Line %s, since %s UTC. Give it a reason.", p.resourceLine(d.Resource), d.Start.UTC().Format("15:04")),
 				Ref:  DowntimeType + "/" + d.ID, Key: "down:" + d.ID}, now, p.supervisorsOf(d.Resource))
 		}
@@ -79,8 +79,8 @@ func (p *Plant) DeliverStates(gateway platformserver.Caller, b StateBatch, now t
 }
 
 // supervisorsOf are whoever supervises the resource's line or a unit above it (ADR-0012).
-func (p *Plant) supervisorsOf(resource string) platformserver.Recipient {
-	return platformserver.Recipient{Structure: SiteStructure, Unit: p.resourceLine(resource), Role: string(Supervisor)}
+func (p *Plant) supervisorsOf(resource string) platform.Recipient {
+	return platform.Recipient{Structure: SiteStructure, Unit: p.resourceLine(resource), Role: string(Supervisor)}
 }
 
 // deriveDowntime recomputes a resource's downtime from all its samples. Events
@@ -212,7 +212,7 @@ type PlannedPage struct {
 	Orders     []PlannedOrder `json:"orders"`
 }
 
-func (p *Plant) DeliverPlanned(erp platformserver.Caller, page PlannedPage, now time.Time) *kernel.Error {
+func (p *Plant) DeliverPlanned(erp platform.Caller, page PlannedPage, now time.Time) *kernel.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if erp.Tenant != p.tenant || roleOf(erp) != ERP && !erp.Replaying {

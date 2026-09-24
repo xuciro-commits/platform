@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"platformserver/platform"
 	"sync"
 	"testing"
 	"time"
@@ -55,8 +56,8 @@ func TestOutboundEffects(t *testing.T) {
 	defer server.Close()
 	var journal []Entry
 	build := func() *Tenant {
-		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}},
-			Seat{Subjects: []string{"bo"}, Member: Member{ID: "bo", Roles: map[string]string{"a": "writer"}}})
+		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}},
+			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{"a": "writer"}}})
 		tn, err := NewTenant("t-1", dir, newNotes("t-1", "a"))
 		if err != nil {
 			t.Fatal(err)
@@ -75,7 +76,7 @@ func TestOutboundEffects(t *testing.T) {
 	bo, _ := tn.app(PlatformApp).(*Console).Member("bo")
 	t0 := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	keys := 0
-	decide := func(tn *Tenant, m Member, schema, typ, id string, payload any) string {
+	decide := func(tn *Tenant, m platform.Member, schema, typ, id string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
 		_, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: m.ID, Authority: PlatformApp, IdempotencyKey: fmt.Sprint("d", keys),

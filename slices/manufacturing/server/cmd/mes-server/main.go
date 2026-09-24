@@ -10,6 +10,7 @@ import (
 
 	"mes"
 	"platformserver"
+	"platformserver/platform"
 )
 
 const tenant = "plant-sz"
@@ -27,12 +28,12 @@ var demo = []platformserver.Seat{
 
 // seat signs in as subject and belongs to units of the site structure (ADR-0012).
 func seat(subject, id string, role mes.Role, units ...string) platformserver.Seat {
-	s := platformserver.Seat{Subjects: []string{subject}, Member: platformserver.Member{ID: id, Roles: map[string]string{"mes": string(role)}}}
+	s := platformserver.Seat{Subjects: []string{subject}, Member: platform.Member{ID: id, Roles: map[string]string{"mes": string(role)}}}
 	if subject == "supervisor" {
 		s.Roles[platformserver.PlatformApp], s.Roles[platformserver.OrgApp] = platformserver.Admin, platformserver.OrgAdmin
 	}
 	for _, u := range units {
-		s.Units = append(s.Units, platformserver.Membership{Unit: u, Role: string(role)})
+		s.Units = append(s.Units, platform.Membership{Unit: u, Role: string(role)})
 	}
 	return s
 }

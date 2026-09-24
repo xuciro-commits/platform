@@ -5,7 +5,7 @@
 // a room type, and read the bookings.
 package lodging
 
-import "platformserver"
+import "platformserver/platform"
 
 const ID = "lodging.booking/1"
 
@@ -19,18 +19,18 @@ type Booking struct {
 	Canceled bool   `json:"canceled"`
 }
 
-func Protocol() platformserver.Protocol {
-	stay := []platformserver.Field{{Name: "roomType", Type: "string", Required: true, Description: "Room type the provider sells"},
+func Protocol() platform.Protocol {
+	stay := []platform.Field{{Name: "roomType", Type: "string", Required: true, Description: "Room type the provider sells"},
 		{Name: "checkIn", Type: "date", Required: true, Description: "First night (YYYY-MM-DD; hourly types YYYY-MM-DDTHH:MM)"},
 		{Name: "checkOut", Type: "date", Required: true, Description: "Departure, exclusive"}}
-	return platformserver.Protocol{Name: "lodging.booking", Version: 1,
-		Actions: []platformserver.Action{
+	return platform.Protocol{Name: "lodging.booking", Version: 1,
+		Actions: []platform.Action{
 			{Schema: "reserve", Title: "Reserve stay", Description: "Reserve a stay; refused when the provider cannot sell it.",
-				Payload: append(stay, platformserver.Field{Name: "guest", Type: "string", Required: true, Description: "Guest name"})},
+				Payload: append(stay, platform.Field{Name: "guest", Type: "string", Required: true, Description: "Guest name"})},
 			{Schema: "change", Title: "Change stay", Description: "Change the room type or dates of a booking.", Payload: stay},
-			{Schema: "cancel", Title: "Cancel booking", Description: "Cancel a booking; it stays in the history.", Payload: []platformserver.Field{}},
+			{Schema: "cancel", Title: "Cancel booking", Description: "Cancel a booking; it stays in the history.", Payload: []platform.Field{}},
 		},
 		Reads:  []string{"bookings"},
-		Events: []platformserver.ProtocolEvent{{Name: "changed", Title: "Booking changed"}, {Name: "canceled", Title: "Booking canceled"}},
+		Events: []platform.ProtocolEvent{{Name: "changed", Title: "Booking changed"}, {Name: "canceled", Title: "Booking canceled"}},
 	}
 }

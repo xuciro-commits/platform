@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/platform"
 )
 
 // The platform app (ADR-0010) is the tenant's console: its directory of
@@ -31,13 +32,13 @@ const (
 // Seat is a directory entry as configured: the subjects that sign in as the member.
 type Seat struct {
 	Subjects []string `json:"subjects"` // "user:<email>", "client:<id>", or a development token's subject
-	Member
-	Units []Membership `json:"units,omitempty"` // the member's starting memberships (ADR-0012); Party is filled in
+	platform.Member
+	Units []platform.Membership `json:"units,omitempty"` // the member's starting memberships (ADR-0012); Party is filled in
 }
 
 // Memberships are the seats' starting memberships, for the org app's seed.
-func Memberships(seats []Seat) []Membership {
-	var out []Membership
+func Memberships(seats []Seat) []platform.Membership {
+	var out []platform.Membership
 	for _, s := range seats {
 		for _, m := range s.Units {
 			m.Party = "member:" + s.ID
@@ -50,31 +51,31 @@ func Memberships(seats []Seat) []Membership {
 type Console struct {
 	mu       sync.Mutex
 	tenant   string
-	members  map[string]*Member
+	members  map[string]*platform.Member
 	subjects map[string]string // subject → member ID
-	ledger   *Ledger
+	ledger   *platform.Ledger
 	t        *Tenant // the tenant running it, once composed (NewTenant)
 }
 
-func ConsoleActions() *Catalog {
+func ConsoleActions() *platform.Catalog {
 	admin := []string{Admin}
-	app := Field{Name: "app", Type: "string", Required: true, Description: "App ID"}
-	return NewCatalog(append([]Action{
-		Action{Schema: SchemaAdd, Target: MemberType, Capability: "members", Title: "Add member",
+	app := platform.Field{Name: "app", Type: "string", Required: true, Description: "App ID"}
+	return platform.NewCatalog(append([]platform.Action{
+		platform.Action{Schema: SchemaAdd, Target: MemberType, Capability: "members", Title: "Add member",
 			Description: "Add a member who signs in as a subject: user:<email> for a person, client:<id> for a service or AI agent.",
-			Payload:     []Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"}}, Roles: admin},
-		Action{Schema: SchemaGrant, Target: MemberType, Capability: "members", Title: "Grant role",
+			Payload:     []platform.Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"}}, Roles: admin},
+		platform.Action{Schema: SchemaGrant, Target: MemberType, Capability: "members", Title: "Grant role",
 			Description: "Give a member a role in an app, replacing the role held there.",
-			Payload:     []Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
-		Action{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
-			Description: "Remove a member's role in an app.", Payload: []Field{app}, Roles: admin},
+			Payload:     []platform.Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
+		platform.Action{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
+			Description: "Remove a member's role in an app.", Payload: []platform.Field{app}, Roles: admin},
 	}, append(operationsActions(), effectActions()...)...)...)
 }
 
 // NewConsole seeds a tenant's directory of members; changes recorded later replay on top.
 func NewConsole(tenant string, seats ...Seat) *Console {
-	d := &Console{tenant: tenant, members: map[string]*Member{}, subjects: map[string]string{},
-		ledger: NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType)}
+	d := &Console{tenant: tenant, members: map[string]*platform.Member{}, subjects: map[string]string{},
+		ledger: platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -90,12 +91,12 @@ func NewConsole(tenant string, seats ...Seat) *Console {
 }
 
 // Member is the member a subject signs in as, with its current roles.
-func (d *Console) Member(subject string) (Member, bool) {
+func (d *Console) Member(subject string) (platform.Member, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	m := d.members[d.subjects[subject]]
 	if m == nil {
-		return Member{}, false
+		return platform.Member{}, false
 	}
 	return clone(m), true
 }
@@ -114,21 +115,21 @@ func (d *Console) holding(app, role string) []string {
 	return out
 }
 
-func clone(m *Member) Member {
+func clone(m *platform.Member) platform.Member {
 	out := *m
 	out.Roles = maps.Clone(m.Roles)
 	return out
 }
 
-func (d *Console) Manifest() Manifest {
-	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog,
+func (d *Console) Manifest() platform.Manifest {
+	return platform.Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog,
 		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects"},
 		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false}}
 }
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 
-func (d *Console) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
@@ -139,7 +140,7 @@ func (d *Console) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeR
 		if d.t == nil { // not composed: a tenant's operations need one
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
-		areas := map[string]func(Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error){
+		areas := map[string]func(platform.Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error){
 			ConnectorType: d.t.decideConnector, SettingType: d.t.decideSetting, WorkType: d.t.decideWork, ProtocolType: d.t.decideBinding,
 			NotificationType: d.t.decideNotification, EndpointType: d.t.decideEndpoint, EffectType: d.t.decideEffect,
 		}
@@ -166,7 +167,7 @@ func (d *Console) decideMember(s *pb.Submission) (func(*pb.ChangeRecord), *kerne
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 		return func(*pb.ChangeRecord) {
-			d.members[id] = &Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}}
+			d.members[id] = &platform.Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}}
 			d.subjects[p.Subject] = id
 		}, nil
 	}
@@ -191,13 +192,13 @@ func (d *Console) decideMember(s *pb.Submission) (func(*pb.ChangeRecord), *kerne
 
 // MemberView is a member with the subjects that sign in as it.
 type MemberView struct {
-	Member
+	platform.Member
 	Subjects []string `json:"subjects"`
 }
 
 // Read "notifications": the caller's own. Every other read is for the tenant's
 // administrators only.
-func (d *Console) Read(c Caller, name string) (any, *kernel.Error) {
+func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	t := d.t
 	if t != nil && name == "notifications" {
 		return t.notificationsFor(c.ID), nil
@@ -240,7 +241,7 @@ func (d *Console) Read(c Caller, name string) (any, *kernel.Error) {
 
 // Input "heartbeat": a connector reports it is alive (not journaled; health
 // reads stale after a restart until the next one).
-func (d *Console) Input(c Caller, name string, _ []byte, now time.Time) (any, *kernel.Error) {
+func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time) (any, *kernel.Error) {
 	if name != "heartbeat" || d.t == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}

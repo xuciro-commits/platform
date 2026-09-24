@@ -10,6 +10,7 @@ import (
 
 	"hotel"
 	"platformserver"
+	"platformserver/platform"
 )
 
 func main() {
@@ -20,7 +21,7 @@ func main() {
 	rooms := map[string]hotel.RoomType{"standard": {Rooms: 3, Overbooking: 1}, "suite": {Rooms: 1},
 		"apartment": {Rooms: 2, MinUnits: 28}, "meeting-room": {Rooms: 1, Hourly: true}, "hot-desk": {Rooms: 6, Hourly: true}}
 	seat := func(token, id string, role hotel.Role) platformserver.Seat {
-		return platformserver.Seat{Subjects: []string{token}, Member: platformserver.Member{ID: id, Roles: map[string]string{"hotel": string(role)}}}
+		return platformserver.Seat{Subjects: []string{token}, Member: platform.Member{ID: id, Roles: map[string]string{"hotel": string(role)}}}
 	}
 	tenant := func(id string, seats ...platformserver.Seat) *platformserver.Tenant {
 		t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...), hotel.NewHotel(id, rooms))

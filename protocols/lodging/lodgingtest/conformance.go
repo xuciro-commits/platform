@@ -1,4 +1,6 @@
-package lodging
+// Package lodgingtest checks a tenant's provider of the lodging protocol. It
+// drives a tenant, so it is apart from the protocol, which apps import.
+package lodgingtest
 
 import (
 	"encoding/json"
@@ -7,32 +9,34 @@ import (
 	"testing"
 	"time"
 
+	"lodging"
 	"platformserver"
+	"platformserver/platform"
 )
 
-// Conformance checks that a tenant's provider of this protocol behaves as the
+// Conformance checks that a tenant's provider of the lodging protocol behaves as the
 // protocol says. The tenant must run the platform's Relations; member must be
 // allowed to reserve, change and cancel with the provider (ADR-0011).
-func Conformance(t *testing.T, tenant *platformserver.Tenant, member platformserver.Member, roomType string) {
+func Conformance(t *testing.T, tenant *platformserver.Tenant, member platform.Member, roomType string) {
 	t.Helper()
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	call := func(action, id, key string, payload any) string {
 		raw, _ := json.Marshal(payload)
-		_, _, err := tenant.Invoke(member, ID, action, id, raw, key, now)
+		_, _, err := tenant.Invoke(member, lodging.ID, action, id, raw, key, now)
 		if err != nil {
 			return err.Error()
 		}
 		return "ok"
 	}
-	booking := func(id string) (Booking, bool) {
-		out, err := tenant.Query(member, ID, "bookings")
+	booking := func(id string) (lodging.Booking, bool) {
+		out, err := tenant.Query(member, lodging.ID, "bookings")
 		if err != nil {
 			t.Fatalf("bookings: %v", err)
 		}
-		all := out.([]Booking)
-		i := slices.IndexFunc(all, func(b Booking) bool { return b.ID == id })
+		all := out.([]lodging.Booking)
+		i := slices.IndexFunc(all, func(b lodging.Booking) bool { return b.ID == id })
 		if i < 0 {
-			return Booking{}, false
+			return lodging.Booking{}, false
 		}
 		return all[i], true
 	}

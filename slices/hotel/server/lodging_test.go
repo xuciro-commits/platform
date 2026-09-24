@@ -3,8 +3,9 @@ package hotel
 import (
 	"testing"
 
-	"lodging"
+	"lodging/lodgingtest"
 	"platformserver"
+	"platformserver/platform"
 )
 
 // The hotel conforms to the lodging protocol it provides.
@@ -14,5 +15,5 @@ func TestHotelProvidesLodging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lodging.Conformance(t, tn, platformserver.Member{ID: "manager-1", Tenant: "hotel-a", Roles: map[string]string{"hotel": string(Manager)}}, "suite")
+	lodgingtest.Conformance(t, tn, platform.Member{ID: "manager-1", Tenant: "hotel-a", Roles: map[string]string{"hotel": string(Manager)}}, "suite")
 }

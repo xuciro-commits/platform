@@ -9,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver"
+	"platformserver/platform"
 )
 
 // Memory is the smallest lodging provider: any room type, no capacity. It is the
@@ -18,24 +18,24 @@ import (
 type Memory struct {
 	mu       sync.Mutex
 	bookings map[string]*Booking
-	ledger   *platformserver.Ledger
+	ledger   *platform.Ledger
 }
 
 const Keeper = "keeper"
 
 func NewMemory(tenant string) *Memory {
 	p := Protocol()
-	var actions []platformserver.Action
+	var actions []platform.Action
 	for _, a := range p.Actions {
 		a.Schema, a.Target, a.Capability, a.Roles = "memstay."+a.Schema, "memstay.booking", "stays", []string{Keeper}
 		actions = append(actions, a)
 	}
-	return &Memory{bookings: map[string]*Booking{}, ledger: platformserver.NewLedger(tenant, "memstay", platformserver.NewCatalog(actions...), "memstay.booking")}
+	return &Memory{bookings: map[string]*Booking{}, ledger: platform.NewLedger(tenant, "memstay", platform.NewCatalog(actions...), "memstay.booking")}
 }
 
-func (m *Memory) Manifest() platformserver.Manifest {
-	return platformserver.Manifest{ID: "memstay", Version: "1", Actions: m.ledger.Catalog, Reads: []string{"memstay-bookings"},
-		Provides: []platformserver.Provision{{Protocol: Protocol(),
+func (m *Memory) Manifest() platform.Manifest {
+	return platform.Manifest{ID: "memstay", Version: "1", Actions: m.ledger.Catalog, Reads: []string{"memstay-bookings"},
+		Provides: []platform.Provision{{Protocol: Protocol(),
 			Actions: map[string]string{"reserve": "memstay.reserve", "change": "memstay.change", "cancel": "memstay.cancel"},
 			Reads:   map[string]string{"bookings": "memstay-bookings"},
 			Events:  map[string]string{"changed": "memstay.change", "canceled": "memstay.cancel"}}}}
@@ -43,11 +43,11 @@ func (m *Memory) Manifest() platformserver.Manifest {
 
 func (m *Memory) Declarations() []*pb.AuthorityDeclaration { return m.ledger.Declarations() }
 
-func (m *Memory) Input(platformserver.Caller, string, []byte, time.Time) (any, *kernel.Error) {
+func (m *Memory) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-func (m *Memory) Submit(c platformserver.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (m *Memory) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
@@ -79,7 +79,7 @@ func (m *Memory) Submit(c platformserver.Caller, s *pb.Submission, now time.Time
 	})
 }
 
-func (m *Memory) Read(platformserver.Caller, string) (any, *kernel.Error) {
+func (m *Memory) Read(platform.Caller, string) (any, *kernel.Error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := []Booking{}

@@ -9,6 +9,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver"
+	"platformserver/platform"
 )
 
 var (
@@ -22,7 +23,7 @@ func newHotel() *Hotel {
 	return NewHotel("hotel-a", map[string]RoomType{"standard": {Rooms: 1, Overbooking: 1}, "suite": {Rooms: 1}})
 }
 
-func submission(p platformserver.Caller, schema, id, key string, payload any, expectedRevision ...uint32) *pb.Submission {
+func submission(p platform.Caller, schema, id, key string, payload any, expectedRevision ...uint32) *pb.Submission {
 	raw, _ := json.Marshal(payload)
 	s := &pb.Submission{TenantId: p.Tenant, PrincipalId: p.ID, Authority: Authority,
 		Target: &pb.EntityRef{Type: ReservationType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1},
@@ -33,7 +34,7 @@ func submission(p platformserver.Caller, schema, id, key string, payload any, ex
 	return s
 }
 
-func create(h *Hotel, p platformserver.Caller, id, key, roomType, in, out string) (*pb.ChangeRecord, string) {
+func create(h *Hotel, p platform.Caller, id, key, roomType, in, out string) (*pb.ChangeRecord, string) {
 	r, err := h.Submit(p, submission(p, SchemaCreate, id, key,
 		map[string]string{"roomType": roomType, "checkIn": in, "checkOut": out, "guest": "Guest " + id}), now)
 	if err != nil {
@@ -112,7 +113,7 @@ func TestTenantPrincipalAndAuthorityAreChecked(t *testing.T) {
 // hotelTenant runs the hotel on the host with its channel connector, journaling every input.
 func hotelTenant(t *testing.T, journal *[]platformserver.Entry) (*Hotel, *platformserver.Tenant) {
 	seat := func(id string, roles map[string]string) platformserver.Seat {
-		return platformserver.Seat{Subjects: []string{id}, Member: platformserver.Member{ID: id, Roles: roles}}
+		return platformserver.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 	}
 	h := newHotel()
 	tn, err := platformserver.NewTenant("hotel-a", platformserver.NewConsole("hotel-a",
@@ -166,7 +167,7 @@ func TestChannelDuplicatesCollapse(t *testing.T) {
 	}
 	// Without the connector the channel's member cannot deliver.
 	_, bare := hotelTenant(t, &journal)
-	other := platformserver.Member{ID: "channel-2", Tenant: "hotel-a", Roles: map[string]string{"hotel": string(Channel)}}
+	other := platform.Member{ID: "channel-2", Tenant: "hotel-a", Roles: map[string]string{"hotel": string(Channel)}}
 	raw, _ := json.Marshal(b)
 	if _, err := bare.Input(other, "channel-bookings", raw, now); err == nil || err.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
 		t.Fatalf("an unconnected channel delivered: %v", err)
@@ -178,8 +179,8 @@ func TestChannelDuplicatesCollapse(t *testing.T) {
 func TestHotelUsesPlatformOperations(t *testing.T) {
 	var journal []platformserver.Entry
 	_, tn := hotelTenant(t, &journal)
-	member := func(id string) platformserver.Member {
-		return platformserver.Member{ID: id, Tenant: "hotel-a", Roles: map[string]string{"hotel": map[string]string{"desk-1": string(FrontDesk),
+	member := func(id string) platform.Member {
+		return platform.Member{ID: id, Tenant: "hotel-a", Roles: map[string]string{"hotel": map[string]string{"desk-1": string(FrontDesk),
 			"desk-2": string(FrontDesk), "manager-1": string(Manager)}[id], platformserver.PlatformApp: map[string]string{"manager-1": platformserver.Admin}[id]}}
 	}
 	inbox := func(tn *platformserver.Tenant, id string) []string {
@@ -188,7 +189,7 @@ func TestHotelUsesPlatformOperations(t *testing.T) {
 			t.Fatal(err)
 		}
 		titles := []string{}
-		for _, n := range out.([]platformserver.Notification) {
+		for _, n := range out.([]platform.Notification) {
 			titles = append(titles, n.Title)
 		}
 		return titles
@@ -274,6 +275,6 @@ func TestDrillE1ApartmentsAndCoworking(t *testing.T) {
 	expect(t, got, "ok")
 }
 
-func as(id, tenant string, role Role) platformserver.Caller {
-	return platformserver.As("hotel", platformserver.Member{ID: id, Tenant: tenant, Roles: map[string]string{"hotel": string(role)}})
+func as(id, tenant string, role Role) platform.Caller {
+	return platform.As("hotel", platform.Member{ID: id, Tenant: tenant, Roles: map[string]string{"hotel": string(role)}})
 }
