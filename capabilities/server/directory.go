@@ -13,15 +13,16 @@ import (
 )
 
 // The platform app (ADR-0010): the tenant's directory of members, their role in
-// each app and their attributes. Granting and revoking are its decisions, so the
-// directory has history, survives restarts through the journal, and a change
-// takes effect on the next request.
+// each app and their attributes, and what administrators see of the tenant.
+// Every change is one of its decisions, so the directory has history, survives
+// restarts through the journal, and takes effect on the next request.
 const (
-	PlatformApp = "platform"
-	MemberType  = "platform.member"
-	SchemaGrant = "platform.member.grant"
-	// SchemaRevoke removes a member's role in one app.
+	PlatformApp  = "platform"
+	MemberType   = "platform.member"
+	SchemaAdd    = "platform.member.add"
+	SchemaGrant  = "platform.member.grant"
 	SchemaRevoke = "platform.member.revoke"
+	SchemaScope  = "platform.member.scope"
 	Admin        = "admin"
 )
 
@@ -33,26 +34,34 @@ type Seat struct {
 
 type Directory struct {
 	mu       sync.Mutex
+	tenant   string
 	members  map[string]*Member
 	subjects map[string]string // subject → member ID
 	ledger   *Ledger
 }
 
 func DirectoryActions() *Catalog {
+	admin := []string{Admin}
+	app := Field{Name: "app", Type: "string", Required: true, Description: "App ID"}
 	return NewCatalog(
+		Action{Schema: SchemaAdd, Target: MemberType, Capability: "members", Title: "Add member",
+			Description: "Add a member who signs in as a subject: user:<email> for a person, client:<id> for a service or AI agent.",
+			Payload:     []Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"}}, Roles: admin},
 		Action{Schema: SchemaGrant, Target: MemberType, Capability: "members", Title: "Grant role",
 			Description: "Give a member a role in an app, replacing the role held there.",
-			Payload: []Field{{Name: "app", Type: "string", Required: true, Description: "App ID"},
-				{Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: []string{Admin}},
+			Payload:     []Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
 		Action{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
-			Description: "Remove a member's role in an app.",
-			Payload:     []Field{{Name: "app", Type: "string", Required: true, Description: "App ID"}}, Roles: []string{Admin}},
+			Description: "Remove a member's role in an app.", Payload: []Field{app}, Roles: admin},
+		Action{Schema: SchemaScope, Target: MemberType, Capability: "members", Title: "Set attribute",
+			Description: "Set the values of an attribute apps scope roles by (lines, properties); no values removes it.",
+			Payload: []Field{{Name: "attribute", Type: "string", Required: true, Description: "Attribute name"},
+				{Name: "values", Type: "string[]", Description: "Values"}}, Roles: admin},
 	)
 }
 
-// NewDirectory seeds a tenant's directory; grants recorded later replay on top.
+// NewDirectory seeds a tenant's directory; changes recorded later replay on top.
 func NewDirectory(tenant string, seats ...Seat) *Directory {
-	d := &Directory{members: map[string]*Member{}, subjects: map[string]string{},
+	d := &Directory{tenant: tenant, members: map[string]*Member{}, subjects: map[string]string{},
 		ledger: NewLedger(tenant, PlatformApp, DirectoryActions(), MemberType)}
 	for _, s := range seats {
 		m := s.Member
@@ -76,13 +85,17 @@ func (d *Directory) Member(subject string) (Member, bool) {
 	if m == nil {
 		return Member{}, false
 	}
+	return clone(m), true
+}
+
+func clone(m *Member) Member {
 	out := *m
-	out.Roles = maps.Clone(m.Roles)
-	return out, true
+	out.Roles, out.Attributes = maps.Clone(m.Roles), maps.Clone(m.Attributes)
+	return out
 }
 
 func (d *Directory) Manifest() Manifest {
-	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog, Reads: []string{"members"}}
+	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog, Reads: []string{"members", "audit"}}
 }
 
 func (d *Directory) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
@@ -91,36 +104,92 @@ func (d *Directory) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.Chang
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		var p struct{ App, Role string }
-		m := d.members[s.GetTarget().GetId()]
-		if json.Unmarshal(s.GetPayload(), &p) != nil || p.App == "" || s.GetSchema().GetName() == SchemaGrant && p.Role == "" {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		var p struct {
+			Subject, App, Role, Attribute string
+			Values                        []string
+		}
+		if json.Unmarshal(s.GetPayload(), &p) != nil {
+			return nil, invalid
+		}
+		id := s.GetTarget().GetId()
+		m := d.members[id]
+		if s.GetSchema().GetName() == SchemaAdd {
+			if !strings.HasPrefix(p.Subject, "user:") && !strings.HasPrefix(p.Subject, "client:") {
+				return nil, invalid
+			}
+			if m != nil || d.subjects[p.Subject] != "" {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			}
+			return func(*pb.ChangeRecord) {
+				d.members[id] = &Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}}
+				d.subjects[p.Subject] = id
+			}, nil
 		}
 		if m == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		return func(*pb.ChangeRecord) {
-			if s.GetSchema().GetName() == SchemaGrant {
-				m.Roles[p.App] = p.Role
-			} else {
-				delete(m.Roles, p.App)
+		switch s.GetSchema().GetName() {
+		case SchemaGrant:
+			// Only a role the app defines, in an app the tenant runs.
+			if c.tenant == nil {
+				return nil, invalid
 			}
+			if app := c.tenant.app(p.App); app == nil || !slices.Contains(app.Manifest().Actions.Roles(), p.Role) {
+				return nil, invalid
+			}
+			return func(*pb.ChangeRecord) { m.Roles[p.App] = p.Role }, nil
+		case SchemaRevoke:
+			if p.App == "" {
+				return nil, invalid
+			}
+			return func(*pb.ChangeRecord) { delete(m.Roles, p.App) }, nil
+		}
+		if p.Attribute == "" {
+			return nil, invalid
+		}
+		return func(*pb.ChangeRecord) {
+			if len(p.Values) == 0 {
+				delete(m.Attributes, p.Attribute)
+				return
+			}
+			if m.Attributes == nil {
+				m.Attributes = map[string][]string{}
+			}
+			m.Attributes[p.Attribute] = p.Values
 		}, nil
 	})
 }
 
-// Read "members": every member with its roles, sorted by ID.
-func (d *Directory) Read(Caller, string) any {
+// MemberView is a member with the subjects that sign in as it.
+type MemberView struct {
+	Member
+	Subjects []string `json:"subjects"`
+}
+
+// Read "members" and "audit": for the tenant's administrators only.
+func (d *Directory) Read(c Caller, name string) (any, *kernel.Error) {
+	if c.Role() != Admin || c.tenant == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	if name == "audit" {
+		return c.tenant.Audit(), nil
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	out := []Member{}
+	out := []MemberView{}
 	for _, m := range d.members {
-		c := *m
-		c.Roles = maps.Clone(m.Roles)
-		out = append(out, c)
+		v := MemberView{Member: clone(m), Subjects: []string{}}
+		for subject, id := range d.subjects {
+			if id == m.ID {
+				v.Subjects = append(v.Subjects, subject)
+			}
+		}
+		slices.Sort(v.Subjects)
+		out = append(out, v)
 	}
-	slices.SortFunc(out, func(a, b Member) int { return strings.Compare(a.ID, b.ID) })
-	return out
+	slices.SortFunc(out, func(a, b MemberView) int { return strings.Compare(a.ID, b.ID) })
+	return out, nil
 }
 
 func (d *Directory) Input(Caller, string, []byte, time.Time) (any, *kernel.Error) {

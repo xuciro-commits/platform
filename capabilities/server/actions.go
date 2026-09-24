@@ -77,3 +77,37 @@ func (c *Catalog) For(role string) []Action {
 	}
 	return out
 }
+
+// Roles are the roles an app defines: every role some action grants.
+func (c *Catalog) Roles() []string {
+	var out []string
+	for _, a := range c.actions {
+		for _, r := range a.Roles {
+			if !slices.Contains(out, r) {
+				out = append(out, r)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// CapabilityInfo is one capability of an app: its actions and whether it is active.
+type CapabilityInfo struct {
+	Name    string   `json:"name"`
+	Enabled bool     `json:"enabled"`
+	Actions []string `json:"actions"`
+}
+
+func (c *Catalog) Capabilities() []CapabilityInfo {
+	var out []CapabilityInfo
+	for _, a := range c.actions {
+		i := slices.IndexFunc(out, func(x CapabilityInfo) bool { return x.Name == a.Capability })
+		if i < 0 {
+			out = append(out, CapabilityInfo{Name: a.Capability, Enabled: !c.disabled[a.Capability]})
+			i = len(out) - 1
+		}
+		out[i].Actions = append(out[i].Actions, a.Schema)
+	}
+	return out
+}

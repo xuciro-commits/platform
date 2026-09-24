@@ -38,11 +38,8 @@ func newWorld(t *testing.T) *world {
 	}
 	w := &world{t: t, tenant: tn, members: map[string]platformserver.Member{}}
 	tn.Record = func(e platformserver.Entry) { w.journal = append(w.journal, e) }
-	members := tn.Read
 	for _, s := range seats {
-		all, _ := members(platformserver.Member{}, "members")
-		i := slices.IndexFunc(all.([]platformserver.Member), func(m platformserver.Member) bool { return m.ID == s.ID })
-		w.members[s.Subjects[0]] = all.([]platformserver.Member)[i]
+		w.members[s.Subjects[0]] = platformserver.Member{ID: s.ID, Tenant: "hotel-a", Roles: s.Roles}
 	}
 	return w
 }

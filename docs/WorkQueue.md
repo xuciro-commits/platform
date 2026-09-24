@@ -4,8 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **93 · ready** | Platform app and its "Settings" workspace: tenants, members and roles per app, enabled apps with their requirement graph, AI agents, connectors, audit, the live capability matrix | A grant or revocation made in Settings takes effect on the next request; the matrix shown is read from the registry |
-| **94 · after 93** | Events: subscriptions over change records, delivered after commit, handlers owned as work (K9); first use: the bridge reacts to a hotel cancellation | A cancellation in Hotel reaches the CRM opportunity without the hotel knowing CRM |
+| **94 · ready** | Events: subscriptions over change records, delivered after commit, handlers owned as work (K9); first use: the bridge reacts to a hotel cancellation | A cancellation in Hotel reaches the CRM opportunity without the hotel knowing CRM |
 
 ## Open friction (temporary; delete entries once resolved)
 

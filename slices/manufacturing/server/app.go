@@ -18,20 +18,20 @@ func (p *Plant) Manifest() platformserver.Manifest {
 		Inputs: map[string]bool{"states": true, "planned-orders": true, "heartbeat": false}}
 }
 
-func (p *Plant) Read(_ platformserver.Caller, name string) any {
+func (p *Plant) Read(_ platformserver.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case "master":
-		return p.Master()
+		return p.Master(), nil
 	case "orders":
-		return p.Orders()
+		return p.Orders(), nil
 	case "sfcs":
-		return p.SFCs()
+		return p.SFCs(), nil
 	case "planned-orders":
-		return p.Planned()
+		return p.Planned(), nil
 	case "downtime":
-		return p.Downtime()
+		return p.Downtime(), nil
 	}
-	return p.Connectors(time.Now())
+	return p.Connectors(time.Now()), nil
 }
 
 func (p *Plant) Input(c platformserver.Caller, name string, body []byte, now time.Time) (any, *kernel.Error) {

@@ -37,6 +37,16 @@
         "dev"
       ],
       "port": 5176
+    },
+    {
+      "name": "settings",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "web/apps/settings",
+        "dev"
+      ],
+      "port": 5177
     }
   ]
 }

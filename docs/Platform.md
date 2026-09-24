@@ -43,7 +43,9 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Kernel | Connectors (K8) | One descriptor for push and poll sources, cursors, health | `kernel.Connectors` | manufacturing | H |
 | Kernel | Work ownership (K9) | Generations, checkpoints, stale results, owner close | `kernel.Works` | none on a server yet (MSRU `FeatureHost`) | H |
 | Server | Platform host | Apps per tenant from manifests; routing by action, read and input name; requirement check; per-caller catalog; calls between apps only along requirements (ADR-0010) | `platformserver.Tenant`, `Host` | every server | 4 |
-| Server | Directory | Members with one role per app and attributes; grants and revocations as decisions, effective on the next request | `platformserver.Directory` (the platform app) | every server | 4 |
+| Server | Directory | Members (people, services, AI agents) with one role per app and attributes; add, grant, revoke and scope as decisions, effective on the next request; roles checked against the app's own | `platformserver.Directory` (the platform app) | every server | 4 |
+| Server | Audit trail | Accepted top-level inputs per tenant, rebuilt by replay; administrators read it | `Tenant.Audit`, read `audit` | every server | 4 |
+| Server | App registry | Each app's roles, capabilities (active or not), reads, inputs, requirements and cross-app uses | `GET /v1/apps` | every server | 4 |
 | Server | Deployment | Development tokens or journal plus OIDC from the same flags; replay on start | `platformserver.Deployment` | mes-server, sales-server | 2 |
 | Server | Package ledger | The kernel wired for one app: change log, authority declarations, receiver, catalog role check, no re-authorization in replay | `platformserver.Ledger` | every app | 5 |
 | Server | Action catalog | Actions declared once; each caller (screen, integration, AI agent) receives only what its role may call; capabilities deactivated at start-up | `platformserver.Action`, `Catalog` | manufacturing, Hotel, CRM, crm-hotel | 4 |
@@ -54,6 +56,7 @@ A business package (its domain code, UI and bridges) uses these and writes only 
 | Web | Field types | 20 types deciding display, editor, validation, sorting and filters | `@platform/ui` fields | gallery | 1 |
 | Web | Edge client | Persisted outbox, HTTP transport, declarations, action-catalog type | `@platform/kernel` | manufacturing, sales | 2 |
 | Web | Browser sign-in | Authorization code with PKCE | `@platform/kernel` `oidc.ts` | manufacturing | 1 |
+| Web | Settings | The platform app's workspace for any host: members and roles per app, scopes, apps with their requirement graph, the capability matrix and the audit, from the registry | `apps/settings` | sales and plant hosts | 1 |
 | Web | Package UI | A package's views and model for every software that shows its data | `@pkg/hotel` | Hotel Desk, sales | 2 |
 | Operations | Deployment and rehearsal | Compose stack with PostgreSQL and Rauthy; restart and restore rehearsal | `deploy/local` | manufacturing, sales | 2 |
 | Composition | Bridge packages | Cooperation owned by a bridge that uses both packages' declared actions and reads (ADR-0009) | `slices/crm-hotel` | CRM + Hotel | 1 |
@@ -223,7 +226,11 @@ Decided in ADR-0009. CRM (accounts, opportunities) and Hotel know nothing of eac
 
 ### Platform host #92
 
-ADR-0010 step 1. Every server is now a host running apps from manifests: `platform` (the directory), `hotel`, `crm`, `crm-hotel`, `mes`. Per-package principals, `Server[P,T]` and the bridge's composition code are deleted; a member holds one role per app, and a bridge is an app with its own roles. One journal per tenant records only top-level inputs: the hotel reservation a bridge booking causes is rebuilt by replaying the booking, which the bridge tests and the rehearsal check (the sales tenant replays after a restart and a restore, and a revocation made through the platform app survives both). Reads are not yet authorized per caller; the Settings workspace (#93) is the next consumer of the host.
+ADR-0010 step 1. Every server is now a host running apps from manifests: `platform` (the directory), `hotel`, `crm`, `crm-hotel`, `mes`. Per-package principals, `Server[P,T]` and the bridge's composition code are deleted; a member holds one role per app, and a bridge is an app with its own roles. One journal per tenant records only top-level inputs: the hotel reservation a bridge booking causes is rebuilt by replaying the booking, which the bridge tests and the rehearsal check (the sales tenant replays after a restart and a restore, and a revocation made through the platform app survives both). Reads are authorized by the app that serves them (#93: the directory and audit are for administrators; business reads are still open to every member of the tenant).
+
+### Settings #93
+
+ADR-0010 part 3, first areas: members and access, apps with their requirement graph, the capability matrix, audit. The matrix is no longer maintained by hand for apps: Settings reads it from `GET /v1/apps`, and the table above keeps the platform capabilities. Checked in the browser: revoking a member's hotel role in Settings removed the hotel actions and the bridge booking from that member's next catalog, and the audit shows the revocation. Not yet in Settings: organisational units, per-app settings, connectors and health, automation (they wait for their platform capabilities, ADR-0010 part 2).
 
 ### Shared capability models (candidates, layer 2)
 

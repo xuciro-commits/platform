@@ -151,7 +151,7 @@ func (h *Hotel) Manifest() platformserver.Manifest {
 		Reads: []string{"reservations"}, Inputs: map[string]bool{"channel-bookings": true}}
 }
 
-func (h *Hotel) Read(platformserver.Caller, string) any { return h.Reservations() }
+func (h *Hotel) Read(platformserver.Caller, string) (any, *kernel.Error) { return h.Reservations(), nil }
 
 // Input takes channel bookings; only a channel connector sends them.
 func (h *Hotel) Input(c platformserver.Caller, _ string, body []byte, now time.Time) (any, *kernel.Error) {

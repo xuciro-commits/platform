@@ -39,7 +39,7 @@ func (n *notes) Manifest() Manifest {
 	return m
 }
 func (n *notes) Declarations() []*pb.AuthorityDeclaration { return n.ledger.Declarations() }
-func (n *notes) Read(Caller, string) any                  { return n.texts }
+func (n *notes) Read(Caller, string) (any, *kernel.Error) { return n.texts, nil }
 func (n *notes) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return n.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		if n.peer != "" {
@@ -108,7 +108,7 @@ func TestTenantComposition(t *testing.T) {
 	if got := schemas(bo); len(got) != 0 {
 		t.Fatalf("bo is offered %v; b.note uses a.note, which bo may not call", got)
 	}
-	if got := schemas(ana); !slices.Equal(got, []string{SchemaGrant, SchemaRevoke, "a.note", "b.note"}) {
+	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaScope, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
 	}
 	// An app may call only what it requires.
@@ -140,8 +140,12 @@ func TestHostHTTPAndDirectory(t *testing.T) {
 		return rec.Code, strings.TrimSpace(rec.Body.String())
 	}
 	submit := func(token, member, schema, target, key, payload string) (int, string) {
+		id := "bo"
+		if schema == SchemaAdd {
+			id = "agent-1"
+		}
 		raw, _ := json.Marshal(map[string]any{"tenantId": "t-1", "principalId": member, "authority": PlatformApp, "idempotencyKey": key,
-			"target": map[string]string{"type": target, "id": "bo"}, "schema": map[string]any{"name": schema, "version": 1},
+			"target": map[string]string{"type": target, "id": id}, "schema": map[string]any{"name": schema, "version": 1},
 			"payload": []byte(payload)})
 		return call("POST", "/v1/submissions", token, string(raw))
 	}
@@ -173,6 +177,34 @@ func TestHostHTTPAndDirectory(t *testing.T) {
 		t.Fatalf("a member without the admin role granted itself: %d", status)
 	}
 	submit("ana-token", "ana", SchemaRevoke, MemberType, "r1", `{"app":"b"}`)
+	for _, c := range []struct {
+		key, schema, payload string
+		status               int
+	}{
+		{"x1", SchemaGrant, `{"app":"a","role":"owner"}`, 400},     // a role app a does not define
+		{"x2", SchemaGrant, `{"app":"nope","role":"writer"}`, 400}, // an app the tenant does not run
+		{"x3", SchemaScope, `{"attribute":"lines","values":["L1"]}`, 200},
+		{"x4", SchemaAdd, `{"subject":"client:agent"}`, 200},
+		{"x5", SchemaAdd, `{"subject":"client:agent"}`, 409},
+		{"x6", SchemaAdd, `{"subject":"agent"}`, 400},
+	} {
+		if status, body := submit("ana-token", "ana", c.schema, MemberType, c.key, c.payload); status != c.status {
+			t.Errorf("%s %s: %d %s", c.schema, c.payload, status, body)
+		}
+	}
+	if status, body := call("GET", "/v1/members", "ana-token", ""); status != 200 ||
+		!strings.Contains(body, `"id":"agent-1","tenant":"t-1","roles":{},"subjects":["client:agent"]`) || !strings.Contains(body, `"attributes":{"lines":["L1"]}`) {
+		t.Fatalf("members: %d %s", status, body)
+	}
+	if status, _ := call("GET", "/v1/members", "bo-token", ""); status != 403 {
+		t.Fatalf("a member without the admin role read the directory: %d", status)
+	}
+	if _, body := call("GET", "/v1/audit", "ana-token", ""); strings.Count(body, `"app":"platform"`) != 4 || !strings.Contains(body, `"target":"platform.member/agent-1"`) {
+		t.Fatalf("audit: %s", body)
+	}
+	if _, body := call("GET", "/v1/apps", "ana-token", ""); !strings.Contains(body, `"roles":["writer"],"capabilities":[{"name":"notes","enabled":true,"actions":["b.note"]}],"inputs":["b-feed"],"uses":["b.note → a.note"]`) {
+		t.Fatalf("apps: %s", body)
+	}
 	if _, body := call("GET", "/v1/actions", "bo-token", ""); strings.Contains(body, `"b.note"`) || !strings.Contains(body, `"a.note"`) {
 		t.Fatalf("after revoking b, bo sees %s", body)
 	}

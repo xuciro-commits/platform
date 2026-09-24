@@ -53,7 +53,8 @@ type App interface {
 	Manifest() Manifest
 	Declarations() []*pb.AuthorityDeclaration
 	Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
-	Read(c Caller, name string) any
+	// Read serves a named read; the app refuses callers it does not show it to.
+	Read(c Caller, name string) (any, *kernel.Error)
 	Input(c Caller, name string, body []byte, now time.Time) (any, *kernel.Error)
 }
 
@@ -67,6 +68,37 @@ type Tenant struct {
 	mu     sync.Mutex
 	apps   []App
 	owner  map[string]App // "action:", "read:" and "input:" names → app
+	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
+	// own lock, because reads run inside other apps' submissions.
+	auditMu sync.Mutex
+	audit   []AuditEntry
+}
+
+// AuditEntry is one accepted input: who, when, through which app, what.
+type AuditEntry struct {
+	At     time.Time `json:"at"`
+	Member string    `json:"member"`
+	App    string    `json:"app"`
+	Action string    `json:"action"` // an action's schema, or "input:<name>"
+	Target string    `json:"target,omitempty"`
+}
+
+const auditKept = 1000
+
+// Audit is the tenant's recent accepted inputs, oldest first.
+func (t *Tenant) Audit() []AuditEntry {
+	t.auditMu.Lock()
+	defer t.auditMu.Unlock()
+	return slices.Clone(t.audit)
+}
+
+func (t *Tenant) remember(e AuditEntry) {
+	t.auditMu.Lock()
+	defer t.auditMu.Unlock()
+	t.audit = append(t.audit, e)
+	if len(t.audit) > auditKept {
+		t.audit = t.audit[len(t.audit)-auditKept:]
+	}
 }
 
 // NewTenant enables apps for a tenant; it refuses duplicate names and unmet requirements.
@@ -130,6 +162,7 @@ func (t *Tenant) Submit(m Member, s *pb.Submission, now time.Time) (*pb.ChangeRe
 	defer t.mu.Unlock()
 	record, err := a.Submit(t.caller(m, a, false), s, now)
 	if err == nil {
+		t.remember(submitted(m.ID, a, s, now))
 		body, _ := protojson.Marshal(s)
 		t.record(a, "submission", m, body, now)
 	}
@@ -146,18 +179,19 @@ func (t *Tenant) Input(m Member, name string, body []byte, now time.Time) (any, 
 	defer t.mu.Unlock()
 	out, err := a.Input(t.caller(m, a, false), name, body, now)
 	if err == nil && a.Manifest().Inputs[name] {
+		t.remember(AuditEntry{At: now, Member: m.ID, App: a.Manifest().ID, Action: "input:" + name})
 		t.record(a, name, m, body, now)
 	}
 	return out, err
 }
 
 // Read serves a named read of the app that declares it.
-func (t *Tenant) Read(m Member, name string) (any, bool) {
+func (t *Tenant) Read(m Member, name string) (any, *kernel.Error) {
 	a := t.owner["read:"+name]
 	if a == nil {
-		return nil, false
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	return a.Read(t.caller(m, a, false), name), true
+	return a.Read(t.caller(m, a, false), name)
 }
 
 func (t *Tenant) record(a App, kind string, m Member, body []byte, now time.Time) {
@@ -186,14 +220,21 @@ func (t *Tenant) Replay(entries []Entry) error {
 				return fmt.Errorf("entry %d: bad submission", i+1)
 			}
 			_, err = a.Submit(t.caller(m, a, true), s, e.At)
+			t.remember(submitted(m.ID, a, s, e.At))
 		} else {
 			_, err = a.Input(t.caller(m, a, true), e.Kind, e.Body, e.At)
+			t.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + e.Kind})
 		}
 		if err != nil {
 			return fmt.Errorf("entry %d (%s %s): %v", i+1, e.App, e.Kind, err)
 		}
 	}
 	return nil
+}
+
+func submitted(member string, a App, s *pb.Submission, at time.Time) AuditEntry {
+	return AuditEntry{At: at, Member: member, App: a.Manifest().ID, Action: s.GetSchema().GetName(),
+		Target: s.GetTarget().GetType() + "/" + s.GetTarget().GetId()}
 }
 
 // Catalog is what m may call: each app's actions for m's role there, and an
@@ -221,22 +262,37 @@ func (t *Tenant) Declarations() []*pb.AuthorityDeclaration {
 	return out
 }
 
-// Apps describes the enabled apps for discovery (ADR-0010).
+// Apps describes the enabled apps from their manifests (ADR-0010): discovery,
+// the requirement graph and the capability matrix read this.
 func (t *Tenant) Apps() []AppInfo {
-	var out []AppInfo
+	out := []AppInfo{}
 	for _, a := range t.apps {
 		m := a.Manifest()
-		out = append(out, AppInfo{ID: m.ID, Version: m.Version, Requires: append([]string{}, m.Requires...), Reads: m.Reads, Actions: len(m.Actions.actions)})
+		info := AppInfo{ID: m.ID, Version: m.Version, Requires: append([]string{}, m.Requires...), Reads: append([]string{}, m.Reads...),
+			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}}
+		for input, journaled := range m.Inputs {
+			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
+		}
+		slices.Sort(info.Inputs)
+		for _, action := range m.Actions.actions {
+			for _, used := range action.Uses {
+				info.Uses = append(info.Uses, action.Schema+" → "+used)
+			}
+		}
+		out = append(out, info)
 	}
 	return out
 }
 
 type AppInfo struct {
-	ID       string   `json:"id"`
-	Version  string   `json:"version"`
-	Requires []string `json:"requires"`
-	Reads    []string `json:"reads"`
-	Actions  int      `json:"actions"`
+	ID           string           `json:"id"`
+	Version      string           `json:"version"`
+	Requires     []string         `json:"requires"`
+	Reads        []string         `json:"reads"`
+	Roles        []string         `json:"roles"`
+	Capabilities []CapabilityInfo `json:"capabilities"`
+	Inputs       []string         `json:"inputs"`
+	Uses         []string         `json:"uses"`
 }
 
 // Submit lets an app call another app's action, only along its declared
@@ -256,7 +312,7 @@ func (c Caller) Read(app, name string) (any, *kernel.Error) {
 	if err != nil {
 		return nil, err
 	}
-	return target.Read(c.tenant.caller(c.Member, target, c.Replaying), name), nil
+	return target.Read(c.tenant.caller(c.Member, target, c.Replaying), name)
 }
 
 func (c Caller) peer(app string) (App, *kernel.Error) {

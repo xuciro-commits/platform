@@ -112,10 +112,15 @@ type OpportunityStays struct {
 }
 
 // Read "customers".
-func (b *Bridge) Read(c platformserver.Caller, _ string) any {
-	accounts, _ := c.Read("crm", "accounts")
-	opportunities, _ := c.Read("crm", "opportunities")
-	all, _ := c.Read("hotel", "reservations")
+func (b *Bridge) Read(c platformserver.Caller, _ string) (any, *kernel.Error) {
+	accounts, err1 := c.Read("crm", "accounts")
+	opportunities, err2 := c.Read("crm", "opportunities")
+	all, err3 := c.Read("hotel", "reservations")
+	for _, err := range []*kernel.Error{err1, err2, err3} {
+		if err != nil {
+			return nil, err
+		}
+	}
 	reservations := map[string]hotel.Reservation{}
 	for _, r := range all.([]hotel.Reservation) {
 		reservations[r.ID] = r
@@ -137,7 +142,7 @@ func (b *Bridge) Read(c platformserver.Caller, _ string) any {
 		}
 		out = append(out, customer)
 	}
-	return out
+	return out, nil
 }
 
 // NewTenant is the composed sales software for one tenant: the directory, the

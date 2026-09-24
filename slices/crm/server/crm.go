@@ -142,11 +142,11 @@ func (c *CRM) Manifest() platformserver.Manifest {
 	return platformserver.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"accounts", "opportunities"}}
 }
 
-func (c *CRM) Read(_ platformserver.Caller, name string) any {
+func (c *CRM) Read(_ platformserver.Caller, name string) (any, *kernel.Error) {
 	if name == "accounts" {
-		return c.Accounts()
+		return c.Accounts(), nil
 	}
-	return c.Opportunities()
+	return c.Opportunities(), nil
 }
 
 func (c *CRM) Input(platformserver.Caller, string, []byte, time.Time) (any, *kernel.Error) {

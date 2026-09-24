@@ -111,9 +111,9 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, t.Apps())
 	})
 	handle("GET /v1/{read}", func(w http.ResponseWriter, r *http.Request, m Member, t *Tenant) {
-		out, ok := t.Read(m, r.PathValue("read"))
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
+		out, err := t.Read(m, r.PathValue("read"))
+		if err != nil {
+			Reply(w, nil, err)
 			return
 		}
 		WriteJSON(w, http.StatusOK, out)
