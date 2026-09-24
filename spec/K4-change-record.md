@@ -13,7 +13,7 @@ Schema: `proto/platform/kernel/v1alpha1/change.proto`. Vectors: `vectors/k4-chan
 
 | # | Rule | Error when violated |
 |---|---|---|
-| C1 | `tenant_id`, `principal_id`, `idempotency_key`, `target.type`, `target.id` and `schema.name` are required. | `INVALID_ARGUMENT` |
+| C1 | `tenant_id`, `principal_id`, `authority`, `idempotency_key`, `target.type`, `target.id` and `schema.name` are required. | `INVALID_ARGUMENT` |
 | C2 | The receiver must know `schema` (name and version) or be able to upgrade it. | `UNKNOWN_SCHEMA` |
 | C3 | A non-empty `causation_id` must name an accepted change in the same tenant. | `INVALID_REFERENCE` |
 | C4 | Idempotency is scoped to (`tenant_id`, `idempotency_key`). Resubmitting an identical submission returns the originally accepted record (same `change_id` and times) and appends nothing. | — |

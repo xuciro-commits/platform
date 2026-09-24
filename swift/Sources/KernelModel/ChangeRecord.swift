@@ -63,7 +63,7 @@ public struct ChangeLog: Sendable {
     }
 
     public mutating func submit(_ s: Submission, at now: Date) throws(KernelError) -> ChangeRecord {
-        let required = [s.tenantId, s.principalId, s.idempotencyKey, s.target.type, s.target.id, s.schema.name]
+        let required = [s.tenantId, s.principalId, s.authority, s.idempotencyKey, s.target.type, s.target.id, s.schema.name]
         guard !required.contains(where: \.isEmpty) else { throw .invalidArgument }       // C1
         guard knownSchemas.contains(s.schema) else { throw .unknownSchema }              // C2
         if let existing = byKey[s.tenantId]?[s.idempotencyKey] {

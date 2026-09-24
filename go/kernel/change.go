@@ -31,7 +31,7 @@ func NewChangeLog(schemas []*pb.SchemaRef) *ChangeLog {
 func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord { return l.logs[tenant] }
 
 func (l *ChangeLog) Submit(s *pb.Submission, now time.Time) (*pb.ChangeRecord, *Error) {
-	required := []string{s.GetTenantId(), s.GetPrincipalId(), s.GetIdempotencyKey(),
+	required := []string{s.GetTenantId(), s.GetPrincipalId(), s.GetAuthority(), s.GetIdempotencyKey(),
 		s.GetTarget().GetType(), s.GetTarget().GetId(), s.GetSchema().GetName()}
 	if slices.Contains(required, "") {
 		return nil, errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // C1

@@ -132,6 +132,27 @@
           "submit": {
             "tenantId": "tenant-a",
             "principalId": "user-1",
+            "authority": "",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "submit": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
             "authority": "tenant-server",
             "target": {
               "type": "test.item",

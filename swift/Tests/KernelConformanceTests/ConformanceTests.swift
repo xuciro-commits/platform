@@ -67,6 +67,42 @@ struct ConformanceTests {
             }
         }
     }
+
+    @Test("K2 Fact kinds and K3 Provenance vectors")
+    func facts() throws {
+        let file: VectorFile<ChangeGiven, FactStep> = try load("k2-k3-facts.json")
+        for vector in file.vectors {
+            var log = FactLog(knownSchemas: vector.given.schemas)
+            var factIDs: [Int: String] = [:]
+            for (index, step) in vector.steps.enumerated() {
+                let label = Comment(rawValue: "\(vector.id) step \(index)")
+                if let query = step.claims {
+                    let current = log.currentClaims(tenant: query.tenantId, subject: query.subject, attribute: query.attribute)
+                    #expect(current.map(\.factId) == (step.expect.current ?? []).map { factIDs[$0] ?? "" }, label)
+                    continue
+                }
+                var fact = try #require(step.record, label)
+                fact.derivedFrom = fact.derivedFrom.map { input in
+                    guard input.hasPrefix("$step:"), let n = Int(input.dropFirst(6)) else { return input }
+                    return factIDs[n] ?? ""
+                }
+                do {
+                    let record = try log.record(fact, at: try date(try #require(step.at, label)))
+                    factIDs[index] = record.factId
+                    let expected = try #require(step.expect.accepted, label)
+                    #expect(record.recordedTime == (try date(expected.recordedTime)), label)
+                    if let original = expected.sameAs {
+                        #expect(record.factId == factIDs[original], label)
+                    }
+                } catch let error as KernelError {
+                    #expect(step.expect.error == error.rawValue, label)
+                }
+            }
+            for (tenant, count) in vector.expectLog ?? [:] {
+                #expect(log.records(tenant: tenant).count == count, Comment(rawValue: "\(vector.id) log \(tenant)"))
+            }
+        }
+    }
 }
 
 // MARK: - Vector format (see Docs/Platform.md, Kernel Contract)
@@ -119,6 +155,27 @@ struct ChangeExpect: Decodable {
     }
     let accepted: Accepted?
     let error: String?
+}
+
+struct FactStep: Decodable {
+    struct ClaimsQuery: Decodable {
+        let tenantId: String
+        let subject: EntityRef
+        let attribute: String
+    }
+    struct Expect: Decodable {
+        struct Accepted: Decodable {
+            let recordedTime: String
+            let sameAs: Int?
+        }
+        let accepted: Accepted?
+        let current: [Int]?
+        let error: String?
+    }
+    let record: Fact?
+    let claims: ClaimsQuery?
+    let at: String?
+    let expect: Expect
 }
 
 private let vectorsDirectory = URL(fileURLWithPath: #filePath)

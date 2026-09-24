@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -191,6 +192,92 @@ func TestChangeRecordVectors(t *testing.T) {
 					}
 					if a.SameAs != nil && record.GetChangeId() != changeIDs[*a.SameAs] {
 						t.Errorf("%s: replay returned a new change", label)
+					}
+				} else if err == nil || err.Error() != step.Expect.Error {
+					t.Errorf("%s: got %v, want %s", label, err, step.Expect.Error)
+				}
+			}
+			for tenant, count := range v.ExpectLog {
+				if got := len(log.Records(tenant)); got != count {
+					t.Errorf("log %s: %d records, want %d", tenant, got, count)
+				}
+			}
+		})
+	}
+}
+
+func TestFactVectors(t *testing.T) {
+	for _, v := range load(t, "k2-k3-facts.json").Vectors {
+		t.Run(v.ID, func(t *testing.T) {
+			var given struct {
+				Schemas []json.RawMessage `json:"schemas"`
+			}
+			json.Unmarshal(v.Given, &given)
+			var schemas []*pb.SchemaRef
+			for _, raw := range given.Schemas {
+				s := &pb.SchemaRef{}
+				decode(t, raw, s)
+				schemas = append(schemas, s)
+			}
+			log := NewFactLog(schemas)
+			factIDs := map[int]string{}
+			for i, rawStep := range v.Steps {
+				var step struct {
+					Record json.RawMessage `json:"record"`
+					Claims *struct {
+						TenantID  string          `json:"tenantId"`
+						Subject   json.RawMessage `json:"subject"`
+						Attribute string          `json:"attribute"`
+					} `json:"claims"`
+					At     time.Time `json:"at"`
+					Expect struct {
+						Accepted *struct {
+							RecordedTime time.Time `json:"recordedTime"`
+							SameAs       *int      `json:"sameAs"`
+						} `json:"accepted"`
+						Current []int  `json:"current"`
+						Error   string `json:"error"`
+					} `json:"expect"`
+				}
+				if err := json.Unmarshal(rawStep, &step); err != nil {
+					t.Fatal(err)
+				}
+				label := fmt.Sprintf("step %d", i)
+				if q := step.Claims; q != nil {
+					subject := &pb.EntityRef{}
+					decode(t, q.Subject, subject)
+					var got, want []string
+					for _, r := range log.CurrentClaims(q.TenantID, subject, q.Attribute) {
+						got = append(got, r.GetFactId())
+					}
+					for _, n := range step.Expect.Current {
+						want = append(want, factIDs[n])
+					}
+					if !slices.Equal(got, want) {
+						t.Errorf("%s: current claims %v, want %v", label, got, want)
+					}
+					continue
+				}
+				f := &pb.Fact{}
+				decode(t, step.Record, f)
+				for j, input := range f.DerivedFrom {
+					if n, ok := strings.CutPrefix(input, "$step:"); ok {
+						index, _ := strconv.Atoi(n)
+						f.DerivedFrom[j] = factIDs[index]
+					}
+				}
+				record, err := log.Record(f, step.At)
+				if a := step.Expect.Accepted; a != nil {
+					if err != nil {
+						t.Errorf("%s: rejected with %v, want accepted", label, err)
+						continue
+					}
+					factIDs[i] = record.GetFactId()
+					if !record.GetRecordedTime().AsTime().Equal(a.RecordedTime) {
+						t.Errorf("%s: recorded %v, want %v", label, record.GetRecordedTime().AsTime(), a.RecordedTime)
+					}
+					if a.SameAs != nil && record.GetFactId() != factIDs[*a.SameAs] {
+						t.Errorf("%s: replay returned a new fact", label)
 					}
 				} else if err == nil || err.Error() != step.Expect.Error {
 					t.Errorf("%s: got %v, want %s", label, err, step.Expect.Error)
