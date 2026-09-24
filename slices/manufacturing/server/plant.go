@@ -32,6 +32,7 @@ const (
 	SchemaNC       = "mes.sfc.nc"
 	SchemaSign     = "mes.sfc.sign"
 	SchemaReason   = "mes.downtime.reason"
+	SchemaResend   = "mes.order.reconfirm"
 
 	schemaStates  = "mes.resource.states"
 	schemaPlanned = "mes.erp.planned-order"
@@ -122,6 +123,7 @@ type Order struct {
 	ERP          string `json:"erp,omitempty"`
 	Confirmation string `json:"confirmation,omitempty"`
 	ERPDetail    string `json:"erpDetail,omitempty"`
+	Resent       int    `json:"resent,omitempty"` // corrected confirmations sent after a refusal or failure
 }
 
 // Plant is one tenant: master data, execution state and its kernel logs.
@@ -215,6 +217,9 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 		return roleOf(who) == Quality || sfc != nil && onLine(p.lineOf(sfc))
 	case SchemaSign:
 		return true
+	case SchemaResend:
+		o := p.orders[s.GetTarget().GetId()]
+		return o != nil && onLine(p.orderLine(o))
 	case SchemaReason:
 		refs, _ := p.identity.Resolve(&pb.EntityRef{Type: DowntimeType, Id: s.GetTarget().GetId()})
 		return roleOf(who) == Supervisor || len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
@@ -246,6 +251,9 @@ func (p *Plant) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*p
 			if sfc := p.sfcs[s.GetTarget().GetId()]; sfc != nil && s.GetTarget().GetType() == SFCType {
 				sfc.Revision = record.GetRevision()
 				p.confirmIfFinished(who, sfc.Order, now)
+			}
+			if s.GetSchema().GetName() == SchemaResend {
+				p.confirm(who, p.orders[s.GetTarget().GetId()], now)
 			}
 		}, nil
 	})
@@ -393,6 +401,30 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission) (func(), *kernel
 			return nil, conflict // the event was split: the reason must be given for each part
 		}
 		return nil, nil // reasons are read from the log through identity (see Downtime)
+	case SchemaResend:
+		var r struct {
+			Planned string `json:"planned"`
+		}
+		o := p.orders[id]
+		if json.Unmarshal(s.GetPayload(), &r) != nil {
+			return nil, invalid
+		}
+		if o == nil {
+			return nil, notFound
+		}
+		if o.ERP != "refused" && o.ERP != "failed" {
+			return nil, conflict // only a confirmation the ERP refused, or that never arrived, is corrected
+		}
+		if r.Planned != "" && !p.claimed(r.Planned) {
+			return nil, invalid
+		}
+		return func() {
+			if r.Planned != "" {
+				o.Planned = r.Planned
+			}
+			o.Resent++
+			o.ERP, o.Confirmation, o.ERPDetail = "", "", ""
+		}, nil
 	}
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }

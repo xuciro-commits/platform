@@ -4,7 +4,7 @@ export type Product = { id: string; name: string; routing: string; operations: O
 export type WorkCenter = { id: string; name: string; line: string; resources: string[] };
 export type Master = { products: Product[]; workCenters: WorkCenter[] };
 export type Order = { id: string; product: string; quantity: number; sfcs: string[]; planned?: string;
-  erp?: "sent" | "confirmed" | "refused" | "failed"; confirmation?: string; erpDetail?: string };
+  erp?: "sent" | "confirmed" | "refused" | "failed"; confirmation?: string; erpDetail?: string; resent?: number };
 export type SFC = {
   id: string; order: string; product: string; step: number; state: "queued" | "active" | "hold" | "done" | "scrapped";
   resource?: string; revision: number; ncs: { step: number; code: string; by: string }[]; signatures: { action: string; meaning: string; by: string }[];

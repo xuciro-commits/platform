@@ -25,10 +25,10 @@ func TestCatalogPerCaller(t *testing.T) {
 		who  platform.Caller
 		want []string
 	}{
-		{sup, []string{read, SchemaRelease, SchemaReason}},
+		{sup, []string{read, SchemaRelease, SchemaReason, SchemaResend}},
 		{op1, []string{read, SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
 		{qa1, []string{read, SchemaNC, SchemaSign}},
-		{assistant, []string{read, SchemaReason}},
+		{assistant, []string{read, SchemaReason, SchemaResend}},
 		{gw, []string{read}}, // every member marks its own notifications
 	} {
 		if got := schemas(p.tenant.Catalog(c.who.Member)); !slices.Equal(got, c.want) {

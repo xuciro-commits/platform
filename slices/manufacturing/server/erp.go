@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -39,19 +40,34 @@ func (p *Plant) confirmIfFinished(who platform.Caller, order string, now time.Ti
 	if o == nil || o.ERP != "" {
 		return
 	}
+	for _, id := range o.SFCs {
+		if s := p.sfcs[id].State; s != "done" && s != "scrapped" {
+			return
+		}
+	}
+	p.confirm(who, o, now)
+}
+
+// key names the order's current confirmation: the order, then "<order>#<n>"
+// for the n-th corrected one, so the ERP receives a correction as a new message.
+func (o *Order) key() string {
+	if o.Resent == 0 {
+		return o.ID
+	}
+	return fmt.Sprintf("%s#%d", o.ID, o.Resent+1)
+}
+
+// confirm emits the order's confirmation (#101) with its current key.
+func (p *Plant) confirm(who platform.Caller, o *Order, now time.Time) {
 	done := 0
 	for _, id := range o.SFCs {
-		switch p.sfcs[id].State {
-		case "done":
+		if p.sfcs[id].State == "done" {
 			done++
-		case "scrapped":
-		default:
-			return
 		}
 	}
 	yield := o.Quantity * done / len(o.SFCs)
 	c := Confirmation{Order: o.ID, Planned: o.Planned, Product: o.Product, Quantity: o.Quantity, Yield: yield, Scrap: o.Quantity - yield, SFCs: o.SFCs}
-	if n, _ := who.Emit(EffectConfirmation, o.ID, OrderType+"/"+o.ID, c, now); n > 0 {
+	if n, _ := who.Emit(EffectConfirmation, o.key(), OrderType+"/"+o.ID, c, now); n > 0 {
 		o.ERP = "sent"
 	}
 }
@@ -64,10 +80,12 @@ type answer struct {
 
 // Answer records how the ERP answered as an observation on the order, with the
 // endpoint as provenance, and tells the line's supervisors when it was refused.
+// The answer to a confirmation since corrected is recorded, and changes nothing.
 func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome, now time.Time) *kernel.Error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	order := p.orders[e.Key]
+	id, _, _ := strings.Cut(e.Key, "#")
+	order := p.orders[id]
 	if order == nil {
 		return notFound
 	}
@@ -91,6 +109,9 @@ func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome,
 		Provenance: &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: e.Endpoint}, SourceTime: timestamppb.New(now)}}, now); err != nil {
 		return err
 	}
+	if e.Key != order.key() {
+		return nil
+	}
 	order.ERP, order.Confirmation, order.ERPDetail = a.State, a.Confirmation, a.Detail
 	if a.State != "confirmed" {
 		c.Notify(platform.Notification{Title: fmt.Sprintf("ERP %s the confirmation of %s", a.State, order.ID), Body: a.Detail,
@@ -99,11 +120,25 @@ func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome,
 	return nil
 }
 
-// supervisorsOfOrder are the supervisors of the line where the order's routing starts.
+// supervisorsOfOrder are the supervisors of the order's line.
 func (p *Plant) supervisorsOfOrder(o *Order) platform.Recipient {
-	r := platform.Recipient{Structure: SiteStructure, Role: string(Supervisor)}
+	return platform.Recipient{Structure: SiteStructure, Role: string(Supervisor), Unit: p.orderLine(o)}
+}
+
+// orderLine is the line where the order's routing starts.
+func (p *Plant) orderLine(o *Order) string {
 	if prod := p.product(o.Product); prod != nil && len(prod.Operations) > 0 {
-		r.Unit = p.workCenter(prod.Operations[0].WorkCenter).Line
+		return p.workCenter(prod.Operations[0].WorkCenter).Line
 	}
-	return r
+	return ""
+}
+
+// claimed reports whether the ERP sent planned order id (its claim is on record).
+func (p *Plant) claimed(id string) bool {
+	for _, r := range p.facts.Records(p.tenant) {
+		if f := r.GetFact(); f.GetSchema().GetName() == schemaPlanned && f.GetSubject().GetId() == id {
+			return true
+		}
+	}
+	return false
 }

@@ -79,4 +79,24 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	expect(t, notes.([]platform.Notification)[0].Title, "ERP refused the confirmation of SO-2")
 	p.tenant.Dispatch(t0) // settled effects are not sent again
 	expect(t, fmt.Sprint(calls), "2")
+
+	// The supervisor corrects the refused order: it fulfils a planned order the
+	// ERP sent since, and its confirmation goes again under a new key.
+	type resend struct {
+		Planned string `json:"planned,omitempty"`
+	}
+	expect(t, submit(p, op1, SchemaResend, OrderType, "SO-2", resend{}), "ERROR_CODE_POLICY_DENIED")
+	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-1", resend{}), "ERROR_CODE_CONFLICT") // confirmed already
+	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-2", resend{Planned: "PO-404"}), "ERROR_CODE_INVALID_ARGUMENT")
+	expect(t, fmt.Sprint(p.DeliverPlanned(erp, PlannedPage{CursorFrom: "page-1", CursorTo: "page-2", Orders: []PlannedOrder{{ERPID: "PO-9002", Product: "P-100", Quantity: 1}}}, t0)), "<nil>")
+	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-2", resend{Planned: "PO-9002"}), "ok")
+	expect(t, order("SO-2").ERP, "sent")
+	p.tenant.Dispatch(t0)
+	o = order("SO-2")
+	expect(t, fmt.Sprint(o.ERP, " ", o.Confirmation, " ", o.Resent, " ", calls), "confirmed CONF-PO-9002-1 1 3")
+	var keys []string
+	for _, e := range p.tenant.Effects(t0) {
+		keys = append(keys, e.Key+":"+e.State)
+	}
+	expect(t, fmt.Sprint(keys), "[SO-2#2:delivered SO-2:rejected SO-1:delivered]")
 }

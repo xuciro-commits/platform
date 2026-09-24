@@ -51,6 +51,11 @@ function PlannedOrders() {
     });
   const { can, decide, master } = usePlant();
   const [releasing, setReleasing] = useState<Planned>();
+  const [resending, setResending] = useState<Order>();
+  const [plannedFor, setPlannedFor] = useState("");
+  // Confirmations the ERP refused or that never arrived: corrected and sent again (mes.order.reconfirm).
+  const attention = orders.filter((o) => o.erp === "refused" || o.erp === "failed");
+  const unreleased = (useRead<Planned[]>("/v1/planned-orders") ?? []).filter((p) => !orders.some((o) => o.planned === p.erpId));
   const columns: ColumnDef<Planned & { released: string; erp: string; confirmation: string }, any>[] = [
     { accessorKey: "erpId", header: "ERP order", meta: { width: 110 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "product", header: "Product", cell: (c) => `${c.getValue()} · ${routing(master, c.getValue())?.name ?? ""}` },
@@ -67,7 +72,37 @@ function PlannedOrders() {
   return (
     <>
       <PageHeader title="Planned orders" description="Demand claimed by the ERP (polled connector). Releasing cites the claim as evidence." />
-      <DataTable data={planned} columns={columns} getRowId={(p) => p.erpId} height="calc(100dvh - 190px)" />
+      {attention.length > 0 && (
+        <section className="mb-3 rounded-md border border-border bg-surface p-3 text-sm">
+          <h2 className="mb-2 font-semibold">Confirmations the ERP did not accept</h2>
+          {attention.map((o) => (
+            <div key={o.id} className="flex items-center gap-3 py-1">
+              <span className="font-mono text-xs">{o.id}</span><StatusTag status={o.erp!} registry={erpStatus} />
+              <span className="flex-1 text-muted">{o.erpDetail}</span>
+              {can("mes.order.reconfirm") && <Button size="sm" onClick={() => { setResending(o); setPlannedFor(o.planned ?? ""); }}>Correct and resend</Button>}
+            </div>
+          ))}
+        </section>
+      )}
+      <DataTable data={planned} columns={columns} getRowId={(p) => p.erpId} height={attention.length ? "calc(100dvh - 300px)" : "calc(100dvh - 190px)"} />
+      <Dialog open={!!resending} onOpenChange={(o) => !o && setResending(undefined)} title={`Resend ${resending?.id ?? ""} to the ERP`}>
+        {resending && (
+          <div className="grid gap-3 text-sm">
+            <p className="text-muted">The ERP answered: {resending.erpDetail || resending.erp}. Name the planned order this shop order fulfils, then confirm it again.</p>
+            <Select aria-label="Planned order" value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)}>
+              <option value="">{resending.planned ? `Keep ${resending.planned}` : "No planned order"}</option>
+              {unreleased.map((p) => <option key={p.erpId} value={p.erpId}>{p.erpId} · {p.product} × {p.quantity}</option>)}
+            </Select>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setResending(undefined)}>Cancel</Button>
+              <Button variant="primary" onClick={async () => {
+                await decide("mes.order.reconfirm", { type: "mes.order", id: resending.id }, plannedFor && plannedFor !== resending.planned ? { planned: plannedFor } : {});
+                setResending(undefined);
+              }}>Resend</Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
       <Dialog open={!!releasing} onOpenChange={(o) => !o && setReleasing(undefined)} title={`Release ${releasing?.erpId ?? ""}`}>
         {releasing && (
           <EntityForm schema={z.object({ order: z.string().regex(/^SO-\d+$/, "Format SO-123"), sfcs: z.number().int().min(1).max(releasing.quantity) })}

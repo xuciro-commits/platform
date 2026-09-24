@@ -41,5 +41,9 @@ func Actions() *platform.Catalog {
 			Description: "Assign the reason of a downtime event on a resource of your lines.",
 			Payload:     []platform.Field{{Name: "reason", Type: "string", Required: true, Description: "Tool change, Setup, Material shortage, Breakdown or Quality issue"}},
 			Roles:       roles(Supervisor, Operator, Assistant)},
+		platform.Action{Schema: SchemaResend, Target: OrderType, Capability: "orders", Title: "Resend confirmation to the ERP",
+			Description: "Correct an order whose confirmation the ERP refused, or that never arrived, and confirm it again: name the ERP planned order it fulfils when that was missing or wrong.",
+			Payload:     []platform.Field{{Name: "planned", Type: "string", Description: "ERP planned order ID (a planned order the ERP sent)"}},
+			Roles:       roles(Supervisor, Assistant)},
 	)
 }
