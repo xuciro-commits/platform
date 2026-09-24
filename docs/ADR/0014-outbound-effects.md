@@ -115,11 +115,10 @@ An outbound effect is the server playing the edge toward an external authority. 
 - Secrets are resolved by name from `PLATFORM_SECRETS_DIR` or `PLATFORM_SECRET_<NAME>`. A dialer refuses private addresses at connect time unless the endpoint allows them.
 - `cmd/webhook-sink` is a receiver that checks signatures and keeps one copy per key, for the local stack and the rehearsal.
 - The per-destination breaker is, for now, the endpoint's ordered queue: its head retries with backoff and holds the rest, and the endpoint shows as failing. A pause of its own comes when an endpoint serves several kinds.
-- Waiting for their first use, as decided:
-  - apps emitting their own effects (`Caller.Emit`, `Manifest.Emits`);
-  - answers as observations (D4);
-  - approval of irreversible kinds caused by agents (D6);
-  - email, and the MES write-back.
+- #101, the MES write-back:
+  - Apps emit their own effects: `Manifest.Emits` declares the kinds, and `Caller.Emit(kind, key, …)` sends to the endpoints an administrator bound to `<app>/<kind>`. The key is the app's, such as the order, so the same business fact is sent once.
+  - The receiver's JSON answer is journaled with the outcome and handed to the app (`Answerer`), in replay too. The plant records it as an observation on the order, with the endpoint as provenance (D4), and tells the line's supervisors when the ERP refuses.
+- Waiting for their first use, as decided: approval of irreversible kinds caused by agents (D6), and email.
 
 ## Done-when, for the implementation item that follows acceptance
 

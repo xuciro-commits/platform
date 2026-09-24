@@ -35,6 +35,7 @@ const (
 
 	schemaStates  = "mes.resource.states"
 	schemaPlanned = "mes.erp.planned-order"
+	schemaAnswer  = "mes.erp.confirmation" // the ERP's answer to an order confirmation (ADR-0014 D4)
 )
 
 // Master data (Opcenter: product, workflow/spec, resource; SAP ME: material, router/operation, work center/resource).
@@ -116,6 +117,11 @@ type Order struct {
 	Quantity int      `json:"quantity"`
 	SFCs     []string `json:"sfcs"`
 	Planned  string   `json:"planned,omitempty"`
+	// The confirmation written back to the ERP when the last SFC ends: sent,
+	// confirmed (with the ERP's number), refused or failed, read from its answer.
+	ERP          string `json:"erp,omitempty"`
+	Confirmation string `json:"confirmation,omitempty"`
+	ERPDetail    string `json:"erpDetail,omitempty"`
 }
 
 // Plant is one tenant: master data, execution state and its kernel logs.
@@ -134,8 +140,9 @@ type Plant struct {
 
 func NewPlant(tenant string, master MasterData) *Plant {
 	p := &Plant{tenant: tenant, master: master, orders: map[string]*Order{}, sfcs: map[string]*SFC{},
-		ledger:   platformserver.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
-		facts:    kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}, {Name: schemaPlanned, Version: 1}}, nil)),
+		ledger: platformserver.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
+		facts: kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}, {Name: schemaPlanned, Version: 1},
+			{Name: schemaAnswer, Version: 1}}, nil)),
 		identity: kernel.NewIdentity(nil), downtime: map[string][]Downtime{}}
 	p.ledger.Changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(p.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
@@ -238,6 +245,7 @@ func (p *Plant) Submit(who platformserver.Caller, s *pb.Submission, now time.Tim
 			}
 			if sfc := p.sfcs[s.GetTarget().GetId()]; sfc != nil && s.GetTarget().GetType() == SFCType {
 				sfc.Revision = record.GetRevision()
+				p.confirmIfFinished(who, sfc.Order, now)
 			}
 		}, nil
 	})

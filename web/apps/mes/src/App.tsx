@@ -16,6 +16,10 @@ const sfcStatus = defineStatuses({
   queued: { label: "Queued", tone: "info" }, active: { label: "In work", tone: "warning" }, hold: { label: "On hold", tone: "danger" },
   done: { label: "Done", tone: "success" }, scrapped: { label: "Scrapped", tone: "neutral" },
 });
+const erpStatus = defineStatuses({
+  sent: { label: "Sent", tone: "info" }, confirmed: { label: "Confirmed", tone: "success" },
+  refused: { label: "Refused", tone: "danger" }, failed: { label: "Failed", tone: "danger" },
+});
 const downtimeStatus = defineStatuses({
   open: { label: "Down", tone: "danger" }, closed: { label: "Closed", tone: "neutral" }, check: { label: "Needs check", tone: "warning" },
 });
@@ -41,15 +45,21 @@ function PlannedOrders() {
   const orders = useRead<Order[]>("/v1/orders") ?? [];
   // Joined into the rows: the table caches accessor values per row object.
   const planned = (useRead<Planned[]>("/v1/planned-orders") ?? [])
-    .map((p) => ({ ...p, released: orders.find((o) => o.planned === p.erpId)?.id ?? "" }));
+    .map((p) => {
+      const o = orders.find((x) => x.planned === p.erpId);
+      return { ...p, released: o?.id ?? "", erp: o?.erp ?? "", confirmation: o?.confirmation ?? o?.erpDetail ?? "" };
+    });
   const { can, decide, master } = usePlant();
   const [releasing, setReleasing] = useState<Planned>();
-  const columns: ColumnDef<Planned & { released: string }, any>[] = [
+  const columns: ColumnDef<Planned & { released: string; erp: string; confirmation: string }, any>[] = [
     { accessorKey: "erpId", header: "ERP order", meta: { width: 110 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "product", header: "Product", cell: (c) => `${c.getValue()} · ${routing(master, c.getValue())?.name ?? ""}` },
     { accessorKey: "quantity", header: "Qty", meta: { width: 70, align: "right" } },
     { accessorKey: "due", header: "Due", meta: { width: 110 } },
     { accessorKey: "released", header: "Released as", meta: { width: 120 } },
+    // Written back when the last SFC ends (ADR-0014): the ERP's answer, or why it refused.
+    { accessorKey: "erp", header: "Confirmed to ERP", meta: { width: 220 }, cell: ({ row: { original: p } }) => p.erp
+        ? <span className="flex items-center gap-2"><StatusTag status={p.erp} registry={erpStatus} /><span className="font-mono text-xs">{p.confirmation}</span></span> : null },
     { id: "act", header: "", meta: { width: 90 }, enableSorting: false, cell: ({ row: { original: p } }) =>
         p.released || !can("mes.order.release") ? null
           : <Button size="sm" onClick={() => setReleasing(p)}>Release</Button> },

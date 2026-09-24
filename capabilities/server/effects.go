@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -35,21 +36,41 @@ import (
 // events in Settings, and the platform app turns each matching event into an
 // effect, signed as Standard Webhooks.
 
-// Endpoint is a destination the tenant's administrator configured.
+// Endpoint is a destination the tenant's administrator configured. It receives
+// the events it subscribes to (webhooks, no app code) and the effects apps emit
+// of the kinds bound to it ("<app>/<kind>", e.g. "mes/erp-confirmation").
 type Endpoint struct {
 	ID           string   `json:"id"`
 	Kind         string   `json:"kind"` // webhook
 	URL          string   `json:"url"`
-	Secret       string   `json:"secret"` // a secret's name in the store, never the secret
-	Events       []string `json:"events"` // action schemas or "<protocol id>#<event>"
+	Secret       string   `json:"secret"`           // a secret's name in the store, never the secret
+	Events       []string `json:"events,omitempty"` // action schemas or "<protocol id>#<event>"
+	Effects      []string `json:"effects,omitempty"`
 	AllowPrivate bool     `json:"allowPrivate,omitempty"`
+}
+
+// Emit declares an effect kind an app sends to whatever endpoint the tenant binds to it.
+type Emit struct {
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+// Answerer is an app that hears how its effects ended: delivered with the
+// receiver's answer, rejected, or failed. The answer comes from outside, so it is
+// journaled with the outcome, and replay hands the app the same answer (D4): the
+// app records it as an observation and decides on it; it never changes state by itself.
+type Answerer interface {
+	Answer(c Caller, e Effect, o Outcome, now time.Time) *kernel.Error
 }
 
 // Effect is one intent for one endpoint and what became of it.
 type Effect struct {
-	ID       string    `json:"id"` // the idempotency key: <tenant>:<app>:<change id>:<endpoint>
+	ID       string    `json:"id"` // the idempotency key: <tenant>:<app>:<change id or key>:<endpoint>
 	Endpoint string    `json:"endpoint"`
-	Event    string    `json:"event"`
+	Event    string    `json:"event"`         // the event or effect kind
+	App      string    `json:"app,omitempty"` // the app that emitted it; empty for webhooks
+	Key      string    `json:"key,omitempty"` // the app's key for it
 	Target   string    `json:"target"`
 	At       time.Time `json:"at"`
 	State    string    `json:"state"` // pending, retrying, delivered, rejected, failed, discarded
@@ -115,6 +136,37 @@ func (t *Tenant) trimEffects() {
 		}
 		t.outbound = slices.Delete(t.outbound, i, i+1)
 	}
+}
+
+// Emit sends data as an effect of kind (declared in the app's manifest) to every
+// endpoint bound to it; key names the effect within the app and kind, so the
+// same fact of the business is sent once whatever retries or replays do. It is
+// called inside an input, so replay rebuilds the intent and never sends it.
+// It returns how many endpoints will receive it.
+func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
+	t := c.tenant
+	if t == nil {
+		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if a := t.app(c.App); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e Emit) bool { return e.Name == kind }) || key == "" {
+		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	name := c.App + "/" + kind
+	body, _ := json.Marshal(map[string]any{"type": name, "timestamp": now, "data": data})
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	n := 0
+	for _, ep := range t.endpoints {
+		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
+		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *Effect) bool { return x.ID == id }) {
+			continue
+		}
+		t.outbound = append(t.outbound, &Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
+			State: "pending", Due: now, Body: string(body)})
+		n++
+	}
+	t.trimEffects()
+	return n, nil
 }
 
 // Effects lists the tenant's effects, newest first; bodies older than 30 days are dropped.
@@ -209,10 +261,11 @@ func (t *Tenant) Dispatch(now time.Time) {
 
 // Outcome is what an attempt learned; it is the journal entry of the attempt.
 type Outcome struct {
-	Effect string `json:"effect"`
-	Result string `json:"result"` // delivered, rejected, retry
-	Detail string `json:"detail,omitempty"`
-	Digest string `json:"digest,omitempty"`
+	Effect string          `json:"effect"`
+	Result string          `json:"result"` // delivered, rejected, retry
+	Detail string          `json:"detail,omitempty"`
+	Digest string          `json:"digest,omitempty"`
+	Answer json.RawMessage `json:"answer,omitempty"` // the receiver's body, for app effects (up to 64 KiB of JSON)
 }
 
 // send makes one attempt, signed as Standard Webhooks, with the effect's ID as
@@ -250,7 +303,11 @@ func (t *Tenant) send(ep Endpoint, x Effect, now time.Time) Outcome {
 	case err != nil:
 		out.Result, out.Detail = "retry", "no answer (unknown; resent with the same key): "+err.Error()
 	default:
+		answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		resp.Body.Close()
+		if x.App != "" && json.Valid(answer) {
+			out.Answer = answer
+		}
 		code := resp.StatusCode
 		switch {
 		case code >= 200 && code < 300:
@@ -292,21 +349,36 @@ func (t *Tenant) settle(effect string, o Outcome, now time.Time) {
 	if p := t.app(PlatformApp); p != nil {
 		t.record(p, "effect", t.automation(PlatformApp, false).Member, body, now)
 	}
-	t.apply(o, now)
+	t.apply(o, now, false)
 }
 
-// apply records an outcome on its effect; replay calls it with the journaled outcome.
-func (t *Tenant) apply(o Outcome, at time.Time) bool {
+// apply records an outcome on its effect and, once the effect is settled, tells
+// the app that emitted it; replay calls it with the journaled outcome.
+func (t *Tenant) apply(o Outcome, at time.Time, replaying bool) bool {
+	x, ok := t.mark(o, at)
+	if !ok {
+		return false
+	}
+	if x.App != "" && settled(x.State) && x.State != "discarded" {
+		if a, ok := t.app(x.App).(Answerer); ok {
+			a.Answer(t.automation(x.App, replaying), x, o, at)
+			t.enqueue(at)
+		}
+	}
+	return true
+}
+
+func (t *Tenant) mark(o Outcome, at time.Time) (Effect, bool) {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	i := slices.IndexFunc(t.outbound, func(x *Effect) bool { return x.ID == o.Effect })
 	if i < 0 {
-		return false
+		return Effect{}, false
 	}
 	x := t.outbound[i]
 	x.sending, x.Last, x.Digest, x.Error = false, at, o.Digest, o.Detail
 	if x.State == "discarded" {
-		return true // discarded while its attempt was on the way
+		return *x, true // discarded while its attempt was on the way
 	}
 	x.Attempts++
 	switch {
@@ -319,7 +391,7 @@ func (t *Tenant) apply(o Outcome, at time.Time) bool {
 	default:
 		x.State, x.Due = "retrying", at.Add(effectBackoff(x.ID, x.Attempts))
 	}
-	return true
+	return *x, true
 }
 
 // The platform app's decisions about endpoints and effects.
@@ -339,7 +411,8 @@ func effectActions() []Action {
 			Description: "Send the chosen events to a URL, signed with a named secret (Standard Webhooks).",
 			Payload: []Field{{Name: "url", Type: "string", Required: true, Description: "https URL of the receiver"},
 				{Name: "secret", Type: "string", Required: true, Description: "Name of the signing secret in the secret store"},
-				{Name: "events", Type: "string[]", Required: true, Description: "Action schemas or <protocol id>#<event>"},
+				{Name: "events", Type: "string[]", Description: "Action schemas or <protocol id>#<event> to send as webhooks"},
+				{Name: "effects", Type: "string[]", Description: "Effect kinds apps emit, <app>/<kind>, to send here"},
 				{Name: "allowPrivate", Type: "boolean", Description: "Allow private addresses and plain http (inside the deployment only)"}}, Roles: admin},
 		{Schema: SchemaEndpointRemove, Target: EndpointType, Capability: "integrations", Title: "Remove webhook endpoint",
 			Description: "Stop sending to the endpoint; what it has not received is discarded.", Payload: []Field{}, Roles: admin},
@@ -366,8 +439,14 @@ func decideEffects(c Caller, s *pb.Submission, now time.Time) (apply func(*pb.Ch
 	switch s.GetSchema().GetName() {
 	case SchemaEndpointAdd:
 		var ep Endpoint
-		if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" || ep.Secret == "" || len(ep.Events) == 0 {
+		if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" || ep.Secret == "" || len(ep.Events)+len(ep.Effects) == 0 {
 			return nil, invalid, true
+		}
+		for _, kind := range ep.Effects {
+			app, name, _ := strings.Cut(kind, "/")
+			if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e Emit) bool { return e.Name == name }) {
+				return nil, invalid, true
+			}
 		}
 		if u, err := url.Parse(ep.URL); err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
 			return nil, invalid, true

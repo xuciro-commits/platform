@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **101 · proposed** | Next outbound uses (ADR-0014 D7 order): email as a notification channel (with the approval of D6 for external recipients), then MES order confirmation written back to the ERP with its answer as an observation (D4); apps emit their own effects (`Manifest.Emits`) | The owner picks the next one |
+| **102 · proposed** | Remaining outbound uses (ADR-0014): email as a notification channel with approval of external, agent-caused sends (D6); a correction path when the ERP refuses (the supervisor resends after fixing the order, or closes it by decision) | The owner picks the next item |
 
 ## Open friction (temporary; delete entries once resolved)
 

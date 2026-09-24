@@ -15,13 +15,13 @@ import { z } from "zod";
 
 type Member = { id: string; tenant: string; roles: Record<string, string>; attributes?: Record<string, string[]>; subjects: string[] };
 type Capability = { name: string; enabled: boolean; actions: string[] };
-type AppInfo = { id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
+type AppInfo = { emits?: { name: string; title: string; description: string }[]; id: string; version: string; requires: string[]; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
 type ProtocolInfo = { id: string; actions: string[]; reads: string[]; events: { name: string; title: string }[]; providers: string[]; consumers: string[]; bound?: string };
 type Delivery = { at: string; app: string; action: string; target: string; subscriber: string; outcome: string; attempt?: number };
 type Task = { id: string; kind: "delivery" | "job"; app: string; title: string; state: string; attempts: number; last?: string; due?: string; error?: string };
 type Connector = { id: string; direction: string; dataClasses: string[]; heartbeat: string; health: string; lastSeen?: string; cursor?: string; disabled: boolean;
   lastError?: { at: string; input: string; error: string } };
-type EndpointView = { id: string; url: string; secret: string; events: string[]; allowPrivate?: boolean; pending: number; failing: number; health: string; delivered: number };
+type EndpointView = { id: string; url: string; secret: string; events?: string[]; effects?: string[]; allowPrivate?: boolean; pending: number; failing: number; health: string; delivered: number };
 type Effect = { id: string; endpoint: string; event: string; target: string; at: string; state: string; attempts: number; last?: string; due?: string; error?: string; digest?: string };
 type SettingValue = { name: string; title: string; description: string; type: "boolean" | "integer" | "text" | "choice"; default: string; choices?: string[]; value: string };
 type AppSettings = { app: string; settings: SettingValue[] };
@@ -416,7 +416,8 @@ function Webhooks() {
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const { apps, decideOn } = useAdmin();
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ id: "", url: "", secret: "", allowPrivate: false, events: [] as string[] });
+  const [draft, setDraft] = useState({ id: "", url: "", secret: "", allowPrivate: false, events: [] as string[], effects: [] as string[] });
+  const kinds = apps.flatMap((a) => (a.emits ?? []).map((e) => ({ id: `${a.id}/${e.name}`, title: e.title })));
   const events = [...apps.flatMap((a) => a.capabilities.flatMap((c) => c.actions)).filter((x) => !x.startsWith("platform.")),
     ...protocols.flatMap((p) => (p.events ?? []).map((e) => `${p.id}#${e.name}`))];
   const tone = (s: string) => (({ delivered: "success", retrying: "warning", pending: "info", failed: "danger", rejected: "danger" }) as const)[s as "failed"] ?? "neutral";
@@ -449,7 +450,7 @@ function Webhooks() {
             <span className="font-semibold">{ep.id}</span><span className="font-mono text-xs">{ep.url}</span>
             <Tag label={ep.health} tone={ep.health === "ok" ? "success" : "danger"} />
             <span className="text-xs text-muted">secret “{ep.secret}” · {ep.delivered} delivered · {ep.pending} waiting</span>
-            <span className="flex flex-wrap gap-1">{ep.events.map((e) => <Tag key={e} label={e} tone="info" />)}</span>
+            <span className="flex flex-wrap gap-1">{[...(ep.events ?? []), ...(ep.effects ?? [])].map((e) => <Tag key={e} label={e} tone="info" />)}</span>
             <Button size="sm" variant="danger" className="ml-auto" onClick={() => void decideOn("platform.endpoint.remove", { type: "platform.endpoint", id: ep.id }, {})}>Remove</Button>
           </section>
         ))}
@@ -463,7 +464,15 @@ function Webhooks() {
           <Input aria-label="Secret name" placeholder="Name of the signing secret in the secret store" value={draft.secret} onChange={(e) => setDraft({ ...draft, secret: e.target.value })} />
           <label className="flex items-center gap-2"><input type="checkbox" checked={draft.allowPrivate} onChange={(e) => setDraft({ ...draft, allowPrivate: e.target.checked })} />
             Receiver inside the deployment (private address, http allowed)</label>
-          <p className="mt-1 text-xs text-muted">Events</p>
+          {kinds.length > 0 && <>
+            <p className="mt-1 text-xs text-muted">Effects apps send (the receiver's answer goes back to the app)</p>
+            {kinds.map((k) => (
+              <label key={k.id} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={draft.effects.includes(k.id)}
+                onChange={(e) => setDraft({ ...draft, effects: e.target.checked ? [...draft.effects, k.id] : draft.effects.filter((x) => x !== k.id) })} />
+                <span className="font-mono">{k.id}</span> · {k.title}</label>
+            ))}
+          </>}
+          <p className="mt-1 text-xs text-muted">Events (as webhooks)</p>
           <div className="grid max-h-48 gap-1 overflow-auto">
             {events.map((ev) => (
               <label key={ev} className="flex items-center gap-2 font-mono text-xs"><input type="checkbox" checked={draft.events.includes(ev)}
@@ -472,7 +481,7 @@ function Webhooks() {
           </div>
           <span className="mt-2 flex justify-end gap-2">
             <Button onClick={() => setAdding(false)}>Cancel</Button>
-            <Button variant="primary" disabled={!draft.id || !draft.url || !draft.secret || draft.events.length === 0}
+            <Button variant="primary" disabled={!draft.id || !draft.url || !draft.secret || draft.events.length + draft.effects.length === 0}
               onClick={async () => {
                 const { id, ...payload } = draft;
                 if (await decideOn("platform.endpoint.add", { type: "platform.endpoint", id }, payload)) setAdding(false);

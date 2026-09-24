@@ -59,6 +59,7 @@ type Manifest struct {
 	Everyone   []string      // reads any member may use; the app filters by caller
 	Jobs       []Job         // scheduled work (Runner), ADR-0013
 	Settings   []Setting     // typed values administrators set in Settings
+	Emits      []Emit        // outbound effects it sends to endpoints the tenant binds (ADR-0014)
 }
 
 // Event is an accepted decision, delivered to subscribers after commit.
@@ -340,7 +341,7 @@ func (t *Tenant) Replay(entries []Entry) error {
 		var err *kernel.Error
 		if e.Kind == "effect" { // an outbound attempt's outcome: applied, never sent again
 			var o Outcome
-			if json.Unmarshal(e.Body, &o) != nil || !t.apply(o, e.At) {
+			if json.Unmarshal(e.Body, &o) != nil || !t.apply(o, e.At, true) {
 				return fmt.Errorf("entry %d: effect outcome for an effect the replay did not create", i+1)
 			}
 			continue
@@ -411,7 +412,7 @@ func (t *Tenant) Apps() []AppInfo {
 	for _, a := range t.apps {
 		m := a.Manifest()
 		info := AppInfo{ID: m.ID, Version: m.Version, Requires: append([]string{}, m.Requires...), Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
-			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...)}
+			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]Emit{}, m.Emits...)}
 		for input, journaled := range m.Inputs {
 			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
 		}
@@ -444,6 +445,7 @@ type AppInfo struct {
 	Subscribes   []string         `json:"subscribes"`
 	Provides     []string         `json:"provides"`
 	Consumes     []string         `json:"consumes"`
+	Emits        []Emit           `json:"emits"`
 }
 
 // Submit lets an app call another app's action, only along its declared

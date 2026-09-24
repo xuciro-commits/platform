@@ -40,10 +40,11 @@ submit() { # token key schema target-type target-id payload [expected-revision]
   local server=${SERVER:-$MES}
   who=$(curl -s -H "Authorization: Bearer $1" "$server/v1/me" | jq -r .principalId)
   body=$(jq -n --arg w "$who" --arg k "$2" --arg s "$3" --arg tt "$4" --arg ti "$5" --arg p "$(printf %s "$6" | base64)" --arg r "${7:-}" \
-    --arg tenant "${TENANT:-plant-sz}" --arg authority "${AUTHORITY:-plant-server}" \
+    --arg e "${EVIDENCE:-}" --arg tenant "${TENANT:-plant-sz}" --arg authority "${AUTHORITY:-plant-server}" \
     '{tenantId:$tenant, principalId:$w, authority:$authority, idempotencyKey:$k,
       schema:{name:$s, version:1}, target:{type:$tt, id:$ti}, payload:$p}
-     + (if $r == "" then {} else {expectedRevision:($r|tonumber)} end)')
+     + (if $r == "" then {} else {expectedRevision:($r|tonumber)} end)
+     + (if $e == "" then {} else {evidenceFactIds:[$e]} end)')
   curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$server/v1/submissions" -d "$body"
 }
 state() { { for path in orders sfcs downtime planned-orders notifications; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
@@ -64,7 +65,21 @@ curl -s -H "Authorization: Bearer $SUP" "$MES/v1/notifications" | jq -e 'any(.[]
 [[ $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/notifications" | jq length) == 0 ]] || fail "operator notified"
 AUTHORITY=platform submit "$SUP" o-1 platform.connector.disable platform.connector erp '{}' | jq -e .record >/dev/null || fail "disable connector"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -r '.[] | select(.id == "erp") | .health') == disabled ]] || fail "connector health"
-echo "ok   operations: downtime notified to the line's supervisor only; ERP connector disabled from Settings"
+# ERP write-back (#101): the plant's order confirmation goes to the ERP endpoint
+# the administrator bound; the ERP's number comes back as an observation.
+AUTHORITY=platform submit "$SUP" o-2 platform.endpoint.add platform.endpoint erp-api \
+  '{"url":"http://webhook-sink:8080/erp","secret":"sink","effects":["mes/erp-confirmation"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "bind ERP endpoint"
+claim=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/planned-orders" | jq -r '.[] | select(.erpId == "PO-9003") | .factId')
+EVIDENCE=$claim submit "$SUP" r-2 mes.order.release mes.order WO-2 '{"product":"P-100","quantity":12,"sfcs":1,"planned":"PO-9003"}' | jq -e .record >/dev/null || fail "release WO-2"
+rev=0
+for resource in FURNACE-1 CNC-11 CMM-1; do
+  submit "$OP1" "w2-s$rev" mes.sfc.start mes.sfc WO-2-001 "{\"resource\":\"$resource\"}" $rev | jq -e .record >/dev/null || fail "start WO-2 at $resource"
+  submit "$OP1" "w2-c$rev" mes.sfc.complete mes.sfc WO-2-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-2 at $resource"
+  rev=$((rev + 2))
+done
+for _ in $(seq 20); do [[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/orders" | jq -r '.[] | select(.id == "WO-2") | .erp') == confirmed ]] && break; sleep 0.5; done
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/orders" | jq -r '.[] | select(.id == "WO-2") | .erp + " " + .confirmation') == "confirmed CONF-100001" ]] || fail "ERP write-back: $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/orders" | jq -c '.[] | select(.id == "WO-2")')"
+echo "ok   operations: downtime notified to the line's supervisor only; ERP connector disabled from Settings; a finished order confirmed to the ERP, its number back on the order"
 submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | jq -e .record >/dev/null || fail start
 [[ $(submit "$OP2" s-2 mes.sfc.start mes.sfc WO-1-002 '{"resource":"FURNACE-1"}' 0 | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "line policy"
 
@@ -121,7 +136,7 @@ sales crm-server "$MGR" s-b3 crm.opportunity.book crm.opportunity OPP-1 '{"roomT
 echo "ok   sales solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants; the cancellation reached a webhook endpoint signed, once"
 
 before=$(state)
-[[ $(jq -s '.[1] | length' <<<"$before") == 2 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
+[[ $(jq -s '.[1] | length' <<<"$before") == 3 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
 compose restart mes-server sales-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done

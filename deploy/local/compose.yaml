@@ -41,6 +41,7 @@ services:
       - -directory=/etc/mes/directory.json
     ports: ["127.0.0.1:${MES_PORT:-8490}:8490"]
     volumes: [./mes/directory.json:/etc/mes/directory.json:ro]
+    environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000 }
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }
