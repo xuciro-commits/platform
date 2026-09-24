@@ -1,62 +1,153 @@
 # ADR-0010: The platform is a host that runs apps; its own administration is an app
 
-**Status:** Proposed (2026-09-24; awaiting the owner)
+**Status:** Accepted (2026-09-24; direction approved by the owner, host capabilities detailed in this revision)
 
-**Context.** Composition #91 worked, but by hand: each package defines its own principal (F-21), routing across packages is composition code (F-23), and no journal spans packages. The owner's model is an operating system. The platform is the base layer. Business packages are apps. The platform's own administration (identity, roles, apps, connectors, data) is an app too, like Settings. Apps offer capabilities to each other, and what an app offers must be discoverable without the dependencies turning into a tangle.
+**Context.** Composition #91 worked by hand:
+- each package defines its own principal (F-21);
+- routing across packages is composition code (F-23);
+- no journal spans packages.
 
-**Decision.**
+The owner's model is the architecture logic of an operating system. The platform hosts and gives base capabilities; business packages are installable, pluggable apps; the platform's own administration is an app like Settings. Apps also offer capabilities to each other, and what they offer must be discoverable without the dependencies turning into a tangle. Mature business platforms already work this way:
+- Odoo: modules with a manifest, installed through Settings, with a technical registry of models, access rights, record rules, scheduled actions and sequences.
+- ServiceNow: scoped applications, an application repository, and system administration.
+- SAP BTP and CAP: extensions, per-tenant feature toggles, and SaaS provisioning.
+- Salesforce: packages, permission sets, and Setup.
+- Microsoft Power Platform: solutions with dependencies, publishers, upgrade, and uninstall.
 
-1. **Host.** One platform host per deployment runs a set of apps for each tenant. It owns everything apps share:
-   - authentication (OIDC) and the tenant directory;
-   - one ordered journal per tenant across all its apps;
-   - the kernel wiring (`Ledger`);
-   - routing of submissions and reads to the owning app;
-   - the catalog each caller receives;
-   - audit.
+This ADR fixes the relationship between the platform and apps, and details what the host provides.
 
-   Apps never wire the kernel, authenticate, or route.
-2. **App manifest.** Each app declares itself in typed code (not configuration):
-   - identity and version;
-   - the data classes it is authority for;
-   - its actions (ADR-0008) and public reads;
-   - the roles it defines;
-   - the other apps' actions and reads it requires;
-   - the capabilities that can be deactivated;
-   - its connectors;
-   - its UI package.
+## Part 1. The platform and apps
 
-   A bridge (ADR-0009) is an app whose manifest requires two apps.
+1. **Host.** One platform host per deployment runs a set of apps for each tenant.
+   - Apps only declare themselves and write business knowledge.
+   - Apps never wire the kernel, authenticate, route, keep their own journal, or define principals.
+2. **App manifest.** Each app declares itself in typed code, not configuration:
+   - identity, publisher and version;
+   - data classes it is authority for (K5);
+   - actions (ADR-0008), public reads and events it emits;
+   - roles it defines, and the attributes those roles may be scoped by (line, property);
+   - settings (typed, per tenant);
+   - capabilities that can be deactivated;
+   - connectors and scheduled work;
+   - navigation entries and its UI package (`@pkg/<app>`);
+   - requirements: other apps' actions, reads or events it uses.
 3. **Three tiers, one direction.** Platform services ← business apps ← bridges and solution apps.
    - A business app requires only the platform.
-   - A bridge requires the apps it joins.
-   - An app that requires another app's actions must declare it, and the requirement graph must be acyclic.
-   - The host refuses to start a tenant whose enabled apps leave a requirement unmet. A verify gate checks the graph at build time.
-4. **Calls go through the host.** An app reaches another app only through the host, by action name or read name, never through its Go internals. So every cross-app call is:
-   - authorized with the caller's roles in the called app;
+   - A bridge (ADR-0009) requires the apps it joins.
+   - An app that uses another app's action, read or event declares it, and the requirement graph is acyclic.
+   - The build checks the graph. The host refuses to enable an app whose requirements are not enabled for that tenant, and refuses to disable one that an enabled app requires.
+4. **All cross-app traffic goes through the host,** by name (action, read, event), never through another app's code. Every call is therefore:
+   - authorized with the caller's role in the called app;
    - ordered in the tenant journal;
    - audited;
-   - visible in the dependency graph.
+   - drawn in the dependency graph.
+5. **Discovery** is the host's registry of manifests, filtered per caller. People, integrations and AI agents receive the same catalog (`/v1/actions`, `/v1/apps`). What exists is fixed at build time (ADR-0008): there is no runtime service lookup and no runtime code loading.
+6. **Lifecycle.**
+   - Install: the app is built into the host.
+   - Enable or disable: per tenant, as a decision of the platform app.
+   - Upgrade: rebuild the host, restart, and replay the journal (ADR-0007). Payload versions move through K7.
+   - Remove: when an app is disabled, its actions and navigation leave every catalog, and its scheduled work and subscriptions stop (K9 owner close). Its recorded history stays, and references to its entities keep resolving. No accepted decision is undone (ADR-0008 point 4).
+7. **The platform app.** It is an app on the same host, with the Settings workspace (Part 3), and its decisions go through the kernel like any app's. The platform administers itself with the same tools it gives apps.
 
-   Discovery is the host's registry of manifests, filtered per caller. People, integrations and AI agents all use the same `/v1/actions`. There is no runtime service lookup: what exists is fixed at build time (ADR-0008).
-5. **Directory.** A member of a tenant has one role per app, plus attributes (lines, properties). Granting and revoking are decisions of the platform app (K4), with history. They take effect on the next request, which closes the operations-floor gap on revocation. The member replaces per-package principals (F-21).
-6. **The platform app.** It runs on the host like any app, with a web "Settings" workspace:
-   - tenants;
-   - members and their role per app;
-   - the apps enabled per tenant, with their requirement graph;
-   - AI agents and their grants;
-   - connectors and their health;
-   - journal and audit views;
-   - the live capability matrix: what each app provides and requires, read from the registry.
+## Part 2. What the host provides
 
-   Its own actions go through the kernel like any app's.
-7. **Platform services, added when an app needs them:**
-   - events: subscriptions over change records, delivered after commit, handlers owned as work (K9);
-   - files;
-   - analysis datasets: read-only projections for customer models and dashboards (ADR-0008);
-   - notifications.
+The rows below name the capability and what an app gets from it. The "When" column is the work item that delivers it; "later" means built when an app first needs it, never ahead of a user.
 
-   Each service is a platform capability with its own row in the matrix; none is built ahead of a user.
+**A. App management**
 
-**Consequences.** #92 becomes the first step of this ADR: the host, manifests, the directory and the tenant journal, with the sales composition and manufacturing moved onto it. The admin app follows; then events. The kernel contract does not change. The manifest may become contract (spec and vectors) once a non-Go app needs it. Composition code in `crmhotel.NewServer` and the per-package principal types are deleted.
+| Capability | An app gets | Reference | When |
+|---|---|---|---|
+| App registry | Its manifest registered; discoverable by name | Odoo `ir.module.module`, ServiceNow app repository | #92 |
+| Requirement check | Start-up and build refuse unmet or cyclic requirements | Odoo `depends`, Power Platform solution dependencies | #92 |
+| Enable and disable per tenant | Activation as a recorded decision; its contributions appear or leave | SAP CAP feature toggles | #92 (start-up), #93 (Settings) |
+| Upgrade | Rebuild, restart, replay; payload upgrades through K7 | Power Platform solution upgrade | exists (ADR-0007) |
 
-**Revisit when** an app must run in its own process or be released on its own (the host then becomes a gateway over app processes), or third parties build apps (ADR-0008 point 1).
+**B. Identity and access**
+
+| Capability | An app gets | Reference | When |
+|---|---|---|---|
+| Authentication | Callers proven by OIDC; apps never see credentials | Rauthy (ADR-0007) | exists |
+| Directory | Members of a tenant, with attributes (lines, properties) and organisational units | Odoo users and companies | #92 |
+| Roles per app | The app defines roles; each member holds zero or one role per app | Odoo groups, Salesforce permission sets | #92 |
+| Scoped grants | A role limited by attributes (line L1, property A); the app's policy reads them (K6) | Odoo record rules | #92 |
+| Grant and revoke | Decisions with history; effective on the next request | — | #92 |
+| Service accounts and AI agents | Non-human members with their own grants and catalog | ServiceNow integration users | #92 |
+| Effective permissions | "Who may do X", "what may Y do" | Salesforce permission analysis | #93 |
+
+**C. Tenancy and organisation**
+
+| Capability | An app gets | Reference | When |
+|---|---|---|---|
+| Tenants | Isolation of data, journal, members and settings (K6) | SAP BTP subaccount | exists |
+| Organisational units | A tree (group → company → property/plant → line) apps use as policy context, never as kernel schema | Odoo multi-company | #93 |
+| App settings | Typed per-tenant settings declared by the app, edited in Settings | Odoo `res.config.settings` | #93 |
+| Number sequences | Readable document numbers (SO-1042) per tenant and unit, without gaps across replays | Odoo `ir.sequence` | later |
+
+**D. Data**
+
+| Capability | An app gets | Reference | When |
+|---|---|---|---|
+| Tenant journal | One ordered, durable journal across the tenant's apps; replay; backup and restore | ADR-0007 | #92 |
+| Kernel logs per app | Change log, facts, authority for its data classes (`Ledger`) | — | exists (#91) |
+| Entity references | Open any entity by type and ID across apps (routes, links, redirects, K1) | — | #93 |
+| Files and attachments | Stored files referenced from entities | — | later |
+| Analysis datasets | Read-only projections for customer models and dashboards (ADR-0008 point 2) | SAP datasphere, Dataverse views | later |
+| Retention and privacy | Erasure duties reconciled with history (K4 falsifier) | — | later |
+
+**E. Actions, events and integration**
+
+| Capability | An app gets | Reference | When |
+|---|---|---|---|
+| Action catalog and invocation | Declared actions; callers receive their own catalog; cross-app calls through the host | ADR-0008 | exists; routing through the host in #92 |
+| Public reads | Named queries other apps and the UI may use | Salesforce OSDK-like APIs | #92 |
+| Events | Subscriptions over change records, delivered after commit, handlers owned as work (K9) | ServiceNow business rules and events, Odoo automated actions | #94 |
+| Scheduled work | Jobs with owner, checkpoints and cancellation (K9) | Odoo `ir.cron`, ServiceNow scheduled jobs | later |
+| Connectors | Push and poll sources with cursors and health (K8) | ServiceNow IntegrationHub | exists (manufacturing); managed in #93 |
+| Outbound API and webhooks | External systems call actions or receive events with the same grants | — | later |
+| Agent adapters | CLI and MCP over a caller's catalog | ADR-0008 | exists (CLI); MCP later |
+
+**F. Operations**
+
+| Capability | An app gets | Reference | When |
+|---|---|---|---|
+| Audit | Who did what, when, through which app, from the journal | — | #93 (view) |
+| Logs and correlation | Correlation IDs across cross-app calls, no business content | Platform.md §7 floor | #92 |
+| Health | App, connector and journal health | — | #93 |
+| Backup and restore | Rehearsed | ADR-0007 | exists |
+| Notifications | In-app notices from events; email later | — | later |
+
+**G. The UI host**
+
+| Capability | An app gets | Reference | When |
+|---|---|---|---|
+| Workspace shell | Docking workspace, command palette, session, theme | `@platform/ui` | exists |
+| App launcher and navigation | Entries contributed from the manifest; shown only when the caller's catalog allows | VS Code contribution points, OpenMRS extension slots | #93 |
+| Cross-app links | Open another app's entity view by reference | — | #93 |
+| App UI packages | `@pkg/<app>` views used by any software | ADR-0009 | exists (#91) |
+| Preferences | Language, theme, density per member | — | later |
+
+## Part 3. Settings (the platform app's workspace)
+
+| Area | Operations |
+|---|---|
+| Apps | Installed apps and versions; enable or disable per tenant with the requirement graph; deactivate capabilities; health |
+| Members and access | Members from the identity provider; roles per app with attribute scopes; service accounts and AI agents; grant history; effective permissions |
+| Organisation | Tenant profile; organisational units; per-app settings forms from app declarations |
+| Integrations | Connectors with health, cursor and last error; API clients |
+| Data and audit | Journal and audit explorer by app, member and entity; entity history; backup status |
+| Automation | Scheduled and running work; event subscriptions and failed deliveries |
+| Capability matrix | Live from the registry: what each app provides and requires, and which platform capabilities it uses |
+
+## Consequences
+
+- **Delivery order.**
+  - #92: the host, manifests, the directory with per-app roles and scoped grants, the tenant journal, and cross-app routing and reads. The sales composition and manufacturing move onto it.
+  - #93: Settings and the platform capabilities it needs to show.
+  - #94: events.
+  - Everything marked "later" waits for its first user.
+- **Kernel.** The kernel contract does not change. The manifest becomes contract (spec and vectors) when a non-Go app needs it.
+- **Deleted.** Composition code in `crmhotel.NewServer` and per-package principal types.
+
+**Revisit when:**
+- an app must run in its own process or be released on its own (the host then becomes a gateway over app processes);
+- third parties build apps (ADR-0008 point 1: isolation, a public manifest API, review).
