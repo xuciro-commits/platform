@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract]   (default: everything)
+# Platform verification. Usage: scripts/verify.sh [contract|hotel]   (default: everything)
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -29,9 +29,17 @@ contract() {
   step contract-swift swift test --package-path contract/swift
 }
 
+hotel() {
+  step hotel-server bash -c 'cd slices/hotel/server && go vet ./... && go test -count=1 ./...'
+  step hotel-client-k5 cargo test --manifest-path slices/hotel/client/src-tauri/Cargo.toml
+  step hotel-flows slices/hotel/flows.sh
+}
+
 case "${1:-all}" in
-  contract|all) contract ;;
-  *) echo "usage: $0 [contract]"; exit 2 ;;
+  contract) contract ;;
+  hotel) hotel ;;
+  all) contract; hotel ;;
+  *) echo "usage: $0 [contract|hotel]"; exit 2 ;;
 esac
 
 if ((${#failed[@]})); then echo "Failed: ${failed[*]}"; exit 1; fi

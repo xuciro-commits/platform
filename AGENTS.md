@@ -11,6 +11,7 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | Path | Contents |
 |---|---|
 | `contract/` | Kernel contract `v1alpha1`: Protobuf data contract (`proto/`), semantic rules with errors (`spec/`), conformance vectors (`vectors/`), Go reference (`go/`) and Swift implementation (`swift/`) running the same vectors |
+| `slices/hotel/` | Hotel reference slice (#79): Go tenant server (`server/`, with a channel simulator), Tauri desk client with a Rust K5 outbox that runs the contract's K5 vectors (`client/`), `flows.sh` reproducing timeout, offline, conflict and rejection flows. May not change the kernel |
 | `docs/Platform.md` | The platform design: layers, kernel hypotheses K1–K9, kernel contract rules, validation strategy |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
@@ -27,5 +28,7 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 ## Verify
 
 ```sh
-scripts/verify.sh        # contract vocabulary, buf lint + generated code, Go vet/test, Swift test
+scripts/verify.sh           # everything
+scripts/verify.sh contract  # contract vocabulary, buf lint + generated code, Go vet/test, Swift test
+scripts/verify.sh hotel     # Hotel server tests, Rust K5 vectors, end-to-end flows (needs cargo)
 ```

@@ -1,0 +1,280 @@
+// Package hotel is the Hotel reference slice (docs/WorkQueue.md #79): a tenant
+// server that accepts reservation decisions through the kernel contract. It may
+// not change the kernel; where the contract does not fit, it records friction.
+package hotel
+
+import (
+	"encoding/json"
+	"slices"
+	"sync"
+	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+)
+
+const (
+	ReservationType = "hotel.reservation"
+	Authority       = "hotel-server"
+	SchemaCreate    = "hotel.reservation.create"
+	SchemaModify    = "hotel.reservation.modify"
+	SchemaCancel    = "hotel.reservation.cancel"
+)
+
+// Role is domain data (K6: org structure is not kernel).
+type Role string
+
+const (
+	FrontDesk Role = "front-desk"
+	Manager   Role = "manager"
+	Channel   Role = "channel"
+)
+
+type Principal struct {
+	ID     string
+	Tenant string
+	Role   Role
+}
+
+// Policy is the policy hook: one evaluation of (principal, action, target).
+type Policy func(p Principal, action string, target *pb.EntityRef) bool
+
+// DefaultPolicy: front desk and channels create and modify; only managers cancel.
+func DefaultPolicy(p Principal, action string, _ *pb.EntityRef) bool {
+	switch action {
+	case SchemaCreate, SchemaModify:
+		return slices.Contains([]Role{FrontDesk, Manager, Channel}, p.Role)
+	case SchemaCancel:
+		return p.Role == Manager
+	}
+	return false
+}
+
+// Stay is a half-open range of nights [CheckIn, CheckOut), dates as YYYY-MM-DD.
+type Stay struct {
+	RoomType string `json:"roomType"`
+	CheckIn  string `json:"checkIn"`
+	CheckOut string `json:"checkOut"`
+}
+
+type Reservation struct {
+	ID       string `json:"id"`
+	Stay            // embedded
+	Guest    string `json:"guest"`
+	Version  int    `json:"version"`
+	Canceled bool   `json:"canceled"`
+}
+
+// Payloads, one per schema (version 1).
+type createPayload struct {
+	Stay
+	Guest      string `json:"guest"`
+	SourceFact string `json:"sourceFact,omitempty"` // F-11: causation cannot name a fact
+}
+
+type modifyPayload struct {
+	Stay
+	ExpectedVersion int `json:"expectedVersion"` // F-14: no precondition field in K4
+}
+
+type cancelPayload struct {
+	ExpectedVersion int `json:"expectedVersion"`
+}
+
+// Hotel is one tenant: its rooms, reservations and kernel logs.
+type Hotel struct {
+	mu           sync.Mutex
+	tenant       string
+	rooms        map[string]RoomType
+	reservations map[string]*Reservation
+	changes      *kernel.ChangeLog
+	facts        *kernel.FactLog
+	authorities  *kernel.Authorities
+	policy       Policy
+}
+
+// RoomType is sellable inventory per night: physical rooms plus an overbooking
+// allowance, as property management systems (OPERA, Mews) configure it.
+type RoomType struct {
+	Rooms       int `json:"rooms"`
+	Overbooking int `json:"overbooking"`
+}
+
+func NewHotel(tenant string, rooms map[string]RoomType, policy Policy) *Hotel {
+	schemas := []*pb.SchemaRef{{Name: SchemaCreate, Version: 1}, {Name: SchemaModify, Version: 1}, {Name: SchemaCancel, Version: 1}}
+	registry := kernel.NewSchemaRegistry(schemas, nil)
+	h := &Hotel{tenant: tenant, rooms: rooms, reservations: map[string]*Reservation{},
+		changes: kernel.NewChangeLog(registry), authorities: kernel.NewAuthorities(Authority), policy: policy,
+		facts: kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: channelMessageSchema, Version: 1}}, nil))}
+	h.authorities.Declare(&pb.AuthorityDeclaration{TenantId: tenant, DataClass: ReservationType,
+		Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: Authority, Epoch: 1})
+	return h
+}
+
+func denied() *kernel.Error                { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED} }
+func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
+
+// Submit turns a submission into a change record or rejects it.
+func (h *Hotel) Submit(p Principal, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// F-12: the contract does not bind principal_id to the authenticated caller.
+	if s.GetTenantId() != h.tenant || p.Tenant != h.tenant || s.GetPrincipalId() != p.ID {
+		return nil, denied()
+	}
+	// F-10: replays must return the original even if the domain would now refuse,
+	// so the slice looks for the key before validating.
+	for _, r := range h.changes.Records(h.tenant) {
+		if r.GetSubmission().GetIdempotencyKey() == s.GetIdempotencyKey() {
+			return h.changes.Submit(s, now)
+		}
+	}
+	if err := h.authorities.Authorize(s); err != nil {
+		return nil, err
+	}
+	if !h.policy(p, s.GetSchema().GetName(), s.GetTarget()) {
+		return nil, denied()
+	}
+	apply, err := h.validate(s)
+	if err != nil {
+		return nil, err
+	}
+	record, err := h.changes.Submit(s, now)
+	if err == nil {
+		apply()
+	}
+	return record, err
+}
+
+// validate checks the domain rules and returns how to apply the decision.
+func (h *Hotel) validate(s *pb.Submission) (func(), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	existing := h.reservations[id]
+	invalid := fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
+	switch s.GetSchema().GetName() {
+	case SchemaCreate:
+		var c createPayload
+		if json.Unmarshal(s.GetPayload(), &c) != nil || c.Guest == "" || !h.validStay(c.Stay) {
+			return nil, invalid
+		}
+		if existing != nil {
+			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+		}
+		if !h.fits(c.Stay, "") {
+			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+		}
+		return func() { h.reservations[id] = &Reservation{ID: id, Stay: c.Stay, Guest: c.Guest, Version: 1} }, nil
+	case SchemaModify:
+		var m modifyPayload
+		if json.Unmarshal(s.GetPayload(), &m) != nil || !h.validStay(m.Stay) {
+			return nil, invalid
+		}
+		if existing == nil || existing.Canceled {
+			return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+		}
+		if m.ExpectedVersion != existing.Version || !h.fits(m.Stay, id) {
+			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+		}
+		return func() { existing.Stay, existing.Version = m.Stay, existing.Version+1 }, nil
+	case SchemaCancel:
+		var c cancelPayload
+		if json.Unmarshal(s.GetPayload(), &c) != nil {
+			return nil, invalid
+		}
+		if existing == nil || existing.Canceled {
+			return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+		}
+		if c.ExpectedVersion != existing.Version {
+			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+		}
+		return func() { existing.Canceled, existing.Version = true, existing.Version+1 }, nil
+	}
+	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
+}
+
+func (h *Hotel) validStay(s Stay) bool {
+	in, err1 := time.Parse(time.DateOnly, s.CheckIn)
+	out, err2 := time.Parse(time.DateOnly, s.CheckOut)
+	return err1 == nil && err2 == nil && out.After(in) && h.rooms[s.RoomType].Rooms > 0
+}
+
+// fits reports whether every night of the stay has a free room of its type,
+// ignoring the reservation being modified. Capacity allocation is domain code.
+func (h *Hotel) fits(s Stay, ignore string) bool {
+	in, _ := time.Parse(time.DateOnly, s.CheckIn)
+	out, _ := time.Parse(time.DateOnly, s.CheckOut)
+	for night := in; night.Before(out); night = night.AddDate(0, 0, 1) {
+		used := 0
+		for id, r := range h.reservations {
+			if id != ignore && !r.Canceled && r.RoomType == s.RoomType && r.CheckIn <= night.Format(time.DateOnly) && night.Format(time.DateOnly) < r.CheckOut {
+				used++
+			}
+		}
+		if t := h.rooms[s.RoomType]; used >= t.Rooms+t.Overbooking {
+			return false
+		}
+	}
+	return true
+}
+
+func (h *Hotel) Reservations() []Reservation {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]Reservation, 0, len(h.reservations))
+	for _, r := range h.reservations {
+		out = append(out, *r)
+	}
+	slices.SortFunc(out, func(a, b Reservation) int {
+		if a.CheckIn != b.CheckIn {
+			if a.CheckIn < b.CheckIn {
+				return -1
+			}
+			return 1
+		}
+		if a.ID < b.ID {
+			return -1
+		}
+		return 1
+	})
+	return out
+}
+
+// Channel connector input (K2 observation, then a decision by the channel principal).
+
+const channelMessageSchema = "hotel.channel.booking"
+
+type ChannelBooking struct {
+	MessageID     string `json:"messageId"`
+	ReservationID string `json:"reservationId"`
+	Stay
+	Guest  string    `json:"guest"`
+	SentAt time.Time `json:"sentAt"`
+}
+
+// IngestChannelBooking records the raw message as an observation (duplicates
+// collapse by message ID) and submits the booking it asks for.
+func (h *Hotel) IngestChannelBooking(connector Principal, b ChannelBooking, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	raw, _ := json.Marshal(b)
+	h.mu.Lock()
+	fact, err := h.facts.Record(&pb.Fact{TenantId: h.tenant, Kind: pb.FactKind_FACT_KIND_OBSERVATION,
+		Subject: &pb.EntityRef{Type: ReservationType, Id: b.ReservationID}, Attribute: "channel-booking",
+		Schema: &pb.SchemaRef{Name: channelMessageSchema, Version: 1}, IdempotencyKey: b.MessageID, Payload: raw,
+		Provenance: &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: connector.ID}, SourceTime: timestamppb.New(b.SentAt)}}, now)
+	h.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	payload, _ := json.Marshal(createPayload{Stay: b.Stay, Guest: b.Guest, SourceFact: fact.GetFactId()})
+	return h.Submit(connector, &pb.Submission{TenantId: h.tenant, PrincipalId: connector.ID, Authority: Authority,
+		Target: &pb.EntityRef{Type: ReservationType, Id: b.ReservationID}, Schema: &pb.SchemaRef{Name: SchemaCreate, Version: 1},
+		IdempotencyKey: "channel:" + b.MessageID, Payload: payload}, now)
+}
+
+// RecordJSON renders a change record with Protobuf JSON names.
+func RecordJSON(r *pb.ChangeRecord) json.RawMessage {
+	out, _ := protojson.Marshal(r)
+	return out
+}

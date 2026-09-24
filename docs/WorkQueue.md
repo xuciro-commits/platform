@@ -4,8 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **79 · ready** | Hotel vertical slice in the platform repository: Go server (tenancy, principals, policy hook, change records; reservations and capacity conflicts in the domain), one client (Tauri suggested), one simulated channel connector; draft → confirm → modify/cancel; two staff roles. **May not change the kernel**; records friction | Rejection, conflict and offline-pending flows reproducible; friction recorded |
-| **81 · after 79** | Compare and revise: update kernel statuses, resolve friction, decide shared Rust edge core (ADR) | Platform.md updated; refactor tasks for both apps listed here |
+| **81 · ready** | Compare and revise: update kernel statuses, resolve friction, decide shared Rust edge core (ADR) | Platform.md updated; refactor tasks for both apps listed here |
 | **82 · after 81** | Evolution drills E1 (Hotel → coworking/serviced apartments) and E2 (Music → shared library) | For each drill, which layer changed; kernel changes carry ADRs |
 | **83 · after 81** | First manufacturing slice from the #78 discovery (Platform.md §8), including edge observations; confirm or refute F-5 to F-9 | Same rules as #79 |
 
@@ -20,3 +19,11 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 | F-7 | Manufacturing | predicted (K5/K4) | Review-board dispositions need several signatures; regulated decisions need signature meaning and re-authentication | Model as domain workflow over single decisions first; kernel change only if that fails |
 | F-8 | Manufacturing | predicted (K6) | Policies are scoped by plant hierarchy (site/area/line) | Hierarchy passed as policy context attributes; kernel stays hierarchy-free unless #83 shows otherwise |
 | F-9 | Manufacturing | predicted (K8) | OPC UA/MQTT push subscriptions next to polled sources | Specify K8 with both in #79/#83 |
+| F-10 | Hotel | missing (K4) | Domain checks must run after idempotent-replay detection and before append; the change log has no seam for it, so the slice scans the log for the key (`slices/hotel/server/hotel.go`) | Add a replay lookup or a validate-then-append rule to K4 |
+| F-11 | Hotel | mapping (K2/K4) | A booking decision caused by a channel observation cannot name it: `causation_id` only names changes, so the fact ID rides in the payload | Let causation name a fact, or add a separate reference |
+| F-12 | Hotel | missing (K6) | Nothing binds `tenant_id`/`principal_id` to the authenticated caller; the slice rejects mismatches with `POLICY_DENIED` | Specify K6 (principal binding, policy evaluation) |
+| F-13 | Hotel | missing (K5) | Which authority answers are outbox `conflict` vs `reject` is unspecified; the client maps 409 → conflict, other 4xx → reject, transport/5xx → unknown | Add the mapping to K5 by error code |
+| F-14 | Hotel | missing (K4) | Modify/cancel need optimistic concurrency; the envelope has no precondition, so `expectedVersion` rides in the payload | Decide whether preconditions are kernel (K4) or domain |
+| F-15 | Hotel | ambiguity (K4) | Rejections append nothing (C9), so a redelivered channel booking that was refused can succeed later with the same key | Decide whether an idempotency key remembers rejections |
+| F-16 | Hotel | ambiguity (K5) | A send that certainly never reached the authority (connection refused) can only become `UNKNOWN`; offline and lost answers look the same | Consider `SENDING → PENDING` for undelivered sends |
+| F-17 | Hotel | missing (K5) | Edges have no specified way to learn declarations; the client hard-codes the reservation authority | Distribute declarations (K5) |
