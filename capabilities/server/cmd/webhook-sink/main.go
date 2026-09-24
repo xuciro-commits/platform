@@ -9,6 +9,8 @@
 //	GET  /received  {"calls": n, "kept": {"<webhook-id>": <body>}, "confirmations": {"<webhook-id>": "CONF-…"}}
 //	POST /fail?on=true|false   answer 503 to every webhook until switched off
 //	GET  /mail      [{"messageId", "to", "from", "subject", "text"}], oldest first
+//	GET  /v1/models, POST /v1/chat/completions   a local model server on the
+//	                OpenAI wire (ADR-0015): model "echo" repeats the last message
 package main
 
 import (
@@ -111,6 +113,23 @@ func main() {
 		mu.Lock()
 		defer mu.Unlock()
 		json.NewEncoder(w).Encode(map[string]any{"calls": calls, "kept": kept, "confirmations": confirmations})
+	})
+	http.HandleFunc("GET /v1/models", func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "echo", "name": "Echo", "context_length": 4096}}})
+	})
+	http.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Model    string
+			Messages []struct{ Role, Content string }
+		}
+		if json.NewDecoder(r.Body).Decode(&req) != nil || req.Model != "echo" || len(req.Messages) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"message": "model echo only"}})
+			return
+		}
+		last := req.Messages[len(req.Messages)-1].Content
+		json.NewEncoder(w).Encode(map[string]any{"model": "echo", "choices": []map[string]any{{"message": map[string]string{"role": "assistant", "content": "echo: " + last}}},
+			"usage": map[string]int{"prompt_tokens": len(strings.Fields(last)), "completion_tokens": len(strings.Fields(last)) + 1}})
 	})
 	http.HandleFunc("GET /mail", func(w http.ResponseWriter, _ *http.Request) {
 		mu.Lock()

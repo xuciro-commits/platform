@@ -6,6 +6,7 @@
 package platform
 
 import (
+	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -79,6 +80,21 @@ type Manifest struct {
 	Jobs       []Job         // scheduled work (Runner), ADR-0013
 	Settings   []Setting     // typed values administrators set in Settings
 	Emits      []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0014)
+	// Roles are roles that grant no action but open something else, such as
+	// models (ADR-0015); the roles its actions grant need not be listed.
+	Roles []string
+}
+
+// AllRoles are every role the app defines: those its actions grant and Roles.
+func (m Manifest) AllRoles() []string {
+	out := m.Actions.Roles()
+	for _, r := range m.Roles {
+		if !slices.Contains(out, r) {
+			out = append(out, r)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // App is one app's instance in one tenant.

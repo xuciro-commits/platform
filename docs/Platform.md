@@ -77,6 +77,7 @@ Status legend:
 | Notifications | Platform capability (`platform` app) | To members, holders of a unit's role, or holders of an app role; deduplicated by key; read state as a decision; mailed through an email endpoint | `Caller.Notify` | manufacturing, Hotel, the platform (approvals) | 3 |
 | Protocol binding | Platform capability (`platform` app) | The administrator chooses the provider of new calls; reads span every provider | `platform.protocol.bind`, `Caller.Query` | sales | 1 |
 | Organisation | Platform capability (`org` app) | Units in dated structures, memberships; rules ask for a member's units | `Organization`, `Caller.Units` | manufacturing, sales | 2 |
+| AI providers and models | Platform capability (`ai` app, ADR-0015) | Vendor, OpenAI-compatible and local providers; live catalogs; models enabled for everyone or for ai users; calls through the host with usage journaled | `AI`, `Tenant.Chat`, `POST /v1/ai/chat` | sales, manufacturing (Settings, rehearsal) | 1 |
 | Links and timeline | Platform capability (`relations` app) | Relations between entities; protocol events told on linked timelines | `Relations`, `Caller.Link`, `Caller.Links` | CRM, sales | 1 |
 | Identity provider | Platform capability (deployment) | OIDC subjects; the directory maps them to members | `OIDC`, Rauthy | every deployed host | 3 |
 | Protocols | Industry protocol | Named, versioned actions, reads and events, with conformance tests apart from the protocol (`lodging/lodgingtest`) | `platform.Protocol`, `protocols/lodging` | Hotel and memstay provide lodging; CRM consumes it | 2 |
@@ -126,6 +127,8 @@ Status legend:
 | 0014 | Per-endpoint limits (rate, payload size, timeout) | Partial: a fixed 10 s timeout and a 64 KiB answer; no rate |
 | 0014 | A breaker per destination | Partial: the ordered queue per endpoint holds the rest behind a failing head |
 | 0014 | Webhooks filtered by the catalog rules of who may see an event | Amended (#104): an endpoint is the administrator's, so it has the administrator's view — any event the tenant declares; an undeclared event is refused |
+| 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
+| 0015 | Quotas and rate limits; the Anthropic adapter (SDK dependency); app calls as effects; streaming | Deferred (batch 2) |
 | 0014 | D6 approval of irreversible effects caused by agents; email | Implemented: held effects approved by a person; email endpoints for notifications (SMTP, STARTTLS, PLAIN) |
 
 #### Terminology and ownership
@@ -148,6 +151,9 @@ Status legend:
 | **Effect** | One intent for one endpoint: from an event (webhook), from `Caller.Emit`, or from a notification (email); its key is its ID. Held while an irreversible kind an AI agent caused waits for a person | Host | Intent rebuilt from its input; approval and discard are decisions; each attempt's outcome is journal entry `effect` |
 | **Answer** | What an endpoint returned for an app's effect; the app records it as an observation | Journaled with the outcome, recorded by the app (`Answerer`) | Journal entry `effect` |
 | **Notification** | A message to a member, resolved on the input's day | Created by apps (`Caller.Notify`), stored by the host; read state is a `platform` decision | Rebuilt from its input |
+| **Provider** | A source of models: vendor, OpenAI-compatible API or local server; its key is a secret's name | `ai` app decisions | Decisions |
+| **Model** | A provider's model enabled for everyone or for ai users; called as `<provider>/<model>` | `ai` app decisions | Decisions |
+| **Usage** | One model call's meter reading: member, model, tokens, cost, latency, outcome. Prompts and answers are not kept | The host, applied by the `ai` app | Journal entry `usage` |
 | **Setting** | A typed value an app declares | Declared by the app; values set by `platform` decisions, stored by the host | Decisions |
 
 Ownership rule: the host keeps shared runtime state; the `platform` app (`Console`) decides every change an administrator makes, each area deciding its own target type; apps decide only about their own data classes, reach the platform through `Caller` and each other through protocols only.
@@ -201,6 +207,7 @@ decision or app input ──emit──▶ pending ──attempt──▶ deliver
 | `delivery` | Each attempt of an event for a subscriber | Attempts again and must reach the same outcome, otherwise replay stops |
 | `job` | A run that decided or notified something | Runs again at the recorded time and must reach the same outcome |
 | `effect` | Each attempt of an outbound effect | Applies the recorded outcome and hands the answer to the app; never sends |
+| `usage` | Each model call (ADR-0015) | Applies the meter reading; never calls a model |
 
 Volatile by design, not rebuilt: heartbeats, a connector's last refused input, endpoint health (it depends on the secret store), and a job's run count and next due time (runs that did nothing are not journaled; after a restart a job is due at once).
 
@@ -444,6 +451,15 @@ Three things the owner held until the gate closed:
 - **Email.** Mail reuses the effect machinery unchanged: intent in the input, attempt outside the lock, outcome journaled, Message-ID as the key.
 
 The rehearsal runs all three through a restart. The sink is also the local mail server, so no mail catcher image was needed.
+
+### AI providers #105
+
+ADR-0015, batch 1. The `ai` platform app holds providers and enabled models as decisions; the host calls models outside the tenant's lock and journals each call's usage.
+- **Providers:** vendors with fixed URLs (OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter); third-party OpenAI-compatible APIs; local servers (LM Studio, Ollama, llama.cpp).
+- **Checked live** against OpenRouter's free models: the catalog (458 models, 20 free), enabling in Settings, a call from the playground, and usage per member.
+- **Rehearsal:** the sink stands in for a local model server, so the rehearsal runs offline.
+- **Found:** free models are often rate-limited upstream (429). Such calls end as failed, with the provider's reason recorded in their usage.
+- **Waiting:** the Anthropic adapter waits for the owner's approval of the official SDK dependency.
 
 ### Shared capability models (candidates, layer 2)
 

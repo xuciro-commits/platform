@@ -102,7 +102,7 @@ func TestNotificationsByEmail(t *testing.T) {
 			Seat{Subjects: []string{"client:bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{}}},
 			Seat{Subjects: []string{"gw"}, Member: platform.Member{ID: "gw", Roles: map[string]string{}}})
 		org := NewOrganization("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Sites", Kind: "site"}},
-			Units: []platform.Unit{{ID: "L1", Kind: "line"}},
+			Units:       []platform.Unit{{ID: "L1", Kind: "line"}},
 			Memberships: []platform.Membership{{Party: "member:sup", Unit: "L1", Role: "supervisor"}, {Party: "member:bot", Unit: "L1", Role: "supervisor"}}})
 		tn, err := NewTenant("t-1", dir, org, probe{newNotes("t-1", "p")})
 		if err == nil {

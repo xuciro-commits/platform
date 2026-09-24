@@ -126,6 +126,36 @@ func (h *Host) Handler() http.Handler {
 		_, record, err := t.Invoke(m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), call.Target, call.Payload, call.IdempotencyKey, h.Now())
 		Reply(w, record, err)
 	})
+	handle("POST /v1/ai/chat", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var req ChatRequest
+		if json.NewDecoder(r.Body).Decode(&req) != nil {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		answer, err, failure := t.Chat(m, req, h.Now())
+		switch {
+		case err != nil:
+			Reply(w, nil, err)
+		case failure != nil:
+			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail}, "usage": answer.Usage})
+		default:
+			WriteJSON(w, http.StatusOK, answer)
+		}
+	})
+	handle("GET /v1/ai/providers/{id}/models", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		models, err, failure := t.ProviderModels(m, r.PathValue("id"), r.URL.Query().Get("refresh") == "true")
+		switch {
+		case err != nil:
+			Reply(w, nil, err)
+		case failure != nil:
+			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail}})
+		default:
+			WriteJSON(w, http.StatusOK, models)
+		}
+	})
+	handle("GET /v1/ai/vendors", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
+		WriteJSON(w, http.StatusOK, Vendors)
+	})
 	handle("POST /mcp", h.mcp)
 	handle("GET /v1/{read}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		out, err := t.Read(m, r.PathValue("read"))

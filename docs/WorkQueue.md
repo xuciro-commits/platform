@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **awaiting owner** | Nothing queued: the convergence gate and the held features (ERP correction, D6 approval, email) are done | The owner names the next item |
+| **105 · batch 1 done, owner testing** | AI providers (ADR-0015): providers, catalogs, enabled models with access, calls with journaled usage, Settings (providers, playground, usage) | The owner has tested with OpenRouter; batch 2 (quotas and rate limits, the Anthropic adapter, app calls as effects, streaming) is ordered |
 
 ## Open friction (temporary; delete entries once resolved)
 

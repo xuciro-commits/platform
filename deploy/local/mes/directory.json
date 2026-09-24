@@ -7,7 +7,8 @@
     "roles": {
       "mes": "supervisor",
       "platform": "admin",
-      "org": "admin"
+      "org": "admin",
+      "ai": "admin"
     },
     "units": [
       {
@@ -22,7 +23,8 @@
     ],
     "id": "op-l1",
     "roles": {
-      "mes": "operator"
+      "mes": "operator",
+      "ai": "user"
     },
     "units": [
       {
@@ -37,7 +39,8 @@
     ],
     "id": "op-l2",
     "roles": {
-      "mes": "operator"
+      "mes": "operator",
+      "ai": "user"
     },
     "units": [
       {
@@ -52,7 +55,8 @@
     ],
     "id": "qa-1",
     "roles": {
-      "mes": "quality"
+      "mes": "quality",
+      "ai": "user"
     }
   },
   {
@@ -61,7 +65,8 @@
     ],
     "id": "qa-2",
     "roles": {
-      "mes": "quality"
+      "mes": "quality",
+      "ai": "user"
     }
   },
   {

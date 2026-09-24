@@ -6,3 +6,6 @@ target/
 slices/hotel/client/src-tauri/gen/
 node_modules/
 dist/
+
+# Local secrets (never committed)
+.env

@@ -68,6 +68,10 @@ type Tenant struct {
 	// client refusing private addresses). Tests replace both (ADR-0014).
 	Secrets  func(name string) ([]byte, bool)
 	Outbound func(req *http.Request, allowPrivate bool) (*http.Response, error)
+	// AIClient sends model calls (default: a client refusing private addresses
+	// unless the provider is local); tests replace it (ADR-0015).
+	AIClient func(req *http.Request) (*http.Response, error)
+	ai       *AI
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -122,6 +126,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		}
 		if d, ok := a.(*Console); ok {
 			d.t = t
+		}
+		if x, ok := a.(*AI); ok {
+			t.ai = x
 		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {
@@ -273,6 +280,14 @@ func (t *Tenant) Replay(entries []Entry) error {
 			}
 			continue
 		}
+		if e.Kind == "usage" && t.ai != nil { // a model call's usage: applied, the call never made again
+			var u Usage
+			if json.Unmarshal(e.Body, &u) != nil {
+				return fmt.Errorf("entry %d: bad usage", i+1)
+			}
+			t.ai.meter(u)
+			continue
+		}
 		if e.Kind == "delivery" || e.Kind == "job" {
 			if err := t.replayWork(e.Kind, e.Body, e.At); err != nil {
 				return fmt.Errorf("entry %d: %v", i+1, err)
@@ -336,7 +351,7 @@ func (t *Tenant) Apps() []AppInfo {
 	for _, a := range t.apps {
 		m := a.Manifest()
 		info := AppInfo{ID: m.ID, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
-			Roles: m.Actions.Roles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...)}
+			Roles: m.AllRoles(), Capabilities: m.Actions.Capabilities(), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...)}
 		for input, journaled := range m.Inputs {
 			info.Inputs = append(info.Inputs, input+map[bool]string{true: "", false: " (not journaled)"}[journaled])
 		}

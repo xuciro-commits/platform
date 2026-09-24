@@ -49,6 +49,7 @@ submit() { # token key schema target-type target-id payload [expected-revision]
 }
 state() { { for path in orders sfcs downtime planned-orders notifications; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
   curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -c '[.[] | {id, disabled}]'
+  curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage" | jq -c '.totals'
   for path in customers reservations members links timeline; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done
   curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/protocols" | jq -c '[.[] | {id, bound}]'; } | jq -cS .; }
 
@@ -126,6 +127,20 @@ mailed() { curl -s "$SINK/mail" | jq -r '[.[] | select(.to == "sup@plant.test") 
 for _ in $(seq 20); do [[ $(mailed) == *"Approve Order confirmation"* ]] && break; sleep 0.5; done
 [[ $(mailed) == *"ERP refused the confirmation of WO-3"* && $(mailed) == *"Approve Order confirmation to the ERP for mes.order/WO-3"* ]] || fail "mail: $(curl -s "$SINK/mail")"
 echo "ok   ERP correction: a refused order resent by the AI assistant, held until the supervisor approved, then confirmed; the refusal and the approval request mailed to the supervisor"
+
+
+# AI providers (ADR-0015): the plant's administrator adds a local model server
+# (the sink speaks the OpenAI wire) and opens a model to ai users; an operator
+# calls it through the host, the AI assistant (no ai role) is refused, and the
+# call's usage is journaled (compared again after the restart below).
+AUTHORITY=ai submit "$SUP" ai-1 ai.provider.add ai.provider local '{"kind":"local","baseUrl":"http://webhook-sink:8080/v1"}' | jq -e .record >/dev/null || fail "add AI provider"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai/providers/local/models" | jq -r '.[].id') == echo ]] || fail "provider catalog"
+AUTHORITY=ai submit "$SUP" ai-2 ai.model.enable ai.model local/echo '{"access":"users"}' | jq -e .record >/dev/null || fail "enable model"
+chat() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$MES/v1/ai/chat" -d '{"model":"local/echo","messages":[{"role":"user","content":"line one is down"}]}'; }
+[[ $(chat "$OP1" | jq -r .content) == "echo: line one is down" ]] || fail "model call: $(chat "$OP1")"
+[[ $(chat "$AGENT" | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "the assistant called a model open to ai users only"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage" | jq -c '[.totals[] | {member, model, calls, input, output}]') == '[{"member":"op-l1","model":"local/echo","calls":1,"input":4,"output":5}]' ]] || fail "AI usage: $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage")"
+echo "ok   AI providers: a local model server added and a model opened to ai users; an operator's call answered and metered, the assistant refused"
 
 # The sales solution: the CRM books a stay through the lodging protocol and the
 # hotel provides it (ADR-0011); the platform app revokes a role and the catalog

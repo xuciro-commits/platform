@@ -203,7 +203,7 @@ func (d *Console) decideMember(s *pb.Submission) (func(*pb.ChangeRecord), *kerne
 	if d.t == nil {
 		return nil, invalid
 	}
-	if app := d.t.app(p.App); app == nil || !slices.Contains(app.Manifest().Actions.Roles(), p.Role) {
+	if app := d.t.app(p.App); app == nil || !slices.Contains(app.Manifest().AllRoles(), p.Role) {
 		return nil, invalid
 	}
 	return func(*pb.ChangeRecord) { m.Roles[p.App] = p.Role }, nil

@@ -34,6 +34,15 @@ export class EdgeClient {
     return response.json() as Promise<T>;
   }
 
+  /** Calls a host service that is not a submission, such as a model call (ADR-0015): the answer's JSON comes back whatever its status. */
+  async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ ok: boolean; status: number; body: T }> {
+    const response = await fetch(this.connection.server + path, {
+      method, headers: { Authorization: `Bearer ${this.connection.token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { ok: response.ok, status: response.status, body: (await response.json().catch(() => ({}))) as T };
+  }
+
   /** Takes the tenant's declarations from its authority (A9). */
   async refreshDeclarations(): Promise<void> {
     this.authorities.refresh(await this.get("/v1/declarations"));
