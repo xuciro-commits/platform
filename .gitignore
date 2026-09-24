@@ -3,3 +3,4 @@
 **/.swiftpm/
 .DS_Store
 target/
+slices/hotel/client/src-tauri/gen/
