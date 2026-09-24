@@ -44,11 +44,11 @@ func As(app string, m Member) Caller { return Caller{Member: m, App: app} }
 // Manifest declares an app (ADR-0010). Names of actions, reads and inputs are
 // unique within a tenant; the host routes by them.
 type Manifest struct {
-	ID       string
-	Version  string
-	Actions  *Catalog
-	Reads    []string
-	Inputs   map[string]bool // connector inputs; true: recorded in the journal
+	ID      string
+	Version string
+	Actions *Catalog
+	Reads   []string
+	Inputs  map[string]bool // connector inputs; true: recorded in the journal
 	// Subscribes names its own actions, or events of protocols it consumes
 	// ("<protocol id>#<event>"), delivered to Handle after commit. Apps know no
 	// other app: they reach each other through protocols only (ADR-0011).
@@ -189,6 +189,9 @@ func NewTenant(id string, apps ...App) (*Tenant, error) {
 		}
 		if o, ok := a.(*Organization); ok {
 			t.org = o
+		}
+		if d, ok := a.(*Console); ok {
+			d.t = t
 		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {

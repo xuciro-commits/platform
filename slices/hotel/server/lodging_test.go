@@ -9,7 +9,7 @@ import (
 
 // The hotel conforms to the lodging protocol it provides.
 func TestHotelProvidesLodging(t *testing.T) {
-	tn, err := platformserver.NewTenant("hotel-a", platformserver.NewDirectory("hotel-a"), platformserver.NewRelations("hotel-a"),
+	tn, err := platformserver.NewTenant("hotel-a", platformserver.NewConsole("hotel-a"), platformserver.NewRelations("hotel-a"),
 		NewHotel("hotel-a", map[string]RoomType{"suite": {Rooms: 1}}))
 	if err != nil {
 		t.Fatal(err)

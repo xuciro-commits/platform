@@ -380,4 +380,3 @@ func (h *Hotel) IngestChannelBooking(connector platformserver.Caller, b ChannelB
 	}
 	return record, err
 }
-

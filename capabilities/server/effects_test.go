@@ -55,7 +55,7 @@ func TestOutboundEffects(t *testing.T) {
 	defer server.Close()
 	var journal []Entry
 	build := func() *Tenant {
-		dir := NewDirectory("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}},
+		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}},
 			Seat{Subjects: []string{"bo"}, Member: Member{ID: "bo", Roles: map[string]string{"a": "writer"}}})
 		tn, err := NewTenant("t-1", dir, newNotes("t-1", "a"))
 		if err != nil {
@@ -71,8 +71,8 @@ func TestOutboundEffects(t *testing.T) {
 		json.Unmarshal(raw, &stored)
 		journal = append(journal, stored)
 	}
-	ana, _ := tn.app(PlatformApp).(*Directory).Member("ana")
-	bo, _ := tn.app(PlatformApp).(*Directory).Member("bo")
+	ana, _ := tn.app(PlatformApp).(*Console).Member("ana")
+	bo, _ := tn.app(PlatformApp).(*Console).Member("bo")
 	t0 := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	keys := 0
 	decide := func(tn *Tenant, m Member, schema, typ, id string, payload any) string {

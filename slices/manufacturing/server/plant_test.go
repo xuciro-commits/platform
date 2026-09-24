@@ -76,7 +76,7 @@ func plantTenantOf(t *testing.T, seed []platformserver.Membership, disable ...st
 			t.Fatalf("no capability %s", c)
 		}
 	}
-	tn, err := platformserver.NewTenant(tenant, platformserver.NewDirectory(tenant), platformserver.NewOrganization(tenant, DemoOrganization(seed)), p)
+	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant), platformserver.NewOrganization(tenant, DemoOrganization(seed)), p)
 	if err == nil {
 		err = tn.Connect(DemoConnectors(tenant)...)
 	}

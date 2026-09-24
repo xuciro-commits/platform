@@ -23,7 +23,7 @@ func main() {
 		return platformserver.Seat{Subjects: []string{token}, Member: platformserver.Member{ID: id, Roles: map[string]string{"hotel": string(role)}}}
 	}
 	tenant := func(id string, seats ...platformserver.Seat) *platformserver.Tenant {
-		t, err := platformserver.NewTenant(id, platformserver.NewDirectory(id, seats...), hotel.NewHotel(id, rooms))
+		t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...), hotel.NewHotel(id, rooms))
 		if err != nil {
 			log.Fatal(err)
 		}

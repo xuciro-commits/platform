@@ -221,7 +221,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 		t.Fatal("booking is offered without the provider's grant")
 	}
 	// Without any provider the optional protocol is unbound and booking is not offered.
-	bare, err := platformserver.NewTenant("t", platformserver.NewDirectory("t"), platformserver.NewRelations("t"), crm.New("t"))
+	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), platformserver.NewRelations("t"), crm.New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,10 +12,13 @@ import (
 	"platformkernel/kernel"
 )
 
-// The platform app (ADR-0010): the tenant's directory of members, their role in
-// each app, and what administrators see of the tenant.
-// Every change is one of its decisions, so the directory has history, survives
-// restarts through the journal, and takes effect on the next request.
+// The platform app (ADR-0010) is the tenant's console: its directory of
+// members and their role in each app, and every administrator's decision about
+// the host's operations — connectors, app settings, owned work, protocol
+// bindings, notifications, endpoints and effects. Every change is one of its
+// decisions, so it has history, survives restarts through the journal, and
+// takes effect on the next request. Each area decides its own target type,
+// next to the state it changes (operations.go, effects.go).
 const (
 	PlatformApp  = "platform"
 	MemberType   = "platform.member"
@@ -44,15 +47,16 @@ func Memberships(seats []Seat) []Membership {
 	return out
 }
 
-type Directory struct {
+type Console struct {
 	mu       sync.Mutex
 	tenant   string
 	members  map[string]*Member
 	subjects map[string]string // subject → member ID
 	ledger   *Ledger
+	t        *Tenant // the tenant running it, once composed (NewTenant)
 }
 
-func DirectoryActions() *Catalog {
+func ConsoleActions() *Catalog {
 	admin := []string{Admin}
 	app := Field{Name: "app", Type: "string", Required: true, Description: "App ID"}
 	return NewCatalog(append([]Action{
@@ -67,10 +71,10 @@ func DirectoryActions() *Catalog {
 	}, append(operationsActions(), effectActions()...)...)...)
 }
 
-// NewDirectory seeds a tenant's directory; changes recorded later replay on top.
-func NewDirectory(tenant string, seats ...Seat) *Directory {
-	d := &Directory{tenant: tenant, members: map[string]*Member{}, subjects: map[string]string{},
-		ledger: NewLedger(tenant, PlatformApp, DirectoryActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType)}
+// NewConsole seeds a tenant's directory of members; changes recorded later replay on top.
+func NewConsole(tenant string, seats ...Seat) *Console {
+	d := &Console{tenant: tenant, members: map[string]*Member{}, subjects: map[string]string{},
+		ledger: NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -86,7 +90,7 @@ func NewDirectory(tenant string, seats ...Seat) *Directory {
 }
 
 // Member is the member a subject signs in as, with its current roles.
-func (d *Directory) Member(subject string) (Member, bool) {
+func (d *Console) Member(subject string) (Member, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	m := d.members[d.subjects[subject]]
@@ -97,7 +101,7 @@ func (d *Directory) Member(subject string) (Member, bool) {
 }
 
 // holding are the members with role in app, sorted.
-func (d *Directory) holding(app, role string) []string {
+func (d *Console) holding(app, role string) []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var out []string
@@ -116,69 +120,73 @@ func clone(m *Member) Member {
 	return out
 }
 
-func (d *Directory) Manifest() Manifest {
+func (d *Console) Manifest() Manifest {
 	return Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog,
 		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects"},
 		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false}}
 }
 
-func (d *Directory) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
+func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 
-func (d *Directory) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (d *Console) Submit(c Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-		if c.tenant == nil && !strings.HasPrefix(s.GetSchema().GetName(), "platform.member.") {
-			return nil, invalid
+		declared, _ := d.ledger.Catalog.Action(s.GetSchema().GetName())
+		if declared.Target == MemberType {
+			return d.decideMember(s)
 		}
-		if apply, err, ok := operate(c, s, now); ok {
-			return apply, err
+		if d.t == nil { // not composed: a tenant's operations need one
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
-		if apply, err, ok := decideEffects(c, s, now); ok {
-			return apply, err
+		areas := map[string]func(Caller, *pb.Submission, time.Time) (func(*pb.ChangeRecord), *kernel.Error){
+			ConnectorType: d.t.decideConnector, SettingType: d.t.decideSetting, WorkType: d.t.decideWork, ProtocolType: d.t.decideBinding,
+			NotificationType: d.t.decideNotification, EndpointType: d.t.decideEndpoint, EffectType: d.t.decideEffect,
 		}
-		var p struct {
-			Subject, App, Role string
-		}
-		if json.Unmarshal(s.GetPayload(), &p) != nil {
-			return nil, invalid
-		}
-		id := s.GetTarget().GetId()
-		m := d.members[id]
-		if s.GetSchema().GetName() == SchemaAdd {
-			if !strings.HasPrefix(p.Subject, "user:") && !strings.HasPrefix(p.Subject, "client:") {
-				return nil, invalid
-			}
-			if m != nil || d.subjects[p.Subject] != "" {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
-			}
-			return func(*pb.ChangeRecord) {
-				d.members[id] = &Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}}
-				d.subjects[p.Subject] = id
-			}, nil
-		}
-		if m == nil {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-		}
-		switch s.GetSchema().GetName() {
-		case SchemaGrant:
-			// Only a role the app defines, in an app the tenant runs.
-			if c.tenant == nil {
-				return nil, invalid
-			}
-			if app := c.tenant.app(p.App); app == nil || !slices.Contains(app.Manifest().Actions.Roles(), p.Role) {
-				return nil, invalid
-			}
-			return func(*pb.ChangeRecord) { m.Roles[p.App] = p.Role }, nil
-		case SchemaRevoke:
-			if p.App == "" {
-				return nil, invalid
-			}
-			return func(*pb.ChangeRecord) { delete(m.Roles, p.App) }, nil
-		}
-		return nil, invalid
+		return areas[declared.Target](c, s, now)
 	})
+}
+
+// decideMember decides the directory's actions: add a member, grant or revoke a role.
+func (d *Console) decideMember(s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	var p struct {
+		Subject, App, Role string
+	}
+	if json.Unmarshal(s.GetPayload(), &p) != nil {
+		return nil, invalid
+	}
+	id := s.GetTarget().GetId()
+	m := d.members[id]
+	if s.GetSchema().GetName() == SchemaAdd {
+		if !strings.HasPrefix(p.Subject, "user:") && !strings.HasPrefix(p.Subject, "client:") {
+			return nil, invalid
+		}
+		if m != nil || d.subjects[p.Subject] != "" {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		return func(*pb.ChangeRecord) {
+			d.members[id] = &Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}}
+			d.subjects[p.Subject] = id
+		}, nil
+	}
+	if m == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if s.GetSchema().GetName() == SchemaRevoke {
+		if p.App == "" {
+			return nil, invalid
+		}
+		return func(*pb.ChangeRecord) { delete(m.Roles, p.App) }, nil
+	}
+	// SchemaGrant: only a role the app defines, in an app the tenant runs.
+	if d.t == nil {
+		return nil, invalid
+	}
+	if app := d.t.app(p.App); app == nil || !slices.Contains(app.Manifest().Actions.Roles(), p.Role) {
+		return nil, invalid
+	}
+	return func(*pb.ChangeRecord) { m.Roles[p.App] = p.Role }, nil
 }
 
 // MemberView is a member with the subjects that sign in as it.
@@ -189,28 +197,29 @@ type MemberView struct {
 
 // Read "notifications": the caller's own. Every other read is for the tenant's
 // administrators only.
-func (d *Directory) Read(c Caller, name string) (any, *kernel.Error) {
-	if c.tenant != nil && name == "notifications" {
-		return c.tenant.notificationsFor(c.ID), nil
+func (d *Console) Read(c Caller, name string) (any, *kernel.Error) {
+	t := d.t
+	if t != nil && name == "notifications" {
+		return t.notificationsFor(c.ID), nil
 	}
-	if c.Role() != Admin || c.tenant == nil {
+	if c.Role() != Admin || t == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	switch name {
 	case "audit":
-		return c.tenant.Audit(), nil
+		return t.Audit(), nil
 	case "deliveries":
-		return c.tenant.Deliveries(), nil
+		return t.Deliveries(), nil
 	case "work":
-		return c.tenant.Tasks(), nil
+		return t.Tasks(), nil
 	case "connectors":
-		return c.tenant.Connectors(time.Now()), nil
+		return t.Connectors(time.Now()), nil
 	case "settings":
-		return c.tenant.Settings(), nil
+		return t.Settings(), nil
 	case "endpoints":
-		return c.tenant.Endpoints(), nil
+		return t.Endpoints(), nil
 	case "effects":
-		return c.tenant.Effects(time.Now()), nil
+		return t.Effects(time.Now()), nil
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -231,11 +240,11 @@ func (d *Directory) Read(c Caller, name string) (any, *kernel.Error) {
 
 // Input "heartbeat": a connector reports it is alive (not journaled; health
 // reads stale after a restart until the next one).
-func (d *Directory) Input(c Caller, name string, _ []byte, now time.Time) (any, *kernel.Error) {
-	if name != "heartbeat" || c.tenant == nil {
+func (d *Console) Input(c Caller, name string, _ []byte, now time.Time) (any, *kernel.Error) {
+	if name != "heartbeat" || d.t == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
-	c.tenant.opsMu.Lock()
-	defer c.tenant.opsMu.Unlock()
-	return nil, c.tenant.connectors.Heartbeat(c.Tenant, c.ID, now)
+	d.t.opsMu.Lock()
+	defer d.t.opsMu.Unlock()
+	return nil, d.t.connectors.Heartbeat(c.Tenant, c.ID, now)
 }

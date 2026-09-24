@@ -48,7 +48,7 @@ func note(tenant, member, app, key, topic, text string) *pb.Submission {
 }
 
 func setup(t *testing.T, record func(Entry)) (*Tenant, *notes, *notes) {
-	dir := NewDirectory("t-1",
+	dir := NewConsole("t-1",
 		Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", "b": "writer", PlatformApp: Admin}}},
 		Seat{Subjects: []string{"bo"}, Member: Member{ID: "bo", Roles: map[string]string{"b": "writer"}}})
 	a, b := newNotes("t-1", "a"), newNotes("t-1", "b")
@@ -66,8 +66,8 @@ func TestTenantComposition(t *testing.T) {
 	}
 	var journal []Entry
 	tn, a, b := setup(t, func(e Entry) { journal = append(journal, e) })
-	ana, _ := tn.app(PlatformApp).(*Directory).Member("ana")
-	bo, _ := tn.app(PlatformApp).(*Directory).Member("bo")
+	ana, _ := tn.app(PlatformApp).(*Console).Member("ana")
+	bo, _ := tn.app(PlatformApp).(*Console).Member("bo")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 
 	// Each submission reaches the app declaring its action, with the member's role there.
@@ -112,7 +112,7 @@ func TestTenantComposition(t *testing.T) {
 	}
 }
 
-func TestHostHTTPAndDirectory(t *testing.T) {
+func TestHostHTTPAndConsole(t *testing.T) {
 	tn, _, _ := setup(t, nil)
 	h := NewHost(Tokens(map[string]string{"ana-token": "ana", "bo-token": "bo", "stranger": "nobody"}), tn)
 	call := func(method, path, token, body string) (int, string) {

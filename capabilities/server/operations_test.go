@@ -45,7 +45,7 @@ func (p probe) Run(c Caller, _ string, now time.Time) *kernel.Error {
 func TestOperations(t *testing.T) {
 	var journal []Entry
 	build := func() *Tenant {
-		dir := NewDirectory("t-1",
+		dir := NewConsole("t-1",
 			Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{PlatformApp: Admin}}},
 			Seat{Subjects: []string{"sup"}, Member: Member{ID: "sup", Roles: map[string]string{}}},
 			Seat{Subjects: []string{"op"}, Member: Member{ID: "op", Roles: map[string]string{}}},
@@ -67,7 +67,7 @@ func TestOperations(t *testing.T) {
 	}
 	tn := build()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	member := func(id string) Member { m, _ := tn.app(PlatformApp).(*Directory).Member(id); return m }
+	member := func(id string) Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
 	ana, sup, op, gw := member("ana"), member("sup"), member("op"), member("gw")
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	n := 0

@@ -399,7 +399,7 @@ func (c Caller) Notify(n Notification, now time.Time, to ...Recipient) []string 
 			members = append(members, r.Member)
 		}
 		if r.AppRole != "" {
-			if d, ok := t.app(PlatformApp).(*Directory); ok {
+			if d, ok := t.app(PlatformApp).(*Console); ok {
 				for _, m := range d.holding(c.App, r.AppRole) {
 					if !slices.Contains(members, m) {
 						members = append(members, m)
@@ -504,7 +504,7 @@ func (t *Tenant) Settings() []AppSettings {
 	return out
 }
 
-// The platform app's operations decisions: connectors, settings, work, notifications.
+// The console's operations actions: connectors, settings, work, protocol bindings, notifications.
 const (
 	ConnectorType          = "platform.connector"
 	SettingType            = "platform.setting"
@@ -539,71 +539,76 @@ func operationsActions() []Action {
 	}
 }
 
-// operate decides the platform app's operations actions; ok is false for other actions.
-func operate(c Caller, s *pb.Submission, now time.Time) (apply func(*pb.ChangeRecord), err *kernel.Error, ok bool) {
-	t := c.tenant
-	id := s.GetTarget().GetId()
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	switch s.GetSchema().GetName() {
-	case SchemaConnectorOn, SchemaConnectorOff:
-		t.opsMu.Lock()
-		d := t.descriptors[id]
-		t.opsMu.Unlock()
-		if d == nil {
-			return nil, notFound, true
-		}
-		off := s.GetSchema().GetName() == SchemaConnectorOff
-		return func(*pb.ChangeRecord) { t.opsMu.Lock(); d.Disabled = off; t.opsMu.Unlock() }, nil, true
-	case SchemaSettingSet:
-		var p struct{ Value string }
-		json.Unmarshal(s.GetPayload(), &p)
-		app, name, _ := strings.Cut(id, "/")
-		a := t.app(app)
-		if a == nil {
-			return nil, notFound, true
-		}
-		i := slices.IndexFunc(a.Manifest().Settings, func(x Setting) bool { return x.Name == name })
-		if i < 0 {
-			return nil, notFound, true
-		}
-		if !a.Manifest().Settings[i].accepts(p.Value) {
-			return nil, invalid, true
-		}
-		return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.settings[id] = p.Value; t.opsMu.Unlock() }, nil, true
-	case SchemaProtocolBind:
-		var p struct{ Provider string }
-		json.Unmarshal(s.GetPayload(), &p)
-		if !slices.ContainsFunc(t.providers(id), func(b binding) bool { return b.provider.Manifest().ID == p.Provider }) {
-			return nil, invalid, true
-		}
-		return func(*pb.ChangeRecord) { t.rebind(id, p.Provider) }, nil, true
-	case SchemaWorkRetry:
-		t.opsMu.Lock()
-		known := slices.ContainsFunc(t.failed, func(x *Task) bool { return x.ID == id }) || slices.ContainsFunc(t.jobs, func(x *Task) bool { return x.ID == id })
-		t.opsMu.Unlock()
-		if !known {
-			return nil, notFound, true
-		}
-		return func(*pb.ChangeRecord) { t.retry(id, now) }, nil, true
-	case SchemaNotificationRead:
-		t.opsMu.Lock()
-		i := slices.IndexFunc(t.notices, func(x Notification) bool { return x.ID == id })
-		mine := i >= 0 && t.notices[i].Member == c.ID
-		t.opsMu.Unlock()
-		if i < 0 {
-			return nil, notFound, true
-		}
-		if !mine {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, true
-		}
-		return func(*pb.ChangeRecord) {
-			t.opsMu.Lock()
-			defer t.opsMu.Unlock()
-			if i := slices.IndexFunc(t.notices, func(x Notification) bool { return x.ID == id }); i >= 0 {
-				t.notices[i].Read = true
-			}
-		}, nil, true
+// The console's decisions about operations, one area per target type.
+
+func (t *Tenant) decideConnector(_ Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	t.opsMu.Lock()
+	d := t.descriptors[s.GetTarget().GetId()]
+	t.opsMu.Unlock()
+	if d == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	return nil, nil, false
+	off := s.GetSchema().GetName() == SchemaConnectorOff
+	return func(*pb.ChangeRecord) { t.opsMu.Lock(); d.Disabled = off; t.opsMu.Unlock() }, nil
+}
+
+func (t *Tenant) decideSetting(_ Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	var p struct{ Value string }
+	json.Unmarshal(s.GetPayload(), &p)
+	app, name, _ := strings.Cut(id, "/")
+	a := t.app(app)
+	if a == nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	i := slices.IndexFunc(a.Manifest().Settings, func(x Setting) bool { return x.Name == name })
+	if i < 0 {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if !a.Manifest().Settings[i].accepts(p.Value) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.settings[id] = p.Value; t.opsMu.Unlock() }, nil
+}
+
+func (t *Tenant) decideBinding(_ Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	var p struct{ Provider string }
+	json.Unmarshal(s.GetPayload(), &p)
+	if !slices.ContainsFunc(t.providers(id), func(b binding) bool { return b.provider.Manifest().ID == p.Provider }) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	return func(*pb.ChangeRecord) { t.rebind(id, p.Provider) }, nil
+}
+
+func (t *Tenant) decideWork(_ Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	t.opsMu.Lock()
+	known := slices.ContainsFunc(t.failed, func(x *Task) bool { return x.ID == id }) || slices.ContainsFunc(t.jobs, func(x *Task) bool { return x.ID == id })
+	t.opsMu.Unlock()
+	if !known {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	return func(*pb.ChangeRecord) { t.retry(id, now) }, nil
+}
+
+func (t *Tenant) decideNotification(c Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	t.opsMu.Lock()
+	i := slices.IndexFunc(t.notices, func(x Notification) bool { return x.ID == id })
+	mine := i >= 0 && t.notices[i].Member == c.ID
+	t.opsMu.Unlock()
+	if i < 0 {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if !mine {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	return func(*pb.ChangeRecord) {
+		t.opsMu.Lock()
+		defer t.opsMu.Unlock()
+		if i := slices.IndexFunc(t.notices, func(x Notification) bool { return x.ID == id }); i >= 0 {
+			t.notices[i].Read = true
+		}
+	}, nil
 }

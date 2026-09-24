@@ -31,7 +31,7 @@ func TestMCP(t *testing.T) {
 	if _, body := rpc(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"a_note","arguments":{"target":"x","text":"hi"}}}`); !strings.Contains(body, `"isError":true`) {
 		t.Fatalf("a call outside the catalog: %s", body)
 	}
-	tn.app(PlatformApp).(*Directory).members["bo"].Roles["a"] = "writer"
+	tn.app(PlatformApp).(*Console).members["bo"].Roles["a"] = "writer"
 	if _, body := rpc(`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"a_note","arguments":{"target":"x","idempotencyKey":"m1"}}}`); !strings.Contains(body, `"isError":false`) || !strings.Contains(body, `changeId`) {
 		t.Fatalf("call: %s", body)
 	}

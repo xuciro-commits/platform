@@ -62,7 +62,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	}
 	var journal []Entry
 	build := func() (*Tenant, *notes) {
-		dir := NewDirectory("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}})
+		dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"a": "writer", PlatformApp: Admin}}})
 		w := newNotes("t-1", "w")
 		tn, err := NewTenant("t-1", dir, published{newNotes("t-1", "a")}, watcher{w})
 		if err != nil {
@@ -77,7 +77,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 		json.Unmarshal(raw, &stored)
 		journal = append(journal, stored)
 	}
-	ana, _ := tn.app(PlatformApp).(*Directory).Member("ana")
+	ana, _ := tn.app(PlatformApp).(*Console).Member("ana")
 	start := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	at := func(s int) time.Time { return start.Add(time.Duration(s) * time.Second) }
 	submit := func(key, topic, text string, s int) {
@@ -186,7 +186,7 @@ func (e echo) Handle(c Caller, ev Event) *kernel.Error {
 }
 
 func TestSubscriptionCycleStops(t *testing.T) {
-	dir := NewDirectory("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"e": "writer"}}})
+	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{"e": "writer"}}})
 	tn, err := NewTenant("t-1", dir, echo{newNotes("t-1", "e"), ""}.as("e.note"))
 	if err != nil {
 		t.Fatal(err)

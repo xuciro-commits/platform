@@ -33,17 +33,17 @@ func Now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 // Host serves tenants; each tenant's directory resolves its members.
 type Host struct {
 	tenants      []*Tenant
-	directories  map[*Tenant]*Directory
+	consoles     map[*Tenant]*Console
 	authenticate Authenticate
 	Now          func() time.Time
 }
 
-// NewHost serves tenants; a tenant's members come from its Directory app.
+// NewHost serves tenants; a tenant's members come from its console (the platform app).
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
-	h := &Host{tenants: tenants, directories: map[*Tenant]*Directory{}, authenticate: authenticate, Now: Now}
+	h := &Host{tenants: tenants, consoles: map[*Tenant]*Console{}, authenticate: authenticate, Now: Now}
 	for _, t := range tenants {
-		if d, ok := t.app(PlatformApp).(*Directory); ok {
-			h.directories[t] = d
+		if d, ok := t.app(PlatformApp).(*Console); ok {
+			h.consoles[t] = d
 		}
 	}
 	return h
@@ -55,7 +55,7 @@ func (h *Host) member(r *http.Request) (Member, *Tenant, bool) {
 		return Member{}, nil, false
 	}
 	for _, t := range h.tenants {
-		if d := h.directories[t]; d == nil {
+		if d := h.consoles[t]; d == nil {
 			continue
 		} else if m, ok := d.Member(subject); ok {
 			return m, t, true

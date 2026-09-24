@@ -7,7 +7,7 @@ import (
 )
 
 func TestMemoryConforms(t *testing.T) {
-	tn, err := platformserver.NewTenant("t", platformserver.NewDirectory("t"), platformserver.NewRelations("t"), NewMemory("t"))
+	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), platformserver.NewRelations("t"), NewMemory("t"))
 	if err != nil {
 		t.Fatal(err)
 	}

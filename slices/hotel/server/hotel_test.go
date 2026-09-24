@@ -115,7 +115,7 @@ func hotelTenant(t *testing.T, journal *[]platformserver.Entry) (*Hotel, *platfo
 		return platformserver.Seat{Subjects: []string{id}, Member: platformserver.Member{ID: id, Roles: roles}}
 	}
 	h := newHotel()
-	tn, err := platformserver.NewTenant("hotel-a", platformserver.NewDirectory("hotel-a",
+	tn, err := platformserver.NewTenant("hotel-a", platformserver.NewConsole("hotel-a",
 		seat("desk-1", map[string]string{"hotel": string(FrontDesk)}), seat("desk-2", map[string]string{"hotel": string(FrontDesk)}),
 		seat("manager-1", map[string]string{"hotel": string(Manager), platformserver.PlatformApp: platformserver.Admin}),
 		seat("channel-sim", map[string]string{"hotel": string(Channel)})), h)

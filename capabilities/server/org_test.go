@@ -52,7 +52,7 @@ func TestOrganizationStructures(t *testing.T) {
 }
 
 func TestOrganizationDecisions(t *testing.T) {
-	dir := NewDirectory("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{OrgApp: OrgAdmin}}})
+	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: Member{ID: "ana", Roles: map[string]string{OrgApp: OrgAdmin}}})
 	o := NewOrganization("t-1", groupSeed())
 	tn, err := NewTenant("t-1", dir, o)
 	if err != nil {

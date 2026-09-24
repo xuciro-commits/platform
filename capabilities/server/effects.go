@@ -395,7 +395,7 @@ func (t *Tenant) mark(o Outcome, at time.Time) (Effect, bool) {
 	return *x, true
 }
 
-// The platform app's decisions about endpoints and effects.
+// The console's actions about endpoints and effects.
 const (
 	EndpointType         = "platform.endpoint"
 	EffectType           = "platform.effect"
@@ -424,42 +424,16 @@ func effectActions() []Action {
 	}
 }
 
-// decideEffects decides the endpoint and effect actions; ok is false for others.
-func decideEffects(c Caller, s *pb.Submission, now time.Time) (apply func(*pb.ChangeRecord), err *kernel.Error, ok bool) {
-	t := c.tenant
+// decideEndpoint decides adding and removing an endpoint.
+func (t *Tenant) decideEndpoint(_ Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	t.opsMu.Lock()
 	known := slices.IndexFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id }) >= 0
-	var effect *Effect
-	if i := slices.IndexFunc(t.outbound, func(x *Effect) bool { return x.ID == id }); i >= 0 {
-		effect = t.outbound[i]
-	}
 	t.opsMu.Unlock()
-	switch s.GetSchema().GetName() {
-	case SchemaEndpointAdd:
-		var ep Endpoint
-		if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" || ep.Secret == "" || len(ep.Events)+len(ep.Effects) == 0 {
-			return nil, invalid, true
-		}
-		for _, kind := range ep.Effects {
-			app, name, _ := strings.Cut(kind, "/")
-			if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e EffectKind) bool { return e.Name == name }) {
-				return nil, invalid, true
-			}
-		}
-		if u, err := url.Parse(ep.URL); err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
-			return nil, invalid, true
-		}
-		if known {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, true
-		}
-		ep.ID, ep.Kind = id, "webhook"
-		return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.endpoints = append(t.endpoints, &ep); t.opsMu.Unlock() }, nil, true
-	case SchemaEndpointRemove:
+	if s.GetSchema().GetName() == SchemaEndpointRemove {
 		if !known {
-			return nil, notFound, true
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		return func(*pb.ChangeRecord) {
 			t.opsMu.Lock()
@@ -470,21 +444,50 @@ func decideEffects(c Caller, s *pb.Submission, now time.Time) (apply func(*pb.Ch
 					x.State = "discarded"
 				}
 			}
-		}, nil, true
-	case SchemaEffectRetry:
-		if effect == nil || (effect.State != "failed" && effect.State != "rejected") {
-			return nil, notFound, true
-		}
-		return func(*pb.ChangeRecord) {
-			t.opsMu.Lock()
-			effect.State, effect.Due, effect.since = "pending", now, effect.Attempts
-			t.opsMu.Unlock()
-		}, nil, true
-	case SchemaEffectDiscard:
-		if effect == nil || settled(effect.State) {
-			return nil, notFound, true
-		}
-		return func(*pb.ChangeRecord) { t.opsMu.Lock(); effect.State = "discarded"; t.opsMu.Unlock() }, nil, true
+		}, nil
 	}
-	return nil, nil, false
+	var ep Endpoint
+	if json.Unmarshal(s.GetPayload(), &ep) != nil || id == "" || ep.Secret == "" || len(ep.Events)+len(ep.Effects) == 0 {
+		return nil, invalid
+	}
+	for _, kind := range ep.Effects {
+		app, name, _ := strings.Cut(kind, "/")
+		if a := t.app(app); a == nil || !slices.ContainsFunc(a.Manifest().Emits, func(e EffectKind) bool { return e.Name == name }) {
+			return nil, invalid
+		}
+	}
+	if u, err := url.Parse(ep.URL); err != nil || u.Host == "" || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
+		return nil, invalid
+	}
+	if known {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	ep.ID, ep.Kind = id, "webhook"
+	return func(*pb.ChangeRecord) { t.opsMu.Lock(); t.endpoints = append(t.endpoints, &ep); t.opsMu.Unlock() }, nil
+}
+
+// decideEffect decides retrying and discarding an effect.
+func (t *Tenant) decideEffect(_ Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	t.opsMu.Lock()
+	var effect *Effect
+	if i := slices.IndexFunc(t.outbound, func(x *Effect) bool { return x.ID == id }); i >= 0 {
+		effect = t.outbound[i]
+	}
+	t.opsMu.Unlock()
+	if s.GetSchema().GetName() == SchemaEffectDiscard {
+		if effect == nil || settled(effect.State) {
+			return nil, notFound
+		}
+		return func(*pb.ChangeRecord) { t.opsMu.Lock(); effect.State = "discarded"; t.opsMu.Unlock() }, nil
+	}
+	if effect == nil || (effect.State != "failed" && effect.State != "rejected") {
+		return nil, notFound
+	}
+	return func(*pb.ChangeRecord) {
+		t.opsMu.Lock()
+		effect.State, effect.Due, effect.since = "pending", now, effect.Attempts
+		t.opsMu.Unlock()
+	}, nil
 }
