@@ -1,0 +1,39 @@
+package mes
+
+import (
+	"google.golang.org/protobuf/types/known/durationpb"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+)
+
+// DemoMaster is a small plant with two lines: a pump housing on L1 and a valve body on L2.
+func DemoMaster() MasterData {
+	return MasterData{
+		Products: []Product{
+			{ID: "P-100", Name: "Pump housing", Routing: "RT-100", Operations: []Operation{
+				{Step: 10, Name: "Cast", WorkCenter: "WC-CAST"}, {Step: 20, Name: "Machine", WorkCenter: "WC-CNC-1"},
+				{Step: 30, Name: "Inspect", WorkCenter: "WC-QC-1"}}},
+			{ID: "P-200", Name: "Valve body", Routing: "RT-200", Operations: []Operation{
+				{Step: 10, Name: "Machine", WorkCenter: "WC-CNC-2"}, {Step: 20, Name: "Assemble", WorkCenter: "WC-ASM"},
+				{Step: 30, Name: "Pressure test", WorkCenter: "WC-QC-2"}}},
+		},
+		WorkCenters: []WorkCenter{
+			{ID: "WC-CAST", Name: "Casting", Line: "L1", Resources: []string{"FURNACE-1"}},
+			{ID: "WC-CNC-1", Name: "Machining L1", Line: "L1", Resources: []string{"CNC-11", "CNC-12"}},
+			{ID: "WC-QC-1", Name: "Inspection L1", Line: "L1", Resources: []string{"CMM-1"}},
+			{ID: "WC-CNC-2", Name: "Machining L2", Line: "L2", Resources: []string{"CNC-21"}},
+			{ID: "WC-ASM", Name: "Assembly", Line: "L2", Resources: []string{"ASM-1"}},
+			{ID: "WC-QC-2", Name: "Test L2", Line: "L2", Resources: []string{"TEST-1"}},
+		},
+	}
+}
+
+// DemoConnectors: the line gateway pushes equipment states, the ERP is polled for planned orders.
+func DemoConnectors(tenant string) []*pb.ConnectorDescriptor {
+	return []*pb.ConnectorDescriptor{
+		{TenantId: tenant, ConnectorId: "gateway-l1", Direction: pb.ConnectorDirection_CONNECTOR_DIRECTION_PUSH,
+			DataClasses: []string{ResourceType}, Heartbeat: durationpb.New(30e9)},
+		{TenantId: tenant, ConnectorId: "erp", Direction: pb.ConnectorDirection_CONNECTOR_DIRECTION_POLL,
+			DataClasses: []string{PlannedType}, Heartbeat: durationpb.New(600e9)},
+	}
+}

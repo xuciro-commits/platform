@@ -1,0 +1,270 @@
+package mes
+
+import (
+	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+)
+
+// Sample is one equipment state reading from a PLC (via the edge gateway).
+type Sample struct {
+	At    time.Time `json:"at"`
+	State string    `json:"state"` // run, idle, down
+}
+
+// StateBatch is one gateway delivery: many samples, one provenance (K3).
+type StateBatch struct {
+	BatchID  string   `json:"batchId"`
+	Resource string   `json:"resource"`
+	Samples  []Sample `json:"samples"`
+}
+
+// Downtime is derived from samples (K2 derived); its identity is a K1 entity so
+// decisions about it (the reason) survive recomputation through redirects.
+type Downtime struct {
+	ID         string     `json:"id"`
+	Resource   string     `json:"resource"`
+	Start      time.Time  `json:"start"`
+	End        *time.Time `json:"end,omitempty"`
+	Reason     string     `json:"reason,omitempty"`
+	NeedsCheck bool       `json:"needsCheck,omitempty"` // a reason was given for an event that later split
+}
+
+// Event IDs are opaque and never reused (K1). Deriving them from the start time
+// would revive a retired ID when a split recreates an event at the same start.
+func resourceOfEvent(id string) string { resource, _, _ := strings.Cut(id, "#"); return resource }
+
+func (p *Plant) RegisterConnector(d *pb.ConnectorDescriptor) *kernel.Error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.connectors.Register(d)
+}
+
+// DeliverStates records a gateway batch as one observation and re-derives downtime.
+func (p *Plant) DeliverStates(gateway Principal, b StateBatch, now time.Time) (*pb.FactRecord, *kernel.Error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if gateway.Tenant != p.tenant || gateway.Role != Gateway {
+		return nil, denied
+	}
+	if b.BatchID == "" || b.Resource == "" || len(b.Samples) == 0 || p.resourceLine(b.Resource) == "" {
+		return nil, invalid
+	}
+	if err := p.connectors.Deliver(p.tenant, gateway.ID, ResourceType, "", "", now); err != nil {
+		return nil, err
+	}
+	slices.SortFunc(b.Samples, func(x, y Sample) int { return x.At.Compare(y.At) })
+	raw, _ := json.Marshal(b)
+	fact, err := p.facts.Record(&pb.Fact{TenantId: p.tenant, Kind: pb.FactKind_FACT_KIND_OBSERVATION,
+		Subject: &pb.EntityRef{Type: ResourceType, Id: b.Resource}, Attribute: "state",
+		Schema: &pb.SchemaRef{Name: schemaStates, Version: 1}, IdempotencyKey: gateway.ID + ":" + b.BatchID, Payload: raw,
+		Provenance: &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: gateway.ID}, SourceTime: timestamppb.New(b.Samples[0].At)}}, now)
+	if err != nil {
+		return nil, err
+	}
+	p.deriveDowntime(b.Resource)
+	return fact, nil
+}
+
+// deriveDowntime recomputes a resource's downtime from all its samples. Events
+// whose start moved are merged into the new event; events cut in two are split,
+// so decisions made about the old event keep resolving (K1 redirects).
+func (p *Plant) deriveDowntime(resource string) {
+	var samples []Sample
+	for _, r := range p.facts.Records(p.tenant) {
+		if r.GetFact().GetSubject().GetId() == resource && r.GetFact().GetSchema().GetName() == schemaStates {
+			var b StateBatch
+			json.Unmarshal(r.GetFact().GetPayload(), &b)
+			samples = append(samples, b.Samples...)
+		}
+	}
+	slices.SortFunc(samples, func(x, y Sample) int { return x.At.Compare(y.At) })
+	var events []Downtime
+	for i, s := range samples {
+		down := s.State == "down"
+		wasDown := i > 0 && samples[i-1].State == "down"
+		switch {
+		case down && !wasDown:
+			events = append(events, Downtime{Resource: resource, Start: s.At})
+		case !down && wasDown:
+			end := s.At
+			events[len(events)-1].End = &end
+		}
+	}
+	// Match to the previous events by overlap: one-to-one keeps the entity (its
+	// bounds moved); one old to several new is a split; several old to one new a merge.
+	old := p.downtime[resource]
+	overlapping := func(e Downtime, in []Downtime) []int {
+		var out []int
+		for i, x := range in {
+			if overlaps(e, x) {
+				out = append(out, i)
+			}
+		}
+		return out
+	}
+	for i := range events {
+		if prev := overlapping(events[i], old); len(prev) == 1 && len(overlapping(old[prev[0]], events)) == 1 {
+			events[i].ID = old[prev[0]].ID
+			continue
+		}
+		p.nextEvent++
+		events[i].ID = fmt.Sprintf("%s#%d", resource, p.nextEvent)
+		p.identity.Register(&pb.EntityRef{Type: DowntimeType, Id: events[i].ID})
+	}
+	for _, o := range old {
+		if slices.ContainsFunc(events, func(e Downtime) bool { return e.ID == o.ID }) {
+			continue
+		}
+		var to []*pb.EntityRef
+		for _, i := range overlapping(o, events) {
+			to = append(to, &pb.EntityRef{Type: DowntimeType, Id: events[i].ID})
+		}
+		kind := pb.RedirectKind_REDIRECT_KIND_MERGE
+		if len(to) > 1 {
+			kind = pb.RedirectKind_REDIRECT_KIND_SPLIT
+		}
+		if len(to) > 0 {
+			p.identity.AddRedirect(&pb.Redirect{From: &pb.EntityRef{Type: DowntimeType, Id: o.ID}, To: to, Kind: kind})
+		}
+	}
+	p.downtime[resource] = events
+}
+
+func overlaps(a, b Downtime) bool {
+	far := time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+	aEnd, bEnd := far, far
+	if a.End != nil {
+		aEnd = *a.End
+	}
+	if b.End != nil {
+		bEnd = *b.End
+	}
+	return a.Start.Before(bEnd) && b.Start.Before(aEnd)
+}
+
+// Downtime lists current events with the reason decided for them: every reason
+// decision whose target resolves to exactly this event, the latest winning.
+func (p *Plant) Downtime() []Downtime {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []Downtime
+	for _, events := range p.downtime {
+		out = append(out, events...)
+	}
+	for _, r := range p.changes.Records(p.tenant) {
+		if r.GetSubmission().GetSchema().GetName() != SchemaReason {
+			continue
+		}
+		var reason reasonPayload
+		json.Unmarshal(r.GetSubmission().GetPayload(), &reason)
+		refs, _ := p.identity.Resolve(r.GetSubmission().GetTarget())
+		for i := range out {
+			if slices.ContainsFunc(refs, func(ref kernel.Ref) bool { return ref.ID == out[i].ID }) {
+				if len(refs) == 1 {
+					out[i].Reason, out[i].NeedsCheck = reason.Reason, false
+				} else if out[i].Reason == "" {
+					out[i].NeedsCheck = true
+				}
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b Downtime) int { return a.Start.Compare(b.Start) })
+	return out
+}
+
+// ERP planned orders arrive by polling (K8 poll): each page is exactly-once by cursor,
+// and every planned order is a claim the supervisor may release against (K4 C11).
+
+type PlannedOrder struct {
+	ERPID    string `json:"erpId"`
+	Product  string `json:"product"`
+	Quantity int    `json:"quantity"`
+	Due      string `json:"due"`
+	FactID   string `json:"factId,omitempty"`
+}
+
+type PlannedPage struct {
+	CursorFrom string         `json:"cursorFrom"`
+	CursorTo   string         `json:"cursorTo"`
+	Orders     []PlannedOrder `json:"orders"`
+}
+
+func (p *Plant) DeliverPlanned(erp Principal, page PlannedPage, now time.Time) *kernel.Error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if erp.Tenant != p.tenant || erp.Role != ERP {
+		return denied
+	}
+	if err := p.connectors.Deliver(p.tenant, erp.ID, PlannedType, page.CursorFrom, page.CursorTo, now); err != nil {
+		return err
+	}
+	for _, o := range page.Orders {
+		raw, _ := json.Marshal(o)
+		p.facts.Record(&pb.Fact{TenantId: p.tenant, Kind: pb.FactKind_FACT_KIND_CLAIM,
+			Subject: &pb.EntityRef{Type: PlannedType, Id: o.ERPID}, Attribute: "demand",
+			Schema: &pb.SchemaRef{Name: schemaPlanned, Version: 1}, IdempotencyKey: erp.ID + ":" + o.ERPID + ":" + page.CursorTo, Payload: raw,
+			Provenance: &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: erp.ID}, SourceTime: timestamppb.New(now), Confidence: 1}}, now)
+	}
+	return nil
+}
+
+// Planned lists current ERP claims (latest per planned order) with their fact IDs.
+func (p *Plant) Planned() []PlannedOrder {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []PlannedOrder
+	seen := map[string]bool{}
+	records := p.facts.Records(p.tenant)
+	for i := len(records) - 1; i >= 0; i-- {
+		f := records[i].GetFact()
+		if f.GetSchema().GetName() != schemaPlanned || seen[f.GetSubject().GetId()] {
+			continue
+		}
+		seen[f.GetSubject().GetId()] = true
+		var o PlannedOrder
+		json.Unmarshal(f.GetPayload(), &o)
+		o.FactID = records[i].GetFactId()
+		out = append(out, o)
+	}
+	slices.SortFunc(out, func(a, b PlannedOrder) int { return compare(a.ERPID, b.ERPID) })
+	return out
+}
+
+func (p *Plant) Heartbeat(who Principal, now time.Time) *kernel.Error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.connectors.Heartbeat(p.tenant, who.ID, now)
+}
+
+type ConnectorView struct {
+	Descriptor *pb.ConnectorDescriptor `json:"-"`
+	ID         string                  `json:"id"`
+	Direction  string                  `json:"direction"`
+	Health     string                  `json:"health"`
+	LastSeen   *time.Time              `json:"lastSeen,omitempty"`
+	Cursor     string                  `json:"cursor,omitempty"`
+}
+
+func (p *Plant) Connectors(now time.Time) []ConnectorView {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []ConnectorView
+	for _, d := range p.connectors.Descriptors(p.tenant) {
+		s, _ := p.connectors.Status(p.tenant, d.GetConnectorId(), now)
+		v := ConnectorView{ID: d.GetConnectorId(), Direction: d.GetDirection().String(), Health: s.GetHealth().String(), Cursor: s.GetCursor()}
+		if s.GetLastSeen() != nil {
+			t := s.GetLastSeen().AsTime()
+			v.LastSeen = &t
+		}
+		out = append(out, v)
+	}
+	return out
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|web|hotel]   (default: everything)
+# Platform verification. Usage: scripts/verify.sh [contract|web|hotel|manufacturing]   (default: everything)
 # The web step needs node and pnpm (brew install node pnpm).
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
@@ -31,7 +31,11 @@ contract() {
 }
 
 web() {
-  step web bash -c 'cd web && pnpm install --frozen-lockfile && pnpm check'
+  step web bash -c 'cd web && pnpm install --frozen-lockfile && gen() { find packages/kernel/src/gen -type f -exec shasum {} + | sort; } && before=$(gen) && pnpm --dir packages/kernel generate && { [ "$before" = "$(gen)" ] || { echo "TypeScript contract types were stale; regenerated"; exit 1; }; } && pnpm check'
+}
+
+manufacturing() {
+  step manufacturing-server bash -c 'cd slices/manufacturing/server && go vet ./... && go test -count=1 ./...'
 }
 
 hotel() {
@@ -44,8 +48,9 @@ case "${1:-all}" in
   contract) contract ;;
   web) web ;;
   hotel) web; hotel ;;
-  all) contract; web; hotel ;;
-  *) echo "usage: $0 [contract|web|hotel]"; exit 2 ;;
+  manufacturing) manufacturing ;;
+  all) contract; web; hotel; manufacturing ;;
+  *) echo "usage: $0 [contract|web|hotel|manufacturing]"; exit 2 ;;
 esac
 
 if ((${#failed[@]})); then echo "Failed: ${failed[*]}"; exit 1; fi

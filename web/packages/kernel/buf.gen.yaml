@@ -1,0 +1,10 @@
+# TypeScript types for the kernel contract (contract/proto). Regenerate with `pnpm generate`.
+version: v2
+inputs:
+  - directory: ../../../contract/proto
+plugins:
+  - local: node_modules/.bin/protoc-gen-es
+    out: src/gen
+    opt:
+      - target=ts
+      - json_types=true
