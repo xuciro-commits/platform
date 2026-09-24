@@ -133,6 +133,36 @@ struct ConformanceTests {
             }
         }
     }
+
+    @Test("K5 Authority and sync vectors")
+    func authority() throws {
+        let file: VectorFile<AuthorityGiven, AuthorityStep> = try load("k5-authority.json")
+        for vector in file.vectors {
+            var authorities = Authorities(edge: vector.given.edge)
+            for declaration in vector.given.declarations {
+                try authorities.declare(declaration)
+            }
+            for (index, step) in vector.steps.enumerated() {
+                var actual = AuthorityExpect()
+                do throws(KernelError) {
+                    if let d = step.declare {
+                        try authorities.declare(d)
+                        actual.ok = true
+                    } else if let s = step.authorize {
+                        try authorities.authorize(s)
+                        actual.ok = true
+                    } else if let s = step.enqueue {
+                        actual.state = try authorities.enqueue(s).rawValue
+                    } else if let t = step.transition {
+                        actual.state = try authorities.transition(tenant: t.tenantId, idempotencyKey: t.idempotencyKey, event: t.event).rawValue
+                    }
+                } catch {
+                    actual.error = error.rawValue
+                }
+                #expect(actual == step.expect, Comment(rawValue: "\(vector.id) step \(index)"))
+            }
+        }
+    }
 }
 
 // MARK: - Vector format (see Docs/Platform.md, Kernel Contract)
@@ -235,6 +265,30 @@ struct SchemaExpect: Decodable, Equatable {
     var ok: Bool?
     var path: [UInt32]?
     var version: UInt32?
+    var error: String?
+}
+
+struct AuthorityGiven: Decodable {
+    let edge: String
+    let declarations: [AuthorityDeclaration]
+}
+
+struct AuthorityStep: Decodable {
+    struct Transition: Decodable {
+        let tenantId: String
+        let idempotencyKey: String
+        let event: String
+    }
+    let declare: AuthorityDeclaration?
+    let authorize: Submission?
+    let enqueue: Submission?
+    let transition: Transition?
+    let expect: AuthorityExpect
+}
+
+struct AuthorityExpect: Decodable, Equatable {
+    var ok: Bool?
+    var state: String?
     var error: String?
 }
 

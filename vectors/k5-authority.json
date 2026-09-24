@@ -1,0 +1,1022 @@
+{
+  "contract": "v1alpha1",
+  "concept": "K5",
+  "vectors": [
+    {
+      "id": "k5.declare",
+      "rules": [
+        "A1",
+        "A2",
+        "A7"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": []
+      },
+      "steps": [
+        {
+          "declare": {
+            "tenantId": "",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "",
+            "epoch": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_UNSPECIFIED",
+            "authorityId": "server-1",
+            "epoch": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 2
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-2",
+            "epoch": 1
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-2",
+            "epoch": 3
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-2",
+            "epoch": 2
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "authorize": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-2",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "ok": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.authorize",
+      "rules": [
+        "A3"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "authorize": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "authorize": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "device-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_AUTHORITY"
+          }
+        },
+        {
+          "authorize": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.other",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "authorize": {
+            "tenantId": "tenant-b",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.migrate",
+      "rules": [
+        "A2",
+        "A3",
+        "A4"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_DEVICE",
+            "authorityId": "device-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "authorize": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "device-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "device-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFIRMED"
+          }
+        },
+        {
+          "declare": {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 2
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "authorize": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "device-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_AUTHORITY"
+          }
+        },
+        {
+          "authorize": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-2",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.local-authority",
+      "rules": [
+        "A4",
+        "A5"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_DEVICE",
+            "authorityId": "device-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "device-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFIRMED"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "retry"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.enqueue-undeclared",
+      "rules": [
+        "A4",
+        "A7"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.other",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.confirm",
+      "rules": [
+        "A5"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "confirm"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "confirm"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFIRMED"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "retry"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "timeout"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.unknown-retry",
+      "rules": [
+        "A5"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "retry"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "timeout"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_UNKNOWN"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "confirm"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "retry"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "confirm"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFIRMED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.conflict-keeps-draft",
+      "rules": [
+        "A5",
+        "A6"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "conflict"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFLICT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "retry"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFLICT"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "eyJ2IjoyfQ=="
+          },
+          "expect": {
+            "error": "ERROR_CODE_IDEMPOTENCY_CONFLICT"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-2",
+            "payload": "eyJ2IjoyfQ=="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.reject",
+      "rules": [
+        "A5"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "reject"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_REJECTED"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "retry"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "bogus"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-9",
+            "event": "send"
+          },
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k5.tenant-isolation",
+      "rules": [
+        "A6"
+      ],
+      "given": {
+        "edge": "device-1",
+        "declarations": [
+          {
+            "tenantId": "tenant-a",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          },
+          {
+            "tenantId": "tenant-b",
+            "dataClass": "test.item",
+            "kind": "AUTHORITY_KIND_TENANT_SERVER",
+            "authorityId": "server-1",
+            "epoch": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "enqueue": {
+            "tenantId": "tenant-a",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "enqueue": {
+            "tenantId": "tenant-b",
+            "principalId": "user-1",
+            "authority": "server-1",
+            "target": {
+              "type": "test.item",
+              "id": "a"
+            },
+            "schema": {
+              "name": "test.note",
+              "version": 1
+            },
+            "idempotencyKey": "k-1",
+            "payload": "e30="
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_PENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-b",
+            "idempotencyKey": "k-1",
+            "event": "send"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_SENDING"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-a",
+            "idempotencyKey": "k-1",
+            "event": "confirm"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "transition": {
+            "tenantId": "tenant-b",
+            "idempotencyKey": "k-1",
+            "event": "confirm"
+          },
+          "expect": {
+            "state": "SUBMISSION_STATE_CONFIRMED"
+          }
+        }
+      ]
+    }
+  ]
+}

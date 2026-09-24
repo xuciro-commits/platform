@@ -12,5 +12,6 @@ Schema: `proto/platform/kernel/v1alpha1/error.proto`. A rejected operation retur
 | `INVALID_REFERENCE` | A referenced entity or change does not exist in scope. |
 | `UNKNOWN_SCHEMA` | The payload schema or version is unknown and cannot be upgraded. |
 | `POLICY_DENIED` | Authorization refused the principal (K6). |
+| `NOT_AUTHORITY` | The receiver is not the declared authority for the data class (K5). |
 
 Adding a code is a minor contract change; changing when an existing code is returned is a breaking change (see `Docs/Platform.md`, Kernel Contract).

@@ -379,3 +379,76 @@ func TestSchemaEvolutionVectors(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthorityVectors(t *testing.T) {
+	for _, v := range load(t, "k5-authority.json").Vectors {
+		t.Run(v.ID, func(t *testing.T) {
+			var given struct {
+				Edge         string            `json:"edge"`
+				Declarations []json.RawMessage `json:"declarations"`
+			}
+			json.Unmarshal(v.Given, &given)
+			authorities := NewAuthorities(given.Edge)
+			for _, raw := range given.Declarations {
+				d := &pb.AuthorityDeclaration{}
+				decode(t, raw, d)
+				if err := authorities.Declare(d); err != nil {
+					t.Fatalf("given declaration rejected: %v", err)
+				}
+			}
+			for i, rawStep := range v.Steps {
+				var step struct {
+					Declare    json.RawMessage `json:"declare"`
+					Authorize  json.RawMessage `json:"authorize"`
+					Enqueue    json.RawMessage `json:"enqueue"`
+					Transition *struct {
+						TenantID       string `json:"tenantId"`
+						IdempotencyKey string `json:"idempotencyKey"`
+						Event          string `json:"event"`
+					} `json:"transition"`
+					Expect struct {
+						OK    bool   `json:"ok"`
+						State string `json:"state"`
+						Error string `json:"error"`
+					} `json:"expect"`
+				}
+				if err := json.Unmarshal(rawStep, &step); err != nil {
+					t.Fatal(err)
+				}
+				var state pb.SubmissionState
+				var err *Error
+				switch {
+				case step.Declare != nil:
+					d := &pb.AuthorityDeclaration{}
+					decode(t, step.Declare, d)
+					err = authorities.Declare(d)
+				case step.Authorize != nil:
+					s := &pb.Submission{}
+					decode(t, step.Authorize, s)
+					err = authorities.Authorize(s)
+				case step.Enqueue != nil:
+					s := &pb.Submission{}
+					decode(t, step.Enqueue, s)
+					state, err = authorities.Enqueue(s)
+				case step.Transition != nil:
+					tr := step.Transition
+					state, err = authorities.Transition(tr.TenantID, tr.IdempotencyKey, tr.Event)
+				}
+				got, want := "ok", "ok"
+				if err != nil {
+					got = err.Error()
+				} else if state != 0 {
+					got = state.String()
+				}
+				if e := step.Expect; e.Error != "" {
+					want = e.Error
+				} else if e.State != "" {
+					want = e.State
+				}
+				if got != want {
+					t.Errorf("step %d: got %s, want %s", i, got, want)
+				}
+			}
+		})
+	}
+}

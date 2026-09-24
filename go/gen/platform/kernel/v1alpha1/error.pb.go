@@ -35,6 +35,7 @@ const (
 	ErrorCode_ERROR_CODE_INVALID_REFERENCE    ErrorCode = 6
 	ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA       ErrorCode = 7
 	ErrorCode_ERROR_CODE_POLICY_DENIED        ErrorCode = 8
+	ErrorCode_ERROR_CODE_NOT_AUTHORITY        ErrorCode = 9
 )
 
 // Enum value maps for ErrorCode.
@@ -49,6 +50,7 @@ var (
 		6: "ERROR_CODE_INVALID_REFERENCE",
 		7: "ERROR_CODE_UNKNOWN_SCHEMA",
 		8: "ERROR_CODE_POLICY_DENIED",
+		9: "ERROR_CODE_NOT_AUTHORITY",
 	}
 	ErrorCode_value = map[string]int32{
 		"ERROR_CODE_UNSPECIFIED":          0,
@@ -60,6 +62,7 @@ var (
 		"ERROR_CODE_INVALID_REFERENCE":    6,
 		"ERROR_CODE_UNKNOWN_SCHEMA":       7,
 		"ERROR_CODE_POLICY_DENIED":        8,
+		"ERROR_CODE_NOT_AUTHORITY":        9,
 	}
 )
 
@@ -161,7 +164,7 @@ const file_platform_kernel_v1alpha1_error_proto_rawDesc = "" +
 	"\adetails\x18\x03 \x03(\v2,.platform.kernel.v1alpha1.Error.DetailsEntryR\adetails\x1a:\n" +
 	"\fDetailsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x9e\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\xbc\x02\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bERROR_CODE_INVALID_ARGUMENT\x10\x01\x12\x18\n" +
@@ -171,7 +174,8 @@ const file_platform_kernel_v1alpha1_error_proto_rawDesc = "" +
 	"\x19ERROR_CODE_REDIRECT_CYCLE\x10\x05\x12 \n" +
 	"\x1cERROR_CODE_INVALID_REFERENCE\x10\x06\x12\x1d\n" +
 	"\x19ERROR_CODE_UNKNOWN_SCHEMA\x10\a\x12\x1c\n" +
-	"\x18ERROR_CODE_POLICY_DENIED\x10\bB\xe8\x01\n" +
+	"\x18ERROR_CODE_POLICY_DENIED\x10\b\x12\x1c\n" +
+	"\x18ERROR_CODE_NOT_AUTHORITY\x10\tB\xe8\x01\n" +
 	"\x1ccom.platform.kernel.v1alpha1B\n" +
 	"ErrorProtoP\x01Z:platformkernel/gen/platform/kernel/v1alpha1;kernelv1alpha1\xa2\x02\x03PKX\xaa\x02\x18Platform.Kernel.V1alpha1\xca\x02\x18Platform\\Kernel\\V1alpha1\xe2\x02$Platform\\Kernel\\V1alpha1\\GPBMetadata\xea\x02\x1aPlatform::Kernel::V1alpha1b\x06proto3"
 

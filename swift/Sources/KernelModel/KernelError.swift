@@ -8,4 +8,5 @@ public enum KernelError: String, Error, Codable, Sendable {
     case invalidReference = "ERROR_CODE_INVALID_REFERENCE"
     case unknownSchema = "ERROR_CODE_UNKNOWN_SCHEMA"
     case policyDenied = "ERROR_CODE_POLICY_DENIED"
+    case notAuthority = "ERROR_CODE_NOT_AUTHORITY"
 }
