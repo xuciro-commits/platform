@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **100 · gate** | Outbound effects architecture gate (before any code): how an app's decision reaches an external system (webhooks, calls to other systems, email) without breaking replay, with the owner's review | The owner accepts or amends the proposed ADR; implementation then gets its own item |
+| **100 · gate: awaiting owner** | Outbound effects architecture gate: `docs/ADR/0014-outbound-effects.md` (proposed) with decision points D1–D8. No code before the owner's answer | The owner accepts or amends D1–D8; the ADR is marked accepted and the implementation gets its own item with the ADR's done-when |
 
 ## Open friction (temporary; delete entries once resolved)
 
