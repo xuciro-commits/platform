@@ -2,6 +2,8 @@
 
 Canonical description of the business platform. Decisions with lasting cost are recorded in [ADR/](ADR/); current work is in [WorkQueue.md](WorkQueue.md). When this document and code disagree, the code is the fact and this document states the target — record the gap in the work queue.
 
+Product intent and advisory guidance for top-level design are in [ProductIntentReview.md](ProductIntentReview.md); that review does not itself change the architecture decisions recorded here or in the ADRs.
+
 ## 1. Purpose
 
 A multi-tenant **business platform with server and edge/client runtimes**. It must support personal local-first applications (Music) and multi-user organizational applications where a server is authoritative (Hotel as a reference domain, manufacturing as the real validation domain).

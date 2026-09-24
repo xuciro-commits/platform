@@ -17,6 +17,7 @@ The **business platform**: the kernel contract, and later the Go backend, refere
 | `slices/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |
 | `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri), `apps/mes` (manufacturing client) |
 | `docs/Platform.md` | The platform design: layers, kernel hypotheses K1–K9, kernel contract rules, validation strategy |
+| `docs/ProductIntentReview.md` | Product intent and top-level architectural direction: advisory context for design decisions, not an implementation plan or a replacement for accepted ADRs |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
 | `scripts/verify.sh` | All checks |
