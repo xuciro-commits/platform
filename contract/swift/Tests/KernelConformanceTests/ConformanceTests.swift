@@ -203,6 +203,40 @@ struct ConformanceTests {
             }
         }
     }
+
+    @Test("K8 Connector vectors")
+    func connectors() throws {
+        let file: VectorFile<Empty, ConnectorStep> = try load("k8-connectors.json")
+        for vector in file.vectors {
+            var connectors = Connectors()
+            for (index, step) in vector.steps.enumerated() {
+                let label = Comment(rawValue: "\(vector.id) step \(index)")
+                var actual = ConnectorExpect()
+                do throws(KernelError) {
+                    let at = try? date(step.at ?? "")
+                    if let d = step.register {
+                        try connectors.register(d)
+                        actual.ok = true
+                    } else if let d = step.deliver {
+                        try connectors.deliver(tenant: d.tenantId, connector: d.connectorId, dataClass: d.dataClass,
+                                               cursorFrom: d.cursorFrom ?? "", cursorTo: d.cursorTo ?? "", at: at!)
+                        actual.ok = true
+                    } else if let h = step.heartbeat {
+                        try connectors.heartbeat(tenant: h.tenantId, connector: h.connectorId, at: at!)
+                        actual.ok = true
+                    } else if let s = step.status {
+                        let status = try connectors.status(tenant: s.tenantId, connector: s.connectorId, at: at!)
+                        actual.health = status.health.rawValue
+                        actual.lastSeen = status.lastSeen.map { $0.formatted(.iso8601) }
+                        actual.cursor = status.cursor.isEmpty ? nil : status.cursor
+                    }
+                } catch {
+                    actual.error = error.rawValue
+                }
+                #expect(actual == step.expect, label)
+            }
+        }
+    }
 }
 
 // MARK: - Vector format (see docs/Platform.md, Kernel Contract)
@@ -353,6 +387,30 @@ struct ReceiveStep: Decodable {
     let at: String
     let domain: String?
     let expect: ChangeExpect
+}
+
+struct Empty: Decodable {}
+
+struct ConnectorStep: Decodable {
+    struct Delivery: Decodable {
+        let tenantId, connectorId, dataClass: String
+        let cursorFrom, cursorTo: String?
+    }
+    struct Ref: Decodable { let tenantId, connectorId: String }
+    let register: ConnectorDescriptor?
+    let deliver: Delivery?
+    let heartbeat: Ref?
+    let status: Ref?
+    let at: String?
+    let expect: ConnectorExpect
+}
+
+struct ConnectorExpect: Decodable, Equatable {
+    var ok: Bool?
+    var health: String?
+    var lastSeen: String?
+    var cursor: String?
+    var error: String?
 }
 
 private let vectorsDirectory = URL(fileURLWithPath: #filePath)

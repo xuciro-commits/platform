@@ -1,0 +1,467 @@
+{
+  "contract": "v1alpha1",
+  "concept": "K8",
+  "vectors": [
+    {
+      "id": "k8.register",
+      "rules": [
+        "N1"
+      ],
+      "given": {},
+      "steps": [
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "register": {
+            "tenantId": "tenant-b",
+            "connectorId": "gw-1",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-2",
+            "direction": "CONNECTOR_DIRECTION_UNSPECIFIED",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-3",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k8.deliver-scope",
+      "rules": [
+        "N2",
+        "N5"
+      ],
+      "given": {},
+      "steps": [
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-off",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s",
+            "disabled": true
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-9",
+            "dataClass": "test.device"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-b",
+            "connectorId": "gw-1",
+            "dataClass": "test.device"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "dataClass": "test.order"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_POLICY_DENIED"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-off",
+            "dataClass": "test.device"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_POLICY_DENIED"
+          }
+        },
+        {
+          "status": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "health": "CONNECTOR_HEALTH_STALE"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "dataClass": "test.device"
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "status": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1"
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "health": "CONNECTOR_HEALTH_OK",
+            "lastSeen": "2026-01-01T10:01:00Z"
+          }
+        },
+        {
+          "status": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-off"
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "health": "CONNECTOR_HEALTH_DISABLED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k8.poll-cursor",
+      "rules": [
+        "N3",
+        "N5"
+      ],
+      "given": {},
+      "steps": [
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "erp",
+            "direction": "CONNECTOR_DIRECTION_POLL",
+            "dataClasses": [
+              "test.order"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "erp",
+            "dataClass": "test.order",
+            "cursorFrom": "p1",
+            "cursorTo": "p2"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "erp",
+            "dataClass": "test.order",
+            "cursorTo": "p1"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "status": {
+            "tenantId": "tenant-a",
+            "connectorId": "erp"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "health": "CONNECTOR_HEALTH_OK",
+            "cursor": "p1",
+            "lastSeen": "2026-01-01T10:00:00Z"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "erp",
+            "dataClass": "test.order",
+            "cursorTo": "p9"
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "erp",
+            "dataClass": "test.order",
+            "cursorFrom": "p1",
+            "cursorTo": "p2"
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "erp",
+            "dataClass": "test.order",
+            "cursorFrom": "p1",
+            "cursorTo": "p2"
+          },
+          "at": "2026-01-01T10:02:00Z",
+          "expect": {
+            "error": "ERROR_CODE_CONFLICT"
+          }
+        },
+        {
+          "status": {
+            "tenantId": "tenant-a",
+            "connectorId": "erp"
+          },
+          "at": "2026-01-01T10:02:00Z",
+          "expect": {
+            "health": "CONNECTOR_HEALTH_OK",
+            "cursor": "p2",
+            "lastSeen": "2026-01-01T10:01:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k8.push-has-no-cursor",
+      "rules": [
+        "N3"
+      ],
+      "given": {},
+      "steps": [
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "dataClass": "test.device",
+            "cursorTo": "x"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "dataClass": "test.device",
+            "cursorFrom": "x"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "error": "ERROR_CODE_INVALID_ARGUMENT"
+          }
+        }
+      ]
+    },
+    {
+      "id": "k8.health",
+      "rules": [
+        "N4"
+      ],
+      "given": {},
+      "steps": [
+        {
+          "register": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "direction": "CONNECTOR_DIRECTION_PUSH",
+            "dataClasses": [
+              "test.device"
+            ],
+            "heartbeat": "60s"
+          },
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "heartbeat": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1"
+          },
+          "at": "2026-01-01T10:00:00Z",
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "status": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1"
+          },
+          "at": "2026-01-01T10:01:00Z",
+          "expect": {
+            "health": "CONNECTOR_HEALTH_OK",
+            "lastSeen": "2026-01-01T10:00:00Z"
+          }
+        },
+        {
+          "status": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1"
+          },
+          "at": "2026-01-01T10:01:01Z",
+          "expect": {
+            "health": "CONNECTOR_HEALTH_STALE",
+            "lastSeen": "2026-01-01T10:00:00Z"
+          }
+        },
+        {
+          "deliver": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1",
+            "dataClass": "test.device"
+          },
+          "at": "2026-01-01T10:02:00Z",
+          "expect": {
+            "ok": true
+          }
+        },
+        {
+          "status": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-1"
+          },
+          "at": "2026-01-01T10:02:30Z",
+          "expect": {
+            "health": "CONNECTOR_HEALTH_OK",
+            "lastSeen": "2026-01-01T10:02:00Z"
+          }
+        },
+        {
+          "heartbeat": {
+            "tenantId": "tenant-a",
+            "connectorId": "gw-9"
+          },
+          "at": "2026-01-01T10:03:00Z",
+          "expect": {
+            "error": "ERROR_CODE_NOT_FOUND"
+          }
+        }
+      ]
+    }
+  ]
+}

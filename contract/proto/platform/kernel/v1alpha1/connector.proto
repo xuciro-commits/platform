@@ -1,0 +1,43 @@
+// K8 Connectors — data contract only. Meaning: contract/spec/K8-connectors.md.
+syntax = "proto3";
+
+package platform.kernel.v1alpha1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+enum ConnectorDirection {
+  CONNECTOR_DIRECTION_UNSPECIFIED = 0;
+  // The external system sends deliveries when it has them (webhooks, MQTT, OPC UA subscriptions).
+  CONNECTOR_DIRECTION_PUSH = 1;
+  // The platform fetches pages from the external system with a cursor.
+  CONNECTOR_DIRECTION_POLL = 2;
+}
+
+// How an external system attaches to a tenant.
+message ConnectorDescriptor {
+  string tenant_id = 1;
+  string connector_id = 2;
+  ConnectorDirection direction = 3;
+  // Entity types (K1) the connector may deliver facts about.
+  repeated string data_classes = 4;
+  // Expected maximum silence; longer silence makes the connector stale.
+  google.protobuf.Duration heartbeat = 5;
+  bool disabled = 6;
+}
+
+enum ConnectorHealth {
+  CONNECTOR_HEALTH_UNSPECIFIED = 0;
+  CONNECTOR_HEALTH_OK = 1;
+  CONNECTOR_HEALTH_STALE = 2;
+  CONNECTOR_HEALTH_DISABLED = 3;
+}
+
+// A connector's state as the platform sees it.
+message ConnectorStatus {
+  string connector_id = 1;
+  ConnectorHealth health = 2;
+  google.protobuf.Timestamp last_seen = 3;
+  // Poll connectors only: where the next page starts.
+  string cursor = 4;
+}

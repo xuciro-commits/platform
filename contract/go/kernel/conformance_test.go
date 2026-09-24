@@ -542,3 +542,61 @@ func TestReceiveVectors(t *testing.T) {
 		})
 	}
 }
+
+func TestConnectorVectors(t *testing.T) {
+	for _, v := range load(t, "k8-connectors.json").Vectors {
+		t.Run(v.ID, func(t *testing.T) {
+			c := NewConnectors()
+			for i, rawStep := range v.Steps {
+				var step struct {
+					Register json.RawMessage `json:"register"`
+					Deliver  *struct {
+						TenantID, ConnectorID, DataClass, CursorFrom, CursorTo string
+					} `json:"deliver"`
+					Heartbeat *struct{ TenantID, ConnectorID string } `json:"heartbeat"`
+					Status    *struct{ TenantID, ConnectorID string } `json:"status"`
+					At        time.Time                               `json:"at"`
+					Expect    json.RawMessage                         `json:"expect"`
+				}
+				if err := json.Unmarshal(rawStep, &step); err != nil {
+					t.Fatal(err)
+				}
+				var got string
+				result := func(err *Error) string {
+					if err != nil {
+						return fmt.Sprintf(`{"error":%q}`, err.Error())
+					}
+					return `{"ok":true}`
+				}
+				switch {
+				case step.Register != nil:
+					d := &pb.ConnectorDescriptor{}
+					decode(t, step.Register, d)
+					got = result(c.Register(d))
+				case step.Deliver != nil:
+					d := step.Deliver
+					got = result(c.Deliver(d.TenantID, d.ConnectorID, d.DataClass, d.CursorFrom, d.CursorTo, step.At))
+				case step.Heartbeat != nil:
+					got = result(c.Heartbeat(step.Heartbeat.TenantID, step.Heartbeat.ConnectorID, step.At))
+				case step.Status != nil:
+					s, err := c.Status(step.Status.TenantID, step.Status.ConnectorID, step.At)
+					if err != nil {
+						got = result(err)
+					} else {
+						s.ConnectorId = ""
+						out, _ := protojson.Marshal(s)
+						got = string(out)
+					}
+				}
+				var want, have any
+				json.Unmarshal(step.Expect, &want)
+				json.Unmarshal([]byte(got), &have)
+				wantJSON, _ := json.Marshal(want)
+				haveJSON, _ := json.Marshal(have)
+				if string(wantJSON) != string(haveJSON) {
+					t.Errorf("step %d: got %s, want %s", i, haveJSON, wantJSON)
+				}
+			}
+		})
+	}
+}
