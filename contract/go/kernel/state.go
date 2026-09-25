@@ -106,7 +106,9 @@ func (c *Connectors) State() ([]*pb.ConnectorDescriptor, []ConnectorMark) {
 	slices.SortFunc(descriptors, func(a, b *pb.ConnectorDescriptor) int {
 		return strings.Compare(a.GetTenantId()+"/"+a.GetConnectorId(), b.GetTenantId()+"/"+b.GetConnectorId())
 	})
-	slices.SortFunc(marks, func(a, b ConnectorMark) int { return strings.Compare(a.Tenant+"/"+a.Connector, b.Tenant+"/"+b.Connector) })
+	slices.SortFunc(marks, func(a, b ConnectorMark) int {
+		return strings.Compare(a.Tenant+"/"+a.Connector, b.Tenant+"/"+b.Connector)
+	})
 	return descriptors, marks
 }
 

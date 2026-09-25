@@ -23,6 +23,9 @@ type Member struct {
 	// Agent marks an AI agent: an irreversible effect it causes waits for a
 	// person's approval, and it cannot give one (ADR-0014 D6).
 	Agent bool `json:"agent,omitempty"`
+	// Language is the member's own choice (ADR-0023 6b), such as "zh-CN";
+	// empty: the tenant's default, else what the browser asks for.
+	Language string `json:"language,omitempty"`
 }
 
 // Caller is a member as one app sees it. Replaying marks the journal replay:
@@ -96,6 +99,8 @@ type Manifest struct {
 	// Roles are roles that grant no action but open something else, such as
 	// models (ADR-0015); the roles its actions grant need not be listed.
 	Roles []string
+	// Languages translate the app's titles and descriptions (ADR-0023).
+	Languages Languages
 }
 
 // AllRoles are every role the app defines: those its actions grant and Roles.

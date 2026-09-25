@@ -31,7 +31,7 @@ for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
 [[ $(code supervisor) == 401 ]] || fail "demo token accepted in production mode"
 # One workspace per host (ADR-0018): the page, how to sign in, and the apps a member may open.
 curl -s "$MES/" | grep -q "<title>Workspace</title>" || fail "workspace page"
-[[ $(curl -s "$SALES/v1/sign-in" | jq -c .) == "{\"client\":\"platform-web\",\"issuer\":\"$IDP/\"}" ]] || fail "sign-in: $(curl -s "$SALES/v1/sign-in")"
+[[ $(curl -s "$SALES/v1/sign-in" | jq -cS .) == "{\"client\":\"platform-web\",\"issuer\":\"$IDP/\"}" ]] || fail "sign-in: $(curl -s "$SALES/v1/sign-in")"
 [[ $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/me" | jq -c '[.apps[].id]') == '["ai","mes"]' ]] || fail "apps of op1: $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/me" | jq -c '[.apps[].id]')"
 echo "ok   workspace: served by the host; one client signs in for every app; a member sees the apps they hold a role in"
 IFS=. read -r head claims sig <<<"$OP2"
@@ -61,7 +61,7 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
 
 # Inputs of every kind the journal keeps: a poll page, decisions, a push batch.
-(cd ../../slices/manufacturing/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
+(cd ../../apps/manufacturing/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
   MES_ERP_SECRET=erpLocalOnly0000000000000000000000000000000000000000000000000000 \
   go run ./cmd/gateway-sim -server "$MES" -oidc-token "$IDP/oidc/token" -batches 4 -every 200ms >/dev/null)
 submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
@@ -93,10 +93,10 @@ submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | 
 
 # An AI agent is a client with a role and lines: its catalog holds only what it
 # may call, and the server refuses the rest even when the adapter is bypassed.
-agent() { (cd ../../slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
+agent() { (cd ../../apps/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MES" -oidc-token "$IDP/oidc/token" "$@"); }
-[[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") | not)]') == '["platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
+[[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") | not)]') == '["platform.member.language","platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
 event=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"

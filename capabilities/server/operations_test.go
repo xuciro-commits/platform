@@ -164,7 +164,7 @@ func TestOperations(t *testing.T) {
 	if !slices.Equal(kinds, []string{"p-feed", "submission", "submission", "p-feed", "submission", "submission", "job"}) {
 		t.Fatalf("journal %v", kinds)
 	}
-	if s := tn.Settings(); len(s) != 1 || s[0].Settings[0].Value != "3" {
+	if s := tn.Settings(); len(s) != 2 || s[1].App != "p" || s[1].Settings[0].Value != "3" { // the platform's own, then the app's
 		t.Fatalf("settings %+v", s)
 	}
 

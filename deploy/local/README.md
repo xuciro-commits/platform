@@ -97,7 +97,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 以 AI 助手身份操作：
 
 ```bash
-cd slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 go run ./cmd/mes-agent -server http://localhost:8490 -oidc-token http://localhost:8480/auth/v1/oidc/token actions
+cd apps/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 go run ./cmd/mes-agent -server http://localhost:8490 -oidc-token http://localhost:8480/auth/v1/oidc/token actions
 ```
 
 把末尾的 `actions` 换成 `do <动作> <目标> '<JSON>'` 就是执行动作，例如 `do mes.order.reconfirm WO-3 '{"planned":"PO-9001"}'`。
@@ -108,7 +108,7 @@ cd slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRE
 - sales：`manager`、`sales`、`sales-only`、`desk`
 - MES：`supervisor`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`erp`、`assistant-l1`（AI 代理）
 
-开发令牌的主机不占 Docker 的端口：在 `solutions/sales` 下运行 `go run ./cmd/sales-server -addr 127.0.0.1:8496`，或在 `slices/manufacturing/server` 下运行 `go run ./cmd/mes-server -addr 127.0.0.1:8491`，再用启动配置 `workspace` / `workspace-plant` 打开工作台，右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
+开发令牌的主机不占 Docker 的端口：在 `solutions/sales` 下运行 `go run ./cmd/sales-server -addr 127.0.0.1:8496`，或在 `apps/manufacturing/server` 下运行 `go run ./cmd/mes-server -addr 127.0.0.1:8491`，再用启动配置 `workspace` / `workspace-plant` 打开工作台，右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
 
 ## 接入外部系统时填什么
 
@@ -146,6 +146,14 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
 - 没有 `ai` 角色的成员（例如 AI 助手 `agent-l1`）只能用开放给 everyone 的模型。
 
 **MCP**：`POST http://localhost:8490/mcp`（或 8495），带 `Authorization: Bearer <该成员的令牌>`。工具列表就是这个成员的动作目录和可读数据。
+
+**外部智能体（A2A）**（Integrations → Add endpoint → A2A，只在 MES 用到）
+
+| URL | 密钥名 | 勾选 |
+|---|---|---|
+| `http://webhook-sink:8080/a2a`（供应商智能体替身） | 可留空（真实对方填存放其令牌的密钥名） | 勾"内部地址"；外发类型 `mes/lead-time` |
+
+发布我们自己的智能体：App settings → Agents → "Published over A2A" 填 `helpdesk.triage`；卡片在 `http://localhost:8495/a2a/hotel-a/helpdesk.triage/.well-known/agent-card.json`，调用方用成员令牌按 A2A 1.0 JSON-RPC 发 `SendMessage`（请求头 `A2A-Version: 1.0`）。
 
 ## 常用测试路线
 
@@ -186,4 +194,19 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
    2. 智能体替你干活时不会直接改数据：它要做的动作会作为草稿等你确认，你可以改字段后 Confirm，或写原因 Reject（它会接着想办法）；这些都记为这次运行的反馈；
    3. 左侧 Search 可以跨所有你能看的类型搜记录；
    4. 管理员在设置 → Processes → Evaluations 选一个智能体和一个候选模型点 Evaluate：它用候选模型把有人确认或纠正过的历史运行"干跑"一遍（只检查、不执行），报告里每条都会标出与人接受的一致、不一致、重犯被纠正的错误，或避开了它。
-9. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+9. **知识与记忆**（Sales，`manager@hotel.test`）：
+   1. AI → Providers 启用本地替身的 `embed` 模型，再在 App settings → Knowledge 把 "Embedding model" 设为 `local/embed`（不设也能按关键词检索）；
+   2. Knowledge → Documents 新建一篇"House rules"，比如写上 Wifi 密码在房卡上、前台可以重置；左侧 Search 搜 "wifi password" 能看到这段；
+   3. 按第 7 条开一张"Wifi keeps dropping"的工单：分诊智能体的回复会引用 House rules，运行记录上列出引用的文档；管理员在运行页还能看到每次模型调用的完整请求和回答（保留 30 天）；
+   4. 在第 8 条里改掉或驳回智能体的草稿后，它会提议一条记忆；助手面板里能看到"智能体记得关于你的事"，保留后下次运行会用上，也可以随时忘掉；设置 → Processes 列出所有记忆。
+10. **智能体互调（A2A）**：
+    1. MES（`sup@plant.test`）：按上面的表添加供应商智能体的接收地址，然后在任一记录上 "Ask the assistant"，选 "Material planner"，问 "What is the lead time of P-200?"，它通过 A2A 问供应商智能体，回答 12 天；
+    2. Sales（`manager@hotel.test`）：按上面把 `helpdesk.triage` 发布出去，用 curl 或任一 A2A 客户端发一条 `SendMessage`，任务完成后返回分诊结果；它以调用者的权限直接行动，外发的邮件照样要人批准。
+11. **多语言**（任一主机，ADR-0023）：右上角头像菜单 → 语言 → 简体中文，页面会重新加载：导航、按钮、列表、记录页、设置，以及各应用的实体、字段、状态、动作名称都变成中文（记录内容是谁写的就是什么语言，不翻译）；在记录上"问助手"，智能体会用中文写理由和结果（需要真实模型，本地替身 echo 不会说中文）。切回 English 同样在这个菜单。你选的语言会存成你自己的偏好，换浏览器登录也一样；管理员可以在 App settings → Settings 设"Default language"（如 `zh-CN`）作为租户默认。通知、收件箱任务、审批和邮件也会按读者的语言显示（应用写的英文按词典里的句式翻译）。
+    术语表：设置 → 知识 → 术语表 → 新建术语，比如术语 `单子`，含义"销售对商机的叫法"，指向 `crm.opportunity`；之后在搜索里输入"单子 年度"会只在商机里找"年度"，智能体的提示词里也会带上这些术语。术语只能指向已有的实体、字段或动作，不会改变它们本身。
+12. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+13. **新建一个应用**（不需要 Docker，按 `docs/Apps.md`，ADR-0023）：
+    1. 在 `capabilities/server` 运行 `go run ./cmd/new-app -id purchasing -entity request -title "Purchase request" -zh 采购申请 -app-title Purchasing -app-zh 采购`，它会写好 `apps/purchasing/server`（实体、动作、审核流程、中文词典、测试、开发主机）和 `web/packages/purchasing`（界面，已登记到工作台）；
+    2. `cd apps/purchasing/server && go test ./...` 应该直接通过；
+    3. `pnpm --dir web/apps/workspace build`，再在 `apps/purchasing/server` 运行 `go run ./cmd/purchasing-server -web ../../../web/apps/workspace/dist`，打开 `http://127.0.0.1:8499`，用令牌 `member` 新建一张采购申请，再用令牌 `manager` 登录，收件箱里会有"审核 …"，点"完成"后申请变成"已完成"；
+    4. 用完删掉：`rm -rf apps/purchasing web/packages/purchasing`，再 `git checkout web/apps/workspace web/pnpm-lock.yaml`。也可以让编码智能体用 `new-app` 技能照着这条路径加实体、动作、流程和翻译。

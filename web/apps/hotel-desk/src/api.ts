@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// Typed wrappers over the Tauri commands (slices/hotel/client/src-tauri/src/main.rs).
+// Typed wrappers over the Tauri commands (apps/hotel/client/src-tauri/src/main.rs).
 
 import type { Reservation, RoomType, Stay } from "@pkg/hotel";
 export type OutboxEntry = {

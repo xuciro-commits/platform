@@ -46,6 +46,7 @@ type AgentRunRecord struct {
 	Seen        string     `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
 	OnBehalf    string     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
 	Acts        bool       `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
+	Language    string     `json:"language,omitempty" field:"readonly"`                         // the person's, which the agent answers in (ADR-0023 D6)
 	Flow        string     `json:"flow,omitempty" field:"readonly"`                             // the flow instance whose step started it
 	Token       int        `json:"token,omitempty" field:"readonly"`
 	Step        string     `json:"step,omitempty" field:"readonly"` // that step's name
@@ -138,7 +139,8 @@ func NewAgents(tenant string) *Agents {
 			Description: "Give one of your apps' agents a goal; it works on your behalf, within what you may do yourself.",
 			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
 				{Name: "goal", Type: "string", Required: true, Description: "What it should achieve"}, {Name: "ref", Type: "string", Description: "The record it is about, <type>/<id>"},
-				{Name: "act", Type: "boolean", Description: "Act within your grants instead of drafting for you to confirm (how A2A callers run agents)"}}},
+				{Name: "act", Type: "boolean", Description: "Act within your grants instead of drafting for you to confirm (how A2A callers run agents)"},
+				{Name: "language", Type: "string", Description: "The language to answer in, such as zh-CN; empty: English"}}},
 		platform.Action{Schema: SchemaRunStep, Target: RunType, Capability: "runs", Title: "Take step", Payload: []platform.Field{}, Roles: []string{AgentAdmin},
 			Description: "Made by the host: a step the model chose."},
 		platform.Action{Schema: SchemaRunCancel, Target: RunType, Capability: "runs", Title: "Stop run", Payload: []platform.Field{}, Roles: []string{AgentAdmin, platform.AnyMember},
@@ -323,9 +325,9 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		return record, err
 	}
 	var p struct {
-		Agent, Goal, Ref, Reason, Model string
-		Act                             bool
-		Payload                         json.RawMessage
+		Agent, Goal, Ref, Reason, Model, Language string
+		Act                                       bool
+		Payload                                   json.RawMessage
 	}
 	json.Unmarshal(s.GetPayload(), &p)
 	d := a.defs[p.Agent]
@@ -352,7 +354,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now)
-			run.Acts = p.Act
+			run.Acts, run.Language = p.Act, p.Language
 			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
 		case SchemaEvalStart:
 			return a.startEvaluation(c, id, struct{ Agent, Model string }{p.Agent, p.Model})
@@ -474,18 +476,20 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		out, _, _ := platform.Find[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
 		return out, nil
 	}
-	type view struct {
-		ID           string          `json:"id"`
-		App          string          `json:"app"`
-		Title        string          `json:"title"`
-		Instructions string          `json:"instructions"`
-		Tools        []string        `json:"tools"`
-		Budget       platform.Budget `json:"budget"`
-	}
-	out := []view{}
+	out := []AgentInfo{}
 	for _, id := range slices.Sorted(maps.Keys(a.defs)) {
 		d := a.defs[id]
-		out = append(out, view{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
+		out = append(out, AgentInfo{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil
+}
+
+// AgentInfo is a declared agent as people see it.
+type AgentInfo struct {
+	ID           string          `json:"id"`
+	App          string          `json:"app"`
+	Title        string          `json:"title"`
+	Instructions string          `json:"instructions"`
+	Tools        []string        `json:"tools"`
+	Budget       platform.Budget `json:"budget"`
 }

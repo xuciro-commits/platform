@@ -60,7 +60,7 @@ They agree on three separate things. We take them apart the same way:
 | D2 | Where approvals live | (a) Generic, declared on actions and held by the host. (b) Each app models its own approval states | **(a)**: every reference platform treats approval as a platform service; one chain engine serves purchase, leave, release and posting |
 | D3 | When a held action is checked | (a) Only when requested. (b) Again when finally approved, inside the approval's input | **(b)**: stock, capacity or prices may have moved while approvers decided; the rules at approval time are the truth |
 | D4 | Approvers | Organisation-based (a role in a unit above the requester's), app role, named member, with amount or condition thresholds per level; serial levels; parallel approvers within a level, any one or all | As listed; delegation and substitutes wait for ADR-0012's deferred delegation |
-| D5 | Tasks and SLA | (a) Tasks with due times and escalation now; business calendars (working hours, holidays) later. (b) Calendars first | **(a)**: calendars are their own capability (Platform.md §10.3 A) |
+| D5 | Tasks and SLA | (a) Tasks with due times and escalation now; business calendars (working hours, holidays) later. (b) Calendars first | **(a)**: calendars are their own capability (Platform.md §10.4, application model) |
 | D6 | Where approval requests and tasks live | (a) Entity types of a new platform app, `work`. (b) Inside the console | **(a)**: the console administers the tenant; `work` is what every member uses daily, with its own roles |
 | D7 | Proof | Manufacturing's order and SFC lifecycles move onto it. A thin HR reference app has people and leave requests approved along the organisation (manager, then department head above five days). The helpdesk reference app (tickets with SLA) follows as stage 2's second proof | As listed |
 
@@ -98,7 +98,7 @@ They agree on three separate things. We take them apart the same way:
 - **Tasks:** `work.task` records. Approval levels open them; apps open them with `Caller.Assign`.
   - The `inbox` read serves them overdue first; take and done are transitions.
   - A job notifies the candidates of an overdue task once.
-- **HR reference app** (`slices/hr`): leave requests with a lifecycle and a two-level approval (the manager, and the department head above five days), in about 150 lines. It runs in the sales solution.
+- **HR reference app** (`apps/hr`): leave requests with a lifecycle and a two-level approval (the manager, and the department head above five days), in about 150 lines. It runs in the sales solution.
   - The sales workspace has leave requests, the inbox and "my requests". The MES has the inbox.
   - The kit's record page shows a status bar with the transitions the member may take.
 - **Proven** by the HR test and the rehearsal: approval along the organisation, a stale request refused when run, rejection, withdrawal, a refused probe, an agent refused, escalation of an overdue task, and replay. Checked in the browser: submit, the manager's inbox, two levels approved, the requester told.

@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
 import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
+import { language, languages, setLanguage, t } from "../i18n";
 
 export type View = {
   id: string;
@@ -45,10 +46,12 @@ export const notify = toast;
  * tabs are routes (one per entity), a command palette (⌘K) and notifications.
  * The layout survives restarts (per `storageKey`); the active tab is in the URL.
  */
-export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, onActiveRoute }: {
+export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, onActiveRoute, onLanguage }: {
   product: string; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
   launcher?: Launcher; onActiveRoute?: (route: Route) => void;
+  /** Keeps a chosen language beyond this browser, e.g. as the member's preference; the page reloads in it after. */
+  onLanguage?: (id: string) => unknown;
 }) {
   const dock = useRef<DockviewApi>(null);
   const [active, setActive] = useState<string>();
@@ -78,7 +81,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     view: ({ params }: IDockviewPanelProps<{ route: Route }>) => {
       const view = byId.get(params.route.view);
       return <div className="h-full overflow-auto bg-background p-4">
-        {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">This view no longer exists.</p>}
+        {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}
       </div>;
     },
   }), [byId]);
@@ -122,15 +125,15 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
 
   const activePanel = () => dock.current?.activePanel;
   const builtInMenus: Menu[] = [
-    { label: "View", items: [
-      { label: "Command palette", shortcut: "⌘K", onSelect: () => setPaletteOpen(true) },
-      { label: navOpen ? "Hide navigation" : "Show navigation", onSelect: () => setNavOpen(!navOpen) },
-      { label: "Reset layout", onSelect: () => { dock.current?.clear(); open(home); } },
+    { label: t("View"), items: [
+      { label: t("Command palette"), shortcut: "⌘K", onSelect: () => setPaletteOpen(true) },
+      { label: navOpen ? t("Hide navigation") : t("Show navigation"), onSelect: () => setNavOpen(!navOpen) },
+      { label: t("Reset layout"), onSelect: () => { dock.current?.clear(); open(home); } },
     ] },
-    { label: "Window", items: [
-      { label: "Float tab", disabled: !active, onSelect: () => { const p = activePanel(); if (p) dock.current?.addFloatingGroup(p); } },
-      { label: "Move tab to new window", disabled: !active, onSelect: () => { const p = activePanel(); if (p) void dock.current?.addPopoutGroup(p); } },
-      { label: "Close tab", disabled: !active, onSelect: () => activePanel()?.api.close() },
+    { label: t("Window"), items: [
+      { label: t("Float tab"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) dock.current?.addFloatingGroup(p); } },
+      { label: t("Move tab to new window"), disabled: !active, onSelect: () => { const p = activePanel(); if (p) void dock.current?.addPopoutGroup(p); } },
+      { label: t("Close tab"), disabled: !active, onSelect: () => activePanel()?.api.close() },
       ...openTabs.map((t) => ({ label: t.title, onSelect: () => dock.current?.getPanel(t.key)?.api.setActive() })),
     ] },
   ];
@@ -139,7 +142,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     <WorkspaceContext.Provider value={workspace}>
       <div className="grid h-dvh grid-rows-[36px_1fr] bg-background text-foreground">
         <header className="flex items-center gap-2 border-b border-border bg-surface px-2">
-          <button type="button" aria-label="Toggle navigation" onClick={() => setNavOpen(!navOpen)}
+          <button type="button" aria-label={t("Toggle navigation")} onClick={() => setNavOpen(!navOpen)}
             className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
           {launcher ? <AppMenu launcher={launcher} product={product} /> : <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>}
           <Menubar.Root className="flex items-center">
@@ -162,16 +165,16 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
           </Menubar.Root>
           <button type="button" onClick={() => setPaletteOpen(true)}
             className="mx-auto flex h-6 w-72 items-center gap-2 rounded-md border border-border bg-background px-2 text-sm text-muted hover:text-foreground max-lg:hidden">
-            <Search className="size-3.5" />Search and commands<kbd className="ml-auto text-xs">⌘K</kbd>
+            <Search className="size-3.5" />{t("Search and commands")}<kbd className="ml-auto text-xs">⌘K</kbd>
           </button>
           <div className="ml-auto flex items-center gap-2">
             {status}
-            {session && <SessionMenu session={session} />}
+            {session && <SessionMenu session={session} onLanguage={onLanguage} />}
           </div>
         </header>
         <div className={cn("grid min-h-0", navOpen ? "grid-cols-[220px_1fr]" : "grid-cols-1")}>
           {navOpen && (
-            <nav aria-label="Main" className="overflow-auto border-r border-border bg-surface p-2">
+            <nav aria-label={t("Main")} className="overflow-auto border-r border-border bg-surface p-2">
               {nav.map((section) => (
                 <div key={section.label} className="mb-3">
                   <div className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted">{section.label}</div>
@@ -194,14 +197,14 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
           </div>
         </div>
       </div>
-      <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label="Command palette"
+      <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")}
         overlayClassName="fixed inset-0 z-40 bg-black/30"
         contentClassName="fixed left-1/2 top-[15%] z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-md border border-border bg-surface shadow-2xl">
-        <Command.Input placeholder="Go to, open, run…" className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
+        <Command.Input placeholder={t("Go to, open, run…")} className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
         <Command.List className="max-h-80 overflow-auto p-1">
-          <Command.Empty className="p-3 text-sm text-muted">No results</Command.Empty>
+          <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>
           {launcher && (
-            <Command.Group heading="Apps" className={paletteGroup}>
+            <Command.Group heading={t("Apps")} className={paletteGroup}>
               {launcher.apps.map((a) => (
                 <Command.Item key={a.id} value={`app ${a.title}`} className={paletteItem}
                   onSelect={() => { launcher.onSelect(a.id); setPaletteOpen(false); }}>{a.icon}{a.title}</Command.Item>
@@ -217,7 +220,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
             </Command.Group>
           ))}
           {openTabs.length > 0 && (
-            <Command.Group heading="Open tabs" className={paletteGroup}>
+            <Command.Group heading={t("Open tabs")} className={paletteGroup}>
               {openTabs.map((tab) => (
                 <Command.Item key={tab.key} value={`tab ${tab.title} ${tab.key}`} className={paletteItem}
                   onSelect={() => { dock.current?.getPanel(tab.key)?.api.setActive(); setPaletteOpen(false); }}>{tab.title}</Command.Item>
@@ -225,7 +228,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
             </Command.Group>
           )}
           {commands.length > 0 && (
-            <Command.Group heading="Commands" className={paletteGroup}>
+            <Command.Group heading={t("Commands")} className={paletteGroup}>
               {commands.map((c) => (
                 <Command.Item key={c.id} value={`${c.group ?? ""} ${c.label}`} className={paletteItem}
                   onSelect={() => { setPaletteOpen(false); c.run(); }}>
@@ -244,12 +247,12 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
 function AppMenu({ launcher, product }: { launcher: Launcher; product: string }) {
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger aria-label="Apps" className="flex h-7 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover">
+      <DropdownMenu.Trigger aria-label={t("Apps")} className="flex h-7 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover">
         <LayoutGrid className="size-4 text-muted" />{product}<ChevronDown className="size-3.5 text-muted" />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="start" sideOffset={4} className={menuPanel}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">Apps</DropdownMenu.Label>
+          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Apps")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={launcher.current ?? ""} onValueChange={launcher.onSelect}>
             {launcher.apps.map((a) => (
               <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "gap-2 [&_svg]:size-3.5")}>
@@ -263,7 +266,7 @@ function AppMenu({ launcher, product }: { launcher: Launcher; product: string })
   );
 }
 
-function SessionMenu({ session }: { session: Session }) {
+function SessionMenu({ session, onLanguage }: { session: Session; onLanguage?: (id: string) => unknown }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger className="flex h-7 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover">
@@ -278,11 +281,20 @@ function SessionMenu({ session }: { session: Session }) {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content align="end" sideOffset={4} className={menuPanel}>
-          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">Switch tenant or identity</DropdownMenu.Label>
+          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Switch tenant or identity")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={session.current} onValueChange={session.onSwitch}>
             {session.options.map((o) => (
               <DropdownMenu.RadioItem key={o.id} value={o.id} className={menuItem}>
                 <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{o.label}
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+          <DropdownMenu.Separator className="my-1 h-px bg-border" />
+          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Language")}</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={language()} onValueChange={(id) => void Promise.resolve(onLanguage?.(id)).catch(() => undefined).finally(() => setLanguage(id))}>
+            {languages.map((l) => (
+              <DropdownMenu.RadioItem key={l.id} value={l.id} className={menuItem}>
+                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{l.name}
               </DropdownMenu.RadioItem>
             ))}
           </DropdownMenu.RadioGroup>

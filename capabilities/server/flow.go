@@ -421,29 +421,32 @@ func (f *Flows) run(x *FlowInstance) *platform.Run {
 }
 
 // Read "flows": the declared flows, for the workspace to draw.
+// FlowDefinition is a declared flow as people see it: its steps and where each may go.
+type FlowDefinition struct {
+	ID      string     `json:"id"`
+	App     string     `json:"app"`
+	Title   string     `json:"title"`
+	Version int        `json:"version"`
+	Start   []string   `json:"start"`
+	Steps   []FlowStep `json:"steps"`
+}
+
+type FlowStep struct {
+	Name  string   `json:"name"`
+	Title string   `json:"title"`
+	Kind  string   `json:"kind" enum:"act,wait,ask,call,all,any,agent"`
+	Next  []string `json:"next"`
+	// Chooses: the step's code picks the next one as the instance runs.
+	Chooses bool `json:"chooses,omitempty"`
+}
+
 func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
-	type stepView struct {
-		Name  string   `json:"name"`
-		Title string   `json:"title"`
-		Kind  string   `json:"kind"`
-		Next  []string `json:"next"`
-		// Chooses: the step's code picks the next one as the instance runs.
-		Chooses bool `json:"chooses,omitempty"`
-	}
-	type flowView struct {
-		ID      string     `json:"id"`
-		App     string     `json:"app"`
-		Title   string     `json:"title"`
-		Version int        `json:"version"`
-		Start   []string   `json:"start"`
-		Steps   []stepView `json:"steps"`
-	}
-	out := []flowView{}
+	out := []FlowDefinition{}
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		for _, d := range f.defs[id] {
-			v := flowView{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: d.Start.On}
+			v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: d.Start.On}
 			for _, s := range d.Steps {
-				sv := stepView{Name: s.Name, Title: cmpOr(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}
+				sv := FlowStep{Name: s.Name, Title: cmpOr(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}
 				for _, n := range append(append([]string{s.Next, s.OnTimeout, s.Fault}, s.All...), s.Any...) {
 					if n != "" && !slices.Contains(sv.Next, n) {
 						sv.Next = append(sv.Next, n)

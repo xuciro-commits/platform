@@ -1,6 +1,6 @@
 # ADR-0008: First-party packages assembled at build time; customers customize around industry rules; every caller acts through declared, granted actions
 
-**Status:** Accepted (2026-09-24, owner decisions on ProductIntentReview §8)
+**Status:** Accepted (2026-09-24, owner decisions on the external product review of that day, §8; the review is in git history)
 
 **Context.** The product intent review left four questions to the owner: who business packages are for, how deep customers may change them, how far AI may act, and whether packages are installed at runtime.
 

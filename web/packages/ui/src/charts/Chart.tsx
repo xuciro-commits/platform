@@ -5,6 +5,7 @@ import type { ECharts } from "echarts/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toOption, formatter, type Theme } from "./echarts";
 import { aggregateQuery, aggregateValues, columnOf, markOf, type AggregateColumn, type AggregateData, type AggregateQuery, type ChartSpec } from "./spec";
+import { t } from "../i18n";
 
 /** Where aggregates come from: the host's `GET /v1/aggregates/<type>`, wired by the workspace. */
 export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData> };
@@ -45,7 +46,7 @@ export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: Ag
       setState({ data: { columns, rows } });
       return;
     }
-    if (!source || !("entity" in spec.data)) return setState({ error: "No source for records" });
+    if (!source || !("entity" in spec.data)) return setState({ error: t("No source for records") });
     let live = true;
     source.aggregate(spec.data.entity, query).then((data) => live && setState({ data }), (e) => live && setState({ error: String(e) }));
     return () => { live = false; };
@@ -57,9 +58,9 @@ export function Chart({ spec, source, height = 260, frame = true }: { spec: Char
   const { data, error } = useChartData(spec, source);
   const mark = markOf(spec);
   const body = error ? <p className="text-sm text-[var(--tone-danger)]">{error}</p>
-    : !data ? <p className="text-sm text-muted">Loading…</p>
+    : !data ? <p className="text-sm text-muted">{t("Loading…")}</p>
     : mark.type === "kpi" ? <Kpi spec={spec} data={data} />
-    : data.rows.length === 0 ? <p className="text-sm text-muted">No data</p>
+    : data.rows.length === 0 ? <p className="text-sm text-muted">{t("No data")}</p>
     : <Canvas spec={spec} data={data} height={height} />;
   if (!frame) return body;
   return (

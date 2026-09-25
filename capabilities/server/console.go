@@ -26,7 +26,10 @@ const (
 	SchemaAdd    = "platform.member.add"
 	SchemaGrant  = "platform.member.grant"
 	SchemaRevoke = "platform.member.revoke"
-	Admin        = "admin"
+	// SchemaLanguage sets a member's language: their own, or anyone's by an administrator (ADR-0023 6b).
+	SchemaLanguage  = "platform.member.language"
+	SettingLanguage = "language"
+	Admin           = "admin"
 )
 
 // Seat is a directory entry as configured: the subjects that sign in as the member.
@@ -70,6 +73,9 @@ func ConsoleActions() *platform.Catalog {
 			Payload:     []platform.Field{app, {Name: "role", Type: "string", Required: true, Description: "A role the app defines"}}, Roles: admin},
 		platform.Action{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
 			Description: "Remove a member's role in an app.", Payload: []platform.Field{app}, Roles: admin},
+		platform.Action{Schema: SchemaLanguage, Target: MemberType, Capability: "language", Title: "Choose language",
+			Description: "Choose the language a member reads the platform in: your own, or anyone's as an administrator.",
+			Payload:     []platform.Field{{Name: "language", Type: "string", Description: "A language the tenant speaks, such as zh-CN; empty: the tenant's default"}}, Roles: []string{platform.AnyMember}},
 	}, append(operationsActions(), effectActions()...)...)...)
 }
 
@@ -188,7 +194,9 @@ func clone(m *platform.Member) platform.Member {
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog,
 		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects"},
-		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false}}
+		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false},
+		Settings: []platform.Setting{{Name: SettingLanguage, Title: "Default language", Type: "text", Default: "",
+			Description: "The language members read until they choose their own, such as zh-CN; empty: what each browser asks for, else English."}}}
 }
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
@@ -199,7 +207,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		declared, _ := d.ledger.Catalog.Action(s.GetSchema().GetName())
 		if declared.Target == MemberType {
-			return d.decideMember(s)
+			return d.decideMember(c, s)
 		}
 		if d.t == nil { // not composed: a tenant's operations need one
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -213,11 +221,11 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 }
 
 // decideMember decides the directory's actions: add a member, grant or revoke a role.
-func (d *Console) decideMember(s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
-		Subject, App, Role string
-		Agent              bool
+		Subject, App, Role, Language string
+		Agent                        bool
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
 		return nil, invalid
@@ -238,6 +246,15 @@ func (d *Console) decideMember(s *pb.Submission) (func(*pb.ChangeRecord), *kerne
 	}
 	if m == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if s.GetSchema().GetName() == SchemaLanguage {
+		if c.ID != id && c.Role() != Admin && !c.Replaying {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		if p.Language != "" && p.Language != "en" && (d.t == nil || !slices.Contains(d.t.languages(), p.Language)) && !c.Replaying {
+			return nil, invalid
+		}
+		return func(*pb.ChangeRecord) { m.Language = p.Language }, nil
 	}
 	if s.GetSchema().GetName() == SchemaRevoke {
 		if p.App == "" {
@@ -313,4 +330,19 @@ func (d *Console) Input(c platform.Caller, name string, _ []byte, now time.Time)
 	d.t.opsMu.Lock()
 	defer d.t.opsMu.Unlock()
 	return nil, d.t.connectors.Heartbeat(c.Tenant, c.ID, now)
+}
+
+// language is the language a member reads (ADR-0023 6b): their own choice,
+// else the tenant's default; "" is English, or what the browser asks for.
+func (d *Console) language(member string) string {
+	d.mu.Lock()
+	m := d.members[member]
+	d.mu.Unlock()
+	if m != nil && m.Language != "" {
+		return m.Language
+	}
+	if d.t == nil {
+		return ""
+	}
+	return d.t.setting(d.t.automation(PlatformApp, false), SettingLanguage)
 }

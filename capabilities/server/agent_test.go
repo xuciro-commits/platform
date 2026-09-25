@@ -18,7 +18,7 @@ import (
 // desk is a test app: tickets answered by people or by its triage agent.
 type Ticket struct {
 	platform.Record
-	Subject string `json:"subject" field:"required,search"`
+	Subject string `json:"subject" field:"required,search" help:"What the customer asks, in their words" synonyms:"topic"`
 	Status  string `json:"status" field:"readonly" choices:"open,answered"`
 	Reply   string `json:"reply,omitempty" field:"readonly" type:"longtext" knowledge:"true"`
 }
@@ -78,9 +78,10 @@ var clerksOf = func(platform.Caller, *platform.Run) []platform.Recipient {
 
 func (d *desk) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "desk", Version: "1", Actions: d.ledger.Catalog, Reads: []string{"queue"},
-		Entities: []platform.Entity{{Type: "desk.ticket", Title: "Ticket", Model: Ticket{}, Display: "subject"}},
-		Agents:   []platform.Agent{triage, scout}, Flows: []platform.Flow{handle},
-		Emits:    []platform.EffectKind{{Name: "lookup", Title: "Ask the partner", Description: "Ask the partner's agent a question."}}}
+		Entities: []platform.Entity{{Type: "desk.ticket", Title: "Ticket", Model: Ticket{}, Display: "subject", Synonyms: "case,issue",
+			Description: "A customer's request the desk answers."}},
+		Agents: []platform.Agent{triage, scout}, Flows: []platform.Flow{handle},
+		Emits: []platform.EffectKind{{Name: "lookup", Title: "Ask the partner", Description: "Ask the partner's agent a question."}}}
 }
 func (d *desk) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 func (d *desk) Snapshot() (json.RawMessage, error)       { return d.ledger.Snapshot() }
@@ -141,6 +142,9 @@ func scriptedModel(t *testing.T) *httptest.Server {
 			call("search", map[string]any{"query": "T"})
 		case is("ask") && n == 0:
 			call("ask", map[string]any{"question": "May I answer T3?", "answers": []string{"yes", "no"}})
+		case is("speak"): // ADR-0023 D6: the run's language reaches the prompt
+			system, _ := req.Messages[0]["content"].(string)
+			call("finish", map[string]any{"result": map[bool]string{true: "中文", false: "English"}[strings.Contains(system, "Simplified Chinese")]})
 		case is("refund") && n == 0:
 			call("desk_ticket_answer", map[string]any{"target": "T4", "reply": "a refund"})
 		case is("Answer ticket") && n == 0:
@@ -238,6 +242,12 @@ func TestAgents(t *testing.T) {
 	expect("answered as ana", ticket("T1").Status+" "+ticket("T1").Reply+" "+ticket("T1").Changed.By, "answered Hello, it works again ana")
 	think(2)
 	expect("R1", run("R1").State+" "+run("R1").Signals[0].Kind+" "+run("R1").Signals[0].Value, `done changed {"reply":"Hello, it works again"}`)
+
+	// In the person's language (ADR-0023 D6).
+	do("ana", AgentApp, SchemaRunStart, RunType, "RL1", map[string]string{"agent": "desk.triage", "goal": "speak", "language": "zh-CN"})
+	do("ana", AgentApp, SchemaRunStart, RunType, "RL2", map[string]string{"agent": "desk.triage", "goal": "speak"})
+	think(2)
+	expect("languages", run("RL1").Result+" "+run("RL2").Result, "中文 English")
 	expect("rationale", run("R1").Steps[1].Rationale, "because desk_ticket_answer")
 	// A rejected draft: the agent hears why and goes on.
 	start("ana", "R6", "Answer ticket T4: wifi", "desk.ticket/T4")

@@ -1,6 +1,7 @@
 package lodging
 
 import (
+	"embed"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -11,6 +12,13 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+// languages translate the app's titles and descriptions (ADR-0023).
+//
+//go:embed i18n
+var languageFiles embed.FS
+
+var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 // Memory is the smallest lodging provider: any room type, no capacity. It is the
 // protocol's reference implementation and the second provider that shows a
@@ -48,7 +56,7 @@ func (m *Memory) Restore(raw json.RawMessage) error {
 }
 
 func (m *Memory) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "memstay", Title: "Memstay", Version: "1", Actions: m.ledger.Catalog, Reads: []string{"memstay-bookings"},
+	return platform.Manifest{Languages: languages, ID: "memstay", Title: "Memstay", Version: "1", Actions: m.ledger.Catalog, Reads: []string{"memstay-bookings"},
 		Provides: []platform.Provision{{Protocol: Protocol(),
 			Actions: map[string]string{"reserve": "memstay.reserve", "change": "memstay.change", "cancel": "memstay.cancel"},
 			Reads:   map[string]string{"bookings": "memstay-bookings"},

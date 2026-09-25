@@ -2,18 +2,19 @@
 // open on this host. The host decides who sees what — the apps the tenant runs
 // and the member holds a role in (`/v1/me`), the actions of their catalog — and
 // each app's UI package contributes its views and navigation through defineApp.
+import "./i18n";
 import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
-import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route } from "@platform/ui";
+import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
+import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { chromeViews } from "./chrome";
 
-/** A development identity of a host on development tokens (GET /v1/sign-in). */
-export type Identity = { token: string; tenant: string; member: string; roles: Record<string, string> };
-type Notification = { read: boolean };
-type ProtocolInfo = { id: string; bound?: string };
+/** A development identity of a host on development tokens (GET /v1/sign-in); generated from the host (ADR-0023). */
+export type Identity = Api.Identity;
+type Notification = Api.Notification;
+type ProtocolInfo = Api.ProtocolInfo;
 
 // The UI packages this workspace is built with (D2): each loads only when the
 // member holds a role in an app it serves. Settings serves the platform's apps.
@@ -42,8 +43,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!me) return;
+    if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser (ADR-0023)
     Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
-    client.refreshDeclarations().then(() => setReady(true), () => notify.error("Host unreachable"));
+    client.refreshDeclarations().then(() => setReady(true), () => notify.error(t("Host unreachable")));
   }, [client, me]);
 
   const [apps, setApps] = useState<(AppUI & { serves?: string[] })[]>();
@@ -122,15 +124,15 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   if (meQuery.error) {
     const problem = /HTTP 401/.test(String(meQuery.error))
-      ? signedIn ? `${signedIn.session.email} is not a member of this host.` : "This host does not accept this identity."
-      : "The host is unreachable.";
+      ? signedIn ? t("{email} is not a member of this host.", { email: signedIn.session.email }) : t("This host does not accept this identity.")
+      : t("The host is unreachable.");
     return <main className="grid h-dvh place-items-center text-sm text-muted">{problem}</main>;
   }
-  if (!host || !apps || !ready) return <main className="grid h-dvh place-items-center text-sm text-muted">Opening the workspace…</main>;
+  if (!host || !apps || !ready) return <main className="grid h-dvh place-items-center text-sm text-muted">{t("Opening the workspace…")}</main>;
 
   const sessionOptions = [
-    ...(me!.tenants.length > 1 ? me!.tenants.map((t) => ({ id: `tenant:${t}`, label: `Tenant ${t}` })) : []),
-    ...(signedIn ? [{ id: "sign-out", label: `Sign out ${signedIn.session.email}` }]
+    ...(me!.tenants.length > 1 ? me!.tenants.map((tenant) => ({ id: `tenant:${tenant}`, label: `${t("Tenant")} ${tenant}` })) : []),
+    ...(signedIn ? [{ id: "sign-out", label: t("Sign out {email}", { email: signedIn.session.email }) }]
       : identities.filter((i) => i.tenant === me!.tenantId).map((i) => ({ id: `as:${i.token}`, label: `${i.member} · ${Object.entries(i.roles).map(([a, r]) => `${a} ${r}`).join(", ")}` }))),
   ];
   const onSwitch = (id: string) => {
@@ -143,29 +145,30 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   return (
     <HostContext.Provider value={host}>
-      <Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? "Workspace"} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
+      <Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         views={views} home={{ view: "home" }}
+        onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
         launcher={{ apps: apps.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
           onSelect: (id) => { select(id); const home = apps.find((a) => a.id === id)?.home; if (home) location.hash = `#/${home.view}`; } }}
         onActiveRoute={(route: Route) => { const id = owner.get(route.view); if (id && id !== current) select(id); }}
         nav={[
-          { label: "You", items: [
-            { label: "Apps", icon: <LayoutGrid />, route: { view: "home" } },
-            { label: "Inbox", icon: <Inbox />, route: { view: "inbox" } },
-            { label: "My requests", icon: <Send />, route: { view: "requests" } },
-            { label: "Notifications", icon: <Bell />, route: { view: "notifications" }, badge: badge(unread) },
-            { label: "Records", icon: <Database />, route: { view: "records" } },
-            { label: "Search", icon: <Search />, route: { view: "search" } },
-            ...(host.can("agent.run.start") ? [{ label: "Assistant", icon: <Sparkles />, route: { view: "assistant" } }] : []),
-            ...(waiting ? [{ label: "Outbox", icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] : []),
+          { label: t("You"), items: [
+            { label: t("Apps"), icon: <LayoutGrid />, route: { view: "home" } },
+            { label: t("Inbox"), icon: <Inbox />, route: { view: "inbox" } },
+            { label: t("My requests"), icon: <Send />, route: { view: "requests" } },
+            { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" }, badge: badge(unread) },
+            { label: t("Records"), icon: <Database />, route: { view: "records" } },
+            { label: t("Search"), icon: <Search />, route: { view: "search" } },
+            ...(host.can("agent.run.start") ? [{ label: t("Assistant"), icon: <Sparkles />, route: { view: "assistant" } }] : []),
+            ...(waiting ? [{ label: t("Outbox"), icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] : []),
           ] },
-          ...(saved.length ? [{ label: "Saved views", items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
-          ...(app?.dashboards?.some((d) => !d.for || d.for(host)) ? [{ label: "Dashboards", items: app.dashboards.filter((d) => !d.for || d.for(host))
+          ...(saved.length ? [{ label: t("Saved views"), items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
+          ...(app?.dashboards?.some((d) => !d.for || d.for(host)) ? [{ label: t("Dashboards"), items: app.dashboards.filter((d) => !d.for || d.for(host))
             .map((d) => ({ label: d.title, icon: <Gauge />, route: { view: "dashboard", params: { app: app.id, id: d.id } } })) }] : []),
           ...(app?.nav(host) ?? []),
         ]}
-        commands={[{ id: "resend", label: "Send unanswered decisions again", run: () => void host.resend() }, ...(app?.commands?.(host) ?? [])]}
-        status={<span className="text-xs text-muted">{app ? `${app.title}: ${host.role(app.id) ?? "—"}` : `${apps.length} apps`}</span>}
+        commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() }, ...(app?.commands?.(host) ?? [])]}
+        status={<span className="text-xs text-muted">{app ? `${app.title}: ${host.role(app.id) ?? "—"}` : t("{n} apps", { n: apps.length })}</span>}
         session={{ tenant: me!.tenantId, principal: me!.principalId, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch }} />
     </HostContext.Provider>

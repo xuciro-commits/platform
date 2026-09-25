@@ -312,5 +312,11 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 			t.Failed++
 		}
 	}
-	return map[string]any{"calls": calls, "totals": totals}, nil
+	return AIUsage{Calls: calls, Totals: totals}, nil
+}
+
+// AIUsage is model calls metered from the journal, and their totals per day, member and model.
+type AIUsage struct {
+	Calls  []Usage `json:"calls"`
+	Totals []Total `json:"totals"`
 }

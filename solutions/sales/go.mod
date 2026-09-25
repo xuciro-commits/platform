@@ -42,10 +42,10 @@ replace platformserver => ../../capabilities/server
 
 replace lodging => ../../protocols/lodging
 
-replace crm => ../../slices/crm/server
+replace crm => ../../apps/crm/server
 
-replace hr => ../../slices/hr/server
+replace hr => ../../apps/hr/server
 
-replace helpdesk => ../../slices/helpdesk/server
+replace helpdesk => ../../apps/helpdesk/server
 
-replace hotel => ../../slices/hotel/server
+replace hotel => ../../apps/hotel/server

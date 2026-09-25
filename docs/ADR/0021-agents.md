@@ -1,6 +1,6 @@
 # ADR-0021: Agents — governed principals in a traced harness
 
-**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.4). The owner accepted D1–D10 as recommended. What is built is under "As built" (batches 1 and 2).
+**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.5). The owner accepted D1–D10 as recommended. What is built is under "As built" (batches 1 and 2); batch 3 is ADR-0022.
 
 ## Context
 
@@ -176,7 +176,7 @@ Our platform starts from an advantage there: every decision is already journaled
   - Every record page offers "Ask the assistant". Its run page shows each step with its rationale, the draft with its fields to change, confirm or reject, and the signals.
   - Search (`/v1/search`) covers every type the member may read.
   - Settings → Processes lists the declared agents, every run and the evaluations.
-- **Helpdesk (D10 (2))** (`slices/helpdesk`, composed in the sales solution):
+- **Helpdesk (D10 (2))** (`apps/helpdesk`, composed in the sales solution):
   - Tickets have a lifecycle: triage (the priority sets when the answer is due), reply, close and escalate.
   - The service-level flow has two branches:
     - the triage agent, or the desk when it stops;

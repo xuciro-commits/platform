@@ -1,15 +1,11 @@
 // A browser edge of a server-authoritative domain: a persisted K5 outbox and an
 // HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
+import type { Action } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 
-/** One action a server offers to this caller (platformserver.Action, ADR-0008): render from it, never re-check roles. */
-export type ActionDeclaration = {
-  schema: string; target: string; capability: string; title: string; description: string;
-  payload: { name: string; type: string; required?: boolean; description: string }[];
-  /** The action waits for approvers before it takes effect (ADR-0017). */
-  needsApproval?: boolean;
-};
+/** One action a server offers to this caller (ADR-0008): render from it, never re-check roles. Generated from the host (ADR-0023). */
+export type ActionDeclaration = Action;
 
 export type Connection = { server: string; token: string; tenant: string; principal: string };
 
@@ -30,10 +26,11 @@ export class EdgeClient {
     return /HTTP 401/.test(String(error)) ? "sign-in required: this host accepts identity-provider tokens only" : "host unreachable";
   }
 
-  /** The bearer token, and the tenant once known: a person may be a member of several on one host (ADR-0018). */
+  /** The bearer token, the tenant once known (a person may be a member of several on one host, ADR-0018), and the page's language, in which the host serves declarations (ADR-0023). */
   private headers(json = false): Record<string, string> {
+    const lang = typeof document === "undefined" ? "" : document.documentElement.lang;
     return { Authorization: `Bearer ${this.connection.token}`, ...(this.connection.tenant ? { "Platform-Tenant": this.connection.tenant } : {}),
-      ...(json ? { "Content-Type": "application/json" } : {}) };
+      ...(lang ? { "Accept-Language": lang } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
   }
 
   async get<T>(path: string): Promise<T> {

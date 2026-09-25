@@ -9,6 +9,7 @@ import { Input, Select } from "../primitives/input";
 import { Tag, type Tone } from "../components/StatusTag";
 import { WorkspaceContext } from "../shell/Workspace";
 import type { Route } from "../shell/route";
+import { t } from "../i18n";
 
 export type EditorProps<V> = { id?: string; value: V | undefined; onChange: (value: V | undefined) => void; invalid?: boolean; autoFocus?: boolean };
 export type Operator<V> = { id: string; label: string; needsArg: boolean; test: (value: V | undefined, arg: V | undefined) => boolean };
@@ -16,6 +17,8 @@ export type Operator<V> = { id: string; label: string; needsArg: boolean; test: 
 export type FieldType<V = any, R = any> = {
   type: string;
   label: string;
+  /** What the field holds, from its declaration (ADR-0023 D1): shown under the label of forms. */
+  help?: string;
   required?: boolean;
   readOnly?: boolean;
   align?: "left" | "right";
@@ -31,23 +34,23 @@ export type FieldType<V = any, R = any> = {
   text: (value: V | undefined) => string;
 };
 
-type Common = { label: string; required?: boolean; readOnly?: boolean; width?: number };
+type Common = { label: string; help?: string; required?: boolean; readOnly?: boolean; width?: number };
 const empty = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 const muted = <span className="text-muted">—</span>;
 const byString = (a: unknown, b: unknown) => String(a).localeCompare(String(b));
 const byNumber = (a: number, b: number) => a - b;
-const isEmpty: Operator<any> = { id: "empty", label: "is empty", needsArg: false, test: (v) => empty(v) };
-const notEmpty: Operator<any> = { id: "notEmpty", label: "is not empty", needsArg: false, test: (v) => !empty(v) };
-const equals: Operator<any> = { id: "is", label: "is", needsArg: true, test: (v, a) => v === a };
+const isEmpty: Operator<any> = { id: "empty", label: t("is empty"), needsArg: false, test: (v) => empty(v) };
+const notEmpty: Operator<any> = { id: "notEmpty", label: t("is not empty"), needsArg: false, test: (v) => !empty(v) };
+const equals: Operator<any> = { id: "is", label: t("is"), needsArg: true, test: (v, a) => v === a };
 const numberOps: Operator<number>[] = [equals,
   { id: "gt", label: ">", needsArg: true, test: (v, a) => v !== undefined && a !== undefined && v > a },
   { id: "lt", label: "<", needsArg: true, test: (v, a) => v !== undefined && a !== undefined && v < a }, isEmpty, notEmpty];
 const textOps: Operator<string>[] = [
-  { id: "contains", label: "contains", needsArg: true, test: (v, a) => !a || (v ?? "").toLowerCase().includes(a.toLowerCase()) },
+  { id: "contains", label: t("contains"), needsArg: true, test: (v, a) => !a || (v ?? "").toLowerCase().includes(a.toLowerCase()) },
   equals, isEmpty, notEmpty];
 const timeOps: Operator<string>[] = [equals,
-  { id: "before", label: "is before", needsArg: true, test: (v, a) => !!v && !!a && v < a },
-  { id: "after", label: "is after", needsArg: true, test: (v, a) => !!v && !!a && v > a }, isEmpty, notEmpty];
+  { id: "before", label: t("is before"), needsArg: true, test: (v, a) => !!v && !!a && v < a },
+  { id: "after", label: t("is after"), needsArg: true, test: (v, a) => !!v && !!a && v > a }, isEmpty, notEmpty];
 
 function input<V>(type: string, parse: (raw: string) => V | undefined, show: (v: V) => string = String, extra: object = {}) {
   return ({ id, value, onChange, invalid, autoFocus }: EditorProps<V>) => (
@@ -100,7 +103,7 @@ export const percent = (o: Common): FieldType<number> => ({
 
 export const checkbox = (o: Common): FieldType<boolean> => ({
   type: "checkbox", align: "left", width: 90, ...o, schema: z.boolean(), compare: (a, b) => Number(a) - Number(b), text: (v) => (v ? "yes" : "no"),
-  operators: [{ id: "checked", label: "is checked", needsArg: false, test: (v) => !!v }, { id: "unchecked", label: "is not checked", needsArg: false, test: (v) => !v }],
+  operators: [{ id: "checked", label: t("is checked"), needsArg: false, test: (v) => !!v }, { id: "unchecked", label: t("is not checked"), needsArg: false, test: (v) => !v }],
   display: (v) => (v ? <Check className="size-3.5 text-[var(--tone-success)]" aria-label="yes" /> : <span className="text-muted" aria-label="no">—</span>),
   editor: ({ id, value, onChange }) => <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-[var(--primary)]" />,
 });
@@ -130,7 +133,7 @@ export const singleSelect = (o: Common & { options: Option[] }): FieldType<strin
   return {
     type: "singleSelect", width: 130, ...o, schema: z.enum(o.options.map((x) => x.value) as [string, ...string[]]),
     compare: (a, b) => o.options.findIndex((x) => x.value === a) - o.options.findIndex((x) => x.value === b),
-    operators: [equals, { id: "isNot", label: "is not", needsArg: true, test: (v, a) => v !== a }, isEmpty, notEmpty],
+    operators: [equals, { id: "isNot", label: t("is not"), needsArg: true, test: (v, a) => v !== a }, isEmpty, notEmpty],
     text: (v) => find(v)?.label ?? v ?? "",
     display: (v) => (v ? <Tag label={find(v)?.label ?? v} tone={find(v)?.tone} /> : muted),
     editor: ({ id, value, onChange, invalid, autoFocus }) => (
@@ -188,7 +191,7 @@ export const barcode = (o: Common & { pattern?: RegExp }): FieldType<string> => 
   ...text(o), type: "barcode", width: 160, schema: o.pattern ? z.string().regex(o.pattern, "Barcode format") : z.string(),
   display: (v) => (v ? (
     <span className="inline-flex items-center gap-1 font-mono text-xs">{v}
-      <button type="button" aria-label="Copy" className="text-muted hover:text-foreground"
+      <button type="button" aria-label={t("Copy")} className="text-muted hover:text-foreground"
         onClick={(e) => { e.stopPropagation(); void navigator.clipboard?.writeText(v); }}><Copy className="size-3" /></button>
     </span>) : muted),
   editor: input("text", (s) => s.trim(), String, { className: "font-mono", inputMode: "numeric", autoComplete: "off" }),

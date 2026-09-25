@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"slices"
 	"testing"
 	"time"
@@ -232,6 +233,10 @@ func TestRecords(t *testing.T) {
 	CheckReplay(t, tn, journal, func() *Tenant { return stockTenant(t) })
 }
 
+// timed says whether timing bounds hold: on unless PLATFORM_TIMING=0 or -short,
+// which CI sets because its runners are slower than a developer's machine.
+func timed() bool { return os.Getenv("PLATFORM_TIMING") != "0" && !testing.Short() }
+
 // The done-when of ADR-0016's generic reads: a filtered, sorted page of 100 000
 // records in memory in under 100 ms.
 func TestRecordsAtScale(t *testing.T) {
@@ -260,7 +265,7 @@ func TestRecordsAtScale(t *testing.T) {
 		t.Fatalf("%d of %d: %v", len(page.Records), page.Total, err)
 	}
 	t.Logf("filtered, sorted page of 100 000 records in %v", elapsed)
-	if elapsed > 100*time.Millisecond && !testing.Short() {
+	if elapsed > 100*time.Millisecond && timed() {
 		t.Fatalf("took %v", elapsed)
 	}
 	// ADR-0019's done-when: grouped and measured in under 100 ms.
@@ -275,7 +280,7 @@ func TestRecordsAtScale(t *testing.T) {
 		t.Fatalf("aggregate %v %v", agg.Rows, err)
 	}
 	t.Logf("grouped and measured 100 000 records in %v", elapsed)
-	if elapsed > 100*time.Millisecond && !testing.Short() {
+	if elapsed > 100*time.Millisecond && timed() {
 		t.Fatalf("aggregate took %v", elapsed)
 	}
 }

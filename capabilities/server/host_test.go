@@ -98,10 +98,10 @@ func TestTenantComposition(t *testing.T) {
 		}
 		return out
 	}
-	if got := schemas(bo); !slices.Equal(got, []string{SchemaNotificationRead, "b.note"}) {
+	if got := schemas(bo); !slices.Equal(got, []string{SchemaLanguage, SchemaNotificationRead, "b.note"}) {
 		t.Fatalf("bo is offered %v", got)
 	}
-	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke,
+	if got := schemas(ana); !slices.Equal(got, []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage,
 		SchemaConnectorOn, SchemaConnectorOff, SchemaSettingSet, SchemaWorkRetry, SchemaProtocolBind, SchemaNotificationRead,
 		SchemaEndpointAdd, SchemaEndpointRemove, SchemaEffectRetry, SchemaEffectDiscard, SchemaEffectApprove, "a.note", "b.note"}) {
 		t.Fatalf("ana's catalog %v", got)
@@ -240,7 +240,7 @@ func TestWorkspaceSurface(t *testing.T) {
 		}
 	}
 	h.Issuer, h.Client = "https://id.example/", "platform-web"
-	if got := call("/v1/sign-in", "", ""); got != `200 {"client":"platform-web","issuer":"https://id.example/"}` {
+	if got := call("/v1/sign-in", "", ""); got != `200 {"issuer":"https://id.example/","client":"platform-web"}` {
 		t.Errorf("a production host signs in with %s", got)
 	}
 }

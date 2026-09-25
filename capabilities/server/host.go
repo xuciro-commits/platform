@@ -42,7 +42,9 @@ type Tenant struct {
 	vectorMemory map[string][]float32
 	transcripts  []Transcript
 	knowledge    *Knowledge
-	agentRun     string // the run whose agent is submitting, under mu: its effects name it
+	dictionaries sync.Map // language → map[string]string, merged from the platform's and the apps' (ADR-0023)
+	patternCache sync.Map // language → []pattern
+	agentRun     string   // the run whose agent is submitting, under mu: its effects name it
 	mu           sync.Mutex
 	apps         []platform.App
 	owner        map[string]platform.App // "action:", "read:" and "input:" names → app
@@ -554,4 +556,14 @@ func checkManifest(a platform.App) error {
 		}
 	}
 	return nil
+}
+
+// Member is a member of the tenant's directory, as the console holds it now:
+// for tests and tools that act as a member.
+func (t *Tenant) Member(id string) (platform.Member, bool) {
+	d, ok := t.app(PlatformApp).(*Console)
+	if !ok {
+		return platform.Member{}, false
+	}
+	return d.Member(id)
 }

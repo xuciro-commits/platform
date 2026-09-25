@@ -54,7 +54,7 @@ func TestHelpdeskTriage(t *testing.T) {
 			name, args = "helpdesk_ticket_triage", map[string]any{"target": ticket, "category": "booking", "priority": "high"}
 		case 4:
 			found := regexp.MustCompile(`"title":"([^"]+)"`).FindAllStringSubmatch(results[1], -1) // the account's opportunities
-			rule := regexp.MustCompile(`"title":"([^"]+)"`).FindStringSubmatch(results[2])        // the passage found
+			rule := regexp.MustCompile(`"title":"([^"]+)"`).FindStringSubmatch(results[2])         // the passage found
 			reply := "About your " + found[len(found)-1][1] + ": the front desk resets the wifi password (" + rule[1] + "). A colleague is on it."
 			if strings.Contains(goal, "refund") {
 				reply = "We will refund you."

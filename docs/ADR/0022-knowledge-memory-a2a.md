@@ -1,6 +1,6 @@
 # ADR-0022: Knowledge, memory and agent-to-agent
 
-**Status:** Accepted (2026-09-25, #111, stage 5 batch 3; ADR-0021 D5, D7 and D9 left these for later). The owner accepted D1–D9 as recommended; pgvector waits until a tenant outgrows D2 (a).
+**Status:** Accepted (2026-09-25, #111, stage 5 batch 3; ADR-0021 D5, D7 and D9 left these for later). The owner accepted D1–D9 as recommended; pgvector waits until a tenant outgrows D2 (a). Built in batches 3a to 3c; see "As built".
 
 ## Context
 
@@ -107,3 +107,30 @@ Our constraints:
 - Agents gain knowledge that is not records, and every passage they used is cited and journaled, so a run can be explained after the documents have changed.
 - What makes knowledge fast (vectors) stays outside the truth (the journal), like projections (ADR-0019).
 - Our agents join other platforms' agents through the protocol the reference platforms chose, under the same identity, grants and D6 as everything else.
+
+## As built (#111, batch 3)
+
+### 3a: knowledge and transcripts
+
+- **The knowledge app** (`knowledge.go`): `knowledge.document` records name the apps whose members may read them. Apps mark text fields `knowledge:"true"` (`platform/entity.go`), so their records are found without copying.
+- **Passages** are cut at headings and about 800 tokens. Search ranks them by words (BM25) and, when the setting `knowledge/embedding-model` names an enabled model, by meaning; the two are fused by rank, only among what the reader may read. `GET /v1/knowledge?q=` serves people.
+- **Vectors are derived:** embedded as owned work outside the lock, kept by passage hash and model in PostgreSQL (in memory without it), and metered to the knowledge app.
+- **An agent's `knowledge` tool** runs outside the lock like the model call. What it found is journaled with the step and kept on the run as citations, so replay neither searches nor embeds.
+- **Transcripts** (`transcripts.go`): every model call's full request and answer, kept outside the journal for the agent app's `transcript-days` (30), shown to agent administrators on the run page (`GET /v1/transcripts`).
+- **Proof:** the helpdesk's triage agent reads the house rules and cites them; Settings gains Knowledge; Search shows passages. The sink embeds hashed words. `TestKnowledge` checks scope, citations and a replay that calls no model.
+
+### 3b: memory and the remaining signals
+
+- **Memory** (`agent_memory.go`): the `remember` tool keeps a fact for 90 days, about the person the run is for or for every run. Keep and forget are the memory's lifecycle: agent administrators any, a person those about them. The most relevant active memories go into the prompt; `GET /v1/memories` serves them.
+- **Proposed memories:** a changed or rejected draft, a corrected proposal and a discarded effect propose one, which counts once a person keeps it (14 days otherwise).
+- **Signals:** effects an agent caused name its run, so approving one is an `approved` signal and discarding it a `discarded` one; a flow that compensates marks its agents' finished runs `undone`. A run is stored before its flow goes on, so the flow's signal is kept.
+- **UI:** the assistant shows what agents remember about you; Settings lists every memory.
+- **Found:** an app does not hear that its effect was discarded (F-24).
+
+### 3c: agent-to-agent
+
+- **Publishing** (`a2a.go`): the agent app's setting `published` lists agents other systems may call. Each has an agent card at `/a2a/<tenant>/<agent>/.well-known/agent-card.json`, with the host's OpenID issuer as its security scheme, and the JSON-RPC binding at `/a2a/<tenant>/<agent>` (`SendMessage`, `GetTask`, `CancelTask`). A caller's run acts within the caller's grants without drafts (`Acts`); `ask` becomes `TASK_STATE_INPUT_REQUIRED`. `SendMessage` waits up to 60 s unless told to return at once.
+- **Calling:** an endpoint of kind `a2a` names an external agent, with its bearer token as the secret. An effect bound to it is sent as `SendMessage`, and the task's result is the journaled answer. An agent's tool `emit:<kind>` sends such an effect and waits for its answer, held when irreversible.
+- **Proof:** the plant's planner (`mes.planner`) asks a supplier's agent for a lead time through `mes/lead-time`; the helpdesk's triage agent answers a client outside once published. `TestA2A` and the rehearsal, which replay without calling the partner.
+- **Not yet:** streaming, the HTTP+JSON binding, `ListTasks`.
+

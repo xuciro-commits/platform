@@ -1,4 +1,4 @@
-// Shapes of mes-server's read API (slices/manufacturing/server).
+// Shapes of mes-server's read API (apps/manufacturing/server).
 export type Operation = { step: number; name: string; workCenter: string };
 export type Product = { id: string; name: string; routing: string; operations: Operation[] };
 export type WorkCenter = { id: string; name: string; line: string; resources: string[] };

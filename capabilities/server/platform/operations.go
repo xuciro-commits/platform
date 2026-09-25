@@ -24,7 +24,7 @@ type Setting struct {
 	Name        string   `json:"name"`
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
-	Type        string   `json:"type"` // boolean, integer, text, choice
+	Type        string   `json:"type" enum:"boolean,integer,text,choice"`
 	Default     string   `json:"default"`
 	Choices     []string `json:"choices,omitempty"`
 }

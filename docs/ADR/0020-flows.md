@@ -1,6 +1,6 @@
 # ADR-0020: Flows — long-running processes across apps
 
-**Status:** Accepted (2026-09-25, #110, the architecture gate of stage 4 in Platform.md §10.4). The owner accepted D1–D9 as recommended. What is built is under "As built".
+**Status:** Accepted (2026-09-25, #110, the architecture gate of stage 4 in Platform.md §10.5). The owner accepted D1–D9 as recommended. What is built is under "As built".
 
 ## Context
 
@@ -17,7 +17,7 @@ A real process spans these and outlives any one input. For example: an order is 
 
 Today such chains are hand-written inside apps. The plant's ERP confirmation is an `After` hook, a stored state field and a separate reconfirm action. Nobody can see where one instance of the chain stands, or why it took the path it did. Nothing times out, and nothing undoes the steps already taken when a later one fails.
 
-SAP's AI-native North Star (June 2026) adds a second reason to build this now. In an AI-native platform, agents are orchestrated: a goal is decomposed, delegated to steps, and the exceptions go to people. Flows are that orchestration. The decision traces SAP calls the moat of the next decade are the record of which path a process took and why (Platform.md §10.3 F).
+SAP's AI-native North Star (June 2026) adds a second reason to build this now. In an AI-native platform, agents are orchestrated: a goal is decomposed, delegated to steps, and the exceptions go to people. Flows are that orchestration. The decision traces SAP calls the moat of the next decade are the record of which path a process took and why (Platform.md §10.4, AI).
 
 What the reference platforms do:
 
@@ -94,7 +94,7 @@ They split on how a process is defined, and there are three ways:
 | D5 | Failure | Retries with backoff, then the declared fault path, else compensation through declared undo actions (a saga), else a task to the flow's owners | As listed |
 | D6 | Running instances across a new version | (a) Pinned to their version; old versions stay in code until drained, checked at start-up; optional mapping to move them. (b) Always migrate to the latest | **(a)**: like Camunda and ServiceNow; a process never changes under someone's feet unless a mapping says how |
 | D7 | Steps in this stage | act, wait (event with correlation, condition, time; each with a timeout), ask, call, all/any, and agent declared for stage 5 | As listed |
-| D8 | Decision traces | Each step's reason, inputs and evidence kept on the instance, shown on its page and readable by stage 5's agents | As listed: the first part of the context graph (Platform.md §10.3 F) |
+| D8 | Decision traces | Each step's reason, inputs and evidence kept on the instance, shown on its page and readable by stage 5's agents | As listed: the first part of the context graph (Platform.md §10.4, AI) |
 | D9 | Proof | (1) The plant's order confirmation becomes a flow: wait for the last SFC, confirm to the ERP, on refusal ask the supervisor to correct, send again, time out to a task; its hand-written state and actions go. (2) A sales flow across apps: a won opportunity books its group's stays through the lodging protocol, waits for the provider's confirmation with a timeout, and on a later cancellation undoes the bookings | As listed |
 
 ## Build items after the decisions

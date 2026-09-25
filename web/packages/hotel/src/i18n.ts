@@ -1,0 +1,31 @@
+// Simplified Chinese for this package (ADR-0023), keyed by the English source text.
+import { register } from "@platform/ui";
+
+register("zh-CN", {
+  "Arrivals per month": "每月到店",
+  "Canceled": "已取消",
+  "Check-in": "入住",
+  "Check-out": "退房",
+  "Check-out must be after check-in": "退房须晚于入住",
+  "Confirmed": "已确认",
+  "Confirmed and canceled": "已确认和已取消",
+  "Confirmed reservations": "已确认的预订",
+  "Every stay, from the front desk, the channel and the lodging protocol.": "所有住宿，来自前台、渠道和住宿协议。",
+  "Guest": "客人",
+  "Hotel": "酒店",
+  "No reservation": "没有预订",
+  "No reservations": "没有预订",
+  "Occupancy": "入住率",
+  "Pick a date": "请选择日期",
+  "Pick a room type": "请选择房型",
+  "Required": "必填",
+  "Reservation": "预订",
+  "Reservations": "预订",
+  "Reservations by arrival month and room type; cancellations apart.": "按到店月份和房型统计的预订；取消的单列。",
+  "Rev.": "修订",
+  "Revision": "修订",
+  "Room type": "房型",
+  "Room types": "房型",
+  "Status": "状态",
+  "Stay": "住宿",
+});

@@ -2,7 +2,7 @@
 
 Durable statement of what the owner wants for the platform. The owner's latest explicit instruction always wins; update this file when direction changes rather than adding new ones.
 
-Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, with the owner's direction of that day added (capability-led, reference-grounded). Music's own product intent stays in MSRU (`Docs/Music.md`, `Docs/AppleClient.md`). The advisory review in [ProductIntentReview.md](ProductIntentReview.md) is handled; what it contributed is in [Platform.md](Platform.md) §1 and §10.
+Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, with the owner's direction of that day added (capability-led, reference-grounded). Music's own product intent stays in MSRU; since 2026-09-26 Music is no longer a target of the platform. The external product review of 2026-09-24 was handled and folded into [Platform.md](Platform.md) §1 and §10, then deleted (git keeps it).
 
 ## What we are building
 
@@ -17,7 +17,7 @@ Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, wit
    - Oracle Fusion Cloud and APEX.
 
    The comparison is not with one vertical application. A team should be able to build a CRM, an MES, a PMS or a HIS on it mostly by writing business knowledge.
-3. **Music (MSRU)** remains a real product and the long-term validation domain for local-first, personal, edge-side capabilities.
+3. **The target apps are CRM, MES and ERP (2026-09-26).** They are the business software the platform must carry first, together: sales and customers, the shop floor, and finance, purchasing, inventory and production orders, meeting through protocols. Hotel stays as a reference app; HR and the helpdesk stay as thin proofs. Music is no longer a target; it remains a product in the MSRU repository.
 
 The deepest goal is a platform that **supports change itself**. It must not encode an organisation's or application's current shape as its permanent identity. Domains may be rewritten; the deeper contracts must stay coherent.
 
@@ -44,7 +44,7 @@ The deepest goal is a platform that **supports change itself**. It must not enco
 - **Rust** where it gives a real systems or performance advantage.
 - **TypeScript, React and `@platform/ui`** for web workspaces.
 - **Tauri with Rust** for the cross-platform desktop client.
-- **Swift** where Apple-native capabilities and deep local integration matter.
+- **Swift** where Apple-native capabilities and deep local integration matter; with Music no longer a target, no platform app needs it today.
 
 The server must not couple to Apple because the first app was Swift. The kernel is language-neutral contracts plus conformance tests, without four parallel implementations.
 
@@ -63,7 +63,8 @@ The server must not couple to Apple because the first app was Swift. The kernel 
   - Platform.md;
   - ADRs for decisions worth preserving;
   - one work queue;
-  - client or domain docs where a domain genuinely needs them.
+  - client or domain docs where a domain genuinely needs them;
+  - procedures for coding agents as skills (`.claude/skills/`), not as prose in the docs above.
 - Consolidate instead of appending. Hypotheses, friction notes and investigations are temporary: fold conclusions into the canonical docs or an ADR, then delete them. Git history is the archive.
 - Documents describe targets; code states facts. When they disagree, record the gap.
 
@@ -76,3 +77,4 @@ The server must not couple to Apple because the first app was Swift. The kernel 
   - the action crosses an authorization boundary: publishing, deleting user data, deploying, contacting others, downloading.
 - If a plan is unsound, say so directly and propose a better one; do not add complexity to please, and do not silently replace the core goal.
 - Written docs go into the repository at the right place; chat reports results and locations.
+- A batch closes with its documents in the same commit (AGENTS.md rule 8); a stage closes with a review of the whole against the references (Platform.md §10.3).
