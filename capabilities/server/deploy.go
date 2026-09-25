@@ -15,6 +15,7 @@ import (
 // development tokens, or with a PostgreSQL journal and an OpenID provider.
 type Deployment struct {
 	Addr, Database, Issuer, Keys, Directory, Web string
+	Project                                      bool
 }
 
 // Flags registers the deployment flags on the default flag set.
@@ -25,6 +26,7 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.Issuer, "oidc-issuer", "", "OpenID issuer whose access tokens are accepted (empty: development tokens, the token is the subject)")
 	flag.StringVar(&d.Keys, "oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
 	flag.StringVar(&d.Directory, "directory", "", "JSON file with the seats of every tenant (empty: the built-in development seats)")
+	flag.BoolVar(&d.Project, "project", false, "copy records into PostgreSQL tables per tenant for tools outside the host (ADR-0019; needs -database)")
 	flag.StringVar(&d.Web, "web", "", "directory of the workspace's build, served at / (ADR-0018; empty: API only)")
 	return d
 }
@@ -48,10 +50,11 @@ func (d *Deployment) Seats(development []Seat) []Seat {
 // Serve replays each tenant's journal, then records into it (fail-stop), runs
 // the tenants' owned work every second (ADR-0013) and serves.
 func (d *Deployment) Serve(tenants ...*Tenant) error {
+	ctx := context.Background()
+	var journal *Journal
 	if d.Database != "" {
-		ctx := context.Background()
-		journal, err := OpenJournal(ctx, d.Database)
-		if err != nil {
+		var err error
+		if journal, err = OpenJournal(ctx, d.Database); err != nil {
 			return fmt.Errorf("journal: %w", err)
 		}
 		for _, t := range tenants {
@@ -78,6 +81,23 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			return fmt.Errorf("-oidc-keys is required with -oidc-issuer")
 		}
 		authenticate = OIDC(d.Issuer, d.Keys)
+	}
+	if journal != nil && d.Project {
+		for _, t := range tenants {
+			p, err := Project(ctx, journal.pool, t)
+			if err != nil { // a copy for outside tools: the host serves without it
+				log.Printf("projection %s: %v", t.ID, err)
+				continue
+			}
+			log.Printf("projected %s into schema %s (reader role %s)", t.ID, ProjectionSchema(t.ID), ReaderRole(t.ID))
+			go func() {
+				for range time.Tick(time.Second) {
+					if err := p.Flush(ctx); err != nil {
+						log.Printf("projection %s: %v", t.ID, err)
+					}
+				}
+			}()
+		}
 	}
 	RunWork(tenants...)
 	log.Printf("host on http://%s", d.Addr)

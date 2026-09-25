@@ -41,6 +41,7 @@ services:
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -directory=/etc/mes/directory.json
       - -web=/web
+      - -project
     ports: ["127.0.0.1:${MES_PORT:-8490}:8490"]
     volumes: [./mes/directory.json:/etc/mes/directory.json:ro]
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}" }
@@ -58,6 +59,7 @@ services:
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -directory=/etc/sales/directory.json
       - -web=/web
+      - -project
     ports: ["127.0.0.1:${SALES_PORT:-8495}:8495"]
     volumes: [./sales/directory.json:/etc/sales/directory.json:ro]
     # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.

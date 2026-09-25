@@ -188,6 +188,16 @@ records() { curl -s -H "Authorization: Bearer $1" "$SALES/v1/records/$2"; }
 [[ $(records "$MGR" 'crm.opportunity/OPP-1' | jq -c '[.record.booked, [.history[].schema]]') == '[1,["crm.opportunity.book","crm.opportunity.open"]]' ]] || fail "record history: $(records "$MGR" 'crm.opportunity/OPP-1')"
 [[ $(records "$MGR" 'crm.account/ACME' | jq -r '.related[0].total') == 2 ]] || fail "related records"
 echo "ok   application model: generic reads with a domain, the owner's scope, a record's history and its related records"
+# Analytics (ADR-0019): aggregates with the member's scope; the records projected
+# into PostgreSQL, readable by the tenant's reader role and no other tenant's.
+agg() { curl -s -H "Authorization: Bearer $1" "$SALES/v1/aggregates/$2"; }
+[[ $(agg "$MGR" 'crm.opportunity?group=owner&measure=count,sum:booked' | jq -c .rows) == '[{"count":2,"owner":"sales-1","sum:booked":1}]' ]] || fail "aggregate: $(agg "$MGR" 'crm.opportunity?group=owner&measure=count,sum:booked')"
+sql() { compose exec -T postgres psql -U platform -d platform -qtAc "$1" 2>&1; }
+for _ in $(seq 10); do [[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_hotel_a.crm_opportunity") == 2 ]] && break; sleep 1; done
+[[ $(sql "set role tenant_hotel_a_reader; select string_agg(id || ':' || booked, ',' order by id) from tenant_hotel_a.crm_opportunity") == "OPP-1:1,OPP-2:0" ]] || fail "projection: $(sql "select * from tenant_hotel_a.crm_opportunity")"
+[[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_hotel_a.crm_opportunity_changes where record_id = 'OPP-1'") == 2 ]] || fail "projected history"
+[[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_plant_sz.mes_sfc") == *"permission denied"* ]] || fail "a reader of another tenant"
+echo "ok   analytics: an aggregate within the manager's scope; records and their history in PostgreSQL for the tenant's reader role only"
 # Lifecycles, approvals and tasks (ADR-0017): a leave request waits for the
 # manager found in the organisation, lands in their inbox, and is approved by
 # the approval; the requester is told.
@@ -216,7 +226,8 @@ for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{
 sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == 1 ]] || fail "a delivered webhook was sent again after the restart"
 echo "ok   restart: mes $(compose logs mes-server | grep -o 'replayed [0-9]* entries' | tail -1), sales $(compose logs sales-server | grep -o 'replayed [0-9]* entries' | tail -1); same state, revocation kept"
 
-compose exec -T postgres pg_dump -U platform -d platform -Fc >"$backup/platform.dump"
+# The journal is what to back up: the projections are copies rebuilt at start-up (ADR-0019).
+compose exec -T postgres pg_dump -U platform -d platform -Fc --exclude-schema='tenant_*' >"$backup/platform.dump"
 submit "$OP1" c-1 mes.sfc.complete mes.sfc WO-1-001 '{}' 1 | jq -e .record >/dev/null || fail complete
 after=$(state)
 [[ $after != "$before" ]] || fail "completion changed nothing"

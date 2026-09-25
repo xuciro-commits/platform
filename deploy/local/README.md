@@ -53,6 +53,18 @@ OPENROUTER_API_KEY=sk-or-...
 cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy
 ```
 
+## 报表工具直连数据库（ADR-0019）
+
+两个主机启动时会把各自租户的记录复制到 PostgreSQL，每个租户一个 schema（`tenant_hotel_a`、`tenant_plant_sz`），每个实体类型一张表（如 `crm_opportunity`），变更历史在 `<表名>_changes`。这些只是副本，主机每次启动会按日志重建，所以不要往里写，备份也只需要日志表 `journal`。
+
+每个租户有一个只读角色（`tenant_hotel_a_reader`、`tenant_plant_sz_reader`），默认不能登录。要让 Metabase、Power BI、Excel 这类工具连进来，先给它开登录：
+
+```bash
+cd deploy/local && docker compose exec postgres psql -U platform -d platform -c "alter role tenant_hotel_a_reader login password 'reader-local-only'"
+```
+
+然后在工具里填：主机 `localhost`，端口 `5433`，库 `platform`，用户 `tenant_hotel_a_reader`，密码 `reader-local-only`。它只能读自己租户的 schema。注意：记录级权限不会带到外部工具里，谁拿到这个角色就能看到整个租户的数据，所以这是管理员的授权。
+
 ## 人员账号（登录用）
 
 所有人的密码都是 **`Plant-Local-1`**。

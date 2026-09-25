@@ -24,6 +24,8 @@ type recordStore struct {
 	mu    sync.Mutex
 	types map[string]*entityType
 	byGo  map[reflect.Type]*entityType
+	// touched, when set, hears of each record put, under mu (the PostgreSQL projection, ADR-0019).
+	touched func(typ, id string)
 }
 
 type entityType struct {
@@ -171,6 +173,9 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		rec.Revision = r.GetRevision()
 	}
 	et.rows[rec.ID] = &row{value: v, history: append(history, change)}
+	if s.touched != nil {
+		s.touched(et.info.Type, rec.ID)
+	}
 	return nil
 }
 
