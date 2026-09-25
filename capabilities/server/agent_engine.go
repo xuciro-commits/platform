@@ -22,6 +22,9 @@ type stepBody struct {
 	Usage     Usage           `json:"usage"`
 	Failure   string          `json:"failure,omitempty"` // the model did not answer
 	Stop      string          `json:"stop,omitempty"`    // the host stopped the run before calling a model
+	// Observation is what a knowledge search found, made outside the lock like
+	// the model's answer and applied from here on replay (ADR-0022 D4).
+	Observation json.RawMessage `json:"observation,omitempty"`
 	// Evaluation is a finished evaluation's report; Run is then its ID.
 	Evaluation *Evaluation `json:"evaluation,omitempty"`
 }
@@ -54,9 +57,28 @@ func (t *Tenant) Think(now time.Time) {
 			body.Failure = failure.Detail
 		} else if len(answer.ToolCalls) > 0 {
 			body.Tool, body.Arguments = answer.ToolCalls[0].Name, answer.ToolCalls[0].Arguments // one step at a time
+			if body.Tool == "knowledge" {
+				body.Observation = t.agents.look(x.run, body.Arguments, now)
+			}
 		}
 		t.agentStep(body, now)
 	}
+}
+
+// look searches knowledge for a run, as whom it reads, outside the tenant's lock.
+func (a *Agents) look(run AgentRunRecord, args json.RawMessage, now time.Time) json.RawMessage {
+	var p struct{ Query string }
+	json.Unmarshal(args, &p)
+	app := ""
+	if d := a.defs[run.Agent]; d != nil {
+		app = d.app
+	}
+	found := a.t.Knowledge(a.reader(run), app, p.Query, 4, now)
+	for i := range found {
+		found[i].Text = clip(found[i].Text, 700)
+	}
+	raw, _ := json.Marshal(found)
+	return raw
 }
 
 // due collects the running runs' next turns, under the tenant's lock.
@@ -88,6 +110,7 @@ func (a *Agents) due(now time.Time) []turn {
 				break
 			}
 			x.model, x.pv, x.req = model, pv, a.prompt(c, d, run, name)
+			x.req.run = run.ID
 		}
 		a.busy[run.ID] = true
 		out = append(out, x)
@@ -231,6 +254,15 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		tool, ok := d.tools[b.Tool]
 		if !ok {
 			step.Outcome = "no tool " + b.Tool
+			break
+		}
+		if tool.kind == "knowledge" { // found outside the lock, journaled with the step
+			var found []Passage
+			json.Unmarshal(b.Observation, &found)
+			for _, p := range found {
+				run.Citations = append(run.Citations, Citation{Document: p.Document, Title: p.Title, Chunk: p.Chunk, Step: len(run.Steps)})
+			}
+			step.Outcome = cmpOr(string(b.Observation), "[]")
 			break
 		}
 		step.Outcome, then = a.use(c, d, &run, tool, args, b.Arguments, now)

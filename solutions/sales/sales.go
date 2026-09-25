@@ -25,7 +25,7 @@ func NewTenant(id string, rooms map[string]hotel.RoomType, seats ...platformserv
 func Compose(id string, providers []platform.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	org := DemoOrganization()
 	org.Memberships = append(org.Memberships, platformserver.Memberships(seats)...)
-	apps := append([]platform.App{platformserver.NewConsole(id, seats...), platformserver.NewOrganization(id, org), platformserver.NewRelations(id), platformserver.NewAI(id), platformserver.NewWork(id), platformserver.NewFlows(id), platformserver.NewAgents(id)}, providers...)
+	apps := append([]platform.App{platformserver.NewConsole(id, seats...), platformserver.NewOrganization(id, org), platformserver.NewRelations(id), platformserver.NewAI(id), platformserver.NewWork(id), platformserver.NewFlows(id), platformserver.NewAgents(id), platformserver.NewKnowledge(id)}, providers...)
 	return platformserver.NewTenant(id, append(apps, crm.New(id), hr.New(id), helpdesk.New(id))...)
 }
 

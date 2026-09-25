@@ -215,6 +215,16 @@ func (h *Host) Handler() http.Handler {
 	handle("GET /v1/search", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Search(&m, r.URL.Query().Get("q"), h.Now()))
 	})
+	handle("GET /v1/knowledge", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, t.Knowledge(&m, "", r.URL.Query().Get("q"), 8, h.Now()))
+	})
+	handle("GET /v1/transcripts", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[AgentApp] != AgentAdmin && m.Roles[AIApp] != AIAdmin {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		WriteJSON(w, http.StatusOK, t.Transcripts(r.URL.Query().Get("run"), 50))
+	})
 	handle("GET /v1/aggregates/{type}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		p := r.URL.Query()
 		q := AggregateQuery{Domain: json.RawMessage(p.Get("domain")), Search: p.Get("search"), Archived: p.Get("archived") == "true"}

@@ -141,7 +141,7 @@ echo "ok   ERP correction: a refused order resent by the AI assistant, held unti
 # calls it through the host, the AI assistant (no ai role) is refused, and the
 # call's usage is journaled (compared again after the restart below).
 AUTHORITY=ai submit "$SUP" ai-1 ai.provider.add ai.provider local '{"kind":"local","baseUrl":"http://webhook-sink:8080/v1"}' | jq -e .record >/dev/null || fail "add AI provider"
-[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai/providers/local/models" | jq -r '.[].id') == echo ]] || fail "provider catalog"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai/providers/local/models" | jq -c '[.[].id]') == '["echo","embed"]' ]] || fail "provider catalog"
 AUTHORITY=ai submit "$SUP" ai-2 ai.model.enable ai.model local/echo '{"access":"users"}' | jq -e .record >/dev/null || fail "enable model"
 chat() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$MES/v1/ai/chat" -d '{"model":"local/echo","messages":[{"role":"user","content":"line one is down"}]}'; }
 [[ $(chat "$OP1" | jq -r .content) == "echo: line one is down" ]] || fail "model call: $(chat "$OP1")"
@@ -256,16 +256,24 @@ sales ai "$MGR" hd-2 ai.model.enable ai.model local/echo '{"access":"users"}' | 
 sales platform "$MGR" hd-3 platform.setting.set platform.setting agent/model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "sales agents' model"
 sales platform "$MGR" hd-4 platform.endpoint.add platform.endpoint mail-gateway \
   '{"url":"http://webhook-sink:8080/hook","secret":"sink","effects":["helpdesk/reply"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "mail gateway endpoint"
+sales ai "$MGR" hd-k1 ai.model.enable ai.model local/embed '{"access":"users"}' | jq -e .record >/dev/null || fail "embedding model"
+sales platform "$MGR" hd-k2 platform.setting.set platform.setting knowledge/embedding-model '{"value":"local/embed"}' | jq -e .record >/dev/null || fail "knowledge's model"
+sales knowledge "$MGR" hd-k3 knowledge.document.create knowledge.document RULES '{"title":"House rules","text":"# Wifi\n\nWifi keeps dropping? The password is on the key card, and the front desk resets it."}' | jq -e .record >/dev/null || fail "house rules"
+kn() { curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/knowledge?q=wifi%20password" | jq -r '.[0].document'; }
+[[ $(kn) == knowledge.document/RULES ]] || fail "knowledge search: $(kn)"
 sales helpdesk "$MGR" hd-5 helpdesk.ticket.open helpdesk.ticket T-1 '{"subject":"Wifi keeps dropping","customer":"anna@acme.test","account":"ACME"}' | jq -e .record >/dev/null || fail "open ticket"
 ticket() { records "$MGR" 'helpdesk.ticket/T-1' | jq -r '.record.status + " " + .record.priority + " " + .record.replied'; }
 for _ in $(seq 40); do [[ $(ticket) == answered* ]] && break; sleep 0.5; done
 [[ $(ticket) == "answered normal agent:helpdesk.triage" ]] || fail "ticket after triage: $(ticket)"
+[[ $(records "$MGR" 'helpdesk.ticket/T-1' | jq -r .record.reply) == *"House rules"* ]] || fail "the reply cites nothing: $(records "$MGR" 'helpdesk.ticket/T-1' | jq -r .record.reply)"
+[[ $(records "$MGR" 'agent.run?sort=-id' | jq -r '[.records[] | select(.goal | contains("T-1")) | .citations[0].document][0]') == knowledge.document/RULES ]] || fail "the run's citation"
+[[ $(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/transcripts" | jq 'length > 0') == true ]] || fail "transcripts"
 held=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/effects" | jq -r '.[] | select(.event == "helpdesk/reply") | .state + " " + .id')
 [[ ${held%% *} == held ]] || fail "the agent's reply was not held: $held"
 sales platform "$MGR" hd-6 platform.effect.approve platform.effect "${held#* }" '{}' | jq -e .record >/dev/null || fail "approve the reply"
 for _ in $(seq 20); do [[ $(curl -s "$SINK/received" | jq '[.kept[] | select(.type == "helpdesk/reply")] | length') == 1 ]] && break; sleep 0.5; done
 [[ $(curl -s "$SINK/received" | jq -r '.kept[] | select(.type == "helpdesk/reply") | .data.to') == anna@acme.test ]] || fail "reply mailed: $(curl -s "$SINK/received")"
-echo "ok   helpdesk: the triage agent triaged and replied on the local model; its reply's mail held, approved by the manager, and sent to the mail gateway"
+echo "ok   helpdesk: the triage agent found the house rules (knowledge, embedded on the local model), triaged and replied citing them; its transcripts kept; its reply's mail held, approved by the manager, and sent to the mail gateway"
 before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
@@ -311,5 +319,5 @@ echo "ok   the edge outbox resends what the backup missed; state matches again"
 
 compose exec -T postgres createdb -U platform journal_test
 (cd ../../capabilities/server && PLATFORM_TEST_DATABASE=postgres://platform:platform-local-only@localhost:$PG_PORT/journal_test \
-  go test -count=1 -run TestJournal . >/dev/null) || fail "journal test"
+  go test -count=1 -run TestJournal . 2>&1) >"$backup/journal-test.log" || { cat "$backup/journal-test.log" >&2; fail "journal test"; }
 echo "ok   journal numbering refuses a second writer (capabilities/server TestJournal)"

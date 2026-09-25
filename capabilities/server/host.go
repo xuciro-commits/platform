@@ -35,9 +35,16 @@ type Tenant struct {
 	// Record, when set, makes each accepted input durable before it is answered;
 	// a failure must stop the server (ADR-0007).
 	Record func(Entry)
-	mu     sync.Mutex
-	apps   []platform.App
-	owner  map[string]platform.App // "action:", "read:" and "input:" names → app
+	// Store keeps what is derived outside the journal: vectors and transcripts
+	// (ADR-0022); without one they stay in memory.
+	Store        Store
+	derivedMu    sync.Mutex
+	vectorMemory map[string][]float32
+	transcripts  []Transcript
+	knowledge    *Knowledge
+	mu           sync.Mutex
+	apps         []platform.App
+	owner        map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	auditMu    sync.Mutex
@@ -144,6 +151,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		}
 		if x, ok := a.(*Agents); ok {
 			t.agents, x.t = x, t
+		}
+		if x, ok := a.(*Knowledge); ok {
+			t.knowledge, x.t = x, t
 		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {

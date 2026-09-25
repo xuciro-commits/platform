@@ -14,7 +14,8 @@
 //	                given tools (an agent, ADR-0021), it calls a read tool first,
 //	                then finishes proposing the first item read whose ID the goal
 //	                does not name and whose product it does; the helpdesk's
-//	                triage agent triages a ticket as normal and replies
+//	                triage agent searches knowledge, triages a ticket as normal and
+//	                replies citing what it found; model "embed" embeds hashed words
 package main
 
 import (
@@ -25,6 +26,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log"
 	"mime"
@@ -37,6 +39,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // message is one mail as the sink keeps it.
@@ -121,7 +124,23 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]any{"calls": calls, "kept": kept, "confirmations": confirmations})
 	})
 	http.HandleFunc("GET /v1/models", func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "echo", "name": "Echo", "context_length": 4096}}})
+		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "echo", "name": "Echo", "context_length": 4096}, {"id": "embed", "name": "Hashed words", "context_length": 8192}}})
+	})
+	http.HandleFunc("POST /v1/embeddings", func(w http.ResponseWriter, r *http.Request) { // "embed": each word hashed into 64 dimensions
+		var req struct{ Input []string }
+		json.NewDecoder(r.Body).Decode(&req)
+		data, tokens := []map[string]any{}, 0
+		for i, text := range req.Input {
+			v := make([]float32, 64)
+			for _, word := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+				h := fnv.New32a()
+				h.Write([]byte(word))
+				v[h.Sum32()%64]++
+				tokens++
+			}
+			data = append(data, map[string]any{"index": i, "embedding": v})
+		}
+		json.NewEncoder(w).Encode(map[string]any{"model": "embed", "data": data, "usage": map[string]int{"prompt_tokens": tokens}})
 	})
 	http.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -156,12 +175,25 @@ func main() {
 					}
 				}
 				switch {
-				case ticket == nil || done >= 2:
-					call("finish", map[string]string{"result": "triaged and answered", "rationale": "Both steps are done."})
+				case ticket == nil || done >= 3:
+					call("finish", map[string]string{"result": "triaged and answered", "rationale": "The steps are done."})
 				case done == 0:
+					subject := regexp.MustCompile(`Subject: (.*)`).FindStringSubmatch(req.Messages[1].Content)
+					call("knowledge", map[string]string{"query": subject[len(subject)-1], "rationale": "See what the house says about it."})
+				case done == 1:
 					call("helpdesk_ticket_triage", map[string]string{"target": ticket[1], "category": "other", "priority": "normal", "rationale": "Nothing marks it urgent."})
 				default:
-					call("helpdesk_ticket_reply", map[string]string{"target": ticket[1], "reply": "Thank you for writing. A colleague will follow up today.", "rationale": "Acknowledge and hand it on."})
+					var passages []struct{ Title string }
+					for _, m := range req.Messages {
+						if m.Role == "tool" && strings.HasPrefix(m.Content, "[") && json.Unmarshal([]byte(m.Content), &passages) == nil {
+							break
+						}
+					}
+					reply := "Thank you for writing. A colleague will follow up today."
+					if len(passages) > 0 {
+						reply = "Thank you for writing; see our " + passages[0].Title + ". A colleague will follow up today."
+					}
+					call("helpdesk_ticket_reply", map[string]string{"target": ticket[1], "reply": reply, "rationale": "Acknowledge, cite, and hand it on."})
 				}
 				return
 			}

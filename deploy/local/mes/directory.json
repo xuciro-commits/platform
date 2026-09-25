@@ -11,7 +11,8 @@
       "ai": "admin",
       "work": "admin",
       "flow": "admin",
-      "agent": "admin"
+      "agent": "admin",
+      "knowledge": "editor"
     },
     "units": [
       {

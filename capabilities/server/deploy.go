@@ -103,6 +103,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			}
 			// An input the journal did not take is never answered; the client's
 			// outbox resends it after the restart has replayed the rest.
+			t.Store = journal
 			t.Record = func(e Entry) {
 				if err := journal.Append(ctx, t.ID, e); err != nil {
 					log.Fatalf("journal append: %v", err)
@@ -240,10 +241,12 @@ func RunWork(tenants ...*Tenant) {
 			}
 		}
 	}()
-	go func() { // evaluations make many model calls: apart from runs
+	go func() { // evaluations, embeddings and old transcripts: many calls, apart from runs
 		for range time.Tick(5 * time.Second) {
 			for _, t := range tenants {
 				t.Evaluate(Now())
+				t.Embed(Now())
+				t.PurgeTranscripts(Now())
 			}
 		}
 	}()

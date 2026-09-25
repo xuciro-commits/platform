@@ -193,4 +193,4 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
 
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
-export { Assistant, RunView, Search, runStates, type AgentInfo, type AgentRun, type RunDraft, type RunSignal, type RunStep } from "./agents";
+export { Assistant, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Passage, type RunDraft, type RunSignal, type RunStep } from "./agents";

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"sync"
 	"time"
 
@@ -50,6 +51,13 @@ var schema = []string{
 		tenant text not null, seq bigint not null, code text not null, state bytea not null,
 		at timestamptz not null default now(), primary key (tenant, seq))`,
 	`alter table journal add column if not exists versions jsonb`,
+	`create table if not exists embeddings (
+		tenant text not null, model text not null, hash text not null, vector bytea not null,
+		primary key (tenant, model, hash))`,
+	`create table if not exists transcripts (
+		tenant text not null, at timestamptz not null, member text not null, model text not null,
+		run text not null default '', request jsonb not null, answer jsonb not null, outcome text not null)`,
+	`create index if not exists transcripts_run on transcripts (tenant, run, at)`,
 }
 
 func OpenJournal(ctx context.Context, url string) (*Journal, error) {
@@ -148,3 +156,66 @@ func (j *Journal) Append(ctx context.Context, tenant string, e Entry) error {
 }
 
 func (j *Journal) Close() { j.pool.Close() }
+
+// The journal's database also keeps what is derived outside the journal
+// (ADR-0022): passages' vectors and model calls' transcripts. Losing either
+// loses no truth, so failures are logged, not fatal.
+
+func (j *Journal) Vectors(tenant, model string, hashes []string) map[string][]float32 {
+	out := map[string][]float32{}
+	rows, err := j.pool.Query(context.Background(), `select hash, vector from embeddings where tenant = $1 and model = $2 and hash = any($3)`, tenant, model, hashes)
+	if err != nil {
+		log.Printf("vectors: %v", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var h string
+		var v []byte
+		if rows.Scan(&h, &v) == nil {
+			out[h] = decodeVector(v)
+		}
+	}
+	return out
+}
+
+func (j *Journal) SaveVectors(tenant, model string, vs map[string][]float32) {
+	for h, v := range vs {
+		if _, err := j.pool.Exec(context.Background(), `insert into embeddings (tenant, model, hash, vector) values ($1, $2, $3, $4) on conflict do nothing`,
+			tenant, model, h, encodeVector(v)); err != nil {
+			log.Printf("save vectors: %v", err)
+			return
+		}
+	}
+}
+
+func (j *Journal) SaveTranscript(x Transcript) {
+	if _, err := j.pool.Exec(context.Background(), `insert into transcripts (tenant, at, member, model, run, request, answer, outcome) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		x.Tenant, x.At, x.Member, x.Model, x.Run, x.Request, x.Answer, x.Outcome); err != nil {
+		log.Printf("transcript: %v", err)
+	}
+}
+
+func (j *Journal) Transcripts(tenant, run string, limit int) []Transcript {
+	out := []Transcript{}
+	rows, err := j.pool.Query(context.Background(), `select at, member, model, run, request, answer, outcome from transcripts
+		where tenant = $1 and ($2 = '' or run = $2) order by at desc limit $3`, tenant, run, limit)
+	if err != nil {
+		log.Printf("transcripts: %v", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var x Transcript
+		if rows.Scan(&x.At, &x.Member, &x.Model, &x.Run, &x.Request, &x.Answer, &x.Outcome) == nil {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+func (j *Journal) PurgeTranscripts(tenant string, before time.Time) {
+	if _, err := j.pool.Exec(context.Background(), `delete from transcripts where tenant = $1 and at < $2`, tenant, before); err != nil {
+		log.Printf("purge transcripts: %v", err)
+	}
+}

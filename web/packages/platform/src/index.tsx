@@ -4,14 +4,14 @@
 // connectors and endpoints, app settings, owned work (ADR-0013), AI providers
 // and usage (ADR-0015), flows (ADR-0020), agents and their evaluations
 // (ADR-0021) and the audit trail. Every change is a decision.
-import { Records, defineApp, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
+import { GeneratedForm, Records, defineApp, newId, useHost, useReadQuery as useRead, type AgentInfo, type Passage } from "@platform/app";
 import type { EdgeClient } from "@platform/kernel";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, FlowView, Input, PageHeader, Select, Tag, useWorkspace,
+  Button, Card, DataTable, Dialog, EntityCard, EntityForm, FlowView, Input, PageHeader, Select, Tag, useWorkspace,
   type ColumnDef, type FlowDefinition, type FlowInstanceData, type View,
 } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Blocks, Bot, BrainCircuit, Cable, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
+import { BarChart3, BookOpen, Blocks, Bot, BrainCircuit, Cable, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -861,7 +861,39 @@ function Evaluations() {
   );
 }
 
+// Knowledge (ADR-0022): documents agents and members find by words and, with
+// an embedding model, by meaning; each is read by members of the apps it names.
+function Knowledge() {
+  const { can, decide, client } = useHost();
+  const [writing, setWriting] = useState(false);
+  const [q, setQ] = useState("");
+  const [found, setFound] = useState<Passage[]>();
+  return (
+    <>
+      <Records type="knowledge.document" description="House rules, manuals, FAQs. Agents search them with their knowledge tool and cite what they used; members find them in Search. Set the embedding model in App settings → Knowledge to search by meaning as well as by words."
+        actions={can("knowledge.document.create") && <Button variant="primary" onClick={() => setWriting(true)}><BookOpen />New document</Button>} />
+      <h2 className="mb-2 mt-4 text-sm font-semibold">Try a search</h2>
+      <form className="flex max-w-2xl gap-2" onSubmit={async (e) => { e.preventDefault(); setFound(await client.get<Passage[]>(`/v1/knowledge?q=${encodeURIComponent(q)}`)); }}>
+        <Input aria-label="Question" placeholder="What an agent might ask" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Button type="submit">Search</Button>
+      </form>
+      {found && <div className="mt-2 grid max-w-2xl gap-2">
+        {found.length === 0 && <p className="text-sm text-muted">Nothing you may read answers it.</p>}
+        {found.map((p) => <Card key={`${p.document}#${p.chunk}`} className="p-3">
+          <div className="text-sm font-medium">{p.title}</div>
+          <div className="font-mono text-xs text-muted">{p.document} · passage {p.chunk + 1} · score {p.score}</div>
+          <p className="mt-1 whitespace-pre-wrap text-sm">{p.text}</p></Card>)}
+      </div>}
+      <Dialog open={writing} onOpenChange={setWriting} title="New document">
+        <GeneratedForm type="knowledge.document" submitLabel="Save" onCancel={() => setWriting(false)}
+          onSubmit={async (v) => { if (await decide("knowledge.document.create", { type: "knowledge.document", id: newId("DOC") }, v, { expectedRevision: 0 })) setWriting(false); }} />
+      </Dialog>
+    </>
+  );
+}
+
 const views: View[] = [
+  { id: "knowledge", title: () => "Knowledge", render: () => <Knowledge /> },
   { id: "agents", title: () => "Agents", render: () => <Agents /> },
   { id: "evaluations", title: () => "Evaluations", render: () => <Evaluations /> },
   { id: "flows", title: () => "Flows", render: () => <Flows /> },
@@ -901,6 +933,7 @@ export default defineApp({
       ...(admin ? [{ label: "Operations", items: [nav("Integrations", <PlugZap />, "integrations"), nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] }] : []),
       ...(host.role("flow") || host.role("agent") ? [{ label: "Processes", items: [...(host.role("flow") ? [nav("Flows", <Route />, "flows")] : []),
         ...(host.role("agent") ? [nav("Agents", <BrainCircuit />, "agents"), nav("Evaluations", <FlaskConical />, "evaluations")] : [])] }] : []),
+      ...(host.role("knowledge") ? [{ label: "Knowledge", items: [nav("Documents", <BookOpen />, "knowledge")] }] : []),
     ];
   },
 });

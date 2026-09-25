@@ -23,7 +23,7 @@ var (
 		{Subjects: []string{"sales"}, Member: platform.Member{ID: "sales-1", Roles: map[string]string{"crm": "sales", "hotel": "front-desk", "memstay": lodging.Keeper}}},
 		{Subjects: []string{"sales-only"}, Member: platform.Member{ID: "sales-2", Roles: map[string]string{"crm": "sales"}}},
 		{Subjects: []string{"desk"}, Member: platform.Member{ID: "desk-1", Roles: map[string]string{"hotel": "front-desk", "helpdesk": "desk"}}},
-		{Subjects: []string{"manager"}, Member: platform.Member{ID: "manager-1", Roles: map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper, "helpdesk": "lead"}}},
+		{Subjects: []string{"manager"}, Member: platform.Member{ID: "manager-1", Roles: map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper, "helpdesk": "lead", "knowledge": "editor"}}},
 	}
 )
 

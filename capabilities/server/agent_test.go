@@ -20,7 +20,7 @@ type Ticket struct {
 	platform.Record
 	Subject string `json:"subject" field:"required,search"`
 	Status  string `json:"status" field:"readonly" choices:"open,answered"`
-	Reply   string `json:"reply,omitempty" field:"readonly" type:"longtext"`
+	Reply   string `json:"reply,omitempty" field:"readonly" type:"longtext" knowledge:"true"`
 }
 
 type desk struct{ ledger *platform.Ledger }

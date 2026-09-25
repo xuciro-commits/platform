@@ -12,8 +12,11 @@ export type RunSignal = { at: string; kind: string; by: string; detail?: string;
 export type AgentRun = {
   id: string; agent: string; title: string; goal: string; ref?: string; onBehalf?: string; flow?: string; step?: string;
   state: string; model?: string; steps: RunStep[]; stepsUsed: number; tokensUsed: number; actionsUsed: number; cost?: number;
-  result?: string; stopped?: string; draft?: RunDraft[]; signals?: RunSignal[];
+  result?: string; stopped?: string; draft?: RunDraft[]; signals?: RunSignal[]; citations?: Citation[];
 };
+export type Citation = { document: string; title: string; chunk: number; step: number };
+export type Passage = { document: string; title: string; chunk: number; text: string; score: number };
+type Transcript = { at: string; member: string; model: string; request: unknown; answer: unknown; outcome: string };
 export type AgentInfo = { id: string; app: string; title: string; instructions: string; tools: string[]; budget: { Steps: number; Tokens: number; Actions: number } };
 type Hit = { type: string; id: string; title: string };
 
@@ -100,6 +103,17 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
           </li>
         ))}
       </ol>
+      {!!run.citations?.length && (
+        <div className="grid gap-1">
+          <div className="text-xs text-muted">Sources it read</div>
+          {run.citations.map((c, i) => (
+            <button key={i} type="button" className="text-left text-sm underline" onClick={() => openRecord(c.document.split("#")[0]!)}>
+              {c.title} <span className="font-mono text-xs text-muted">{c.document} · passage {c.chunk + 1} · step {c.step + 1}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {!compact && role("agent") === "admin" && <Transcripts run={run.id} />}
       {!!run.signals?.length && (
         <div className="grid gap-1">
           <div className="text-xs text-muted">What people made of it</div>
@@ -111,6 +125,26 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Every model call of a run in full, for agent administrators (ADR-0022 D8). */
+function Transcripts({ run }: { run: string }) {
+  const [shown, setShown] = useState(false);
+  const calls = useReadQuery<Transcript[]>(`/v1/transcripts?run=${encodeURIComponent(run)}`).data;
+  if (!calls?.length) return null;
+  return (
+    <div className="grid gap-1">
+      <button type="button" className="text-left text-xs text-muted underline" onClick={() => setShown(!shown)}>
+        {shown ? "Hide" : "Show"} the {calls.length} model calls in full
+      </button>
+      {shown && calls.map((c, i) => (
+        <details key={i} className="rounded-md border border-border bg-surface px-3 py-2 text-xs">
+          <summary>{c.at} · {c.model} · {c.outcome}</summary>
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono">{JSON.stringify({ request: c.request, answer: c.answer }, null, 2)}</pre>
+        </details>
+      ))}
     </div>
   );
 }
@@ -166,15 +200,31 @@ export function Search({ initial = "" }: { initial?: string }) {
   const openRecord = useOpenRecord();
   const [q, setQ] = useState(initial);
   const [hits, setHits] = useState<Hit[]>();
-  const run = async (text: string) => setHits(text.trim() ? await client.get<Hit[]>(`/v1/search?q=${encodeURIComponent(text)}`) : undefined);
+  const [passages, setPassages] = useState<Passage[]>([]);
+  const run = async (text: string) => {
+    const q = encodeURIComponent(text);
+    setHits(text.trim() ? await client.get<Hit[]>(`/v1/search?q=${q}`) : undefined);
+    setPassages(text.trim() ? await client.get<Passage[]>(`/v1/knowledge?q=${q}`) : []);
+  };
   const title = (type: string) => entities.find((e) => e.type === type)?.title ?? type;
   return (
     <div className="grid max-w-3xl gap-3">
-      <PageHeader title="Search" description="Records of every app you work in, by text, within what you may see." />
+      <PageHeader title="Search" description="Records of every app you work in, and the knowledge you may read, by text, within what you may see." />
       <form onSubmit={(e) => { e.preventDefault(); void run(q); }}>
         <Input aria-label="Search" autoFocus placeholder="Search records" value={q} onChange={(e) => setQ(e.target.value)} />
       </form>
-      {hits && (hits.length === 0 ? <p className="text-sm text-muted">Nothing found.</p> : (
+      {passages.length > 0 && (
+        <div className="grid gap-2">
+          <div className="text-xs text-muted">Knowledge</div>
+          {passages.map((p) => (
+            <Card key={`${p.document}#${p.chunk}`} className="p-3 text-sm">
+              <button type="button" className="font-medium underline" onClick={() => openRecord(p.document.split("#")[0]!)}>{p.title}</button>
+              <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-muted">{p.text}</p>
+            </Card>
+          ))}
+        </div>
+      )}
+      {hits && (hits.length === 0 ? <p className="text-sm text-muted">No records found.</p> : (
         <ul className="grid gap-1">
           {hits.map((h) => (
             <li key={`${h.type}/${h.id}`}>

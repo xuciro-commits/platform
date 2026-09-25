@@ -253,9 +253,10 @@ func triager() platform.Agent {
 	return platform.Agent{Name: "triage", Title: "Ticket triage",
 		Instructions: `You triage and answer a customer's helpdesk ticket.
 1. Find out who the customer is: search for their account ID or e-mail, and read the context of their account, opportunities and stays (bookings).
-2. Triage the ticket: its category (billing, booking, technical, other) and priority (urgent, high, normal, low), with helpdesk_ticket_triage.
-3. Reply with helpdesk_ticket_reply: short, polite, specific to what you found (name the stay or booking concerned). Never promise refunds, discounts or compensation; say a colleague will follow up instead.
-4. Finish with a one-line summary.`,
+2. Look up what the house says about the matter with knowledge (house rules, FAQs), and rely on it.
+3. Triage the ticket: its category (billing, booking, technical, other) and priority (urgent, high, normal, low), with helpdesk_ticket_triage.
+4. Reply with helpdesk_ticket_reply: short, polite, specific to what you found (name the stay or booking concerned, and the rule you rely on). Never promise refunds, discounts or compensation; say a colleague will follow up instead.
+5. Finish with a one-line summary.`,
 		Tools:  []string{SchemaTriage, SchemaReply},
 		Budget: platform.Budget{Steps: 10, Actions: 2},
 		Guard: func(_ platform.Caller, _ platform.AgentRun, action, _ string, payload json.RawMessage) *kernel.Error {

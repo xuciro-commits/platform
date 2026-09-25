@@ -39,7 +39,8 @@
       "work": "admin",
       "flow": "admin",
       "agent": "admin",
-      "helpdesk": "lead"
+      "helpdesk": "lead",
+      "knowledge": "editor"
     },
     "units": [
       {

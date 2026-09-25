@@ -56,6 +56,7 @@ type ChatRequest struct {
 	Tools       []Tool    `json:"tools,omitempty"`
 	MaxTokens   int       `json:"maxTokens,omitempty"`
 	Temperature *float64  `json:"temperature,omitempty"`
+	run         string    // the agent run or evaluation the call is for, on its transcript
 }
 
 // ChatAnswer is what the model answered, with the call's usage.
@@ -107,6 +108,9 @@ func (t *Tenant) call(pv Provider, model Model, m platform.Member, req ChatReque
 		}
 	}
 	answer.Usage = u
+	request, _ := json.Marshal(req)
+	reply, _ := json.Marshal(answer)
+	t.transcribe(Transcript{At: now, Member: m.ID, Model: model.Name(), Run: req.run, Request: request, Answer: reply, Outcome: u.Outcome})
 	return answer, failure
 }
 

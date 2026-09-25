@@ -168,7 +168,10 @@ type FieldInfo struct {
 	ReadOnly bool     `json:"readOnly,omitempty"`
 	Choices  []string `json:"choices,omitempty"`
 	Ref      string   `json:"ref,omitempty"` // the entity type a reference points to
-	Index    []int    `json:"-"`
+	// Knowledge marks a text field agents and members find through the
+	// knowledge app (ADR-0022 D1), tag knowledge:"true".
+	Knowledge bool  `json:"knowledge,omitempty"`
+	Index     []int `json:"-"`
 }
 
 // EntityInfo is an entity type as the host and the UI see it.
@@ -233,7 +236,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		if name == "" {
 			return EntityInfo{}, fmt.Errorf("entity %s: field %s needs a json name", e.Type, sf.Name)
 		}
-		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index}
+		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true"}
 		if f.Title == "" {
 			f.Title = strings.ToUpper(name[:1]) + name[1:]
 		}

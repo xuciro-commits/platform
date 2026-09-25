@@ -49,10 +49,13 @@ func TestHelpdeskTriage(t *testing.T) {
 		case 1:
 			name, args = "context", map[string]any{"type": "crm.account", "id": account}
 		case 2:
-			name, args = "helpdesk_ticket_triage", map[string]any{"target": ticket, "category": "booking", "priority": "high"}
+			name, args = "knowledge", map[string]any{"query": "wifi"}
 		case 3:
+			name, args = "helpdesk_ticket_triage", map[string]any{"target": ticket, "category": "booking", "priority": "high"}
+		case 4:
 			found := regexp.MustCompile(`"title":"([^"]+)"`).FindAllStringSubmatch(results[1], -1) // the account's opportunities
-			reply := "About your " + found[len(found)-1][1] + ": a colleague is on it."
+			rule := regexp.MustCompile(`"title":"([^"]+)"`).FindStringSubmatch(results[2])        // the passage found
+			reply := "About your " + found[len(found)-1][1] + ": the front desk resets the wifi password (" + rule[1] + "). A colleague is on it."
 			if strings.Contains(goal, "refund") {
 				reply = "We will refund you."
 			}
@@ -123,13 +126,19 @@ func TestHelpdeskTriage(t *testing.T) {
 			map[string]string{"subject": subject, "customer": "anna@acme.test", "account": "ACME", "body": "The wifi in our rooms drops."}), "ok")
 	}
 
-	// Grounded in the CRM: the account's opportunity is named in the reply; the
+	w.expect(do(lead, platformserver.KnowledgeApp, platformserver.DocumentType+".create", platformserver.DocumentType, "RULES",
+		map[string]any{"title": "House rules", "text": "# Wifi\n\nThe wifi password is on the key card; the front desk resets it."}), "ok")
+
+	// Grounded in the CRM and the house rules, cited: the account's opportunity is named in the reply; the
 	// high priority makes it due in four hours; the mail waits for a person.
 	open("T-1", "Wifi keeps dropping")
 	work(8 * time.Second)
 	x := ticket("T-1")
 	w.expect(fmt.Sprint(x.Status, " ", x.Category, " ", x.Priority, " ", x.Due.Sub(x.Created.At), " ", x.Replied, " | ", x.Reply),
-		"answered booking high 4h0m0s agent:helpdesk.triage | About your Board offsite: a colleague is on it.")
+		"answered booking high 4h0m0s agent:helpdesk.triage | About your Board offsite: the front desk resets the wifi password (House rules). A colleague is on it.")
+	agents := platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}
+	cited, _ := w.tenant.Records(agents, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","T-1"]]`)}, now)
+	w.expect(fmt.Sprint(cited.Records[0].(platformserver.AgentRunRecord).Citations), "[{knowledge.document/RULES House rules 0 2}]")
 	effects, _ := w.tenant.Read(ops, "effects")
 	held := effects.([]platform.Effect)
 	w.expect(fmt.Sprint(len(held), " ", held[0].State, " ", len(mailed)), "1 held 0")
@@ -141,7 +150,7 @@ func TestHelpdeskTriage(t *testing.T) {
 	// The guard: a reply promising a refund is refused; the ticket stays open.
 	open("T-2", "I want a refund")
 	work(8 * time.Second)
-	runs, _ := w.tenant.Records(platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}, platformserver.RunType,
+	runs, _ := w.tenant.Records(agents, platformserver.RunType,
 		platform.Query{Domain: json.RawMessage(`[["goal","like","refund"]]`)}, now)
 	run := runs.Records[0].(platformserver.AgentRunRecord)
 	w.expect(fmt.Sprint(ticket("T-2").Status, " ", slices.ContainsFunc(run.Steps, func(s platformserver.RunStep) bool { return strings.HasPrefix(s.Outcome, "refused by its guard") })), "triaged true")

@@ -23,7 +23,7 @@ const packages: { serves: string[]; load: () => Promise<{ default: AppUI }> }[] 
   { serves: ["hr"], load: () => import("@pkg/hr") },
   { serves: ["helpdesk"], load: () => import("@pkg/helpdesk") },
   { serves: ["mes"], load: () => import("@pkg/mes") },
-  { serves: ["platform", "org", "ai", "flow", "agent"], load: () => import("@pkg/platform") },
+  { serves: ["platform", "org", "ai", "flow", "agent", "knowledge"], load: () => import("@pkg/platform") },
 ];
 
 const remembered = (key: string) => { try { return sessionStorage.getItem(key) ?? undefined; } catch { return undefined; } };

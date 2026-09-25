@@ -195,6 +195,7 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model Model, pv Provider
 		t.mu.Lock()
 		req := a.prompt(t.automation(AgentApp, false), d, dry, model.Name())
 		t.mu.Unlock()
+		req.run = run.ID + ":evaluation"
 		answer, failure := t.call(pv, model, who, req, now)
 		t.meter(who, answer.Usage)
 		dry.StepsUsed++
@@ -263,12 +264,15 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 		out, _ := json.Marshal(m)
 		return string(out)
 	}
-	if tool.kind == "read" || tool.kind == "context" || tool.kind == "search" {
+	if tool.kind == "read" || tool.kind == "context" || tool.kind == "search" || tool.kind == "knowledge" {
 		for _, s := range run.Steps {
 			if s.Tool == tool.tool.Name && strip(s.Arguments) == strip(string(raw)) {
 				return s.Outcome
 			}
 		}
+	}
+	if tool.kind == "knowledge" { // a new question: searched now, outside the lock
+		return string(a.look(dry, raw, now))
 	}
 	t := a.t
 	t.mu.Lock()

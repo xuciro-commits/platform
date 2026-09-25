@@ -39,27 +39,28 @@ const (
 // AgentRunRecord is one run of an agent.
 type AgentRunRecord struct {
 	platform.Record
-	Agent       string    `json:"agent" field:"readonly,search"` // "<app>.<name>"
-	Title       string    `json:"title" field:"readonly,search"`
-	Goal        string    `json:"goal" field:"readonly" type:"longtext"`
-	Ref         string    `json:"ref,omitempty" field:"readonly"`
-	Seen        string    `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
-	OnBehalf    string    `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
-	Flow        string    `json:"flow,omitempty" field:"readonly"` // the flow instance whose step started it
-	Token       int       `json:"token,omitempty" field:"readonly"`
-	Step        string    `json:"step,omitempty" field:"readonly"` // that step's name
-	State       string    `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
-	Model       string    `json:"model,omitempty" field:"readonly"`
-	Steps       []RunStep `json:"steps" field:"readonly"`
-	StepsUsed   int       `json:"stepsUsed" field:"readonly" title:"Model turns"`
-	TokensUsed  int       `json:"tokensUsed" field:"readonly" title:"Tokens"`
-	ActionsUsed int       `json:"actionsUsed" field:"readonly" title:"Actions"`
-	Cost        float64   `json:"cost,omitempty" field:"readonly"`
-	Result      string    `json:"result,omitempty" field:"readonly" type:"longtext"`
-	Task        string    `json:"task,omitempty" field:"readonly"`
-	Stopped     string    `json:"stopped,omitempty" field:"readonly" title:"Why it stopped"`
-	Draft       []Draft   `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
-	Signals     []Signal  `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
+	Agent       string     `json:"agent" field:"readonly,search"` // "<app>.<name>"
+	Title       string     `json:"title" field:"readonly,search"`
+	Goal        string     `json:"goal" field:"readonly" type:"longtext"`
+	Ref         string     `json:"ref,omitempty" field:"readonly"`
+	Seen        string     `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
+	OnBehalf    string     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
+	Flow        string     `json:"flow,omitempty" field:"readonly"` // the flow instance whose step started it
+	Token       int        `json:"token,omitempty" field:"readonly"`
+	Step        string     `json:"step,omitempty" field:"readonly"` // that step's name
+	State       string     `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
+	Model       string     `json:"model,omitempty" field:"readonly"`
+	Steps       []RunStep  `json:"steps" field:"readonly"`
+	StepsUsed   int        `json:"stepsUsed" field:"readonly" title:"Model turns"`
+	TokensUsed  int        `json:"tokensUsed" field:"readonly" title:"Tokens"`
+	ActionsUsed int        `json:"actionsUsed" field:"readonly" title:"Actions"`
+	Cost        float64    `json:"cost,omitempty" field:"readonly"`
+	Result      string     `json:"result,omitempty" field:"readonly" type:"longtext"`
+	Task        string     `json:"task,omitempty" field:"readonly"`
+	Stopped     string     `json:"stopped,omitempty" field:"readonly" title:"Why it stopped"`
+	Draft       []Draft    `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
+	Citations   []Citation `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
+	Signals     []Signal   `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
 }
 
 // Draft is an action an agent running for a person proposes; the person
@@ -72,6 +73,14 @@ type Draft struct {
 	Payload   string `json:"payload"`
 	Rationale string `json:"rationale,omitempty"`
 	Step      int    `json:"step"` // the run's step that drafted it
+}
+
+// Citation is a passage of knowledge a run read (ADR-0022 D4).
+type Citation struct {
+	Document string `json:"document"`
+	Title    string `json:"title"`
+	Chunk    int    `json:"chunk"`
+	Step     int    `json:"step"`
 }
 
 // Signal is what a person made of an agent's work (ADR-0021 D7): a draft
@@ -158,6 +167,8 @@ func (a *Agents) Manifest() platform.Manifest {
 				Description: "The enabled model agents call, <provider>/<model>; it must call tools. Empty: agents stop and hand their goal to a person."},
 			{Name: SettingAgentDaily, Title: "Tokens per agent per day", Type: "integer", Default: "200000",
 				Description: "An agent that has used this many tokens today stops its runs until tomorrow."},
+			{Name: SettingTranscriptDays, Title: "Days transcripts are kept", Type: "integer", Default: "30",
+				Description: "Every model call's full request and answer are kept this many days outside the journal, for agent administrators; they may hold personal data."},
 		}}
 }
 
@@ -247,6 +258,8 @@ func (a *Agents) declare(app platform.App) error {
 			{kind: "context", tool: Tool{Name: "context", Description: "Read a record with its history, the records it references and that reference it, its links across apps, the flows and tasks about it.",
 				Properties: map[string]any{"type": map[string]any{"type": "string", "description": "The entity type, like mes.order"}, "id": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"type", "id", "rationale"}}},
 			{kind: "search", tool: Tool{Name: "search", Description: "Search records of every type you may read by text; answers types, IDs and titles.",
+				Properties: map[string]any{"query": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"query", "rationale"}}},
+			{kind: "knowledge", tool: Tool{Name: "knowledge", Description: "Search the tenant's documents and knowledge (house rules, manuals, FAQs) by what you need to know; answers passages with their sources, to cite.",
 				Properties: map[string]any{"query": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"query", "rationale"}}},
 			{kind: "ask", tool: Tool{Name: "ask", Description: "Ask a person when you are unsure or need a decision; the run waits for the answer.",
 				Properties: map[string]any{"question": map[string]any{"type": "string"}, "answers": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "The answers to offer, if any"}, "rationale": rationale()},
@@ -433,7 +446,7 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	out := []view{}
 	for _, id := range slices.Sorted(maps.Keys(a.defs)) {
 		d := a.defs[id]
-		out = append(out, view{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "ask", "finish"), Budget: d.Budget})
+		out = append(out, view{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil
 }
