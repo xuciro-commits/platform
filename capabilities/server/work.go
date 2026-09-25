@@ -134,7 +134,7 @@ func (w *Work) entities() []platform.Entity {
 					{Name: "claim", Title: "Take", From: []string{"open"}, To: []string{"open"}, Roles: everyone, Capability: "tasks",
 						Description: "Take a task offered to you, so others see it is yours.", Do: w.claim},
 					{Name: "complete", Title: "Done", From: []string{"open"}, To: []string{"done"}, Roles: everyone, Capability: "tasks",
-						Payload: []platform.Field{{Name: "answer", Type: "string", Description: "One of the task's answers, when it has any"}},
+						Payload:     []platform.Field{{Name: "answer", Type: "string", Description: "One of the task's answers, when it has any"}},
 						Description: "Mark a task of yours done.", Do: w.completer},
 				}}},
 		{Type: ViewType, Title: "Saved view", Model: SavedView{}},

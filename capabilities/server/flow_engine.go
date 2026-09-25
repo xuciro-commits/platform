@@ -135,7 +135,9 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 	return err
 }
 
-func ended(state string) bool { return state == "done" || state == "compensated" || state == "canceled" }
+func ended(state string) bool {
+	return state == "done" || state == "compensated" || state == "canceled"
+}
 
 func (ss *session) create(d *flowDef, id, key string, data any, onBehalf, parent string) *FlowInstance {
 	raw, _ := json.Marshal(data)

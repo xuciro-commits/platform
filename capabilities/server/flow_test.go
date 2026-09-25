@@ -83,7 +83,9 @@ func shopAct(action string) *platform.Act {
 	return &platform.Act{Action: "shop.order." + action, Target: func(_ platform.Caller, r *platform.Run) string { return order(r) }}
 }
 
-var clerks = func(platform.Caller, *platform.Run) []platform.Recipient { return []platform.Recipient{{AppRole: "clerk"}} }
+var clerks = func(platform.Caller, *platform.Run) []platform.Recipient {
+	return []platform.Recipient{{AppRole: "clerk"}}
+}
 
 // fulfil v1: reserve, wait for payment (an hour, then chase), ship.
 func fulfil(version int) platform.Flow {
@@ -94,7 +96,9 @@ func fulfil(version int) platform.Flow {
 		Steps: []platform.Step{
 			{Name: "reserve", Act: shopAct("reserve"), Undo: shopAct("release"), Next: "paid"},
 			{Name: "paid", Next: "ship", Timeout: time.Hour, OnTimeout: "chase", Wait: &platform.Wait{On: "shop.order.pay",
-				Match: func(_ platform.Caller, r *platform.Run, e platform.Event) bool { return e.Record.GetSubmission().GetTarget().GetId() == order(r) }}},
+				Match: func(_ platform.Caller, r *platform.Run, e platform.Event) bool {
+					return e.Record.GetSubmission().GetTarget().GetId() == order(r)
+				}}},
 			{Name: "chase", Ask: &platform.Ask{Title: func(_ platform.Caller, r *platform.Run) string { return "Chase payment of " + order(r) }, To: clerks,
 				Answers: []string{"wait", "cancel"}},
 				Choose: func(_ platform.Caller, r *platform.Run) (string, string) {
@@ -119,7 +123,9 @@ func fulfil(version int) platform.Flow {
 var bill = platform.Flow{Name: "bill", Title: "Bill", Version: 1,
 	Start: platform.Start{On: "shop.order.bill", Begin: func(platform.Caller, platform.Event) (string, any, bool) { return "", nil, false }},
 	Steps: []platform.Step{
-		{Name: "later", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) time.Time { return time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC) }}, Next: "bill"},
+		{Name: "later", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) time.Time {
+			return time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
+		}}, Next: "bill"},
 		{Name: "bill", Act: &platform.Act{Action: "shop.order.bill", Target: func(c platform.Caller, r *platform.Run) string {
 			id, _, _ := strings.Cut(r.Key, "/") // the caller's key, "<flow>:<order>/<n>"
 			return strings.TrimPrefix(id, "shop.fulfil:")
@@ -152,7 +158,9 @@ func TestFlows(t *testing.T) {
 		}
 		return "ok"
 	}
-	place := func(id, item string) { do("ana", "shop", "shop.order.place", "shop.order", id, map[string]string{"item": item}) }
+	place := func(id, item string) {
+		do("ana", "shop", "shop.order.place", "shop.order", id, map[string]string{"item": item})
+	}
 	tick := func(d time.Duration) { // time passes; the host works every second of it that matters
 		for end := now.Add(d); !now.After(end); now = now.Add(time.Second) {
 			tn.Work(now)
