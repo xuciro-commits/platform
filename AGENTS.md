@@ -4,7 +4,7 @@ Start here (Claude Code reaches this file through `CLAUDE.md`).
 
 ## What this repository is
 
-The **business platform**: the kernel contract, the Go host, the web workspaces, reference apps and platform-level Rust components (ADR-0003). It is multi-tenant and survives domain change; it aims at what Odoo, ServiceNow, Salesforce Platform or Palantir Foundry offer, in typed code. Reference apps (Hotel, manufacturing, CRM) exercise and demonstrate capabilities; they are not its source of truth. The owner's goals and collaboration rules are in `docs/Intent.md`; the capability plan is `docs/Platform.md` §10. Apple client code and the Music product live in the MSRU repository.
+The **business platform**: the kernel contract, the Go host, the web workspaces, reference apps and platform-level Rust components (ADR-0003). It is multi-tenant and survives domain change; it aims at what Odoo, ServiceNow, Salesforce Platform or Palantir Foundry offer, in typed code. The target apps are CRM, MES (manufacturing) and ERP; Hotel, HR and the helpdesk stay as reference apps. They exercise and demonstrate capabilities; they are not its source of truth. The owner's goals and collaboration rules are in `docs/Intent.md`; the capability plan is `docs/Platform.md` §10. The Music product and its Apple client live in the MSRU repository and are no longer a target of the platform (2026-09-26).
 
 ## Map
 

@@ -8,11 +8,11 @@ Each fact has one home here: what exists is the capability map (§2.4), what is 
 
 The main line: **building, composing, running and evolving business software**. Apps define their objects, relations, rules and actions and contribute UI and runtime work; software is composed from them; when products, processes, structure or the business itself change, capabilities are added, changed, replaced or retired while data, history, permissions and work in progress stay continuous. Kernel concepts and shared capabilities earn their place by what they contribute to this line.
 
-A multi-tenant **business platform with server and edge/client runtimes**. It supports personal local-first applications (Music, in the MSRU repository) and multi-user organisational applications where a server is authoritative. Reference apps — Hotel, manufacturing, CRM, HR, helpdesk — exercise and demonstrate capabilities; they are not the platform's source of truth.
+A multi-tenant **business platform with server and edge/client runtimes**. It supports multi-user organisational applications where a server is authoritative, and edge clients that keep working offline. The **target apps are CRM, MES and ERP** (Intent.md): the business software it must carry first, meeting through protocols. Hotel, HR and the helpdesk are reference apps. All of them exercise and demonstrate capabilities; none is the platform's source of truth.
 
 The platform does not encode what an organisation or application looks like today. It provides the capabilities an application needs to move to its *next* shape — new products, processes, structure, operating model, even a different primary business — without rewriting the foundation. Domains are expected to change substantially; the kernel should change only when a genuinely missing cross-domain capability is discovered.
 
-**Not:** an Apple UI framework (that is one client layer, see `Docs/AppleClient.md` in the MSRU repository); the intersection of the reference apps; a generic business-object or ERP schema; a configuration language that replaces domain code.
+**Not:** an Apple UI framework; the intersection of the target apps; a generic business-object or ERP schema; a configuration language that replaces domain code.
 
 ## 2. The product model
 
@@ -85,8 +85,8 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 
 | Capability | Layer | What an app gets | Code | Used by |
 |---|---|---|---|---|
-| Identity and redirects (K1) | Kernel | Opaque stable IDs, merge and split redirects | `kernel.Identity` | manufacturing, Music |
-| Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | manufacturing, Hotel, Music |
+| Identity and redirects (K1) | Kernel | Opaque stable IDs, merge and split redirects | `kernel.Identity` | manufacturing (and Music, before 2026-09-26) |
+| Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | manufacturing, Hotel |
 | Decisions (K4) | Kernel | Change records: idempotency, revisions (C12), causation | `kernel.ChangeLog` | all |
 | Authority and outbox (K5) | Kernel | Authority per data class; edge outbox in Go, Swift, Rust and TypeScript | `kernel.Authorities` | all |
 | Tenancy and policy (K6) | Kernel | Receiving order, one policy evaluation per decision | `kernel.Receiver` | all |
@@ -264,7 +264,7 @@ Server runtime (Go, reference implementation)
         ▲  kernel contracts: language-neutral schemas + semantics + conformance vectors
 Edge / client runtimes
   Web (TypeScript, React, @platform/ui): the workspace every host serves
-  Apple (Swift): deep OS/hardware/file integration — AppFoundation client layer, Music
+  Apple (Swift): the contract's second implementation; no platform app uses it since Music stopped being a target
   Desktop (Tauri/Rust): the Hotel Desk, offline with the Rust K5 outbox
   Edge gateways (candidate Rust/Go): devices, PLCs, sensors, offline sites
 ```
@@ -314,19 +314,19 @@ The kernel is defined by six parts, all in `contract/`. A part never substitutes
 
 ### Fact kinds across domains
 
-| Kind | Music | Hotel | Manufacturing |
-|---|---|---|---|
-| Observation | File tags, file signature, scan results | Raw channel booking message | Sensor reading, machine state, counts, the ERP's answer |
-| Claim | MusicBrainz/AcoustID match, provider metadata | OTA guest profile, channel rate | Planned order from the ERP, supplier lot data |
-| Decision | User correction, entity merge, review choice | Confirm/assign/cancel reservation | Release order, start and complete SFC, disposition |
-| Derived | Loudness cache, summaries, search index | Availability, reports | Downtime, OEE, WIP statistics |
+| Kind | CRM | Manufacturing (MES) | ERP (to build) | Hotel |
+|---|---|---|---|---|
+| Observation | An email or call logged from outside | Sensor reading, machine state, counts, the ERP's answer | Bank statement line, quantity counted at goods receipt | Raw channel booking message |
+| Claim | A lead's company data from an enrichment source | Planned order from the ERP, supplier lot data | Supplier invoice, a supplier's price list or lead time | OTA guest profile, channel rate |
+| Decision | Open, win or lose an opportunity | Release order, start and complete SFC, disposition | Approve a purchase order, post a journal entry, release a production order | Confirm/assign/cancel reservation |
+| Derived | Pipeline value, forecast | Downtime, OEE, WIP statistics | Account balances, stock on hand, MRP's planned orders | Availability, reports |
 
 ## 5. Authority, sync and submissions
 
-- **Device authority** (personal Music library): local changes apply immediately; the server is a replica/backup.
+- **Device authority** (data a person keeps on their own device, such as offline drafts; Music's library proved it before 2026-09-26): local changes apply immediately; the server is a replica/backup.
 - **Server authority** (reservations, work orders): the edge submits *intents*; UI shows pending until accepted or rejected.
 - **Observations** are authoritative at their source and never "conflict" — they are appended and may later be judged wrong.
-- **Authority migration** (personal → shared library) must be possible without redesigning the domain.
+- **Authority migration** (personal → shared, device → server, external system → platform) must be possible without redesigning the domain. Replacing the plant's ERP stand-in with the ERP app is the next case.
 
 Submission states for server-authoritative intents: `pending → sending → confirmed | conflict | rejected | unknown`. `unknown` (timeout, lost connection) retries with the **same operation ID and parameters**; conflicts and rejections keep the draft and never retry automatically; a user revision is a new operation. Transient errors and business conflicts never share an infinite retry queue. Switching tenant/account isolates queues and results; results from an old identity are never shown to a new one. Incremental sync must handle cursor expiry, pagination consistency, tombstones, permission revocation and duplicate events; push is a refresh hint, never the only source of data.
 
@@ -357,18 +357,19 @@ Applications are pressure environments for the platform, not its source of truth
 
 | Domain | Nature | Pressures | Cannot test |
 |---|---|---|---|
-| Music (MSRU) | Real product; personal, local-first, edge | Identity, claims and resolution, observations, connectors, library-management evolution | Organisations, permissions, transactions, scarce resources |
 | Hotel | Reference app modelled on OPERA Cloud and Mews | Server authority, several principals, capacity over time, a channel connector | Realism — it can confirm our own assumptions |
 | Manufacturing | Reference app modelled on Opcenter and SAP ME (ISA-95 practice), desk-studied, no plant yet | Observation streams, device edge, hierarchy, quality, work orders, ERP integration | A real plant's volume and exceptions |
-| CRM, HR, helpdesk | Thin reference apps | Records, lifecycles, approvals, flows across protocols, agents, knowledge | Depth in any function |
+| CRM | Target app | Parties, opportunities, activities, protocols to other apps, the sales assistant | — |
+| ERP | Target app, to build, modelled on SAP S/4HANA and Odoo | Money and units, double-entry posting (several changes that stand or fall together: K4's open case), number sequences, periods, purchasing and inventory, production orders the MES executes | Depth: one company's full chart of accounts, tax, localisation |
+| HR, helpdesk | Thin reference apps | Lifecycles, approvals, flows, agents, knowledge | Depth in either function |
 
 Two tests for every abstraction: **cross-domain comparison** (does any app need exceptions, bypasses, duplicated infrastructure or awkward mappings? are we abstracting a capability or naming two unrelated things alike?) and **evolution drills**:
 
 | Drill | Change | State |
 |---|---|---|
 | E1 | Hotel → serviced apartments and coworking | Done (#82): kernel and contract unchanged; `EntityForm` gained a datetime field; capacity stayed domain code |
-| E2 | Music personal → shared family library | Done on the kernel alone (`apps/drills`, #82): K5 A10 adoption (ADR-0006); the MSRU implementation is future work |
-| E3 | Music listening → professional library management or other media | Not run |
+| E2 | Music personal → shared family library | Done on the kernel alone (`apps/drills`, #82): K5 A10 adoption (ADR-0006); no app implementation follows, since Music is no longer a target |
+| E3 | ERP: one company → a group of two legal entities trading with each other | Not run; tests the organisation (ADR-0012), tenancy and posting across entities |
 | E4 | Manufacturing line reorganisation or a new process | Not run; the organisation (ADR-0012) and flow versions (ADR-0020) are what it would test |
 
 **What the stages taught** (the evidence behind the model; the detail is in each ADR):
@@ -399,7 +400,7 @@ Reference apps model their domain on leading systems, not on invention, so that 
 
 1. **Four languages** are a real cost; every additional implementation language must beat the cost of re-implementing the contract.
 2. **No real organisation uses the platform yet.** Hotel is synthetic and manufacturing is desk-studied; real use would falsify more than any drill.
-3. **Music's platform pressure** lies in professional library management (identity, claims, review, corrections, sources), which product work under-invested in (MSRU).
+3. **ERP can swallow the plan.** It is the deepest of the target apps; keep it thin. Its value to the platform is the pressure of money, posting, periods and production orders, not breadth of features.
 4. **Inner-platform effect:** "supporting change" must not slide into configuring everything. Change is absorbed by quickly modifiable app code.
 5. **The server is not the kernel;** treating it as such re-binds the platform to one deployment shape.
 6. **The host runtime is one package.** `platformserver` holds the runtime and all eight platform apps (about 10 000 lines without tests, 112 methods on `Tenant`). Platform apps reach host internals that business apps cannot, and the host wires `relations`, `flow` and `agent` into event delivery by name while `Manifest.Subscribes` has no app user. Lesson 6 applies to the host itself.
@@ -512,8 +513,8 @@ Stages 1–5 are built: the application model (ADR-0016), lifecycles, approvals 
 | Stage | Contents | Why this order | Proven when |
 |---|---|---|---|
 | 6. The model speaks, the API is a contract | The semantic model in declarations; the host API contract with generated TypeScript clients; the developer kit (app guide, scaffold, skills) | Every agent, integrator, coding agent and UI reads the model; it is cheap, and every later stage uses it | An agent answers better with descriptions than without in an evaluation; the workspace compiles against generated clients; a new app is scaffolded and passes `CheckReplay` |
-| 7. The application half, completed | Files and attachments (also as knowledge), number sequences, comments and followers, business calendars, record-state triggers, import and export, field-level security, delegation; the kit's remaining families (boards, time views, trees, mobile and field tasks), each once | The classic platform features every reference app still lacks; calendars unblock service levels and flows' timeouts | A purchasing and inventory reference app and a projects app built from declarations only; the helpdesk's service level on a business calendar |
+| 7. The application half, completed | Files and attachments (also as knowledge), number sequences, comments and followers, business calendars, record-state triggers, import and export, field-level security, delegation; the kit's remaining families (boards, time views, trees, mobile and field tasks), each once | The classic platform features every reference app still lacks; calendars unblock service levels and flows' timeouts | The ERP's purchasing and inventory built from declarations only (#115); the helpdesk's service level on a business calendar |
 | 8. AI control plane | Quotas, rate limits and streaming (ADR-0015 batch 2); the agents overview with value and an off switch; evaluation suites; traces across agents; MCP authorization and resources | Agents exist in three apps and outside ones call in; governing them at scale is the next gap the references closed in 2026 | An administrator sees every agent's use and value, switches one off, and a standard MCP client signs in and acts within its grants |
 | 9. Scale and delivery | Many tenants per process, provisioning, package upgrades, the backend-for-frontend token, run-time UI bundles, bulk data out | When a second real organisation or team comes | A new team ships an app without touching the host |
 
-Reference apps are chosen to exercise capabilities, not for depth: CRM, HR and the helpdesk exist; purchasing and inventory (requests, approvals, stock moves, units, money) and projects (tasks, boards, timelines) are next; Hotel and manufacturing exist.
+The target apps are CRM, MES and ERP; CRM and MES exist, the ERP is next (#115). Hotel, HR and the helpdesk stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.

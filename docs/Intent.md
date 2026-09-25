@@ -2,7 +2,7 @@
 
 Durable statement of what the owner wants for the platform. The owner's latest explicit instruction always wins; update this file when direction changes rather than adding new ones.
 
-Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, with the owner's direction of that day added (capability-led, reference-grounded). Music's own product intent stays in MSRU (`Docs/Music.md`, `Docs/AppleClient.md`). The external product review of 2026-09-24 was handled and folded into [Platform.md](Platform.md) §1 and §10, then deleted (git keeps it).
+Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, with the owner's direction of that day added (capability-led, reference-grounded). Music's own product intent stays in MSRU; since 2026-09-26 Music is no longer a target of the platform. The external product review of 2026-09-24 was handled and folded into [Platform.md](Platform.md) §1 and §10, then deleted (git keeps it).
 
 ## What we are building
 
@@ -17,7 +17,7 @@ Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, wit
    - Oracle Fusion Cloud and APEX.
 
    The comparison is not with one vertical application. A team should be able to build a CRM, an MES, a PMS or a HIS on it mostly by writing business knowledge.
-3. **Music (MSRU)** remains a real product and the long-term validation domain for local-first, personal, edge-side capabilities.
+3. **The target apps are CRM, MES and ERP (2026-09-26).** They are the business software the platform must carry first, together: sales and customers, the shop floor, and finance, purchasing, inventory and production orders, meeting through protocols. Hotel stays as a reference app; HR and the helpdesk stay as thin proofs. Music is no longer a target; it remains a product in the MSRU repository.
 
 The deepest goal is a platform that **supports change itself**. It must not encode an organisation's or application's current shape as its permanent identity. Domains may be rewritten; the deeper contracts must stay coherent.
 
@@ -44,7 +44,7 @@ The deepest goal is a platform that **supports change itself**. It must not enco
 - **Rust** where it gives a real systems or performance advantage.
 - **TypeScript, React and `@platform/ui`** for web workspaces.
 - **Tauri with Rust** for the cross-platform desktop client.
-- **Swift** where Apple-native capabilities and deep local integration matter.
+- **Swift** where Apple-native capabilities and deep local integration matter; with Music no longer a target, no platform app needs it today.
 
 The server must not couple to Apple because the first app was Swift. The kernel is language-neutral contracts plus conformance tests, without four parallel implementations.
 
