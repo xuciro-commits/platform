@@ -33,7 +33,7 @@ services:
       - rauthy:/app/data
 
   mes-server:
-    build: { context: ../.., dockerfile: slices/manufacturing/server/Dockerfile }
+    build: { context: ../.., dockerfile: apps/manufacturing/server/Dockerfile }
     command:
       - -addr=0.0.0.0:8490
       - -database=postgres://platform:platform-local-only@postgres:5432/platform

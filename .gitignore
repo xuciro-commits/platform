@@ -3,7 +3,13 @@
 **/.swiftpm/
 .DS_Store
 target/
-slices/hotel/client/src-tauri/gen/
+apps/hotel/client/src-tauri/gen/
+# Build outputs of `go build` and `go test -c` in a module directory
+*.test
+capabilities/server/cmd/webhook-sink/webhook-sink
+apps/manufacturing/server/cmd/mes-server/mes-server
+apps/hotel/server/cmd/hotel-server/hotel-server
+solutions/sales/cmd/sales-server/sales-server
 node_modules/
 dist/
 

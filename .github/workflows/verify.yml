@@ -1,0 +1,76 @@
+# Runs scripts/verify.sh on every push and pull request (AGENTS.md "Verify").
+# Swift (macOS) and the Docker rehearsal stay on the owner's Mac; timing bounds
+# are off here (PLATFORM_TIMING=0) because shared runners are slower.
+name: verify
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PLATFORM_TIMING: "0"
+
+jobs:
+  go:
+    name: contract, format, host, apps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: capabilities/server/go.mod
+          cache-dependency-path: "**/go.sum"
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+      - run: scripts/verify.sh ci
+
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - run: scripts/verify.sh web
+
+  hotel:
+    name: hotel (server, Rust K5 vectors, flows)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/hotel/server/go.mod
+          cache-dependency-path: "**/go.sum"
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - name: Tauri's system libraries
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/hotel/client/src-tauri
+      - run: scripts/verify.sh hotel

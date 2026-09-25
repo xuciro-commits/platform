@@ -23,7 +23,9 @@ func TestA2A(t *testing.T) {
 	partner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		heard = append(heard, r.Header.Get("A2A-Version")+" "+r.Header.Get("Authorization")+" "+string(body))
-		var req struct{ Params struct{ Message struct{ MessageID string } } }
+		var req struct {
+			Params struct{ Message struct{ MessageID string } }
+		}
 		json.Unmarshal(body, &req)
 		fmt.Fprintf(w, `{"jsonrpc":"2.0","id":1,"result":{"task":{"id":"t-%s","contextId":"c","status":{"state":"TASK_STATE_COMPLETED"},
 			"artifacts":[{"artifactId":"a","name":"answer","parts":[{"data":{"product":"P-200","leadTimeDays":12}}]}]}}}`, req.Params.Message.MessageID)

@@ -97,7 +97,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 以 AI 助手身份操作：
 
 ```bash
-cd slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 go run ./cmd/mes-agent -server http://localhost:8490 -oidc-token http://localhost:8480/auth/v1/oidc/token actions
+cd apps/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 go run ./cmd/mes-agent -server http://localhost:8490 -oidc-token http://localhost:8480/auth/v1/oidc/token actions
 ```
 
 把末尾的 `actions` 换成 `do <动作> <目标> '<JSON>'` 就是执行动作，例如 `do mes.order.reconfirm WO-3 '{"planned":"PO-9001"}'`。
@@ -108,7 +108,7 @@ cd slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRE
 - sales：`manager`、`sales`、`sales-only`、`desk`
 - MES：`supervisor`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`erp`、`assistant-l1`（AI 代理）
 
-开发令牌的主机不占 Docker 的端口：在 `solutions/sales` 下运行 `go run ./cmd/sales-server -addr 127.0.0.1:8496`，或在 `slices/manufacturing/server` 下运行 `go run ./cmd/mes-server -addr 127.0.0.1:8491`，再用启动配置 `workspace` / `workspace-plant` 打开工作台，右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
+开发令牌的主机不占 Docker 的端口：在 `solutions/sales` 下运行 `go run ./cmd/sales-server -addr 127.0.0.1:8496`，或在 `apps/manufacturing/server` 下运行 `go run ./cmd/mes-server -addr 127.0.0.1:8491`，再用启动配置 `workspace` / `workspace-plant` 打开工作台，右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
 
 ## 接入外部系统时填什么
 

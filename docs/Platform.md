@@ -25,7 +25,7 @@ The platform does not encode what an organisation or application looks like toda
 | **App API** | What an app sees: `Member`, `Caller`, `Manifest`, the declarations (entities, lifecycles, actions, reads, flows, agents, jobs, settings, effect kinds) and `Ledger`. Apps reach the host only through `Runtime` | `platformserver/platform`; for UIs `@platform/app` | An app needs something the host already does |
 | **Platform apps** | Cross-industry capabilities run as apps: `platform` (the console), `org`, `relations`, `work`, `flow`, `ai`, `agent`, `knowledge` | `platformserver` (§9 risk 6) | A cross-industry need appears in a second app |
 | **Protocols** | Versioned interfaces apps provide and consume, with conformance tests | `protocols/` | A second provider or consumer appears |
-| **Apps** | An industry's or a function's rules, entities, flows, agents and UI | `slices/`, `web/packages/*` | Its business changes |
+| **Apps** | An industry's or a function's rules, entities, flows, agents and UI | `apps/`, `web/packages/*` | Its business changes |
 
 Operators set values (settings, bindings, endpoints, enabled models), never rules (§6). Dependencies point downward only; the kernel knows no domain vocabulary; the host and platform apps know no specific app. The model is a tool, not a taxonomy every file must be forced into: when experience shows a boundary is wrong, change the model through an ADR. The property that must hold is that **lower layers do not change when a domain evolves**.
 
@@ -125,7 +125,7 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 ### 2.5 Terminology and ownership
 
 Words that are easy to confuse:
-- An **app** is a unit of capability: a Go manifest and, usually, a UI package. **Platform apps** are the eight listed in §2.1. **Reference apps** live under `slices/` (a name from the kernel-validation phase). "Package" in ADR-0008 and ADR-0009 means app.
+- An **app** is a unit of capability: a Go manifest and, usually, a UI package. **Platform apps** are the eight listed in §2.1. **Reference apps** live under `apps/` (called `slices/` until 2026-09-26, from the kernel-validation phase). "Package" in ADR-0008 and ADR-0009 means app.
 - A **solution** is a composition of apps for one host: `solutions/sales`, the plant's `mes-server`, the Hotel's `hotel-server`.
 - An **event** is an accepted decision as others see it. A domain's own word "event", such as a downtime event, is not this.
 
@@ -367,7 +367,7 @@ Two tests for every abstraction: **cross-domain comparison** (does any app need 
 | Drill | Change | State |
 |---|---|---|
 | E1 | Hotel → serviced apartments and coworking | Done (#82): kernel and contract unchanged; `EntityForm` gained a datetime field; capacity stayed domain code |
-| E2 | Music personal → shared family library | Done on the kernel alone (`slices/drills`, #82): K5 A10 adoption (ADR-0006); the MSRU implementation is future work |
+| E2 | Music personal → shared family library | Done on the kernel alone (`apps/drills`, #82): K5 A10 adoption (ADR-0006); the MSRU implementation is future work |
 | E3 | Music listening → professional library management or other media | Not run |
 | E4 | Manufacturing line reorganisation or a new process | Not run; the organisation (ADR-0012) and flow versions (ADR-0020) are what it would test |
 
@@ -404,7 +404,7 @@ Reference apps model their domain on leading systems, not on invention, so that 
 5. **The server is not the kernel;** treating it as such re-binds the platform to one deployment shape.
 6. **The host runtime is one package.** `platformserver` holds the runtime and all eight platform apps (about 10 000 lines without tests, 112 methods on `Tenant`). Platform apps reach host internals that business apps cannot, and the host wires `relations`, `flow` and `agent` into event delivery by name while `Manifest.Subscribes` has no app user. Lesson 6 applies to the host itself.
 7. **Documents drift.** Before this review, the same status was kept in five places and all of them were stale. One home per fact (the header of this document); every batch closes with its documents (AGENTS.md rule 8).
-8. **Verification runs on one machine.** There is no CI; a batch can land without `scripts/verify.sh`, and timing thresholds in tests depend on the machine (`TestRecordsAtScale` takes 134 ms on a 4-core container against a 100 ms bound).
+8. **Verification on one machine** was the risk until CI (#112); Swift and the Docker rehearsal still run only on the owner's Mac, and timing bounds only where `PLATFORM_TIMING` is not `0`.
 9. **Agents depend on models the platform does not control.** Signals and evaluation are the guard; per-tenant quotas and rate limits are still missing (ADR-0015 batch 2).
 
 ## 10. Where we are going

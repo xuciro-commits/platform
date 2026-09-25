@@ -61,7 +61,7 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
 
 # Inputs of every kind the journal keeps: a poll page, decisions, a push batch.
-(cd ../../slices/manufacturing/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
+(cd ../../apps/manufacturing/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
   MES_ERP_SECRET=erpLocalOnly0000000000000000000000000000000000000000000000000000 \
   go run ./cmd/gateway-sim -server "$MES" -oidc-token "$IDP/oidc/token" -batches 4 -every 200ms >/dev/null)
 submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
@@ -93,7 +93,7 @@ submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | 
 
 # An AI agent is a client with a role and lines: its catalog holds only what it
 # may call, and the server refuses the rest even when the adapter is bypassed.
-agent() { (cd ../../slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
+agent() { (cd ../../apps/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MES" -oidc-token "$IDP/oidc/token" "$@"); }
 [[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") | not)]') == '["platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"

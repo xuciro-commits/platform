@@ -10,7 +10,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
 
-apps=(slices/hotel/server:hotel slices/crm/server:crm slices/manufacturing/server:mes slices/hr/server:hr slices/helpdesk/server:helpdesk)
+apps=(apps/hotel/server:hotel apps/crm/server:crm apps/manufacturing/server:mes apps/hr/server:hr apps/helpdesk/server:helpdesk)
 protocols=(protocols/lodging:lodging)
 names=$(for x in "${apps[@]}"; do echo "${x#*:}"; done)
 

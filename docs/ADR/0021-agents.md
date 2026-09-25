@@ -176,7 +176,7 @@ Our platform starts from an advantage there: every decision is already journaled
   - Every record page offers "Ask the assistant". Its run page shows each step with its rationale, the draft with its fields to change, confirm or reject, and the signals.
   - Search (`/v1/search`) covers every type the member may read.
   - Settings → Processes lists the declared agents, every run and the evaluations.
-- **Helpdesk (D10 (2))** (`slices/helpdesk`, composed in the sales solution):
+- **Helpdesk (D10 (2))** (`apps/helpdesk`, composed in the sales solution):
   - Tickets have a lifecycle: triage (the priority sets when the answer is due), reply, close and escalate.
   - The service-level flow has two branches:
     - the triage agent, or the desk when it stops;

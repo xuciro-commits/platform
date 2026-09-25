@@ -80,7 +80,7 @@ func (d *desk) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "desk", Version: "1", Actions: d.ledger.Catalog, Reads: []string{"queue"},
 		Entities: []platform.Entity{{Type: "desk.ticket", Title: "Ticket", Model: Ticket{}, Display: "subject"}},
 		Agents:   []platform.Agent{triage, scout}, Flows: []platform.Flow{handle},
-		Emits:    []platform.EffectKind{{Name: "lookup", Title: "Ask the partner", Description: "Ask the partner's agent a question."}}}
+		Emits: []platform.EffectKind{{Name: "lookup", Title: "Ask the partner", Description: "Ask the partner's agent a question."}}}
 }
 func (d *desk) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 func (d *desk) Snapshot() (json.RawMessage, error)       { return d.ledger.Snapshot() }

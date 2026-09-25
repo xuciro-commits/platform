@@ -98,7 +98,7 @@ They agree on three separate things. We take them apart the same way:
 - **Tasks:** `work.task` records. Approval levels open them; apps open them with `Caller.Assign`.
   - The `inbox` read serves them overdue first; take and done are transitions.
   - A job notifies the candidates of an overdue task once.
-- **HR reference app** (`slices/hr`): leave requests with a lifecycle and a two-level approval (the manager, and the department head above five days), in about 150 lines. It runs in the sales solution.
+- **HR reference app** (`apps/hr`): leave requests with a lifecycle and a two-level approval (the manager, and the department head above five days), in about 150 lines. It runs in the sales solution.
   - The sales workspace has leave requests, the inbox and "my requests". The MES has the inbox.
   - The kit's record page shows a status bar with the transitions the member may take.
 - **Proven** by the HR test and the rehearsal: approval along the organisation, a stale request refused when run, rejection, withdrawal, a refused probe, an agent refused, escalation of an overdue task, and replay. Checked in the browser: submit, the manager's inbox, two levels approved, the requester told.
