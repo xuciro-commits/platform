@@ -133,7 +133,7 @@ Status legend:
 | 0016 | Entity declarations, the record store, generic reads, scope, history, generated actions and pages | Implemented (#106); CRM, Hotel, manufacturing |
 | 0017 | Lifecycles, approvals, tasks and the inbox | Implemented (#107); the helpdesk proof, delegation and calendars deferred |
 | 0018 | One workspace: one sign-in, a launcher, apps as contributions, cross-app references | Implemented (#108); global search, the backend-for-frontend and run-time UI bundles deferred |
-| 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Accepted (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
+| 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented except snapshots (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
@@ -614,9 +614,9 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 
 | Capability | Reference | Status |
 |---|---|---|
-| Read models: projections of decisions into queryable tables (PostgreSQL), rebuilt from the journal | CQRS projections, Foundry datasets | missing |
-| Reports: pivot, group and aggregate over read models | Odoo pivot, Salesforce reports | missing |
-| Dashboards: charts and KPI tiles per role | ServiceNow Performance Analytics, Salesforce dashboards | missing |
+| Read models: projections of decisions into queryable tables (PostgreSQL), rebuilt from the journal | CQRS projections, Foundry datasets | have (ADR-0019): typed tables per entity type and tenant, a reader role |
+| Reports: pivot, group and aggregate over read models | Odoo pivot, Salesforce reports | have (ADR-0019): aggregates with scope, pivot and charts on every list |
+| Dashboards: charts and KPI tiles per role | ServiceNow Performance Analytics, Salesforce dashboards | have (ADR-0019): app dashboards from a visualization spec, saved views; targets and time series missing |
 | Customer analysis models beside packages (ADR-0008) | Foundry Contour, Power BI on Dataverse | missing |
 
 **F. AI.**
@@ -635,13 +635,13 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 | Family | Examples | Status |
 |---|---|---|
 | Shell and navigation | Docking workspace, command palette, entity routes, session; one workspace with a launcher across apps, one sign-in, records opened across apps by reference (ADR-0018) | have; global search missing |
-| Lists and tables | Data table with filter and sort | have, with server paging (ADR-0016); saved views missing |
+| Lists and tables | Data table with filter and sort | have, with server paging (ADR-0016), group by, pivot, chart and saved views (ADR-0019) |
 | Record page | Header, status bar, fields in sections, tabs, related lists, history and comments panel | partial: header, fields, related lists, history (ADR-0016); status bar with stage 2, comments later |
 | Forms | Typed fields, validation | have, generated from entity declarations (ADR-0016) |
 | Trees and hierarchies | Organisation chart, unit trees, bills of materials, categories | partial: coded in Settings |
 | Boards | Kanban by state or any field, drag to transition | missing |
 | Time views | Calendar, timeline, Gantt, resource rack (room rack, machine schedule) | missing |
-| Charts and dashboards | Bar, line, pie, KPI tiles, pivot | missing |
+| Charts and dashboards | Bar, line, pie, KPI tiles, pivot | have: the platform's visualization spec, ECharts 6 behind it (ADR-0019) |
 | Inbox and notifications | — | have: notifications and the inbox (ADR-0017) |
 | Files | Upload, preview, attachment list | missing |
 | Mobile and field | Scan, sign, photograph, short tasks, offline queue | missing |

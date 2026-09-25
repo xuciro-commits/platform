@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **109 · building** | Stage 3 of the capability plan (Platform.md §10.4, ADR-0019 accepted; charts through the platform's visualization spec, ECharts 6 as renderer): aggregates over entity types with the list's domain and scope, pivot and charts in the kit, dashboards and saved views, PostgreSQL projections for outside tools, snapshots for start-up (ADR-0019) | The build items of ADR-0019 are done: aggregates with scope, the kit's pivot and charts, dashboards and saved views, projections, snapshots |
+| **109 · building: snapshots** | Stage 3 (ADR-0019): aggregates, the visualization spec with ECharts 6, pivot, dashboards, saved views and projections are built. Left: snapshots (D6) — every stateful host component, app and kernel log saves and restores its state at a journal position, valid for the app versions that wrote it; `CheckReplay` checks snapshot plus tail equals full replay in every test; the plant's downtime becomes records first | A tenant with 1 000 000 journal entries restarts from a snapshot in seconds; changing an app's version forces a full replay; every `CheckReplay` passes through a snapshot |
 | **105 · batch 1 done, owner testing** | AI providers (ADR-0015): providers, catalogs, enabled models with access, calls with journaled usage, Settings (providers, playground, usage) | The owner has tested with OpenRouter; batch 2 (quotas and rate limits, the Anthropic adapter, app calls as effects, streaming) is ordered |
 
 ## Open friction (temporary; delete entries once resolved)

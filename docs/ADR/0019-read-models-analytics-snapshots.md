@@ -83,3 +83,32 @@ Two points carry over:
 - A list, a pivot and a chart are three views of one query over one model, under one record security.
 - The journal stays the truth. Projections and snapshots are copies that can be thrown away and rebuilt.
 - Stage 7 can move the record store itself into the database behind the same reads, with the projection and snapshot machinery already in place.
+
+## As built (#109, in progress)
+
+- **Aggregates:** `GET /v1/aggregates/<type>?group=&measure=&domain=&search=` (`Tenant.Aggregate`).
+  - It is a path of its own, not `/v1/records/<type>/aggregate`, so that no record id is shadowed.
+  - Groups: fields, date buckets (day, ISO week, month, year) on dates, datetimes, the `created` and `changed` stamps, and text that starts with a date (the Hotel's check-in holds hours for hourly types).
+  - Measures: count, sum, avg, min, max. A money measure adds its currency as a group, with amounts in minor units.
+  - The list's domain and search apply, and so does the member's scope. Domains now also accept the stamps, and days for datetimes.
+  - Measured: 100 000 records grouped and measured in about 50 ms.
+- **Visualization spec** (`@platform/ui` `charts/spec.ts`), the contract of D5:
+  - `data` is an entity type (with a domain) or inline values; then a `mark` (bar, line, area, point, arc, kpi) and `encoding` channels (x, y, color, theta, size), each with a field, a measurement type, a time unit and an aggregate.
+  - Over records, the kit derives the host aggregate from the encodings. Inline values are aggregated the same way.
+  - `charts/echarts.ts` alone compiles specs to ECharts 6 options. The renderer is loaded the first time a chart draws (about 190 kB gzipped).
+- **Kit:**
+  - `Chart`, with KPI tiles.
+  - `Pivot`: row and column groups, one measure, totals, and drill-down into the records behind a cell, date buckets as ranges.
+  - Every `RecordList` gains List, Pivot and Chart views of its filter, and "Save view…".
+- **Dashboards:** `defineApp({ dashboards })`, specs per app shown to the members `for` admits: CRM pipeline, Hotel occupancy, plant shop floor.
+- **Saved views:** `work.view` records of the work app (`work.view.save`, `work.view.remove`, owner-only), with the read `views` for every member. They are listed under "Saved views" in the workspace.
+- **Projections:** `-project` rebuilds the schema `tenant_<id>` at start-up.
+  - One table per entity type, with typed columns, and `<table>_changes`, keyed by record and position, because one decision may change a record twice. Changes are flushed each second.
+  - The role `tenant_<id>_reader` may read only its own tenant's schema.
+  - Lines are JSON columns, not child tables: simpler for tools, and nothing yet needs them joined.
+  - A failure leaves the host serving. Backups hold only the journal (the rehearsal excludes `tenant_*`).
+- **Proven:** host tests (aggregates with scope, buckets, money, the 100 000-record timing; saved views; projection columns), kit tests (spec to query, inline aggregation, ECharts options, drill domains), the rehearsal (aggregate within scope; projected rows and history read by the tenant's reader role, refused for another tenant's), and the browser (dashboards, pivot with drill-down, chart, a saved view).
+- **Not yet:**
+  - snapshots (D6), after measuring replay at about 60 000 entries a second: linear, a million in about 17 s;
+  - downtime as records, so the plant's dashboard can show downtime by reason.
+
