@@ -1,6 +1,6 @@
 # ADR-0022: Knowledge, memory and agent-to-agent
 
-**Status:** Proposed (2026-09-25, #111, stage 5 batch 3; ADR-0021 D5, D7 and D9 left these for later). The decision points below wait for the owner.
+**Status:** Accepted (2026-09-25, #111, stage 5 batch 3; ADR-0021 D5, D7 and D9 left these for later). The owner accepted D1–D9 as recommended; pgvector waits until a tenant outgrows D2 (a).
 
 ## Context
 

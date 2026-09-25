@@ -136,7 +136,7 @@ Status legend:
 | 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
 | 0020 | Flows: declared steps, waits, people, compensation, versions, decision traces | Implemented (#110, stage 4) |
 | 0021 | Agents: declared principals, the harness, context graph, traces, evaluation, A2A | Accepted (#111, stage 5); batches 1 and 2 implemented |
-| 0022 | Knowledge, memory and agent-to-agent: documents with hybrid scoped search and journaled citations, memory as records, A2A 1.0, transcripts | Proposed (#111, stage 5 batch 3) |
+| 0022 | Knowledge, memory and agent-to-agent: documents with hybrid scoped search and journaled citations, memory as records, A2A 1.0, transcripts | Accepted (#111, stage 5 batch 3) |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
