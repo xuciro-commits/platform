@@ -11,7 +11,7 @@ node_id = 1
 nodes = ["1 localhost:8100 localhost:8200"]
 secret_raft = 'local-raft-secret-0001'
 secret_api = 'local-api-secret-00001'
-insecure_cookie = true
+insecure_cookie = true # the cluster dashboard's cookie over HTTP; browser sign-in is [access] below
 
 [encryption]
 keys = ['k1/r7sKqFSJT4eVewKRUIPS7FmNLS3H3ZNE0w75kXSjN7c=']
@@ -21,6 +21,14 @@ key_active = 'k1'
 scheme = 'http'
 port_http = 8080
 pub_url = 'localhost:8480'
+
+# Local Rauthy runs over plain HTTP. By default its session cookies are Secure
+# (and __Host- prefixed): Safari refuses them on http://localhost, so the
+# browser sign-in loses its session and Rauthy answers as if the password were
+# wrong, while token grants without cookies still work. Local only; a real
+# deployment serves HTTPS and keeps the default.
+[access]
+cookie_mode = 'danger-insecure'
 
 [webauthn]
 rp_id = 'localhost'

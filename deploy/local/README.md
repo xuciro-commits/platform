@@ -79,6 +79,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 | `sales@hotel.test` | Sales `hotel-a` | `sales-1` | crm 销售、hotel 前台、memstay 管家、hr 员工；ai 用户 | 销售组、2026 年会项目 |
 | `manager@hotel.test` | Sales | `manager-1` | crm 销售经理、hotel 经理、memstay 管家、hr 人事、work 管理员；platform、org、ai 管理员 | 酒店总经理等；`hotel-a` 经理、`hospitality` 负责人（两级审批人） |
 
+- 本地 Rauthy 走 HTTP，所以 `rauthy/config.toml` 里设了 `[access] cookie_mode = 'danger-insecure'`：不设的话，Safari 会丢掉 Rauthy 的安全 cookie，浏览器登录会显示密码错误（密码其实是对的）。只用于本地。
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
 - 成员名单来自 `mes/directory.json` 和 `sales/directory.json`。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
 
