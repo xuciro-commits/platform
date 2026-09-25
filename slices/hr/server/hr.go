@@ -99,6 +99,11 @@ func New(tenant string) *App {
 	return &App{tenant: tenant, ledger: platform.NewLedger(tenant, "hr", Actions(), LeaveType)}
 }
 
+// Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0019 D6).
+func (a *App) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
+
+func (a *App) Restore(raw json.RawMessage) error { return a.ledger.Restore(raw) }
+
 func (a *App) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "hr", Title: "HR", Version: "1", Actions: a.ledger.Catalog, Entities: Entities()}
 }

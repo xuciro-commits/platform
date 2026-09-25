@@ -138,6 +138,11 @@ func (w *Work) entities() []platform.Entity {
 	}
 }
 
+// Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0019 D6).
+func (w *Work) Snapshot() (json.RawMessage, error) { return w.ledger.Snapshot() }
+
+func (w *Work) Restore(raw json.RawMessage) error { return w.ledger.Restore(raw) }
+
 func (w *Work) Manifest() platform.Manifest {
 	return platform.Manifest{ID: WorkApp, Title: "Work", Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
 		Reads: []string{"inbox", "requests", "views"}, Everyone: []string{"inbox", "requests", "views"},

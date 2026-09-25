@@ -223,8 +223,14 @@ before=$(state)
 compose restart mes-server sales-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done
 [[ $(state) == "$before" ]] || fail "state after restart differs"
+# Snapshots (ADR-0019 D6): each host saved its tenant at shutdown and started from it.
+logged() { for _ in $(seq 10); do compose logs "$1" | grep -q "$2" && return; sleep 1; done; return 1; }
+for host in mes-server sales-server; do
+  logged $host "saved a snapshot of" || fail "$host saved no snapshot at shutdown"
+  logged $host "from the snapshot at" || fail "$host did not start from its snapshot"
+done
 sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == 1 ]] || fail "a delivered webhook was sent again after the restart"
-echo "ok   restart: mes $(compose logs mes-server | grep -o 'replayed [0-9]* entries' | tail -1), sales $(compose logs sales-server | grep -o 'replayed [0-9]* entries' | tail -1); same state, revocation kept"
+echo "ok   restart: each host saved a snapshot at shutdown and started from it (mes $(compose logs mes-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
 
 # The journal is what to back up: the projections are copies rebuilt at start-up (ADR-0019).
 compose exec -T postgres pg_dump -U platform -d platform -Fc --exclude-schema='tenant_*' >"$backup/platform.dump"

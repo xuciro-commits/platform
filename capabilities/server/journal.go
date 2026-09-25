@@ -1,12 +1,17 @@
 package platformserver
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,6 +42,9 @@ var schema = []string{
 		principal jsonb not null, body jsonb not null, at timestamptz not null,
 		primary key (tenant, seq))`,
 	`alter table journal add column if not exists app text not null default ''`,
+	`create table if not exists snapshots (
+		tenant text not null, seq bigint not null, code text not null, state bytea not null,
+		at timestamptz not null default now(), primary key (tenant, seq))`,
 }
 
 func OpenJournal(ctx context.Context, url string) (*Journal, error) {
@@ -53,25 +61,70 @@ func OpenJournal(ctx context.Context, url string) (*Journal, error) {
 	return &Journal{pool: pool, next: map[string]int64{}}, nil
 }
 
-// Entries reads a tenant's entries in order; appends continue after them.
-func (j *Journal) Entries(ctx context.Context, tenant string) ([]Entry, error) {
-	rows, err := j.pool.Query(ctx, `select app, kind, principal, body, at from journal where tenant = $1 order by seq`, tenant)
+// Entries reads a tenant's entries after position after (0: all) in order;
+// appends continue after the last.
+func (j *Journal) Entries(ctx context.Context, tenant string, after int64) ([]Entry, error) {
+	rows, err := j.pool.Query(ctx, `select seq, app, kind, principal, body, at from journal where tenant = $1 and seq > $2 order by seq`, tenant, after)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []Entry
+	last := after
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.App, &e.Kind, &e.Principal, &e.Body, &e.At); err != nil {
+		if err := rows.Scan(&last, &e.App, &e.Kind, &e.Principal, &e.Body, &e.At); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	j.next[tenant] = int64(len(out)) + 1
+	j.next[tenant] = last + 1
 	return out, rows.Err()
+}
+
+// Position is the number of the tenant's last entry.
+func (j *Journal) Position(tenant string) int64 {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.next[tenant] - 1
+}
+
+// SaveSnapshot keeps a tenant's state at a position, compressed, with the code
+// that wrote it; the two newest are kept (ADR-0019 D6).
+func (j *Journal) SaveSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error {
+	var packed bytes.Buffer
+	w := gzip.NewWriter(&packed)
+	w.Write(state)
+	if err := w.Close(); err != nil {
+		return err
+	}
+	if _, err := j.pool.Exec(ctx, `insert into snapshots (tenant, seq, code, state) values ($1, $2, $3, $4) on conflict (tenant, seq) do nothing`,
+		tenant, seq, code, packed.Bytes()); err != nil {
+		return err
+	}
+	_, err := j.pool.Exec(ctx, `delete from snapshots where tenant = $1 and seq < (select min(seq) from (select seq from snapshots where tenant = $1 order by seq desc limit 2) newest)`, tenant)
+	return err
+}
+
+// Snapshot is the tenant's newest snapshot written by code, if any.
+func (j *Journal) Snapshot(ctx context.Context, tenant, code string) (int64, []byte, bool, error) {
+	var seq int64
+	var packed []byte
+	err := j.pool.QueryRow(ctx, `select seq, state from snapshots where tenant = $1 and code = $2 order by seq desc limit 1`, tenant, code).Scan(&seq, &packed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil, false, nil
+	}
+	if err != nil {
+		return 0, nil, false, err
+	}
+	r, err := gzip.NewReader(bytes.NewReader(packed))
+	if err != nil {
+		return 0, nil, false, err
+	}
+	state, err := io.ReadAll(r)
+	return seq, state, err == nil, err
 }
 
 func (j *Journal) Append(ctx context.Context, tenant string, e Entry) error {

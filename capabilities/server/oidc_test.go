@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -71,11 +72,12 @@ func TestJournal(t *testing.T) {
 	}
 	defer j.Close()
 	j.pool.Exec(ctx, `delete from journal where tenant = 't-journal'`)
+	j.pool.Exec(ctx, `delete from snapshots where tenant = 't-journal'`)
 	entry := Entry{Kind: "submission", Principal: json.RawMessage(`{"id":"p1"}`), Body: json.RawMessage(`{"a":1}`), At: Now()}
 	if j.Append(ctx, "t-journal", entry) == nil {
 		t.Fatal("append before reading must fail")
 	}
-	if got, _ := j.Entries(ctx, "t-journal"); len(got) != 0 {
+	if got, _ := j.Entries(ctx, "t-journal", 0); len(got) != 0 {
 		t.Fatalf("fresh tenant has %d entries", len(got))
 	}
 	for range 2 {
@@ -90,8 +92,25 @@ func TestJournal(t *testing.T) {
 	if other.Append(ctx, "t-journal", entry) == nil {
 		t.Fatal("stale writer appended")
 	}
-	got, err := j.Entries(ctx, "t-journal")
+	got, err := j.Entries(ctx, "t-journal", 0)
 	if err != nil || len(got) != 2 || !got[1].At.Equal(entry.At) || string(got[0].Body) != `{"a": 1}` {
 		t.Fatalf("entries %v %v", got, err)
+	}
+	// Snapshots (ADR-0019 D6): the newest of the same code, then the entries after it.
+	for seq := range int64(3) {
+		if err := j.SaveSnapshot(ctx, "t-journal", seq+1, "code-a", []byte(fmt.Sprint("state ", seq+1))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if seq, state, ok, err := j.Snapshot(ctx, "t-journal", "code-a"); err != nil || !ok || seq != 3 || string(state) != "state 3" {
+		t.Fatalf("snapshot %d %q %v %v", seq, state, ok, err)
+	}
+	if _, _, ok, _ := j.Snapshot(ctx, "t-journal", "code-b"); ok {
+		t.Fatal("a snapshot of other code was offered")
+	}
+	var kept int
+	j.pool.QueryRow(ctx, `select count(*) from snapshots where tenant = 't-journal'`).Scan(&kept)
+	if after, _ := j.Entries(ctx, "t-journal", 1); len(after) != 1 || kept != 2 || j.Position("t-journal") != 2 {
+		t.Fatalf("after 1: %d entries, %d snapshots kept, position %d", len(after), kept, j.Position("t-journal"))
 	}
 }

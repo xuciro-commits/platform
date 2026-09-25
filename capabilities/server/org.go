@@ -79,6 +79,20 @@ func NewOrganization(tenant string, seed platform.OrgSeed) *Organization {
 	return &Organization{chart: chart, ledger: platform.NewLedger(tenant, OrgApp, catalog, UnitType, StructureType)}
 }
 
+// Snapshot and Restore: the chart as decisions left it (ADR-0019 D6).
+func (o *Organization) Snapshot() (json.RawMessage, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.ledger.SnapshotWith(o.chart)
+}
+
+func (o *Organization) Restore(raw json.RawMessage) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.chart = platform.OrgSeed{}
+	return o.ledger.RestoreWith(raw, &o.chart)
+}
+
 func (o *Organization) Manifest() platform.Manifest {
 	return platform.Manifest{ID: OrgApp, Title: "Organisation", Version: "1", Actions: o.ledger.Catalog, Reads: []string{"organization"}}
 }

@@ -33,8 +33,36 @@ func CheckReplay(t testing.TB, live *Tenant, journal []Entry, build func() *Tena
 	if err := again.Replay(stored); err != nil {
 		t.Fatalf("replay: %v", err)
 	}
-	if a, b := snapshot(live), snapshot(again); a != b {
-		t.Fatalf("replayed tenant differs from the live one:\nlive:   %s\nreplay: %s", a, b)
+	want := snapshot(live)
+	if got := snapshot(again); got != want {
+		t.Fatalf("replayed tenant differs from the live one:\nlive:   %s\nreplay: %s", want, got)
+	}
+	// A snapshot is a shortcut, never a different outcome (ADR-0019 D6): taken
+	// after any prefix of the journal, restored into a new tenant, and given
+	// the rest, it reaches the live state; saved again, it saves the same.
+	for _, k := range slices.Compact([]int{0, len(stored) / 3, len(stored) / 2, len(stored)}) {
+		before := build()
+		if err := before.Replay(stored[:k]); err != nil {
+			t.Fatalf("replay of %d entries: %v", k, err)
+		}
+		saved, _, err := before.Snapshot(func() int64 { return int64(k) })
+		if err != nil {
+			t.Fatalf("snapshot after %d entries: %v", k, err)
+		}
+		restored := build()
+		restored.Outbound = again.Outbound
+		if err := restored.Restore(saved); err != nil {
+			t.Fatalf("restore of the snapshot after %d entries: %v", k, err)
+		}
+		if resaved, _, _ := restored.Snapshot(func() int64 { return 0 }); string(resaved) != string(saved) {
+			t.Fatalf("a restored snapshot saves differently after %d entries:\nsaved:   %s\nresaved: %s", k, saved, resaved)
+		}
+		if err := restored.Replay(stored[k:]); err != nil {
+			t.Fatalf("replay after the snapshot at %d: %v", k, err)
+		}
+		if got := snapshot(restored); got != want {
+			t.Fatalf("a snapshot after %d of %d entries, then the rest, differs from the live tenant:\nlive:     %s\nrestored: %s", k, len(stored), want, got)
+		}
 	}
 }
 

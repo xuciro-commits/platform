@@ -235,6 +235,28 @@ func ChannelConnector(id string) *pb.ConnectorDescriptor {
 func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Declarations() }
 
 // Manifest declares the hotel as an app (ADR-0010).
+// Snapshot and Restore: the channel's facts and the decisions; reservations
+// and room types are the host's records (ADR-0019 D6).
+func (h *Hotel) Snapshot() (json.RawMessage, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	facts, err := platform.SnapshotFacts(h.facts, h.tenant)
+	if err != nil {
+		return nil, err
+	}
+	return h.ledger.SnapshotWith(facts)
+}
+
+func (h *Hotel) Restore(raw json.RawMessage) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var facts json.RawMessage
+	if err := h.ledger.RestoreWith(raw, &facts); err != nil {
+		return err
+	}
+	return platform.RestoreFacts(h.facts, h.tenant, facts)
+}
+
 func (h *Hotel) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "hotel", Title: "Hotel", Version: "1", Actions: h.ledger.Catalog, Entities: h.entities,
 		Reads: []string{"lodging-bookings"}, Inputs: map[string]bool{"channel-bookings": true},

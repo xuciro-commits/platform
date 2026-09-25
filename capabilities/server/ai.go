@@ -115,6 +115,30 @@ func NewAI(tenant string) *AI {
 	), ProviderType, ModelType)}
 }
 
+// Snapshot and Restore: providers, models and usage (ADR-0019 D6).
+type aiState struct {
+	Providers []Provider `json:"providers"`
+	Models    []Model    `json:"models"`
+	Usage     []Usage    `json:"usage"`
+}
+
+func (a *AI) Snapshot() (json.RawMessage, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.ledger.SnapshotWith(aiState{a.providers, a.models, a.usage})
+}
+
+func (a *AI) Restore(raw json.RawMessage) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var s aiState
+	if err := a.ledger.RestoreWith(raw, &s); err != nil {
+		return err
+	}
+	a.providers, a.models, a.usage = s.Providers, s.Models, s.Usage
+	return nil
+}
+
 func (a *AI) Manifest() platform.Manifest {
 	return platform.Manifest{ID: AIApp, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage"},
 		Everyone: []string{"ai-models", "ai-usage"}, Roles: []string{AIUser}} // the user role opens models with access "users"

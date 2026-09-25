@@ -163,6 +163,11 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
 
 // Manifest declares the CRM as an app (ADR-0010).
+// Snapshot and Restore: its records are the host's; the ledger is its own (ADR-0019 D6).
+func (c *CRM) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
+
+func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) }
+
 func (c *CRM) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "crm", Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
 		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}

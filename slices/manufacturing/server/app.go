@@ -21,6 +21,41 @@ const (
 // Manifest declares the plant as the "mes" app (ADR-0010): its actions, its
 // reads, its connector inputs (batches and pages, both journaled; the host keeps
 // the connectors), its settings and its scheduled job (ADR-0013).
+// Snapshot and Restore: the plant's facts (ERP claims, gateway batches), the
+// identities and redirects of downtime events, the derived downtime and the
+// decisions; orders and SFCs are the host's records (ADR-0019 D6).
+type plantState struct {
+	Facts     json.RawMessage       `json:"facts"`
+	Identity  kernel.IdentityState  `json:"identity"`
+	Downtime  map[string][]Downtime `json:"downtime"`
+	NextEvent int                   `json:"nextEvent"`
+}
+
+func (p *Plant) Snapshot() (json.RawMessage, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	facts, err := platform.SnapshotFacts(p.facts, p.tenant)
+	if err != nil {
+		return nil, err
+	}
+	return p.ledger.SnapshotWith(plantState{Facts: facts, Identity: p.identity.State(), Downtime: p.downtime, NextEvent: p.nextEvent})
+}
+
+func (p *Plant) Restore(raw json.RawMessage) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var s plantState
+	if err := p.ledger.RestoreWith(raw, &s); err != nil {
+		return err
+	}
+	p.identity.Restore(s.Identity)
+	p.downtime, p.nextEvent = s.Downtime, s.NextEvent
+	if p.downtime == nil {
+		p.downtime = map[string][]Downtime{}
+	}
+	return platform.RestoreFacts(p.facts, p.tenant, s.Facts)
+}
+
 func (p *Plant) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog,
 		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,

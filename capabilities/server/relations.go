@@ -64,6 +64,29 @@ func NewRelations(tenant string) *Relations {
 	), LinkType, NoteType)}
 }
 
+// Snapshot and Restore: links and notes (ADR-0019 D6).
+type relationsState struct {
+	Links []Link `json:"links"`
+	Notes []Note `json:"notes"`
+}
+
+func (r *Relations) Snapshot() (json.RawMessage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.ledger.SnapshotWith(relationsState{r.links, r.notes})
+}
+
+func (r *Relations) Restore(raw json.RawMessage) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var s relationsState
+	if err := r.ledger.RestoreWith(raw, &s); err != nil {
+		return err
+	}
+	r.links, r.notes = s.Links, s.Notes
+	return nil
+}
+
 func (r *Relations) Manifest() platform.Manifest {
 	return platform.Manifest{ID: RelationsApp, Title: "Relations", Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"}}
 }

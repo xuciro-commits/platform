@@ -33,6 +33,20 @@ func NewMemory(tenant string) *Memory {
 	return &Memory{bookings: map[string]*Booking{}, ledger: platform.NewLedger(tenant, "memstay", platform.NewCatalog(actions...), "memstay.booking")}
 }
 
+// Snapshot and Restore: the bookings and the decisions (ADR-0019 D6).
+func (m *Memory) Snapshot() (json.RawMessage, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ledger.SnapshotWith(m.bookings)
+}
+
+func (m *Memory) Restore(raw json.RawMessage) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.bookings = map[string]*Booking{}
+	return m.ledger.RestoreWith(raw, &m.bookings)
+}
+
 func (m *Memory) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "memstay", Title: "Memstay", Version: "1", Actions: m.ledger.Catalog, Reads: []string{"memstay-bookings"},
 		Provides: []platform.Provision{{Protocol: Protocol(),

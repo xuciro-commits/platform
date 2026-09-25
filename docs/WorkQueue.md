@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **109 · building: snapshots** | Stage 3 (ADR-0019): aggregates, the visualization spec with ECharts 6, pivot, dashboards, saved views and projections are built. Left: snapshots (D6) — every stateful host component, app and kernel log saves and restores its state at a journal position, valid for the app versions that wrote it; `CheckReplay` checks snapshot plus tail equals full replay in every test; the plant's downtime becomes records first | A tenant with 1 000 000 journal entries restarts from a snapshot in seconds; changing an app's version forces a full replay; every `CheckReplay` passes through a snapshot |
+| **110 · next: architecture gate** | Stage 4 of the capability plan (Platform.md §10.4): flows and automation. An ADR compares ServiceNow Flow Designer, Salesforce Flow, Power Automate, Odoo automated actions, Camunda/Temporal and Oracle Integration, and proposes orchestrated processes over owned work and effects — waits, timers, human steps (tasks and approvals), compensation — with decision points for the owner | The owner has decided the ADR's points; the build items are queued with their done-when |
 | **105 · batch 1 done, owner testing** | AI providers (ADR-0015): providers, catalogs, enabled models with access, calls with journaled usage, Settings (providers, playground, usage) | The owner has tested with OpenRouter; batch 2 (quotas and rate limits, the Anthropic adapter, app calls as effects, streaming) is ordered |
 
 ## Open friction (temporary; delete entries once resolved)

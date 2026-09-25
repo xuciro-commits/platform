@@ -114,6 +114,29 @@ func (d *Console) Identities() []Identity {
 	return out
 }
 
+// Snapshot and Restore: the members, how they sign in, and the decisions (ADR-0019 D6).
+type consoleState struct {
+	Members  map[string]*platform.Member `json:"members"`
+	Subjects map[string]string           `json:"subjects"`
+}
+
+func (d *Console) Snapshot() (json.RawMessage, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.ledger.SnapshotWith(consoleState{d.members, d.subjects})
+}
+
+func (d *Console) Restore(raw json.RawMessage) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var s consoleState
+	if err := d.ledger.RestoreWith(raw, &s); err != nil {
+		return err
+	}
+	d.members, d.subjects = s.Members, s.Subjects
+	return nil
+}
+
 // Member is the member a subject signs in as, with its current roles.
 func (d *Console) Member(subject string) (platform.Member, bool) {
 	d.mu.Lock()

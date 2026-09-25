@@ -84,7 +84,7 @@ Two points carry over:
 - The journal stays the truth. Projections and snapshots are copies that can be thrown away and rebuilt.
 - Stage 7 can move the record store itself into the database behind the same reads, with the projection and snapshot machinery already in place.
 
-## As built (#109, in progress)
+## As built (#109)
 
 - **Aggregates:** `GET /v1/aggregates/<type>?group=&measure=&domain=&search=` (`Tenant.Aggregate`).
   - It is a path of its own, not `/v1/records/<type>/aggregate`, so that no record id is shadowed.
@@ -108,7 +108,17 @@ Two points carry over:
   - Lines are JSON columns, not child tables: simpler for tools, and nothing yet needs them joined.
   - A failure leaves the host serving. Backups hold only the journal (the rehearsal excludes `tenant_*`).
 - **Proven:** host tests (aggregates with scope, buckets, money, the 100 000-record timing; saved views; projection columns), kit tests (spec to query, inline aggregation, ECharts options, drill domains), the rehearsal (aggregate within scope; projected rows and history read by the tenant's reader role, refused for another tenant's), and the browser (dashboards, pivot with drill-down, chart, a saved view).
+- **Snapshots** (D6):
+  - **What is saved:** the tenant's host state (records and their history, owned work, connectors, notices, settings, endpoints, effects, bindings, the audit) and each app's own, through `platform.Snapshotter`. For apps whose data is records, that is their ledger alone (`Ledger.Snapshot`, `Ledger.SnapshotWith` for more). The plant keeps its facts, identities, redirects and derived downtime, so it snapshots them and they need not become records first.
+  - **The kernel:** the Go kernel gained restore functions for the change log, the fact log, identity, owned work and connectors (`contract/go/kernel/state.go`). They add no contract rule: a restored log answers as the saved one, and its test says so. Kernel messages are kept in their binary form, several times faster than their JSON form.
+  - **Storage:** the table `snapshots` beside the journal, compressed, the two newest per tenant.
+  - **Which snapshot is used:** one is valid for its code, a hash of the binary and the apps' versions, so any other build replays the whole journal and then saves its own.
+  - **When one is taken:** `-snapshot-every` entries once the journal also grew by a tenth, and at shutdown (SIGTERM). A failed restore stops the host with a hint (`-snapshot-every=0` replays everything).
+  - **Pause:** decisions wait only while the state is captured. Records are immutable once stored, so they are encoded after the lock.
+  - **Checked in every composition:** `CheckReplay` takes a snapshot after no entries, a third, half and all of each test's journal, restores it into a new tenant, and checks that saving again gives the same bytes and that replaying the rest reaches the live state. A deliberately broken restore fails the host tests.
+  - **The rehearsal:** both hosts save a snapshot at shutdown and start from it, and a restored backup starts from its snapshot.
+  - **Measured** (`PLATFORM_SCALE=1000000 go test -run TestSnapshotAtScale` in `solutions/sales`), one million entries: full replay 22 s, restore 5.5 s from a 746 MB snapshot (before compression). While one was taken, a decision waited at most 1 s.
 - **Not yet:**
-  - snapshots (D6), after measuring replay at about 60 000 entries a second: linear, a million in about 17 s;
-  - downtime as records, so the plant's dashboard can show downtime by reason.
-
+  - capturing app state without the tenant's lock, which is what that second of waiting is now;
+  - restoring entity types in parallel;
+  - downtime as records, for a plant chart of downtime by reason.

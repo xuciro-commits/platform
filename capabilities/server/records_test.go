@@ -56,6 +56,8 @@ func newStock(tenant string) *stock {
 func (s *stock) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "stock", Version: "1", Actions: s.ledger.Catalog, Entities: stockEntities()}
 }
+func (s *stock) Snapshot() (json.RawMessage, error)       { return s.ledger.Snapshot() }
+func (s *stock) Restore(raw json.RawMessage) error        { return s.ledger.Restore(raw) }
 func (s *stock) Declarations() []*pb.AuthorityDeclaration { return s.ledger.Declarations() }
 func (s *stock) Read(platform.Caller, string) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}

@@ -133,7 +133,7 @@ Status legend:
 | 0016 | Entity declarations, the record store, generic reads, scope, history, generated actions and pages | Implemented (#106); CRM, Hotel, manufacturing |
 | 0017 | Lifecycles, approvals, tasks and the inbox | Implemented (#107); the helpdesk proof, delegation and calendars deferred |
 | 0018 | One workspace: one sign-in, a launcher, apps as contributions, cross-app references | Implemented (#108); global search, the backend-for-frontend and run-time UI bundles deferred |
-| 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented except snapshots (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
+| 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
@@ -221,11 +221,13 @@ Volatile by design, not rebuilt: heartbeats, a connector's last refused input, e
 
 Removing an action schema, input or effect kind that a journal already holds needs a migration: replay would meet an entry no code accepts.
 
+**Snapshots** (ADR-0019 D6) shorten replay without changing it: a tenant's state saved at a journal position, by the code that wrote it (the binary and its apps' versions), restored at start-up, then only the later entries replayed. Other code ignores it and replays the whole journal. A snapshot is taken every N entries (and a tenth of the journal), and at shutdown.
+
 #### Invariants and the checks that hold them
 
 | Invariant | Check |
 |---|---|
-| Replay reproduces everything the host shows, and calls nothing outside | `platformserver.CheckReplay` in the tests of the host, manufacturing, Hotel and the sales solution |
+| Replay reproduces everything the host shows, and calls nothing outside; so does a snapshot taken after any part of the journal, restored and given the rest | `platformserver.CheckReplay` in the tests of the host, manufacturing, Hotel, CRM, HR and the sales solution (four snapshot points each); the rehearsal's restart and restore |
 | A manifest the host cannot honour is refused at composition: undescribed actions, settings whose default is not of their type, jobs without an interval, repeated effect kinds, open reads not declared, actions using anything but a consumed protocol's action, subscriptions to another app's actions, protocols no earlier app provides | `checkManifest` and `NewTenant`, run by every composition's tests |
 | No app depends on another app; a protocol depends on no app; app and protocol packages import the app API and never the host runtime (only binaries and `*test` harnesses compose tenants) | `scripts/boundaries.sh` (verify step `app-boundaries`), on imports; the runtime is reachable only through `platform.Runtime` |
 | Rules scope by the input's time, so a replay decides alike | `Caller.Units(structure, now)`; organisation test |
@@ -473,6 +475,10 @@ ADR-0015, batch 1. The `ai` platform app holds providers and enabled models as d
 
 Entities are declared once (ADR-0016) and move through declared lifecycles with approvals along the organisation and one inbox (ADR-0017): CRM, Hotel, manufacturing and HR. One workspace per host (ADR-0018) opens every app a member holds a role in after one sign-in; records open across apps by reference, and a protocol's record in its bound provider's view. What held: the host already decided identity and membership, so one sign-in needed no server change beyond telling the client its apps; the client side lost three sites and three OIDC clients.
 
+### Read models, analytics and snapshots (#109, stage 3)
+
+Aggregates over any entity type within the member's scope; the platform's visualization spec with ECharts 6 behind it; pivot, charts and saved views on every list; app dashboards; typed PostgreSQL projections with a reader role per tenant; snapshots. What held: the record store (ADR-0016) made analytics one generic read, and replay-as-truth made snapshots checkable everywhere at once — `CheckReplay` restores a snapshot at four points of every test journal. What it cost: every app implements `platform.Snapshotter` (for most, its ledger alone), and the Go kernel gained restore functions that add no contract rule.
+
 ### Shared capability models (candidates, layer 2)
 
 Across domains the business differs but the data is organised alike. These are **capability candidates**, not kernel: they carry domain-like vocabulary and are promoted only when two domains use them without exceptions (§4 rules). The UI kit (`web/packages/ui`, ADR-0004) already gives them one presentation.
@@ -651,7 +657,7 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 | Capability | Status |
 |---|---|
 | Journal, replay, backup and restore, OIDC, deployment flags | have |
-| Snapshots and checkpoints, so start-up does not replay all history | missing, needed before any large tenant |
+| Snapshots and checkpoints, so start-up does not replay all history | have (ADR-0019): a million entries restore in about 5 s instead of 22 s |
 | Structured logs, metrics, traces with correlation | partial |
 | Health of apps and the journal | partial |
 | Package versions, upgrades and per-tenant enablement (ADR-0010 amended) | partial |
