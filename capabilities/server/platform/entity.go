@@ -86,7 +86,7 @@ type Lifecycle struct {
 type State struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
-	Tone        string `json:"tone,omitempty"`        // info, success, warning, danger, neutral
+	Tone        string `json:"tone,omitempty" enum:"info,success,warning,danger,neutral"`
 	Description string `json:"description,omitempty"` // what a record in this state means (ADR-0023 D1)
 }
 
@@ -167,12 +167,15 @@ func (s Scope) Level(role string) string {
 type FieldInfo struct {
 	Name     string   `json:"name"`
 	Title    string   `json:"title"`
-	Type     string   `json:"type"` // text, longtext, integer, decimal, money, date, datetime, boolean, choice, reference, references, tags, lines
+	Type     string   `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines"`
 	Required bool     `json:"required,omitempty"`
 	Search   bool     `json:"search,omitempty"`
 	ReadOnly bool     `json:"readOnly,omitempty"`
 	Choices  []string `json:"choices,omitempty"`
-	Ref      string   `json:"ref,omitempty"` // the entity type a reference points to
+	// ChoiceTitles are the choices in the reader's language, beside the values
+	// records hold; the host fills them when it translates (ADR-0023).
+	ChoiceTitles []string `json:"choiceTitles,omitempty"`
+	Ref          string   `json:"ref,omitempty"` // the entity type a reference points to
 	// Knowledge marks a text field agents and members find through the
 	// knowledge app (ADR-0022 D1), tag knowledge:"true".
 	Knowledge bool `json:"knowledge,omitempty"`

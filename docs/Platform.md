@@ -107,6 +107,7 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 | Identity provider | Host runtime | OIDC subjects; the directory maps them to members | `OIDC`, Rauthy | every deployed host |
 | Languages (ADR-0023) | App API, host runtime, web | Dictionaries shipped with each app's manifest and UI package, keyed by the English text; declarations in the member's language (their choice, else the browser's, else the tenant's default), choice values with translated titles; notifications, tasks and mail said in the reader's language through patterns; `t()` and a language switch in the workspace; agents answer in the run's language | `platform.Languages`, `languages.go`, `@platform/ui` `i18n.ts` | every app (English, Simplified Chinese) |
 | Meaning and glossary (ADR-0023) | App API, platform app `knowledge` | Descriptions, help, examples and synonyms declared with entity types, fields and states; served to people, forms, tool schemas and agents' prompts; search by a type's names; the tenant's glossary layered on top, never changing a declaration | `Entity.Description`, tags `help`, `synonyms`, `example`, `knowledge.term` | CRM, MES, helpdesk (test app) |
+| Host API contract (ADR-0023) | Host runtime | OpenAPI 3.1 of every route and named read, generated from the Go types, with the caller's entity types and action payloads; TypeScript types generated from it | `api.go`, `/v1/openapi.json`, `cmd/api-types`, `@platform/kernel` `Api` | every web package |
 | Agent doors | Host runtime | A caller's catalog as MCP tools; published agents over A2A 1.0 (JSON-RPC, agent cards) | `POST /mcp`, `/a2a/<tenant>/<agent>`, `cmd/mes-agent` | every host; helpdesk published |
 | Console | Platform app `platform` | Members, roles, service accounts and agents; audit and deliveries; app settings; protocol binding; endpoints; approval and retry of effects | `console.go` | every host |
 | Organisation (ADR-0012) | Platform app `org` | Units in dated structures, memberships; rules ask for a member's units at the input's time | `org.go`, `Caller.Units` | manufacturing, HR, sales |
@@ -274,7 +275,7 @@ Edge / client runtimes
 
 **The kernel is a contract, not a library** ([ADR-0002](ADR/0002-kernel-as-contract.md)). It is defined by schemas, semantic rules and conformance test vectors; Go implements it first. A runtime either implements the contract and passes the same vectors, or maps to it at its boundary. Cross-language boundaries exist only where justified — no four parallel implementations of everything. Swift and Tauri clients do not share a Rust edge core yet ([ADR-0005](ADR/0005-no-shared-edge-core-yet.md)).
 
-The kernel contract covers what edges and the server must agree on to exchange decisions. The host's HTTP API — actions, entities, records, inbox, context, search, knowledge — is what every web client, integrator and agent actually uses, and it has no contract of its own yet: its TypeScript side is written by hand (§10.4, stage 6).
+The kernel contract covers what edges and the server must agree on to exchange decisions. The host's HTTP API — actions, entities, records, inbox, context, search, knowledge — is what every web client, integrator and agent uses; its contract is generated from the host's Go types as OpenAPI 3.1 at `/v1/openapi.json`, and the web edge's TypeScript types are generated from it (ADR-0023 D7).
 
 ## 4. Kernel — current definition (hypotheses under test)
 
@@ -474,8 +475,7 @@ Built capabilities are in the capability map (§2.4). This is what remains, with
 
 | Area | Capability | What an app gets | Reference |
 |---|---|---|---|
-| Application model | Host API contract | An OpenAPI description generated from the host's routes and each tenant's manifests; typed TypeScript clients generated from it | Salesforce and Dataverse metadata APIs, OData |
-| | Attachments and files | Files on records, object storage, preview, retention; files as knowledge | Odoo `ir.attachment`, ServiceNow attachments |
+| Application model | Attachments and files | Files on records, object storage, preview, retention; files as knowledge | Odoo `ir.attachment`, ServiceNow attachments |
 | | Number sequences | Readable document numbers per tenant, unit and year, without gaps across replays | Odoo `ir.sequence` |
 | | Comments, mentions and followers | A conversation on any record, followers notified (timeline notes exist) | Odoo `mail.thread`, Salesforce Chatter |
 | | Import and export | CSV/Excel in and out through the same actions | Odoo import, Salesforce Data Loader |
@@ -514,7 +514,7 @@ Stages 1–5 are built: the application model (ADR-0016), lifecycles, approvals 
 
 | Stage | Contents | Why this order | Proven when |
 |---|---|---|---|
-| 6. The model speaks, the API is a contract | Languages and meaning (6a, 6b built, ADR-0023); the host API contract with generated TypeScript clients; the developer kit (app guide, scaffold, skills) | Every agent, integrator, coding agent and UI reads the model; it is cheap, and every later stage uses it | An agent answers better with descriptions than without in an evaluation; the workspace compiles against generated clients; a new app is scaffolded and passes `CheckReplay` |
+| 6. The model speaks, the API is a contract | Languages and meaning (6a, 6b), the host API contract (6c), all built (ADR-0023); the host API contract with generated TypeScript clients; the developer kit (app guide, scaffold, skills) | Every agent, integrator, coding agent and UI reads the model; it is cheap, and every later stage uses it | An agent answers better with descriptions than without in an evaluation; the workspace compiles against generated clients; a new app is scaffolded and passes `CheckReplay` |
 | 7. The application half, completed | Files and attachments (also as knowledge), number sequences, comments and followers, business calendars, record-state triggers, import and export, field-level security, delegation; the kit's remaining families (boards, time views, trees, mobile and field tasks), each once | The classic platform features every reference app still lacks; calendars unblock service levels and flows' timeouts | The ERP's purchasing and inventory built from declarations only (#115); the helpdesk's service level on a business calendar |
 | 8. AI control plane | Quotas, rate limits and streaming (ADR-0015 batch 2); the agents overview with value and an off switch; evaluation suites; traces across agents; MCP authorization and resources | Agents exist in three apps and outside ones call in; governing them at scale is the next gap the references closed in 2026 | An administrator sees every agent's use and value, switches one off, and a standard MCP client signs in and acts within its grants |
 | 9. Scale and delivery | Many tenants per process, provisioning, package upgrades, the backend-for-frontend token, run-time UI bundles, bulk data out | When a second real organisation or team comes | A new team ships an app without touching the host |

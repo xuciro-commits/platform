@@ -240,7 +240,7 @@ func TestWorkspaceSurface(t *testing.T) {
 		}
 	}
 	h.Issuer, h.Client = "https://id.example/", "platform-web"
-	if got := call("/v1/sign-in", "", ""); got != `200 {"client":"platform-web","issuer":"https://id.example/"}` {
+	if got := call("/v1/sign-in", "", ""); got != `200 {"issuer":"https://id.example/","client":"platform-web"}` {
 		t.Errorf("a production host signs in with %s", got)
 	}
 }

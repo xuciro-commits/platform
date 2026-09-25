@@ -476,18 +476,20 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		out, _, _ := platform.Find[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
 		return out, nil
 	}
-	type view struct {
-		ID           string          `json:"id"`
-		App          string          `json:"app"`
-		Title        string          `json:"title"`
-		Instructions string          `json:"instructions"`
-		Tools        []string        `json:"tools"`
-		Budget       platform.Budget `json:"budget"`
-	}
-	out := []view{}
+	out := []AgentInfo{}
 	for _, id := range slices.Sorted(maps.Keys(a.defs)) {
 		d := a.defs[id]
-		out = append(out, view{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
+		out = append(out, AgentInfo{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil
+}
+
+// AgentInfo is a declared agent as people see it.
+type AgentInfo struct {
+	ID           string          `json:"id"`
+	App          string          `json:"app"`
+	Title        string          `json:"title"`
+	Instructions string          `json:"instructions"`
+	Tools        []string        `json:"tools"`
+	Budget       platform.Budget `json:"budget"`
 }

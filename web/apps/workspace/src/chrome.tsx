@@ -4,15 +4,15 @@
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
 import { Assistant, DashboardView, RecordDetail, Records, RunView, Search, useHost, useOpenRecord, useRead, type AppUI, type SavedView } from "@platform/app";
-import type { Entry } from "@platform/kernel";
+import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
   type ColumnDef, type InboxTask, type View,
  t } from "@platform/ui";
 import { useState } from "react";
 
-type Notification = { id: string; app: string; title: string; body?: string; ref?: string; at: string; read: boolean };
-type Request = { id: string; title: string; target: string; state: string; level: number; levels: { title: string; approvers: string[]; approved: string[] }[]; outcome?: string };
+type Notification = Api.Notification;
+type Request = Api.ApprovalRequest;
 
 const requestStates = defineStatuses({ pending: { label: t("Pending"), tone: "warning" }, approved: { label: t("Approved"), tone: "success" },
   rejected: { label: t("Rejected"), tone: "danger" }, refused: { label: t("Refused when run"), tone: "danger" }, withdrawn: { label: t("Withdrawn"), tone: "neutral" } });

@@ -4,17 +4,17 @@
 // each app's UI package contributes its views and navigation through defineApp.
 import "./i18n";
 import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
-import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
+import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
 import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { chromeViews } from "./chrome";
 
-/** A development identity of a host on development tokens (GET /v1/sign-in). */
-export type Identity = { token: string; tenant: string; member: string; roles: Record<string, string> };
-type Notification = { read: boolean };
-type ProtocolInfo = { id: string; bound?: string };
+/** A development identity of a host on development tokens (GET /v1/sign-in); generated from the host (ADR-0023). */
+export type Identity = Api.Identity;
+type Notification = Api.Notification;
+type ProtocolInfo = Api.ProtocolInfo;
 
 // The UI packages this workspace is built with (D2): each loads only when the
 // member holds a role in an app it serves. Settings serves the platform's apps.

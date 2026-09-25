@@ -6,7 +6,7 @@
 // (ADR-0021) and the audit trail. Every change is a decision.
 import "./i18n";
 import { GeneratedForm, Records, defineApp, newId, useHost, useReadQuery as useRead, type AgentInfo, type Passage } from "@platform/app";
-import type { EdgeClient } from "@platform/kernel";
+import type { EdgeClient, Api } from "@platform/kernel";
 import {
   Button, Card, DataTable, Dialog, EntityCard, EntityForm, FlowView, Input, PageHeader, Select, Tag, useWorkspace,
   type ColumnDef, type FlowDefinition, type FlowInstanceData, type View,
@@ -16,19 +16,18 @@ import { BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Cable, FlaskConi
 import { useState } from "react";
 import { z } from "zod";
 
-type Member = { id: string; tenant: string; roles: Record<string, string>; subjects: string[]; agent?: boolean };
-type Capability = { name: string; enabled: boolean; actions: string[] };
-type AppInfo = { emits?: { name: string; title: string; description: string }[]; id: string; version: string; reads: string[]; roles: string[]; capabilities: Capability[]; inputs: string[]; uses: string[]; subscribes: string[]; provides: string[]; consumes: string[] };
-type ProtocolInfo = { id: string; actions: string[]; reads: string[]; events: { name: string; title: string }[]; providers: string[]; consumers: string[]; bound?: string };
-type Delivery = { at: string; app: string; action: string; target: string; subscriber: string; outcome: string; attempt?: number };
-type Task = { id: string; kind: "delivery" | "job"; app: string; title: string; state: string; attempts: number; last?: string; due?: string; error?: string };
-type Connector = { id: string; direction: string; dataClasses: string[]; heartbeat: string; health: string; lastSeen?: string; cursor?: string; disabled: boolean;
-  lastError?: { at: string; input: string; error: string } };
-type EndpointView = { id: string; kind: string; url: string; secret?: string; from?: string; notifications?: string[]; events?: string[]; effects?: string[]; allowPrivate?: boolean; pending: number; failing: number; health: string; delivered: number };
-type Effect = { id: string; endpoint: string; event: string; target: string; at: string; state: string; agent?: string; attempts: number; last?: string; due?: string; error?: string; digest?: string };
-type SettingValue = { name: string; title: string; description: string; type: "boolean" | "integer" | "text" | "choice"; default: string; choices?: string[]; value: string };
-type AppSettings = { app: string; settings: SettingValue[] };
-type AuditEntry = { at: string; member: string; app: string; action: string; target?: string };
+// What the host answers with is generated from its Go types (ADR-0023 D7).
+type Member = Api.MemberView;
+type AppInfo = Api.AppInfo;
+type ProtocolInfo = Api.ProtocolInfo;
+type Delivery = Api.Delivery;
+type Task = Api.Task;
+type Connector = Api.ConnectorView;
+type EndpointView = Api.EndpointView;
+type Effect = Api.Effect;
+type SettingValue = Api.SettingValue;
+type AppSettings = Api.AppSettings;
+type AuditEntry = Api.AuditEntry;
 
 type Admin = {
   client: EdgeClient; apps: AppInfo[];
@@ -37,11 +36,8 @@ type Admin = {
 };
 
 // The organisation (ADR-0012): units in several structures, memberships, all dated.
-type Unit = { id: string; name: string; kind: string; legal?: boolean; external?: boolean; from?: string; until?: string; closed?: string };
-type Structure = { id: string; name: string; kind: string; matrix?: boolean };
-type Edge = { structure: string; unit: string; parent: string; relation?: string; share?: number; from?: string; until?: string };
-type Membership = { party: string; unit: string; role: string; primary?: boolean; from?: string; until?: string };
-type Chart = { structures: Structure[]; units: Unit[]; edges: Edge[]; memberships: Membership[] };
+type Edge = Api.Edge;
+type Chart = Api.OrgSeed;
 const today = () => new Date().toISOString().slice(0, 10);
 const active = (x: { from?: string; until?: string }, day: string) => (x.from ?? "") <= day && (!x.until || day < x.until);
 // The administrator's host: decisions about members, and about any target.
@@ -585,12 +581,12 @@ function Audit() {
 // AI providers (ADR-0015): providers and models are decisions of the ai app;
 // catalogs are read live from each provider; calls go through the host, which
 // meters them. Keys stay in the secret store; only their names appear here.
-type Vendor = { id: string; name: string; baseUrl: string };
-type Provider = { id: string; kind: string; vendor?: string; baseUrl: string; secret?: string };
-type AIModel = { provider: string; model: string; access: string };
-type CatalogModel = { id: string; name?: string; context?: number; free?: boolean };
-type Usage = { at: string; member: string; agent?: boolean; model: string; served?: string; input: number; output: number; cost?: number; millis: number; outcome: string };
-type Total = { day: string; member: string; model: string; calls: number; failed: number; input: number; output: number; cost: number };
+type Vendor = Api.Vendor;
+type Provider = Api.Provider;
+type AIModel = Api.Model;
+type CatalogModel = Api.CatalogModel;
+type Usage = Api.Usage;
+type Total = Api.Total;
 const locals = [
   { label: t("LM Studio"), url: "http://host.docker.internal:1234/v1" }, { label: t("Ollama"), url: "http://host.docker.internal:11434/v1" },
   { label: t("llama.cpp server"), url: "http://host.docker.internal:8080/v1" },

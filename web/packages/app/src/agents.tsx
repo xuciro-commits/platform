@@ -4,23 +4,21 @@
 // about a record, and the global search over every type the member may read.
 import "./i18n";
 import { Button, Card, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses, t, language } from "@platform/ui";
+import type { Api } from "@platform/kernel";
 import { useState } from "react";
 import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "./index";
 
-export type RunStep = { at: string; tool: string; arguments?: string; rationale?: string; outcome: string; tokens?: number };
-export type RunDraft = { kind: string; action: string; target: string; type?: string; payload: string; rationale?: string; step: number };
-export type RunSignal = { at: string; kind: string; by: string; detail?: string; value?: string };
-export type AgentRun = {
-  id: string; agent: string; title: string; goal: string; ref?: string; onBehalf?: string; flow?: string; step?: string;
-  state: string; model?: string; steps: RunStep[]; stepsUsed: number; tokensUsed: number; actionsUsed: number; cost?: number;
-  result?: string; stopped?: string; draft?: RunDraft[]; signals?: RunSignal[]; citations?: Citation[];
-};
-export type Citation = { document: string; title: string; chunk: number; step: number };
-export type Passage = { document: string; title: string; chunk: number; text: string; score: number };
-export type Memory = { id: string; agent: string; fact: string; for?: string; run?: string; state: string; expires?: string };
-type Transcript = { at: string; member: string; model: string; request: unknown; answer: unknown; outcome: string };
-export type AgentInfo = { id: string; app: string; title: string; instructions: string; tools: string[]; budget: { Steps: number; Tokens: number; Actions: number } };
-type Hit = { type: string; id: string; title: string };
+// Generated from the host's Go types (ADR-0023 D7).
+export type RunStep = Api.RunStep;
+export type RunDraft = Api.Draft;
+export type RunSignal = Api.Signal;
+export type AgentRun = Api.AgentRunRecord;
+export type Citation = Api.Citation;
+export type Passage = Api.Passage;
+export type Memory = Api.Memory;
+type Transcript = Api.Transcript;
+export type AgentInfo = Api.AgentInfo;
+type Hit = Api.Hit;
 
 export const runStates = defineStatuses({ running: { label: t("Working"), tone: "info" }, waiting: { label: t("Waiting for you"), tone: "warning" },
   done: { label: t("Done"), tone: "success" }, stopped: { label: t("Stopped"), tone: "danger" } });

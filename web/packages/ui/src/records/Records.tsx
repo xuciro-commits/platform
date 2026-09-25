@@ -16,20 +16,20 @@ import { Chart } from "../charts/Chart";
 import { Pivot } from "../charts/Pivot";
 import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
 import { t } from "../i18n";
+import type { Api } from "@platform/kernel";
 
-export type FieldInfo = {
-  name: string; title: string; required?: boolean; search?: boolean; readOnly?: boolean; choices?: string[]; choiceTitles?: string[]; ref?: string; help?: string; synonyms?: string; example?: string;
-  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines";
-};
-export type State = { name: string; title: string; tone?: "info" | "success" | "warning" | "danger" | "neutral" };
-export type Lifecycle = { field: string; initial: string; states: State[]; transitions: { name: string; schema: string; title: string; from: string[]; to: string[] }[] };
-export type EntityInfo = { type: string; title: string; plural: string; description?: string; synonyms?: string; app: string; display: string; fields: FieldInfo[]; standard: string[]; lifecycle?: Lifecycle };
-export type Stamp = { by?: string; at?: string; change?: string };
+// What the host describes is generated from its Go types (ADR-0023 D7); the kit
+// only refines what it holds in general: any entity's record.
+export type FieldInfo = Api.FieldInfo;
+export type State = Api.State;
+export type Lifecycle = Api.LifecycleInfo;
+export type EntityInfo = Api.EntityInfo;
+export type Stamp = Api.Stamp;
 export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;
 export type RecordQuery = { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean };
-export type RecordPageData = { records: EntityRecord[]; total: number };
-export type RecordChange = { change: string; schema: string; by: string; at: string; fields: { field: string; before?: unknown; after?: unknown }[] };
-export type RecordView = { record: EntityRecord; history: RecordChange[]; related: { type: string; field: string; title: string; records: EntityRecord[]; total: number }[] };
+export type RecordPageData = Omit<Api.RecordPage, "records"> & { records: EntityRecord[] };
+export type RecordChange = Api.RecordChange;
+export type RecordView = Omit<Api.RecordView, "record" | "related"> & { record: EntityRecord; related: (Omit<Api.Related, "records"> & { records: EntityRecord[] })[] };
 export type Money = { amount: number; currency: string };
 
 /** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart (ADR-0019). */
@@ -305,9 +305,8 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   );
 }
 
-export type InboxTask = { id: string; title: string; body?: string; ref?: string; app: string; candidates: string[]; assignee?: string; due?: string; state: string;
-  /** What the person may answer (a flow's question, ADR-0020); none: done. */
-  answers?: string[] };
+/** A task offered to a member; `answers` are what a flow's question offers (ADR-0020), none: done. */
+export type InboxTask = Api.WorkTask;
 
 /** A member's open tasks (ADR-0017), overdue first; each can open what it is about and offers the actions the app gives it. */
 export function Inbox({ tasks, onOpen, actions, empty = t("Nothing for you") }: {

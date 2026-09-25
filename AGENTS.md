@@ -27,6 +27,7 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 | `docs/Intent.md` | The owner's intent and direction: what the platform is, how capabilities are chosen (from reference platforms, not one product's pull), what stays true, working with AI |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
+| `web/packages/kernel/src/gen/host.ts` | The host API's TypeScript types (exported as `Api` from `@platform/kernel`), generated from the host's Go types by `capabilities/server/cmd/api-types`; never edited (ADR-0023 D7) |
 | `.github/workflows/verify.yml` | CI: `scripts/verify.sh ci`, `web` and `hotel` on every push (Swift and the Docker rehearsal stay on the owner's Mac; timing bounds off with `PLATFORM_TIMING=0`) |
 | `scripts/verify.sh` | All checks (`scripts/boundaries.sh`: dependency boundaries between apps and the host) |
 | `.claude/skills/` | Procedures for coding agents in this repository: `architecture-gate` (open a stage with an ADR the owner decides), `close-out` (finish a batch: checks, documents, commit) |

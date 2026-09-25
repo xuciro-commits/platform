@@ -25,6 +25,7 @@ A batch is done when its checks pass and its documents say what now exists, in t
 | A new directory, platform app or skill | The map in `AGENTS.md` |
 | The item's state | `docs/WorkQueue.md`; delete the item when done |
 | Friction found on the way | An `F-n` row in `docs/WorkQueue.md` |
+| A type or route the host answers with | `go run ./cmd/api-types` in `capabilities/server` (`TestAPIContract` fails on a stale `host.ts`); a new route is declared with its `Route` |
 | A new title, description, choice or UI word | Its Chinese in the app's `i18n/zh-CN.json` or the package's `i18n.ts` (AGENTS.md rule 10; `TestChinese`, `TestLanguages` and the kit's i18n test fail otherwise) |
 
 Then search the docs for the capability's name and fix every stale mention: `grep -rn "<name>" docs AGENTS.md deploy/local/README.md`.

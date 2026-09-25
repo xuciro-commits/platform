@@ -3,7 +3,7 @@
 // reaches the host only through useHost, as a server-side app reaches it only
 // through its Caller. The workspace signs in once, for every app.
 import "./i18n";
-import type { ActionDeclaration, EdgeClient, Entry } from "@platform/kernel";
+import type { ActionDeclaration, Api, EdgeClient, Entry } from "@platform/kernel";
 import {
   Button, Chart, Dialog, Input, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
@@ -12,15 +12,9 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
-export type AppEntry = { id: string; title: string; role: string };
-/** The signed-in member on this host. */
-export type Me = {
-  tenantId: string; principalId: string;
-  profile: { id: string; roles: Record<string, string>; agent?: boolean };
-  apps: AppEntry[]; tenants: string[];
-  /** The language the host serves this member in, and the member's own choice (ADR-0023). */
-  language?: string; languages?: string[]; preferred?: string;
-};
+export type AppEntry = Api.AppEntry;
+/** The signed-in member on this host, with their language (ADR-0023). */
+export type Me = Api.MeView;
 export type Decision = { evidence?: string[]; expectedRevision?: number };
 
 /** What an app's UI may use of the host, for the signed-in member. */
@@ -112,7 +106,7 @@ export function GeneratedForm({ type, record, onSubmit, onCancel, submitLabel }:
 }
 
 /** A member's saved view of a list (the work app's `views` read). */
-export type SavedView = { id: string; title: string; entity: string; state: string };
+export type SavedView = Api.SavedView;
 
 /**
  * The list page of an entity type: the host's search, sort and pages, within

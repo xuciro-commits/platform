@@ -1,15 +1,11 @@
 // A browser edge of a server-authoritative domain: a persisted K5 outbox and an
 // HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
+import type { Action } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 
-/** One action a server offers to this caller (platformserver.Action, ADR-0008): render from it, never re-check roles. */
-export type ActionDeclaration = {
-  schema: string; target: string; capability: string; title: string; description: string;
-  payload: { name: string; type: string; required?: boolean; description: string }[];
-  /** The action waits for approvers before it takes effect (ADR-0017). */
-  needsApproval?: boolean;
-};
+/** One action a server offers to this caller (ADR-0008): render from it, never re-check roles. Generated from the host (ADR-0023). */
+export type ActionDeclaration = Action;
 
 export type Connection = { server: string; token: string; tenant: string; principal: string };
 

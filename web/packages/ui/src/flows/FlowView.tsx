@@ -3,9 +3,10 @@
 import { StatusTag, defineStatuses } from "../components/StatusTag";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
+import type { Api } from "@platform/kernel";
 
-export type FlowStep = { name: string; title: string; kind: string; next: string[]; chooses?: boolean };
-export type FlowDefinition = { id: string; app: string; title: string; version: number; start: string[]; steps: FlowStep[] };
+export type FlowStep = Api.FlowStep;
+export type FlowDefinition = Api.FlowDefinition;
 export type FlowToken = { id: number; step: string; branch?: string; waits?: string; attempts?: number; due?: string; task?: string; child?: string; error?: string };
 export type FlowTrace = { at: string; step?: string; what: string; detail?: string; by?: string };
 export type FlowInstanceData = {
