@@ -52,3 +52,9 @@ func (r runtime) Deliver(c platform.Caller, dataClass, from, to string, now time
 	defer r.t.opsMu.Unlock()
 	return r.t.connectors.Deliver(c.Tenant, c.ID, dataClass, from, to, now)
 }
+
+func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
+	return r.t.assign(c, rec, a)
+}
+
+func (r runtime) Probing() bool { return r.t.probing }

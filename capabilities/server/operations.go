@@ -318,6 +318,18 @@ func (t *Tenant) Connectors(now time.Time) []ConnectorView {
 const noticesKept = 2000
 
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
+	members := t.recipients(c, now, to)
+	address := map[string]string{} // members who sign in as user:<email> may be mailed (mail.go)
+	if d, ok := t.app(PlatformApp).(*Console); ok {
+		for _, m := range members {
+			address[m] = d.address(m)
+		}
+	}
+	return t.notice(c, n, now, members, address)
+}
+
+// recipients are the members to resolves to on now's day (ADR-0012).
+func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
 	var members []string
 	for _, r := range to {
 		if r.Member != "" && !slices.Contains(members, r.Member) {
@@ -340,12 +352,10 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 			}
 		}
 	}
-	address := map[string]string{} // members who sign in as user:<email> may be mailed (mail.go)
-	if d, ok := t.app(PlatformApp).(*Console); ok {
-		for _, m := range members {
-			address[m] = d.address(m)
-		}
-	}
+	return members
+}
+
+func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Time, members []string, address map[string]string) []string {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	var out []string

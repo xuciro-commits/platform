@@ -8,7 +8,8 @@
       "crm": "sales",
       "hotel": "front-desk",
       "memstay": "keeper",
-      "ai": "user"
+      "ai": "user",
+      "hr": "employee"
     },
     "units": [
       {
@@ -33,7 +34,9 @@
       "platform": "admin",
       "org": "admin",
       "memstay": "keeper",
-      "ai": "admin"
+      "ai": "admin",
+      "hr": "hr",
+      "work": "admin"
     },
     "units": [
       {
@@ -48,6 +51,14 @@
       {
         "unit": "guest-committee",
         "role": "chair"
+      },
+      {
+        "unit": "hotel-a",
+        "role": "manager"
+      },
+      {
+        "unit": "hospitality",
+        "role": "head"
       }
     ]
   }

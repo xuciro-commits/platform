@@ -1,6 +1,11 @@
 package platform
 
-import "slices"
+import (
+	"slices"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+)
 
 // Action declares one business action a domain offers (ADR-0008): the submission
 // schema that carries it, what it acts on, the capability it belongs to, and a
@@ -17,6 +22,33 @@ type Action struct {
 	// Uses names protocol actions this one invokes (ProtocolAction); a caller
 	// is offered it only when it may call the bound provider's (ADR-0009, ADR-0011).
 	Uses []string `json:"uses,omitempty"`
+	// Approval holds the action until its approvers agree (ADR-0017).
+	Approval *Approval `json:"-"`
+	// NeedsApproval tells callers the action waits for approval (set by NewCatalog).
+	NeedsApproval bool `json:"needsApproval,omitempty"`
+}
+
+// Approval is the chain of approvers an action waits for (ADR-0017 D2–D4):
+// levels in order; the last approval runs the held submission again, and its
+// rules decide at that time.
+type Approval struct {
+	Levels []ApprovalLevel
+}
+
+// ApprovalLevel names its approvers: holders of Role in the requester's units
+// or above them in Structure (a manager, a department head), holders of
+// AppRole in the action's app, or a named Member. All asks every approver;
+// otherwise any one decides. When, if set, says whether the level applies to
+// this submission (an amount, a number of days). Due is how long its task may
+// wait before it escalates.
+type ApprovalLevel struct {
+	Title           string
+	Structure, Role string
+	AppRole         string
+	Member          string
+	All             bool
+	When            func(c Caller, s *pb.Submission) bool
+	Due             time.Duration
 }
 
 // Field describes one payload field of an action.
@@ -35,6 +67,9 @@ type Catalog struct {
 }
 
 func NewCatalog(actions ...Action) *Catalog {
+	for i := range actions {
+		actions[i].NeedsApproval = actions[i].Approval != nil
+	}
 	return &Catalog{actions: actions, disabled: map[string]bool{}}
 }
 

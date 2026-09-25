@@ -1,6 +1,6 @@
 # ADR-0017: Lifecycles, approvals and tasks
 
-**Status:** Proposed (2026-09-25, #107, the architecture gate of stage 2 in Platform.md §10.4). The owner decides D1–D7; the build items follow.
+**Status:** Accepted (2026-09-25, #107). The owner accepted D1–D7 as recommended. What is built is under "As built".
 
 ## Context
 
@@ -78,3 +78,29 @@ They agree on three separate things. We take them apart the same way:
 - An app's document becomes a declaration (fields, lifecycle, approval rules) plus the rules only it knows.
 - Approval and assignment are no longer per-app features: every app gets the same chain, inbox and audit.
 - Stage 4's flows orchestrate these same lifecycles, approvals and tasks across apps.
+
+## As built (#107)
+
+- **Lifecycles** (`platform.Lifecycle` on an `Entity`): a status field, its states with tones, and transitions generated as actions `<type>.<transition>`.
+  - `Do` holds the rules and may choose the target among `To`. `After` runs once the record is stored, for what follows elsewhere.
+  - A new record starts in the initial state, and `Check` refuses a state the lifecycle does not have.
+  - `Ledger.Generated` decides standard actions and transitions alike; `platform.EntityActions` gives their catalog entries.
+- **Manufacturing:** SFCs and orders are records. The SFC's start, complete, nonconformance and two-person signed disposition are its transitions, with the same schemas, so journals replay.
+  - An order completes when its last SFC ends and is then confirmed to the ERP.
+  - The ERP's answer changes the order through `Caller.PutAt` (a change from an input that is not a decision).
+  - The kit gained child lines (slices of structs, such as NCs and signatures).
+  - A record's revision is the kernel's own (K4 C12).
+- **Approvals:** `platform.Approval` on an action or a transition, with levels.
+  - Each level names its approvers: a role in the requester's units or above in a structure, an app role, or a member. A level may ask all approvers, apply only under `When`, and give its task a due time.
+  - `Tenant.Submit` holds such a submission. It first probes its policy and rules as the requester, with nothing recorded (`Runtime.Probing`). Then the `work` app opens the request as a journaled decision.
+  - `work.approval.approve`, `.reject` and `.withdraw` are the request's own transitions. The last approval runs the held submission inside that input, as the requester, and a refusal marks the request refused with the reason.
+  - Requesters and AI agents cannot approve.
+- **Tasks:** `work.task` records. Approval levels open them; apps open them with `Caller.Assign`.
+  - The `inbox` read serves them overdue first; take and done are transitions.
+  - A job notifies the candidates of an overdue task once.
+- **HR reference app** (`slices/hr`): leave requests with a lifecycle and a two-level approval (the manager, and the department head above five days), in about 150 lines. It runs in the sales solution.
+  - The sales workspace has leave requests, the inbox and "my requests". The MES has the inbox.
+  - The kit's record page shows a status bar with the transitions the member may take.
+- **Proven** by the HR test and the rehearsal: approval along the organisation, a stale request refused when run, rejection, withdrawal, a refused probe, an agent refused, escalation of an overdue task, and replay. Checked in the browser: submit, the manager's inbox, two levels approved, the requester told.
+- **Not yet:** the helpdesk reference app (tickets with SLA), stage 2's second proof; delegation and substitutes; business calendars.
+

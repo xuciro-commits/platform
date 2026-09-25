@@ -1,11 +1,12 @@
 // Package sales is the sales software as a solution (ADR-0011): the platform's
-// directory and relations, a lodging provider and the CRM, composed without a
-// bridge. The CRM consumes the lodging protocol; any provider serves it.
+// directory, relations, AI and work (approvals, tasks), a lodging provider, the
+// CRM and HR's leave requests, composed without a bridge. The CRM consumes the lodging protocol; any provider serves it.
 package sales
 
 import (
 	"crm"
 	"hotel"
+	"hr"
 	"lodging"
 	"platformserver"
 	"platformserver/platform"
@@ -22,8 +23,8 @@ func NewTenant(id string, rooms map[string]hotel.RoomType, seats ...platformserv
 func Compose(id string, providers []platform.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	org := DemoOrganization()
 	org.Memberships = append(org.Memberships, platformserver.Memberships(seats)...)
-	apps := append([]platform.App{platformserver.NewConsole(id, seats...), platformserver.NewOrganization(id, org), platformserver.NewRelations(id), platformserver.NewAI(id)}, providers...)
-	return platformserver.NewTenant(id, append(apps, crm.New(id))...)
+	apps := append([]platform.App{platformserver.NewConsole(id, seats...), platformserver.NewOrganization(id, org), platformserver.NewRelations(id), platformserver.NewAI(id), platformserver.NewWork(id)}, providers...)
+	return platformserver.NewTenant(id, append(apps, crm.New(id), hr.New(id))...)
 }
 
 // DemoOrganization is a hospitality group as ADR-0012 sees it: the same units in

@@ -64,6 +64,7 @@ Status legend:
 | Composition and routing | Host runtime | Manifests checked at start (`checkManifest`); routing by action, read and input name | `NewTenant`, `Tenant` | every host | 4 |
 | Journal and replay | Host runtime | One ordered journal per tenant; fail-stop; replay through the same code | `Journal`, `Tenant.Replay`, `CheckReplay` | every host | 4 |
 | Application model | App API and host runtime (ADR-0016) | Entity types declared once as Go structs; records kept by the host; generic reads with domain, search, sort and pages; scope per role; record history; related records; generated create, edit and archive | `platform.Entity`, `Caller.Put`, `platform.Get`/`Find`, `/v1/entities`, `/v1/records` | CRM, Hotel | 2 |
+| Lifecycles, approvals, tasks | App API and platform capability (`work` app, ADR-0017) | States and transitions declared on an entity type; approval chains from the organisation, held by the host and run when approved; tasks with due times, escalation and one inbox | `platform.Lifecycle`, `platform.Approval`, `Caller.Assign`, `work.approval`, `work.task`, `/v1/inbox` | manufacturing, HR | 2 |
 | Package ledger | App API | The kernel wired for one app, catalog role check, publishing to subscribers | `platform.Ledger` | every app | 5 |
 | Action catalog | App API, served by the host runtime | Declared actions; each caller receives only what its role may call; start-up deactivation | `platform.Action`, `platform.Catalog`, `/v1/actions`, MCP | all apps | 4 |
 | Reads and read authorization | Host runtime | Named reads; role in the app, or opened to every member | `Tenant.Read`, `Manifest.Everyone` | all apps | 4 |
@@ -128,6 +129,8 @@ Status legend:
 | 0014 | Per-endpoint limits (rate, payload size, timeout) | Partial: a fixed 10 s timeout and a 64 KiB answer; no rate |
 | 0014 | A breaker per destination | Partial: the ordered queue per endpoint holds the rest behind a failing head |
 | 0014 | Webhooks filtered by the catalog rules of who may see an event | Amended (#104): an endpoint is the administrator's, so it has the administrator's view — any event the tenant declares; an undeclared event is refused |
+| 0016 | Entity declarations, the record store, generic reads, scope, history, generated actions and pages | Implemented (#106); CRM, Hotel, manufacturing |
+| 0017 | Lifecycles, approvals, tasks and the inbox | Implemented (#107); the helpdesk proof, delegation and calendars deferred |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
@@ -571,9 +574,9 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 
 | Capability | What an app gets | Reference | Status |
 |---|---|---|---|
-| Lifecycles (state machines) | States and transitions declared with the entity; transitions are actions with guards; the UI shows a status bar | Odoo status bar, ServiceNow state flows, Salesforce paths | missing: hand-coded per app |
-| Approvals | Approval chains by organisation structure, role, amount or rule; delegation and substitutes; a person's decision journaled | ServiceNow approvals, SAP release strategies, Salesforce approval processes | partial: held effects only (D6) |
-| Tasks and inbox | Work items assigned to members, roles or units, with due dates, SLA timers and escalation; one inbox across apps | ServiceNow task and SLA, Odoo activities | partial: notifications only |
+| Lifecycles (state machines) | States and transitions declared with the entity; transitions are actions with guards; the UI shows a status bar | Odoo status bar, ServiceNow state flows, Salesforce paths | have (ADR-0017; manufacturing, HR, the work app itself) |
+| Approvals | Approval chains by organisation structure, role, amount or rule; delegation and substitutes; a person's decision journaled | ServiceNow approvals, SAP release strategies, Salesforce approval processes | have (ADR-0017); delegation and substitutes missing |
+| Tasks and inbox | Work items assigned to members, roles or units, with due dates, SLA timers and escalation; one inbox across apps | ServiceNow task and SLA, Odoo activities | have (ADR-0017); business calendars for SLAs missing |
 | Flows (orchestration) | Long-running processes across apps: steps, waits, timers, human tasks, compensation, versioned and replay-safe, built on owned work and effects | ServiceNow Flow Designer, Temporal, Camunda | partial: subscriptions, jobs and effects are the parts |
 | Automation rules | "When X, if Y, do Z" declared in code on entities and events | Odoo automated actions, ServiceNow business rules | partial: subscriptions in code |
 | Scheduling and capacity | Resources, calendars and allocation over time (rooms, machines, people) | Odoo planning, SAP capacity planning | missing (candidate in §8) |
@@ -632,7 +635,7 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 | Boards | Kanban by state or any field, drag to transition | missing |
 | Time views | Calendar, timeline, Gantt, resource rack (room rack, machine schedule) | missing |
 | Charts and dashboards | Bar, line, pie, KPI tiles, pivot | missing |
-| Inbox and notifications | — | partial: notifications |
+| Inbox and notifications | — | have: notifications and the inbox (ADR-0017) |
 | Files | Upload, preview, attachment list | missing |
 | Mobile and field | Scan, sign, photograph, short tasks, offline queue | missing |
 

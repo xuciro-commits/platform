@@ -97,7 +97,8 @@ type Transition struct {
 	From, To    []string
 	Roles       []string
 	Payload     []Field
-	Capability  string // default: the entity type
+	Capability  string    // default: the entity type
+	Approval    *Approval // the transition waits for these approvers (ADR-0017)
 	Do          func(c Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error
 	// After runs once the transition is accepted and the record stored: what
 	// follows from it elsewhere (another record, a notification, an effect).
@@ -397,7 +398,7 @@ func EntityActions(e Entity) []Action {
 				description = fmt.Sprintf("Move a %s from %s to %s.", strings.ToLower(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
 			}
 			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
-				Description: description, Payload: payload, Roles: t.Roles})
+				Description: description, Payload: payload, Roles: t.Roles, Approval: t.Approval})
 		}
 	}
 	return out

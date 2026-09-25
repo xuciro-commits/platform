@@ -8,7 +8,8 @@
       "mes": "supervisor",
       "platform": "admin",
       "org": "admin",
-      "ai": "admin"
+      "ai": "admin",
+      "work": "admin"
     },
     "units": [
       {

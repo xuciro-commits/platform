@@ -66,6 +66,9 @@ type Runtime interface {
 	Get(c Caller, t reflect.Type, id string) (any, bool)
 	Find(c Caller, t reflect.Type, q Query) ([]any, int, *kernel.Error)
 	Check(c Caller, entity any) *kernel.Error
+	// Work (ADR-0017): tasks for people, and whether decisions are only probed.
+	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *kernel.Error
+	Probing() bool
 }
 
 // Manifest declares an app (ADR-0010). Names of actions, reads and inputs are

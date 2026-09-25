@@ -51,6 +51,7 @@ composition() {
   step app-boundaries scripts/boundaries.sh
   step lodging-protocol bash -c 'cd protocols/lodging && go vet ./... && go test -count=1 ./...'
   step crm-server bash -c 'cd slices/crm/server && go vet ./... && go test -count=1 ./...'
+  step hr-server bash -c 'cd slices/hr/server && go vet ./... && go test -count=1 ./...'
   step sales-solution bash -c 'cd solutions/sales && go vet ./... && go test -count=1 ./...'
 }
 

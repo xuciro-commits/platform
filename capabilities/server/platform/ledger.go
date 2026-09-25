@@ -58,6 +58,17 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	if !c.Replaying && !l.Catalog.Enabled(s.GetSchema().GetName()) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
+	if c.rt != nil && c.rt.Probing() { // a request for approval: policy and rules, nothing recorded or applied (ADR-0017 D3)
+		if !c.Automation && !(l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())) {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		if rules != nil {
+			if _, err := rules(); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	}
 	receiver := kernel.Receiver{Changes: l.Changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
 			return c.Replaying || c.Automation || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())

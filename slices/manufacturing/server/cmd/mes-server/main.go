@@ -54,7 +54,7 @@ func main() {
 	}
 	seats := deployment.Seats(demo)
 	t, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seats...),
-		platformserver.NewOrganization(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), platformserver.NewAI(tenant), plant)
+		platformserver.NewOrganization(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), platformserver.NewAI(tenant), platformserver.NewWork(tenant), plant)
 	if err == nil {
 		err = t.Connect(mes.DemoConnectors(tenant)...)
 	}

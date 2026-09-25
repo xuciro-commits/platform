@@ -6,11 +6,11 @@ import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type OidcConfig
 import { newReservation, ReservationCard, ReservationTable, roomTypeOptions, type Reservation, type RoomType } from "@pkg/hotel";
 import { BookingTable, type Booking } from "@pkg/lodging";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Input, NotificationList, PageHeader, RecordForm, RecordList, RecordPage, StatusTag, Tag, Workspace,
-  defineStatuses, entityFrom, notify, useWorkspace, type ColumnDef, type EntityInfo, type EntityRecord, type RecordPageData, type RecordSource, type RecordView, type View,
+  Button, DataTable, Dialog, EntityCard, EntityForm, Inbox, Input, NotificationList, PageHeader, RecordForm, RecordList, RecordPage, StatusTag, Tag, Workspace,
+  defineStatuses, entityFrom, notify, useWorkspace, type ColumnDef, type EntityInfo, type EntityRecord, type InboxTask, type RecordPageData, type RecordSource, type RecordView, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BedDouble, Bell, Building2, Handshake, Users } from "lucide-react";
+import { BedDouble, Bell, Building2, CalendarDays, Handshake, Inbox as InboxIcon, Send, Users } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -193,14 +193,13 @@ function GeneratedForm({ type, record, onSubmit, onCancel, submitLabel }: {
 }
 
 function Records({ type }: { type: string }) {
-  const { source, can } = useSales();
+  const { source } = useSales();
   const { open } = useWorkspace();
   const info = source.entity(type);
   return (
     <>
       <PageHeader title={info?.plural ?? type} description="Generated from the entity's declaration: search, sort and pages come from the host, within what you may see." />
-      <RecordList source={source} type={type} onOpen={(r) => open({ view: "record", params: { type, id: r.id } })}
-        toolbar={can(`${type}.create`) && <span className="text-xs text-muted">New ones from Customers</span>} />
+      <RecordList source={source} type={type} onOpen={(r) => open({ view: "record", params: { type, id: r.id } })} />
     </>
   );
 }
@@ -216,6 +215,7 @@ function RecordDetail({ type, id }: { type: string; id: string }) {
   return (
     <>
       <RecordPage source={source} type={type} id={id} reload={reload} onOpen={(t, r) => open({ view: "record", params: { type: t, id: r.id } })}
+        can={can} onTransition={(schema, r) => void act(schema, r, {})}
         actions={(r) => <>
           {can(`${type}.edit`) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>Edit</Button>}
           {can(`${type}.archive`) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>Archive</Button>}
@@ -228,6 +228,70 @@ function RecordDetail({ type, id }: { type: string; id: string }) {
   );
 }
 
+// HR (ADR-0017): leave requests drafted here and submitted for approval.
+function LeaveRequests() {
+  const { can, decide } = useSales();
+  const [drafting, setDrafting] = useState(false);
+  return (
+    <>
+      <Records type="hr.leave" />
+      {can("hr.leave.create") && <div className="mt-2"><Button variant="primary" onClick={() => setDrafting(true)}><CalendarDays />New leave request</Button></div>}
+      <Dialog open={drafting} onOpenChange={setDrafting} title="New leave request">
+        <EntityForm schema={z.object({ kind: z.enum(["vacation", "sick", "unpaid"]), from: z.iso.date(), until: z.iso.date(), note: z.string().optional() })
+          .refine((v) => v.until >= v.from, { message: "Last day before the first", path: ["until"] })}
+          defaultValues={{ kind: "vacation", from: "", until: "", note: "" }} submitLabel="Draft" onCancel={() => setDrafting(false)}
+          fields={[{ name: "kind", label: "Kind", kind: "select", options: ["vacation", "sick", "unpaid"].map((k) => ({ value: k, label: k })) },
+            { name: "from", label: "First day", kind: "date" }, { name: "until", label: "Last day", kind: "date" }, { name: "note", label: "Note for the approvers" }]}
+          onSubmit={async (v) => { if (await decide("hr.leave.create", { type: "hr.leave", id: newId("LV") }, v, 0)) setDrafting(false); }} />
+      </Dialog>
+    </>
+  );
+}
+
+// The member's inbox (ADR-0017): approvals to decide and tasks to do, overdue first.
+function MyInbox() {
+  const tasks = useRead<InboxTask[]>("/v1/inbox") ?? [];
+  const { decide } = useSales();
+  const { open } = useWorkspace();
+  const approval = (t: InboxTask) => t.ref?.startsWith("work.approval/") ? t.ref.slice("work.approval/".length) : undefined;
+  return (
+    <>
+      <PageHeader title="Inbox" description="Approvals waiting for you and tasks offered to you, from every app of this workspace." />
+      <Inbox tasks={tasks} onOpen={(t) => t.ref && open({ view: "record", params: { type: t.ref.split("/")[0]!, id: t.ref.split("/").slice(1).join("/") } })}
+        actions={(t) => approval(t) ? <>
+          <Button size="sm" variant="primary" onClick={() => void decide("work.approval.approve", { type: "work.approval", id: approval(t)! }, {})}>Approve</Button>
+          <Button size="sm" variant="danger" onClick={() => void decide("work.approval.reject", { type: "work.approval", id: approval(t)! }, {})}>Reject</Button>
+        </> : <>
+          {!t.assignee && <Button size="sm" onClick={() => void decide("work.task.claim", { type: "work.task", id: t.id }, {})}>Take</Button>}
+          <Button size="sm" variant="primary" onClick={() => void decide("work.task.complete", { type: "work.task", id: t.id }, {})}>Done</Button>
+        </>} />
+    </>
+  );
+}
+
+type Request = { id: string; title: string; target: string; state: string; level: number; levels: { title: string; approvers: string[]; approved: string[] }[]; outcome?: string };
+const requestStates = defineStatuses({ pending: { label: "Pending", tone: "warning" }, approved: { label: "Approved", tone: "success" },
+  rejected: { label: "Rejected", tone: "danger" }, refused: { label: "Refused when run", tone: "danger" }, withdrawn: { label: "Withdrawn", tone: "neutral" } });
+
+function MyRequests() {
+  const requests = useRead<Request[]>("/v1/requests") ?? [];
+  const { decide } = useSales();
+  const columns: ColumnDef<Request, any>[] = [
+    { accessorKey: "title", header: "Request" },
+    { accessorKey: "target", header: "About", meta: { width: 180 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { id: "level", header: "Waiting for", meta: { width: 220 }, accessorFn: (r) => r.state === "pending" ? `${r.levels[r.level]?.title}: ${r.levels[r.level]?.approvers.join(", ")}` : "" },
+    { accessorKey: "state", header: "State", meta: { width: 140 }, cell: ({ row: { original: r } }) => <span title={r.outcome}><StatusTag status={r.state} registry={requestStates} /></span> },
+    { id: "act", header: "", meta: { width: 100 }, cell: ({ row: { original: r } }) => r.state === "pending" &&
+      <Button size="sm" onClick={() => void decide("work.approval.withdraw", { type: "work.approval", id: r.id }, {})}>Withdraw</Button> },
+  ];
+  return (
+    <>
+      <PageHeader title="My requests" description="What you asked for that waits for approvers, and how it ended." />
+      <DataTable data={requests} columns={columns} getRowId={(r) => r.id} height="calc(100dvh - 190px)" empty="No requests" />
+    </>
+  );
+}
+
 const views: View[] = [
   { id: "notifications", title: () => "Notifications", render: () => <Notifications /> },
   { id: "customers", title: () => "Customers", render: () => <Customers /> },
@@ -236,6 +300,9 @@ const views: View[] = [
   { id: "opportunities", title: () => "Opportunities", render: () => <Records type="crm.opportunity" /> },
   { id: "record", title: (p) => p.id ?? "Record", render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "reservations", title: () => "Reservations", render: () => <Reservations /> },
+  { id: "leave", title: () => "Leave requests", render: () => <LeaveRequests /> },
+  { id: "inbox", title: () => "Inbox", render: () => <MyInbox /> },
+  { id: "requests", title: () => "My requests", render: () => <MyRequests /> },
   { id: "reservation", title: (p) => p.id ?? "Reservation", render: (p) => <ReservationDetail id={p.id ?? ""} /> },
 ];
 
@@ -265,8 +332,9 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
     let ok = false;
     for (const entry of await client.send()) {
       ok = entry.state === "SUBMISSION_STATE_CONFIRMED";
-      const title = actions?.find((a) => a.schema === schema)?.title ?? schema;
-      (ok ? notify.success : notify.error)(`${title}: ${ok ? "done" : entry.outcome}`);
+      const declared = actions?.find((a) => a.schema === schema);
+      const done = declared?.needsApproval ? "sent for approval" : "done"; // held by the host until its approvers agree (ADR-0017)
+      (ok ? notify.success : notify.error)(`${declared?.title ?? schema}: ${ok ? done : entry.outcome}`);
     }
     await queries.invalidateQueries();
     return ok;
@@ -276,10 +344,12 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
       <Workspace product="Sales Workspace" storageKey="sales.layout" views={views} home={{ view: "customers" }}
         nav={[
           { label: "You", items: [{ label: "Notifications", icon: <Bell />, route: { view: "notifications" },
-            badge: unread ? <span className="text-xs text-[var(--tone-info)]">{unread}</span> : null }] },
+            badge: unread ? <span className="text-xs text-[var(--tone-info)]">{unread}</span> : null },
+            { label: "Inbox", icon: <InboxIcon />, route: { view: "inbox" } }, { label: "My requests", icon: <Send />, route: { view: "requests" } }] },
           { label: "CRM", items: [{ label: "Customers", icon: <Building2 />, route: { view: "customers" } },
             { label: "Accounts", icon: <Users />, route: { view: "accounts" } }, { label: "Opportunities", icon: <Handshake />, route: { view: "opportunities" } }] },
           { label: "Hotel", items: [{ label: "Reservations", icon: <BedDouble />, route: { view: "reservations" } }] },
+          { label: "HR", items: [{ label: "Leave requests", icon: <CalendarDays />, route: { view: "leave" } }] },
         ]}
         status={<span className="text-xs text-muted">{actions ? `${actions.length} actions granted` : meQuery.error ? EdgeClient.problem(meQuery.error) : "connecting…"}</span>}
         session={signedIn

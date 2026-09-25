@@ -50,7 +50,7 @@ submit() { # token key schema target-type target-id payload [expected-revision]
 state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500" downtime planned-orders notifications; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
   curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -c '[.[] | {id, disabled}]'
   curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage" | jq -c '.totals'
-  for path in customers records/hotel.reservation records/hotel.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done
+  for path in customers records/hotel.reservation records/hotel.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1 records/hr.leave records/work.approval; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done
   curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/protocols" | jq -c '[.[] | {id, bound}]'; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
 
@@ -90,7 +90,7 @@ submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | 
 agent() { (cd ../../slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MES" -oidc-token "$IDP/oidc/token" "$@"); }
-[[ $(agent actions | jq -c '[.[].schema]') == '["platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
+[[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") | not)]') == '["platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
 event=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"
@@ -182,6 +182,18 @@ records() { curl -s -H "Authorization: Bearer $1" "$SALES/v1/records/$2"; }
 [[ $(records "$MGR" 'crm.opportunity/OPP-1' | jq -c '[.record.booked, [.history[].schema]]') == '[1,["crm.opportunity.book","crm.opportunity.open"]]' ]] || fail "record history: $(records "$MGR" 'crm.opportunity/OPP-1')"
 [[ $(records "$MGR" 'crm.account/ACME' | jq -r '.related[0].total') == 2 ]] || fail "related records"
 echo "ok   application model: generic reads with a domain, the owner's scope, a record's history and its related records"
+# Lifecycles, approvals and tasks (ADR-0017): a leave request waits for the
+# manager found in the organisation, lands in their inbox, and is approved by
+# the approval; the requester is told.
+sales hr "$SALES_TOKEN" h-1 hr.leave.create hr.leave LV-1 '{"kind":"vacation","from":"2026-11-02","until":"2026-11-04"}' | jq -e .record >/dev/null || fail "draft leave"
+[[ $(sales hr "$SALES_TOKEN" h-2 hr.leave.submit hr.leave LV-1 '{}' | jq -r .record.submission.schema.name) == work.approval.request ]] || fail "leave held for approval"
+task=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/inbox" | jq -r '.[0].ref')
+[[ $task == work.approval/hr.h-2 ]] || fail "manager's inbox: $(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/inbox")"
+[[ $(sales work "$SALES_TOKEN" h-3 work.approval.approve work.approval hr.h-2 '{}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "the requester approved"
+sales work "$MGR" h-4 work.approval.approve work.approval hr.h-2 '{}' | jq -e .record >/dev/null || fail "approve"
+[[ $(records "$SALES_TOKEN" 'hr.leave/LV-1' | jq -r '.record.state') == approved ]] || fail "leave after approval: $(records "$SALES_TOKEN" 'hr.leave/LV-1')"
+[[ $(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/requests" | jq -r '.[0].state') == approved ]] || fail "request state"
+echo "ok   approvals: a leave request held, found in the manager's inbox through the organisation, approved, and applied by the approval"
 # Two lodging providers (#99): the administrator sends new stays to serviced
 # apartments; the hotel's stay stays on the opportunity, and the restart keeps the choice.
 SERVER=$SALES TENANT=hotel-a AUTHORITY=platform submit "$MGR" p-1 platform.protocol.bind platform.protocol lodging.booking/1 '{"provider":"memstay"}' | jq -e .record >/dev/null || fail "choose provider"

@@ -7,6 +7,8 @@ import { Authorities, type Entry } from "./outbox";
 export type ActionDeclaration = {
   schema: string; target: string; capability: string; title: string; description: string;
   payload: { name: string; type: string; required?: boolean; description: string }[];
+  /** The action waits for approvers before it takes effect (ADR-0017). */
+  needsApproval?: boolean;
 };
 
 export type Connection = { server: string; token: string; tenant: string; principal: string };

@@ -15,9 +15,11 @@ import { Input, Select } from "../primitives/input";
 
 export type FieldInfo = {
   name: string; title: string; required?: boolean; search?: boolean; readOnly?: boolean; choices?: string[]; ref?: string;
-  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags";
+  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines";
 };
-export type EntityInfo = { type: string; title: string; plural: string; app: string; display: string; fields: FieldInfo[]; standard: string[] };
+export type State = { name: string; title: string; tone?: "info" | "success" | "warning" | "danger" | "neutral" };
+export type Lifecycle = { field: string; initial: string; states: State[]; transitions: { name: string; schema: string; title: string; from: string[]; to: string[] }[] };
+export type EntityInfo = { type: string; title: string; plural: string; app: string; display: string; fields: FieldInfo[]; standard: string[]; lifecycle?: Lifecycle };
 export type Stamp = { by?: string; at?: string; change?: string };
 export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;
 export type RecordQuery = { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean };
@@ -63,14 +65,38 @@ export function entityFrom(info: EntityInfo, options: Record<string, { value: st
         case "date": return date(common);
         case "datetime": return datetime(common);
         case "boolean": return checkbox(common);
-        case "choice": return singleSelect({ ...common, options: (f.choices ?? []).map((c) => ({ value: c, label: c })) });
+        case "choice": return info.lifecycle?.field === f.name ? lifecycleField(common, info.lifecycle)
+          : singleSelect({ ...common, options: (f.choices ?? []).map((c) => ({ value: c, label: c })) });
         case "reference": return options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
         case "references": case "tags": return multiSelect({ ...common, readOnly: f.type === "references" || f.readOnly, options: options[f.name] ?? [] });
+        case "lines": return { ...text(common), readOnly: true, display: (v: unknown) => <span className="text-muted">{Array.isArray(v) ? `${v.length} lines` : "—"}</span> } as FieldType<any>;
         default: return text(common);
       }
     })();
   }
   return defineEntity<EntityRecord>({ name: info.type, fields, primary: info.display === "id" ? "id" : info.display });
+}
+
+// A status field shows its state with the lifecycle's tones.
+const lifecycleField = (common: { label: string }, l: Lifecycle): FieldType<string> => ({
+  ...singleSelect({ ...common, readOnly: true, options: l.states.map((s) => ({ value: s.name, label: s.title, tone: s.tone })) }),
+});
+
+/** The lifecycle's states, the current one marked, and the transitions the caller may take from it. */
+export function StatusBar({ lifecycle, state, can, onTransition }: {
+  lifecycle: Lifecycle; state: string; can?: (schema: string) => boolean; onTransition?: (schema: string, title: string) => void;
+}) {
+  const open = lifecycle.transitions.filter((t) => t.from.includes(state) && (!can || can(t.schema)));
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <ol className="flex overflow-hidden rounded-md border border-border text-xs">
+        {lifecycle.states.map((s) => (
+          <li key={s.name} className={s.name === state ? "bg-primary px-2 py-1 font-medium text-primary-foreground" : "px-2 py-1 text-muted"}>{s.title}</li>
+        ))}
+      </ol>
+      {onTransition && open.map((t) => <Button key={t.schema} size="sm" onClick={() => onTransition(t.schema, t.title)}>{t.title}</Button>)}
+    </div>
+  );
 }
 
 const displayOf = (info: EntityInfo, r: EntityRecord) => String((info.display === "id" ? r.id : r[info.display]) ?? r.id);
@@ -127,9 +153,11 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0 }: {
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition }: {
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
   onOpen?: (type: string, r: EntityRecord) => void; reload?: number;
+  /** The caller's catalog, and how to take a lifecycle transition (a decision on this record). */
+  can?: (schema: string) => boolean; onTransition?: (schema: string, r: EntityRecord) => void;
 }) {
   const info = source.entity(type);
   const [view, setView] = useState<RecordView>();
@@ -147,6 +175,8 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0 }: {
         {r.archived && <Tag label="archived" />}
         <span className="ml-auto flex gap-1">{actions?.(r)}</span>
       </header>
+      {info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={can}
+        onTransition={onTransition && ((schema) => onTransition(schema, r))} />}
       <section className="rounded-md border border-border bg-surface p-3">
         <PropertyList items={[...info.fields.map((f) => [f.title, entity.fields[f.name]!.display(r[f.name] as never, r)] as [string, ReactNode]),
           ["Created", `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
@@ -180,5 +210,34 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0 }: {
         </ol>
       </section>
     </div>
+  );
+}
+
+export type InboxTask = { id: string; title: string; body?: string; ref?: string; app: string; candidates: string[]; assignee?: string; due?: string; state: string };
+
+/** A member's open tasks (ADR-0017), overdue first; each can open what it is about and offers the actions the app gives it. */
+export function Inbox({ tasks, onOpen, actions, empty = "Nothing for you" }: {
+  tasks: InboxTask[]; onOpen?: (task: InboxTask) => void; actions?: (task: InboxTask) => ReactNode; empty?: string;
+}) {
+  if (tasks.length === 0) return <p className="text-sm text-muted">{empty}</p>;
+  const now = Date.now();
+  return (
+    <ul className="grid max-w-3xl gap-2">
+      {tasks.map((t) => {
+        const late = !!t.due && Date.parse(t.due) < now;
+        return (
+          <li key={t.id} className="rounded-md border border-border bg-surface p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" className="text-left font-medium hover:underline" onClick={() => onOpen?.(t)}>{t.title}</button>
+              {late && <Tag label="overdue" tone="danger" />}
+              {t.due && !late && <span className="text-xs text-muted">due {new Date(t.due).toLocaleString()}</span>}
+              {t.assignee && <span className="text-xs text-muted">taken by {t.assignee}</span>}
+              <span className="ml-auto flex gap-1">{actions?.(t)}</span>
+            </div>
+            {t.body && <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{t.body}</p>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

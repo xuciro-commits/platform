@@ -73,6 +73,8 @@ type Tenant struct {
 	AIClient func(req *http.Request) (*http.Response, error)
 	ai       *AI
 	records  *recordStore // the apps' entity records (ADR-0016)
+	work     *Work        // approvals and tasks (ADR-0017)
+	probing  bool         // a submission for approval is being checked, not applied
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -130,6 +132,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		}
 		if x, ok := a.(*AI); ok {
 			t.ai = x
+		}
+		if w, ok := a.(*Work); ok {
+			t.work, w.t = w, t
 		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {
@@ -196,11 +201,42 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	defer t.enqueue(now)
+	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil && t.work != nil {
+		return t.request(m, a, s, now)
+	}
 	record, err := a.Submit(t.caller(m, a, false), s, now)
 	if err == nil {
 		t.remember(submitted(m.ID, a, s, now))
 		body, _ := protojson.Marshal(s)
 		t.record(a, "submission", m, body, now)
+	}
+	return record, err
+}
+
+// request holds a submission whose action needs approval (ADR-0017): its
+// policy and rules are checked now, as the requester, without effect; then the
+// work app opens the request, and the submission runs when the last approver
+// agrees. A resend with the same key answers with the request made.
+func (t *Tenant) request(m platform.Member, a platform.App, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	id := a.Manifest().ID + "." + s.GetIdempotencyKey()
+	work := t.automation(WorkApp, false)
+	if _, known := platform.Get[ApprovalRequest](work, id); !known {
+		t.probing = true
+		_, err := a.Submit(t.caller(m, a, false), s, now)
+		t.probing = false
+		if err != nil {
+			return nil, err
+		}
+	}
+	held, _ := protojson.Marshal(s)
+	payload, _ := json.Marshal(map[string]any{"requester": m.ID, "submission": json.RawMessage(held)})
+	request := &pb.Submission{TenantId: t.ID, PrincipalId: work.ID, Authority: WorkApp, IdempotencyKey: "approval:" + id,
+		Target: &pb.EntityRef{Type: ApprovalType, Id: id}, Schema: &pb.SchemaRef{Name: SchemaRequest, Version: 1}, Payload: payload}
+	record, err := t.work.Submit(work, request, now)
+	if err == nil { // the journal holds the request, made by the work app; the requester is on the request
+		t.remember(submitted(work.ID, t.work, request, now))
+		body, _ := protojson.Marshal(request)
+		t.record(t.work, "submission", work.Member, body, now)
 	}
 	return record, err
 }

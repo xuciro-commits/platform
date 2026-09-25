@@ -1,10 +1,10 @@
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, NotificationList, PageHeader, PropertyList, Select, StatusTag, Workspace,
-  defineStatuses, notify, submissionStatuses, useWorkspace, type ColumnDef, type View,
+  Button, DataTable, Dialog, EntityCard, EntityForm, Inbox as TaskInbox, NotificationList, PageHeader, PropertyList, Select, StatusTag, Workspace,
+  defineStatuses, type InboxTask, notify, submissionStatuses, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bell, ClipboardList, Cpu, Factory, Inbox, ShieldAlert } from "lucide-react";
+import { Activity, Bell, CheckSquare, ClipboardList, Cpu, Factory, Inbox, ShieldAlert } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { z } from "zod";
 import {
@@ -255,6 +255,20 @@ function Notifications() {
   </>;
 }
 
+// Approvals and tasks for the signed-in member (ADR-0017): the platform's work app.
+function MyInbox() {
+  const tasks = useRead<InboxTask[]>("/v1/inbox") ?? [];
+  const { decide } = usePlant();
+  const approval = (t: InboxTask) => t.ref?.startsWith("work.approval/") ? t.ref.slice("work.approval/".length) : undefined;
+  return <>
+    <PageHeader title="Inbox" description="Approvals waiting for you and tasks offered to you." />
+    <TaskInbox tasks={tasks} actions={(t) => approval(t) ? <>
+      <Button size="sm" variant="primary" onClick={() => void decide("work.approval.approve", { type: "work.approval", id: approval(t)! }, {})}>Approve</Button>
+      <Button size="sm" variant="danger" onClick={() => void decide("work.approval.reject", { type: "work.approval", id: approval(t)! }, {})}>Reject</Button>
+    </> : <Button size="sm" variant="primary" onClick={() => void decide("work.task.complete", { type: "work.task", id: t.id }, {})}>Done</Button>} />
+  </>;
+}
+
 function Outbox() {
   const { outbox } = usePlant();
   const columns: ColumnDef<Entry, any>[] = [
@@ -278,6 +292,7 @@ const views: View[] = [
   { id: "equipment", title: () => "Downtime", render: () => <Equipment /> },
   { id: "notifications", title: () => "Notifications", render: () => <Notifications /> },
   { id: "outbox", title: () => "Outbox", render: () => <Outbox /> },
+  { id: "inbox", title: () => "Inbox", render: () => <MyInbox /> },
 ];
 
 export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: OidcSession } }) {
@@ -314,7 +329,8 @@ export function App({ signedIn }: { signedIn?: { config: OidcConfig; session: Oi
     <PlantContext.Provider value={{ me, client, master, decide, outbox, can }}>
       <Workspace product="Plant Operations" storageKey="mes.layout" views={views} home={{ view: "queue" }}
         nav={[
-          { label: "You", items: [nav("Notifications", <Bell />, "notifications", unread ? <span className="text-xs text-[var(--tone-info)]">{unread}</span> : null)] },
+          { label: "You", items: [nav("Notifications", <Bell />, "notifications", unread ? <span className="text-xs text-[var(--tone-info)]">{unread}</span> : null),
+            nav("Inbox", <CheckSquare />, "inbox")] },
           { label: "Planning", items: [nav("Planned orders", <ClipboardList />, "planned")] },
           { label: "Execution", items: [nav("Work queue", <Factory />, "queue"), nav("All SFCs", <Cpu />, "sfcs")] },
           { label: "Quality", items: [nav("Holds", <ShieldAlert />, "holds")] },
