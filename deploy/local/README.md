@@ -147,6 +147,14 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
 
 **MCP**：`POST http://localhost:8490/mcp`（或 8495），带 `Authorization: Bearer <该成员的令牌>`。工具列表就是这个成员的动作目录和可读数据。
 
+**外部智能体（A2A）**（Integrations → Add endpoint → A2A，只在 MES 用到）
+
+| URL | 密钥名 | 勾选 |
+|---|---|---|
+| `http://webhook-sink:8080/a2a`（供应商智能体替身） | 可留空（真实对方填存放其令牌的密钥名） | 勾"内部地址"；外发类型 `mes/lead-time` |
+
+发布我们自己的智能体：App settings → Agents → "Published over A2A" 填 `helpdesk.triage`；卡片在 `http://localhost:8495/a2a/hotel-a/helpdesk.triage/.well-known/agent-card.json`，调用方用成员令牌按 A2A 1.0 JSON-RPC 发 `SendMessage`（请求头 `A2A-Version: 1.0`）。
+
 ## 常用测试路线
 
 1. **ERP 回写、纠正、D6 批准、邮件**（MES，`sup@plant.test`）：
@@ -186,4 +194,12 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
    2. 智能体替你干活时不会直接改数据：它要做的动作会作为草稿等你确认，你可以改字段后 Confirm，或写原因 Reject（它会接着想办法）；这些都记为这次运行的反馈；
    3. 左侧 Search 可以跨所有你能看的类型搜记录；
    4. 管理员在设置 → Processes → Evaluations 选一个智能体和一个候选模型点 Evaluate：它用候选模型把有人确认或纠正过的历史运行"干跑"一遍（只检查、不执行），报告里每条都会标出与人接受的一致、不一致、重犯被纠正的错误，或避开了它。
-9. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+9. **知识与记忆**（Sales，`manager@hotel.test`）：
+   1. AI → Providers 启用本地替身的 `embed` 模型，再在 App settings → Knowledge 把 "Embedding model" 设为 `local/embed`（不设也能按关键词检索）；
+   2. Knowledge → Documents 新建一篇"House rules"，比如写上 Wifi 密码在房卡上、前台可以重置；左侧 Search 搜 "wifi password" 能看到这段；
+   3. 按第 7 条开一张"Wifi keeps dropping"的工单：分诊智能体的回复会引用 House rules，运行记录上列出引用的文档；管理员在运行页还能看到每次模型调用的完整请求和回答（保留 30 天）；
+   4. 在第 8 条里改掉或驳回智能体的草稿后，它会提议一条记忆；助手面板里能看到"智能体记得关于你的事"，保留后下次运行会用上，也可以随时忘掉；设置 → Processes 列出所有记忆。
+10. **智能体互调（A2A）**：
+    1. MES（`sup@plant.test`）：按上面的表添加供应商智能体的接收地址，然后在任一记录上 "Ask the assistant"，选 "Material planner"，问 "What is the lead time of P-200?"，它通过 A2A 问供应商智能体，回答 12 天；
+    2. Sales（`manager@hotel.test`）：按上面把 `helpdesk.triage` 发布出去，用 curl 或任一 A2A 客户端发一条 `SendMessage`，任务完成后返回分诊结果；它以调用者的权限直接行动，外发的邮件照样要人批准。
+11. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。

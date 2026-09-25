@@ -1,6 +1,6 @@
 # ADR-0021: Agents — governed principals in a traced harness
 
-**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.4). The owner accepted D1–D10 as recommended. What is built is under "As built" (batches 1 and 2).
+**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.5). The owner accepted D1–D10 as recommended. What is built is under "As built" (batches 1 and 2); batch 3 is ADR-0022.
 
 ## Context
 

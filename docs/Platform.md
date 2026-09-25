@@ -1,148 +1,133 @@
 # Platform Architecture
 
-Canonical description of the business platform. Decisions with lasting cost are recorded in [ADR/](ADR/); current work is in [WorkQueue.md](WorkQueue.md). When this document and code disagree, the code is the fact and this document states the target — record the gap in the work queue.
+Canonical description of the business platform. Decisions with lasting cost are recorded in [ADR/](ADR/); current work is in [WorkQueue.md](WorkQueue.md); the owner's intent is in [Intent.md](Intent.md). When this document and code disagree, the code is the fact and this document states the target — record the gap in the work queue.
 
-The owner's intent is in [Intent.md](Intent.md). Advisory guidance for top-level design is in [ProductIntentReview.md](ProductIntentReview.md) (handled 2026-09-24; its disposition is at the top); that review does not itself change the architecture decisions recorded here or in the ADRs. Where the platform is going, capability by capability, is §10.
+Each fact has one home here: what exists is the capability map (§2.4), what is promised but open is §2.9, what is missing is the plan (§10.4). An ADR's "As built" section holds the detail of what a stage built. Last reviewed as a whole on 2026-09-26, after stage 5 (§10).
 
 ## 1. Purpose
 
-The main line: **building, composing, running and evolving business software**. Business packages define their objects, relations, rules and actions and contribute UI and runtime work; software is composed from them; when products, processes, structure or the business itself change, capabilities are added, changed, replaced or retired while data, history, permissions and work in progress stay continuous. Kernel concepts and shared capabilities earn their place by what they contribute to this line (ProductIntentReview).
+The main line: **building, composing, running and evolving business software**. Apps define their objects, relations, rules and actions and contribute UI and runtime work; software is composed from them; when products, processes, structure or the business itself change, capabilities are added, changed, replaced or retired while data, history, permissions and work in progress stay continuous. Kernel concepts and shared capabilities earn their place by what they contribute to this line.
 
-A multi-tenant **business platform with server and edge/client runtimes**. It must support personal local-first applications (Music) and multi-user organizational applications where a server is authoritative (Hotel as a reference domain, manufacturing as the real validation domain).
+A multi-tenant **business platform with server and edge/client runtimes**. It supports personal local-first applications (Music, in the MSRU repository) and multi-user organisational applications where a server is authoritative. Reference apps — Hotel, manufacturing, CRM, HR, helpdesk — exercise and demonstrate capabilities; they are not the platform's source of truth.
 
-The platform does not encode what an organization or application looks like today. It provides the capabilities an application needs to move to its *next* shape — new products, processes, structure, operating model, even a different primary business — without rewriting the foundation. Domains are expected to change substantially; the kernel should change only when a genuinely missing cross-domain capability is discovered.
+The platform does not encode what an organisation or application looks like today. It provides the capabilities an application needs to move to its *next* shape — new products, processes, structure, operating model, even a different primary business — without rewriting the foundation. Domains are expected to change substantially; the kernel should change only when a genuinely missing cross-domain capability is discovered.
 
-**Not:** an Apple UI framework (that is one client layer, see `Docs/AppleClient.md` in the MSRU repository); the intersection of Music and Hotel; a generic business-object or ERP schema; a configuration language that replaces domain code.
+**Not:** an Apple UI framework (that is one client layer, see `Docs/AppleClient.md` in the MSRU repository); the intersection of the reference apps; a generic business-object or ERP schema; a configuration language that replaces domain code.
 
-## 2. Layer model (a working model, judged by its change gradient)
+## 2. The product model
 
-| Layer | Holds | Changes when |
+### 2.1 Layers
+
+| Layer | Holds | Where | Changes when |
+|---|---|---|---|
+| **Kernel** | The language-neutral contract K1–K9: identity, facts, decisions, authority, tenancy, schema versions, connectors, work ownership (§4) | `contract/` (spec, vectors, Go, Swift) | A kernel hypothesis is revised (spec and vectors first) |
+| **Host runtime** | Composition, routing, journal and replay, snapshots, the record store, owned work, dispatch of effects, model calls; it implements `platform.Runtime` | `platformserver` | The platform grows a mechanism |
+| **App API** | What an app sees: `Member`, `Caller`, `Manifest`, the declarations (entities, lifecycles, actions, reads, flows, agents, jobs, settings, effect kinds) and `Ledger`. Apps reach the host only through `Runtime` | `platformserver/platform`; for UIs `@platform/app` | An app needs something the host already does |
+| **Platform apps** | Cross-industry capabilities run as apps: `platform` (the console), `org`, `relations`, `work`, `flow`, `ai`, `agent`, `knowledge` | `platformserver` (§9 risk 6) | A cross-industry need appears in a second app |
+| **Protocols** | Versioned interfaces apps provide and consume, with conformance tests | `protocols/` | A second provider or consumer appears |
+| **Apps** | An industry's or a function's rules, entities, flows, agents and UI | `slices/`, `web/packages/*` | Its business changes |
+
+Operators set values (settings, bindings, endpoints, enabled models), never rules (§6). Dependencies point downward only; the kernel knows no domain vocabulary; the host and platform apps know no specific app. The model is a tool, not a taxonomy every file must be forced into: when experience shows a boundary is wrong, change the model through an ADR. The property that must hold is that **lower layers do not change when a domain evolves**.
+
+Placement questions: Would it still hold in a different industry? After a pivot within the same industry? Is it "must be so" or "one of several implementations"? Would operators change it at run time — and is that a parameter (configuration) or a change of rules (code)?
+
+### 2.2 How it fits together
+
+```text
+ COMPOSE   solution (Go, per host) ─▶ tenant ─▶ apps, each a Manifest:
+             entity types · lifecycles · actions · reads · flows · agents · jobs · settings · effect kinds
+             apps meet only through protocols (provider ◀─ consumer), never each other
+
+ WRITE     caller: person · service account · agent · connector · MCP or A2A client
+             │ submission (an action on a target) or input (a connector page, an answer, a model's step)
+             ▼
+           receive: authenticate ─▶ catalog and role ─▶ policy (K6) ─▶ approval? (held by `work`)
+             ─▶ the app's rules ─▶ journal entry ─▶ decision (K4) and facts (K2, K3)
+             ▼
+           records with history ─▶ events ─▶ flows · agents' waits · subscribers
+                                        └─▶ effects out (webhook, email, A2A; held when an agent causes the irreversible)
+                                        └─▶ notifications · tasks · links on timelines
+
+ READ      records ─▶ generic reads · aggregates · context graph · search · dashboards
+           derived, rebuildable: projections (PostgreSQL) · knowledge passages and vectors · snapshots
+
+ PEOPLE    members hold one role per app; units in dated structures scope what they see and who approves
+ AGENTS    declared principals; each run's steps, drafts, citations and people's signals are kept;
+           evaluation re-runs signalled runs dry; memory is records people keep or forget
+```
+
+The concepts group into five planes. Each has one owner.
+
+| Plane | Concepts | Owner |
 |---|---|---|
-| 1. Kernel | Invariants and contracts: identity & references, fact kinds & provenance, change records, authority & sync, tenancy/principal/policy hook, schema evolution, long-running work ownership | A cross-domain capability is proven missing (ADR required) |
-| 2. Capabilities | Replaceable, composable mechanisms: storage engines, sync transport, search/indexing, connectors & ingestion, files/devices/peripherals, notifications, scheduling, matching, client UI layers; candidate: capacity-over-time allocation | A better implementation or a new mechanism is needed |
-| 3. Domain models | Music catalogue, rooms/reservations, work orders/materials — types, invariants, queries | The business domain changes |
-| 4. Workflows & policies | Import review, check-in, work-order release, cascade rules, cancellation rules | The way the organization operates changes |
-| 5. Runtime config & operational state | Rates, thresholds, feature flags, tenant settings, credentials, queues, cursors, health | Daily operation |
+| Composition | Solution, tenant, app, manifest, protocol, binding, setting | Code (solutions, apps); bindings and settings are console decisions |
+| Truth | Submission, input, decision, fact, journal entry, effect outcome, usage | The app that holds authority over the target's data class (K5); the host journals |
+| Reads | Record, history, aggregate, context, search, projection, passage, snapshot | The host, derived from the truth |
+| People and work | Member, role, unit, structure, approval request, task, notification, saved view | `platform`, `org`, `work` |
+| Agents | Agent, run, step, draft, signal, evaluation, memory, document, transcript | `agent`, `knowledge`, `ai` |
 
-Dependencies point downward only; the kernel knows no domain vocabulary; capabilities know no specific domain. The model is a tool, not a taxonomy every file must be forced into: if experience shows two layers should merge or a boundary is missing, change the model (via ADR). The property that must hold is that **lower layers do not change when a domain evolves**.
+### 2.3 Where data lives
 
-Placement questions: Would it still hold in a different industry? After a pivot within the same industry? Is it "must be so" or "one of several implementations"? Would operators change it at runtime — and is that a parameter (config) or a change of rules (code)?
+| Class | What | Kept in | Rebuilt by | Losing it costs |
+|---|---|---|---|---|
+| **Truth** | Every accepted top-level input: submissions, connector pages, delivery and job outcomes, agent steps with what their knowledge search found, effect outcomes with answers, model usage, flow versions started | The PostgreSQL journal, one per tenant, fail-stop | — | Everything; backups hold the journal |
+| **Derived state** | Records and their history, kernel logs, owned work and queues, effects' intents, notifications, flow instances, agent runs, memories | Memory; snapshots (ADR-0019) | Replay through the same code | Start-up time |
+| **Derived indexes** | Projections `tenant_<id>` (typed tables per entity type), knowledge vectors by passage hash | PostgreSQL beside the journal | Rebuilt at start; vectors re-embedded as owned work | Rebuild time; embedding cost |
+| **Outside, with retention** | Transcripts of model calls (30 days by default); secrets (by name, in the deployment) | PostgreSQL table; environment | Not rebuilt | The full text of old model calls |
+| **Volatile** | Heartbeats, a connector's last refusal, endpoint health, a job's run count and next due time | Memory | — | Nothing that decides |
+| **Code** | Declarations: entity types, actions, lifecycles, flows, agents, protocols, instructions | Go and TypeScript, versioned with the binary | — | — |
 
-### Platform model (convergence gates #103, #104)
+Business state an app decides is **records** (ADR-0016). Observations and claims from outside are **facts** (K2) that decisions cite as evidence; the plant keeps its machine states, ERP claims and derived downtime as facts. A value computed from others is derived and never stored as truth.
 
-Audited across #92–#101 as one platform (#103); the owner's decisions on what the audit found were built in #104. This section is canonical: when code, an ADR and this section disagree, this section says which one is current.
+### 2.4 Capability map (what exists)
 
-**Layers.**
+Kernel status is in §4. "Used by" names the apps that prove a capability; a platform app counts when it uses another capability as an app would.
 
-| Layer | Meaning | Changes when |
-|---|---|---|
-| **Kernel** | The language-neutral contract (K1–K9): spec, vectors, Go and Swift | A kernel hypothesis is revised (spec and vectors first) |
-| **Host runtime** | Package `platformserver`: composition, routing, journal and replay, owned work, dispatch, stores for notifications, settings, connectors, endpoints and effects; it implements `platform.Runtime` | The platform grows a mechanism |
-| **App API** | Package `platformserver/platform`: what an app sees — `Member`, `Caller`, `Manifest`, the declarations (actions, protocols, jobs, settings, effect kinds, the organisation's vocabulary) and `Ledger`. A caller reaches the host only through `Runtime`; apps and protocols import this package, never the runtime | An app needs something the host already does |
-| **Platform capability** | Behaviour exposed as a platform app (`platform`, whose type is `Console`; `org`; `relations`) or as a `Caller` method apps use | A cross-industry need appears in a second app |
-| **Industry protocol** | A versioned interface apps provide and consume, with conformance tests | A second provider or consumer appears |
-| **Domain** | An app: its rules, reads, inputs, settings, jobs and effect kinds | Its business changes |
+| Capability | Layer | What an app gets | Code | Used by |
+|---|---|---|---|---|
+| Identity and redirects (K1) | Kernel | Opaque stable IDs, merge and split redirects | `kernel.Identity` | manufacturing, Music |
+| Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | manufacturing, Hotel, Music |
+| Decisions (K4) | Kernel | Change records: idempotency, revisions (C12), causation | `kernel.ChangeLog` | all |
+| Authority and outbox (K5) | Kernel | Authority per data class; edge outbox in Go, Swift, Rust and TypeScript | `kernel.Authorities` | all |
+| Tenancy and policy (K6) | Kernel | Receiving order, one policy evaluation per decision | `kernel.Receiver` | all |
+| Schema versions (K7) | Kernel | Versioned payloads; webhook bodies carry the version | `kernel.SchemaRegistry` | all (declared) |
+| Connectors (K8) | Kernel | One descriptor for push and poll, cursors, health | `kernel.Connectors` | manufacturing, Hotel |
+| Work ownership (K9) | Kernel | Generations, stale results, owner close (checkpoints unused) | `kernel.Works` | the host |
+| Composition and routing | Host runtime | Manifests checked at start; routing by action, read and input | `NewTenant`, `checkManifest`, `Tenant` | every host |
+| Journal, replay and snapshots | Host runtime | One ordered journal per tenant; fail-stop; replay through the same code; snapshots valid for their code | `Journal`, `Tenant.Replay`, `CheckReplay`, `snapshot.go` | every host |
+| Record store and generic reads (ADR-0016) | App API, host runtime | Entity types as Go structs; generic reads with domain, search, sort and pages; scope per role; history; related records; generated create, edit, archive and forms | `platform.Entity`, `Caller.Put`, `Get`/`Find`, `/v1/entities`, `/v1/records` | CRM, Hotel, manufacturing, HR, helpdesk |
+| Aggregates and projections (ADR-0019) | Host runtime | Group and measure within scope; typed PostgreSQL tables per entity type with a reader role per tenant | `/v1/aggregates`, `-project` | CRM, Hotel, manufacturing |
+| Action catalog | App API, host runtime | Declared actions; each caller receives only what its role permits; start-up deactivation | `platform.Action`, `/v1/actions` | all |
+| Reads and read authorization | Host runtime | Named reads; role in the app, or open to every member | `Tenant.Read`, `Manifest.Everyone` | all |
+| Package ledger | App API | The kernel wired for one app, catalog role check, publishing | `platform.Ledger` | every app |
+| Owned work: deliveries and jobs (ADR-0013) | Host runtime | Events delivered as owned work with retries; scheduled jobs run as the app | `Manifest.Jobs`, `Tenant.Work` | manufacturing, Hotel, `work`, `flow`, `agent`. `Manifest.Subscribes` has no app user: apps react to events through flows |
+| Connectors, managed | Host runtime | Deliveries through the caller; cursor, health, last refusal; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | manufacturing, Hotel |
+| Outbound effects (ADR-0014, 0022) | Host runtime | Webhooks for events; effect kinds apps emit; email of notifications; A2A messages to external agents; at least once with a stable key; answers back to the app; irreversible kinds an agent causes held for a person | `Tenant.Dispatch`, `Caller.Emit`, `Answerer`, `mail.go`, `a2a.go` | sales, manufacturing, helpdesk |
+| Deployment | Host runtime | Development tokens, or journal plus OIDC, from one set of flags; the work runner | `Deployment`, `RunWork` | mes-server, sales-server, hotel-server |
+| Identity provider | Host runtime | OIDC subjects; the directory maps them to members | `OIDC`, Rauthy | every deployed host |
+| Agent doors | Host runtime | A caller's catalog as MCP tools; published agents over A2A 1.0 (JSON-RPC, agent cards) | `POST /mcp`, `/a2a/<tenant>/<agent>`, `cmd/mes-agent` | every host; helpdesk published |
+| Console | Platform app `platform` | Members, roles, service accounts and agents; audit and deliveries; app settings; protocol binding; endpoints; approval and retry of effects | `console.go` | every host |
+| Organisation (ADR-0012) | Platform app `org` | Units in dated structures, memberships; rules ask for a member's units at the input's time | `org.go`, `Caller.Units` | manufacturing, HR, sales |
+| Links and timeline | Platform app `relations` | Relations between entities; protocol events told on linked timelines | `Caller.Link`, `Caller.Links` | CRM |
+| Notifications | Host, read state in `platform` | To members, a unit's role or an app role; deduplicated; mailed through an email endpoint | `Caller.Notify` | manufacturing, Hotel, helpdesk, `work` |
+| Lifecycles, approvals, tasks, inbox (ADR-0017) | App API, platform app `work` | States and transitions on an entity type; approval chains along the organisation; tasks with due times and escalation; one inbox; saved views | `platform.Lifecycle`, `platform.Approval`, `Caller.Assign`, `/v1/inbox` | manufacturing, HR, helpdesk |
+| Flows (ADR-0020) | App API, platform app `flow` | Declared long-running processes: acts, waits, questions, parallel branches, sub-flows, agent steps, timeouts, compensation, versions, a trace of why each step went where it went | `platform.Flow`, `flow.go`, `flow_engine.go` | manufacturing, CRM, helpdesk |
+| AI providers and models (ADR-0015) | Platform app `ai` | Vendor, OpenAI-compatible, Anthropic and local providers; enabled models with access; calls through the host with usage journaled; tools on both wires | `ai.go`, `aicall.go`, `anthropic.go`, `/v1/ai/chat` | every host |
+| Agents (ADR-0021, 0022) | App API, platform app `agent` | Declared agents as principals with the intersection of grants; runs journaled step by step; drafts people confirm; signals; evaluation by dry re-runs; memory; transcripts; the context graph and search as tools | `platform.Agent`, `agent*.go`, `context.go`, `/v1/context`, `/v1/search` | manufacturing, CRM, helpdesk |
+| Knowledge (ADR-0022) | Platform app `knowledge` | Documents and `knowledge:"true"` fields; passages; hybrid search (BM25 and vectors) within what the reader may read; citations journaled with an agent's step | `knowledge.go`, `/v1/knowledge` | helpdesk |
+| Protocols (ADR-0011) | Protocols | Named, versioned actions, reads and events with conformance tests | `platform.Protocol`, `protocols/lodging` | Hotel and memstay provide lodging; CRM consumes it |
+| UI kit | Web | Components, docking workspace, entity routes, records (lists, pages, forms), pivot, charts from the platform's visualization spec (ECharts 6), flow view | `@platform/ui` | every web app |
+| Workspace and the UI app API (ADR-0018) | Web | One sign-in per host; apps contributed by UI packages; records opened across apps by reference; dashboards; the assistant, run pages and global search | `@platform/app`, `web/apps/workspace` | every app UI |
+| Edge client and sign-in | Web | Outbox, HTTP client, OIDC with PKCE, a host's reasons for refusing | `@platform/kernel` | workspace, Hotel Desk |
+| Settings | Web | Members, organisation, apps, settings, protocols, integrations, AI, processes (flows, agents, evaluations, memories), knowledge, audit | `@pkg/platform` | every host |
+| App UI packages | Web | An app's or a protocol's views for any workspace | `@pkg/crm`, `@pkg/helpdesk`, `@pkg/hotel`, `@pkg/hr`, `@pkg/mes`, `@pkg/lodging` | — |
 
-#### Capability map
+### 2.5 Terminology and ownership
 
-Status legend:
-- **n**: apps using the capability;
-- **1**: proven once;
-- **gap**: known missing;
-- **H**: a kernel hypothesis under test (kernel status as in §4).
-
-| Capability | Layer | What an app gets | Code | Used by | Status |
-|---|---|---|---|---|---|---|
-| Identity and redirects (K1) | Kernel | Opaque stable IDs, merge/split redirects | `kernel.Identity` | manufacturing, Music | 2D |
-| Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | manufacturing, Hotel, Music | 2D |
-| Decisions (K4) | Kernel | Change records: idempotency, revisions (C12), causation | `kernel.ChangeLog` | all | E |
-| Authority and outbox (K5) | Kernel | Authority per data class; edge outbox in Go, Swift, Rust and TypeScript | `kernel.Authorities` | all | 2D |
-| Tenancy and policy (K6) | Kernel | Receiving order, one policy evaluation per decision | `kernel.Receiver` | all | E |
-| Schema versions (K7) | Kernel | Versioned payloads; webhook bodies carry the version | `kernel.SchemaRegistry` | all (declared) | H |
-| Connectors (K8) | Kernel | One descriptor for push and poll, cursors, health | `kernel.Connectors`, kept by the host | manufacturing, Hotel | H |
-| Work ownership (K9) | Kernel | Generations, stale results, owner close | `kernel.Works`, used by the host for owned work (generations only; checkpoints unused) | host | H |
-| Composition and routing | Host runtime | Manifests checked at start (`checkManifest`); routing by action, read and input name | `NewTenant`, `Tenant` | every host | 4 |
-| Journal and replay | Host runtime | One ordered journal per tenant; fail-stop; replay through the same code | `Journal`, `Tenant.Replay`, `CheckReplay` | every host | 4 |
-| Application model | App API and host runtime (ADR-0016) | Entity types declared once as Go structs; records kept by the host; generic reads with domain, search, sort and pages; scope per role; record history; related records; generated create, edit and archive | `platform.Entity`, `Caller.Put`, `platform.Get`/`Find`, `/v1/entities`, `/v1/records` | CRM, Hotel | 2 |
-| Lifecycles, approvals, tasks | App API and platform capability (`work` app, ADR-0017) | States and transitions declared on an entity type; approval chains from the organisation, held by the host and run when approved; tasks with due times, escalation and one inbox | `platform.Lifecycle`, `platform.Approval`, `Caller.Assign`, `work.approval`, `work.task`, `/v1/inbox` | manufacturing, HR | 2 |
-| Package ledger | App API | The kernel wired for one app, catalog role check, publishing to subscribers | `platform.Ledger` | every app | 5 |
-| Action catalog | App API, served by the host runtime | Declared actions; each caller receives only what its role may call; start-up deactivation | `platform.Action`, `platform.Catalog`, `/v1/actions`, MCP | all apps | 4 |
-| Reads and read authorization | Host runtime | Named reads; role in the app, or opened to every member | `Tenant.Read`, `Manifest.Everyone` | all apps | 4 |
-| Events and subscriptions | Host runtime | An app's own decisions or a consumed protocol's events, queued per subscriber, delivered as owned work with retries | `Manifest.Subscribes`, `Subscriber`, `Tenant.Work` | tests only (no production subscriber since #95) | 1 |
-| Scheduled jobs | Host runtime | Declared jobs, run as the app | `Manifest.Jobs`, `Runner` | manufacturing, Hotel | 2 |
-| Connectors (managed) | Host runtime | Deliveries through the caller; cursor, health, last refused input; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | manufacturing, Hotel | 2 |
-| Outbound effects | Host runtime | Webhooks for events; effect kinds apps emit; email of notifications; at least once with a stable key; answers back to the app; irreversible kinds an AI agent causes held for a person's approval | `Tenant.Dispatch`, `Caller.Emit`, `Answerer`, `mail.go` | sales (webhook), manufacturing (ERP write-back, email, approval) | 2 |
-| Deployment | Host runtime | Development tokens or journal plus OIDC from one set of flags; the work runner | `Deployment`, `RunWork` | mes-server, sales-server, hotel-server | 3 |
-| Members, roles, service accounts and AI agents | Platform capability (`platform` app) | Members signing in as subjects, one role per app, grant and revoke as decisions | `Console` (its directory area) | every host | 4 |
-| Audit and deliveries history | Platform capability (`platform` app) | Accepted inputs and delivery attempts, rebuilt by replay | reads `audit`, `deliveries` | every host | 4 |
-| App settings | Platform capability (`platform` app) | Typed values the app declares; administrators set them as decisions | `Manifest.Settings`, `Caller.Setting` | manufacturing, Hotel | 2 |
-| Notifications | Platform capability (`platform` app) | To members, holders of a unit's role, or holders of an app role; deduplicated by key; read state as a decision; mailed through an email endpoint | `Caller.Notify` | manufacturing, Hotel, the platform (approvals) | 3 |
-| Protocol binding | Platform capability (`platform` app) | The administrator chooses the provider of new calls; reads span every provider | `platform.protocol.bind`, `Caller.Query` | sales | 1 |
-| Organisation | Platform capability (`org` app) | Units in dated structures, memberships; rules ask for a member's units | `Organization`, `Caller.Units` | manufacturing, sales | 2 |
-| AI providers and models | Platform capability (`ai` app, ADR-0015) | Vendor, OpenAI-compatible and local providers; live catalogs; models enabled for everyone or for ai users; calls through the host with usage journaled | `AI`, `Tenant.Chat`, `POST /v1/ai/chat` | sales, manufacturing (Settings, rehearsal) | 1 |
-| Links and timeline | Platform capability (`relations` app) | Relations between entities; protocol events told on linked timelines | `Relations`, `Caller.Link`, `Caller.Links` | CRM, sales | 1 |
-| Identity provider | Platform capability (deployment) | OIDC subjects; the directory maps them to members | `OIDC`, Rauthy | every deployed host | 3 |
-| Protocols | Industry protocol | Named, versioned actions, reads and events, with conformance tests apart from the protocol (`lodging/lodgingtest`) | `platform.Protocol`, `protocols/lodging` | Hotel and memstay provide lodging; CRM consumes it | 2 |
-| Agent adapters | Platform capability | A caller's catalog as MCP tools and CLI | `POST /mcp`, `cmd/mes-agent` | every host | 2 |
-| UI kit, shell, notification list | Web | Components, docking workspace, entity routes, notifications, launcher | `@platform/ui` | all web apps | 4 |
-| Workspace and the UI app API | Web | One sign-in per host; apps contributed by UI packages; records opened across apps by reference | `@platform/app` (`defineApp`, `useHost`), `web/apps/workspace`, `GET /v1/sign-in`, `/v1/me` apps | every app UI | 18 |
-| Edge client and sign-in | Web | Outbox, HTTP client, OIDC with PKCE, reasons a host refuses | `@platform/kernel` | MES, sales, Settings | 3 |
-| Settings | Web (the `platform` app's workspace) | Members, organisation, apps, app settings, protocols, integrations (connectors, endpoints, effects), automation, audit | `apps/settings` | every host, signed in or with demo tokens | 1 |
-| Package UI | Web | An app's or a protocol's views for any software | `@pkg/hotel`, `@pkg/lodging` | Hotel Desk, sales | 2 |
-| Industry apps | Domain | Manufacturing (`mes`), Hotel (`hotel`), CRM (`crm`), serviced apartments (`memstay`, the protocol's reference provider) | `slices/*`, `protocols/lodging` | — | — |
-
-#### ADR reconciliation
-
-"Accepted" means decided, not built. Each promise has one of four states:
-- **Implemented:** built and tested.
-- **Partial:** built in part; what is missing is named.
-- **Deferred:** waits for its first user.
-- **Superseded:** replaced by a later decision.
-
-| ADR | Promise | State |
-|---|---|---|
-| 0007 | Input journal in PostgreSQL, fail-stop, replay on start; OIDC | Implemented (rehearsed restart and restore) |
-| 0008 | Governed actions and per-caller catalogs; AI as an authorized caller; start-up deactivation; no runtime installation | Implemented |
-| 0008 | Human confirmation before an agent's action takes effect | Partial: an irreversible effect an AI agent causes waits for a person (ADR-0014 D6); the agent's decision inside the tenant takes effect, as it can be corrected |
-| 0008 | Analysis data models and dashboards for customers | Deferred |
-| 0009 | Bridges between packages | Superseded by ADR-0011; the unused bridge path (`Manifest.Requires`, `Caller.Submit`, `Caller.Read`) was removed in #104. Apps know no other app |
-| 0010 | Apps from manifests; routing; the platform app with Settings; audit; app registry; public reads | Implemented |
-| 0010 | Requirement graph between apps | Superseded by ADR-0011: the protocol graph (providers composed before consumers) is checked instead |
-| 0010 | Enable and disable an app per tenant as a recorded decision | Amended (#104): apps are composed per tenant in code and capabilities are deactivated at start-up; a decision waits for a tenant that must change its apps without a release |
-| 0010 | Scoped grants by member attributes | Superseded by the organisation (ADR-0012); attributes removed in #103 |
-| 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
-| 0010 | Logs and correlation | Partial: correlation IDs pass through protocol calls; no structured logs |
-| 0010 | Health | Partial: connectors and endpoints have health; apps and the journal do not |
-| 0010 | App launcher and navigation from manifests | Implemented by ADR-0018 (#108): one workspace, apps contributed through `defineApp` |
-| 0010 | Cross-app links in the UI | Partial: links and timeline exist; opening another app's entity view does not |
-| 0010 | Number sequences, files, analysis datasets, retention, preferences | Deferred |
-| 0011 | Protocols with conformance; providers and consumers; binding by protocol; choice in Settings; links and timeline; MCP | Implemented |
-| 0011 | Protocol versions side by side | Deferred |
-| 0011 | Routing an action on an existing entity to the provider that holds it | Deferred (the CRM only reserves) |
-| 0011 | Cross-industry protocols (party, documents, notification, calendar) | Partial: notification, links and timeline are platform capabilities, not protocols; the rest is deferred |
-| 0012 | Units, structures, memberships with valid time; rules read a named structure; Settings | Implemented |
-| 0012 | Rules evaluated at the input's time | Implemented (#104): `Caller.Units` takes the input's time, as notifications do |
-| 0012 | Successors of merged or split units; posts; delegation; federation | Deferred |
-| 0013 | Owned deliveries with retries and ordering; jobs; connectors in the host; notifications; typed settings; open reads | Implemented |
-| 0013 | Work kept in K9 `Works` | Partial: generations only; checkpoints unused |
-| 0013 | An app's work stops when it is disabled | Deferred (with per-tenant disable) |
-| 0014 | Intent, attempt and outcome separated; at least once with a stable key; retries and failure; answers as observations; endpoints in Settings; secrets by name; private addresses refused; webhooks without app code; effect kinds apps emit | Implemented |
-| 0014 | Per-endpoint limits (rate, payload size, timeout) | Partial: a fixed 10 s timeout and a 64 KiB answer; no rate |
-| 0014 | A breaker per destination | Partial: the ordered queue per endpoint holds the rest behind a failing head |
-| 0014 | Webhooks filtered by the catalog rules of who may see an event | Amended (#104): an endpoint is the administrator's, so it has the administrator's view — any event the tenant declares; an undeclared event is refused |
-| 0016 | Entity declarations, the record store, generic reads, scope, history, generated actions and pages | Implemented (#106); CRM, Hotel, manufacturing |
-| 0017 | Lifecycles, approvals, tasks and the inbox | Implemented (#107); the helpdesk proof, delegation and calendars deferred |
-| 0018 | One workspace: one sign-in, a launcher, apps as contributions, cross-app references | Implemented (#108); global search, the backend-for-frontend and run-time UI bundles deferred |
-| 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
-| 0020 | Flows: declared steps, waits, people, compensation, versions, decision traces | Implemented (#110, stage 4) |
-| 0021 | Agents: declared principals, the harness, context graph, traces, evaluation, A2A | Accepted (#111, stage 5); batches 1 and 2 implemented |
-| 0022 | Knowledge, memory and agent-to-agent: documents with hybrid scoped search and journaled citations, memory as records, A2A 1.0, transcripts | Accepted (#111, stage 5 batch 3) |
-| 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
-| 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
-| 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
-| 0014 | D6 approval of irreversible effects caused by agents; email | Implemented: held effects approved by a person; email endpoints for notifications (SMTP, STARTTLS, PLAIN) |
-
-#### Terminology and ownership
+Words that are easy to confuse:
+- An **app** is a unit of capability: a Go manifest and, usually, a UI package. **Platform apps** are the eight listed in §2.1. **Reference apps** live under `slices/` (a name from the kernel-validation phase). "Package" in ADR-0008 and ADR-0009 means app.
+- A **solution** is a composition of apps for one host: `solutions/sales`, the plant's `mes-server`, the Hotel's `hotel-server`.
+- An **event** is an accepted decision as others see it. A domain's own word "event", such as a downtime event, is not this.
 
 | Term | Is | Owned by | Durable as |
 |---|---|---|---|
@@ -150,26 +135,38 @@ Status legend:
 | **Submission** | A request to take an action on an entity | The caller | — |
 | **Decision** | An accepted submission: a K4 change record in the ledger of the app holding authority over the target's data class | That app's `Ledger` | Journal entry `submission` |
 | **Input** | A top-level entry that is not a submission: a connector's batch or page | The app declaring the input | Journal entry `<input name>`; heartbeats are not journaled |
-| **Fact** | What an app records as true at a source: an **observation** (seen, such as a machine state or an ERP answer) or a **claim** (asserted by a source, such as a planned order) | The app's fact log (K2) | Rebuilt from the input or outcome that recorded it |
-| **Event** | An accepted decision as others see it after commit, named by its action schema or by a protocol event (`<protocol>#<event>`). A domain's own word "event", such as a downtime event, is not this | Host | Rebuilt from the decision |
-| **Subscription** | An app's declared interest in its own decisions or in a consumed protocol's events | The app's manifest | Code |
-| **Delivery** | One event queued for one subscriber, attempted as owned work, in order per subscriber | Host (`Task` of kind delivery) | Journal entry `delivery` per attempt, with its outcome |
-| **Job** | Scheduled work an app declares and runs as `app:<id>` | Declared by the app, run by the host (`Task` of kind job) | Journal entry `job`, only when a run decided or notified something |
+| **Fact** | What is true at a source: an **observation** (seen, such as a machine state or an ERP answer) or a **claim** (asserted by a source, such as a planned order) | The app's fact log (K2) | Rebuilt from the input or outcome that recorded it |
+| **Entity type** | A Go struct an app declares: fields, scope, lifecycle, seed | The app | Code |
+| **Record** | One entity's current fields, revision and history | Decided by the app's ledger, kept by the host | Rebuilt from decisions |
+| **Lifecycle** | States and transitions on an entity type; each transition is an action | The app | Code |
+| **Approval request** | A submission held until the approvers of each level agree; the last approval runs it as the requester | `work` | Decisions |
+| **Task** | Work for members, a role or a unit, with a due time and answers | `work`, opened by approvals, flows, agents and apps | Decisions |
+| **Event** | An accepted decision after commit, named by its action schema or a protocol event (`<protocol>#<event>`) | Host | Rebuilt from the decision |
+| **Subscription** | An app's declared interest in its own decisions or a consumed protocol's events | The app's manifest | Code |
+| **Delivery** | One event queued for one subscriber, attempted as owned work, in order per subscriber | Host (`Task` of kind delivery) | Journal entry `delivery` per attempt |
+| **Job** | Scheduled work an app declares and runs as `app:<id>` | Declared by the app, run by the host | Journal entry `job`, only when a run decided or notified something |
 | **Work** | K9 ownership of a delivery or a job: owner, generation, state | Host, through `kernel.Works` | Rebuilt by replay; job counters are volatile |
-| **Connector** | An inbound source: a K8 descriptor whose ID is the member it signs in as | Connected by the deployment, held by the host, switched by the `platform` app | Cursor and switch rebuilt; heartbeat and last refusal volatile |
-| **Endpoint** | An outbound destination: a webhook (URL, secret name, subscribed events, bound effect kinds) or an email server (SMTP URL, sender, apps whose notifications it mails) | `platform` app decisions, held by the host | Decisions |
+| **Flow** | A declared long-running process; an **instance** is its record with tokens, undo stack and trace | Declared by the app, run by `flow` | Code; instances are decisions |
+| **Connector** | An inbound source: a K8 descriptor whose ID is the member it signs in as | Connected by the deployment, held by the host, switched by `platform` | Cursor and switch rebuilt; heartbeat and last refusal volatile |
+| **Endpoint** | An outbound destination: a webhook, an email server or an external A2A agent | `platform` decisions, held by the host | Decisions |
 | **Effect kind** | An outbound message an app declares it sends (`Manifest.Emits`) | The app's manifest | Code |
-| **Effect** | One intent for one endpoint: from an event (webhook), from `Caller.Emit`, or from a notification (email); its key is its ID. Held while an irreversible kind an AI agent caused waits for a person | Host | Intent rebuilt from its input; approval and discard are decisions; each attempt's outcome is journal entry `effect` |
-| **Answer** | What an endpoint returned for an app's effect; the app records it as an observation | Journaled with the outcome, recorded by the app (`Answerer`) | Journal entry `effect` |
+| **Effect** | One intent for one endpoint, from an event, `Caller.Emit` or a notification; its key is its ID. Held while an irreversible kind an agent caused waits for a person | Host | Intent rebuilt from its input; approval and discard are decisions; each attempt's outcome is journal entry `effect` |
+| **Answer** | What an endpoint returned for an app's effect; the app records it as an observation | The app (`Answerer`) | Journal entry `effect` |
 | **Notification** | A message to a member, resolved on the input's day | Created by apps (`Caller.Notify`), stored by the host; read state is a `platform` decision | Rebuilt from its input |
-| **Provider** | A source of models: vendor, OpenAI-compatible API or local server; its key is a secret's name | `ai` app decisions | Decisions |
-| **Model** | A provider's model enabled for everyone or for ai users; called as `<provider>/<model>` | `ai` app decisions | Decisions |
-| **Usage** | One model call's meter reading: member, model, tokens, cost, latency, outcome. Prompts and answers are not kept | The host, applied by the `ai` app | Journal entry `usage` |
-| **Setting** | A typed value an app declares | Declared by the app; values set by `platform` decisions, stored by the host | Decisions |
+| **Setting** | A typed value an app declares | Declared by the app; values set by `platform` decisions | Decisions |
+| **Provider**, **model** | A source of models, and one of its models enabled for everyone or for AI users | `ai` decisions | Decisions |
+| **Usage** | One model call's meter reading: member, model, tokens, cost, latency, outcome | Host, applied by `ai` | Journal entry `usage` |
+| **Agent** | A declared principal `agent:<app>.<name>`: instructions, tools, budget, guard, who takes over | The app | Code; published over A2A by a setting |
+| **Run** | One goal of an agent: steps with rationale, draft, citations, budgets used, result | `agent` | Journal entries `agent`, decisions `agent.run.*` |
+| **Signal** | A person's answer to an agent's work: confirmed, changed, rejected, approved, discarded, undone | `agent` | Decisions |
+| **Evaluation** | Signalled runs re-run dry with a candidate model, compared with what people accepted | `agent` | Journal entry `agent` |
+| **Memory** | A short fact an agent keeps about a person or for every run; expires unless a person keeps it | `agent` | Decisions |
+| **Document**, **passage** | Knowledge text and the pieces it is cut into; vectors are derived | `knowledge` | Decisions; vectors derived |
+| **Transcript** | A model call's full request and answer | Host, outside the journal | Retention setting |
 
-Ownership rule: the host keeps shared runtime state; the `platform` app (`Console`) decides every change an administrator makes, each area deciding its own target type; apps decide only about their own data classes, reach the platform through `Caller` and each other through protocols only.
+Ownership rule: the host keeps shared runtime state; the `platform` app decides every change an administrator makes, each area deciding its own target type; apps decide only about their own data classes, reach the platform through `Caller` and each other through protocols only.
 
-#### External effects: lifecycle and replay
+### 2.6 External effects: lifecycle and replay
 
 ```
   agent + irreversible kind ──▶ held ──approve (a person's decision)──▶ pending
@@ -183,33 +180,23 @@ decision or app input ──emit──▶ pending ──attempt──▶ deliver
 
 1. **Creation.** Inside an input:
    - `emit` turns a decision whose event an endpoint subscribes to into an effect. The ID is `<tenant>:<app>:<change id>:<endpoint>`.
-   - `Caller.Emit` turns an app's effect of a bound kind into an effect. The ID is `<tenant>:<app>:<kind>:<key>:<endpoint>`. When the kind is irreversible and the caller is an AI agent, the effect is held, and the administrators are notified.
+   - `Caller.Emit` turns an app's effect of a bound kind into an effect. The ID is `<tenant>:<app>:<kind>:<key>:<endpoint>`. When the kind is irreversible and the caller is an AI agent, the effect is held, and the administrators are notified. An agent's `emit:<kind>` tool does the same and waits for the answer.
    - `Caller.Notify` turns a notification to a member with an email address into a mail for each email endpoint carrying that app. The ID is `<tenant>:notice:<notification>:<endpoint>`.
 
    An effect has no journal entry of its own. It is part of the input that caused it, and replay recreates it with the same ID.
 2. **Attempt.** `Dispatch` takes the due head of each endpoint's effects (ordered per endpoint; held effects wait outside the order) and sends it outside the tenant's lock.
    - A webhook is signed as Standard Webhooks, with `webhook-id` and `Idempotency-Key` both set to the effect ID.
    - A mail goes over SMTP (STARTTLS when offered), with the effect ID as its Message-ID.
+   - An A2A message is a `SendMessage` to the endpoint's agent; the task's result is the answer.
    - Private addresses are refused at connect time unless the endpoint allows them.
    - Dispatch is never called during replay.
-3. **Outcome.** Every attempt ends in a journal entry `effect` holding:
-   - the result: delivered, rejected or retry;
-   - the detail;
-   - the digest of the body sent;
-   - for an app's effect, the answer (JSON, up to 64 KiB).
-
-   Then it is applied:
-   - retry sets the next due time: 5 s doubling to 1 h, with jitter derived from the ID;
-   - after 12 attempts since the last manual retry the effect is failed.
+3. **Outcome.** Every attempt ends in a journal entry `effect` holding the result (delivered, rejected or retry), the detail, the digest of the body sent, and for an app's effect the answer (JSON, up to 64 KiB). A retry sets the next due time: 5 s doubling to 1 h, with jitter derived from the ID; after 12 attempts since the last manual retry the effect is failed.
 4. **Answer.** For an app's effect, once settled, the host calls the app's `Answer` with the outcome. The app records the answer as an observation and may notify or decide. Replay makes the same call with the journaled answer.
-5. **Idempotency.** At least once:
-   - a crash between an attempt and its entry leaves the effect pending;
-   - after restart it is sent again with the same ID;
-   - receivers keep one copy per ID. The ERP stand-in returns the same confirmation for the same ID.
-6. **Approval, manual retry and discard** are `platform` decisions. Only a person approves a held effect; an agent's approval is refused whatever its role. A retry makes a failed or rejected effect pending again, with a full schedule. A discard settles a pending or retrying effect.
+5. **Idempotency.** At least once: a crash between an attempt and its entry leaves the effect pending; after restart it is sent again with the same ID; receivers keep one copy per ID.
+6. **Approval, manual retry and discard** are `platform` decisions. Only a person approves a held effect; an agent's approval is refused whatever its role. Approving or discarding an effect an agent's run caused is a signal on the run.
 7. **Replay** rebuilds intents from their inputs, applies every recorded outcome and hands answers to apps. It calls nothing: `CheckReplay` fails the test on any outbound call. After replay, effects still pending are sent by the running host with their original IDs.
 
-#### Replay semantics for every journal entry kind
+### 2.7 Replay semantics for every journal entry kind
 
 | Entry kind | Written when | Replay does |
 |---|---|---|
@@ -217,63 +204,92 @@ decision or app input ──emit──▶ pending ──attempt──▶ deliver
 | `<input>` (connector batch or page) | An input declared journaled is accepted | Runs the same app code (cursor checks included) |
 | `delivery` | Each attempt of an event for a subscriber | Attempts again and must reach the same outcome, otherwise replay stops |
 | `job` | A run that decided or notified something | Runs again at the recorded time and must reach the same outcome |
-| `agent` | Each step an agent's model chose (ADR-0021) | Applies the recorded choice — the tool is used again, its action decided again — and never calls the model |
-| (any, with `versions`) | A flow instance started while handling the entry (ADR-0020) | Starts it on the recorded version, whatever the code declares since |
+| `agent` | Each step an agent's model chose, with what its knowledge search found; an evaluation's report | Applies the recorded choice — the tool is used again, its action decided again — and never calls a model, embeds or searches |
+| (any, with `versions`) | A flow instance started while handling the entry | Starts it on the recorded version, whatever the code declares since |
 | `effect` | Each attempt of an outbound effect | Applies the recorded outcome and hands the answer to the app; never sends |
-| `usage` | Each model call (ADR-0015) | Applies the meter reading; never calls a model |
-
-Volatile by design, not rebuilt: heartbeats, a connector's last refused input, endpoint health (it depends on the secret store), and a job's run count and next due time (runs that did nothing are not journaled; after a restart a job is due at once).
+| `usage` | Each model call | Applies the meter reading; never calls a model |
 
 Removing an action schema, input or effect kind that a journal already holds needs a migration: replay would meet an entry no code accepts.
 
-**Snapshots** (ADR-0019 D6) shorten replay without changing it: a tenant's state saved at a journal position, by the code that wrote it (the binary and its apps' versions), restored at start-up, then only the later entries replayed. Other code ignores it and replays the whole journal. A snapshot is taken every N entries (and a tenth of the journal), and at shutdown.
+**Snapshots** (ADR-0019 D6) shorten replay without changing it: a tenant's state saved at a journal position, valid only for the code that wrote it (the binary and its apps' versions), restored at start-up, then only the later entries replayed. Other code ignores it and replays the whole journal.
 
-#### Invariants and the checks that hold them
+### 2.8 Invariants and the checks that hold them
 
 | Invariant | Check |
 |---|---|
-| Replay reproduces everything the host shows, and calls nothing outside; so does a snapshot taken after any part of the journal, restored and given the rest | `platformserver.CheckReplay` in the tests of the host, manufacturing, Hotel, CRM, HR and the sales solution (four snapshot points each); the rehearsal's restart and restore |
-| A manifest the host cannot honour is refused at composition: undescribed actions, settings whose default is not of their type, jobs without an interval, repeated effect kinds, open reads not declared, actions using anything but a consumed protocol's action, subscriptions to another app's actions, protocols no earlier app provides | `checkManifest` and `NewTenant`, run by every composition's tests |
-| No app depends on another app; a protocol depends on no app; app and protocol packages import the app API and never the host runtime (only binaries and `*test` harnesses compose tenants) | `scripts/boundaries.sh` (verify step `app-boundaries`), on imports; the runtime is reachable only through `platform.Runtime` |
+| Replay reproduces everything the host shows and calls nothing outside; so does a snapshot taken after any part of the journal, restored and given the rest | `platformserver.CheckReplay` in the tests of the host, manufacturing, Hotel, CRM, HR and the sales solution (four snapshot points each); the rehearsal's restart and restore |
+| Replay never calls a model, embeds or searches | Host tests fail when a replay calls a model (`TestAgents`, knowledge tests) |
+| A manifest the host cannot honour is refused at composition: undescribed actions, settings of the wrong type, jobs without an interval, repeated effect kinds, undeclared open reads, flows and agents naming steps or tools that do not exist, protocols no earlier app provides | `checkManifest` and `NewTenant`, run by every composition's tests |
+| No app depends on another app; a protocol depends on no app; apps and protocols import the app API, never the host runtime | `scripts/boundaries.sh` (verify step `app-boundaries`) |
 | Rules scope by the input's time, so a replay decides alike | `Caller.Units(structure, now)`; organisation test |
-| Every caller receives only the actions its role permits, AI agents included | Catalog tests (host, manufacturing, sales) and the rehearsal |
+| Every caller receives only the actions its role permits; an agent never does more than the person it runs for | Catalog tests, `TestAgents`, the rehearsal |
 | Each accepted top-level input is journaled once, before it is answered | Host tests and the rehearsal (restart and restore) |
 | Kernel vocabulary stays domain-free | verify step `contract-vocabulary` |
 
+### 2.9 Open promises of accepted ADRs
+
+"Accepted" means decided, not built. Promises that are built are recorded in each ADR's "As built"; this table keeps only what is partial, deferred, amended or superseded.
+
+| ADR | Promise | State |
+|---|---|---|
+| 0008 | Analysis data models and dashboards customers add beside packages | Deferred: projections give a reader role per tenant; where customer models live is open (§10.4) |
+| 0009 | Bridges between packages | Superseded by ADR-0011; the bridge path was removed in #104 |
+| 0010 | Requirement graph between apps; scoped grants by member attributes | Superseded by the protocol graph (ADR-0011) and the organisation (ADR-0012) |
+| 0010 | Enable and disable an app per tenant as a recorded decision | Amended (#104): apps are composed per tenant in code; capabilities are deactivated at start-up |
+| 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
+| 0010 | Logs and correlation; health | Partial: correlation IDs pass through protocol calls and runs; no structured logs; connectors and endpoints have health, apps and the journal do not |
+| 0010 | Number sequences, files, analysis datasets, retention, preferences | Deferred (§10.4) |
+| 0011 | Protocol versions side by side; routing an action on an existing entity to its provider | Deferred |
+| 0011 | Cross-industry protocols (party, documents, calendar) | Partial: notification, links and timeline are platform capabilities |
+| 0012 | Successors of merged or split units; posts; delegation; federation | Deferred |
+| 0013 | Work kept in K9 `Works` | Partial: generations only; checkpoints unused |
+| 0013 | An app's work stops when it is disabled | Deferred (with per-tenant disable) |
+| 0014 | Per-endpoint limits; a breaker per destination | Partial: a fixed 10 s timeout and 64 KiB answer; the ordered queue holds the rest behind a failing head |
+| 0014 | Webhooks filtered by who may see an event | Amended (#104): an endpoint has the administrator's view |
+| 0015 | Quotas and rate limits, app calls as effects, streaming | Deferred (batch 2); agents have a daily token quota |
+| 0016 | References to a protocol's entity type; a reference picker in generated forms | Deferred |
+| 0017 | Delegation and substitutes; business calendars | Deferred |
+| 0018 | The backend-for-frontend token; UI bundles loaded at run time | Deferred (stage 9) |
+| 0019 | Capturing state without the tenant's lock; parallel restore; the plant's downtime as records | Deferred |
+| 0020 | Record-state triggers; business calendars for timeouts; a drawn graph | Deferred |
+| 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
 
 ## 3. Runtimes and languages
 
 ```text
 Server runtime (Go, reference implementation)
   tenancy · principals/policy · change records · identity/redirects · claims & resolution
-  sync endpoints · server-authoritative domain modules · workflows · connectors · audit/ops
+  sync endpoints · server-authoritative apps · flows · agents · connectors · effects · audit/ops
   Rust only for measured wins (solvers, matching, fingerprinting, protocol stacks)
         ▲  kernel contracts: language-neutral schemas + semantics + conformance vectors
 Edge / client runtimes
+  Web (TypeScript, React, @platform/ui): the workspace every host serves
   Apple (Swift): deep OS/hardware/file integration — AppFoundation client layer, Music
-  Desktop (Tauri/Rust): cross-platform office clients (suggested for Hotel)
-  Edge gateways (candidate Rust/Go): devices, PLCs, sensors, offline sites — from manufacturing
+  Desktop (Tauri/Rust): the Hotel Desk, offline with the Rust K5 outbox
+  Edge gateways (candidate Rust/Go): devices, PLCs, sensors, offline sites
 ```
 
-**The kernel is a contract, not a library** ([ADR-0002](ADR/0002-kernel-as-contract.md)). It is defined by schemas, semantic rules and conformance test vectors; Go implements it first. A runtime either implements the contract and passes the same vectors, or maps to it at its boundary. Cross-language boundaries exist only where justified — no four parallel implementations of everything. Whether Swift and Tauri clients share a Rust edge core is deliberately undecided until both a Music retrofit and a first Tauri client exist.
+**The kernel is a contract, not a library** ([ADR-0002](ADR/0002-kernel-as-contract.md)). It is defined by schemas, semantic rules and conformance test vectors; Go implements it first. A runtime either implements the contract and passes the same vectors, or maps to it at its boundary. Cross-language boundaries exist only where justified — no four parallel implementations of everything. Swift and Tauri clients do not share a Rust edge core yet ([ADR-0005](ADR/0005-no-shared-edge-core-yet.md)).
+
+The kernel contract covers what edges and the server must agree on to exchange decisions. The host's HTTP API — actions, entities, records, inbox, context, search, knowledge — is what every web client, integrator and agent actually uses, and it has no contract of its own yet: its TypeScript side is written by hand (§10.4, stage 6).
 
 ## 4. Kernel — current definition (hypotheses under test)
 
-Each item is a falsifiable statement. Status: **H** hypothesis · **2D** used in two different pressure domains without exceptions · **E** survived an evolution drill · **S** stable (changes need an ADR). Only S items are frozen; demoting or deleting an item is progress. Evidence lives in code, tests and the work queue — not in a growing notes file.
+Each item is a falsifiable statement. Status: **H** hypothesis · **2D** used in two different pressure domains without exceptions · **E** survived an evolution drill · **S** stable (changes need an ADR). Only S items are frozen; demoting or deleting an item is progress. Evidence lives in code, tests and the work queue.
 
 | # | Statement | Falsified if | Status |
 |---|---|---|---|
-| K1 Identity | Entities have platform-assigned, opaque, stable IDs; references are typed IDs; external IDs are claims, not identity; merge/split keeps old IDs resolvable via redirects | A domain must encode meaning in IDs; redirects cannot express a split; cross-runtime references need domain knowledge to resolve | **2D** (Music redirects; manufacturing SFCs and derived downtime entities; creation rule I10 added in #86) |
+| K1 Identity | Entities have platform-assigned, opaque, stable IDs; references are typed IDs; external IDs are claims, not identity; merge/split keeps old IDs resolvable via redirects | A domain must encode meaning in IDs; redirects cannot express a split; cross-runtime references need domain knowledge to resolve | **2D** (Music redirects; manufacturing SFCs and derived downtime entities; creation rule I10) |
 | K2 Fact kinds | Persistent business data is an **observation** (append-only, source-authoritative), **claim** (coexisting, resolved), **decision** (needs authority, may be rejected, undone only by a new decision) or **derived** (recomputable) | Data that fits none, or needs a fifth conflict semantic | **2D** (Hotel channel observations; manufacturing state batches, ERP claims, derived downtime) |
-| K3 Provenance | Every observation/claim/decision records source (principal or connector), time and confidence/authority basis | Provenance cost is unacceptable for high-rate observations even when batched | **2D** (Hotel, manufacturing: one provenance per 600-sample batch is enough, F-5 refuted) |
-| K4 Change record | Every accepted decision yields an envelope: change ID, tenant, principal, authority, target reference, schema version, valid time, recorded time, causation/correlation, idempotency key. History is kept; events and subscriptions build on it | Correctness needs multi-change atomicity the envelope cannot group; audit retention cannot be reconciled with deletion/privacy duties | **E** (Music corrections, Hotel reservations; unchanged through drills E1 and E2) |
+| K3 Provenance | Every observation/claim/decision records source (principal or connector), time and confidence/authority basis | Provenance cost is unacceptable for high-rate observations even when batched | **2D** (one provenance per 600-sample batch is enough) |
+| K4 Change record | Every accepted decision yields an envelope: change ID, tenant, principal, authority, target reference, schema version, valid time, recorded time, causation/correlation, idempotency key. History is kept; events and subscriptions build on it | Correctness needs multi-change atomicity the envelope cannot group; audit retention cannot be reconciled with deletion/privacy duties | **E** (Music corrections, Hotel reservations; unchanged through drills E1 and E2 and stages 1–5) |
 | K5 Authority & sync | Authority (device / tenant server / external system / negotiated) is declared per data class; sync behaviour is derived from it; authority can migrate | A data class needs two simultaneous authorities; derived sync needs per-domain exceptions | **2D** (server authority in Hotel and manufacturing, device authority in Music); drill E2 added A10 adoption (ADR-0006) |
-| K6 Tenancy & policy | A tenant is an isolation boundary (data, keys, config, quota, audit), not an org schema. Every decision records its principal; authorization is one auditable policy evaluation (principal, action, target, context). Org hierarchy is domain data. A personal space is a degenerate tenant (one principal, device authority) | Policy evaluation must understand domain hierarchy; personal apps must carry tenant overhead | **E** (Hotel roles, manufacturing lines; family roles in drill E2 needed no change) |
+| K6 Tenancy & policy | A tenant is an isolation boundary (data, keys, config, quota, audit), not an org schema. Every decision records its principal; authorization is one auditable policy evaluation (principal, action, target, context). Org hierarchy is domain data. A personal space is a degenerate tenant | Policy evaluation must understand domain hierarchy; personal apps must carry tenant overhead | **E** (Hotel roles, manufacturing lines; family roles in drill E2; the organisation stayed outside the kernel, ADR-0012) |
 | K7 Schema evolution | Every stored or transmitted payload is versioned with an upgrade path; entity types can split/merge through K1 redirects; old clients and new servers can coexist (expand → migrate → contract) | A drill needs a stop-the-world migration | H |
-| K8 Connectors | External systems attach through one descriptor: capabilities, identity mapping (K1), sync cursor, health/auth state; protocols stay in capabilities/domains | Capabilities need parameters a set cannot express; push and poll sources need two descriptor kinds | H (specified in #83: push gateway and polled ERP in one descriptor; Hotel's channel still ad hoc) |
-| K9 Work ownership | Long-running work has an owner, cancellation, stale-result invalidation and resumable checkpoints; closing an owner never silently reverts committed decisions | Server workflows and client tasks cannot share these semantics | H (specified in #86: generations, stale-result invalidation, checkpoints, owner close; client side in MSRU's `FeatureHost`) |
+| K8 Connectors | External systems attach through one descriptor: capabilities, identity mapping (K1), sync cursor, health/auth state; protocols stay in capabilities/domains | Capabilities need parameters a set cannot express; push and poll sources need two descriptor kinds | H (push gateway and polled ERP in one descriptor; the Hotel's channel moved onto it in #98) |
+| K9 Work ownership | Long-running work has an owner, cancellation, stale-result invalidation and resumable checkpoints; closing an owner never silently reverts committed decisions | Server workflows and client tasks cannot share these semantics | H (generations used by the host's owned work; checkpoints unused; client side in MSRU's `FeatureHost`) |
 
-Explicitly **not** kernel today: capacity allocation over time (candidate capability — Hotel, manufacturing scheduling), a workflow engine (compare Music import review, Hotel reservation lifecycle and a manufacturing work order first, all as code state machines), money/ledger, organizational hierarchy, UI shells and routes, matching toolkits, media playback.
+Stages 1–5 built records, lifecycles, analytics, flows and agents without a kernel change; the Go kernel only gained restore functions for snapshots, which add no rule. Explicitly **not** kernel: capacity allocation over time, flows, money, organisational hierarchy, UI shells and routes, matching toolkits, media playback. The action catalog is used by every app and client; it becomes a kernel-contract candidate once a client outside TypeScript needs it (spec and vectors first).
 
 ### Kernel Contract
 
@@ -294,17 +310,16 @@ The kernel is defined by six parts, all in `contract/`. A part never substitutes
 
 **Conformance.** An implementation conforms to a version for the concepts whose vectors it passes in full. Vector format: `{contract, concept, vectors: [{id, rules, given, steps: [{<operation>, expect}], expectLog?}]}`. Schema objects use Protobuf JSON names and are parsed strictly. Values assigned by the implementation are referenced indirectly (`"$step:N"` for the change ID produced by step N; `sameAs: N` for a replay of step N). The authority clock is given per step (`at`), so results are deterministic.
 
-**Current coverage** (`v1alpha1`): K1 Identity, K2 Fact kinds with K3 Provenance, K4 Change record, K5 Authority and sync, K6 Tenancy and policy (receiving order), K7 Schema evolution, K8 Connectors. K8 Connectors. Not yet specified: K9. Open cases recorded in the specs: atomic groups of changes (K4), batched provenance for high-rate observations (K3), negotiated authority (K5).
-
+**Current coverage** (`v1alpha1`): K1 to K9 all have spec rules and vectors that Go and Swift pass. Open cases recorded in the specs: atomic groups of changes (K4), negotiated authority (K5), a refusal's reason beyond its code (F-23).
 
 ### Fact kinds across domains
 
 | Kind | Music | Hotel | Manufacturing |
 |---|---|---|---|
-| Observation | File tags, file signature, scan results | Raw channel booking message | Sensor reading, machine state, counts |
-| Claim | MusicBrainz/AcoustID match, provider metadata | OTA guest profile, channel rate | Inspection result, supplier lot data |
-| Decision | User correction, entity merge, review choice | Confirm/assign/cancel reservation | Release work order, release lot, stop line |
-| Derived | Loudness cache, summaries, search index | Availability, reports | OEE, WIP statistics |
+| Observation | File tags, file signature, scan results | Raw channel booking message | Sensor reading, machine state, counts, the ERP's answer |
+| Claim | MusicBrainz/AcoustID match, provider metadata | OTA guest profile, channel rate | Planned order from the ERP, supplier lot data |
+| Decision | User correction, entity merge, review choice | Confirm/assign/cancel reservation | Release order, start and complete SFC, disposition |
+| Derived | Loudness cache, summaries, search index | Availability, reports | Downtime, OEE, WIP statistics |
 
 ## 5. Authority, sync and submissions
 
@@ -317,394 +332,188 @@ Submission states for server-authoritative intents: `pending → sending → con
 
 ## 6. Configuration vs code
 
-Configure: numbers and switches (rates, windows, thresholds, flags), choosing among existing options (which connector, which storage adapter), tenant-level text, numbering and notification targets. Implement in code: structure and invariants of domain objects, workflow states and transitions, conflict rules, allocation algorithms, cascade rules. When configuration needs conditions, loops, references to other configuration or migrations, it has become code and belongs in a tested domain module.
+Configure: numbers and switches (rates, windows, thresholds, flags), choosing among existing options (which connector, which provider, which model), tenant-level text, numbering and notification targets. Implement in code: structure and invariants of domain objects, lifecycles and transitions, flows, agents' instructions and tools, conflict rules, allocation algorithms, cascade rules. When configuration needs conditions, loops, references to other configuration or migrations, it has become code and belongs in a tested app.
+
+Where others offer a studio to edit models and rules at run time, our builder is a developer — increasingly a coding agent — writing typed code that the host checks at composition and `CheckReplay` checks in tests (§10.3).
 
 ## 7. Positions by concern
 
-| Concern | Platform (layers 1–2) | Domain / application (3–4) |
+| Concern | Platform (kernel, host, platform apps) | App |
 |---|---|---|
-| State & persistence | Identity, change envelope, versioning, migration duty; storage engine is a replaceable capability | Tables, queries, indexes, aggregate boundaries |
-| Addressing / routing | Stable references resolvable across runtimes (with redirects) | Screens and navigation; each client defines its own routes |
-| Permissions | Principals, policy hook, audit | Roles, org hierarchy, concrete rules |
-| Workflows | Work ownership, cancellation, recovery, stale-result invalidation | The state machines themselves |
-| Events | Change record is the invariant; causation/correlation IDs | Who subscribes and how they react; a bus is a capability over change records |
-| Integrations | Connector descriptor | Protocols (Subsonic, OTA channels, OPC UA/MQTT) |
+| State & persistence | Identity, change envelope, versioning, the record store, migration duty; storage engine is replaceable | Entity types, rules, facts it keeps |
+| Addressing / routing | Stable references resolvable across runtimes (with redirects); entity routes in the workspace | Views and navigation inside the app |
+| Permissions | Principals, catalog per role, record scope from the organisation, policy hook, audit | Roles it declares, rules that refuse |
+| Processes | Owned work, lifecycles, approvals, tasks, flows, cancellation, recovery | The lifecycles and flows themselves |
+| Events | Change record is the invariant; causation/correlation IDs; delivery as owned work | Which flows start or wait on which events |
+| Integrations | Connector descriptor, endpoints, effects, MCP, A2A | Protocols (OTA channels, ERP messages, OPC UA/MQTT) |
+| AI | Providers, metering, the agent harness, knowledge, memory, evaluation | Agents' instructions, tools and guards |
 | Time | Valid time vs recorded time | Calendars, shifts, nights, takt |
 
-Operations floor for any organizational deployment: cross-tenant access is rejected; duplicate submissions do not apply twice; version conflicts never overwrite; drafts survive offline restarts; backups are restorable and restore is rehearsed; old clients stay compatible through expand/migrate/contract; permission revocation takes effect; logs carry correlation IDs without sensitive business content. Replicas and sync are never backups.
+Operations floor for any organisational deployment: cross-tenant access is rejected; duplicate submissions do not apply twice; version conflicts never overwrite; drafts survive offline restarts; backups are restorable and restore is rehearsed; old clients stay compatible through expand/migrate/contract; permission revocation takes effect; logs carry correlation IDs without sensitive business content. Replicas and sync are never backups. Open on the floor: permission revocation while a token is valid, structured logs, and backup of the identity provider's runtime data.
 
 ## 8. Validation strategy
 
-Applications are pressure environments for the platform, not its source of truth. Music and Hotel both fitting the platform proves nothing on its own.
+Applications are pressure environments for the platform, not its source of truth.
 
 | Domain | Nature | Pressures | Cannot test |
 |---|---|---|---|
-| Music | Real product; personal, local-first, edge | Identity, claims/resolution, observations, connectors, library-management evolution | Organizations, permissions, transactions, scarce resources |
-| Hotel | Reference domain (synthetic) | Server authority, multiple principals, decisions & rejection, capacity over time, tenancy | Realism — it can confirm our own assumptions |
-| Manufacturing | Real business scenarios | Observation streams, device edge, hierarchy, quality traceability, real-time state, work orders | — (the serious validation domain) |
+| Music (MSRU) | Real product; personal, local-first, edge | Identity, claims and resolution, observations, connectors, library-management evolution | Organisations, permissions, transactions, scarce resources |
+| Hotel | Reference app modelled on OPERA Cloud and Mews | Server authority, several principals, capacity over time, a channel connector | Realism — it can confirm our own assumptions |
+| Manufacturing | Reference app modelled on Opcenter and SAP ME (ISA-95 practice), desk-studied, no plant yet | Observation streams, device edge, hierarchy, quality, work orders, ERP integration | A real plant's volume and exceptions |
+| CRM, HR, helpdesk | Thin reference apps | Records, lifecycles, approvals, flows across protocols, agents, knowledge | Depth in any function |
 
-Two tests for every abstraction: **cross-domain comparison** (does either domain need exceptions, bypasses, duplicated infrastructure or awkward mappings? are we abstracting a capability or naming two unrelated things alike?) and **evolution drills**:
+Two tests for every abstraction: **cross-domain comparison** (does any app need exceptions, bypasses, duplicated infrastructure or awkward mappings? are we abstracting a capability or naming two unrelated things alike?) and **evolution drills**:
 
-| Drill | Change | Checks |
+| Drill | Change | State |
 |---|---|---|
-| E1 | Hotel → serviced apartments / coworking | Capacity allocation stays in the domain; decisions and change records unchanged |
-| E2 | Music personal → shared family/team library | Authority migration, principals, personal space as degenerate tenant |
-| E3 | Music listening → professional library management / other media types | Identity, redirects and claims are not music-shaped |
-| E4 | Manufacturing line reorganization or new process | Org structure really is domain data |
-
-Loop: kernel hypotheses → Hotel slice (may not change the kernel; records friction) + Music retrofit slice + manufacturing discovery → compare → revise kernel → refactor both apps → drills → repeat until drills stop touching the kernel. There is no numeric threshold; each kernel change must name the missing cross-domain capability.
-
-### Review #81 (Hotel and Music against the kernel)
-
-Hotel friction F-10 to F-17 was resolved inside `v1alpha1` (breaking changes allowed and listed here):
-
-- **Contract changes.** K4 C10: domain rules run after replay detection and before the append, so replays return the original even when the domain would now refuse. K4 C11: a decision names the facts it is based on (`evidence_fact_ids`), so a channel booking cites its observation and a claim resolution cites its claims. K6 (new): submissions are bound to the authenticated caller, one policy evaluation per new submission, and a fixed receiving order implemented once as `Receiver`; the Hotel server lost its own checks. K5 A8 maps answers to outbox events by error code, A5 adds `undelivered` (SENDING → PENDING) for requests that never left the edge, A9 has edges take declarations from their authority.
-- **Kept in the domain.** Preconditions (an expected revision) stay payload checked under C10 until the manufacturing slice shows every domain needs them (revisit in #83). Rejections are not remembered per key (C9); senders retry only after no answer.
-- **Shared Rust edge core:** not now (ADR-0005).
-
-### Manufacturing slice #83 (predictions F-5 to F-9)
-
-`slices/manufacturing` follows Opcenter/SAP ME: planned orders polled from the ERP arrive as claims; a supervisor releases a shop order citing its claim (K4 C11); SFCs start and complete operations on work-center resources; a nonconformance holds an SFC until two quality engineers sign one disposition; a line gateway pushes equipment-state batches from which downtime is derived; operators give downtime reasons. The web client (`web/apps/mes`) runs on the platform shell with the TypeScript outbox.
-
-| Prediction | Result |
-|---|---|
-| F-5 per-sample provenance too costly | **Refuted.** A gateway batch (600 samples in the test) is one observation with one provenance; redelivery is idempotent. |
-| F-6 decisions about derived facts | **Resolved in the domain with K1.** A derived event that decisions refer to becomes an entity with an opaque ID assigned when first derived; recomputation keeps the ID when the event only moves, and merges or splits it with redirects. Deriving the ID from the event's content revived a retired ID after a split (caught by a test): derived entities need opaque IDs just like Music's content-derived IDs (Music.md). |
-| F-7 multi-signature dispositions | **Refuted as a kernel need.** Two signatures (reviewed, approved) by different people are two decisions; the domain applies the disposition when they agree. Re-authentication at signing is a transport concern and untested. |
-| F-8 policy by plant hierarchy | **Refuted.** Lines are principal attributes the domain's policy reads (K6 T3); the kernel never sees the hierarchy. |
-| F-9 push and poll connectors | **Confirmed and resolved** by K8: one descriptor with a direction; poll pages are exactly-once by cursor. |
-
-New friction: F-18 (both slices wrote the same HTTP adapter), F-19 (K1 has no creation rule), F-20 (both slices carry a precondition in the payload: Hotel's expected version, manufacturing's expected step).
-
-### Evolution drills #82
-
-| Drill | Change | Kernel | Contract | Capabilities | Domain |
-|---|---|---|---|---|---|
-| E1 Hotel → serviced apartments and coworking | Stays of 28+ nights; desks and meeting rooms booked by the hour | unchanged | unchanged; `hotel.reservation.create` v1 accepts hour-precision times (additive, K7) | UI kit: `EntityForm` gained a `datetime` field | Room types gained a capacity unit (night or hour) and a minimum stay; capacity allocation stays domain code |
-| E2 Music personal → shared family library | Authority moves from Ada's Mac to a family server; more principals with roles; corrections cite provider claims | **changed:** K5 A10 adoption of the old authority's history (ADR-0006) | new vectors `k5-migration.json` | none | Family roles as policy data; Music app work listed in the MSRU queue (unique tenant ID, outbox, upload of its log) |
-
-E2 is exercised by `slices/drills` with Music-shaped decisions on the kernel alone; the MSRU implementation is future work, so E2 proves the kernel path, not the app.
-
-### Review #86 (after manufacturing and the drills)
-
-- **F-20 → K4 C12.** Every target has a revision (accepted changes naming it); a submission may state the revision its user saw and is refused with `CONFLICT` when stale. Hotel's expected version and manufacturing's expected step left their payloads; each domain lost its own stale-view check, and records now carry `revision`.
-- **F-19 → K1 I10.** Entities exist once the decision or derivation that makes them is recorded; creating an existing or retired reference fails, so IDs are never reused.
-- **F-18 → capability `capabilities/server`** (Go module `platformserver`): bearer authentication as a swappable function, the kernel's submission, declaration and `me` endpoints, one error-to-HTTP mapping, CORS. Both slice servers now keep only their domain reads and connector endpoints (about 45 lines each instead of 120). Authentication is where OIDC plugs in (#87).
-- **K9 specified** with vectors in Go and Swift.
-
-### Production path #87 (manufacturing)
-
-Decided in ADR-0007: the server journals accepted inputs in PostgreSQL and replays them on start; principals come from Rauthy through `platformserver.OIDC`. Every manufacturing test ends by replaying its journal into a second plant and comparing state and kernel logs; that check found a real gap (decisions without a state change, such as downtime reasons, were not journaled). `deploy/local/rehearse.sh` covers the operations floor items "backups are restorable and restore is rehearsed" and "cross-tenant access is rejected" for principals from a provider, plus a restart. Still open on the floor: permission revocation while a token is valid (directory reload), correlation IDs in logs, and backup of the identity provider's own data (users created at runtime; bootstrap files recreate the rest).
-
-### Governed actions #90 (manufacturing)
-
-Decided in ADR-0008. `platformserver.Action` declares an action once (schema, target, capability, title, description, payload fields, roles); `GET /v1/actions` returns the caller's own catalog. Role checks moved out of the plant's policy and the MES UI into the catalog; line conditions stay in the domain. An AI agent is the client `mes-assistant` with role `assistant` on line L1, acting through `cmd/mes-agent` (list its catalog, submit one of its actions); `rehearse.sh` shows it acting on L1 and refused a release even when it bypasses the adapter. `-disable downtime-reasons` deactivates a capability: its actions leave the catalog and are refused (`UNKNOWN_SCHEMA`), recorded reasons replay and still show. Replay no longer re-authorizes. Not yet shown: deactivation with running work (no manufacturing capability owns K9 work today), and confirmation by a person before an agent's action takes effect. The action shape lives in the capability layer until a second domain uses it; then it becomes a kernel-contract candidate (spec and vectors first).
-
-### Composition #91 (CRM + Hotel)
-
-Decided in ADR-0009. CRM (accounts, opportunities) and Hotel know nothing of each other (checked by `verify.sh composition`); the bridge `crm-hotel` owns the stays booked for an opportunity and books them through the hotel's own create action, so the hotel's roles, availability and revisions decide. The sales workspace shows CRM views and the Hotel package's contributed views (`@pkg/hotel`, also used by the Hotel Desk). Findings: a bridge's actions must target its own entity (K5 allows one authority per data class, so targeting the CRM's opportunity was refused); a bridge action is offered only when every package it calls would accept the caller; routing and members became the platform host (#92).
-
-### Platform host #92
-
-ADR-0010 step 1. Every server is now a host running apps from manifests: `platform` (the directory), `hotel`, `crm`, `crm-hotel`, `mes`. Per-package principals, `Server[P,T]` and the bridge's composition code are deleted; a member holds one role per app, and a bridge is an app with its own roles. One journal per tenant records only top-level inputs: the hotel reservation a bridge booking causes is rebuilt by replaying the booking, which the bridge tests and the rehearsal check (the sales tenant replays after a restart and a restore, and a revocation made through the platform app survives both). Reads are authorized: a member needs a role in the app that serves the read (#94), and the directory, audit and deliveries are for administrators (#93).
-
-### Settings #93
-
-ADR-0010 part 3, first areas: members and access, apps with their requirement graph, the capability matrix, audit. The matrix is no longer maintained by hand for apps: Settings reads it from `GET /v1/apps`, and the table above keeps the platform capabilities. Checked in the browser: revoking a member's hotel role in Settings removed the hotel actions and the bridge booking from that member's next catalog, and the audit shows the revocation. Not yet in Settings: organisational units, per-app settings, connectors and health, automation (they wait for their platform capabilities, ADR-0010 part 2).
-
-### Events #94
-
-Apps react to each other without knowing each other: the crm-hotel bridge subscribes to the hotel's cancel and modify actions and writes a note on the opportunity's activity timeline (a new CRM action), as `app:crm-hotel`. Delivery runs after commit but inside the input that caused it, so the journal needs no extra entries and replay rebuilds the notes (bridge tests, rehearsal after restart and restore). Handlers were synchronous and not retried; #97 made delivery owned work with retries.
-
-### Protocols #95
-
-ADR-0011, on the owner's observation that large software interoperates through protocols (OIDC, MCP, extension interfaces), not pairwise bridges. The crm-hotel bridge is gone. Hotel provides `lodging.booking/1` and passes its conformance tests; so does `lodging.Memory`, a second provider under which the CRM runs unchanged (`solutions/sales` tests). The CRM books a stay through the protocol and links it to the opportunity with the platform's links; the hotel's cancellation reaches the opportunity's timeline as the protocol's event through that link, with no app in between. Replay rebuilds the reservation, the link and the timeline from the CRM's input alone. An MCP client lists and calls a member's tools in the rehearsal. Not yet: protocol versions side by side (choosing between providers came in #99).
-
-### Organisation #96
-
-ADR-0012, after the owner's partner asked for organisation beyond departments and teams (groups, subsidiaries, business groups, factories, projects, temporary committees, external partners; one person in several structures). The `org` app holds units, structures and memberships with valid time, as decisions. Manufacturing's line scope now comes from the site structure: a supervisor belongs to the plant and so to both lines; removing the org app fails six plant tests. The sales solution's demo group shows one person as general manager (management), director (legal) and committee chair (governance), and an external partner sitting on a committee. Settings shows each structure as a tree as of a date and each member's units across structures. Directory attributes remain for other uses; posts and delegation wait for a need.
-
-### Operations #97
-
-ADR-0013. The host now owns work: an event is queued per subscriber and delivered after the input, retried, and failed visibly; a scheduled job runs as its app. Both are inputs of the journal, so a replay reaches the same outcomes and rebuilds the queues (a replay whose handler ends otherwise than recorded is refused). Connectors moved from the plant into the host: Settings shows health, cursor, last seen and the last refused input, and disables a connector as a decision the restart keeps (rehearsal). A new downtime notifies the supervisors of its line, resolved through the site structure, never its operators; a job reminds them once of downtime still without a reason after the plant's setting, which administrators change in Settings. Checked in the browser: disabling the ERP connector, changing the reminder minutes, running the job from Automation, and marking a notification read in the MES client. Not yet: registering connectors in Settings, outbound webhooks, email, per-member notification preferences, parallel workers.
-
-### Hotel on the operations #98
-
-The hotel is the second app on ADR-0013, chosen to test that #97 was not shaped by manufacturing. Its channel manager is a host connector (the hotel's own K8 handling is gone; a refused booking shows on the connector). Three settings of three types: whether the overbooking allowance is sold, who hears of channel bookings (a choice), and how many days ahead the arrivals list goes. Managers are told of each night sold beyond the physical rooms, and the front desk receives the arrivals list once a day from a job. Friction found and resolved: a hotel addresses people by their role in the app, not by a unit (its managers may sit in any organisation, or none), so `Recipient.AppRole` joined unit-based recipients. Not moved: the Hotel Desk client (Tauri) has no notifications yet; the sales workspace shows them.
-
-### Outbound effects #100
-
-ADR-0014, after an architecture gate the owner closed with D1–D8 as recommended. The host plays the K5 edge toward external systems: an intent is part of the input (replay rebuilds it), an attempt is made outside the lock and never in replay, and its outcome is journaled. The tests stop a process between an attempt and its outcome: the restarted host resends with the same key and the receiver keeps one copy; a replay with a dialer that fails the test makes no call. The rehearsal subscribes `webhook-sink` to `lodging.booking/1#canceled` through the API, cancels a stay and finds it delivered once, signed, also after a restart. Checked in the browser: adding the endpoint in Settings, a cancellation delivered, then a receiver failing and the effect retrying until it recovered on the fifth attempt. Fixed on the way: dialogs sat under sticky table headers (the UI kit's dialog had no stacking level).
-
-### ERP write-back #101
-
-The plant confirms a finished order to the ERP, as SAP's production order confirmation does: when the last SFC is done or scrapped, it emits `mes/erp-confirmation` with its yield and scrap, keyed by the order. The host sends it to the endpoint the administrator bound. The ERP's answer — a confirmation number, or a refusal — is journaled with the outcome and handed back to the plant, which records it as an observation on the order (provenance: the endpoint) and tells the line's supervisors of a refusal. Replay rebuilds the order's ERP state from the journaled answer without calling the ERP; the test fails when replay skips the answer. The rehearsal releases a planned order, runs its routing, and finds the ERP's number on the order; `webhook-sink` answers as the ERP (`/erp`). The MES client shows the confirmation next to the planned order.
-
-### Choosing a provider #99
-
-The sales tenant runs two lodging providers, the hotel and serviced apartments (`memstay`). An administrator chooses in Settings which one receives new calls; the choice is a platform decision (`platform.protocol.bind`), so it replays and survives a restart (rehearsal). Consumers' reads span every provider, and each answer names the type of entities it holds, so the CRM matches its links exactly and a stay booked before the switch stays on the opportunity; the old provider's cancellation still reaches the opportunity's timeline. Not yet: routing an action on an existing entity through the protocol to the provider that holds it (the CRM only reserves; changes and cancellations happen in the provider's own app), and per-consumer bindings.
-
-### Convergence #103, #104
-
-The audit of #92–#101 as one platform (#103) found no missing capability, but boundaries held by convention. The owner's decisions (#104) turned them into structure:
-- the app API is its own package, `platformserver/platform`, and the host is reachable only through `platform.Runtime`, so the boundary is an import rule rather than a list of forbidden names;
-- the platform app is the console, and each of its decisions goes to the area that owns its target type;
-- the bridge path is gone: apps know no other app;
-- rules scope by the input's time;
-- an endpoint has its administrator's view;
-- apps stay composed in code (ADR-0010 amended).
-
-`CheckReplay` in every composition's tests is the lasting guard. When it was added it found two discrepancies:
-- job run counters, now declared volatile;
-- a test harness whose seed drifted.
-
-### ERP correction, approval and email (after #104)
-
-Three things the owner held until the gate closed:
-- **Correction.** An order the ERP refused, or whose confirmation never arrived, is corrected and resent (`mes.order.reconfirm`). The ERP receives the correction as a new message (key `<order>#<n>`). An answer to a superseded confirmation is recorded but changes nothing.
-- **D6.** When the line's AI assistant makes that correction, the posting cannot be recalled, so the effect is held. The supervisor is notified, and by mail, and approves it in Settings. Another AI agent's approval is refused, whatever its role.
-- **Email.** Mail reuses the effect machinery unchanged: intent in the input, attempt outside the lock, outcome journaled, Message-ID as the key.
-
-The rehearsal runs all three through a restart. The sink is also the local mail server, so no mail catcher image was needed.
-
-### AI providers #105
-
-ADR-0015, batch 1. The `ai` platform app holds providers and enabled models as decisions; the host calls models outside the tenant's lock and journals each call's usage.
-- **Providers:** vendors with fixed URLs (OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter); third-party OpenAI-compatible APIs; local servers (LM Studio, Ollama, llama.cpp).
-- **Checked live** against OpenRouter's free models: the catalog (458 models, 20 free), enabling in Settings, a call from the playground, and usage per member.
-- **Rehearsal:** the sink stands in for a local model server, so the rehearsal runs offline.
-- **Found:** free models are often rate-limited upstream (429). Such calls end as failed, with the provider's reason recorded in their usage.
-- **Anthropic** came after the owner approved the SDK dependency: its native Messages and Models APIs through the official Go SDK, tested against a stand-in (no key yet).
-
-### Application model, lifecycles and one workspace (#106–#108)
-
-Entities are declared once (ADR-0016) and move through declared lifecycles with approvals along the organisation and one inbox (ADR-0017): CRM, Hotel, manufacturing and HR. One workspace per host (ADR-0018) opens every app a member holds a role in after one sign-in; records open across apps by reference, and a protocol's record in its bound provider's view. What held: the host already decided identity and membership, so one sign-in needed no server change beyond telling the client its apps; the client side lost three sites and three OIDC clients.
-
-### Read models, analytics and snapshots (#109, stage 3)
-
-Aggregates over any entity type within the member's scope; the platform's visualization spec with ECharts 6 behind it; pivot, charts and saved views on every list; app dashboards; typed PostgreSQL projections with a reader role per tenant; snapshots. What held: the record store (ADR-0016) made analytics one generic read, and replay-as-truth made snapshots checkable everywhere at once — `CheckReplay` restores a snapshot at four points of every test journal. What it cost: every app implements `platform.Snapshotter` (for most, its ledger alone), and the Go kernel gained restore functions that add no contract rule.
-
-### Flows (#110, stage 4)
-
-Declared flows run as records of a flow app, each step a decision inside the owned work that caused it: the plant's ERP confirmation (a hand-written chain before) and the CRM's group stay across the lodging protocol. What held: owned work, tasks and protocols were the parts; replay and snapshots covered flows with no new mechanism except one — the journal now records which flow version an instance started with, because replay through newer code must not pick a newer version. What it cost: every tenant whose apps declare flows composes the flow app.
-
-### Agents, batch 1 (#111, stage 5)
-
-Declared agents run in the host as principals: the model is called outside the journal, each step it chose is journaled with its rationale and applied as a decision, and replay never calls a model. The plant's refused ERP confirmations are corrected by an agent step whose proposal a supervisor approves. What held: the catalog as the only way to act, D6 and probing (ADR-0017) gave the intersection of grants with no new policy code; flows gave waiting, asking and falling back to people. What it cost: model calls gained tools on both wires.
-
-### Agents, batch 2 (#111, stage 5)
-
-People stay in the loop: an agent running for a person drafts, and the person confirms, changes or rejects; flows' reviews of an agent's proposal count too. Each answer is kept as a signal on the run, and an evaluation re-runs the answered runs dry with a candidate model and compares. The workspace gained the assistant on every record, run pages and global search. The helpdesk proved the whole: a ticket triaged and answered by an agent grounded in another app's records, its reply held for a person, its service level kept by a flow. What held: probing gave dry re-runs with no new policy code; the context graph and search grounded an agent in apps its own app does not know; D6 held the agent's mail without the helpdesk knowing. What it cost: a run keeps what it saw at its start, so that an evaluation sees the same; a flow's clock needed a second branch to follow a due time that triage moves.
-
-### Shared capability models (candidates, layer 2)
-
-Across domains the business differs but the data is organised alike. These are **capability candidates**, not kernel: they carry domain-like vocabulary and are promoted only when two domains use them without exceptions (§4 rules). The UI kit (`web/packages/ui`, ADR-0004) already gives them one presentation.
-
-| Capability | Manufacturing | Hotel | Shared shape |
-|---|---|---|---|
-| Master data | Product, material, routing (operations), work center | Room type, room, rate plan | Coded entities with versions and effective dates (K1, K7) |
-| Organisation | Plant → area → line; shifts; operators, qualifications | Property → department (front office, housekeeping); staff, roles | Promoted to the platform (ADR-0012): units in several dated structures, memberships; policy context (K6), never kernel schema |
-| Devices and data collection | PLC states, counters, gauges | Door access, cameras, temperature/humidity | Device registry (connector, K8) plus reading streams as observations (K2, K3) |
-| Documents with lifecycles | Work order, SFC, nonconformance | Reservation, housekeeping task | A state machine in domain code; decisions as change records (K4) submitted through the outbox (K5) |
-
-Entities are declared with the UI kit's field types (ADR-0004), in code owned by the business package. Tenant-defined fields inside a package's rules are ruled out (ADR-0008): customers add their own data models for analysis and their own dashboards beside the package. **Open:** where those customer models and front-end logic live and how they survive package upgrades; design with the first customer who needs it.
-
-### Reference systems (industry state of the art)
-
-Domain slices model their domain on leading systems, not on invention, so that friction comes from real business shape. The kernel still may not borrow their vocabulary.
-
-| Domain | Reference systems | Concepts the slices follow |
+| E1 | Hotel → serviced apartments and coworking | Done (#82): kernel and contract unchanged; `EntityForm` gained a datetime field; capacity stayed domain code |
+| E2 | Music personal → shared family library | Done on the kernel alone (`slices/drills`, #82): K5 A10 adoption (ADR-0006); the MSRU implementation is future work |
+| E3 | Music listening → professional library management or other media | Not run |
+| E4 | Manufacturing line reorganisation or a new process | Not run; the organisation (ADR-0012) and flow versions (ADR-0020) are what it would test |
+
+**What the stages taught** (the evidence behind the model; the detail is in each ADR):
+1. **Replay finds what review misses.** It found decisions without a state change that were not journaled (#87), job counters and a drifting test seed (#103), and a derived ID revived after a split. `CheckReplay` in every composition is the lasting guard.
+2. **Derived things people decide about need opaque IDs** (F-6): content-derived IDs revive retired ones.
+3. **A precondition is kernel, a hierarchy is not.** Both slices carried an expected revision, so it became K4 C12; two-person signatures and plant-line policy stayed domain (F-7, F-8).
+4. **Push and poll are one connector** (F-9, K8).
+5. **Pairwise bridges couple apps; protocols do not.** With conformance tests, a second lodging provider replaced the first under an unchanged CRM (#95, #99).
+6. **A boundary held by convention erodes.** The app API became its own package and an import rule (#104).
+7. **An effect belongs to the input that caused it.** Intent in the input, attempt outside the lock, outcome journaled, nothing called in replay (#100). The same rule later carried model calls, agent steps and knowledge search.
+8. **Declaring entities once pays repeatedly.** Hand-written lists and forms disappeared (#106), and analytics became one generic read (#109).
+9. **Good parts compose.** Flows needed one new journal field, the version (#110); agents needed no new policy code, because the catalog, probing and D6 already gave the intersection of grants and dry re-runs (#111).
+10. **Two apps from different industries before "done".** Every stage's shape changed when its second app arrived (the Hotel's app-role recipients in #98, the helpdesk's moving due time in #111).
+
+### Reference systems for the reference apps
+
+Reference apps model their domain on leading systems, not on invention, so that friction comes from real business shape. The kernel still may not borrow their vocabulary.
+
+| Domain | Reference systems | Concepts the apps follow |
 |---|---|---|
-| Hotel | Oracle OPERA Cloud, Mews (property management); SiteMinder-style channel managers (OTA/HTNG messages) | Inventory per room type and night with an overbooking allowance; reservation lifecycle (reserved → in house → departed, canceled, no-show); rate plans; guest profiles; folios; channel managers pushing availability/rates/inventory (ARI) and delivering reservations with the channel's confirmation number, including duplicates |
-| Manufacturing | Siemens Opcenter Execution (formerly Camstar), SAP ME / Digital Manufacturing | Lot or unit tracked through a route of operations (Opcenter container through workflow/spec steps; SAP ME SFC through router/operation on a resource), start/complete or move per step, data collection per step, nonconformance with NC codes and dispositions (rework, scrap, use as is), hold/release, genealogy of consumed components, resource (equipment) status, electronic signatures (21 CFR Part 11) |
+| Hotel | Oracle OPERA Cloud, Mews; SiteMinder-style channel managers (OTA/HTNG) | Inventory per room type and night with an overbooking allowance; reservation lifecycle; rate plans; guest profiles; folios; channel delivery with the channel's confirmation number, including duplicates. Built: inventory with overbooking, create/modify/cancel, channel delivery |
+| Manufacturing | Siemens Opcenter Execution, SAP ME / Digital Manufacturing | Lot or unit through a route of operations on resources, start/complete per step, data collection, nonconformance with dispositions, hold/release, genealogy, resource status, electronic signatures (21 CFR Part 11), production order confirmation to the ERP |
+| Helpdesk | ServiceNow ITSM and CSM | Tickets with priority-driven service levels, triage, knowledge, escalation |
 
-The Hotel slice (#79) implements room-type inventory per night with overbooking, the create/modify/cancel part of the lifecycle and channel delivery with duplicates; rate plans, profiles, folios and in-house states are left for drill E1.
-
-### Manufacturing discovery (#78)
-
-Desk study of three scenarios as Opcenter Execution and SAP ME run them (ISA-95 practice); no plant has confirmed them yet, so every finding is a **prediction** for the first manufacturing slice (#83) to confirm or refute.
-
-| Scenario and steps (Opcenter / SAP ME terms) | Kernel mapping |
-|---|---|
-| **Work order**: shop order released → lots/SFCs created → each SFC starts and completes operations along its router on a resource (terminals often poorly connected) → quantity changes, SFC split/merge, rework routing → order complete/closed | Order, SFC and resource = entities (K1); release, start/complete (move), close = decisions of the plant server (K4, K5 server authority); operator actions = submissions from an edge outbox with backdated `valid_time` (K4 C7, K5 A5); machine counts = observations reconciled against completions (K2); SFC split/merge = K1 split/merge redirects plus the decisions that create the new SFCs |
-| **Quality nonconformance**: data collection at an operation → NC code logged → SFC on hold → disposition by the review board (rework route, scrap, use as is) with several electronic signatures → containment by genealogy (every SFC that consumed the same component lot) → corrective action; records kept 10+ years | Collected measurement = observation, supplier certificate = claim (K2); NC, hold, release and disposition = decisions (K4) naming what they judge via `causation_id`; assembly/genealogy links = domain decisions; containment scope = derived facts (K2) |
-| **Equipment state and downtime**: resource status (productive, standby, unscheduled down) from PLCs at 1–100 Hz through an edge gateway that buffers offline → downtime events derived from states → operator assigns a reason code → OEE per shift | States = observations with source clock (K2, K3 P3); downtime events and OEE = derived facts; the reason code = a decision about a derived event; gateway = connector (K8) |
-
-Predicted friction, recorded in the work queue (F-5 to F-9): per-sample provenance for state streams (K3 falsification case); decisions that target derived facts which recomputation may replace (K2); multi-signature dispositions (K5 negotiated authority, or domain workflow over several decisions); electronic-signature meaning and re-authentication on regulated decisions (K4/K6); policy scoped by plant hierarchy (K6 falsification case); push subscriptions (OPC UA, MQTT) next to polled sources (K8 falsification case). Genealogy and scheduling look like domain and capability concerns, not kernel ones.
-
-**Friction** (exceptions, bypasses, duplication, awkward mappings, leaks, missing capabilities) is recorded briefly in the work queue while a slice is active and resolved at review into a domain change, a capability change, or a kernel change with an ADR. Resolved entries are deleted; lasting conclusions are folded into this document.
+**Friction** (exceptions, bypasses, duplication, awkward mappings, leaks, missing capabilities) is recorded briefly in the work queue while an app is active and resolved into an app change, a capability change, or a kernel change with an ADR. Resolved entries are deleted; lasting conclusions are folded into this document.
 
 ## 9. Standing risks
 
-1. Four languages are a real cost; every additional implementation language must beat the cost of re-implementing the contract.
-2. Hotel is synthetic; manufacturing discovery runs in parallel with the Hotel slice.
-3. The platform pressure in Music lies in professional library management (identity, claims, review, corrections, sources), which recent product work under-invested in.
-4. Inner-platform effect: "supporting change" must not slide into configuring everything. Change is absorbed by quickly modifiable domain code.
-5. The server is not the kernel; treating it as such re-binds the platform to one deployment shape.
+1. **Four languages** are a real cost; every additional implementation language must beat the cost of re-implementing the contract.
+2. **No real organisation uses the platform yet.** Hotel is synthetic and manufacturing is desk-studied; real use would falsify more than any drill.
+3. **Music's platform pressure** lies in professional library management (identity, claims, review, corrections, sources), which product work under-invested in (MSRU).
+4. **Inner-platform effect:** "supporting change" must not slide into configuring everything. Change is absorbed by quickly modifiable app code.
+5. **The server is not the kernel;** treating it as such re-binds the platform to one deployment shape.
+6. **The host runtime is one package.** `platformserver` holds the runtime and all eight platform apps (about 10 000 lines without tests, 112 methods on `Tenant`). Platform apps reach host internals that business apps cannot, and the host wires `relations`, `flow` and `agent` into event delivery by name while `Manifest.Subscribes` has no app user. Lesson 6 applies to the host itself.
+7. **Documents drift.** Before this review, the same status was kept in five places and all of them were stale. One home per fact (the header of this document); every batch closes with its documents (AGENTS.md rule 8).
+8. **Verification runs on one machine.** There is no CI; a batch can land without `scripts/verify.sh`, and timing thresholds in tests depend on the machine (`TestRecordsAtScale` takes 134 ms on a 4-core container against a 100 ms bound).
+9. **Agents depend on models the platform does not control.** Signals and evaluation are the guard; per-tenant quotas and rate limits are still missing (ADR-0015 batch 2).
 
-## 10. Where we are going (the capability plan, 2026-09-25)
+## 10. Where we are going
 
-The owner's direction (Intent.md, "How we decide what the platform has"): build the capabilities every business platform needs, grounded in the platforms that already do it well, instead of deepening one product. This section is the long-term target. The work queue takes items from it in the order of §10.4.
+The owner's direction (Intent.md, "How we decide what the platform has"): build the capabilities every business platform needs, grounded in the platforms that already do it well, instead of deepening one product. The work queue takes items from this section in the order of §10.5.
 
 ### 10.1 Start, now, end
 
 | | Where | What it proved or offers |
 |---|---|---|
-| **Start** (Aug–Sep 2026) | MSRU: an Apple app with a framework (AppFoundation) inside it; a blueprint for a reusable Apple app framework | Ownership of state and tasks, identity apart from views, the need for a platform below any one app |
-| | The kernel contract (K1–K9) and two slices (Hotel, manufacturing), then the drills | Identity, facts, decisions, authority, tenancy and connectors hold across very different domains |
-| **Now** (#105) | A host running apps from manifests: journal and replay, OIDC, the console (members, roles, operations), organisation, relations, protocols, owned work, connectors, outbound effects (webhooks, email, approval), AI providers, MCP, Settings, one UI kit | The runtime and governance half of a business platform. Each app still hand-writes its own entities, lists, lifecycles and screens |
-| **End** | A platform comparable to Odoo, ServiceNow, Salesforce Platform, Oracle Fusion Cloud and APEX, SAP BTP, Power Platform or Palantir Foundry, in typed code | A team builds a business app mostly by declaring its models, lifecycles, actions and views. The platform gives lists, record pages, search, history, files, comments, approvals, tasks, flows, reports, integration, agents and administration. Apps compose through protocols and evolve without losing data, history or work in progress. It is AI-native: one system of context — records, links, protocols and decisions with their reasons — that people and governed agents reason over across apps, with rules deciding, agents acting within grants and budgets, exceptions routed to people, and every run traced |
-
-The largest gap between now and the end is the **application half**: how an app declares its data and processes, and what it gets for free.
+| **Start** (Aug–Sep 2026) | MSRU: an Apple app with a framework inside it; then the kernel contract (K1–K9), the Hotel and manufacturing slices and the drills | Ownership of state and tasks, identity apart from views; identity, facts, decisions, authority, tenancy and connectors hold across very different domains |
+| **Runtime half** (#92–#105) | A host running apps from manifests: journal and replay, OIDC, the console, organisation, relations, protocols, owned work, connectors, outbound effects, AI providers, MCP, Settings | The runtime and governance half of a business platform |
+| **Now** (stages 1–5, #106–#111) | The application model, lifecycles, approvals and tasks, one workspace, analytics and snapshots, flows, agents with knowledge, memory and A2A | A team declares entities, lifecycles, flows and agents and gets lists, record pages, forms, inbox, pivot, charts, dashboards, traced agent runs and evaluation. Missing: files, sequences, comments, calendars, boards and time views, import and export, a semantic model and an API contract, an AI control plane, scale |
+| **End** | A platform comparable to Odoo, ServiceNow, Salesforce Platform, Oracle Fusion Cloud and APEX, SAP BTP, Power Platform or Palantir Foundry, in typed code | A team builds a business app mostly by declaring its models, lifecycles, actions, flows, agents and views. Apps compose through protocols and evolve without losing data, history or work in progress. It is AI-native: one system of context — records, links, protocols and decisions with their reasons — that people and governed agents, inside and outside, reason over, with rules deciding, agents acting within grants and budgets, exceptions routed to people, and every run traced |
 
 ### 10.2 How the reference platforms are built
 
 They share one skeleton, and it is the one to build toward:
 
-| Layer | Odoo / Frappe | ServiceNow | Salesforce | Palantir Foundry | Oracle (Fusion Cloud, APEX) | Ours now |
-|---|---|---|---|---|---|
-| Package and composition | Modules with manifests and dependencies | Scoped apps, update sets | Packages, AppExchange | Marketplace products | Fusion product families; APEX applications; extensions in Visual Builder Studio, tried in sandboxes | Apps with manifests, protocols (ADR-0010, 0011) |
-| Data model | ORM models, typed fields, relations (Frappe: DocType) | Tables, dictionary | Objects, fields, relationships | Ontology: object types, links | Application Composer custom objects and fields; APEX on database tables | **Each app hand-writes state** |
-| Generic views | List, form, kanban, calendar, pivot, graph, Gantt from one model | Lists, forms, workspaces | Record pages, list views, Lightning App Builder | Workshop, Object Explorer | APEX interactive reports and grids, forms; Redwood pages | Tables and forms coded per app |
-| Actions and rules | Methods, automated and server actions | Business rules, UI actions | Apex, validation rules | Actions, functions | Groovy triggers and validations (Application Composer) | Declared actions, rules in code (ADR-0008) |
-| Lifecycle and approval | Status bar, workflows, approval module | State flows, approvals, SLAs | Approval processes, Flow | Action validation, AIP | Approval Management (AME), BPM approvals | Hand-coded states; approval only for held effects (D6) |
-| Process orchestration | Automated actions, scheduled actions | Flow Designer, IntegrationHub | Flow, Platform Events | Pipelines, automations | Oracle Integration (OIC) processes | Subscriptions, jobs, effects (ADR-0013, 0014) |
-| Work for people | Activities, chatter, followers | Tasks, assignment, inbox, SLAs | Tasks, Chatter | Inbox, notifications | BPM worklist, notifications | Notifications only |
-| Security | Groups, access rights, record rules, multi-company | Roles, ACLs, domain separation | Profiles, permission sets, sharing rules | Markings, organisations, roles | Role-based access, data security policies, business units | Roles per app, organisation scope in rules (ADR-0012) |
-| Analytics | Pivot, graph, spreadsheet dashboards | Performance Analytics | Reports, dashboards | Contour, Quiver, pipelines | OTBI, Oracle Analytics | None |
-| Integration | XML-RPC/JSON-RPC, webhooks | IntegrationHub spokes, REST | REST, events, MuleSoft | Data connection, OSDK | OIC adapters, REST APIs for every object | Connectors, webhooks, email, MCP |
-| AI | Odoo AI features | Now Assist | Agentforce | AIP Logic, agents | OCI Generative AI, AI agents in Fusion | Providers, metering (ADR-0015) |
+| Layer | Odoo / Frappe | ServiceNow | Salesforce | Palantir Foundry | Oracle (Fusion, APEX) | Ours |
+|---|---|---|---|---|---|---|
+| Package and composition | Modules with manifests and dependencies | Scoped apps, update sets | Packages, AppExchange | Marketplace products | Product families; APEX apps; Visual Builder extensions | Apps with manifests composed in code; protocols |
+| Data model | ORM models, typed fields (Frappe: DocType) | Tables, dictionary | Objects, fields, relationships | Ontology: object types, links | Application Composer objects | Entity types as Go structs; the record store |
+| Generic views | List, form, kanban, calendar, pivot, graph, Gantt | Lists, forms, workspaces | Record pages, list views, App Builder | Workshop, Object Explorer | Interactive reports and grids, Redwood pages | Lists, record pages, forms, pivot, charts, dashboards; no boards or time views |
+| Actions and rules | Methods, automated and server actions | Business rules, UI actions | Apex, validation rules | Actions, functions | Groovy triggers and validations | Declared actions and transitions, rules in Go |
+| Lifecycle and approval | Status bar, approvals | State flows, approvals, SLAs | Approval processes, Flow | Action validation | AME, BPM approvals | Lifecycles, approvals along the organisation |
+| Process orchestration | Automated and scheduled actions | Flow Designer, IntegrationHub | Flow, Platform Events | Pipelines, automations | Oracle Integration processes | Flows over owned work and effects |
+| Work for people | Activities, chatter, followers | Tasks, assignment, inbox, SLAs | Tasks, Chatter | Inbox, notifications | BPM worklist | Tasks, one inbox, notifications; no comments or followers |
+| Security | Groups, access rights, record rules, multi-company | Roles, ACLs, domain separation | Profiles, permission sets, sharing | Markings, organisations, roles | Roles, data security policies | Roles per app, record scope from the organisation; no field-level security |
+| Analytics | Pivot, graph, spreadsheet dashboards | Performance Analytics | Reports, dashboards | Contour, Quiver | OTBI, Oracle Analytics | Aggregates, pivot, charts, dashboards, PostgreSQL projections |
+| Integration | JSON-RPC, webhooks | IntegrationHub, REST | REST, events, MuleSoft | Data connection, OSDK | OIC adapters, REST for every object | Connectors, webhooks, email; no generated API contract |
+| AI | Ask AI, agents, AI fields, MCP (Odoo 19, 20) | Now Assist, AI agents, Action Fabric, AI Control Tower | Agentforce, AIforce, Trusted Enterprise AI Harness | AIP Logic, Chatbot Studio, Evals, Autopilot | AI Agent Studio, agent marketplace | Providers, declared agents, knowledge, memory, evaluation, MCP, A2A |
 | Admin | Settings, Studio | System administration | Setup | Control panel | Setup and Maintenance | Settings |
 
 Where we deliberately differ:
-- **Rules and models stay in typed code, not tenant metadata.** No Studio-style runtime editing of package rules; this is ADR-0008.
-- **Every change is a journaled decision, replayed through the same code** (ADR-0007), where the others write tables directly. This is what makes history, audit, AI approval and replay-safe integration native rather than bolted on.
+- **Rules and models stay in typed code, not tenant metadata.** No studio editing of package rules at run time (ADR-0008).
+- **Every change is a journaled decision, replayed through the same code** (ADR-0007), where the others write tables directly. This is what makes history, audit, agent traces and replay-safe integration native rather than bolted on.
 - **Apps meet through protocols, not each other's tables** (ADR-0011).
 
-### 10.3 The capability catalog
+### 10.3 Where the reference platforms went in 2026, and what we take
 
-Status: **have** (built and used), **partial**, **missing**. The reference column names where each is best seen.
+Reviewed on 2026-09-26 from public announcements: [ServiceNow Action Fabric](https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-opens-its-full-system-of-action-to-every-AI-Agent-in-the-enterprise/default.aspx), [Salesforce Trusted Enterprise AI Harness](https://www.salesforce.com/news/stories/enterprise-ai-harness/), [Dataverse semantic model](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/semantic-model-overview) and [July 2026 wave](https://www.microsoft.com/en-us/power-platform/blog/2026/07/06/dataverse-july2026/), [SAP Sapphire 2026](https://news.sap.com/2026/05/sap-sapphire-sap-unveils-autonomous-enterprise/), [Palantir Foundry announcements](https://www.palantir.com/docs/foundry/announcements/2026-04), [Oracle AI Agent Studio](https://www.oracle.com/news/announcement/oracle-introduces-ai-native-builder-experience-2026-07-14/), [Odoo 19 release notes](https://www.odoo.com/odoo-19-release-notes). What each direction means for us:
 
-**A. Application model: declare once, get the rest.** This is the core of the application half.
-
-| Capability | What an app gets | Reference | Status |
+| Direction | Who, 2026 | Where we stand | What we take |
 |---|---|---|---|
-| Entity declarations | Typed entities with fields (the UI kit's field types), required and validation rules, relations to other entities or across protocols, display name | Odoo fields, Salesforce objects, Dataverse tables, Foundry object types | have (ADR-0016; CRM, Hotel; manufacturing after stage 2) |
-| Generic reads | List with filter, sort, paging and count; get by ID; related records — one read contract for every entity | Odoo `search_read`, Salesforce SOQL, OData | have (ADR-0016) |
-| Record history and audit | Every entity's decisions as its history, from the journal | Odoo chatter tracking, Salesforce field history | have (ADR-0016: changed fields per decision) |
-| Comments, mentions and followers | A conversation on any record, followers notified | Odoo `mail.thread`, Salesforce Chatter | partial: timeline notes (relations) |
-| Attachments and files | Files on records, object storage, preview, retention | Odoo `ir.attachment`, ServiceNow attachments | missing |
-| Number sequences | Readable document numbers per tenant, unit and year, without gaps across replays | Odoo `ir.sequence` | missing (ADR-0010 deferred) |
-| Tags, favourites, saved views | Per-member saved filters and views | Odoo favourites, Salesforce list views | missing |
-| Global search | One search across the apps a member may read | ServiceNow global search, Foundry search | missing |
-| Import and export | CSV/Excel in and out through the same actions (import is decisions, not table writes) | Odoo import, Salesforce Data Loader | missing |
-| Money, units, calendars | Currency amounts, units of measure, business calendars (shifts, nights, working hours), time zones | Odoo `res.currency`, `uom`, `resource.calendar` | missing |
+| **The platform as a governed system of action for any agent.** Outside agents (Claude, Copilot, a customer's own) discover and take the platform's actions headlessly, under the same rules, approvals, metering and audit as people | ServiceNow Action Fabric (MCP server, MCP client, A2A; Knowledge 2026); Salesforce AIforce, the platform's data, logic and permissions inside Claude and Slack (Dreamforce 2026); Odoo 20's native MCP server; the Dataverse MCP server | Ahead on governance: MCP serves each caller's catalog, A2A publishes and calls agents, and both go through the same receiver, D6 and journal. Behind on reach: MCP has tools only and no OAuth discovery, so standard clients cannot sign in on their own | MCP authorization with the host's issuer (protected-resource metadata), so any standard client connects as a member; reads and records as MCP resources; inbound agent calls metered per member (stage 8) |
+| **A semantic layer between the schema and the agents.** Business meaning — descriptions, synonyms, glossary, how records relate — derived from the model and curated, so agents and search read the business, not column names | Dataverse semantic model (preview June 2026) and Business Skills; the SAP Knowledge Graph at the centre of SAP's Business AI platform; Salesforce's Trusted Context | Entity types and fields have titles only; generated actions describe a field by its title; the context graph knows structure, not meaning | Descriptions, examples and synonyms declared in code with entity types, fields, states and actions; served by `/v1/entities`, used in agent prompts, MCP and A2A cards, search and generated forms (stage 6) |
+| **A control plane over every agent.** One inventory of agents, models, MCP servers and agent endpoints, inside and outside; observed, measured for value, and switched off in one place | ServiceNow AI Control Tower; Salesforce's AI Control Plane and AI Gateway in the Trusted Enterprise AI Harness; Oracle's ROI measurement in AI Agent Studio | Runs, signals, usage and evaluations exist per agent; nothing shows them together, no agent can be switched off without a release, external agents are endpoints without a view of their use | An agents overview in Settings: declared, published and external agents with runs, acceptance from signals, cost, and an off switch as a decision; OpenTelemetry spans for runs and steps (GenAI conventions) (stage 8) |
+| **Evaluation as a suite, not only as history.** Test cases written with the agent, run before each change, with variance across repeated runs and comparison across models | Palantir AIP Evals; SAP Joule Studio 2.0 generating evaluation suites with the agent; Salesforce's testing centre | Dry re-runs of signalled runs against a candidate model (ADR-0021 D8) | Evaluation cases declared in code beside the agent, run by the host tests with a scripted model and by Settings with a real one, repeated to show variance (stage 8) |
+| **Coding agents build on the platform.** The builder of 2026 is a person with a coding agent; platforms ship plugins, skills and MCP servers for developers | The Dataverse plugin for Claude, Cursor and GitHub Copilot (July 2026); Palantir MCP for building applications (June 2026); Joule Studio 2.0 pro-code; Oracle's AI-native builder | Typed code checked at composition and by `CheckReplay` is the right substrate; there is no developer kit, app guide or scaffold; the repository's own procedures became skills in the review (`.claude/skills/`) | A developer kit: an app developer guide, a scaffold, skills for coding agents (`.claude/skills`), and later a developer MCP (stage 6) |
+| **Multi-agent work is traced end to end.** One view of a goal across chained agents and flows | Palantir AIP Autopilot (beta March 2026); A2A tasks correlated in ServiceNow and SAP | Each run is traced; a run started by A2A or a flow links by correlation, but no view follows the chain | Runs, flows and A2A tasks linked by correlation on the run page (stage 8) |
+| **Business data in open formats for analytics.** Zero-copy sharing and lakehouse formats instead of extracts | SAP Business Data Cloud (Dremio, Microsoft Fabric Connect) | PostgreSQL projections per tenant with a reader role | Later: change streams and exports in an open format, when a customer's analytics needs them (stage 9) |
 
-**B. Process.**
+What we do not take:
+- **Run-time agent builders** (Agent Builder, Joule Studio's managed builder, Copilot Studio): agents are declared in code (ADR-0021 D1). A coding agent with our skills is the builder.
+- **Agents with computers, files or sandboxes** (Joule Work, NVIDIA OpenShell): tools stay the catalog, the knowledge and declared effects (ADR-0021 D6).
+- **Agent and app marketplaces** (Oracle, SAP AI Agent Hub): no run-time installation (ADR-0008); A2A reaches partners' agents.
+- **An own model and pre-built agents by the dozen** (Salesforce Koa and its named agents, ServiceNow's AI specialists): the platform is model-agnostic, and reference apps each show one agent.
 
-| Capability | What an app gets | Reference | Status |
+### 10.4 The capability catalog: what is missing
+
+Built capabilities are in the capability map (§2.4). This is what remains, with where each is best seen.
+
+| Area | Capability | What an app gets | Reference |
 |---|---|---|---|
-| Lifecycles (state machines) | States and transitions declared with the entity; transitions are actions with guards; the UI shows a status bar | Odoo status bar, ServiceNow state flows, Salesforce paths | have (ADR-0017; manufacturing, HR, the work app itself) |
-| Approvals | Approval chains by organisation structure, role, amount or rule; delegation and substitutes; a person's decision journaled | ServiceNow approvals, SAP release strategies, Salesforce approval processes | have (ADR-0017); delegation and substitutes missing |
-| Tasks and inbox | Work items assigned to members, roles or units, with due dates, SLA timers and escalation; one inbox across apps | ServiceNow task and SLA, Odoo activities | have (ADR-0017); business calendars for SLAs missing |
-| Flows (orchestration) | Long-running processes across apps: steps, waits, timers, human tasks, compensation, versioned and replay-safe, built on owned work and effects | ServiceNow Flow Designer, Temporal, Camunda | have (ADR-0020): the plant's ERP confirmation, the CRM's group stay; record-state triggers and calendars missing |
-| Automation rules | "When X, if Y, do Z" declared in code on entities and events | Odoo automated actions, ServiceNow business rules | partial: subscriptions in code |
-| Scheduling and capacity | Resources, calendars and allocation over time (rooms, machines, people) | Odoo planning, SAP capacity planning | missing (candidate in §8) |
+| Application model | Semantic model | Descriptions, examples and synonyms on entity types, fields, states and actions, for agents, search, MCP and forms | Dataverse semantic model, SAP Knowledge Graph |
+| | Host API contract | An OpenAPI description generated from the host's routes and each tenant's manifests; typed TypeScript clients generated from it | Salesforce and Dataverse metadata APIs, OData |
+| | Attachments and files | Files on records, object storage, preview, retention; files as knowledge | Odoo `ir.attachment`, ServiceNow attachments |
+| | Number sequences | Readable document numbers per tenant, unit and year, without gaps across replays | Odoo `ir.sequence` |
+| | Comments, mentions and followers | A conversation on any record, followers notified (timeline notes exist) | Odoo `mail.thread`, Salesforce Chatter |
+| | Import and export | CSV/Excel in and out through the same actions | Odoo import, Salesforce Data Loader |
+| | Money, units, calendars | Currency amounts (money fields exist), units of measure, business calendars, time zones | Odoo `res.currency`, `uom`, `resource.calendar` |
+| | Customer analysis models | Customers' own models and dashboards beside packages (ADR-0008) | Foundry Contour, Power BI on Dataverse |
+| Process | Record-state triggers | Flows and automation that start when a record reaches a state, not only on events | ServiceNow business rules, Odoo automated actions |
+| | Scheduling and capacity | Resources, calendars and allocation over time | Odoo planning, SAP capacity planning |
+| People and access | Field-level access and masking | Sensitive fields hidden by role | Salesforce field-level security |
+| | Effective permissions | Who may do what and why, per member | Salesforce permission analysis |
+| | Delegation and substitutes | Acting for someone for a period | SAP substitution, ServiceNow delegates |
+| | Provisioning | Users and groups from the identity provider (SCIM) | Okta or Entra SCIM |
+| Integration | MCP authorization and resources | Standard clients sign in with the host's issuer; records and reads as resources | MCP specification, ServiceNow Action Fabric |
+| | Inbound email and webhooks as connector inputs | Mail and calls from outside as journaled inputs | ServiceNow inbound actions |
+| | Credentials | OAuth client credentials, rotating secrets, a secret store UI | ServiceNow credential store |
+| | Bulk data out | Change streams and open-format exports | SAP Business Data Cloud |
+| AI | Quotas, rate limits, streaming, app calls as effects | ADR-0015 batch 2 | — |
+| | AI control plane | Every agent inside and outside with its use, value and cost; an off switch | ServiceNow AI Control Tower, Salesforce AI Control Plane |
+| | Evaluation suites | Declared cases, variance, model comparison | Palantir AIP Evals |
+| | Traces across agents | Chained runs, flows and A2A tasks in one view; OpenTelemetry export | Palantir AIP Autopilot |
+| Workspace UI | Boards | Kanban by state or any field, drag to transition | Odoo kanban |
+| | Time views | Calendar, timeline, Gantt, resource rack | Odoo calendar and Gantt, OPERA room rack |
+| | Trees | Organisation charts, bills of materials, categories (coded in Settings today) | — |
+| | Files | Upload, preview, attachment list | — |
+| | Mobile and field | Scan, sign, photograph, short tasks, offline queue | ServiceNow mobile, SAP Digital Manufacturing |
+| Operations | Structured logs, metrics and traces | Correlated logs without business content; OpenTelemetry | — |
+| | Health of apps and the journal | — | — |
+| | Package versions and upgrades per tenant | — | Salesforce package versions |
+| | Many tenants per process, high availability, provisioning | — | — |
+| | Developer kit | App developer guide, scaffold, skills for coding agents, a developer MCP | Dataverse plugin for coding agents, Palantir MCP |
 
-**C. People and access.**
-
-| Capability | What an app gets | Reference | Status |
-|---|---|---|---|
-| Members, roles, service accounts, agents | — | — | have |
-| Organisation structures | — | Odoo multi-company, Workday supervisory organisations | have (ADR-0012) |
-| Record-level access | Row scope from the organisation, generalised: "records of my units" declared, not coded per app | Odoo record rules, Salesforce sharing | have for reads (ADR-0016: own, unit, below, tenant per role); actions still check scope in app code |
-| Field-level access and masking | Sensitive fields hidden by role | Salesforce field-level security | missing |
-| Effective permissions | Who may do what and why, per member | Salesforce permission analysis | partial (ADR-0010) |
-| Delegation and substitutes | Acting for someone for a period | SAP substitution, ServiceNow delegates | missing (ADR-0012 deferred) |
-| Provisioning | Users and groups from the identity provider (SCIM), tenant provisioning | Okta or Entra SCIM | missing |
-
-**D. Integration.**
-
-| Capability | Status |
-|---|---|
-| Inbound connectors (K8), webhooks out, email out, MCP, approval of irreversible effects | have |
-| An API contract generated from manifests (OpenAPI for actions and reads, typed TypeScript clients) | missing |
-| Inbound email and webhooks as connector inputs | missing |
-| Credentials to external services (OAuth client credentials, rotating secrets, a secret store UI) | partial: secrets by name |
-| Bulk data out to analytics (change streams, exports) | missing |
-
-**E. Analytics.**
-
-| Capability | Reference | Status |
-|---|---|---|
-| Read models: projections of decisions into queryable tables (PostgreSQL), rebuilt from the journal | CQRS projections, Foundry datasets | have (ADR-0019): typed tables per entity type and tenant, a reader role |
-| Reports: pivot, group and aggregate over read models | Odoo pivot, Salesforce reports | have (ADR-0019): aggregates with scope, pivot and charts on every list |
-| Dashboards: charts and KPI tiles per role | ServiceNow Performance Analytics, Salesforce dashboards | have (ADR-0019): app dashboards from a visualization spec, saved views; targets and time series missing |
-| Customer analysis models beside packages (ADR-0008) | Foundry Contour, Power BI on Dataverse | missing |
-
-**F. AI.**
-
-| Capability | Status |
-|---|---|
-| Providers, models, access, usage (ADR-0015 batch 1) | have |
-| The Anthropic adapter (official Go SDK) | have |
-| Quotas and rate limits, streaming, app calls as effects (batch 2) | missing |
-| Agents: a model with the caller's catalog as tools, runs as owned work, approvals for what cannot be recalled | have (ADR-0021 batch 1): declared agents, runs journaled step by step, flows' agent steps |
-| Knowledge: documents and records indexed for retrieval, cited answers | missing |
-| AI in the workspace: an assistant panel on any record, with the record as context; stating an intent instead of navigating apps | missing |
-| Context graph: records, links, protocols and the decision history as one typed graph that people and agents query across apps, the grounding for every agent | Palantir Ontology, SAP Knowledge Graph | partial (ADR-0021): a record's context (history, references, related, links, flows, tasks) and search across types; no traversal beyond one record yet |
-| Decision traces: each decision with its reasons, evidence (K4 facts), the branch a rule or flow took, the agent's rationale and the approvals it passed; corrections (rejections, reversals) kept as signals | SAP decision traces, Foundry action logs | partial: flows keep why each step went where it went (ADR-0020); single decisions do not yet |
-| Agent harness: an agent as a principal with narrower grants than a role, budgets (calls, cost, actions), memory, guardrails and observability of each run; goals decomposed and delegated, exceptions to people | SAP harness engineering, Agentforce, AIP | have (ADR-0021 batch 1): declared tools intersected with the person's grants, budgets and daily quotas, guards, ask, stop to a person, every step traced; memory missing |
-| Evaluation: runs replayed against past decisions and corrections before a model, prompt or agent changes | — | missing |
-| Agent interoperability: MCP for tools (have), Agent2Agent for other vendors' agents | MCP, A2A | partial |
-
-**G. Workspace UI (the kit's families; each is one component set used by every app).**
-
-| Family | Examples | Status |
-|---|---|---|
-| Shell and navigation | Docking workspace, command palette, entity routes, session; one workspace with a launcher across apps, one sign-in, records opened across apps by reference (ADR-0018) | have; global search missing |
-| Lists and tables | Data table with filter and sort | have, with server paging (ADR-0016), group by, pivot, chart and saved views (ADR-0019) |
-| Record page | Header, status bar, fields in sections, tabs, related lists, history and comments panel | partial: header, fields, related lists, history (ADR-0016); status bar with stage 2, comments later |
-| Forms | Typed fields, validation | have, generated from entity declarations (ADR-0016) |
-| Trees and hierarchies | Organisation chart, unit trees, bills of materials, categories | partial: coded in Settings |
-| Boards | Kanban by state or any field, drag to transition | missing |
-| Time views | Calendar, timeline, Gantt, resource rack (room rack, machine schedule) | missing |
-| Charts and dashboards | Bar, line, pie, KPI tiles, pivot | have: the platform's visualization spec, ECharts 6 behind it (ADR-0019) |
-| Inbox and notifications | — | have: notifications and the inbox (ADR-0017) |
-| Files | Upload, preview, attachment list | missing |
-| Mobile and field | Scan, sign, photograph, short tasks, offline queue | missing |
-
-**H. Runtime and operations.**
-
-| Capability | Status |
-|---|---|
-| Journal, replay, backup and restore, OIDC, deployment flags | have |
-| Snapshots and checkpoints, so start-up does not replay all history | have (ADR-0019): a million entries restore in about 5 s instead of 22 s |
-| Structured logs, metrics, traces with correlation | partial |
-| Health of apps and the journal | partial |
-| Package versions, upgrades and per-tenant enablement (ADR-0010 amended) | partial |
-| Many tenants per process, high availability, tenant provisioning | missing |
-| Developer kit: scaffold an app, a test harness (`CheckReplay` exists), docs, sample apps | partial |
-
-### 10.4 Order
+### 10.5 Order
 
 Each stage opens with an architecture gate (an ADR with the owner's decisions), then builds, then proves the capability on at least two reference apps from different industries.
 
+Stages 1–5 are built: the application model (ADR-0016), lifecycles, approvals and tasks (ADR-0017, with the workspace in ADR-0018), read models and analytics (ADR-0019), flows (ADR-0020), and agents with knowledge, memory and A2A (ADR-0021, ADR-0022). What comes next is proposed by the stage review of 2026-09-26 and decided at each gate. The review renumbered the later stages: the former stage 6 (UI families and field clients) is part of stage 7, and the former stage 7 (scale and delivery) is stage 9; ADRs written earlier use the former numbers.
+
 | Stage | Contents | Why this order | Proven when |
 |---|---|---|---|
-| 1. Application model | Entity declarations; generic reads with filter, sort and paging; record history; record page and generated forms in the kit; one reference app moved onto it | Everything in B, E and G depends on the platform knowing an app's entities | CRM and Hotel declare their entities and lose their hand-written lists and forms; paging works on 100k records |
-| 2. Lifecycles, approvals, tasks | State machines on entities; approval chains from the organisation; tasks and one inbox with SLA timers | The most common business shape after the model: documents that move through states | A purchase-request or leave-request reference app built from declarations only, plus the MES order lifecycle moved |
-| 3. Read models and analytics | Projections into PostgreSQL rebuilt from the journal; pivot, charts, dashboards; snapshots for start-up | Scale and reporting need the same projection machinery | Dashboards on plant and hotel data; a restart without full replay |
-| 4. Flows and automation | Orchestrated processes over owned work and effects: waits, timers, human steps, compensation; agent steps declared (run in stage 5); every step's reason kept as a decision trace | Needs lifecycles and tasks as its steps; agents need flows as their orchestration | An order-to-delivery flow across two apps through protocols |
-| 5. Agents | The harness (agent principals with scoped grants and budgets, memory, guardrails, traced runs), the context graph for grounding, knowledge retrieval, the assistant panel and intents, evaluation from corrections, A2A | Agents act through everything above, which must exist first | An agent handles a helpdesk ticket end to end under a person's approvals, grounded in the context graph, every run traced |
-| 6. UI families and field clients | Trees, boards, time views, files, mobile tasks — each family once in the kit | Grows with stages 1–5; listed so none is built twice | Every reference app uses the kit's families, none its own |
-| 7. Scale and delivery | Many tenants per process, provisioning, package upgrades, developer kit | When a second real organisation or team comes | A new team scaffolds an app and ships it without touching the host |
+| 6. The model speaks, the API is a contract | The semantic model in declarations; the host API contract with generated TypeScript clients; the developer kit (app guide, scaffold, skills) | Every agent, integrator, coding agent and UI reads the model; it is cheap, and every later stage uses it | An agent answers better with descriptions than without in an evaluation; the workspace compiles against generated clients; a new app is scaffolded and passes `CheckReplay` |
+| 7. The application half, completed | Files and attachments (also as knowledge), number sequences, comments and followers, business calendars, record-state triggers, import and export, field-level security, delegation; the kit's remaining families (boards, time views, trees, mobile and field tasks), each once | The classic platform features every reference app still lacks; calendars unblock service levels and flows' timeouts | A purchasing and inventory reference app and a projects app built from declarations only; the helpdesk's service level on a business calendar |
+| 8. AI control plane | Quotas, rate limits and streaming (ADR-0015 batch 2); the agents overview with value and an off switch; evaluation suites; traces across agents; MCP authorization and resources | Agents exist in three apps and outside ones call in; governing them at scale is the next gap the references closed in 2026 | An administrator sees every agent's use and value, switches one off, and a standard MCP client signs in and acts within its grants |
+| 9. Scale and delivery | Many tenants per process, provisioning, package upgrades, the backend-for-frontend token, run-time UI bundles, bulk data out | When a second real organisation or team comes | A new team ships an app without touching the host |
 
-Reference apps are chosen to exercise capabilities, not for depth. The candidates, each thin:
-- **CRM**, exists: parties, opportunities, activities;
-- **Helpdesk**: tickets, SLA, assignment, knowledge — ServiceNow's home ground;
-- **HR basics**: people on the organisation, leave requests with approvals;
-- **Purchasing and inventory**: requests, approvals, stock moves, units, money;
-- **Projects**: tasks, boards, timelines;
-- **Hotel and manufacturing**, which exist.
-
+Reference apps are chosen to exercise capabilities, not for depth: CRM, HR and the helpdesk exist; purchasing and inventory (requests, approvals, stock moves, units, money) and projects (tasks, boards, timelines) are next; Hotel and manufacturing exist.

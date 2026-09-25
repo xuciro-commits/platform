@@ -2,7 +2,7 @@
 
 Durable statement of what the owner wants for the platform. The owner's latest explicit instruction always wins; update this file when direction changes rather than adding new ones.
 
-Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, with the owner's direction of that day added (capability-led, reference-grounded). Music's own product intent stays in MSRU (`Docs/Music.md`, `Docs/AppleClient.md`). The advisory review in [ProductIntentReview.md](ProductIntentReview.md) is handled; what it contributed is in [Platform.md](Platform.md) §1 and §10.
+Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, with the owner's direction of that day added (capability-led, reference-grounded). Music's own product intent stays in MSRU (`Docs/Music.md`, `Docs/AppleClient.md`). The external product review of 2026-09-24 was handled and folded into [Platform.md](Platform.md) §1 and §10, then deleted (git keeps it).
 
 ## What we are building
 
@@ -63,7 +63,8 @@ The server must not couple to Apple because the first app was Swift. The kernel 
   - Platform.md;
   - ADRs for decisions worth preserving;
   - one work queue;
-  - client or domain docs where a domain genuinely needs them.
+  - client or domain docs where a domain genuinely needs them;
+  - procedures for coding agents as skills (`.claude/skills/`), not as prose in the docs above.
 - Consolidate instead of appending. Hypotheses, friction notes and investigations are temporary: fold conclusions into the canonical docs or an ADR, then delete them. Git history is the archive.
 - Documents describe targets; code states facts. When they disagree, record the gap.
 
@@ -76,3 +77,4 @@ The server must not couple to Apple because the first app was Swift. The kernel 
   - the action crosses an authorization boundary: publishing, deleting user data, deploying, contacting others, downloading.
 - If a plan is unsound, say so directly and propose a better one; do not add complexity to please, and do not silently replace the core goal.
 - Written docs go into the repository at the right place; chat reports results and locations.
+- A batch closes with its documents in the same commit (AGENTS.md rule 8); a stage closes with a review of the whole against the references (Platform.md §10.3).

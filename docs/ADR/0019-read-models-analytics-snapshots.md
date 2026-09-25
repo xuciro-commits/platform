@@ -1,6 +1,6 @@
 # ADR-0019: Read models, analytics and snapshots
 
-**Status:** Accepted (2026-09-25, #109, the architecture gate of stage 3 in Platform.md §10.4). The owner accepted D1–D7 as recommended, with D5 amended: Apache ECharts 6 is the default renderer, and the platform's contract is a small visualization spec of its own, never ECharts options.
+**Status:** Accepted (2026-09-25, #109, the architecture gate of stage 3 in Platform.md §10.5). The owner accepted D1–D7 as recommended, with D5 amended: Apache ECharts 6 is the default renderer, and the platform's contract is a small visualization spec of its own, never ECharts options.
 
 ## Context
 
