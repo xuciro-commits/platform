@@ -21,6 +21,7 @@ type session struct {
 	changed map[string]*FlowInstance
 	order   []string
 	assigns []flowTask
+	runs    []AgentRunRecord // agent runs its steps start (ADR-0021)
 	close   []string
 	event   *platform.Event
 	moves   int
@@ -59,6 +60,45 @@ func (ss *session) apply(r *pb.ChangeRecord) {
 	for _, x := range ss.assigns {
 		ss.f.t.automation(x.app, ss.c.Replaying).Assign(r, x.Assignment)
 	}
+	for _, run := range ss.runs {
+		ss.f.t.automation(AgentApp, ss.c.Replaying).Put(r, run)
+	}
+}
+
+// agentEnded goes on from an agent step when its run ends: done, with its
+// result as the answer; stopped, to the step's fault path, or a person does
+// the step instead.
+func (f *Flows) agentEnded(c platform.Caller, run AgentRunRecord, now time.Time) {
+	c = f.t.automation(FlowApp, c.Replaying)
+	x, ok := platform.Get[FlowInstance](c, run.Flow)
+	if !ok || ended(x.State) {
+		return
+	}
+	i := slices.IndexFunc(x.Tokens, func(t Token) bool { return t.Child == run.ID && t.Waits == "agent" })
+	if i < 0 {
+		return // it timed out, or the instance moved on
+	}
+	f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
+		tok := ss.token(in, run.Token)
+		step := ss.def(in).steps[tok.Step]
+		if run.State == "done" {
+			in.Answer = run.Result
+			ss.trace(in, tok.Step, "agent answered", clip(run.Result, 300), run.Agent)
+			ss.next(in, tok.ID, "")
+			return
+		}
+		ss.trace(in, tok.Step, "agent stopped", run.Stopped, run.Agent)
+		if step.Fault != "" {
+			ss.next(in, tok.ID, step.Fault)
+			return
+		}
+		app, r := ss.app(in), ss.run(in)
+		a := platform.Assignment{Key: fmt.Sprintf("flow:%s:%d", in.ID, in.Seq), Ref: InstanceType + "/" + in.ID, Title: step.Agent.Goal(app, r),
+			To: step.Agent.To(app, r), Body: "The agent stopped (" + run.Stopped + "); do its step."}
+		in.Seq++
+		tok.Waits, tok.Child, tok.Task = "ask", "", ss.def(in).app+":"+a.Key
+		ss.assigns = append(ss.assigns, flowTask{app: ss.def(in).app, Assignment: a})
+	})
 }
 
 func (ss *session) trace(x *FlowInstance, step, what, detail, by string) {
@@ -242,6 +282,20 @@ func (ss *session) take(x *FlowInstance, token int) {
 			tok.Due = ss.now.Add(step.Timeout)
 		}
 		ss.trace(x, tok.Step, "waiting", waitingFor(step), "")
+	case step.Agent != nil && ss.f.t.agents != nil: // the app's agent takes the step (ADR-0021); its run ends it
+		ag := step.Agent
+		id := fmt.Sprintf("%s:%d", x.ID, x.Seq)
+		x.Seq++
+		goal, ref := ag.Goal(app, run), ""
+		if ag.Ref != nil {
+			ref = ag.Ref(app, run)
+		}
+		tok.Waits, tok.Child = "agent", id
+		if step.Timeout > 0 {
+			tok.Due = ss.now.Add(step.Timeout)
+		}
+		ss.runs = append(ss.runs, ss.f.t.agents.create(id, d.app+"."+ag.Agent, goal, ref, "", x.ID, tok.ID))
+		ss.trace(x, tok.Step, "agent", ag.Agent+": "+goal, "")
 	case step.Ask != nil, step.Agent != nil:
 		a := platform.Assignment{Key: fmt.Sprintf("flow:%s:%d", x.ID, x.Seq), Ref: InstanceType + "/" + x.ID}
 		if ask := step.Ask; ask != nil {
@@ -252,8 +306,8 @@ func (ss *session) take(x *FlowInstance, token int) {
 			if ask.Ref != nil {
 				a.Ref = ask.Ref(app, run)
 			}
-		} else { // until agents run (stage 5), a person does what the agent would
-			a.Title, a.To, a.Body = step.Agent.Goal, step.Agent.To(app, run), "An agent's step, done by a person until agents run."
+		} else { // no agent app runs: a person does what the agent would
+			a.Title, a.To, a.Body = step.Agent.Goal(app, run), step.Agent.To(app, run), "An agent's step, done by a person."
 		}
 		x.Seq++
 		if step.Timeout > 0 {

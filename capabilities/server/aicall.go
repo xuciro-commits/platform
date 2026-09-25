@@ -24,24 +24,45 @@ import (
 
 const aiTimeout = 120 * time.Second
 
-// Message is one turn of a conversation, as the OpenAI wire has it.
+// Message is one turn of a conversation, as the OpenAI wire has it: a
+// system, user or assistant turn, an assistant's tool calls, or a tool's result.
 type Message struct {
-	Role    string `json:"role"` // system, user, assistant
-	Content string `json:"content"`
+	Role       string     `json:"role"` // system, user, assistant, tool
+	Content    string     `json:"content"`
+	ToolCalls  []ToolCall `json:"toolCalls,omitempty"`
+	ToolCallID string     `json:"toolCallId,omitempty"` // a tool turn: the call it answers
+}
+
+// Tool is a function the model may call (ADR-0021): a name, what it does, and
+// its parameters as JSON Schema properties.
+type Tool struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Properties  map[string]any `json:"properties"`
+	Required    []string       `json:"required,omitempty"`
+}
+
+// ToolCall is a model's call of a tool, with its arguments as JSON.
+type ToolCall struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
 }
 
 // ChatRequest is a member's call: a model by name ("<provider>/<model>") and the conversation.
 type ChatRequest struct {
 	Model       string    `json:"model"`
 	Messages    []Message `json:"messages"`
+	Tools       []Tool    `json:"tools,omitempty"`
 	MaxTokens   int       `json:"maxTokens,omitempty"`
 	Temperature *float64  `json:"temperature,omitempty"`
 }
 
 // ChatAnswer is what the model answered, with the call's usage.
 type ChatAnswer struct {
-	Content string `json:"content"`
-	Usage   Usage  `json:"usage"`
+	Content   string     `json:"content"`
+	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
+	Usage     Usage      `json:"usage"`
 }
 
 // AIError is a call the provider did not answer or refused.
@@ -65,12 +86,19 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time) (ChatAn
 	if err != nil {
 		return ChatAnswer{}, err, nil
 	}
+	answer, failure := t.call(pv, model, m, req, now)
+	t.meter(m, answer.Usage)
+	return answer, nil, failure
+}
+
+// call calls a model once, outside the tenant's lock; the caller meters it.
+func (t *Tenant) call(pv Provider, model Model, m platform.Member, req ChatRequest, now time.Time) (ChatAnswer, *AIError) {
 	started := time.Now()
 	complete := t.complete
 	if pv.Wire == "anthropic" {
 		complete = t.completeAnthropic
 	}
-	content, u, failure := complete(pv, model.Model, req)
+	answer, u, failure := complete(pv, model.Model, req)
 	u.At, u.Member, u.Agent, u.Model, u.Millis, u.Outcome = now, m.ID, m.Agent, model.Name(), time.Since(started).Milliseconds(), "ok"
 	if failure != nil {
 		u.Outcome = failure.Detail
@@ -78,8 +106,8 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time) (ChatAn
 			u.Outcome = u.Outcome[:300]
 		}
 	}
-	t.meter(m, u)
-	return ChatAnswer{Content: content, Usage: u}, nil, failure
+	answer.Usage = u
+	return answer, failure
 }
 
 // meter journals a call's usage, then applies it.
@@ -91,9 +119,38 @@ func (t *Tenant) meter(m platform.Member, u Usage) {
 	t.ai.meter(u)
 }
 
+// openAIMessages puts a conversation on the OpenAI wire: tool calls as
+// functions with their arguments as a string, tool results with their call.
+func openAIMessages(ms []Message) []map[string]any {
+	out := make([]map[string]any, 0, len(ms))
+	for _, m := range ms {
+		msg := map[string]any{"role": m.Role, "content": m.Content}
+		if len(m.ToolCalls) > 0 {
+			calls := []map[string]any{}
+			for _, c := range m.ToolCalls {
+				calls = append(calls, map[string]any{"id": c.ID, "type": "function", "function": map[string]any{"name": c.Name, "arguments": string(c.Arguments)}})
+			}
+			msg["tool_calls"] = calls
+		}
+		if m.Role == "tool" {
+			msg["tool_call_id"] = m.ToolCallID
+		}
+		out = append(out, msg)
+	}
+	return out
+}
+
 // complete makes one call on the OpenAI Chat Completions wire.
-func (t *Tenant) complete(pv Provider, model string, req ChatRequest) (string, Usage, *AIError) {
-	body := map[string]any{"model": model, "messages": req.Messages}
+func (t *Tenant) complete(pv Provider, model string, req ChatRequest) (ChatAnswer, Usage, *AIError) {
+	body := map[string]any{"model": model, "messages": openAIMessages(req.Messages)}
+	if len(req.Tools) > 0 {
+		tools := []map[string]any{}
+		for _, x := range req.Tools {
+			tools = append(tools, map[string]any{"type": "function", "function": map[string]any{"name": x.Name, "description": x.Description,
+				"parameters": map[string]any{"type": "object", "properties": x.Properties, "required": x.Required}}})
+		}
+		body["tools"] = tools
+	}
 	if req.MaxTokens > 0 {
 		body["max_tokens"] = req.MaxTokens
 	}
@@ -104,7 +161,16 @@ func (t *Tenant) complete(pv Provider, model string, req ChatRequest) (string, U
 	var out struct {
 		Model   string `json:"model"`
 		Choices []struct {
-			Message Message `json:"message"`
+			Message struct {
+				Content   string `json:"content"`
+				ToolCalls []struct {
+					ID       string `json:"id"`
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"message"`
 		} `json:"choices"`
 		Usage struct {
 			Prompt     int     `json:"prompt_tokens"`
@@ -117,23 +183,28 @@ func (t *Tenant) complete(pv Provider, model string, req ChatRequest) (string, U
 	}
 	status, answer, failure := t.aiRequest(pv, http.MethodPost, "/chat/completions", raw, aiTimeout)
 	if failure != nil {
-		return "", Usage{}, failure
+		return ChatAnswer{}, Usage{}, failure
 	}
 	if json.Unmarshal(answer, &out) != nil {
-		return "", Usage{}, &AIError{Status: status, Detail: "unreadable answer"}
+		return ChatAnswer{}, Usage{}, &AIError{Status: status, Detail: "unreadable answer"}
 	}
 	if out.Error != nil || status >= 300 || len(out.Choices) == 0 {
 		detail := http.StatusText(status)
 		if out.Error != nil {
 			detail = out.Error.Message
 		}
-		return "", Usage{}, &AIError{Status: status, Detail: detail}
+		return ChatAnswer{}, Usage{}, &AIError{Status: status, Detail: detail}
 	}
 	u := Usage{Input: out.Usage.Prompt, Output: out.Usage.Completion, Cost: out.Usage.Cost}
 	if out.Model != "" && out.Model != model {
 		u.Served = out.Model
 	}
-	return out.Choices[0].Message.Content, u, nil
+	msg := out.Choices[0].Message
+	reply := ChatAnswer{Content: msg.Content}
+	for _, c := range msg.ToolCalls {
+		reply.ToolCalls = append(reply.ToolCalls, ToolCall{ID: c.ID, Name: c.Function.Name, Arguments: json.RawMessage(cmpOr(c.Function.Arguments, "{}"))})
+	}
+	return reply, u, nil
 }
 
 // aiRequest sends one request to a provider with its key, through the dialer

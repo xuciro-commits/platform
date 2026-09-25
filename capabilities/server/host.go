@@ -76,6 +76,7 @@ type Tenant struct {
 	records  *recordStore // the apps' entity records (ADR-0016)
 	work     *Work        // approvals and tasks (ADR-0017)
 	flows    *Flows       // long-running processes (ADR-0020)
+	agents   *Agents      // AI agents (ADR-0021)
 	probing  bool         // a submission for approval is being checked, not applied
 }
 
@@ -141,6 +142,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if f, ok := a.(*Flows); ok {
 			t.flows, f.t = f, t
 		}
+		if x, ok := a.(*Agents); ok {
+			t.agents, x.t = x, t
+		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {
 				if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
@@ -178,6 +182,17 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			if err := claim(n, a); err != nil {
 				return nil, err
 			}
+		}
+	}
+	for _, a := range apps { // agents, once every app is composed (ADR-0021); flows may give them steps
+		if len(a.Manifest().Agents) == 0 {
+			continue
+		}
+		if t.agents == nil {
+			return nil, fmt.Errorf("tenant %s: %s declares agents, and the tenant runs no agent app", id, a.Manifest().ID)
+		}
+		if err := t.agents.declare(a); err != nil {
+			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
 	for _, a := range apps { // flows, once every app is composed (ADR-0020)
@@ -352,6 +367,17 @@ func (t *Tenant) Replay(entries []Entry) error {
 				return fmt.Errorf("entry %d: bad usage", i+1)
 			}
 			t.ai.meter(u)
+			continue
+		}
+		if e.Kind == "agent" && t.agents != nil { // a step an agent's model chose: applied, the model never called again
+			var b stepBody
+			if json.Unmarshal(e.Body, &b) != nil {
+				return fmt.Errorf("entry %d: bad agent step", i+1)
+			}
+			if err := t.agents.apply(b, e.At, true); err != nil {
+				return fmt.Errorf("entry %d: agent step: %v", i+1, err)
+			}
+			t.enqueue(e.At)
 			continue
 		}
 		if e.Kind == "delivery" || e.Kind == "job" {

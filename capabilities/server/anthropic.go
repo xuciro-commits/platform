@@ -27,10 +27,10 @@ func (t *Tenant) anthropicClient(pv Provider) (anthropic.Client, *AIError) {
 		option.WithHTTPClient(t.aiHTTP(pv)), option.WithMaxRetries(0), option.WithRequestTimeout(aiTimeout)), nil
 }
 
-func (t *Tenant) completeAnthropic(pv Provider, model string, req ChatRequest) (string, Usage, *AIError) {
+func (t *Tenant) completeAnthropic(pv Provider, model string, req ChatRequest) (ChatAnswer, Usage, *AIError) {
 	client, failure := t.anthropicClient(pv)
 	if failure != nil {
-		return "", Usage{}, failure
+		return ChatAnswer{}, Usage{}, failure
 	}
 	params := anthropic.MessageNewParams{Model: model, MaxTokens: anthropicMaxTokens}
 	if req.MaxTokens > 0 {
@@ -39,34 +39,63 @@ func (t *Tenant) completeAnthropic(pv Provider, model string, req ChatRequest) (
 	if req.Temperature != nil {
 		params.Temperature = anthropic.Float(*req.Temperature)
 	}
+	for _, x := range req.Tools { // custom tools (ADR-0021): an agent's catalog actions, reads and built-ins
+		tool := anthropic.ToolParam{Name: x.Name, Description: anthropic.String(x.Description),
+			InputSchema: anthropic.ToolInputSchemaParam{Properties: x.Properties, Required: x.Required}}
+		params.Tools = append(params.Tools, anthropic.ToolUnionParam{OfTool: &tool})
+	}
+	var results []anthropic.ContentBlockParamUnion // tool results, sent together as one user turn
+	flush := func() {
+		if len(results) > 0 {
+			params.Messages = append(params.Messages, anthropic.NewUserMessage(results...))
+			results = nil
+		}
+	}
 	for _, m := range req.Messages {
 		switch m.Role {
 		case "system":
 			params.System = append(params.System, anthropic.TextBlockParam{Text: m.Content})
+		case "tool":
+			results = append(results, anthropic.NewToolResultBlock(m.ToolCallID, m.Content, false))
 		case "assistant":
-			params.Messages = append(params.Messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(m.Content)))
+			flush()
+			var blocks []anthropic.ContentBlockParamUnion
+			if m.Content != "" {
+				blocks = append(blocks, anthropic.NewTextBlock(m.Content))
+			}
+			for _, c := range m.ToolCalls {
+				blocks = append(blocks, anthropic.NewToolUseBlock(c.ID, c.Arguments, c.Name))
+			}
+			params.Messages = append(params.Messages, anthropic.NewAssistantMessage(blocks...))
 		default:
+			flush()
 			params.Messages = append(params.Messages, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Content)))
 		}
 	}
+	flush()
 	resp, err := client.Messages.New(context.Background(), params)
 	if err != nil {
-		return "", Usage{}, anthropicFailure(err)
+		return ChatAnswer{}, Usage{}, anthropicFailure(err)
 	}
 	u := Usage{Input: int(resp.Usage.InputTokens), Output: int(resp.Usage.OutputTokens)}
 	if string(resp.Model) != model {
 		u.Served = string(resp.Model)
 	}
 	if resp.StopReason == anthropic.StopReasonRefusal {
-		return "", u, &AIError{Status: http.StatusOK, Detail: "refused (" + string(resp.StopDetails.Category) + "): " + resp.StopDetails.Explanation}
+		return ChatAnswer{}, u, &AIError{Status: http.StatusOK, Detail: "refused (" + string(resp.StopDetails.Category) + "): " + resp.StopDetails.Explanation}
 	}
+	var answer ChatAnswer
 	var text []string
 	for _, block := range resp.Content {
-		if b, ok := block.AsAny().(anthropic.TextBlock); ok {
+		switch b := block.AsAny().(type) {
+		case anthropic.TextBlock:
 			text = append(text, b.Text)
+		case anthropic.ToolUseBlock:
+			answer.ToolCalls = append(answer.ToolCalls, ToolCall{ID: b.ID, Name: b.Name, Arguments: b.Input})
 		}
 	}
-	return strings.Join(text, ""), u, nil
+	answer.Content = strings.Join(text, "")
+	return answer, u, nil
 }
 
 func (t *Tenant) anthropicModels(pv Provider) ([]CatalogModel, *AIError) {

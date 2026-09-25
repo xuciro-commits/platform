@@ -1,6 +1,6 @@
 # ADR-0021: Agents — governed principals in a traced harness
 
-**Status:** Proposed (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.4). The owner decides D1–D10; the build items follow.
+**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.4). The owner accepted D1–D10 as recommended.
 
 ## Context
 

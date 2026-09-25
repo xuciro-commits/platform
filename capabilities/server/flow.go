@@ -225,6 +225,9 @@ func (f *Flows) declare(a platform.App) error {
 			if a := s.Ask; a != nil && (a.Title == nil || a.To == nil) {
 				return fmt.Errorf("flow %s: step %s asks without a title or people", id, s.Name)
 			}
+			if ag := s.Agent; ag != nil && (ag.Goal == nil || ag.To == nil || !slices.ContainsFunc(m.Agents, func(x platform.Agent) bool { return x.Name == ag.Agent })) {
+				return fmt.Errorf("flow %s: step %s gives a goal to %q, not an agent of %s, or without a goal and people", id, s.Name, ag.Agent, m.ID)
+			}
 		}
 		for from, to := range fl.From {
 			if d.steps[to] == nil || len(versions) == 0 || versions[len(versions)-1].steps[from] == nil {
@@ -391,7 +394,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 					ss.trace(in, tok.Step, "time", "reached", "")
 					ss.next(in, tok.ID, "")
 				})
-			case tok.Waits == "wait" || tok.Waits == "ask" || tok.Waits == "call":
+			case tok.Waits == "wait" || tok.Waits == "ask" || tok.Waits == "call" || tok.Waits == "agent":
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					if tok.Task != "" {
 						ss.close = append(ss.close, tok.Task)

@@ -107,13 +107,14 @@ type Call struct {
 	Data func(c Caller, r *Run) any
 }
 
-// AgentStep is a goal for an agent (stage 5): the actions it may take, a
-// budget, and until agents run, the person it falls back to (a task).
+// AgentStep gives one of the app's agents a goal (ADR-0021) and waits for its
+// run: its result is the Answer. When the run stops (a budget, a guard, no
+// model), the flow goes to the step's Fault, or else a person does the step (To).
 type AgentStep struct {
-	Goal    string
-	Actions []string
-	Budget  int
-	To      func(c Caller, r *Run) []Recipient
+	Agent string // the app's agent, by name
+	Goal  func(c Caller, r *Run) string
+	Ref   func(c Caller, r *Run) string
+	To    func(c Caller, r *Run) []Recipient
 }
 
 // Run is an instance as a step's functions see it.

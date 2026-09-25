@@ -233,4 +233,11 @@ func RunWork(tenants ...*Tenant) {
 			}
 		}
 	}()
+	go func() { // agents' model calls are slow: apart from the rest (ADR-0021)
+		for range time.Tick(time.Second) {
+			for _, t := range tenants {
+				t.Think(Now())
+			}
+		}
+	}()
 }
