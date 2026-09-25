@@ -34,18 +34,20 @@ type Confirmation struct {
 	SFCs     []string `json:"sfcs"`
 }
 
-// confirmIfFinished emits the order's confirmation once all its SFCs have ended.
-func (p *Plant) confirmIfFinished(who platform.Caller, order string, now time.Time) {
-	o := p.orders[order]
-	if o == nil || o.ERP != "" {
+// finishOrder completes an order once all its SFCs have ended, in the decision
+// r that ended the last one, and confirms it to the ERP.
+func (p *Plant) finishOrder(c platform.Caller, r *pb.ChangeRecord, order string, now time.Time) {
+	o, known := platform.Get[Order](c, order)
+	if !known || o.Status == "completed" {
 		return
 	}
 	for _, id := range o.SFCs {
-		if s := p.sfcs[id].State; s != "done" && s != "scrapped" {
+		if s, _ := platform.Get[SFC](c, string(id)); s.State != "done" && s.State != "scrapped" {
 			return
 		}
 	}
-	p.confirm(who, o, now)
+	o.Status = "completed"
+	p.confirm(c, r, o, now)
 }
 
 // key names the order's current confirmation: the order, then "<order>#<n>"
@@ -57,19 +59,23 @@ func (o *Order) key() string {
 	return fmt.Sprintf("%s#%d", o.ID, o.Resent+1)
 }
 
-// confirm emits the order's confirmation (#101) with its current key.
-func (p *Plant) confirm(who platform.Caller, o *Order, now time.Time) {
+// confirm emits the order's confirmation (#101) with its current key and
+// stores the order as changed by r.
+func (p *Plant) confirm(who platform.Caller, r *pb.ChangeRecord, o Order, now time.Time) {
 	done := 0
+	var sfcs []string
 	for _, id := range o.SFCs {
-		if p.sfcs[id].State == "done" {
+		sfcs = append(sfcs, string(id))
+		if s, _ := platform.Get[SFC](who, string(id)); s.State == "done" {
 			done++
 		}
 	}
 	yield := o.Quantity * done / len(o.SFCs)
-	c := Confirmation{Order: o.ID, Planned: o.Planned, Product: o.Product, Quantity: o.Quantity, Yield: yield, Scrap: o.Quantity - yield, SFCs: o.SFCs}
+	c := Confirmation{Order: o.ID, Planned: o.Planned, Product: o.Product, Quantity: o.Quantity, Yield: yield, Scrap: o.Quantity - yield, SFCs: sfcs}
 	if n, _ := who.Emit(EffectConfirmation, o.key(), OrderType+"/"+o.ID, c, now); n > 0 {
 		o.ERP = "sent"
 	}
+	who.Put(r, o)
 }
 
 type answer struct {
@@ -85,8 +91,8 @@ func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome,
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	id, _, _ := strings.Cut(e.Key, "#")
-	order := p.orders[id]
-	if order == nil {
+	order, known := platform.Get[Order](c, id)
+	if !known {
 		return notFound
 	}
 	a := answer{State: map[string]string{"delivered": "confirmed", "rejected": "refused"}[e.State], Detail: o.Detail}
@@ -113,6 +119,7 @@ func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome,
 		return nil
 	}
 	order.ERP, order.Confirmation, order.ERPDetail = a.State, a.Confirmation, a.Detail
+	c.PutAt(now, "erp answer", order)
 	if a.State != "confirmed" {
 		c.Notify(platform.Notification{Title: fmt.Sprintf("ERP %s the confirmation of %s", a.State, order.ID), Body: a.Detail,
 			Ref: OrderType + "/" + order.ID, Key: "erp:" + e.ID + ":" + strconv.Itoa(e.Attempts)}, now, p.supervisorsOfOrder(order))
@@ -121,12 +128,12 @@ func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome,
 }
 
 // supervisorsOfOrder are the supervisors of the order's line.
-func (p *Plant) supervisorsOfOrder(o *Order) platform.Recipient {
+func (p *Plant) supervisorsOfOrder(o Order) platform.Recipient {
 	return platform.Recipient{Structure: SiteStructure, Role: string(Supervisor), Unit: p.orderLine(o)}
 }
 
 // orderLine is the line where the order's routing starts.
-func (p *Plant) orderLine(o *Order) string {
+func (p *Plant) orderLine(o Order) string {
 	if prod := p.product(o.Product); prod != nil && len(prod.Operations) > 0 {
 		return p.workCenter(prod.Operations[0].WorkCenter).Line
 	}

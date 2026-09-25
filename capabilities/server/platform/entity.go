@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 )
@@ -59,10 +61,63 @@ type Entity struct {
 	// Standard asks for generated create, edit and archive actions (D5),
 	// named <type>.create, <type>.edit and <type>.archive.
 	Standard Standard
+	// Lifecycle makes the type a document that moves through states (ADR-0017).
+	Lifecycle *Lifecycle
 	// Seed are the records the type starts with in a tenant (a deployment's or
 	// a package's configuration, like the organisation's seed); decisions change
 	// them afterwards, and replay starts from them again.
 	Seed []any
+}
+
+// Lifecycle declares a status field, its states and the transitions between
+// them (ADR-0017 D1). Each transition is an action <type>.<name>; the status
+// changes only through transitions, so a record's history is its lifecycle.
+type Lifecycle struct {
+	Field       string // the status field: read-only text or choice
+	Initial     string // a new record's status
+	States      []State
+	Transitions []Transition
+}
+
+type State struct {
+	Name  string `json:"name"`
+	Title string `json:"title"`
+	Tone  string `json:"tone,omitempty"` // info, success, warning, danger, neutral
+}
+
+// Transition moves a record from one of From to one of To. Do, when set,
+// checks the transition's rules on the record (a pointer to the entity struct)
+// with the caller's payload and changes its other fields; it may choose the
+// status among To (the first is the default). It runs inside the decision, so
+// replay runs it again; an error refuses the transition.
+type Transition struct {
+	Name        string
+	Title       string
+	Description string
+	From, To    []string
+	Roles       []string
+	Payload     []Field
+	Capability  string // default: the entity type
+	Do          func(c Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error
+	// After runs once the transition is accepted and the record stored: what
+	// follows from it elsewhere (another record, a notification, an effect).
+	After func(c Caller, r *pb.ChangeRecord, record any, now time.Time)
+}
+
+// LifecycleInfo is a lifecycle as the UI sees it.
+type LifecycleInfo struct {
+	Field       string           `json:"field"`
+	Initial     string           `json:"initial"`
+	States      []State          `json:"states"`
+	Transitions []TransitionInfo `json:"transitions"`
+}
+
+type TransitionInfo struct {
+	Name   string   `json:"name"`
+	Schema string   `json:"schema"`
+	Title  string   `json:"title"`
+	From   []string `json:"from"`
+	To     []string `json:"to"`
 }
 
 // Standard are the generated actions an entity type asks for, and who may call them.
@@ -106,7 +161,7 @@ func (s Scope) Level(role string) string {
 type FieldInfo struct {
 	Name     string   `json:"name"`
 	Title    string   `json:"title"`
-	Type     string   `json:"type"` // text, longtext, integer, decimal, money, date, datetime, boolean, choice, reference, references, tags
+	Type     string   `json:"type"` // text, longtext, integer, decimal, money, date, datetime, boolean, choice, reference, references, tags, lines
 	Required bool     `json:"required,omitempty"`
 	Search   bool     `json:"search,omitempty"`
 	ReadOnly bool     `json:"readOnly,omitempty"`
@@ -117,15 +172,16 @@ type FieldInfo struct {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
-	Type     string       `json:"type"`
-	Title    string       `json:"title"`
-	Plural   string       `json:"plural"`
-	App      string       `json:"app"`
-	Display  string       `json:"display"`
-	Fields   []FieldInfo  `json:"fields"`
-	Standard []string     `json:"standard"` // the generated actions' schemas
-	Go       reflect.Type `json:"-"`
-	Scope    Scope        `json:"-"`
+	Type      string         `json:"type"`
+	Title     string         `json:"title"`
+	Plural    string         `json:"plural"`
+	App       string         `json:"app"`
+	Display   string         `json:"display"`
+	Fields    []FieldInfo    `json:"fields"`
+	Standard  []string       `json:"standard"` // the generated actions' schemas
+	Lifecycle *LifecycleInfo `json:"lifecycle,omitempty"`
+	Go        reflect.Type   `json:"-"`
+	Scope     Scope          `json:"-"`
 }
 
 // Field is the named field's description.
@@ -219,6 +275,8 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			f.Type = "decimal"
 		case ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.String:
 			f.Type = "tags"
+		case ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.Struct:
+			f.Type = "lines" // child lines kept inside the record (Frappe child tables, Odoo one2many)
 		default:
 			return EntityInfo{}, fmt.Errorf("entity %s: field %s has a type the kit does not know (%s)", e.Type, name, ft)
 		}
@@ -252,6 +310,29 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			return EntityInfo{}, fmt.Errorf("entity %s: scope level %q without the field it needs", e.Type, l)
 		}
 	}
+	if l := e.Lifecycle; l != nil {
+		f, ok := info.Field(l.Field)
+		states := map[string]bool{}
+		for _, s := range l.States {
+			states[s.Name] = true
+		}
+		if !ok || !f.ReadOnly || (f.Type != "text" && f.Type != "choice") || !states[l.Initial] || len(states) != len(l.States) {
+			return EntityInfo{}, fmt.Errorf("entity %s: the lifecycle needs a read-only text or choice status field, unique states and an initial state among them", e.Type)
+		}
+		info.Lifecycle = &LifecycleInfo{Field: l.Field, Initial: l.Initial, States: l.States, Transitions: []TransitionInfo{}}
+		for i, t := range l.Transitions {
+			ends := append(slices.Clone(t.From), t.To...)
+			if t.Name == "" || len(t.From) == 0 || len(t.To) == 0 || slices.ContainsFunc(ends, func(s string) bool { return !states[s] }) ||
+				slices.ContainsFunc(l.Transitions[:i], func(x Transition) bool { return x.Name == t.Name }) || t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
+				return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
+			}
+			title := t.Title
+			if title == "" {
+				title = strings.ToUpper(t.Name[:1]) + t.Name[1:]
+			}
+			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: t.From, To: t.To})
+		}
+	}
 	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}} {
 		if x[0].(bool) {
 			info.Standard = append(info.Standard, e.Type+x[1].(string))
@@ -260,8 +341,9 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	return info, nil
 }
 
-// StandardActions are the catalog entries of an entity type's generated actions.
-func StandardActions(e Entity) []Action {
+// EntityActions are the catalog entries an entity type's declaration
+// generates: its standard create, edit and archive, and its transitions.
+func EntityActions(e Entity) []Action {
 	info, err := Describe("", e, func(reflect.Type) string { return "?" }) // only names and kinds matter here
 	if err != nil {
 		panic(err) // a declaration error: the app does not compose
@@ -299,6 +381,24 @@ func StandardActions(e Entity) []Action {
 	if e.Standard.Archive {
 		out = append(out, Action{Schema: e.Type + ".archive", Target: e.Type, Capability: capability, Title: "Archive " + strings.ToLower(info.Title),
 			Description: "Archive a " + strings.ToLower(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []Field{}, Roles: e.Standard.Roles})
+	}
+	if e.Lifecycle != nil {
+		for i, t := range e.Lifecycle.Transitions {
+			c := t.Capability
+			if c == "" {
+				c = e.Type
+			}
+			payload := t.Payload
+			if payload == nil {
+				payload = []Field{}
+			}
+			description := t.Description
+			if description == "" {
+				description = fmt.Sprintf("Move a %s from %s to %s.", strings.ToLower(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
+			}
+			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
+				Description: description, Payload: payload, Roles: t.Roles})
+		}
 	}
 	return out
 }
@@ -356,6 +456,14 @@ func Find[T any](c Caller, q Query) ([]T, int, *kernel.Error) {
 func Records[T any](c Caller) []T {
 	out, _, _ := Find[T](c, Query{Archived: true})
 	return out
+}
+
+// PutAt stores entity as changed by an input that is not a decision (an
+// observation, an effect's answer): the change is stamped with the caller and
+// now, and named by cause in the record's history.
+func (c Caller) PutAt(now time.Time, cause string, entity any) *kernel.Error {
+	r := &pb.ChangeRecord{RecordedTime: timestamppb.New(now), Submission: &pb.Submission{PrincipalId: c.ID, Schema: &pb.SchemaRef{Name: cause}}}
+	return c.Put(r, entity)
 }
 
 // Check validates entity against its declaration before a decision is

@@ -23,6 +23,9 @@ const erpStatus = defineStatuses({
 const downtimeStatus = defineStatuses({
   open: { label: "Down", tone: "danger" }, closed: { label: "Closed", tone: "neutral" }, check: { label: "Needs check", tone: "warning" },
 });
+// The plant's records (ADR-0016), through the host's generic reads.
+const ordersQuery = "/v1/records/mes.order?sort=id&archived=true&limit=500";
+const sfcsQuery = "/v1/records/mes.sfc?sort=id&archived=true&limit=500";
 const time = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString() : "—");
 
 // The session: who is signed in and the edge client carrying their outbox.
@@ -42,7 +45,7 @@ function routing(master: Master | undefined, productId: string) {
 }
 
 function PlannedOrders() {
-  const orders = useRead<Order[]>("/v1/orders") ?? [];
+  const orders = useRead<{ records: Order[] }>(ordersQuery)?.records ?? [];
   // Joined into the rows: the table caches accessor values per row object.
   const planned = (useRead<Planned[]>("/v1/planned-orders") ?? [])
     .map((p) => {
@@ -121,7 +124,7 @@ function PlannedOrders() {
 }
 
 function SFCTable({ filter, title, description }: { filter: (s: SFC) => boolean; title: string; description: string }) {
-  const sfcs = (useRead<SFC[]>("/v1/sfcs") ?? []).filter(filter);
+  const sfcs = (useRead<{ records: SFC[] }>(sfcsQuery)?.records ?? []).filter(filter);
   const { master } = usePlant();
   const { open } = useWorkspace();
   const columns: ColumnDef<SFC, any>[] = [
@@ -142,7 +145,7 @@ function SFCTable({ filter, title, description }: { filter: (s: SFC) => boolean;
 }
 
 function SFCDetail({ id }: { id: string }) {
-  const sfc = useRead<SFC[]>("/v1/sfcs")?.find((s) => s.id === id);
+  const sfc = useRead<{ record: SFC }>(`/v1/records/mes.sfc/${encodeURIComponent(id)}`)?.record;
   const { master, decide, can } = usePlant();
   const [resource, setResource] = useState("");
   const [code, setCode] = useState(ncCodes[0]!);

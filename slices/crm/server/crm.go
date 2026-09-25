@@ -68,7 +68,7 @@ func Entities() []platform.Entity {
 // Actions is the CRM catalog (ADR-0008).
 func Actions() *platform.Catalog {
 	both := []string{string(Sales), string(Manager)}
-	return platform.NewCatalog(append(platform.StandardActions(Entities()[0]),
+	return platform.NewCatalog(append(platform.EntityActions(Entities()[0]),
 		platform.Action{Schema: SchemaOpen, Target: OpportunityType, Capability: "opportunities", Title: "Open opportunity",
 			Description: "Open a sales opportunity for an account; the caller owns it.",
 			Payload: []platform.Field{{Name: "account", Type: "string", Required: true, Description: "Account ID"},
@@ -101,7 +101,7 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if who.Tenant != c.tenant {
 		return nil, fail(pb.ErrorCode_ERROR_CODE_POLICY_DENIED)
 	}
-	if record, err, ok := c.ledger.Standard(who, s, now, nil, Entities()...); ok {
+	if record, err, ok := c.ledger.Generated(who, s, now, nil, Entities()...); ok {
 		return record, err
 	}
 	id := s.GetTarget().GetId()

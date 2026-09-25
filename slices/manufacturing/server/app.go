@@ -23,7 +23,7 @@ const (
 // the connectors), its settings and its scheduled job (ADR-0013).
 func (p *Plant) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "mes", Version: "1", Actions: p.ledger.Catalog,
-		Reads:  []string{"master", "orders", "sfcs", "planned-orders", "downtime"},
+		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,
 		Inputs: map[string]bool{"states": true, "planned-orders": true},
 		Jobs:   []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
 		Emits: []platform.EffectKind{{Name: EffectConfirmation, Title: "Order confirmation to the ERP", Irreversible: true,
@@ -56,10 +56,6 @@ func (p *Plant) Read(_ platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case "master":
 		return p.Master(), nil
-	case "orders":
-		return p.Orders(), nil
-	case "sfcs":
-		return p.SFCs(), nil
 	case "planned-orders":
 		return p.Planned(), nil
 	}

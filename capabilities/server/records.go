@@ -134,9 +134,15 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	stamp := platform.Stamp{By: r.GetSubmission().GetPrincipalId(), At: r.GetRecordedTime().AsTime(), Change: r.GetChangeId()}
 	prev := et.rows[rec.ID]
 	change := RecordChange{Change: r.GetChangeId(), Schema: r.GetSubmission().GetSchema().GetName(), By: stamp.By, At: stamp.At, Fields: []FieldChange{}}
-	rec.Changed, rec.Created, rec.Revision = stamp, stamp, 1
-	if target := r.GetSubmission().GetTarget(); target.GetType() == et.info.Type && target.GetId() == rec.ID {
-		rec.Revision = r.GetRevision()
+	// The revision is the kernel's (K4 C12): the decisions naming the record as
+	// their target, which clients send back as the revision they saw.
+	rec.Changed, rec.Created, rec.Revision = stamp, stamp, 0
+	target := r.GetSubmission().GetTarget()
+	named := target.GetType() == et.info.Type && target.GetId() == rec.ID
+	if l := et.info.Lifecycle; prev == nil && l != nil { // a new record starts in the initial state
+		if f, _ := et.info.Field(l.Field); v.FieldByIndex(f.Index).String() == "" {
+			v.FieldByIndex(f.Index).SetString(l.Initial)
+		}
 	}
 	if owner := et.info.Scope.Owner; prev == nil && owner != "" { // a new record belongs to its creator unless the rules say who
 		if f, _ := et.info.Field(owner); v.FieldByIndex(f.Index).String() == "" {
@@ -146,10 +152,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	var history []RecordChange
 	if prev != nil {
 		old := recordOf(prev.value)
-		rec.Created, history = old.Created, prev.history
-		if rec.Revision <= old.Revision {
-			rec.Revision = old.Revision + 1 // changed by a decision about another record
-		}
+		rec.Created, history, rec.Revision = old.Created, prev.history, old.Revision
 		if old.Archived != rec.Archived {
 			change.Fields = append(change.Fields, FieldChange{Field: "archived", Before: jsonOf(old.Archived), After: jsonOf(rec.Archived)})
 		}
@@ -163,6 +166,9 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		if string(before) != string(after) && !(prev == nil && v.FieldByIndex(f.Index).IsZero()) {
 			change.Fields = append(change.Fields, FieldChange{Field: f.Name, Before: before, After: after})
 		}
+	}
+	if named {
+		rec.Revision = r.GetRevision()
 	}
 	et.rows[rec.ID] = &row{value: v, history: append(history, change)}
 	return nil
@@ -200,6 +206,12 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 			if !fv.IsZero() && !slices.Contains(f.Choices, fv.String()) {
 				return invalid
 			}
+		}
+		if l := et.info.Lifecycle; l != nil && f.Name == l.Field && !fv.IsZero() && !slices.ContainsFunc(l.States, func(st platform.State) bool { return st.Name == fv.String() }) {
+			return invalid // not a state of the lifecycle
+		}
+		switch f.Type {
+		case "":
 		case "date":
 			if _, err := time.Parse(time.DateOnly, fv.String()); !fv.IsZero() && err != nil {
 				return invalid

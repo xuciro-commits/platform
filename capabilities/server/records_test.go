@@ -46,7 +46,7 @@ func stockEntities() []platform.Entity {
 func newStock(tenant string) *stock {
 	var actions []platform.Action
 	for _, e := range stockEntities() {
-		actions = append(actions, platform.StandardActions(e)...)
+		actions = append(actions, platform.EntityActions(e)...)
 	}
 	actions = append(actions, platform.Action{Schema: "stock.item.count", Target: "stock.item", Capability: "counts", Title: "Count", Description: "Record a count.",
 		Payload: []platform.Field{{Name: "qty", Type: "integer", Required: true, Description: "Counted"}}, Roles: []string{"line"}})
@@ -64,7 +64,7 @@ func (s *stock) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 func (s *stock) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	if r, err, ok := s.ledger.Standard(c, sub, now, nil, stockEntities()...); ok {
+	if r, err, ok := s.ledger.Generated(c, sub, now, nil, stockEntities()...); ok {
 		return r, err
 	}
 	return s.ledger.Receive(c, sub, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {

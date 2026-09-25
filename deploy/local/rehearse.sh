@@ -47,11 +47,12 @@ submit() { # token key schema target-type target-id payload [expected-revision]
      + (if $e == "" then {} else {evidenceFactIds:[$e]} end)')
   curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$server/v1/submissions" -d "$body"
 }
-state() { { for path in orders sfcs downtime planned-orders notifications; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
+state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500" downtime planned-orders notifications; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
   curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -c '[.[] | {id, disabled}]'
   curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage" | jq -c '.totals'
   for path in customers records/hotel.reservation records/hotel.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done
-  curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/protocols" | jq -c '[.[] | {id, bound}]'; } | jq -cS .; }
+  curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/protocols" | jq -c '[.[] | {id, bound}]'; } |
+  jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
 
 # Inputs of every kind the journal keeps: a poll page, decisions, a push batch.
 (cd ../../slices/manufacturing/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
@@ -78,8 +79,8 @@ for resource in FURNACE-1 CNC-11 CMM-1; do
   submit "$OP1" "w2-c$rev" mes.sfc.complete mes.sfc WO-2-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-2 at $resource"
   rev=$((rev + 2))
 done
-for _ in $(seq 20); do [[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/orders" | jq -r '.[] | select(.id == "WO-2") | .erp') == confirmed ]] && break; sleep 0.5; done
-[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/orders" | jq -r '.[] | select(.id == "WO-2") | .erp + " " + .confirmation') == "confirmed CONF-100001" ]] || fail "ERP write-back: $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/orders" | jq -c '.[] | select(.id == "WO-2")')"
+for _ in $(seq 20); do [[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -r '.records[] | select(.id == "WO-2") | .erp') == confirmed ]] && break; sleep 0.5; done
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -r '.records[] | select(.id == "WO-2") | .erp + " " + .confirmation') == "confirmed CONF-100001" ]] || fail "ERP write-back: $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -c '.records[] | select(.id == "WO-2")')"
 echo "ok   operations: downtime notified to the line's supervisor only; ERP connector disabled from Settings; a finished order confirmed to the ERP, its number back on the order"
 submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | jq -e .record >/dev/null || fail start
 [[ $(submit "$OP2" s-2 mes.sfc.start mes.sfc WO-1-002 '{"resource":"FURNACE-1"}' 0 | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "line policy"
@@ -112,7 +113,7 @@ for resource in FURNACE-1 CNC-11 CMM-1; do
   submit "$OP1" "w3-c$rev" mes.sfc.complete mes.sfc WO-3-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-3 at $resource"
   rev=$((rev + 2))
 done
-wo3() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/orders" | jq -r '.[] | select(.id == "WO-3") | .erp'; }
+wo3() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -r '.records[] | select(.id == "WO-3") | .erp'; }
 for _ in $(seq 20); do [[ $(wo3) == refused ]] && break; sleep 0.5; done
 [[ $(wo3) == refused ]] || fail "ERP refusal of WO-3: $(wo3)"
 submit "$AGENT" a-2 mes.order.reconfirm mes.order WO-3 '{"planned":"PO-9001"}' | jq -e .record >/dev/null || fail "assistant resend"
@@ -189,7 +190,7 @@ sales crm-server "$MGR" s-b3 crm.opportunity.book crm.opportunity OPP-1 '{"roomT
 echo "ok   sales solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants; the cancellation reached a webhook endpoint signed, once"
 
 before=$(state)
-[[ $(jq -s '.[1] | length' <<<"$before") == 4 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
+[[ $(jq -s '.[1].total' <<<"$before") == 4 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
 compose restart mes-server sales-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done

@@ -100,30 +100,33 @@ type Signature struct {
 	By      string `json:"by"`
 }
 
+// SFC is a lot moving through its product's routing (ADR-0016, ADR-0017): its
+// lifecycle is start, complete, nonconformance and signed disposition.
 type SFC struct {
-	ID         string      `json:"id"`
-	Order      string      `json:"order"`
-	Product    string      `json:"product"`
-	Step       int         `json:"step"`  // index into the product's operations
-	State      string      `json:"state"` // queued, active, hold, done, scrapped
-	Resource   string      `json:"resource,omitempty"`
-	Revision   uint32      `json:"revision"` // K4 C12: accepted changes naming this SFC
-	NCs        []NC        `json:"ncs"`
-	Signatures []Signature `json:"signatures"`
+	platform.Record
+	Order      platform.Ref[Order] `json:"order" field:"readonly"`
+	Product    string              `json:"product" field:"readonly,search"`
+	Step       int                 `json:"step" field:"readonly"` // index into the product's operations
+	State      string              `json:"state" field:"readonly" choices:"queued,active,hold,done,scrapped"`
+	Resource   string              `json:"resource,omitempty" field:"readonly"`
+	NCs        []NC                `json:"ncs" field:"readonly" title:"Nonconformances"`
+	Signatures []Signature         `json:"signatures" field:"readonly"`
 }
 
+// Order is a released shop order; it completes when its last SFC ends.
 type Order struct {
-	ID       string   `json:"id"`
-	Product  string   `json:"product"`
-	Quantity int      `json:"quantity"`
-	SFCs     []string `json:"sfcs"`
-	Planned  string   `json:"planned,omitempty"`
+	platform.Record
+	Product  string              `json:"product" field:"readonly,search"`
+	Quantity int                 `json:"quantity" field:"readonly"`
+	SFCs     []platform.Ref[SFC] `json:"sfcs" field:"readonly" title:"SFCs"`
+	Planned  string              `json:"planned,omitempty" field:"readonly" title:"Planned order"`
+	Status   string              `json:"status" field:"readonly" choices:"released,completed"`
 	// The confirmation written back to the ERP when the last SFC ends: sent,
 	// confirmed (with the ERP's number), refused or failed, read from its answer.
-	ERP          string `json:"erp,omitempty"`
-	Confirmation string `json:"confirmation,omitempty"`
-	ERPDetail    string `json:"erpDetail,omitempty"`
-	Resent       int    `json:"resent,omitempty"` // corrected confirmations sent after a refusal or failure
+	ERP          string `json:"erp,omitempty" field:"readonly" title:"ERP"`
+	Confirmation string `json:"confirmation,omitempty" field:"readonly"`
+	ERPDetail    string `json:"erpDetail,omitempty" field:"readonly" title:"ERP detail"`
+	Resent       int    `json:"resent,omitempty" field:"readonly"` // corrected confirmations sent after a refusal or failure
 }
 
 // Plant is one tenant: master data, execution state and its kernel logs.
@@ -131,8 +134,7 @@ type Plant struct {
 	mu        sync.Mutex
 	tenant    string
 	master    MasterData
-	orders    map[string]*Order
-	sfcs      map[string]*SFC
+	entities  []platform.Entity
 	ledger    *platform.Ledger
 	facts     *kernel.FactLog
 	identity  *kernel.Identity
@@ -141,7 +143,7 @@ type Plant struct {
 }
 
 func NewPlant(tenant string, master MasterData) *Plant {
-	p := &Plant{tenant: tenant, master: master, orders: map[string]*Order{}, sfcs: map[string]*SFC{},
+	p := &Plant{tenant: tenant, master: master,
 		ledger: platform.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
 		facts: kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}, {Name: schemaPlanned, Version: 1},
 			{Name: schemaAnswer, Version: 1}}, nil)),
@@ -149,6 +151,7 @@ func NewPlant(tenant string, master MasterData) *Plant {
 	p.ledger.Changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(p.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
 	}
+	p.entities = Entities(p)
 	return p
 }
 
@@ -180,7 +183,7 @@ func (p *Plant) workCenter(id string) *WorkCenter {
 }
 
 // line of the work center where an SFC's current operation runs.
-func (p *Plant) lineOf(sfc *SFC) string {
+func (p *Plant) lineOf(sfc SFC) string {
 	if prod := p.product(sfc.Product); prod != nil && sfc.Step < len(prod.Operations) {
 		if wc := p.workCenter(prod.Operations[sfc.Step].WorkCenter); wc != nil {
 			return wc.Line
@@ -204,7 +207,7 @@ func (p *Plant) resourceLine(resource string) string {
 func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bool {
 	scope := who.Units(SiteStructure, now)
 	onLine := func(line string) bool { return line != "" && slices.Contains(scope, line) }
-	sfc := p.sfcs[s.GetTarget().GetId()]
+	sfc, known := platform.Get[SFC](who, s.GetTarget().GetId())
 	switch s.GetSchema().GetName() {
 	case SchemaRelease:
 		var r releasePayload
@@ -212,14 +215,14 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 		prod := p.product(r.Product)
 		return prod != nil && len(prod.Operations) > 0 && onLine(p.workCenter(prod.Operations[0].WorkCenter).Line)
 	case SchemaStart, SchemaComplete:
-		return sfc != nil && onLine(p.lineOf(sfc))
+		return known && onLine(p.lineOf(sfc))
 	case SchemaNC:
-		return roleOf(who) == Quality || sfc != nil && onLine(p.lineOf(sfc))
+		return roleOf(who) == Quality || known && onLine(p.lineOf(sfc))
 	case SchemaSign:
 		return true
 	case SchemaResend:
-		o := p.orders[s.GetTarget().GetId()]
-		return o != nil && onLine(p.orderLine(o))
+		o, known := platform.Get[Order](who, s.GetTarget().GetId())
+		return known && onLine(p.orderLine(o))
 	case SchemaReason:
 		refs, _ := p.identity.Resolve(&pb.EntityRef{Type: DowntimeType, Id: s.GetTarget().GetId()})
 		return roleOf(who) == Supervisor || len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
@@ -232,30 +235,20 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 func (p *Plant) Disable(capability string) bool { return p.ledger.Catalog.Disable(capability) }
 
 // Submit receives a decision in the kernel's order (K6 T2) with the plant's
-// attribute conditions and rules; roles are the catalog's (ADR-0008).
+// attribute conditions and rules; roles are the catalog's (ADR-0008). The SFC's
+// transitions are generated from its lifecycle (ADR-0017).
 func (p *Plant) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if who.Tenant != p.tenant {
 		return nil, denied
 	}
-	return p.ledger.Receive(who, s, now, func() bool { return p.allowed(who, s, now) }, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		apply, err := p.validate(who, s)
-		if err != nil {
-			return nil, err
-		}
-		return func(record *pb.ChangeRecord) {
-			if apply != nil {
-				apply()
-			}
-			if sfc := p.sfcs[s.GetTarget().GetId()]; sfc != nil && s.GetTarget().GetType() == SFCType {
-				sfc.Revision = record.GetRevision()
-				p.confirmIfFinished(who, sfc.Order, now)
-			}
-			if s.GetSchema().GetName() == SchemaResend {
-				p.confirm(who, p.orders[s.GetTarget().GetId()], now)
-			}
-		}, nil
+	allowed := func() bool { return p.allowed(who, s, now) }
+	if record, err, ok := p.ledger.Generated(who, s, now, allowed, p.entities...); ok {
+		return record, err
+	}
+	return p.ledger.Receive(who, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		return p.validate(who, s, now)
 	})
 }
 
@@ -283,8 +276,9 @@ type reasonPayload struct {
 	Reason string `json:"reason"`
 }
 
-// validate checks the plant's rules (K4 C10) and returns how to apply the decision.
-func (p *Plant) validate(who platform.Caller, s *pb.Submission) (func(), *kernel.Error) {
+// validate checks the rules of the plant's own actions (K4 C10) and returns
+// how to apply the decision.
+func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	switch s.GetSchema().GetName() {
 	case SchemaRelease:
@@ -292,101 +286,19 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission) (func(), *kernel
 		if json.Unmarshal(s.GetPayload(), &r) != nil || p.product(r.Product) == nil || r.Quantity < 1 || r.SFCs < 1 || r.SFCs > r.Quantity {
 			return nil, invalid
 		}
-		prod := p.product(r.Product)
-		if p.orders[id] != nil {
+		if _, known := platform.Get[Order](who, id); known {
 			return nil, conflict
 		}
-		return func() {
-			o := &Order{ID: id, Product: prod.ID, Quantity: r.Quantity, Planned: r.Planned}
+		return func(record *pb.ChangeRecord) {
+			o := Order{Record: platform.Record{ID: id}, Product: r.Product, Quantity: r.Quantity, Planned: r.Planned}
 			for n := 1; n <= r.SFCs; n++ {
-				sfc := &SFC{ID: fmt.Sprintf("%s-%03d", id, n), Order: id, Product: prod.ID, State: "queued", NCs: []NC{}, Signatures: []Signature{}}
-				p.sfcs[sfc.ID] = sfc
-				o.SFCs = append(o.SFCs, sfc.ID)
+				sfc := SFC{Record: platform.Record{ID: fmt.Sprintf("%s-%03d", id, n)}, Order: platform.Ref[Order](id), Product: r.Product, NCs: []NC{}, Signatures: []Signature{}}
+				o.SFCs = append(o.SFCs, platform.Ref[SFC](sfc.ID))
 				p.identity.Create(&pb.EntityRef{Type: SFCType, Id: sfc.ID})
+				who.Put(record, sfc)
 			}
-			p.orders[id] = o
+			who.Put(record, o)
 			p.identity.Create(&pb.EntityRef{Type: OrderType, Id: id})
-		}, nil
-	case SchemaStart, SchemaComplete, SchemaNC:
-		var st sfcPayload
-		sfc := p.sfcs[id]
-		if json.Unmarshal(s.GetPayload(), &st) != nil {
-			return nil, invalid
-		}
-		if sfc == nil {
-			return nil, notFound
-		}
-		prod := p.product(sfc.Product)
-		switch s.GetSchema().GetName() {
-		case SchemaStart:
-			wc := p.workCenter(prod.Operations[sfc.Step].WorkCenter)
-			if !slices.Contains(wc.Resources, st.Resource) {
-				return nil, invalid
-			}
-			if sfc.State != "queued" {
-				return nil, conflict
-			}
-			return func() { sfc.State, sfc.Resource = "active", st.Resource }, nil
-		case SchemaComplete:
-			if sfc.State != "active" {
-				return nil, conflict
-			}
-			return func() {
-				sfc.Resource = ""
-				if sfc.Step+1 < len(prod.Operations) {
-					sfc.Step, sfc.State = sfc.Step+1, "queued"
-				} else {
-					sfc.State = "done"
-				}
-			}, nil
-		default:
-			if st.Code == "" {
-				return nil, invalid
-			}
-			if sfc.State != "queued" && sfc.State != "active" {
-				return nil, conflict
-			}
-			return func() {
-				sfc.State, sfc.Resource = "hold", ""
-				sfc.NCs = append(sfc.NCs, NC{Step: sfc.Step, Code: st.Code, By: who.ID})
-			}, nil
-		}
-	case SchemaSign:
-		var sg signPayload
-		sfc := p.sfcs[id]
-		if json.Unmarshal(s.GetPayload(), &sg) != nil || !slices.Contains([]string{"rework", "scrap", "use-as-is"}, sg.Action) ||
-			!slices.Contains([]string{"reviewed", "approved"}, sg.Meaning) {
-			return nil, invalid
-		}
-		if sfc == nil {
-			return nil, notFound
-		}
-		if sfc.State != "hold" || slices.ContainsFunc(sfc.Signatures, func(x Signature) bool { return x.By == who.ID || x.Meaning == sg.Meaning && x.Action == sg.Action }) {
-			return nil, conflict // one signature per person, one per meaning
-		}
-		if sg.Action == "rework" && (sg.ReworkStep < 0 || sg.ReworkStep > sfc.Step) {
-			return nil, invalid
-		}
-		return func() {
-			sfc.Signatures = append(sfc.Signatures, Signature{Action: sg.Action, Meaning: sg.Meaning, By: who.ID})
-			agreed := 0
-			for _, x := range sfc.Signatures {
-				if x.Action == sg.Action {
-					agreed++
-				}
-			}
-			if agreed < 2 { // two people, reviewed and approved, on the same disposition
-				return
-			}
-			switch sg.Action {
-			case "rework":
-				sfc.Step, sfc.State = sg.ReworkStep, "queued"
-			case "scrap":
-				sfc.State = "scrapped"
-			default:
-				sfc.State = "queued"
-			}
-			sfc.Signatures = []Signature{}
 		}, nil
 	case SchemaReason:
 		var r reasonPayload
@@ -405,11 +317,11 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission) (func(), *kernel
 		var r struct {
 			Planned string `json:"planned"`
 		}
-		o := p.orders[id]
+		o, known := platform.Get[Order](who, id)
 		if json.Unmarshal(s.GetPayload(), &r) != nil {
 			return nil, invalid
 		}
-		if o == nil {
+		if !known {
 			return nil, notFound
 		}
 		if o.ERP != "refused" && o.ERP != "failed" {
@@ -418,42 +330,127 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission) (func(), *kernel
 		if r.Planned != "" && !p.claimed(r.Planned) {
 			return nil, invalid
 		}
-		return func() {
+		return func(record *pb.ChangeRecord) {
 			if r.Planned != "" {
 				o.Planned = r.Planned
 			}
 			o.Resent++
 			o.ERP, o.Confirmation, o.ERPDetail = "", "", ""
+			p.confirm(who, record, o, now)
 		}, nil
 	}
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }
 
+// Entities declares the plant's types (ADR-0016) and the SFC's lifecycle
+// (ADR-0017): its transitions are the operator's and quality's actions, with
+// the plant's rules in Do and what follows (the order's completion, its
+// confirmation to the ERP) in After. p may be nil for the catalog alone.
+func Entities(p *Plant) []platform.Entity {
+	roles := func(r ...Role) []string {
+		out := make([]string, len(r))
+		for i, x := range r {
+			out[i] = string(x)
+		}
+		return out
+	}
+	sfcOf := func(record any) *SFC { return record.(*SFC) }
+	finished := func(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
+		p.finishOrder(c, r, string(sfcOf(record).Order), now)
+	}
+	return []platform.Entity{
+		{Type: OrderType, Title: "Shop order", Model: Order{},
+			Lifecycle: &platform.Lifecycle{Field: "status", Initial: "released",
+				States: []platform.State{{Name: "released", Title: "Released", Tone: "info"}, {Name: "completed", Title: "Completed", Tone: "success"}}}},
+		{Type: SFCType, Title: "SFC", Model: SFC{}, Lifecycle: &platform.Lifecycle{Field: "state", Initial: "queued",
+			States: []platform.State{{Name: "queued", Title: "Queued", Tone: "info"}, {Name: "active", Title: "In work", Tone: "warning"},
+				{Name: "hold", Title: "On hold", Tone: "danger"}, {Name: "done", Title: "Done", Tone: "success"}, {Name: "scrapped", Title: "Scrapped", Tone: "neutral"}},
+			Transitions: []platform.Transition{
+				{Name: "start", Title: "Start operation", Capability: "execution", From: []string{"queued"}, To: []string{"active"}, Roles: roles(Operator),
+					Description: "Start the SFC's current operation on a resource of its work center.",
+					Payload:     []platform.Field{{Name: "resource", Type: "string", Required: true, Description: "Resource of the operation's work center"}},
+					Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+						sfc := sfcOf(record)
+						var st sfcPayload
+						json.Unmarshal(payload, &st)
+						prod := p.product(sfc.Product)
+						if wc := p.workCenter(prod.Operations[sfc.Step].WorkCenter); wc == nil || !slices.Contains(wc.Resources, st.Resource) {
+							return invalid
+						}
+						sfc.Resource = st.Resource
+						return nil
+					}},
+				{Name: "complete", Title: "Complete operation", Capability: "execution", From: []string{"active"}, To: []string{"queued", "done"}, Roles: roles(Operator),
+					Description: "Complete the SFC's active operation; it moves to the next operation or is done.",
+					Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+						sfc := sfcOf(record)
+						sfc.Resource = ""
+						if sfc.Step+1 < len(p.product(sfc.Product).Operations) {
+							sfc.Step, sfc.State = sfc.Step+1, "queued"
+						} else {
+							sfc.State = "done"
+						}
+						return nil
+					}, After: finished},
+				{Name: "nc", Title: "Log nonconformance", Capability: "quality", From: []string{"queued", "active"}, To: []string{"hold"}, Roles: roles(Operator, Quality),
+					Description: "Log a nonconformance at the current operation; the SFC is held until quality signs a disposition.",
+					Payload:     []platform.Field{{Name: "code", Type: "string", Required: true, Description: "NC code: POROSITY, DIMENSION, SURFACE, LEAK"}},
+					Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+						sfc := sfcOf(record)
+						var st sfcPayload
+						if json.Unmarshal(payload, &st) != nil || st.Code == "" {
+							return invalid
+						}
+						sfc.Resource = ""
+						sfc.NCs = append(sfc.NCs, NC{Step: sfc.Step, Code: st.Code, By: c.ID})
+						return nil
+					}},
+				{Name: "sign", Title: "Sign disposition", Capability: "quality", From: []string{"hold"}, To: []string{"hold", "queued", "scrapped"}, Roles: roles(Quality),
+					Description: "Sign the disposition of a held SFC (electronic signature with meaning); two people, reviewed and approved, on the same disposition release it.",
+					Payload: []platform.Field{{Name: "action", Type: "string", Required: true, Description: "rework, scrap or use-as-is"},
+						{Name: "meaning", Type: "string", Required: true, Description: "reviewed or approved"},
+						{Name: "reworkStep", Type: "integer", Description: "Operation step to rework from"}},
+					Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+						sfc := sfcOf(record)
+						var sg signPayload
+						if json.Unmarshal(payload, &sg) != nil || !slices.Contains([]string{"rework", "scrap", "use-as-is"}, sg.Action) ||
+							!slices.Contains([]string{"reviewed", "approved"}, sg.Meaning) {
+							return invalid
+						}
+						if slices.ContainsFunc(sfc.Signatures, func(x Signature) bool { return x.By == c.ID || x.Meaning == sg.Meaning && x.Action == sg.Action }) {
+							return conflict // one signature per person, one per meaning
+						}
+						if sg.Action == "rework" && (sg.ReworkStep < 0 || sg.ReworkStep > sfc.Step) {
+							return invalid
+						}
+						sfc.Signatures = append(sfc.Signatures, Signature{Action: sg.Action, Meaning: sg.Meaning, By: c.ID})
+						agreed := 0
+						for _, x := range sfc.Signatures {
+							if x.Action == sg.Action {
+								agreed++
+							}
+						}
+						if agreed < 2 { // two people, reviewed and approved, on the same disposition
+							return nil
+						}
+						switch sg.Action {
+						case "rework":
+							sfc.Step, sfc.State = sg.ReworkStep, "queued"
+						case "scrap":
+							sfc.State = "scrapped"
+						default:
+							sfc.State = "queued"
+						}
+						sfc.Signatures = []Signature{}
+						return nil
+					}, After: finished},
+			}}},
+	}
+}
+
 // Reads.
 
 func (p *Plant) Master() MasterData { return p.master }
-
-func (p *Plant) Orders() []Order {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	out := make([]Order, 0, len(p.orders))
-	for _, o := range p.orders {
-		out = append(out, *o)
-	}
-	slices.SortFunc(out, func(a, b Order) int { return compare(a.ID, b.ID) })
-	return out
-}
-
-func (p *Plant) SFCs() []SFC {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	out := make([]SFC, 0, len(p.sfcs))
-	for _, s := range p.sfcs {
-		out = append(out, *s)
-	}
-	slices.SortFunc(out, func(a, b SFC) int { return compare(a.ID, b.ID) })
-	return out
-}
 
 func compare(a, b string) int {
 	switch {

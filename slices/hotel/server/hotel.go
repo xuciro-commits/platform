@@ -47,7 +47,7 @@ func Actions() *platform.Catalog {
 		{Name: "checkIn", Type: "date", Required: true, Description: "First night (YYYY-MM-DD; hourly types YYYY-MM-DDTHH:MM)"},
 		{Name: "checkOut", Type: "date", Required: true, Description: "Departure, exclusive"}}
 	book := []string{string(FrontDesk), string(Manager), string(Channel)}
-	return platform.NewCatalog(append(platform.StandardActions(Entities(nil)[0]),
+	return platform.NewCatalog(append(platform.EntityActions(Entities(nil)[0]),
 		platform.Action{Schema: SchemaCreate, Target: ReservationType, Capability: "reservations", Title: "Create reservation",
 			Description: "Reserve a room type for a stay; refused when the type is sold out for any night.",
 			Payload:     append(stay, platform.Field{Name: "guest", Type: "string", Required: true, Description: "Guest name"}), Roles: book},
@@ -164,7 +164,7 @@ func (h *Hotel) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if c.Tenant != h.tenant {
 		return nil, denied()
 	}
-	if record, err, ok := h.ledger.Standard(c, s, now, nil, h.entities...); ok {
+	if record, err, ok := h.ledger.Generated(c, s, now, nil, h.entities...); ok {
 		return record, err
 	}
 	return h.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {

@@ -3,6 +3,7 @@ package platform
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -79,22 +80,77 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	return record, err
 }
 
-// Standard decides an entity type's generated create, edit and archive
-// actions (ADR-0016 D5); ok is false for any other schema. allowed (may be
-// nil) adds the app's conditions to the catalog's role check.
-func (l *Ledger) Standard(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...Entity) (*pb.ChangeRecord, *kernel.Error, bool) {
+// Generated decides the actions entity declarations generate: standard
+// create, edit and archive (ADR-0016 D5) and lifecycle transitions (ADR-0017
+// D1); ok is false for any other schema. allowed (may be nil) adds the app's
+// conditions to the catalog's role check.
+func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed func() bool, entities ...Entity) (*pb.ChangeRecord, *kernel.Error, bool) {
 	schema := s.GetSchema().GetName()
 	for _, e := range entities {
 		verb, found := strings.CutPrefix(schema, e.Type+".")
-		if !found || !(verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive) {
+		if !found {
 			continue
 		}
-		record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
-			return standard(c, e, verb, s)
-		})
-		return record, err, true
+		if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive {
+			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+				return standard(c, e, verb, s)
+			})
+			return record, err, true
+		}
+		if e.Lifecycle == nil {
+			continue
+		}
+		if i := slices.IndexFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Name == verb }); i >= 0 {
+			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+				return transition(c, e, e.Lifecycle.Transitions[i], s, now)
+			})
+			return record, err, true
+		}
 	}
 	return nil, nil, false
+}
+
+// transition moves a record along its lifecycle, through the transition's Do.
+func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+	if c.rt == nil {
+		return nil, notFound()
+	}
+	typ := reflect.TypeOf(e.Model)
+	existing, known := c.rt.Get(c, typ, s.GetTarget().GetId())
+	if !known {
+		return nil, notFound()
+	}
+	info, _ := Describe("", e, func(reflect.Type) string { return "?" })
+	f, _ := info.Field(e.Lifecycle.Field)
+	v := reflect.New(typ)
+	v.Elem().Set(reflect.ValueOf(existing))
+	status := v.Elem().FieldByIndex(f.Index)
+	from := status.String()
+	if v.Elem().Field(0).Interface().(Record).Archived || !slices.Contains(t.From, from) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} // not in a state the transition leaves
+	}
+	if t.Do != nil {
+		if err := t.Do(c, v.Interface(), s.GetPayload(), now); err != nil {
+			return nil, err
+		}
+	}
+	if to := status.String(); to == from && !slices.Contains(t.To, from) {
+		status.SetString(t.To[0])
+	} else if !slices.Contains(t.To, to) {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // Do chose a status the transition does not reach
+	}
+	value := v.Elem().Interface()
+	if err := c.rt.Check(c, value); err != nil {
+		return nil, err
+	}
+	return func(r *pb.ChangeRecord) {
+		c.rt.Put(c, r, value)
+		if t.After != nil {
+			after := reflect.New(typ)
+			after.Elem().Set(reflect.ValueOf(value))
+			t.After(c, r, after.Interface(), now)
+		}
+	}, nil
 }
 
 func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {

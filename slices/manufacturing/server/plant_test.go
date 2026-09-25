@@ -62,6 +62,22 @@ func (p *testPlant) DeliverStates(who platform.Caller, b StateBatch, now time.Ti
 	return fact, err
 }
 
+// Orders and SFCs are the plant's records, as the supervisor reads them (ADR-0016).
+func (p *testPlant) Orders() []Order { return records[Order](p, OrderType) }
+func (p *testPlant) SFCs() []SFC     { return records[SFC](p, SFCType) }
+
+func records[T any](p *testPlant, typ string) []T {
+	page, err := p.tenant.Records(sup.Member, typ, platform.Query{Sort: []string{"id"}, Archived: true}, t0)
+	if err != nil {
+		panic(err)
+	}
+	out := make([]T, len(page.Records))
+	for i, r := range page.Records {
+		out[i] = r.(T)
+	}
+	return out
+}
+
 func (p *testPlant) DeliverPlanned(who platform.Caller, page PlannedPage, now time.Time) *kernel.Error {
 	raw, _ := json.Marshal(page)
 	_, err := p.tenant.Input(who.Member, "planned-orders", raw, now)
@@ -111,7 +127,7 @@ func newPlant(t *testing.T) *testPlant {
 			t.Fatalf("replay: %v", err)
 		}
 		view := func(p *Plant) string {
-			raw, _ := json.Marshal([]any{p.Orders(), p.SFCs(), p.Downtime(), p.Planned()}) // heartbeats are not journaled
+			raw, _ := json.Marshal([]any{p.Downtime(), p.Planned()}) // records are compared by CheckReplay; heartbeats are not journaled
 			return string(raw)
 		}
 		if view(again) != view(plant) {
