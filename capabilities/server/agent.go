@@ -43,6 +43,7 @@ type AgentRunRecord struct {
 	Title       string    `json:"title" field:"readonly,search"`
 	Goal        string    `json:"goal" field:"readonly" type:"longtext"`
 	Ref         string    `json:"ref,omitempty" field:"readonly"`
+	Seen        string    `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
 	OnBehalf    string    `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
 	Flow        string    `json:"flow,omitempty" field:"readonly"` // the flow instance whose step started it
 	Token       int       `json:"token,omitempty" field:"readonly"`
@@ -136,12 +137,17 @@ func NewAgents(tenant string) *Agents {
 			Payload:     []platform.Field{{Name: "payload", Type: "json", Description: "The action's fields, changed; empty: as drafted"}}},
 		platform.Action{Schema: SchemaRunReject, Target: RunType, Capability: "runs", Title: "Reject draft", Roles: []string{platform.AnyMember},
 			Description: "Refuse what the agent running for you drafted; it goes on with your reason.",
-			Payload:     []platform.Field{{Name: "reason", Type: "string", Description: "Why, for the agent"}}})
-	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
+			Payload:     []platform.Field{{Name: "reason", Type: "string", Description: "Why, for the agent"}}},
+		platform.Action{Schema: SchemaEvalStart, Target: EvaluationType, Capability: "evaluations", Title: "Evaluate a model", Roles: []string{AgentAdmin},
+			Description: "Re-run an agent's past runs that people confirmed or corrected, dry, with a candidate model, and compare.",
+			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
+				{Name: "model", Type: "string", Required: true, Description: "The candidate, an enabled model <provider>/<model>"}}})
+	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
 }
 
 func agentEntities() []platform.Entity {
-	return []platform.Entity{{Type: RunType, Title: "Agent run", Model: AgentRunRecord{}, Display: "title"}}
+	return []platform.Entity{{Type: RunType, Title: "Agent run", Model: AgentRunRecord{}, Display: "title"},
+		{Type: EvaluationType, Title: "Agent evaluation", Model: Evaluation{}, Display: "model"}}
 }
 
 func (a *Agents) Manifest() platform.Manifest {
@@ -285,8 +291,8 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	var p struct {
-		Agent, Goal, Ref, Reason string
-		Payload                  json.RawMessage
+		Agent, Goal, Ref, Reason, Model string
+		Payload                         json.RawMessage
 	}
 	json.Unmarshal(s.GetPayload(), &p)
 	d := a.defs[p.Agent]
@@ -298,6 +304,8 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			return d != nil && c.Roles[d.app] != "" // an agent of an app the member works in
 		case SchemaRunCancel:
 			return c.Roles[AgentApp] == AgentAdmin || known && run.OnBehalf == c.ID
+		case SchemaEvalStart:
+			return true // the catalog's role
 		}
 		return known && run.OnBehalf == c.ID // drafts are answered by whom the run is for
 	}
@@ -310,8 +318,10 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			if d == nil || strings.TrimSpace(p.Goal) == "" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
-			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0)
+			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now)
 			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
+		case SchemaEvalStart:
+			return a.startEvaluation(c, id, struct{ Agent, Model string }{p.Agent, p.Model})
 		case SchemaRunCancel:
 			if !known || run.State == "done" || run.State == "stopped" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -388,13 +398,20 @@ func (a *Agents) signal(c platform.Caller, r *pb.ChangeRecord, id string, sig Si
 	}
 }
 
-func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int) AgentRunRecord {
+func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int, now time.Time) AgentRunRecord {
 	title := goal
 	if len(title) > 80 {
 		title = title[:77] + "..."
 	}
-	return AgentRunRecord{Record: platform.Record{ID: id}, Agent: agent, Title: title, Goal: goal, Ref: ref, OnBehalf: onBehalf, Flow: flow, Step: step, Token: token,
+	run := AgentRunRecord{Record: platform.Record{ID: id}, Agent: agent, Title: title, Goal: goal, Ref: ref, OnBehalf: onBehalf, Flow: flow, Step: step, Token: token,
 		State: "running", Steps: []RunStep{}}
+	if typ, rid, ok := strings.Cut(ref, "/"); ok {
+		if view, err := a.t.Context(a.reader(run), typ, rid, now); err == nil {
+			raw, _ := json.Marshal(view)
+			run.Seen = clip(string(raw), 6000)
+		}
+	}
+	return run
 }
 
 // Read "agents": the declared agents, their tools and budgets; "runs": the

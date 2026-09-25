@@ -22,6 +22,8 @@ type stepBody struct {
 	Usage     Usage           `json:"usage"`
 	Failure   string          `json:"failure,omitempty"` // the model did not answer
 	Stop      string          `json:"stop,omitempty"`    // the host stopped the run before calling a model
+	// Evaluation is a finished evaluation's report; Run is then its ID.
+	Evaluation *Evaluation `json:"evaluation,omitempty"`
 }
 
 const preamble = `You are an agent of a business platform. You act only through the tools given: each action is a decision recorded with your name, and what cannot be undone waits for a person. Give a one-sentence rationale with every tool call. Read before you act; ask a person when you are unsure; end with finish and the result the goal asks for.`
@@ -100,12 +102,8 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 	if run.OnBehalf != "" {
 		goal += "\nOn behalf of: " + run.OnBehalf
 	}
-	if run.Ref != "" {
-		typ, id, _ := strings.Cut(run.Ref, "/")
-		if view, err := a.t.Context(a.reader(run), typ, id, time.Now()); err == nil {
-			raw, _ := json.Marshal(view)
-			goal += "\nAbout " + run.Ref + ":\n" + clip(string(raw), 6000)
-		}
+	if run.Seen != "" {
+		goal += "\nAbout " + run.Ref + ":\n" + run.Seen
 	}
 	req := ChatRequest{Model: model, Messages: []Message{{Role: "system", Content: preamble + "\n\n" + d.Instructions}, {Role: "user", Content: goal}}}
 	for i, s := range run.Steps {
@@ -152,6 +150,9 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 	defer t.mu.Unlock()
 	delete(t.agents.busy, b.Run)
 	run, _ := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
+	if b.Evaluation != nil {
+		run.Agent = b.Evaluation.Agent
+	}
 	body, _ := json.Marshal(b)
 	t.record(t.agents, "agent", t.agents.member(run.Agent), body, now)
 	t.agents.apply(b, now, false)
@@ -162,6 +163,17 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 func (a *Agents) apply(b stepBody, now time.Time, replaying bool) *kernel.Error {
 	t := a.t
 	c := t.automation(AgentApp, replaying)
+	if ev := b.Evaluation; ev != nil {
+		s := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: ev.ID + ":report",
+			Target: &pb.EntityRef{Type: EvaluationType, Id: ev.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
+		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+			if _, known := platform.Get[Evaluation](c, ev.ID); !known {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			}
+			return func(r *pb.ChangeRecord) { c.Put(r, *ev) }, nil
+		})
+		return err
+	}
 	run, known := platform.Get[AgentRunRecord](c, b.Run)
 	if !known {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}

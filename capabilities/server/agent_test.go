@@ -274,6 +274,20 @@ func TestAgents(t *testing.T) {
 	x, _ = platform.Get[FlowInstance](tn.automation(FlowApp, false), "desk.handle:T6")
 	expect("fault", x.State+" "+x.Tokens[0].Step, "waiting manual")
 
+	// A candidate model re-runs the runs people answered, dry: R1's changed
+	// draft is not what it drafts again, R6's rejected one is. Nothing is done.
+	expect("evaluate", do("ana", AgentApp, SchemaEvalStart, EvaluationType, "E1", map[string]string{"agent": "desk.triage", "model": "lm/scripted"}), "ok")
+	expect("only administrators", do("bo", AgentApp, SchemaEvalStart, EvaluationType, "E2", map[string]string{"agent": "desk.triage", "model": "lm/scripted"}), "ERROR_CODE_POLICY_DENIED")
+	before := ticket("T4").Revision
+	tn.Evaluate(now)
+	ev, _ := platform.Get[Evaluation](tn.automation(AgentApp, false), "E1")
+	var verdicts []string
+	for _, x := range ev.Cases {
+		verdicts = append(verdicts, x.Run+" "+x.Signal+" "+x.Verdict)
+	}
+	expect("report", ev.State+" "+strings.Join(verdicts, ", ")+fmt.Sprint(" ", ev.Score, " ", ticket("T4").Revision == before), "done R6 rejected repeats, R1 changed differs 0 true")
+	expect("reference", ev.Cases[1].Reference+" / "+ev.Cases[1].Candidate, `desk.ticket.answer T1 {"reply":"Hello, it works again"};  / desk.ticket.answer T1 {"reply":"Hello"}; `)
+
 	// Usage is metered as the agent's.
 	expect("metered", fmt.Sprint(tn.ai.spent("agent:desk.triage", now) > 0), "true")
 	CheckReplay(t, tn, journal, build)

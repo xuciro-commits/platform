@@ -240,4 +240,11 @@ func RunWork(tenants ...*Tenant) {
 			}
 		}
 	}()
+	go func() { // evaluations make many model calls: apart from runs
+		for range time.Tick(5 * time.Second) {
+			for _, t := range tenants {
+				t.Evaluate(Now())
+			}
+		}
+	}()
 }

@@ -317,7 +317,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Timeout > 0 {
 			tok.Due = ss.now.Add(step.Timeout)
 		}
-		ss.runs = append(ss.runs, ss.f.t.agents.create(id, d.app+"."+ag.Agent, goal, ref, "", x.ID, tok.Step, tok.ID))
+		ss.runs = append(ss.runs, ss.f.t.agents.create(id, d.app+"."+ag.Agent, goal, ref, "", x.ID, tok.Step, tok.ID, ss.now))
 		ss.trace(x, tok.Step, "agent", ag.Agent+": "+goal, "")
 	case step.Ask != nil, step.Agent != nil:
 		a := platform.Assignment{Key: fmt.Sprintf("flow:%s:%d", x.ID, x.Seq), Ref: InstanceType + "/" + x.ID}
