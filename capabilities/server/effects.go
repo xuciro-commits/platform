@@ -126,9 +126,9 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 	if i < 0 {
 		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	state, agent := "pending", ""
+	state, agent, run := "pending", "", ""
 	if a.Manifest().Emits[i].Irreversible && c.Agent {
-		state, agent = "held", c.ID
+		state, agent, run = "held", c.ID, t.agentRun
 	}
 	name := c.App + "/" + kind
 	body, _ := json.Marshal(map[string]any{"type": name, "timestamp": now, "data": data})
@@ -140,7 +140,7 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 			continue
 		}
 		t.outbound = append(t.outbound, &effect{Effect: platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
-			State: state, Agent: agent, Due: now, Body: string(body)}})
+			State: state, Agent: agent, Run: run, Due: now, Body: string(body)}})
 		n++
 		if state == "held" {
 			held = append(held, id)
@@ -500,13 +500,28 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 		if c.Agent { // D6: a person approves what an agent caused
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
-		return func(*pb.ChangeRecord) { t.opsMu.Lock(); x.State, x.Due = "pending", now; t.opsMu.Unlock() }, nil
+		return func(r *pb.ChangeRecord) {
+			t.opsMu.Lock()
+			x.State, x.Due = "pending", now
+			t.opsMu.Unlock()
+			if x.Run != "" && t.agents != nil {
+				t.agents.signal(c, r, x.Run, Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
+			}
+		}, nil
 	}
 	if s.GetSchema().GetName() == SchemaEffectDiscard {
 		if x == nil || settled(x.State) {
 			return nil, notFound
 		}
-		return func(*pb.ChangeRecord) { t.opsMu.Lock(); x.State = "discarded"; t.opsMu.Unlock() }, nil
+		return func(r *pb.ChangeRecord) {
+			t.opsMu.Lock()
+			held := x.State == "held"
+			x.State = "discarded"
+			t.opsMu.Unlock()
+			if held && x.Run != "" && t.agents != nil { // a person refused what the agent caused (ADR-0022 D9)
+				t.agents.signal(c, r, x.Run, Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
+			}
+		}, nil
 	}
 	if x == nil || (x.State != "failed" && x.State != "rejected") {
 		return nil, notFound

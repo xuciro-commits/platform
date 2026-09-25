@@ -146,6 +146,21 @@ func TestHelpdeskTriage(t *testing.T) {
 	work(2 * time.Second)
 	w.expect(fmt.Sprint(len(mailed), " ", strings.Contains(mailed[0], `"to":"anna@acme.test"`)), "1 true")
 	w.expect(instance("T-1").State, "done")
+	runOf := func(ticket string) platformserver.AgentRunRecord {
+		page, _ := w.tenant.Records(agents, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","` + ticket + ` "]]`)}, now)
+		return page.Records[0].(platformserver.AgentRunRecord)
+	}
+	w.expect(runOf("T-1").Signals[0].Kind+" "+runOf("T-1").Signals[0].By, "approved ops") // the reply approved: an accepted outcome (ADR-0022 D9)
+
+	// A reply discarded instead: a signal, and a memory proposed to the agent.
+	open("T-4", "Wifi slow in the lobby")
+	work(8 * time.Second)
+	effects, _ = w.tenant.Read(ops, "effects")
+	i := slices.IndexFunc(effects.([]platform.Effect), func(e platform.Effect) bool { return e.State == "held" })
+	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaEffectDiscard, platformserver.EffectType, effects.([]platform.Effect)[i].ID, map[string]any{}), "ok")
+	w.expect(runOf("T-4").Signals[0].Kind, "discarded")
+	memories, _ := w.tenant.Records(agents, platformserver.MemoryType, platform.Query{}, now)
+	w.expect(fmt.Sprint(len(memories.Records), " ", memories.Records[0].(platformserver.Memory).State), "1 proposed")
 
 	// The guard: a reply promising a refund is refused; the ticket stays open.
 	open("T-2", "I want a refund")

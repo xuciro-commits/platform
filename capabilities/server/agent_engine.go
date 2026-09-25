@@ -109,7 +109,7 @@ func (a *Agents) due(now time.Time) []turn {
 				x.stop = "the model " + name + " is not enabled"
 				break
 			}
-			x.model, x.pv, x.req = model, pv, a.prompt(c, d, run, name)
+			x.model, x.pv, x.req = model, pv, a.prompt(c, d, run, name, now)
 			x.req.run = run.ID
 		}
 		a.busy[run.ID] = true
@@ -120,7 +120,7 @@ func (a *Agents) due(now time.Time) []turn {
 
 // prompt is the conversation so far: instructions, the goal with its record's
 // context, then each step as the tool call it was and what came of it.
-func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, model string) ChatRequest {
+func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, model string, now time.Time) ChatRequest {
 	goal := "Goal: " + run.Goal
 	if run.OnBehalf != "" {
 		goal += "\nOn behalf of: " + run.OnBehalf
@@ -128,7 +128,14 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 	if run.Seen != "" {
 		goal += "\nAbout " + run.Ref + ":\n" + run.Seen
 	}
-	req := ChatRequest{Model: model, Messages: []Message{{Role: "system", Content: preamble + "\n\n" + d.Instructions}, {Role: "user", Content: goal}}}
+	system := preamble + "\n\n" + d.Instructions
+	if ms := a.memories(c, run, now); len(ms) > 0 {
+		system += "\n\nWhat you remember from earlier runs:"
+		for _, m := range ms {
+			system += "\n- " + m.Fact
+		}
+	}
+	req := ChatRequest{Model: model, Messages: []Message{{Role: "system", Content: system}, {Role: "user", Content: goal}}}
 	for i, s := range run.Steps {
 		if s.Tool == "" {
 			continue // a failed model call or a text-only answer
@@ -273,10 +280,10 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 		if then != nil {
 			then(r)
 		}
+		c.Put(r, run) // before its flow goes on, which may keep a signal on it
 		if run.State == "done" {
 			a.ended(c, r, run, now)
 		}
-		c.Put(r, run)
 	}
 }
 
@@ -314,6 +321,9 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	case "search":
 		out, _ := json.Marshal(t.Search(a.reader(*run), str("query"), now))
 		return string(out), nil
+	case "remember":
+		about, _ := args["about_person"].(bool)
+		return a.remember(c, run, str("fact"), about && run.OnBehalf != "", now)
 	case "read":
 		var out any
 		var err *kernel.Error
@@ -365,7 +375,9 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 			}
 			return draft("")
 		}
+		t.agentRun = run.ID // effects it causes name the run (discarded, a signal)
 		_, _, err := agent.Invoke(protocol, schema, target, body, key, run.ID, now)
+		t.agentRun = ""
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
@@ -384,7 +396,9 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		}
 		return draft(tool.target)
 	}
+	t.agentRun = run.ID
 	record, err := app.Submit(agent, s, now)
+	t.agentRun = ""
 	if err != nil {
 		return "refused: " + err.Error(), nil
 	}

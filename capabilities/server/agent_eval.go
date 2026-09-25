@@ -180,7 +180,7 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model Model, pv Provider
 		return ""
 	}
 	want, bad, wantResult := decision(d, run.Steps, run.Result, changed)
-	good := slices.Contains([]string{"confirmed", "changed", "accepted"}, last.Kind)
+	good := slices.Contains([]string{"confirmed", "changed", "accepted", "approved"}, last.Kind)
 	if good {
 		x.Reference = strings.Join(append(want, wantResult), "; ")
 	} else {
@@ -193,7 +193,7 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model Model, pv Provider
 	dry := AgentRunRecord{Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []RunStep{}}
 	for dry.StepsUsed < d.Budget.Steps && dry.TokensUsed < d.Budget.Tokens {
 		t.mu.Lock()
-		req := a.prompt(t.automation(AgentApp, false), d, dry, model.Name())
+		req := a.prompt(t.automation(AgentApp, false), d, dry, model.Name(), now)
 		t.mu.Unlock()
 		req.run = run.ID + ":evaluation"
 		answer, failure := t.call(pv, model, who, req, now)

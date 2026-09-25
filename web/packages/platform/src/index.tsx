@@ -832,6 +832,8 @@ function Agents() {
       <DataTable data={agents} columns={columns} getRowId={(a) => a.id} height={180} empty="No app declares an agent" />
       <h2 className="mb-2 mt-4 text-sm font-semibold">Runs</h2>
       <Records type="agent.run" description="Every run: open one for its steps, the rationale of each, and what people made of it." />
+      <h2 className="mb-2 mt-4 text-sm font-semibold">Memories</h2>
+      <Records type="agent.memory" description="What agents keep across runs: facts they chose to remember, and proposals from people's corrections, which count once someone keeps them. Open one to keep or forget it." />
     </>
   );
 }

@@ -151,17 +151,17 @@ func NewAgents(tenant string) *Agents {
 			Description: "Re-run an agent's past runs that people confirmed or corrected, dry, with a candidate model, and compare.",
 			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
 				{Name: "model", Type: "string", Required: true, Description: "The candidate, an enabled model <provider>/<model>"}}})
-	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
+	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType, MemoryType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
 }
 
 func agentEntities() []platform.Entity {
 	return []platform.Entity{{Type: RunType, Title: "Agent run", Model: AgentRunRecord{}, Display: "title"},
-		{Type: EvaluationType, Title: "Agent evaluation", Model: Evaluation{}, Display: "model"}}
+		{Type: EvaluationType, Title: "Agent evaluation", Model: Evaluation{}, Display: "model"}, memoryEntity()}
 }
 
 func (a *Agents) Manifest() platform.Manifest {
 	return platform.Manifest{ID: AgentApp, Title: "Agents", Version: "1", Actions: a.ledger.Catalog, Entities: agentEntities(),
-		Reads: []string{"agents", "runs"}, Everyone: []string{"agents", "runs"},
+		Reads: []string{"agents", "runs", "memories"}, Everyone: []string{"agents", "runs", "memories"},
 		Settings: []platform.Setting{
 			{Name: SettingAgentModel, Title: "Model for agents", Type: "text", Default: "",
 				Description: "The enabled model agents call, <provider>/<model>; it must call tools. Empty: agents stop and hand their goal to a person."},
@@ -261,6 +261,9 @@ func (a *Agents) declare(app platform.App) error {
 				Properties: map[string]any{"query": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"query", "rationale"}}},
 			{kind: "knowledge", tool: Tool{Name: "knowledge", Description: "Search the tenant's documents and knowledge (house rules, manuals, FAQs) by what you need to know; answers passages with their sources, to cite.",
 				Properties: map[string]any{"query": map[string]any{"type": "string"}, "rationale": rationale()}, Required: []string{"query", "rationale"}}},
+			{kind: "remember", tool: Tool{Name: "remember", Description: "Keep a short fact for your next runs: something people told or corrected that you will need again. People see and may forget it.",
+				Properties: map[string]any{"fact": map[string]any{"type": "string"}, "about_person": map[string]any{"type": "boolean", "description": "Only for runs for the person you work for now"}, "rationale": rationale()},
+				Required:   []string{"fact", "rationale"}}},
 			{kind: "ask", tool: Tool{Name: "ask", Description: "Ask a person when you are unsure or need a decision; the run waits for the answer.",
 				Properties: map[string]any{"question": map[string]any{"type": "string"}, "answers": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "The answers to offer, if any"}, "rationale": rationale()},
 				Required:   []string{"question", "rationale"}}},
@@ -303,6 +306,9 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	if s.GetSchema().GetName() == SchemaRunStep {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
+	if record, err, ok := a.ledger.Generated(c, s, now, nil, agentEntities()...); ok { // keeping and forgetting memories
+		return record, err
+	}
 	var p struct {
 		Agent, Goal, Ref, Reason, Model string
 		Payload                         json.RawMessage
@@ -344,11 +350,12 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			if len(run.Draft) == 0 || run.State != "waiting" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
-			draft := run.Draft[0]
+			draft, proposed := run.Draft[0], (*Signal)(nil)
 			step := &run.Steps[draft.Step]
 			if s.GetSchema().GetName() == SchemaRunReject {
 				step.Outcome += "\nrejected by " + c.ID + ": " + cmpOr(p.Reason, "no reason given")
 				run.Signals = append(run.Signals, Signal{At: now, Kind: "rejected", By: c.ID, Detail: p.Reason})
+				proposed = &run.Signals[len(run.Signals)-1]
 			} else {
 				payload, kind := draft.Payload, "confirmed"
 				if len(p.Payload) > 0 && string(p.Payload) != "null" && !sameJSON(p.Payload, []byte(draft.Payload)) {
@@ -364,10 +371,18 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 					signal.Value = payload
 				}
 				run.Signals = append(run.Signals, signal)
+				if kind == "changed" {
+					proposed = &run.Signals[len(run.Signals)-1]
+				}
 				run.ActionsUsed++
 			}
 			run.Draft, run.State, run.Task = nil, "running", ""
-			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
+			return func(r *pb.ChangeRecord) {
+				a.t.automation(AgentApp, c.Replaying).Put(r, run)
+				if proposed != nil {
+					a.propose(c, r, run, *proposed, now)
+				}
+			}, nil
 		}
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
@@ -403,11 +418,12 @@ func sameJSON(x, y []byte) bool {
 }
 
 // signal records what a person made of a run's work, in another app's decision.
-func (a *Agents) signal(c platform.Caller, r *pb.ChangeRecord, id string, sig Signal) {
+func (a *Agents) signal(c platform.Caller, r *pb.ChangeRecord, id string, sig Signal, now time.Time) {
 	c = a.t.automation(AgentApp, c.Replaying)
 	if run, ok := platform.Get[AgentRunRecord](c, id); ok {
 		run.Signals = append(run.Signals, sig)
 		c.Put(r, run)
+		a.propose(c, r, run, sig, now)
 	}
 }
 
@@ -430,6 +446,11 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 // Read "agents": the declared agents, their tools and budgets; "runs": the
 // runs on the caller's behalf.
 func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
+	if name == "memories" { // what agents remember about the caller
+		about, _ := json.Marshal([]any{[]any{"for", "=", c.ID}, []any{"state", "!=", "forgotten"}})
+		out, _, _ := platform.Find[Memory](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
+		return out, nil
+	}
 	if name == "runs" {
 		mine, _ := json.Marshal([]any{[]any{"onBehalf", "=", c.ID}})
 		out, _, _ := platform.Find[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
@@ -446,7 +467,7 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	out := []view{}
 	for _, id := range slices.Sorted(maps.Keys(a.defs)) {
 		d := a.defs[id]
-		out = append(out, view{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "ask", "finish"), Budget: d.Budget})
+		out = append(out, view{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil
 }

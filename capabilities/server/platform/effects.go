@@ -30,6 +30,7 @@ type Effect struct {
 	At       time.Time `json:"at"`
 	State    string    `json:"state"`           // held, pending, retrying, delivered, rejected, failed, discarded
 	Agent    string    `json:"agent,omitempty"` // the AI agent that caused a held effect
+	Run      string    `json:"run,omitempty"`   // and its run
 	Attempts int       `json:"attempts"`
 	Last     time.Time `json:"last,omitzero"`
 	Due      time.Time `json:"due,omitzero"`

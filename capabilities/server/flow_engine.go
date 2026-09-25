@@ -82,7 +82,7 @@ func (ss *session) apply(r *pb.ChangeRecord) {
 		ss.f.t.automation(AgentApp, ss.c.Replaying).Put(r, run)
 	}
 	for _, x := range ss.signals {
-		ss.f.t.agents.signal(ss.c, r, x.run, x.Signal)
+		ss.f.t.agents.signal(ss.c, r, x.run, x.Signal, ss.now)
 	}
 }
 
@@ -442,6 +442,13 @@ func (ss *session) compensate(x *FlowInstance, why string) {
 	ss.stopPaths(x)
 	x.State = "compensating"
 	x.Tokens = []Token{{ID: ss.tokenID(x), Step: "@undo", Waits: "ready"}}
+	if ss.f.t.agents != nil { // what its agents did is undone with the rest (ADR-0022 D9)
+		domain, _ := json.Marshal([]any{[]any{"flow", "=", x.ID}, []any{"state", "=", "done"}})
+		runs, _, _ := platform.Find[AgentRunRecord](ss.f.t.automation(AgentApp, ss.c.Replaying), platform.Query{Domain: domain, Sort: []string{"id"}})
+		for _, run := range runs {
+			ss.signals = append(ss.signals, runSignal{run: run.ID, Signal: Signal{At: ss.now, Kind: "undone", By: "flow", Detail: why}})
+		}
+	}
 	ss.trace(x, "", "compensating", why, "")
 }
 

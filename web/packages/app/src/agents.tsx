@@ -16,13 +16,15 @@ export type AgentRun = {
 };
 export type Citation = { document: string; title: string; chunk: number; step: number };
 export type Passage = { document: string; title: string; chunk: number; text: string; score: number };
+export type Memory = { id: string; agent: string; fact: string; for?: string; run?: string; state: string; expires?: string };
 type Transcript = { at: string; member: string; model: string; request: unknown; answer: unknown; outcome: string };
 export type AgentInfo = { id: string; app: string; title: string; instructions: string; tools: string[]; budget: { Steps: number; Tokens: number; Actions: number } };
 type Hit = { type: string; id: string; title: string };
 
 export const runStates = defineStatuses({ running: { label: "Working", tone: "info" }, waiting: { label: "Waiting for you", tone: "warning" },
   done: { label: "Done", tone: "success" }, stopped: { label: "Stopped", tone: "danger" } });
-const signalTones = { confirmed: "success", accepted: "success", changed: "warning", corrected: "warning", bypassed: "neutral", rejected: "danger" } as const;
+const signalTones = { confirmed: "success", accepted: "success", approved: "success", changed: "warning", corrected: "warning", bypassed: "neutral",
+  rejected: "danger", discarded: "danger", undone: "danger" } as const;
 
 /** One run: read from the member's own runs, or as an administrator of the agent app. */
 function useRun(id: string): AgentRun | undefined {
@@ -182,6 +184,7 @@ export function Assistant({ about }: { about?: string }) {
         </form>
       )}
       {current && <RunView id={current} compact />}
+      <Remembered />
       {earlier.length > 0 && <div className="grid gap-1">
         <div className="text-xs text-muted">Earlier{about ? " about this record" : ""}</div>
         {earlier.slice(0, 10).map((r) => (
@@ -190,6 +193,27 @@ export function Assistant({ about }: { about?: string }) {
           </button>
         ))}
       </div>}
+    </div>
+  );
+}
+
+/** What agents remember about the member (ADR-0022 D5): proposals from their corrections to keep, and facts to forget. */
+function Remembered() {
+  const { decide } = useHost();
+  const memories = useRead<Memory[]>("/v1/memories", 5000) ?? [];
+  if (memories.length === 0) return null;
+  const act = (m: Memory, t: string) => void decide(`agent.memory.${t}`, { type: "agent.memory", id: m.id }, {});
+  return (
+    <div className="grid gap-1">
+      <div className="text-xs text-muted">What agents remember about you</div>
+      {memories.map((m) => (
+        <div key={m.id} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
+          <Tag label={m.state === "proposed" ? "proposed" : "remembered"} tone={m.state === "proposed" ? "warning" : "success"} />
+          <span className="flex-1">{m.fact} <span className="text-xs text-muted">{m.agent}{m.expires ? ` · until ${m.expires.slice(0, 10)}` : " · kept"}</span></span>
+          {(m.state === "proposed" || m.expires) && <Button size="sm" onClick={() => act(m, "keep")}>Keep</Button>}
+          <Button size="sm" variant="ghost" onClick={() => act(m, "forget")}>Forget</Button>
+        </div>
+      ))}
     </div>
   );
 }

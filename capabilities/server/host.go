@@ -42,6 +42,7 @@ type Tenant struct {
 	vectorMemory map[string][]float32
 	transcripts  []Transcript
 	knowledge    *Knowledge
+	agentRun     string // the run whose agent is submitting, under mu: its effects name it
 	mu           sync.Mutex
 	apps         []platform.App
 	owner        map[string]platform.App // "action:", "read:" and "input:" names → app

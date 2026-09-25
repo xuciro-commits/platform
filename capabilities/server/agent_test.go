@@ -60,7 +60,10 @@ var handle = platform.Flow{Name: "handle", Title: "Handle ticket", Version: 1,
 				return "Answer ticket " + r.Key + ": " + t.Subject
 			},
 			Ref: func(_ platform.Caller, r *platform.Run) string { return "desk.ticket/" + r.Key }},
-			Choose: func(_ platform.Caller, r *platform.Run) (string, string) {
+			Choose: func(c platform.Caller, r *platform.Run) (string, string) {
+				if t, _ := platform.Get[Ticket](c, r.Key); strings.Contains(t.Subject, "undo") {
+					return platform.Compensate, "the answer is not wanted"
+				}
 				return "", "the agent answered: " + r.Answer
 			}},
 		{Name: "manual", Ask: &platform.Ask{Title: func(_ platform.Caller, r *platform.Run) string { return "Answer " + r.Key }, To: clerksOf}},
@@ -126,6 +129,8 @@ func scriptedModel(t *testing.T) *httptest.Server {
 		case strings.Contains(strings.SplitN(goal, "\n", 2)[0], "fail"):
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprint(w, `{"error":{"message":"the model is down"}}`)
+		case is("remember") && n == 0:
+			call("remember", map[string]any{"fact": "ana signs replies with her first name", "about_person": true})
 		case is("loop"):
 			call("search", map[string]any{"query": "T"})
 		case is("ask") && n == 0:
@@ -274,6 +279,24 @@ func TestAgents(t *testing.T) {
 	x, _ = platform.Get[FlowInstance](tn.automation(FlowApp, false), "desk.handle:T6")
 	expect("fault", x.State+" "+x.Tokens[0].Step, "waiting manual")
 
+	// Memory (ADR-0022 D5): ana's change proposed a memory, which she keeps;
+	// bo may not forget it. The agent remembers a fact about ana itself, and
+	// both go into the prompt of her next run, not into bo's.
+	memory := func(id string) Memory { m, _ := platform.Get[Memory](tn.automation(AgentApp, false), id); return m }
+	expect("proposed", memory("R1:p1").State+" "+memory("R1:p1").For+" "+memory("R1:p1").Fact, `proposed ana ana changed a draft for "Answer ticket T1: wifi" to {"reply":"Hello, it works again"}.`)
+	expect("bo forgets", do("bo", AgentApp, MemoryType+".forget", MemoryType, "R1:p1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
+	expect("ana keeps", do("ana", AgentApp, MemoryType+".keep", MemoryType, "R1:p1", map[string]any{}), "ok")
+	start("ana", "R7", "remember this", "")
+	think(3)
+	expect("remembered", memory("R7:m1").State+" "+memory("R7:m1").For+" "+fmt.Sprint(memory("R7:m1").Expires.Sub(now) > 80*24*time.Hour), "active ana true")
+	prompt := func(who string) string {
+		return tn.agents.prompt(tn.automation(AgentApp, false), tn.agents.defs["desk.triage"], AgentRunRecord{Agent: "desk.triage", Goal: "reply to ana", OnBehalf: who}, "m", now).Messages[0].Content
+	}
+	expect("ana's prompt", fmt.Sprint(strings.Contains(prompt("ana"), "- ana signs replies"), strings.Contains(prompt("ana"), "it works again")), "true true")
+	expect("bo's prompt", fmt.Sprint(strings.Contains(prompt("bo"), "What you remember")), "false")
+	mine, _ := tn.Read(member("ana"), "memories")
+	expect("ana's memories", fmt.Sprint(len(mine.([]Memory))), "3") // R6's rejection proposed one too
+
 	// A candidate model re-runs the runs people answered, dry: R1's changed
 	// draft is not what it drafts again, R6's rejected one is. Nothing is done.
 	expect("evaluate", do("ana", AgentApp, SchemaEvalStart, EvaluationType, "E1", map[string]string{"agent": "desk.triage", "model": "lm/scripted"}), "ok")
@@ -287,6 +310,12 @@ func TestAgents(t *testing.T) {
 	}
 	expect("report", ev.State+" "+strings.Join(verdicts, ", ")+fmt.Sprint(" ", ev.Score, " ", ticket("T4").Revision == before), "done R6 rejected repeats, R1 changed differs 0 true")
 	expect("reference", ev.Cases[1].Reference+" / "+ev.Cases[1].Candidate, `desk.ticket.answer T1 {"reply":"Hello, it works again"};  / desk.ticket.answer T1 {"reply":"Hello"}; `)
+
+	// A flow that compensates undoes what its agent did: a signal on the run.
+	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T8", map[string]string{"subject": "auto undo"})
+	think(6)
+	runs, _, _ := platform.Find[AgentRunRecord](tn.automation(AgentApp, false), platform.Query{Domain: json.RawMessage(`[["flow","=","desk.handle:T8"]]`)})
+	expect("undone", runs[0].Signals[0].Kind+" "+runs[0].Signals[0].Detail, "undone the flow asked to undo")
 
 	// Usage is metered as the agent's.
 	expect("metered", fmt.Sprint(tn.ai.spent("agent:desk.triage", now) > 0), "true")
