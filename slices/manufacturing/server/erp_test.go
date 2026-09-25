@@ -125,7 +125,11 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	expect(t, submit(p, op1, SchemaResend, OrderType, "SO-2", resend{}), "ERROR_CODE_POLICY_DENIED")
 	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-1", resend{}), "ERROR_CODE_CONFLICT") // confirmed already
 	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-2", resend{Planned: "PO-404"}), "ERROR_CODE_INVALID_ARGUMENT")
-	expect(t, fmt.Sprint(p.DeliverPlanned(erp, PlannedPage{CursorFrom: "page-1", CursorTo: "page-2", Orders: []PlannedOrder{{ERPID: "PO-9002", Product: "P-100", Quantity: 1}}}, t0)), "<nil>")
+	expect(t, fmt.Sprint(p.DeliverPlanned(erp, PlannedPage{CursorFrom: "page-1", CursorTo: "page-2", Orders: []PlannedOrder{{ERPID: "PO-9002", Product: "P-100", Quantity: 1}, {ERPID: "PO-9005", Product: "P-200", Quantity: 1}}}, t0)), "<nil>")
+	// The planned order must fit: the same product, enough quantity, no other order's.
+	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-2", resend{Planned: "PO-9005"}), "ERROR_CODE_INVALID_ARGUMENT") // P-200
+	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-2", resend{Planned: "PO-9001"}), "ERROR_CODE_INVALID_ARGUMENT") // SO-1's
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-9", releasePayload{Product: "P-100", Quantity: 2, SFCs: 1, Planned: "PO-9002"}), "ERROR_CODE_INVALID_ARGUMENT") // for 1
 	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-2", resend{Planned: "PO-9002"}), "ok")
 	expect(t, order("SO-2").ERP, "sent")
 	work() // the resend closes the task; the flow waits for the answer again

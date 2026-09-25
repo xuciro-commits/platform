@@ -95,8 +95,11 @@ func (p *Plant) confirmation() platform.Flow {
 					if i, j := strings.Index(r.Answer, "{"), strings.LastIndex(r.Answer, "}"); i >= 0 && j > i {
 						json.Unmarshal([]byte(r.Answer[i:j+1]), &proposal)
 					}
-					if proposal.Planned == "" || !p.claimed(proposal.Planned) {
-						return "correct", "the agent found no planned order the ERP sent"
+					if proposal.Planned == "" {
+						return "correct", "the agent found no planned order"
+					}
+					if why := p.fits(c, order(c, r), proposal.Planned); why != "" {
+						return "correct", "the agent's proposal does not fit: " + why
 					}
 					r.Set(map[string]string{"planned": proposal.Planned})
 					return "approve", "the agent proposes " + proposal.Planned
@@ -263,12 +266,30 @@ func (p *Plant) orderLine(o Order) string {
 	return ""
 }
 
-// claimed reports whether the ERP sent planned order id (its claim is on record).
-func (p *Plant) claimed(id string) bool {
+// fits says why an order cannot fulfil planned order id, or "" when it can: the
+// ERP sent it (its claim is on record, the latest one counts), for the same
+// product and at least the quantity, and no other order fulfils it.
+func (p *Plant) fits(c platform.Caller, o Order, id string) string {
+	var planned *PlannedOrder
 	for _, r := range p.facts.Records(p.tenant) {
 		if f := r.GetFact(); f.GetSchema().GetName() == schemaPlanned && f.GetSubject().GetId() == id {
-			return true
+			planned = &PlannedOrder{}
+			json.Unmarshal(f.GetPayload(), planned)
 		}
 	}
-	return false
+	switch {
+	case planned == nil:
+		return "the ERP sent no planned order " + id
+	case planned.Product != o.Product:
+		return fmt.Sprintf("%s is for %s, not %s", id, planned.Product, o.Product)
+	case planned.Quantity < o.Quantity:
+		return fmt.Sprintf("%s is for %d, fewer than %d", id, planned.Quantity, o.Quantity)
+	}
+	others, _, _ := platform.Find[Order](c, platform.Query{Domain: json.RawMessage(`[["planned","=",` + strconv.Quote(id) + `]]`)})
+	for _, other := range others {
+		if other.ID != o.ID {
+			return other.ID + " already fulfils " + id
+		}
+	}
+	return ""
 }

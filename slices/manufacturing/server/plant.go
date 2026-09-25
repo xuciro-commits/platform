@@ -290,8 +290,11 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		if _, known := platform.Get[Order](who, id); known {
 			return nil, conflict
 		}
+		o := Order{Record: platform.Record{ID: id}, Product: r.Product, Quantity: r.Quantity, Planned: r.Planned}
+		if r.Planned != "" && !who.Replaying && p.fits(who, o, r.Planned) != "" {
+			return nil, invalid
+		}
 		return func(record *pb.ChangeRecord) {
-			o := Order{Record: platform.Record{ID: id}, Product: r.Product, Quantity: r.Quantity, Planned: r.Planned}
 			for n := 1; n <= r.SFCs; n++ {
 				sfc := SFC{Record: platform.Record{ID: fmt.Sprintf("%s-%03d", id, n)}, Order: platform.Ref[Order](id), Product: r.Product, NCs: []NC{}, Signatures: []Signature{}}
 				o.SFCs = append(o.SFCs, platform.Ref[SFC](sfc.ID))
@@ -337,7 +340,8 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		if o.ERP != "refused" && o.ERP != "failed" {
 			return nil, conflict // only a confirmation the ERP refused, or that never arrived, is corrected
 		}
-		if r.Planned != "" && !p.claimed(r.Planned) {
+		// Rules added later judge new decisions only; the record stands on replay.
+		if r.Planned != "" && !who.Replaying && p.fits(who, o, r.Planned) != "" {
 			return nil, invalid
 		}
 		return func(record *pb.ChangeRecord) {

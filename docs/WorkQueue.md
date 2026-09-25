@@ -11,6 +11,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | ID | Domain | Kind | Observation | Resolution path |
 |---|---|---|---|---|
+| F-23 | Manufacturing | missing (K6 errors) | A refused decision carries only its code: a supervisor who resends an order against a planned order for another product sees "invalid argument", not "PO-9001 is for P-100, not P-200" (the plant knows why, `fits`) | A kernel rule for a refusal's reason (spec and vectors first), shown by the generated form; or the assistant panel of batch 2 (#111) offers only fitting planned orders |
 | F-22 | Composition | limit (K4 C3) | Causation cannot name a change in another package's log; a protocol call (the CRM reserving a stay) derives the provider's idempotency key from the consumer's and puts the consumer's key in the correlation ID | Keep derived keys unless audit needs cross-log causation; then a contract rule with vectors |
 | F-3 | Music | missing (K1) | Music routes never address a specific entity (the platform shell's routes now do, and references cross Go, Rust and TypeScript) | Music adopts entity routes (MSRU) |
 | F-4 | Music | mapping (K8) | Source capabilities are a music-specific bitmask (`SourceCapabilities`), and Subsonic keeps its own `LibraryCapabilities` projected onto it | Now that K8 exists: describe Subsonic and watched folders as K8 poll connectors (MSRU) |
