@@ -339,6 +339,9 @@ func (f *Flows) handle(c platform.Caller, e platform.Event, names []string, now 
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					in.Answer = answer
 					ss.trace(in, tok.Step, "answered", answer, task.Assignee)
+					if step != nil && step.Ask != nil && len(step.Ask.Answers) > 0 {
+						ss.review(in, step, map[bool]string{true: "accepted", false: "corrected"}[answer == step.Ask.Answers[0]], task.Assignee, answer)
+					}
 					ss.next(in, tok.ID, "")
 				}); err != nil {
 					return err
@@ -347,6 +350,7 @@ func (f *Flows) handle(c platform.Caller, e platform.Event, names []string, now 
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					ss.close = append(ss.close, tok.Task)
 					ss.event, in.Answer = &e, "event"
+					ss.review(in, step, "bypassed", s.GetPrincipalId(), s.GetSchema().GetName()+" "+target(s))
 					ss.trace(in, tok.Step, "event", s.GetSchema().GetName()+" "+target(s)+" closed the task", s.GetPrincipalId())
 					ss.next(in, tok.ID, "")
 				}); err != nil {

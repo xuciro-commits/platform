@@ -301,13 +301,25 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	}
 	key := fmt.Sprintf("agent:%s:%d", run.ID, len(run.Steps)+1)
 	agent := platform.NewCaller(runtime{t}, a.member(run.Agent), d.app, c.Replaying, true)
+	person := a.reader(*run)
+	// For a person, it drafts and the person confirms (D6); a flow's agent acts itself.
+	draft := func(typ string) (string, func(*pb.ChangeRecord)) {
+		run.Draft = []Draft{{Kind: tool.kind, Action: tool.schema, Target: target, Type: typ, Payload: string(body), Rationale: str("rationale"), Step: len(run.Steps)}}
+		run.State = "waiting"
+		title, _, _ := strings.Cut(tool.tool.Description, ":")
+		return "drafted for " + person.ID + " to confirm: " + tool.schema + " " + target + " " + string(body), func(*pb.ChangeRecord) {
+			c.Notify(platform.Notification{Title: "Confirm the agent's draft: " + title + " " + target, Body: str("rationale"), Ref: RunType + "/" + run.ID,
+				Key: key + ":draft"}, now, platform.Recipient{Member: person.ID})
+		}
+	}
 	if tool.kind == "protocol" {
 		protocol, schema, _ := strings.Cut(tool.schema, "#")
-		if m := a.reader(*run); m != nil {
+		if person != nil {
 			owner, provided, ok := t.provider(tool.schema)
-			if !ok || !owner.Manifest().Actions.Permits(m.Roles[owner.Manifest().ID], provided) {
-				return "refused: " + m.ID + " may not " + schema + " at the provider", nil
+			if !ok || !owner.Manifest().Actions.Permits(person.Roles[owner.Manifest().ID], provided) {
+				return "refused: " + person.ID + " may not " + schema + " at the provider", nil
 			}
+			return draft("")
 		}
 		_, _, err := agent.Invoke(protocol, schema, target, body, key, run.ID, now)
 		if err != nil {
@@ -319,13 +331,14 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	app := t.app(d.app)
 	s := &pb.Submission{TenantId: t.ID, PrincipalId: agent.ID, Authority: t.authorityOf(tool.target), IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: tool.target, Id: target}, Schema: &pb.SchemaRef{Name: tool.schema, Version: 1}, Payload: body, CorrelationId: run.ID}
-	if m := a.reader(*run); m != nil { // D2: never more than the person it runs for
+	if person != nil { // D2: never more than the person it runs for
 		t.probing = true
-		_, err := app.Submit(t.caller(*m, app, c.Replaying), s, now)
+		_, err := app.Submit(t.caller(*person, app, c.Replaying), s, now)
 		t.probing = false
 		if err != nil {
-			return "refused: " + m.ID + " may not do this (" + err.Error() + ")", nil
+			return "refused: " + person.ID + " may not do this (" + err.Error() + ")", nil
 		}
+		return draft(tool.target)
 	}
 	record, err := app.Submit(agent, s, now)
 	if err != nil {
@@ -348,7 +361,7 @@ func (a *Agents) recipients(c platform.Caller, d *agentDef, run AgentRunRecord) 
 // stop ends a run that cannot go on: a flow's run goes back to its flow; any
 // other goes to a person as a task (ADR-0021 D6).
 func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord, why string, now time.Time) {
-	run.State, run.Stopped = "stopped", why
+	run.State, run.Stopped, run.Draft = "stopped", why, nil
 	if run.Task != "" {
 		a.t.closeTask(c, r, run.Task)
 		run.Task = ""

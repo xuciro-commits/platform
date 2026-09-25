@@ -99,6 +99,10 @@ type Ask struct {
 	Answers []string
 	On      string
 	Match   func(c Caller, r *Run, e Event) bool
+	// Reviews names the agent step whose proposal this asks a person to
+	// accept (ADR-0021 D7): the first answer accepts it, another corrects it,
+	// and an event On bypasses it. What people make of it is kept on the run.
+	Reviews string
 }
 
 // Call runs another of the app's flows and waits for it to end; its end state

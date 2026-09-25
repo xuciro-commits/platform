@@ -28,6 +28,8 @@ const (
 	SchemaRunStart    = "agent.run.start"
 	SchemaRunStep     = "agent.run.step"
 	SchemaRunCancel   = "agent.run.cancel"
+	SchemaRunConfirm  = "agent.run.confirm"
+	SchemaRunReject   = "agent.run.reject"
 	SettingAgentModel = "model"
 	SettingAgentDaily = "daily-tokens"
 	outcomeLimit      = 4000
@@ -44,6 +46,7 @@ type AgentRunRecord struct {
 	OnBehalf    string    `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
 	Flow        string    `json:"flow,omitempty" field:"readonly"` // the flow instance whose step started it
 	Token       int       `json:"token,omitempty" field:"readonly"`
+	Step        string    `json:"step,omitempty" field:"readonly"` // that step's name
 	State       string    `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
 	Model       string    `json:"model,omitempty" field:"readonly"`
 	Steps       []RunStep `json:"steps" field:"readonly"`
@@ -54,6 +57,31 @@ type AgentRunRecord struct {
 	Result      string    `json:"result,omitempty" field:"readonly" type:"longtext"`
 	Task        string    `json:"task,omitempty" field:"readonly"`
 	Stopped     string    `json:"stopped,omitempty" field:"readonly" title:"Why it stopped"`
+	Draft       []Draft   `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
+	Signals     []Signal  `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
+}
+
+// Draft is an action an agent running for a person proposes; the person
+// confirms it, changed or not, or rejects it (ADR-0021 D6).
+type Draft struct {
+	Kind      string `json:"kind"` // action or protocol
+	Action    string `json:"action"`
+	Target    string `json:"target"`
+	Type      string `json:"type,omitempty"`
+	Payload   string `json:"payload"`
+	Rationale string `json:"rationale,omitempty"`
+	Step      int    `json:"step"` // the run's step that drafted it
+}
+
+// Signal is what a person made of an agent's work (ADR-0021 D7): a draft
+// confirmed, changed or rejected; a proposal accepted, corrected, or bypassed
+// by someone acting meanwhile. Signals are the evaluation's reference.
+type Signal struct {
+	At     time.Time `json:"at"`
+	Kind   string    `json:"kind"` // confirmed, changed, rejected, accepted, corrected, bypassed
+	By     string    `json:"by"`
+	Detail string    `json:"detail,omitempty"`
+	Value  string    `json:"value,omitempty"` // what the person chose instead: a changed payload
 }
 
 // RunStep is one step the model chose, and what came of it: the decision trace.
@@ -101,8 +129,14 @@ func NewAgents(tenant string) *Agents {
 				{Name: "goal", Type: "string", Required: true, Description: "What it should achieve"}, {Name: "ref", Type: "string", Description: "The record it is about, <type>/<id>"}}},
 		platform.Action{Schema: SchemaRunStep, Target: RunType, Capability: "runs", Title: "Take step", Payload: []platform.Field{}, Roles: []string{AgentAdmin},
 			Description: "Made by the host: a step the model chose."},
-		platform.Action{Schema: SchemaRunCancel, Target: RunType, Capability: "runs", Title: "Stop run", Payload: []platform.Field{}, Roles: []string{AgentAdmin},
-			Description: "Stop a run; what it did stays done."})
+		platform.Action{Schema: SchemaRunCancel, Target: RunType, Capability: "runs", Title: "Stop run", Payload: []platform.Field{}, Roles: []string{AgentAdmin, platform.AnyMember},
+			Description: "Stop a run; what it did stays done. Anyone may stop a run on their behalf."},
+		platform.Action{Schema: SchemaRunConfirm, Target: RunType, Capability: "runs", Title: "Confirm draft", Roles: []string{platform.AnyMember},
+			Description: "Do what the agent running for you drafted, as yourself; change its fields first if you want.",
+			Payload:     []platform.Field{{Name: "payload", Type: "json", Description: "The action's fields, changed; empty: as drafted"}}},
+		platform.Action{Schema: SchemaRunReject, Target: RunType, Capability: "runs", Title: "Reject draft", Roles: []string{platform.AnyMember},
+			Description: "Refuse what the agent running for you drafted; it goes on with your reason.",
+			Payload:     []platform.Field{{Name: "reason", Type: "string", Description: "Why, for the agent"}}})
 	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
 }
 
@@ -243,48 +277,123 @@ func (a *Agents) runs(c platform.Caller, state ...string) []AgentRunRecord {
 	return out
 }
 
-// Submit takes members' requests and administrators' stops; steps are the host's.
+// Submit takes members' requests, their answers to drafts and stops; steps are the host's.
 func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if s.GetSchema().GetName() == SchemaRunStep {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	var p struct{ Agent, Goal, Ref string }
+	var p struct {
+		Agent, Goal, Ref, Reason string
+		Payload                  json.RawMessage
+	}
 	json.Unmarshal(s.GetPayload(), &p)
 	d := a.defs[p.Agent]
+	id := s.GetTarget().GetId()
+	run, known := platform.Get[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), id)
 	allowed := func() bool {
-		return s.GetSchema().GetName() != SchemaRunStart || d != nil && c.Roles[d.app] != "" // an agent of an app the member works in
-	}
-	return a.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		id := s.GetTarget().GetId()
 		switch s.GetSchema().GetName() {
 		case SchemaRunStart:
-			if _, known := platform.Get[AgentRunRecord](c, id); known {
+			return d != nil && c.Roles[d.app] != "" // an agent of an app the member works in
+		case SchemaRunCancel:
+			return c.Roles[AgentApp] == AgentAdmin || known && run.OnBehalf == c.ID
+		}
+		return known && run.OnBehalf == c.ID // drafts are answered by whom the run is for
+	}
+	return a.ledger.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		switch s.GetSchema().GetName() {
+		case SchemaRunStart:
+			if known {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			if d == nil || strings.TrimSpace(p.Goal) == "" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
-			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", 0)
+			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0)
 			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
 		case SchemaRunCancel:
-			run, known := platform.Get[AgentRunRecord](c, id)
 			if !known || run.State == "done" || run.State == "stopped" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
 			return func(r *pb.ChangeRecord) { a.stop(c, r, &run, "stopped by "+c.ID, now) }, nil
+		case SchemaRunConfirm, SchemaRunReject:
+			if len(run.Draft) == 0 || run.State != "waiting" {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			}
+			draft := run.Draft[0]
+			step := &run.Steps[draft.Step]
+			if s.GetSchema().GetName() == SchemaRunReject {
+				step.Outcome += "\nrejected by " + c.ID + ": " + cmpOr(p.Reason, "no reason given")
+				run.Signals = append(run.Signals, Signal{At: now, Kind: "rejected", By: c.ID, Detail: p.Reason})
+			} else {
+				payload, kind := draft.Payload, "confirmed"
+				if len(p.Payload) > 0 && string(p.Payload) != "null" && !sameJSON(p.Payload, []byte(draft.Payload)) {
+					payload, kind = string(p.Payload), "changed"
+				}
+				done, err := a.confirm(c, run, draft, payload, now)
+				if err != nil {
+					return nil, err // the draft stays; the person may change it or reject it
+				}
+				step.Outcome += "\n" + kind + " by " + c.ID + ": " + done
+				signal := Signal{At: now, Kind: kind, By: c.ID}
+				if kind == "changed" {
+					signal.Value = payload
+				}
+				run.Signals = append(run.Signals, signal)
+				run.ActionsUsed++
+			}
+			run.Draft, run.State, run.Task = nil, "running", ""
+			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
 		}
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
 }
 
-func (a *Agents) create(id, agent, goal, ref, onBehalf, flow string, token int) AgentRunRecord {
+// confirm does a drafted action as the person who confirmed it, correlated to the run.
+func (a *Agents) confirm(c platform.Caller, run AgentRunRecord, d Draft, payload string, now time.Time) (string, *kernel.Error) {
+	t := a.t
+	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
+	if d.Kind == "protocol" {
+		protocol, schema, _ := strings.Cut(d.Action, "#")
+		_, _, err := platform.NewCaller(runtime{t}, c.Member, a.defs[run.Agent].app, c.Replaying, false).Invoke(protocol, schema, d.Target, []byte(payload), key, run.ID, now)
+		if err != nil {
+			return "", err
+		}
+		return "done: " + schema + " " + d.Target, nil
+	}
+	app := t.app(t.authorityOf(d.Type))
+	if app == nil {
+		return "", &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	record, err := app.Submit(t.caller(c.Member, app, c.Replaying), &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: app.Manifest().ID, IdempotencyKey: key,
+		Target: &pb.EntityRef{Type: d.Type, Id: d.Target}, Schema: &pb.SchemaRef{Name: d.Action, Version: 1}, Payload: []byte(payload), CorrelationId: run.ID}, now)
+	if err != nil {
+		return "", err
+	}
+	return "done: " + d.Action + " " + d.Target + " (" + record.GetChangeId() + ")", nil
+}
+
+func sameJSON(x, y []byte) bool {
+	var a, b any
+	return json.Unmarshal(x, &a) == nil && json.Unmarshal(y, &b) == nil && fmt.Sprint(a) == fmt.Sprint(b)
+}
+
+// signal records what a person made of a run's work, in another app's decision.
+func (a *Agents) signal(c platform.Caller, r *pb.ChangeRecord, id string, sig Signal) {
+	c = a.t.automation(AgentApp, c.Replaying)
+	if run, ok := platform.Get[AgentRunRecord](c, id); ok {
+		run.Signals = append(run.Signals, sig)
+		c.Put(r, run)
+	}
+}
+
+func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token int) AgentRunRecord {
 	title := goal
 	if len(title) > 80 {
 		title = title[:77] + "..."
 	}
-	return AgentRunRecord{Record: platform.Record{ID: id}, Agent: agent, Title: title, Goal: goal, Ref: ref, OnBehalf: onBehalf, Flow: flow, Token: token,
+	return AgentRunRecord{Record: platform.Record{ID: id}, Agent: agent, Title: title, Goal: goal, Ref: ref, OnBehalf: onBehalf, Flow: flow, Step: step, Token: token,
 		State: "running", Steps: []RunStep{}}
 }
 

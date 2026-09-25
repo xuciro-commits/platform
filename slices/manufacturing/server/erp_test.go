@@ -272,4 +272,8 @@ func TestERPCorrectionByAgent(t *testing.T) {
 		}
 	}
 	expect(t, fmt.Sprint(o.ERP, " ", o.Confirmation, " ", o.Planned), "confirmed CONF-PO-9002 PO-9002")
+	// The supervisor's answer is kept on the run: the agent's evaluation reference (ADR-0021 D7).
+	runs, _ = p.tenant.Records(platform.Member{ID: "x", Tenant: tenant, Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}, platformserver.RunType, platform.Query{}, at)
+	sig := runs.Records[0].(platformserver.AgentRunRecord).Signals
+	expect(t, fmt.Sprint(len(sig), " ", sig[0].Kind, " ", sig[0].By), "1 accepted sup-1")
 }

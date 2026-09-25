@@ -104,7 +104,7 @@ func (p *Plant) confirmation() platform.Flow {
 					r.Set(map[string]string{"planned": proposal.Planned})
 					return "approve", "the agent proposes " + proposal.Planned
 				}},
-			{Name: "approve", Title: "A supervisor approves the correction", Ask: &platform.Ask{To: supervisors, Answers: []string{"resend", "correct myself"},
+			{Name: "approve", Title: "A supervisor approves the correction", Ask: &platform.Ask{To: supervisors, Answers: []string{"resend", "correct myself"}, Reviews: "propose",
 				Title: func(c platform.Caller, r *platform.Run) string {
 					return fmt.Sprintf("Resend %s to the ERP against %s?", r.Key, platform.DataOf[map[string]string](r)["planned"])
 				},

@@ -22,9 +22,27 @@ type session struct {
 	order   []string
 	assigns []flowTask
 	runs    []AgentRunRecord // agent runs its steps start (ADR-0021)
+	signals []runSignal      // what people made of their proposals
 	close   []string
 	event   *platform.Event
 	moves   int
+}
+
+type runSignal struct {
+	run string
+	Signal
+}
+
+// review keeps what a person made of the proposal of the agent step an Ask reviews.
+func (ss *session) review(x *FlowInstance, step *platform.Step, kind, by, detail string) {
+	if step == nil || step.Ask == nil || step.Ask.Reviews == "" || ss.f.t.agents == nil {
+		return
+	}
+	domain, _ := json.Marshal([]any{[]any{"flow", "=", x.ID}, []any{"step", "=", step.Ask.Reviews}, []any{"state", "=", "done"}})
+	runs, _, _ := platform.Find[AgentRunRecord](ss.f.t.automation(AgentApp, ss.c.Replaying), platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 1})
+	if len(runs) > 0 {
+		ss.signals = append(ss.signals, runSignal{run: runs[0].ID, Signal: Signal{At: ss.now, Kind: kind, By: by, Detail: detail}})
+	}
 }
 
 type flowTask struct {
@@ -62,6 +80,9 @@ func (ss *session) apply(r *pb.ChangeRecord) {
 	}
 	for _, run := range ss.runs {
 		ss.f.t.automation(AgentApp, ss.c.Replaying).Put(r, run)
+	}
+	for _, x := range ss.signals {
+		ss.f.t.agents.signal(ss.c, r, x.run, x.Signal)
 	}
 }
 
@@ -296,7 +317,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Timeout > 0 {
 			tok.Due = ss.now.Add(step.Timeout)
 		}
-		ss.runs = append(ss.runs, ss.f.t.agents.create(id, d.app+"."+ag.Agent, goal, ref, "", x.ID, tok.ID))
+		ss.runs = append(ss.runs, ss.f.t.agents.create(id, d.app+"."+ag.Agent, goal, ref, "", x.ID, tok.Step, tok.ID))
 		ss.trace(x, tok.Step, "agent", ag.Agent+": "+goal, "")
 	case step.Ask != nil, step.Agent != nil:
 		a := platform.Assignment{Key: fmt.Sprintf("flow:%s:%d", x.ID, x.Seq), Ref: InstanceType + "/" + x.ID}

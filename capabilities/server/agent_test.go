@@ -216,12 +216,24 @@ func TestAgents(t *testing.T) {
 	do("ana", AIApp, SchemaModelEnable, ModelType, "lm/scripted", map[string]string{"access": "users"})
 	do("ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "lm/scripted"})
 
-	// For ana, a clerk: it reads the ticket's context, answers it as its own principal, finishes.
+	// For ana, a clerk: it reads the ticket's context and drafts the answer; ana
+	// confirms it, and it is done as ana, correlated to the run (D6). The agent finishes.
 	expect("start", start("ana", "R1", "Answer ticket T1: wifi", "desk.ticket/T1"), "ok")
 	think(4)
-	expect("R1", run("R1").State+" / "+steps("R1"), "done / context {\"type\":\"desk.ticket\",\"record\":{\"id\":\"T1\",\"revision\":1,\"created\":{\"by\":\"ana\",\"at\":\"2026-10-01T09:00:00Z\",\"change\":\"chg-1\"},\"changed\":{\"by\":\"ana\",\"at\":\"2026-10-01T09:00:00Z\",\"change\":\"chg-1\"},\"subject\":\"Wifi, desk_ticket_answer done:, finish finished")
-	expect("answered by the agent", ticket("T1").Status+" "+ticket("T1").Reply+" "+ticket("T1").Changed.By, "answered Hello agent:desk.triage")
+	expect("R1 drafts", run("R1").State+" / "+steps("R1"), "waiting / context {\"type\":\"desk.ticket\",\"record\":{\"id\":\"T1\",\"revision\":1,\"created\":{\"by\":\"ana\",\"at\":\"2026-10-01T09:00:00Z\",\"change\":\"chg-1\"},\"changed\":{\"by\":\"ana\",\"at\":\"2026-10-01T09:00:00Z\",\"change\":\"chg-1\"},\"subject\":\"Wifi, desk_ticket_answer drafted")
+	expect("draft", fmt.Sprint(run("R1").Draft[0].Action, " ", run("R1").Draft[0].Target, " ", run("R1").Draft[0].Payload, " ", ticket("T1").Status), `desk.ticket.answer T1 {"reply":"Hello"} open`)
+	expect("only ana answers her drafts", do("bo", AgentApp, SchemaRunConfirm, RunType, "R1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
+	expect("confirm", do("ana", AgentApp, SchemaRunConfirm, RunType, "R1", map[string]any{"payload": map[string]string{"reply": "Hello, it works again"}}), "ok")
+	expect("answered as ana", ticket("T1").Status+" "+ticket("T1").Reply+" "+ticket("T1").Changed.By, "answered Hello, it works again ana")
+	think(2)
+	expect("R1", run("R1").State+" "+run("R1").Signals[0].Kind+" "+run("R1").Signals[0].Value, `done changed {"reply":"Hello, it works again"}`)
 	expect("rationale", run("R1").Steps[1].Rationale, "because desk_ticket_answer")
+	// A rejected draft: the agent hears why and goes on.
+	start("ana", "R6", "Answer ticket T4: wifi", "desk.ticket/T4")
+	think(3)
+	expect("reject", do("ana", AgentApp, SchemaRunReject, RunType, "R6", map[string]string{"reason": "not this ticket"}), "ok")
+	think(2)
+	expect("R6", run("R6").State+" "+run("R6").Signals[0].Kind+" "+ticket("T4").Status+" "+fmt.Sprint(strings.Contains(run("R6").Result, "rejected by ana: not this ticket")), "done rejected open true")
 	// For bo, a viewer who may not answer: the agent may not either (D2).
 	expect("a viewer starts one", start("bo", "R2", "Answer ticket T2: wifi", "desk.ticket/T2"), "ok")
 	think(4)
