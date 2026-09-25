@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { Button } from "../primitives/button";
 import { recordSchema, type Entity } from "../fields/entity";
 import { checkbox, date, datetime, number, singleSelect, text, type FieldType } from "../fields/types";
+import { t } from "../i18n";
 
 /** A field of an ad hoc form; `kind` picks a platform field type for its editor. */
 export type Field<T> = {
@@ -49,7 +50,7 @@ export function RecordForm<R>({ entity, keys, defaultValues, onSubmit, submitLab
     defaultValues={defaultValues} onSubmit={onSubmit} submitLabel={submitLabel} onCancel={onCancel} />;
 }
 
-function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = "Save", onCancel }: {
+function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("Save"), onCancel }: {
   schema: z.ZodType; fields: { name: string; type: FieldType }[]; defaultValues?: object;
   onSubmit: (values: any) => void | Promise<void>; submitLabel?: string; onCancel?: () => void;
 }) {
@@ -73,7 +74,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = "Sav
         );
       })}
       <div className="mt-1 flex justify-end gap-2">
-        {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+        {onCancel && <Button onClick={onCancel}>{t("Cancel")}</Button>}
         <Button type="submit" variant="primary" disabled={isSubmitting}>{submitLabel}</Button>
       </div>
     </form>

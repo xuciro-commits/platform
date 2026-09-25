@@ -5,6 +5,7 @@
 package hr
 
 import (
+	"embed"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -14,6 +15,13 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+// languages translate the app's titles and descriptions (ADR-0023).
+//
+//go:embed i18n
+var languageFiles embed.FS
+
+var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const (
 	LeaveType    = "hr.leave"
@@ -105,7 +113,7 @@ func (a *App) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
 func (a *App) Restore(raw json.RawMessage) error { return a.ledger.Restore(raw) }
 
 func (a *App) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "hr", Title: "HR", Version: "1", Actions: a.ledger.Catalog, Entities: Entities()}
+	return platform.Manifest{Languages: languages, ID: "hr", Title: "HR", Version: "1", Actions: a.ledger.Catalog, Entities: Entities()}
 }
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }

@@ -1,0 +1,15 @@
+{
+ "Booking canceled": "预订已取消",
+ "Booking changed": "预订已修改",
+ "Cancel a booking; it stays in the history.": "取消预订；它保留在历史中。",
+ "Cancel booking": "取消预订",
+ "Change stay": "修改住宿",
+ "Change the room type or dates of a booking.": "修改预订的房型或日期。",
+ "Departure, exclusive": "离店日期（不含当天）",
+ "First night (YYYY-MM-DD; hourly types YYYY-MM-DDTHH:MM)": "首晚（YYYY-MM-DD；按小时的房型用 YYYY-MM-DDTHH:MM）",
+ "Guest name": "客人姓名",
+ "Memstay": "Memstay 公寓",
+ "Reserve a stay; refused when the provider cannot sell it.": "预订住宿；提供方无法出售时拒绝。",
+ "Reserve stay": "预订住宿",
+ "Room type the provider sells": "提供方出售的房型"
+}

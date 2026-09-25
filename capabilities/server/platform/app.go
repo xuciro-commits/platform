@@ -96,6 +96,8 @@ type Manifest struct {
 	// Roles are roles that grant no action but open something else, such as
 	// models (ADR-0015); the roles its actions grant need not be listed.
 	Roles []string
+	// Languages translate the app's titles and descriptions (ADR-0023).
+	Languages Languages
 }
 
 // AllRoles are every role the app defines: those its actions grant and Roles.

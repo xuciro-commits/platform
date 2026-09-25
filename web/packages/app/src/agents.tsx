@@ -2,7 +2,8 @@
 // rationale the model gave, what people made of it, and the draft that waits
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
-import { Button, Card, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses } from "@platform/ui";
+import "./i18n";
+import { Button, Card, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses, t, language } from "@platform/ui";
 import { useState } from "react";
 import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "./index";
 
@@ -21,8 +22,8 @@ type Transcript = { at: string; member: string; model: string; request: unknown;
 export type AgentInfo = { id: string; app: string; title: string; instructions: string; tools: string[]; budget: { Steps: number; Tokens: number; Actions: number } };
 type Hit = { type: string; id: string; title: string };
 
-export const runStates = defineStatuses({ running: { label: "Working", tone: "info" }, waiting: { label: "Waiting for you", tone: "warning" },
-  done: { label: "Done", tone: "success" }, stopped: { label: "Stopped", tone: "danger" } });
+export const runStates = defineStatuses({ running: { label: t("Working"), tone: "info" }, waiting: { label: t("Waiting for you"), tone: "warning" },
+  done: { label: t("Done"), tone: "success" }, stopped: { label: t("Stopped"), tone: "danger" } });
 const signalTones = { confirmed: "success", accepted: "success", approved: "success", changed: "warning", corrected: "warning", bypassed: "neutral",
   rejected: "danger", discarded: "danger", undone: "danger" } as const;
 
@@ -54,9 +55,9 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
         </label>
       ))}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="primary" onClick={() => void decide("agent.run.confirm", target, { payload: values })}>Confirm</Button>
-        <Input className="w-64" placeholder="Why not, for the agent" value={reason} onChange={(e) => setReason(e.target.value)} />
-        <Button size="sm" variant="danger" onClick={() => void decide("agent.run.reject", target, { reason })}>Reject</Button>
+        <Button size="sm" variant="primary" onClick={() => void decide("agent.run.confirm", target, { payload: values })}>{t("Confirm")}</Button>
+        <Input className="w-64" placeholder={t("Why not, for the agent")} value={reason} onChange={(e) => setReason(e.target.value)} />
+        <Button size="sm" variant="danger" onClick={() => void decide("agent.run.reject", target, { reason })}>{t("Reject")}</Button>
       </div>
     </Card>
   );
@@ -68,26 +69,26 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
   const openRecord = useOpenRecord();
   const run = useRun(id);
   const [open, setOpen] = useState<number>();
-  if (!run) return <p className="text-sm text-muted">Loading run {id}…</p>;
+  if (!run) return <p className="text-sm text-muted">{t("Loading run")} {id}…</p>;
   const mine = run.onBehalf === me.principalId;
   const live = run.state === "running" || run.state === "waiting";
   return (
     <div className="grid max-w-4xl gap-3">
       {!compact && <PageHeader title={run.title} description={`${run.agent}${run.onBehalf ? ` for ${run.onBehalf}` : ""}${run.flow ? `, in the flow ${run.flow}` : ""}`}
         actions={live && (mine || role("agent") === "admin") && can("agent.run.cancel")
-          ? <Button size="sm" variant="danger" onClick={() => void decide("agent.run.cancel", { type: "agent.run", id: run.id }, {})}>Stop</Button> : undefined} />}
+          ? <Button size="sm" variant="danger" onClick={() => void decide("agent.run.cancel", { type: "agent.run", id: run.id }, {})}>{t("Stop")}</Button> : undefined} />}
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <StatusTag status={run.state} registry={runStates} />
         {run.ref && <button type="button" className="font-mono underline" onClick={() => openRecord(run.ref!)}>{run.ref}</button>}
-        <span>{run.stepsUsed} turns · {run.tokensUsed} tokens · {run.actionsUsed} actions{run.cost ? ` · $${run.cost.toFixed(4)}` : ""}</span>
+        <span>{run.stepsUsed} {t("turns ·")} {run.tokensUsed} {t("tokens ·")} {run.actionsUsed} actions{run.cost ? ` · $${run.cost.toFixed(4)}` : ""}</span>
         {run.model && <span className="font-mono">{run.model}</span>}
       </div>
       {!compact && <p className="whitespace-pre-wrap text-sm">{run.goal}</p>}
       {run.draft?.[0] && run.state === "waiting" && (mine ? <DraftCard key={run.draft[0].step} run={run} draft={run.draft[0]} />
-        : <p className="text-sm text-muted">A draft waits for {run.onBehalf} to confirm.</p>)}
-      {run.state === "running" && <p className="text-sm text-muted">The agent is working…</p>}
-      {run.stopped && <p className="text-sm text-[var(--tone-danger)]">Stopped: {run.stopped}</p>}
-      {run.result && <Card className="p-3"><div className="mb-1 text-xs text-muted">Result</div><p className="whitespace-pre-wrap text-sm">{run.result}</p></Card>}
+        : <p className="text-sm text-muted">{t("A draft waits for")} {run.onBehalf} {t("to confirm.")}</p>)}
+      {run.state === "running" && <p className="text-sm text-muted">{t("The agent is working…")}</p>}
+      {run.stopped && <p className="text-sm text-[var(--tone-danger)]">{t("Stopped:")} {run.stopped}</p>}
+      {run.result && <Card className="p-3"><div className="mb-1 text-xs text-muted">{t("Result")}</div><p className="whitespace-pre-wrap text-sm">{run.result}</p></Card>}
       <ol className="grid gap-1">
         {run.steps.map((s, i) => (
           <li key={i} className="rounded-md border border-border bg-surface px-3 py-2 text-sm">
@@ -107,10 +108,10 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
       </ol>
       {!!run.citations?.length && (
         <div className="grid gap-1">
-          <div className="text-xs text-muted">Sources it read</div>
+          <div className="text-xs text-muted">{t("Sources it read")}</div>
           {run.citations.map((c, i) => (
             <button key={i} type="button" className="text-left text-sm underline" onClick={() => openRecord(c.document.split("#")[0]!)}>
-              {c.title} <span className="font-mono text-xs text-muted">{c.document} · passage {c.chunk + 1} · step {c.step + 1}</span>
+              {c.title} <span className="font-mono text-xs text-muted">{c.document} {t("· passage")} {c.chunk + 1} {t("· step")} {c.step + 1}</span>
             </button>
           ))}
         </div>
@@ -118,7 +119,7 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
       {!compact && role("agent") === "admin" && <Transcripts run={run.id} />}
       {!!run.signals?.length && (
         <div className="grid gap-1">
-          <div className="text-xs text-muted">What people made of it</div>
+          <div className="text-xs text-muted">{t("What people made of it")}</div>
           {run.signals.map((s, i) => (
             <div key={i} className="flex items-center gap-2 text-sm">
               <Tag label={s.kind} tone={signalTones[s.kind as keyof typeof signalTones] ?? "neutral"} />
@@ -139,7 +140,7 @@ function Transcripts({ run }: { run: string }) {
   return (
     <div className="grid gap-1">
       <button type="button" className="text-left text-xs text-muted underline" onClick={() => setShown(!shown)}>
-        {shown ? "Hide" : "Show"} the {calls.length} model calls in full
+        {shown ? t("Hide") : t("Show")} the {calls.length} {t("model calls in full")}
       </button>
       {shown && calls.map((c, i) => (
         <details key={i} className="rounded-md border border-border bg-surface px-3 py-2 text-xs">
@@ -168,25 +169,25 @@ export function Assistant({ about }: { about?: string }) {
   const chosen = agent || suited[0]?.id || "";
   const start = async () => {
     const id = newId("RUN");
-    if (await decide("agent.run.start", { type: "agent.run", id }, { agent: chosen, goal, ...(about ? { ref: about } : {}) })) { setCurrent(id); setGoal(""); }
+    if (await decide("agent.run.start", { type: "agent.run", id }, { agent: chosen, goal, ...(about ? { ref: about } : {}), ...(language() !== "en" ? { language: language() } : {}) })) { setCurrent(id); setGoal(""); }
   };
   const earlier = runs.filter((r) => r.id !== current && (!about || r.ref === about));
   return (
     <div className="grid max-w-3xl gap-3">
-      <PageHeader title="Assistant" description={about ? `Ask an agent about ${about}. It drafts; you confirm.` : "Ask one of your apps' agents. It works on your behalf, within what you may do; you confirm what it drafts."} />
-      {agents.length === 0 ? <p className="text-sm text-muted">None of your apps declares an agent.</p> : (
+      <PageHeader title={t("Assistant")} description={about ? `Ask an agent about ${about}. It drafts; you confirm.` : t("Ask one of your apps' agents. It works on your behalf, within what you may do; you confirm what it drafts.")} />
+      {agents.length === 0 ? <p className="text-sm text-muted">{t("None of your apps declares an agent.")}</p> : (
         <form className="grid gap-2" onSubmit={(e) => { e.preventDefault(); if (goal.trim()) void start(); }}>
-          <Select aria-label="Agent" value={chosen} onChange={(e) => setAgent(e.target.value)}>
+          <Select aria-label={t("Agent")} value={chosen} onChange={(e) => setAgent(e.target.value)}>
             {suited.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>
-          <Textarea aria-label="Goal" rows={3} placeholder="What should it do?" value={goal} onChange={(e) => setGoal(e.target.value)} />
-          <div><Button type="submit" variant="primary" disabled={!goal.trim() || !can("agent.run.start")}>Ask</Button></div>
+          <Textarea aria-label={t("Goal")} rows={3} placeholder={t("What should it do?")} value={goal} onChange={(e) => setGoal(e.target.value)} />
+          <div><Button type="submit" variant="primary" disabled={!goal.trim() || !can("agent.run.start")}>{t("Ask")}</Button></div>
         </form>
       )}
       {current && <RunView id={current} compact />}
       <Remembered />
       {earlier.length > 0 && <div className="grid gap-1">
-        <div className="text-xs text-muted">Earlier{about ? " about this record" : ""}</div>
+        <div className="text-xs text-muted">{t("Earlier")}{about ? " about this record" : ""}</div>
         {earlier.slice(0, 10).map((r) => (
           <button key={r.id} type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-row-hover" onClick={() => setCurrent(r.id)}>
             <StatusTag status={r.state} registry={runStates} /><span className="truncate">{r.title}</span>
@@ -205,13 +206,13 @@ function Remembered() {
   const act = (m: Memory, t: string) => void decide(`agent.memory.${t}`, { type: "agent.memory", id: m.id }, {});
   return (
     <div className="grid gap-1">
-      <div className="text-xs text-muted">What agents remember about you</div>
+      <div className="text-xs text-muted">{t("What agents remember about you")}</div>
       {memories.map((m) => (
         <div key={m.id} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
           <Tag label={m.state === "proposed" ? "proposed" : "remembered"} tone={m.state === "proposed" ? "warning" : "success"} />
           <span className="flex-1">{m.fact} <span className="text-xs text-muted">{m.agent}{m.expires ? ` · until ${m.expires.slice(0, 10)}` : " · kept"}</span></span>
-          {(m.state === "proposed" || m.expires) && <Button size="sm" onClick={() => act(m, "keep")}>Keep</Button>}
-          <Button size="sm" variant="ghost" onClick={() => act(m, "forget")}>Forget</Button>
+          {(m.state === "proposed" || m.expires) && <Button size="sm" onClick={() => act(m, "keep")}>{t("Keep")}</Button>}
+          <Button size="sm" variant="ghost" onClick={() => act(m, "forget")}>{t("Forget")}</Button>
         </div>
       ))}
     </div>
@@ -233,13 +234,13 @@ export function Search({ initial = "" }: { initial?: string }) {
   const title = (type: string) => entities.find((e) => e.type === type)?.title ?? type;
   return (
     <div className="grid max-w-3xl gap-3">
-      <PageHeader title="Search" description="Records of every app you work in, and the knowledge you may read, by text, within what you may see." />
+      <PageHeader title={t("Search")} description={t("Records of every app you work in, and the knowledge you may read, by text, within what you may see.")} />
       <form onSubmit={(e) => { e.preventDefault(); void run(q); }}>
-        <Input aria-label="Search" autoFocus placeholder="Search records" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input aria-label={t("Search")} autoFocus placeholder={t("Search records")} value={q} onChange={(e) => setQ(e.target.value)} />
       </form>
       {passages.length > 0 && (
         <div className="grid gap-2">
-          <div className="text-xs text-muted">Knowledge</div>
+          <div className="text-xs text-muted">{t("Knowledge")}</div>
           {passages.map((p) => (
             <Card key={`${p.document}#${p.chunk}`} className="p-3 text-sm">
               <button type="button" className="font-medium underline" onClick={() => openRecord(p.document.split("#")[0]!)}>{p.title}</button>
@@ -248,7 +249,7 @@ export function Search({ initial = "" }: { initial?: string }) {
           ))}
         </div>
       )}
-      {hits && (hits.length === 0 ? <p className="text-sm text-muted">No records found.</p> : (
+      {hits && (hits.length === 0 ? <p className="text-sm text-muted">{t("No records found.")}</p> : (
         <ul className="grid gap-1">
           {hits.map((h) => (
             <li key={`${h.type}/${h.id}`}>

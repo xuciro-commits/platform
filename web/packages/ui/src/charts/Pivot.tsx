@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { formatter } from "./echarts";
 import type { AggregateData, AggregateQuery } from "./spec";
 import type { ChartSource } from "./Chart";
+import { t } from "../i18n";
 
 const text = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : String(v));
 
@@ -38,7 +39,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
     return () => { live = false; };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   if (error) return <p className="text-sm text-[var(--tone-danger)]">{error}</p>;
-  if (!data) return <p className="text-sm text-muted">Loading…</p>;
+  if (!data) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const fmt = formatter({ type: "quantitative", aggregate: measure === "count" ? "count" : measure.split(":")[0] as never, field: measure.split(":")[1] }, data.columns);
   const money = data.columns.find((c) => c.kind === "measure" && c.money);
   const currency = money ? `${money.field}.currency` : undefined;
@@ -86,7 +87,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
         {additive && (
           <tfoot className="bg-surface font-medium">
             <tr>
-              <th className="px-2 py-1 text-left">Total</th>
+              <th className="px-2 py-1 text-left">{t("Total")}</th>
               {columns && colKeys.map((ck) => <td key={ck} className="px-2 py-1 text-right">{show(data.rows.filter((r) => text(r[columns]) === ck))}</td>)}
               <td className="px-2 py-1 text-right">{show(data.rows)}</td>
             </tr>

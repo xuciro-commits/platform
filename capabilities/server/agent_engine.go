@@ -129,6 +129,9 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 		goal += "\nAbout " + run.Ref + ":\n" + run.Seen
 	}
 	system := preamble + "\n\n" + d.Instructions
+	if name := languageNames[run.Language]; name != "" {
+		system += "\n\nWrite your rationale, questions, drafts' free text and result in " + name + ", the language of the person you work for; keep IDs, codes and field names as they are."
+	}
 	if ms := a.memories(c, run, now); len(ms) > 0 {
 		system += "\n\nWhat you remember from earlier runs:"
 		for _, m := range ms {
@@ -518,3 +521,6 @@ func (a *Agents) effectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.E
 		return
 	}
 }
+
+// languageNames name the languages agents answer in (ADR-0023 D6).
+var languageNames = map[string]string{"zh-CN": "Simplified Chinese (简体中文)", "zh-TW": "Traditional Chinese (繁體中文)", "ja": "Japanese", "de": "German", "fr": "French", "es": "Spanish"}

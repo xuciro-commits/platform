@@ -1,10 +1,11 @@
 import { cn } from "../lib/cn";
 import { Button } from "../primitives/button";
+import { t } from "../i18n";
 
 export type NotificationItem = { id: string; title: string; body?: string; at: string; read: boolean; app?: string };
 
 // A member's notifications, newest first: unread ones stand out and can be marked read.
-export function NotificationList<T extends NotificationItem>({ items, onRead, onOpen, empty = "Nothing new" }: {
+export function NotificationList<T extends NotificationItem>({ items, onRead, onOpen, empty = t("Nothing new") }: {
   items: T[]; onRead: (n: T) => void; onOpen?: (n: T) => void; empty?: string;
 }) {
   if (items.length === 0) return <p className="text-sm text-muted">{empty}</p>;
@@ -18,7 +19,7 @@ export function NotificationList<T extends NotificationItem>({ items, onRead, on
             {n.body && <span className="text-muted">{n.body}</span>}
             <span className="text-xs text-muted">{new Date(n.at).toLocaleString()}{n.app ? ` · ${n.app}` : ""}</span>
           </button>
-          {!n.read && <Button size="sm" onClick={() => onRead(n)}>Mark read</Button>}
+          {!n.read && <Button size="sm" onClick={() => onRead(n)}>{t("Mark read")}</Button>}
         </li>
       ))}
     </ul>

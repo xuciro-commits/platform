@@ -9,6 +9,7 @@
 package helpdesk
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -19,6 +20,13 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+// languages translate the app's titles and descriptions (ADR-0023).
+//
+//go:embed i18n
+var languageFiles embed.FS
+
+var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const (
 	TicketType   = "helpdesk.ticket"
@@ -141,7 +149,7 @@ func (a *App) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
 func (a *App) Restore(raw json.RawMessage) error  { return a.ledger.Restore(raw) }
 
 func (a *App) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "helpdesk", Title: "Helpdesk", Version: "1", Actions: a.ledger.Catalog, Entities: Entities(),
+	return platform.Manifest{Languages: languages, ID: "helpdesk", Title: "Helpdesk", Version: "1", Actions: a.ledger.Catalog, Entities: Entities(),
 		Emits: []platform.EffectKind{{Name: EffectReply, Title: "Reply to the customer",
 			Description: "A ticket's reply, for the mail gateway to send to the customer.", Irreversible: true}},
 		Flows: []platform.Flow{serviceLevel()}, Agents: []platform.Agent{triager()}}

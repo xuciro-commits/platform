@@ -30,10 +30,11 @@ export class EdgeClient {
     return /HTTP 401/.test(String(error)) ? "sign-in required: this host accepts identity-provider tokens only" : "host unreachable";
   }
 
-  /** The bearer token, and the tenant once known: a person may be a member of several on one host (ADR-0018). */
+  /** The bearer token, the tenant once known (a person may be a member of several on one host, ADR-0018), and the page's language, in which the host serves declarations (ADR-0023). */
   private headers(json = false): Record<string, string> {
+    const lang = typeof document === "undefined" ? "" : document.documentElement.lang;
     return { Authorization: `Bearer ${this.connection.token}`, ...(this.connection.tenant ? { "Platform-Tenant": this.connection.tenant } : {}),
-      ...(json ? { "Content-Type": "application/json" } : {}) };
+      ...(lang ? { "Accept-Language": lang } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
   }
 
   async get<T>(path: string): Promise<T> {

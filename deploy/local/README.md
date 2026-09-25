@@ -202,4 +202,5 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
 10. **智能体互调（A2A）**：
     1. MES（`sup@plant.test`）：按上面的表添加供应商智能体的接收地址，然后在任一记录上 "Ask the assistant"，选 "Material planner"，问 "What is the lead time of P-200?"，它通过 A2A 问供应商智能体，回答 12 天；
     2. Sales（`manager@hotel.test`）：按上面把 `helpdesk.triage` 发布出去，用 curl 或任一 A2A 客户端发一条 `SendMessage`，任务完成后返回分诊结果；它以调用者的权限直接行动，外发的邮件照样要人批准。
-11. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+11. **多语言**（任一主机，ADR-0023）：右上角头像菜单 → 语言 → 简体中文，页面会重新加载：导航、按钮、列表、记录页、设置，以及各应用的实体、字段、状态、动作名称都变成中文（记录内容是谁写的就是什么语言，不翻译）；在记录上"问助手"，智能体会用中文写理由和结果（需要真实模型，本地替身 echo 不会说中文）。切回 English 同样在这个菜单。
+12. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。

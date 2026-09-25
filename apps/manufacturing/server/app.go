@@ -1,6 +1,7 @@
 package mes
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -10,6 +11,13 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+// languages translate the app's titles and descriptions (ADR-0023).
+//
+//go:embed i18n
+var languageFiles embed.FS
+
+var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 // Settings of the plant (ADR-0013), set by administrators in Settings.
 const (
@@ -57,7 +65,7 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 // reads, its connector inputs (batches and pages, both journaled; the host keeps
 // the connectors), its settings, its scheduled job (ADR-0013) and its flow (ADR-0020).
 func (p *Plant) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
+	return platform.Manifest{Languages: languages, ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
 		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,
 		Inputs: map[string]bool{"states": true, "planned-orders": true},
 		Jobs:   []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},

@@ -2,11 +2,12 @@
 // platformserver/platform: an app's UI declares itself with defineApp and
 // reaches the host only through useHost, as a server-side app reaches it only
 // through its Caller. The workspace signs in once, for every app.
+import "./i18n";
 import type { ActionDeclaration, EdgeClient, Entry } from "@platform/kernel";
 import {
   Button, Chart, Dialog, Input, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
-} from "@platform/ui";
+ t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
@@ -134,14 +135,14 @@ export function Records({ type, description, actions, saved }: { type: string; d
   return (
     <>
       <PageHeader title={saved?.title ?? info?.plural ?? type} actions={actions}
-        description={saved ? `Your saved view of ${info?.plural.toLowerCase() ?? type}.` : description ?? "Generated from the entity's declaration: search, sort and pages come from the host, within what you may see."} />
+        description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
       <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
-      <Dialog open={!!saving} onOpenChange={(o) => !o && setSaving(undefined)} title={saved ? `Save ${saved.title}` : "Save view"}>
+      <Dialog open={!!saving} onOpenChange={(o) => !o && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
         <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (title.trim()) void save(); }}>
-          <Input aria-label="Name" placeholder="Name of the view" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+          <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
           <div className="flex justify-end gap-2">
-            <Button type="button" onClick={() => setSaving(undefined)}>Cancel</Button>
-            <Button type="submit" variant="primary" disabled={!title.trim()}>Save</Button>
+            <Button type="button" onClick={() => setSaving(undefined)}>{t("Cancel")}</Button>
+            <Button type="submit" variant="primary" disabled={!title.trim()}>{t("Save")}</Button>
           </div>
         </form>
       </Dialog>
@@ -179,12 +180,12 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
       <RecordPage source={source} type={type} id={id} reload={reload} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={can} onTransition={(schema, r) => void act(schema, r, {})}
         actions={(r) => <>
-          {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>Ask the assistant</Button>}
-          {can(`${type}.edit`) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>Edit</Button>}
-          {can(`${type}.archive`) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>Archive</Button>}
+          {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}
+          {can(`${type}.edit`) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
+          {can(`${type}.archive`) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>{t("Archive")}</Button>}
         </>} />
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={`Edit ${editing?.id ?? ""}`}>
-        {editing && <GeneratedForm type={type} record={editing} submitLabel="Save" onCancel={() => setEditing(undefined)}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
+        {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onCancel={() => setEditing(undefined)}
           onSubmit={(v) => act(`${type}.edit`, editing, v)} />}
       </Dialog>
     </>

@@ -376,15 +376,15 @@ func EntityActions(e Entity) []Action {
 	}
 	if e.Standard.Create {
 		out = append(out, Action{Schema: e.Type + ".create", Target: e.Type, Capability: capability, Title: "Create " + strings.ToLower(info.Title),
-			Description: "Create a " + strings.ToLower(info.Title) + ".", Payload: fields, Roles: e.Standard.Roles})
+			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: e.Standard.Roles})
 	}
 	if e.Standard.Edit {
 		out = append(out, Action{Schema: e.Type + ".edit", Target: e.Type, Capability: capability, Title: "Edit " + strings.ToLower(info.Title),
-			Description: "Change fields of a " + strings.ToLower(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: e.Standard.Roles})
+			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: e.Standard.Roles})
 	}
 	if e.Standard.Archive {
 		out = append(out, Action{Schema: e.Type + ".archive", Target: e.Type, Capability: capability, Title: "Archive " + strings.ToLower(info.Title),
-			Description: "Archive a " + strings.ToLower(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []Field{}, Roles: e.Standard.Roles})
+			Description: "Archive " + article(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []Field{}, Roles: e.Standard.Roles})
 	}
 	if e.Lifecycle != nil {
 		for i, t := range e.Lifecycle.Transitions {
@@ -398,7 +398,7 @@ func EntityActions(e Entity) []Action {
 			}
 			description := t.Description
 			if description == "" {
-				description = fmt.Sprintf("Move a %s from %s to %s.", strings.ToLower(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
+				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(t.From, " or "), strings.Join(t.To, " or "))
 			}
 			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
 				Description: description, Payload: payload, Roles: t.Roles, Approval: t.Approval})
@@ -477,4 +477,13 @@ func (c Caller) Check(entity any) *kernel.Error {
 		return notFound()
 	}
 	return c.rt.Check(c, entity)
+}
+
+// article is a title in lower case with its indefinite article: "an account".
+func article(title string) string {
+	t := strings.ToLower(title)
+	if t != "" && strings.ContainsRune("aeiou", rune(t[0])) {
+		return "an " + t
+	}
+	return "a " + t
 }

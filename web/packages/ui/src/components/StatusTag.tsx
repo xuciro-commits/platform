@@ -1,4 +1,5 @@
 import { cn } from "../lib/cn";
+import { t } from "../i18n";
 
 /** Semantic tones; domains map their own states onto them. */
 export type Tone = "neutral" | "info" | "success" | "warning" | "danger";
@@ -12,12 +13,12 @@ export function defineStatuses<const R extends StatusRegistry>(registry: R): R {
 
 /** The kernel's outbox states (K5), shared by every server-authority domain. */
 export const submissionStatuses = defineStatuses({
-  SUBMISSION_STATE_PENDING: { label: "Pending", tone: "warning" },
-  SUBMISSION_STATE_SENDING: { label: "Sending", tone: "info" },
-  SUBMISSION_STATE_CONFIRMED: { label: "Confirmed", tone: "success" },
-  SUBMISSION_STATE_CONFLICT: { label: "Conflict", tone: "danger" },
-  SUBMISSION_STATE_REJECTED: { label: "Rejected", tone: "danger" },
-  SUBMISSION_STATE_UNKNOWN: { label: "Unknown", tone: "warning" },
+  SUBMISSION_STATE_PENDING: { label: t("Pending"), tone: "warning" },
+  SUBMISSION_STATE_SENDING: { label: t("Sending"), tone: "info" },
+  SUBMISSION_STATE_CONFIRMED: { label: t("Confirmed"), tone: "success" },
+  SUBMISSION_STATE_CONFLICT: { label: t("Conflict"), tone: "danger" },
+  SUBMISSION_STATE_REJECTED: { label: t("Rejected"), tone: "danger" },
+  SUBMISSION_STATE_UNKNOWN: { label: t("Unknown"), tone: "warning" },
 });
 
 /** A coloured label: states, select options, categories. */

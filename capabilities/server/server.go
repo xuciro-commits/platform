@@ -127,7 +127,9 @@ func (h *Host) Handler() http.Handler {
 		Reply(w, record, err)
 	})
 	handle("GET /v1/me", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, map[string]any{"tenantId": m.Tenant, "principalId": m.ID, "profile": m, "apps": t.AppsOf(m), "tenants": h.tenantsOf(r)})
+		lang := t.Language(r)
+		WriteJSON(w, http.StatusOK, map[string]any{"tenantId": m.Tenant, "principalId": m.ID, "profile": m, "apps": Translate(t.AppsOf(m), t.Dictionary(lang)),
+			"tenants": h.tenantsOf(r), "language": lang, "languages": t.languages()})
 	})
 	handle("GET /v1/declarations", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}
@@ -137,14 +139,14 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	handle("GET /v1/actions", func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Catalog(m))
+	handle("GET /v1/actions", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, Translate(t.Catalog(m), t.Dictionary(t.Language(r))))
 	})
-	handle("GET /v1/apps", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Apps())
+	handle("GET /v1/apps", func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, Translate(t.Apps(), t.Dictionary(t.Language(r))))
 	})
-	handle("GET /v1/protocols", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Protocols())
+	handle("GET /v1/protocols", func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, Translate(t.Protocols(), t.Dictionary(t.Language(r))))
 	})
 	handle("POST /v1/protocols/{protocol}/{version}/{action}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var call struct {
@@ -188,8 +190,8 @@ func (h *Host) Handler() http.Handler {
 	handle("GET /v1/ai/vendors", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
 		WriteJSON(w, http.StatusOK, Vendors)
 	})
-	handle("GET /v1/entities", func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, t.Entities(m))
+	handle("GET /v1/entities", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, Translate(t.Entities(m), t.Dictionary(t.Language(r))))
 	})
 	handle("GET /v1/records/{type}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
@@ -266,6 +268,9 @@ func (h *Host) Handler() http.Handler {
 			Reply(w, nil, err)
 			return
 		}
+		if declarationReads[r.PathValue("read")] {
+			out = Translate(out, t.Dictionary(t.Language(r)))
+		}
 		WriteJSON(w, http.StatusOK, out)
 	})
 	mux.HandleFunc("GET /v1/sign-in", func(w http.ResponseWriter, _ *http.Request) {
@@ -295,7 +300,8 @@ func (h *Host) Handler() http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, "+TenantHeader)
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept-Language, "+TenantHeader)
+		w.Header().Set("Vary", "Accept-Language") // declarations are served in the request's language (ADR-0023)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

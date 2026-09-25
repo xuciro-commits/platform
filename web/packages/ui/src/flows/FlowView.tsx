@@ -2,6 +2,7 @@
 // instance took, where it stands now, and why it moved — the decision trace.
 import { StatusTag, defineStatuses } from "../components/StatusTag";
 import { cn } from "../lib/cn";
+import { t } from "../i18n";
 
 export type FlowStep = { name: string; title: string; kind: string; next: string[]; chooses?: boolean };
 export type FlowDefinition = { id: string; app: string; title: string; version: number; start: string[]; steps: FlowStep[] };
@@ -13,12 +14,12 @@ export type FlowInstanceData = {
 };
 
 export const flowStates = defineStatuses({
-  running: { label: "Running", tone: "info" }, waiting: { label: "Waiting", tone: "info" }, done: { label: "Done", tone: "success" },
-  compensating: { label: "Undoing", tone: "warning" }, compensated: { label: "Undone", tone: "neutral" }, canceled: { label: "Canceled", tone: "neutral" },
-  stuck: { label: "Stuck", tone: "danger" },
+  running: { label: t("Running"), tone: "info" }, waiting: { label: t("Waiting"), tone: "info" }, done: { label: t("Done"), tone: "success" },
+  compensating: { label: t("Undoing"), tone: "warning" }, compensated: { label: t("Undone"), tone: "neutral" }, canceled: { label: t("Canceled"), tone: "neutral" },
+  stuck: { label: t("Stuck"), tone: "danger" },
 });
 
-const kinds: Record<string, string> = { act: "Act", wait: "Wait", ask: "Ask", call: "Sub-flow", all: "All of", any: "Any of", agent: "Agent" };
+const kinds: Record<string, string> = { act: t("Act"), wait: t("Wait"), ask: t("Ask"), call: t("Sub-flow"), all: t("All of"), any: t("Any of"), agent: t("Agent") };
 const waits: Record<string, string> = { ready: "ready", retry: "retrying", wait: "waiting", ask: "asking people", call: "in a sub-flow", join: "waiting for its branches", undo: "retrying an undo", stuck: "stuck" };
 
 /** The steps of a flow, marked by what the instance did in each. */
@@ -34,9 +35,9 @@ export function FlowView({ definition, instance, actions }: {
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <StatusTag status={instance.state} registry={flowStates} />
         <span className="font-semibold">{instance.title}</span>
-        <span className="text-xs text-muted">{instance.flow} · version {instance.version}{instance.onBehalf ? ` · on behalf of ${instance.onBehalf}` : ""}{instance.parent ? ` · called by ${instance.parent}` : ""}</span>
+        <span className="text-xs text-muted">{instance.flow} {t("· version")} {instance.version}{instance.onBehalf ? ` · ${t("on behalf of")} ${instance.onBehalf}` : ""}{instance.parent ? ` · ${t("called by")} ${instance.parent}` : ""}</span>
       </div>
-      <ol className="grid gap-1.5" aria-label="Steps">
+      <ol className="grid gap-1.5" aria-label={t("Steps")}>
         {(definition?.steps ?? []).map((s, i) => {
           const here = tokens.filter((t) => t.step === s.name);
           return (
@@ -50,28 +51,28 @@ export function FlowView({ definition, instance, actions }: {
               <span className="grid gap-0.5">
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{s.title}</span>
-                  <span className="text-xs text-muted">{kinds[s.kind] ?? s.kind}{s.chooses ? ` → as it decides${s.next.length ? ` (or ${s.next.join(", ")})` : ""}` : s.next.length ? ` → ${s.next.join(", ")}` : " → end"}</span>
+                  <span className="text-xs text-muted">{kinds[s.kind] ?? s.kind}{s.chooses ? " → " + t("as it decides") + (s.next.length ? ` (${t("or")} ${s.next.join(", ")})` : "") : s.next.length ? ` → ${s.next.join(", ")}` : " → " + t("end")}</span>
                 </span>
-                {here.map((t) => (
-                  <span key={t.id} className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-[var(--tone-info)]">{waits[t.waits ?? ""] ?? t.waits}{t.attempts ? `, attempt ${t.attempts + 1}` : ""}{t.due ? `, until ${new Date(t.due).toLocaleString()}` : ""}</span>
-                    {t.error && <span className="text-[var(--tone-danger)]">{t.error}</span>}
-                    {actions?.(t)}
+                {here.map((k) => (
+                  <span key={k.id} className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-[var(--tone-info)]">{waits[k.waits ?? ""] ?? k.waits}{k.attempts ? t(", attempt {n}", { n: k.attempts + 1 }) : ""}{k.due ? t(", until {when}", { when: new Date(k.due).toLocaleString() }) : ""}</span>
+                    {k.error && <span className="text-[var(--tone-danger)]">{k.error}</span>}
+                    {actions?.(k)}
                   </span>
                 ))}
               </span>
             </li>
           );
         })}
-        {tokens.filter((t) => t.step === "@undo").map((t) => (
-          <li key={t.id} className="rounded-md border border-[var(--tone-warning)] px-2 py-1.5 text-sm">
-            Undoing: {(instance.undo ?? []).map((u) => `${u.step} (${u.action} ${u.target})`).reverse().join(", ") || "nothing left"}
-            {t.error && <span className="ml-2 text-xs text-[var(--tone-danger)]">{t.error}</span>} {actions?.(t)}
+        {tokens.filter((k) => k.step === "@undo").map((k) => (
+          <li key={k.id} className="rounded-md border border-[var(--tone-warning)] px-2 py-1.5 text-sm">
+            {t("Undoing:")} {(instance.undo ?? []).map((u) => `${u.step} (${u.action} ${u.target})`).reverse().join(", ") || t("nothing left")}
+            {k.error && <span className="ml-2 text-xs text-[var(--tone-danger)]">{k.error}</span>} {actions?.(k)}
           </li>
         ))}
       </ol>
       <section>
-        <h3 className="mb-1 text-xs uppercase text-muted">Why it moved</h3>
+        <h3 className="mb-1 text-xs uppercase text-muted">{t("Why it moved")}</h3>
         <table className="w-full text-sm">
           <tbody>
             {trace.map((t, i) => (

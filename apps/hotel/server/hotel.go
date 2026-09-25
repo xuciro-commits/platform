@@ -4,6 +4,7 @@
 package hotel
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -21,6 +22,13 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+// languages translate the app's titles and descriptions (ADR-0023).
+//
+//go:embed i18n
+var languageFiles embed.FS
+
+var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const (
 	RoomTypeType    = "hotel.room-type"
@@ -258,7 +266,7 @@ func (h *Hotel) Restore(raw json.RawMessage) error {
 }
 
 func (h *Hotel) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "hotel", Title: "Hotel", Version: "1", Actions: h.ledger.Catalog, Entities: h.entities,
+	return platform.Manifest{Languages: languages, ID: "hotel", Title: "Hotel", Version: "1", Actions: h.ledger.Catalog, Entities: h.entities,
 		Reads: []string{"lodging-bookings"}, Inputs: map[string]bool{"channel-bookings": true},
 		Jobs: []platform.Job{{Name: JobArrivals, Title: "Send the front desk the arrivals list", Every: time.Hour}},
 		Settings: []platform.Setting{

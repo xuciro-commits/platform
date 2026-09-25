@@ -2,8 +2,9 @@
 // answered by its agent or by people, within their service level. A ticket's
 // page shows its lifecycle's actions; its service-level flow and the agent's
 // runs are one click away from the record's context.
+import "./i18n";
 import { Records, defineApp, newId, useHost } from "@platform/app";
-import { Button, Dialog, EntityForm } from "@platform/ui";
+import { Button, Dialog, EntityForm, t } from "@platform/ui";
 import { Headset, Ticket } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
@@ -15,12 +16,12 @@ function Tickets() {
   const [opening, setOpening] = useState(false);
   return (
     <>
-      <Records type="helpdesk.ticket" description="Customers' tickets. The triage agent classifies and answers new ones; a reply it writes is mailed once a person approves it. Late tickets go to the desk's leads."
-        actions={can("helpdesk.ticket.open") && <Button variant="primary" onClick={() => setOpening(true)}><Ticket />Open ticket</Button>} />
-      <Dialog open={opening} onOpenChange={setOpening} title="Open ticket">
-        <EntityForm schema={ticket} defaultValues={{ subject: "", customer: "", account: "", body: "" }} submitLabel="Open" onCancel={() => setOpening(false)}
-          fields={[{ name: "subject", label: "Subject" }, { name: "customer", label: "Customer e-mail" },
-            { name: "account", label: "Customer account (CRM ID)" }, { name: "body", label: "What the customer wrote" }]}
+      <Records type="helpdesk.ticket" description={t("Customers' tickets. The triage agent classifies and answers new ones; a reply it writes is mailed once a person approves it. Late tickets go to the desk's leads.")}
+        actions={can("helpdesk.ticket.open") && <Button variant="primary" onClick={() => setOpening(true)}><Ticket />{t("Open ticket")}</Button>} />
+      <Dialog open={opening} onOpenChange={setOpening} title={t("Open ticket")}>
+        <EntityForm schema={ticket} defaultValues={{ subject: "", customer: "", account: "", body: "" }} submitLabel={t("Open")} onCancel={() => setOpening(false)}
+          fields={[{ name: "subject", label: t("Subject") }, { name: "customer", label: t("Customer e-mail") },
+            { name: "account", label: t("Customer account (CRM ID)") }, { name: "body", label: t("What the customer wrote") }]}
           onSubmit={async (v) => { if (await decide("helpdesk.ticket.open", { type: "helpdesk.ticket", id: newId("T") }, v, { expectedRevision: 0 })) setOpening(false); }} />
       </Dialog>
     </>
@@ -29,9 +30,9 @@ function Tickets() {
 
 export default defineApp({
   id: "helpdesk",
-  title: "Helpdesk",
+  title: t("Helpdesk"),
   icon: <Headset />,
   home: { view: "tickets" },
-  views: [{ id: "tickets", title: () => "Tickets", render: () => <Tickets /> }],
-  nav: () => [{ label: "Helpdesk", items: [{ label: "Tickets", icon: <Ticket />, route: { view: "tickets" } }] }],
+  views: [{ id: "tickets", title: () => t("Tickets"), render: () => <Tickets /> }],
+  nav: () => [{ label: t("Helpdesk"), items: [{ label: t("Tickets"), icon: <Ticket />, route: { view: "tickets" } }] }],
 });

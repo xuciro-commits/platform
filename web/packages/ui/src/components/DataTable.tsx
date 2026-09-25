@@ -8,6 +8,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import type { FieldType } from "../fields/types";
 import { Input } from "../primitives/input";
+import { t } from "../i18n";
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -38,7 +39,7 @@ export type DataTableProps<T> = {
 
 /** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
-  data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = "No rows", onCellEdit,
+  data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"), onCellEdit,
 }: DataTableProps<T>) {
   const [editing, setEditing] = useState<{ row: string; column: string; draft: unknown }>();
   // Like a spreadsheet: opening an editor selects the value, so typing replaces it.
@@ -68,11 +69,11 @@ export function DataTable<T>({
           {searchable && (
             <div className="relative w-64">
               <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
-              <Input aria-label="Filter rows" placeholder="Filter" value={globalFilter}
+              <Input aria-label={t("Filter rows")} placeholder={t("Filter")} value={globalFilter}
                 onChange={(e) => setGlobalFilter(e.target.value)} className="pl-7" />
             </div>
           )}
-          <span className="text-xs text-muted tabular-nums">{rows.length.toLocaleString()} rows</span>
+          <span className="text-xs text-muted tabular-nums">{t("{n} rows", { n: rows.length.toLocaleString() })}</span>
           <div className="ml-auto flex items-center gap-2">{toolbar}</div>
         </div>
       )}

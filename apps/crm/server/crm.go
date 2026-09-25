@@ -6,6 +6,7 @@
 package crm
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -17,6 +18,13 @@ import (
 	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+// languages translate the app's titles and descriptions (ADR-0023).
+//
+//go:embed i18n
+var languageFiles embed.FS
+
+var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const (
 	Authority       = "crm-server"
@@ -200,7 +208,7 @@ func (c *CRM) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
 func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) }
 
 func (c *CRM) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "crm", Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
+	return platform.Manifest{Languages: languages, ID: "crm", Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
 		Flows: []platform.Flow{GroupStay()}, Agents: []platform.Agent{Assistant()},
 		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }
