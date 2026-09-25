@@ -1,6 +1,6 @@
 # ADR-0021: Agents — governed principals in a traced harness
 
-**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.4). The owner accepted D1–D10 as recommended.
+**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.4). The owner accepted D1–D10 as recommended. What is built is under "As built".
 
 ## Context
 
@@ -114,3 +114,51 @@ Our platform starts from an advantage there: every decision is already journaled
 - An agent is one more governed principal: it does what its declaration and the person it serves allow, leaves a trace people can read, and stops for them when it should.
 - The journal gains the model's choices, not its prompts. Replay stays deterministic, and the trace becomes the evidence that evaluation and people build on.
 - Grounding, search and traces serve people as well as agents: the assistant panel and global search are the same reads.
+
+## As built
+
+### Batch 1 (#111)
+
+- **Declaration** (`platform/agent.go`):
+  - `Manifest.Agents` lists `platform.Agent` values: name, title, instructions, tools, `Budget` (steps, tokens, actions; 10, 40 000 and 3 by default), `Guard` and `To`.
+  - Tools are the app's actions, protocol actions `"<protocol id>#<action>"` it consumes, and its reads as `"read:<name>"`.
+  - Every agent also has `context`, `search`, `ask` and `finish`, and every tool asks the model for a one-sentence rationale.
+  - `NewTenant` checks each tool against the app's catalog, reads and consumed protocols, and requires the agent app.
+- **The agent app** (`agent.go`, `agent_engine.go`):
+  - `agent.run` records hold the goal, who it runs for (or the flow step), the state, every step (tool, arguments, rationale, outcome, tokens), the budgets used and the result.
+  - A member starts a run with `agent.run.start` for an agent of an app they hold a role in; flows start runs from agent steps.
+  - `Tenant.Think` runs every second, apart from other owned work. It calls the model outside the tenant's lock through the `ai` app's providers, choosing the model with the setting `agent/model`. It then journals the chosen step as an `agent` entry and applies it as one `agent.run.step` decision.
+  - Replay applies the entries, and a host test fails if a replay calls a model.
+- **Governance:**
+  - An action is submitted as `agent:<app>.<name>` (with `Member.Agent`, so D6 holds its irreversible effects), with the run as correlation.
+  - For a person, the action is first probed as that person, so the agent never does more than they may. A protocol action is checked against the person's role at the provider.
+  - The guard runs before the action, and the action budget is counted.
+  - A run stops over its step or token budget, after three model failures, without a model, or on the daily token quota (`agent/daily-tokens`). A stopped run hands its goal to the person it ran for, or to `To`, as a task.
+  - `ask` opens a task with answers and the run waits; the answer, delivered as owned work, resumes it.
+- **Model calls gain tools:**
+  - on the OpenAI wire: tools, `tool_calls`, and tool messages;
+  - in the Anthropic adapter (official Go SDK): `ToolParam`, `ToolUseBlock`, and tool results sent together as one user turn.
+  - `/v1/ai/chat` passes tools through too.
+- **Grounding** (`context.go`):
+  - `Tenant.Context` gives a record with its history, the records it references and that reference it, its links, the flows keyed on it (with their last trace lines) and the tasks about it. `Tenant.Search` searches by text across the types the reader may read.
+  - Both are served at `/v1/context/<type>/<id>` and `/v1/search`. They are the agents' tools, and the workspace's global search in batch 2.
+- **Flows:**
+  - An agent step starts a run and waits; the run's result is the answer.
+  - A stopped run takes the step's `Fault`, or else a person does the step.
+  - A step's `Choose` may keep data on the run.
+- **Proof (the plant):**
+  - When the ERP refuses a confirmation, the flow gives `mes.erp-fixer` the goal. The agent reads the planned orders and finishes with a proposal; it takes no action.
+  - A supervisor approves the proposal in the inbox ("Resend WO-4 to the ERP against PO-9002?"), and the flow resends it.
+  - Without a model, or without a proposal, the supervisors correct it as before.
+- **Proven:**
+  - `TestAgents`: runs for a clerk and for a viewer (refused, D2), a stranger refused, ask and resume, the guard, the budget and takeover, a flow's agent step answering and stopping to its fault path, metering, and replay with snapshots and no model call.
+  - `TestERPCorrectionByAgent`, with a scripted model.
+  - The rehearsal, on the local stand-in model: the sink's echo model now calls a read tool, then proposes the first item whose product the goal names.
+- **Not yet (batch 2):**
+  - the run page and the assistant panel with intents;
+  - global search in the workspace;
+  - corrections as signals;
+  - evaluation by dry re-runs;
+  - the helpdesk reference app;
+  - transcripts in an observability store, beyond the steps kept on the run.
+

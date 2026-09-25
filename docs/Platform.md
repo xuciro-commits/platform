@@ -135,7 +135,7 @@ Status legend:
 | 0018 | One workspace: one sign-in, a launcher, apps as contributions, cross-app references | Implemented (#108); global search, the backend-for-frontend and run-time UI bundles deferred |
 | 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
 | 0020 | Flows: declared steps, waits, people, compensation, versions, decision traces | Implemented (#110, stage 4) |
-| 0021 | Agents: declared principals, the harness, context graph, traces, evaluation, A2A | Proposed (#111, stage 5) |
+| 0021 | Agents: declared principals, the harness, context graph, traces, evaluation, A2A | Accepted (#111, stage 5); batch 1 implemented |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
@@ -216,6 +216,7 @@ decision or app input ──emit──▶ pending ──attempt──▶ deliver
 | `<input>` (connector batch or page) | An input declared journaled is accepted | Runs the same app code (cursor checks included) |
 | `delivery` | Each attempt of an event for a subscriber | Attempts again and must reach the same outcome, otherwise replay stops |
 | `job` | A run that decided or notified something | Runs again at the recorded time and must reach the same outcome |
+| `agent` | Each step an agent's model chose (ADR-0021) | Applies the recorded choice — the tool is used again, its action decided again — and never calls the model |
 | (any, with `versions`) | A flow instance started while handling the entry (ADR-0020) | Starts it on the recorded version, whatever the code declares since |
 | `effect` | Each attempt of an outbound effect | Applies the recorded outcome and hands the answer to the app; never sends |
 | `usage` | Each model call (ADR-0015) | Applies the meter reading; never calls a model |
@@ -486,6 +487,10 @@ Aggregates over any entity type within the member's scope; the platform's visual
 
 Declared flows run as records of a flow app, each step a decision inside the owned work that caused it: the plant's ERP confirmation (a hand-written chain before) and the CRM's group stay across the lodging protocol. What held: owned work, tasks and protocols were the parts; replay and snapshots covered flows with no new mechanism except one — the journal now records which flow version an instance started with, because replay through newer code must not pick a newer version. What it cost: every tenant whose apps declare flows composes the flow app.
 
+### Agents, batch 1 (#111, stage 5)
+
+Declared agents run in the host as principals: the model is called outside the journal, each step it chose is journaled with its rationale and applied as a decision, and replay never calls a model. The plant's refused ERP confirmations are corrected by an agent step whose proposal a supervisor approves. What held: the catalog as the only way to act, D6 and probing (ADR-0017) gave the intersection of grants with no new policy code; flows gave waiting, asking and falling back to people. What it cost: model calls gained tools on both wires.
+
 ### Shared capability models (candidates, layer 2)
 
 Across domains the business differs but the data is organised alike. These are **capability candidates**, not kernel: they carry domain-like vocabulary and are promoted only when two domains use them without exceptions (§4 rules). The UI kit (`web/packages/ui`, ADR-0004) already gives them one presentation.
@@ -639,12 +644,12 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 | Providers, models, access, usage (ADR-0015 batch 1) | have |
 | The Anthropic adapter (official Go SDK) | have |
 | Quotas and rate limits, streaming, app calls as effects (batch 2) | missing |
-| Agents: a model with the caller's catalog as tools, runs as owned work, approvals for what cannot be recalled (batch 3) | partial: MCP, D6 |
+| Agents: a model with the caller's catalog as tools, runs as owned work, approvals for what cannot be recalled | have (ADR-0021 batch 1): declared agents, runs journaled step by step, flows' agent steps |
 | Knowledge: documents and records indexed for retrieval, cited answers | missing |
 | AI in the workspace: an assistant panel on any record, with the record as context; stating an intent instead of navigating apps | missing |
-| Context graph: records, links, protocols and the decision history as one typed graph that people and agents query across apps, the grounding for every agent | Palantir Ontology, SAP Knowledge Graph | partial: records, relations, the journal; no graph read |
+| Context graph: records, links, protocols and the decision history as one typed graph that people and agents query across apps, the grounding for every agent | Palantir Ontology, SAP Knowledge Graph | partial (ADR-0021): a record's context (history, references, related, links, flows, tasks) and search across types; no traversal beyond one record yet |
 | Decision traces: each decision with its reasons, evidence (K4 facts), the branch a rule or flow took, the agent's rationale and the approvals it passed; corrections (rejections, reversals) kept as signals | SAP decision traces, Foundry action logs | partial: flows keep why each step went where it went (ADR-0020); single decisions do not yet |
-| Agent harness: an agent as a principal with narrower grants than a role, budgets (calls, cost, actions), memory, guardrails and observability of each run; goals decomposed and delegated, exceptions to people | SAP harness engineering, Agentforce, AIP | partial: agents as members, catalog-only actions, D6 approval |
+| Agent harness: an agent as a principal with narrower grants than a role, budgets (calls, cost, actions), memory, guardrails and observability of each run; goals decomposed and delegated, exceptions to people | SAP harness engineering, Agentforce, AIP | have (ADR-0021 batch 1): declared tools intersected with the person's grants, budgets and daily quotas, guards, ask, stop to a person, every step traced; memory missing |
 | Evaluation: runs replayed against past decisions and corrections before a model, prompt or agent changes | — | missing |
 | Agent interoperability: MCP for tools (have), Agent2Agent for other vendors' agents | MCP, A2A | partial |
 

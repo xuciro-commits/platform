@@ -170,4 +170,9 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
    3. 选 release（或者两天没人回答），已订的房会按倒序取消；选 confirmed，流程结束；
    4. `manager@hotel.test` 在设置 → Processes → Flows 看所有流程和实例，点开实例能看到每一步和原因，卡住的可以重试、跳过、取消。
    工厂那边：订单最后一个 SFC 完成后，"ERP 确认"流程自动发确认；ERP 拒绝时主管收件箱里会有"修正并重发"的任务，重发后任务自动关闭。
-6. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+6. **智能体**（MES，`sup@plant.test`）：
+   1. 先在设置里给智能体选一个模型：App settings → Agents → "Model for agents"，填一个已启用、支持工具调用的模型，比如 `openrouter/<某个支持 tools 的模型>`，或者本地替身 `local/echo`（先在 AI → Providers 添加 local，地址 `http://webhook-sink:8080/v1`，再启用 echo）；
+   2. 下达一张不带计划订单的订单（比如 P-200，数量 8），让操作员把 SFC 做完；
+   3. ERP 拒绝后，"ERP 确认"流程让工厂的智能体去找对应的计划订单，主管收件箱会出现"Resend WO-x to the ERP against PO-xxxx?"，选 resend 后流程重发、ERP 确认；
+   4. 智能体每一步（调用了什么工具、理由、结果、用了多少 token）记在 `agent.run` 记录上（设置 → Records 选 Agent run 可以看）。没设模型时，智能体会停下，主管自己改。
+7. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。

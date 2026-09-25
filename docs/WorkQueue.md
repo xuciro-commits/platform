@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **111 · gate: awaiting owner** | Stage 5 of the capability plan (Platform.md §10.4): agents (ADR-0021). Agents declared in app code as principals whose grants are their tools intersected with the person they serve; runs as records of an `agent` app with each chosen step journaled and every action a decision; the context graph and search for grounding; ask-a-person, D6, budgets and guards; traces and corrections; evaluation by dry re-runs; A2A later. Proof: the plant's ERP correction as an agent step, and a helpdesk triage agent | The owner has decided D1–D10; then batch 1 of ADR-0021 |
+| **111 · building: batch 2** | Stage 5, agents (ADR-0021). Batch 1 is built: declared agents as governed principals, runs journaled step by step, context graph and search, flows' agent steps, the plant's ERP correction. Batch 2: the run page and the assistant panel with intents in the workspace, global search, corrections as signals, evaluation by dry re-runs, the helpdesk reference app with its triage agent. Batch 3: documents with embeddings, memory, A2A | A member asks the assistant on a record and confirms its draft; a candidate model's report compares its runs with accepted ones; a helpdesk ticket is triaged, grounded and answered after approval |
 | **105 · batch 1 done, owner testing** | AI providers (ADR-0015): providers, catalogs, enabled models with access, calls with journaled usage, Settings (providers, playground, usage) | The owner has tested with OpenRouter; batch 2 (quotas and rate limits, the Anthropic adapter, app calls as effects, streaming) is ordered |
 
 ## Open friction (temporary; delete entries once resolved)
