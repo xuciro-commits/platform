@@ -277,4 +277,6 @@ func TestERPCorrectionByAgent(t *testing.T) {
 	runs, _ = p.tenant.Records(platform.Member{ID: "x", Tenant: tenant, Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}, platformserver.RunType, platform.Query{}, at)
 	sig := runs.Records[0].(platformserver.AgentRunRecord).Signals
 	expect(t, fmt.Sprint(len(sig), " ", sig[0].Kind, " ", sig[0].By), "1 accepted sup-1")
+	view, _ := p.tenant.Context(nil, OrderType, "SO-2", at) // what the agent saw of the order
+	expect(t, fmt.Sprint(view.References), "[sfcs: mes.sfc/SO-2-001]")
 }

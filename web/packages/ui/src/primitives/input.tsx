@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
+import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { cn } from "../lib/cn";
 
 const field =
@@ -11,4 +11,9 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 /** Native select: accessible, fast with long option lists, styled like Input. */
 export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={cn(field, "pr-6", className)} {...props} />;
+}
+
+/** Several lines of text, styled like Input. */
+export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={cn(field, "h-auto min-h-16 py-1", className)} {...props} />;
 }

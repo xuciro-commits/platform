@@ -1,7 +1,8 @@
 // The workspace's own views, shared by every app (ADR-0018 point 6): the
 // launcher, the inbox and requests (the work app, ADR-0017), notifications
-// (ADR-0013), the outbox (K5) and every record the member may read (ADR-0016).
-import { DashboardView, RecordDetail, Records, useHost, useOpenRecord, useRead, type AppUI, type SavedView } from "@platform/app";
+// (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
+// and the assistant, agent runs and global search (ADR-0021).
+import { Assistant, DashboardView, RecordDetail, Records, RunView, Search, useHost, useOpenRecord, useRead, type AppUI, type SavedView } from "@platform/app";
 import type { Entry } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -139,4 +140,7 @@ export const chromeViews = (apps: AppUI[], select: (id: string) => void): View[]
   { id: "outbox", title: () => "Outbox", render: () => <Outbox /> },
   { id: "records", title: () => "Records", render: () => <AllRecords /> },
   { id: "record", title: (p) => p.id ?? "Record", render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
+  { id: "run", title: (p) => p.id ?? "Run", render: (p) => <RunView id={p.id ?? ""} /> },
+  { id: "assistant", title: (p) => p.about ? `Assistant: ${p.about}` : "Assistant", render: (p) => <Assistant about={p.about} /> },
+  { id: "search", title: () => "Search", render: () => <Search /> },
 ];

@@ -73,8 +73,14 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 		if f.Ref == "" {
 			continue
 		}
-		if ref := v.FieldByIndex(f.Index).String(); ref != "" {
-			out.References = append(out.References, f.Name+": "+f.Ref+"/"+ref)
+		x := v.FieldByIndex(f.Index)
+		if x.Kind() != reflect.Slice { // a reference, or references
+			x = reflect.Append(reflect.MakeSlice(reflect.SliceOf(x.Type()), 0, 1), x)
+		}
+		for i := range x.Len() {
+			if ref := x.Index(i).String(); ref != "" {
+				out.References = append(out.References, f.Name+": "+f.Ref+"/"+ref)
+			}
 		}
 	}
 	if t.relations != nil {

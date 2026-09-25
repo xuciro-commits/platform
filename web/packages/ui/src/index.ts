@@ -1,6 +1,6 @@
 export { cn } from "./lib/cn";
 export { Button, type ButtonProps } from "./primitives/button";
-export { Input, Select } from "./primitives/input";
+export { Input, Select, Textarea } from "./primitives/input";
 export { Card } from "./primitives/card";
 export { Dialog } from "./primitives/dialog";
 export { StatusTag, Tag, defineStatuses, submissionStatuses, type StatusRegistry, type Tone } from "./components/StatusTag";

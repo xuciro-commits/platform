@@ -2,15 +2,16 @@
 // members and their role in each app, the organisation, the apps a tenant runs
 // with their protocol graph, the capability matrix read from the registry,
 // connectors and endpoints, app settings, owned work (ADR-0013), AI providers
-// and usage (ADR-0015) and the audit trail. Every change is a decision.
-import { Records, defineApp, useHost, useReadQuery as useRead } from "@platform/app";
+// and usage (ADR-0015), flows (ADR-0020), agents and their evaluations
+// (ADR-0021) and the audit trail. Every change is a decision.
+import { Records, defineApp, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
 import type { EdgeClient } from "@platform/kernel";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, FlowView, Input, PageHeader, Select, Tag, useWorkspace,
   type ColumnDef, type FlowDefinition, type FlowInstanceData, type View,
 } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Blocks, Bot, Cable, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
+import { BarChart3, Blocks, Bot, BrainCircuit, Cable, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -814,7 +815,55 @@ function FlowPage({ id }: { id: string }) {
   );
 }
 
+// Agents (ADR-0021): the agents the apps declare with their tools and budgets,
+// every run with its trace, and evaluations of a candidate model against what
+// people confirmed or corrected.
+function Agents() {
+  const agents = useRead<AgentInfo[]>("/v1/agents").data ?? [];
+  const columns: ColumnDef<AgentInfo, any>[] = [
+    { accessorKey: "title", header: "Agent" },
+    { accessorKey: "id", header: "ID", meta: { width: 200 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { id: "tools", header: "Tools", meta: { width: 320 }, accessorFn: (a) => a.tools.join(", ") },
+    { id: "budget", header: "Budget per run", meta: { width: 220 }, accessorFn: (a) => `${a.budget.Steps} turns, ${a.budget.Tokens} tokens, ${a.budget.Actions} actions` },
+  ];
+  return (
+    <>
+      <PageHeader title="Agents" description="Agents the apps declare. Each is a principal of its own: it does what its tools allow and, for a person, only what they may do; people confirm its drafts. The model is an app setting of Agents." />
+      <DataTable data={agents} columns={columns} getRowId={(a) => a.id} height={180} empty="No app declares an agent" />
+      <h2 className="mb-2 mt-4 text-sm font-semibold">Runs</h2>
+      <Records type="agent.run" description="Every run: open one for its steps, the rationale of each, and what people made of it." />
+    </>
+  );
+}
+
+function Evaluations() {
+  const { decide, can } = useHost();
+  const agents = useRead<AgentInfo[]>("/v1/agents").data ?? [];
+  const models = useRead<AIModel[]>("/v1/ai-models").data ?? [];
+  const [agent, setAgent] = useState("");
+  const [model, setModel] = useState("");
+  const chosen = agent || agents[0]?.id || "";
+  return (
+    <>
+      <PageHeader title="Evaluations" description="A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected." />
+      {can("agent.evaluation.start") && (
+        <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void decide("agent.evaluation.start", { type: "agent.evaluation", id: newId("EVAL") }, { agent: chosen, model }); }}>
+          <Select aria-label="Agent" className="w-64" value={chosen} onChange={(e) => setAgent(e.target.value)}>
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
+          </Select>
+          <Input aria-label="Candidate model" className="w-80" list="enabled-models" placeholder="Candidate model, provider/model" value={model} onChange={(e) => setModel(e.target.value)} />
+          <datalist id="enabled-models">{models.map((m) => <option key={`${m.provider}/${m.model}`} value={`${m.provider}/${m.model}`} />)}</datalist>
+          <Button type="submit" variant="primary" disabled={!chosen || !model}>Evaluate</Button>
+        </form>
+      )}
+      <Records type="agent.evaluation" description="Reports, newest first; open one for each case." />
+    </>
+  );
+}
+
 const views: View[] = [
+  { id: "agents", title: () => "Agents", render: () => <Agents /> },
+  { id: "evaluations", title: () => "Evaluations", render: () => <Evaluations /> },
   { id: "flows", title: () => "Flows", render: () => <Flows /> },
   { id: "flow", title: (p) => p.id ?? "Flow", render: (p) => <FlowPage id={p.id ?? ""} /> },
   { id: "members", title: () => "Members", render: () => <Members /> },
@@ -850,7 +899,8 @@ export default defineApp({
       ...(admin ? [{ label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("App settings", <SlidersHorizontal />, "app-settings"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] }] : []),
       ...(host.role("ai") ? [{ label: "AI", items: [...(host.role("ai") === "admin" ? [nav("Providers and models", <Bot />, "ai-providers")] : []), nav("Playground", <MessageSquare />, "ai-playground"), nav("Usage", <BarChart3 />, "ai-usage")] }] : []),
       ...(admin ? [{ label: "Operations", items: [nav("Integrations", <PlugZap />, "integrations"), nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] }] : []),
-      ...(host.role("flow") ? [{ label: "Processes", items: [nav("Flows", <Route />, "flows")] }] : []),
+      ...(host.role("flow") || host.role("agent") ? [{ label: "Processes", items: [...(host.role("flow") ? [nav("Flows", <Route />, "flows")] : []),
+        ...(host.role("agent") ? [nav("Agents", <BrainCircuit />, "agents"), nav("Evaluations", <FlaskConical />, "evaluations")] : [])] }] : []),
     ];
   },
 });

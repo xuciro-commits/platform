@@ -6,7 +6,7 @@ import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@pl
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
 import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Send, Upload } from "lucide-react";
+import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { chromeViews } from "./chrome";
 
@@ -22,7 +22,7 @@ const packages: { serves: string[]; load: () => Promise<{ default: AppUI }> }[] 
   { serves: ["hotel"], load: () => import("@pkg/hotel/app") },
   { serves: ["hr"], load: () => import("@pkg/hr") },
   { serves: ["mes"], load: () => import("@pkg/mes") },
-  { serves: ["platform", "org", "ai", "flow"], load: () => import("@pkg/platform") },
+  { serves: ["platform", "org", "ai", "flow", "agent"], load: () => import("@pkg/platform") },
 ];
 
 const remembered = (key: string) => { try { return sessionStorage.getItem(key) ?? undefined; } catch { return undefined; } };
@@ -88,7 +88,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     };
     // A record opens in its app's view; a protocol's record (lodging.booking)
     // in the view of the app the tenant binds as its provider (D5).
-    const opens = new Map<string, string>();
+    const opens = new Map<string, string>([["agent.run", "run"]]);
     for (const app of apps ?? []) {
       for (const [type, view] of Object.entries(app.opens ?? {})) {
         const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));
@@ -154,6 +154,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
             { label: "My requests", icon: <Send />, route: { view: "requests" } },
             { label: "Notifications", icon: <Bell />, route: { view: "notifications" }, badge: badge(unread) },
             { label: "Records", icon: <Database />, route: { view: "records" } },
+            { label: "Search", icon: <Search />, route: { view: "search" } },
+            ...(host.can("agent.run.start") ? [{ label: "Assistant", icon: <Sparkles />, route: { view: "assistant" } }] : []),
             ...(waiting ? [{ label: "Outbox", icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] : []),
           ] },
           ...(saved.length ? [{ label: "Saved views", items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),

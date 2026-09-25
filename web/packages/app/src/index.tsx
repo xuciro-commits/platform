@@ -168,6 +168,7 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
 export function RecordDetail({ type, id }: { type: string; id: string }) {
   const { source, can, decide } = useHost();
   const openRecord = useOpenRecord();
+  const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
   const [reload, setReload] = useState(0);
   const act = async (schema: string, r: EntityRecord, payload: object) => {
@@ -178,6 +179,7 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
       <RecordPage source={source} type={type} id={id} reload={reload} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={can} onTransition={(schema, r) => void act(schema, r, {})}
         actions={(r) => <>
+          {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>Ask the assistant</Button>}
           {can(`${type}.edit`) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>Edit</Button>}
           {can(`${type}.archive`) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>Archive</Button>}
         </>} />
@@ -190,3 +192,5 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
 }
 
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+
+export { Assistant, RunView, Search, runStates, type AgentInfo, type AgentRun, type RunDraft, type RunSignal, type RunStep } from "./agents";
