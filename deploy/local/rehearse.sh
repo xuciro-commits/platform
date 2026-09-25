@@ -248,7 +248,25 @@ sales crm-server "$SALES_TOKEN" f-3 crm.opportunity.close crm.opportunity OPP-9 
 flowstate() { curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/records/flow.instance/crm.group-stay:OPP-9" | jq -r '.record.state + " " + ([.record.trace[]?.what] | join(","))'; }
 for _ in $(seq 20); do [[ $(flowstate) == waiting* ]] && break; sleep 0.5; done
 [[ $(flowstate) == "waiting started,acted,chose,acted,chose,asked" ]] || fail "group-stay flow: $(flowstate)"
-before=$(state)
+# The helpdesk (ADR-0021 D10 (2)): a ticket's triage agent, on the local model,
+# triages and replies; the reply's mail is held because an agent wrote it, and
+# reaches the mail gateway (the sink) once the manager approves it.
+sales ai "$MGR" hd-1 ai.provider.add ai.provider local '{"kind":"local","baseUrl":"http://webhook-sink:8080/v1"}' | jq -e .record >/dev/null || fail "sales AI provider"
+sales ai "$MGR" hd-2 ai.model.enable ai.model local/echo '{"access":"users"}' | jq -e .record >/dev/null || fail "sales model"
+sales platform "$MGR" hd-3 platform.setting.set platform.setting agent/model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "sales agents' model"
+sales platform "$MGR" hd-4 platform.endpoint.add platform.endpoint mail-gateway \
+  '{"url":"http://webhook-sink:8080/hook","secret":"sink","effects":["helpdesk/reply"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "mail gateway endpoint"
+sales helpdesk "$MGR" hd-5 helpdesk.ticket.open helpdesk.ticket T-1 '{"subject":"Wifi keeps dropping","customer":"anna@acme.test","account":"ACME"}' | jq -e .record >/dev/null || fail "open ticket"
+ticket() { records "$MGR" 'helpdesk.ticket/T-1' | jq -r '.record.status + " " + .record.priority + " " + .record.replied'; }
+for _ in $(seq 40); do [[ $(ticket) == answered* ]] && break; sleep 0.5; done
+[[ $(ticket) == "answered normal agent:helpdesk.triage" ]] || fail "ticket after triage: $(ticket)"
+held=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/effects" | jq -r '.[] | select(.event == "helpdesk/reply") | .state + " " + .id')
+[[ ${held%% *} == held ]] || fail "the agent's reply was not held: $held"
+sales platform "$MGR" hd-6 platform.effect.approve platform.effect "${held#* }" '{}' | jq -e .record >/dev/null || fail "approve the reply"
+for _ in $(seq 20); do [[ $(curl -s "$SINK/received" | jq '[.kept[] | select(.type == "helpdesk/reply")] | length') == 1 ]] && break; sleep 0.5; done
+[[ $(curl -s "$SINK/received" | jq -r '.kept[] | select(.type == "helpdesk/reply") | .data.to') == anna@acme.test ]] || fail "reply mailed: $(curl -s "$SINK/received")"
+echo "ok   helpdesk: the triage agent triaged and replied on the local model; its reply's mail held, approved by the manager, and sent to the mail gateway"
+before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
 compose restart mes-server sales-server >/dev/null 2>&1
@@ -265,7 +283,7 @@ sales work "$SALES_TOKEN" f-4 work.task.complete work.task "$task" '{"answer":"c
 for _ in $(seq 20); do [[ $(flowstate) == done* ]] && break; sleep 0.5; done
 [[ $(flowstate) == done* ]] || fail "flow after the restart: $(flowstate)"
 echo "ok   flows: a won opportunity's rooms booked by the group-stay flow through the lodging protocol; its question to the owner survived the restart and its answer ended it"
-sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == 1 ]] || fail "a delivered webhook was sent again after the restart"
+sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == "$calls" ]] || fail "a delivered webhook was sent again after the restart"
 echo "ok   restart: each host saved a snapshot at shutdown and started from it (mes $(compose logs mes-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
 
 # The journal is what to back up: the projections are copies rebuilt at start-up (ADR-0019).

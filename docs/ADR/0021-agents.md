@@ -1,6 +1,6 @@
 # ADR-0021: Agents — governed principals in a traced harness
 
-**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.4). The owner accepted D1–D10 as recommended. What is built is under "As built".
+**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.4). The owner accepted D1–D10 as recommended. What is built is under "As built" (batches 1 and 2).
 
 ## Context
 
@@ -154,11 +154,47 @@ Our platform starts from an advantage there: every decision is already journaled
   - `TestAgents`: runs for a clerk and for a viewer (refused, D2), a stranger refused, ask and resume, the guard, the budget and takeover, a flow's agent step answering and stopping to its fault path, metering, and replay with snapshots and no model call.
   - `TestERPCorrectionByAgent`, with a scripted model.
   - The rehearsal, on the local stand-in model: the sink's echo model now calls a read tool, then proposes the first item whose product the goal names.
-- **Not yet (batch 2):**
-  - the run page and the assistant panel with intents;
-  - global search in the workspace;
-  - corrections as signals;
-  - evaluation by dry re-runs;
-  - the helpdesk reference app;
-  - transcripts in an observability store, beyond the steps kept on the run.
+- **Not yet (then batch 2):** the run page and the assistant panel, global search in the workspace, corrections as signals, evaluation by dry re-runs, the helpdesk reference app.
 
+### Batch 2 (#111)
+
+- **Drafts (D6):**
+  - A run on someone's behalf no longer acts. An action it chooses is probed as that person, kept as the run's `draft`, and the person is notified; the run waits.
+  - `agent.run.confirm` (only by that person) does it as them, with the run as correlation, changed or not. `agent.run.reject` gives the agent the reason and it goes on.
+  - Runs started by flows still act within their grants. Anyone may stop a run on their behalf.
+- **Signals (D7):**
+  - Each run keeps `signals`: confirmed, changed (with the person's value) and rejected drafts.
+  - A flow's `Ask` may name the agent step it `Reviews`: its first answer accepts the proposal, another corrects it, and an event `On` bypasses it. The plant's approval reviews its agent.
+  - Held effects discarded, and decisions undone, are not signals yet.
+- **What the run saw:** `seen` keeps the record's context when the run starts. The prompt uses it, and so does the evaluation.
+- **Evaluation (D8)** (`agent_eval.go`):
+  - An administrator queues `agent.evaluation.start` with an agent and an enabled candidate model. `Tenant.Evaluate` runs apart from `Think`, every 5 seconds.
+  - It re-runs the 20 latest runs that have signals, dry. The candidate sees what the run saw: its `seen` context, and the answers its reads got when it calls them the same way. Other reads read now. Actions are probed as the agent and the person, never taken; the records having moved on since is not a refusal.
+  - Each case agrees or differs with an accepted decision (its actions, else its result), or repeats or avoids a corrected one; asks and failures are counted. Calls are metered to whoever started it.
+  - The report is journaled as an `agent` entry and becomes the `agent.evaluation` record; replay never calls the model.
+- **Workspace** (`@platform/app` `agents.tsx`):
+  - Every record page offers "Ask the assistant". Its run page shows each step with its rationale, the draft with its fields to change, confirm or reject, and the signals.
+  - Search (`/v1/search`) covers every type the member may read.
+  - Settings → Processes lists the declared agents, every run and the evaluations.
+- **Helpdesk (D10 (2))** (`slices/helpdesk`, composed in the sales solution):
+  - Tickets have a lifecycle: triage (the priority sets when the answer is due), reply, close and escalate.
+  - The service-level flow has two branches:
+    - the triage agent, or the desk when it stops;
+    - a clock that follows the due time, which triage moves, and tells the leads when it passes.
+  - The agent grounds itself through search and the context graph in the CRM's account, opportunities and stays, though the helpdesk knows no CRM.
+  - A reply is mailed as the irreversible effect `helpdesk/reply`, so the agent's waits for a person. Its guard refuses replies promising money.
+  - The CRM declares a sales assistant for the workspace.
+- **Also:**
+  - The plant checks that a planned order fits the order it confirms: same product, enough quantity, no other order's. Releases and corrections are refused otherwise, and the agent's proposal is checked by the same rule. Recorded decisions stand on replay.
+  - The context graph lists each reference of a list of references.
+- **Proven:**
+  - `TestAgents`: drafts confirmed as changed, rejected, only by their person; evaluation verdicts, with nothing done; replay.
+  - `TestERPCorrectionByAgent`: the supervisor's acceptance kept as a signal.
+  - `TestHelpdeskTriage`: grounding in the CRM, the held reply approved and mailed, the guard, the desk's fallback and escalation, and replay.
+  - The rehearsal's helpdesk path on the local stand-in model.
+- **Not yet (batch 3):**
+  - documents with embeddings;
+  - agent memory;
+  - A2A;
+  - transcripts in an observability store;
+  - signals from discarded effects and undone decisions.

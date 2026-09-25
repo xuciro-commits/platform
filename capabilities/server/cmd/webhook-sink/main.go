@@ -13,7 +13,8 @@
 //	                OpenAI wire (ADR-0015): model "echo" repeats the last message;
 //	                given tools (an agent, ADR-0021), it calls a read tool first,
 //	                then finishes proposing the first item read whose ID the goal
-//	                does not name and whose product it does
+//	                does not name and whose product it does; the helpdesk's
+//	                triage agent triages a ticket as normal and replies
 package main
 
 import (
@@ -33,6 +34,7 @@ import (
 	"net/textproto"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -141,6 +143,27 @@ func main() {
 				json.NewEncoder(w).Encode(map[string]any{"model": "echo", "usage": map[string]int{"prompt_tokens": 50, "completion_tokens": 10},
 					"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "", "tool_calls": []map[string]any{
 						{"id": "c1", "type": "function", "function": map[string]string{"name": name, "arguments": string(raw)}}}}}}})
+			}
+			// The helpdesk's triage agent: triage as normal, reply, finish.
+			if slices.ContainsFunc(req.Tools, func(t struct{ Function struct{ Name string } }) bool {
+				return t.Function.Name == "helpdesk_ticket_triage"
+			}) {
+				ticket := regexp.MustCompile(`ticket (\S+) from`).FindStringSubmatch(req.Messages[1].Content)
+				done := 0
+				for _, m := range req.Messages {
+					if m.Role == "tool" {
+						done++
+					}
+				}
+				switch {
+				case ticket == nil || done >= 2:
+					call("finish", map[string]string{"result": "triaged and answered", "rationale": "Both steps are done."})
+				case done == 0:
+					call("helpdesk_ticket_triage", map[string]string{"target": ticket[1], "category": "other", "priority": "normal", "rationale": "Nothing marks it urgent."})
+				default:
+					call("helpdesk_ticket_reply", map[string]string{"target": ticket[1], "reply": "Thank you for writing. A colleague will follow up today.", "rationale": "Acknowledge and hand it on."})
+				}
+				return
 			}
 			if req.Messages[len(req.Messages)-1].Role != "tool" {
 				for _, t := range req.Tools {

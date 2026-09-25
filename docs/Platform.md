@@ -135,7 +135,7 @@ Status legend:
 | 0018 | One workspace: one sign-in, a launcher, apps as contributions, cross-app references | Implemented (#108); global search, the backend-for-frontend and run-time UI bundles deferred |
 | 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
 | 0020 | Flows: declared steps, waits, people, compensation, versions, decision traces | Implemented (#110, stage 4) |
-| 0021 | Agents: declared principals, the harness, context graph, traces, evaluation, A2A | Accepted (#111, stage 5); batch 1 implemented |
+| 0021 | Agents: declared principals, the harness, context graph, traces, evaluation, A2A | Accepted (#111, stage 5); batches 1 and 2 implemented |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
@@ -490,6 +490,10 @@ Declared flows run as records of a flow app, each step a decision inside the own
 ### Agents, batch 1 (#111, stage 5)
 
 Declared agents run in the host as principals: the model is called outside the journal, each step it chose is journaled with its rationale and applied as a decision, and replay never calls a model. The plant's refused ERP confirmations are corrected by an agent step whose proposal a supervisor approves. What held: the catalog as the only way to act, D6 and probing (ADR-0017) gave the intersection of grants with no new policy code; flows gave waiting, asking and falling back to people. What it cost: model calls gained tools on both wires.
+
+### Agents, batch 2 (#111, stage 5)
+
+People stay in the loop: an agent running for a person drafts, and the person confirms, changes or rejects; flows' reviews of an agent's proposal count too. Each answer is kept as a signal on the run, and an evaluation re-runs the answered runs dry with a candidate model and compares. The workspace gained the assistant on every record, run pages and global search. The helpdesk proved the whole: a ticket triaged and answered by an agent grounded in another app's records, its reply held for a person, its service level kept by a flow. What held: probing gave dry re-runs with no new policy code; the context graph and search grounded an agent in apps its own app does not know; D6 held the agent's mail without the helpdesk knowing. What it cost: a run keeps what it saw at its start, so that an evaluation sees the same; a flow's clock needed a second branch to follow a due time that triage moves.
 
 ### Shared capability models (candidates, layer 2)
 

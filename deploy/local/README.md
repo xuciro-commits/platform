@@ -174,5 +174,16 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
    1. 先在设置里给智能体选一个模型：App settings → Agents → "Model for agents"，填一个已启用、支持工具调用的模型，比如 `openrouter/<某个支持 tools 的模型>`，或者本地替身 `local/echo`（先在 AI → Providers 添加 local，地址 `http://webhook-sink:8080/v1`，再启用 echo）；
    2. 下达一张不带计划订单的订单（比如 P-200，数量 8），让操作员把 SFC 做完；
    3. ERP 拒绝后，"ERP 确认"流程让工厂的智能体去找对应的计划订单，主管收件箱会出现"Resend WO-x to the ERP against PO-xxxx?"，选 resend 后流程重发、ERP 确认；
-   4. 智能体每一步（调用了什么工具、理由、结果、用了多少 token）记在 `agent.run` 记录上（设置 → Records 选 Agent run 可以看）。没设模型时，智能体会停下，主管自己改。
-7. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+   4. 智能体每一步（调用了什么工具、理由、结果、用了多少 token）记在它的运行记录上：设置 → Processes → Agents 下面的 Runs，点开能看到每一步和理由；主管在收件箱的回答（接受或自己改）也记在上面，作为以后评估的依据。没设模型时，智能体会停下，主管自己改。
+   5. 手工纠正时，计划订单必须对得上：同一产品、数量够、没被别的订单占用，否则会被拒绝（目前只显示 invalid argument，原因见工作队列 F-23）。
+7. **帮助台**（Sales，`manager@hotel.test`，他是帮助台 lead）：
+   1. 和第 6 条一样先给 Sales 设智能体模型（AI → Providers 添加 local 并启用 echo，或者用 OpenRouter 的支持 tools 的模型；再在 App settings → Agents 填模型）；在 Integrations 添加一个接收地址，勾选 effect `helpdesk/reply`（本地可以用 `http://webhook-sink:8080/hook`，秘钥随便填，允许私有地址）；
+   2. 打开 Helpdesk → Open ticket，客户账号填 `ACME`（先在 CRM 建好这个账户和商机，模型才能查到）；
+   3. 分诊智能体会分类、定优先级（优先级决定回复期限），再回复；因为是智能体写的回复，邮件会被扣住，Notifications 里会有"Approve Reply to the customer"，到 Integrations 批准后才发出去（本地在 `http://127.0.0.1:8497/received` 能看到）；
+   4. 回复里承诺退款、补偿、折扣的会被智能体的规则拒绝，工单留给人处理；模型不可用时工单直接进帮助台的收件箱；到期还没回复的，lead 会收到"Late ticket"任务和通知。
+8. **助手和评估**（任一主机）：
+   1. 打开任一记录（比如 CRM 的商机，或 MES 的订单），点 "Ask the assistant"，选智能体（Sales 的 "Sales assistant"，MES 的 "ERP correction"），写下要做什么，比如"把这个商机标记为赢单"；
+   2. 智能体替你干活时不会直接改数据：它要做的动作会作为草稿等你确认，你可以改字段后 Confirm，或写原因 Reject（它会接着想办法）；这些都记为这次运行的反馈；
+   3. 左侧 Search 可以跨所有你能看的类型搜记录；
+   4. 管理员在设置 → Processes → Evaluations 选一个智能体和一个候选模型点 Evaluate：它用候选模型把有人确认或纠正过的历史运行"干跑"一遍（只检查、不执行），报告里每条都会标出与人接受的一致、不一致、重犯被纠正的错误，或避开了它。
+9. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
