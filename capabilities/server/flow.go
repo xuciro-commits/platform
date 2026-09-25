@@ -167,19 +167,21 @@ func (f *Flows) declare(a platform.App) error {
 	for _, fl := range m.Flows {
 		id := m.ID + "." + fl.Name
 		d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
-		if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || fl.Start.On == "" || fl.Start.Begin == nil {
+		if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || len(fl.Start.On) == 0 || fl.Start.Begin == nil {
 			return fmt.Errorf("flow %s: name, title, version, a start and steps are required", id)
 		}
 		versions := f.defs[id]
 		if len(versions) > 0 && versions[len(versions)-1].Version >= fl.Version {
 			return fmt.Errorf("flow %s: versions must be declared in ascending order", id)
 		}
-		if protocol, _, ok := strings.Cut(fl.Start.On, "#"); ok {
-			if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
-				return fmt.Errorf("flow %s starts on %s of a protocol %s does not consume", id, fl.Start.On, m.ID)
+		for _, on := range fl.Start.On {
+			if protocol, _, ok := strings.Cut(on, "#"); ok {
+				if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
+					return fmt.Errorf("flow %s starts on %s of a protocol %s does not consume", id, on, m.ID)
+				}
+			} else if _, own := m.Actions.Action(on); !own {
+				return fmt.Errorf("flow %s starts on %s, neither %s's action nor a protocol event", id, on, m.ID)
 			}
-		} else if _, own := m.Actions.Action(fl.Start.On); !own {
-			return fmt.Errorf("flow %s starts on %s, neither %s's action nor a protocol event", id, fl.Start.On, m.ID)
 		}
 		for i := range fl.Steps {
 			s := &fl.Steps[i]
@@ -273,7 +275,7 @@ func (f *Flows) running(c platform.Caller) []FlowInstance {
 // interested reports whether an event starts a flow or may end a wait.
 func (f *Flows) interested(names []string, e platform.Event) bool {
 	for _, versions := range f.defs {
-		if d := versions[len(versions)-1]; slices.Contains(names, d.Start.On) {
+		if d := versions[len(versions)-1]; slices.ContainsFunc(d.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			return true
 		}
 		for _, d := range versions {
@@ -294,7 +296,7 @@ func (f *Flows) handle(c platform.Caller, e platform.Event, names []string, now 
 	s := e.Record.GetSubmission()
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		latest, _ := f.latest(id)
-		if !slices.Contains(names, latest.Start.On) {
+		if !slices.ContainsFunc(latest.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			continue
 		}
 		key, data, ok := latest.Start.Begin(f.t.automation(latest.app, c.Replaying), e)
@@ -422,7 +424,7 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 		App     string     `json:"app"`
 		Title   string     `json:"title"`
 		Version int        `json:"version"`
-		Start   string     `json:"start"`
+		Start   []string   `json:"start"`
 		Steps   []stepView `json:"steps"`
 	}
 	out := []flowView{}

@@ -9,7 +9,8 @@
       "platform": "admin",
       "org": "admin",
       "ai": "admin",
-      "work": "admin"
+      "work": "admin",
+      "flow": "admin"
     },
     "units": [
       {

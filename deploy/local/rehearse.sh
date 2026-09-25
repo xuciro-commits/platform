@@ -162,7 +162,7 @@ sales crm-server "$SALES_TOKEN" s-b crm.opportunity.book crm.opportunity OPP-1 '
 [[ $(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/protocols" | jq -r '.[] | select(.id == "lodging.booking/1") | "\(.bound) \(.consumers)"') == 'hotel ["crm"]' ]] || fail "protocol binding"
 sales platform "$MGR" s-r platform.member.revoke platform.member sales-1 '{"app":"hotel"}' | jq -e .record >/dev/null || fail "revoke"
 catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/actions" | jq -c '[.[].schema | select(startswith("crm.") or startswith("hotel."))]')
-[[ $catalog == '["crm.account.create","crm.account.edit","crm.account.archive","crm.opportunity.open","crm.opportunity.close"]' ]] || fail "catalog after revocation: $catalog"
+[[ $catalog == '["crm.account.create","crm.account.edit","crm.account.archive","crm.opportunity.open","crm.opportunity.close","crm.opportunity.plan"]' ]] || fail "catalog after revocation: $catalog"
 [[ $(sales crm-server "$SALES_TOKEN" s-b2 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
 # Outbound effects (ADR-0014): the administrator subscribes a webhook endpoint to
 # the protocol's cancellation; the cancellation below reaches the sink signed, once.

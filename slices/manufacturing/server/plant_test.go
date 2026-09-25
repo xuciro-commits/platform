@@ -98,7 +98,7 @@ func plantTenantOf(t *testing.T, seed []platform.Membership, disable ...string) 
 		}
 	}
 	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, platformserver.Seat{Subjects: []string{"admin"},
-		Member: platform.Member{ID: "admin", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}}), platformserver.NewOrganization(tenant, DemoOrganization(seed)), p)
+		Member: platform.Member{ID: "admin", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin}}}), platformserver.NewOrganization(tenant, DemoOrganization(seed)), platformserver.NewWork(tenant), platformserver.NewFlows(tenant), p)
 	if err == nil {
 		err = tn.Connect(DemoConnectors(tenant)...)
 	}

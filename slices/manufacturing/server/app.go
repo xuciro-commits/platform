@@ -18,9 +18,6 @@ const (
 	JobReasons            = "downtime-reasons"
 )
 
-// Manifest declares the plant as the "mes" app (ADR-0010): its actions, its
-// reads, its connector inputs (batches and pages, both journaled; the host keeps
-// the connectors), its settings and its scheduled job (ADR-0013).
 // Snapshot and Restore: the plant's facts (ERP claims, gateway batches), the
 // identities and redirects of downtime events, the derived downtime and the
 // decisions; orders and SFCs are the host's records (ADR-0019 D6).
@@ -56,8 +53,11 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 	return platform.RestoreFacts(p.facts, p.tenant, s.Facts)
 }
 
+// Manifest declares the plant as the "mes" app (ADR-0010): its actions, its
+// reads, its connector inputs (batches and pages, both journaled; the host keeps
+// the connectors), its settings, its scheduled job (ADR-0013) and its flow (ADR-0020).
 func (p *Plant) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog,
+	return platform.Manifest{ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()},
 		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,
 		Inputs: map[string]bool{"states": true, "planned-orders": true},
 		Jobs:   []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},

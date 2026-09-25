@@ -33,6 +33,7 @@ const (
 	SchemaSign     = "mes.sfc.sign"
 	SchemaReason   = "mes.downtime.reason"
 	SchemaResend   = "mes.order.reconfirm"
+	SchemaConfirm  = "mes.order.confirm"
 
 	schemaStates  = "mes.resource.states"
 	schemaPlanned = "mes.erp.planned-order"
@@ -220,7 +221,7 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 		return roleOf(who) == Quality || known && onLine(p.lineOf(sfc))
 	case SchemaSign:
 		return true
-	case SchemaResend:
+	case SchemaResend, SchemaConfirm:
 		o, known := platform.Get[Order](who, s.GetTarget().GetId())
 		return known && onLine(p.orderLine(o))
 	case SchemaReason:
@@ -313,6 +314,15 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 			return nil, conflict // the event was split: the reason must be given for each part
 		}
 		return nil, nil // reasons are read from the log through identity (see Downtime)
+	case SchemaConfirm:
+		o, known := platform.Get[Order](who, id)
+		if !known {
+			return nil, notFound
+		}
+		if o.Status != "completed" || o.ERP != "" {
+			return nil, conflict // a completed order, confirmed once; corrections are resent
+		}
+		return func(record *pb.ChangeRecord) { p.confirm(who, record, o, now) }, nil
 	case SchemaResend:
 		var r struct {
 			Planned string `json:"planned"`

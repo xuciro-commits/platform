@@ -224,14 +224,14 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 		}
 		return out
 	}
-	if got := catalog("sales"); !slices.Equal(got, []string{hotel.SchemaCreate, hotel.SchemaModify, crm.SchemaAccount, "crm.account.edit", "crm.account.archive", crm.SchemaOpen, crm.SchemaClose, crm.SchemaBook}) {
+	if got := catalog("sales"); !slices.Equal(got, []string{hotel.SchemaCreate, hotel.SchemaModify, crm.SchemaAccount, "crm.account.edit", "crm.account.archive", crm.SchemaOpen, crm.SchemaClose, crm.SchemaPlan, crm.SchemaBook}) {
 		t.Fatalf("sales catalog %v", got)
 	}
 	if slices.Contains(catalog("sales-only"), crm.SchemaBook) {
 		t.Fatal("booking is offered without the provider's grant")
 	}
 	// Without any provider the optional protocol is unbound and booking is not offered.
-	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), platformserver.NewRelations("t"), crm.New("t"))
+	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), platformserver.NewRelations("t"), platformserver.NewFlows("t"), crm.New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
@@ -15,8 +16,10 @@ import (
 
 // #101: a finished order is confirmed to the ERP as an outbound effect; the
 // ERP's answer comes back as an observation on the order (ADR-0014 D4), and a
-// refusal reaches the line's supervisors. The journal replays all of it without
-// calling the ERP (newPlant's cleanup).
+// refusal reaches the line's supervisors. The confirmation flow (ADR-0020) drives
+// it: it confirms, waits for the answer, and on a refusal asks the supervisors
+// to correct and resend. The journal replays all of it without calling the ERP
+// (newPlant's cleanup).
 func TestOrderConfirmedToTheERP(t *testing.T) {
 	calls := 0
 	erpAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +53,21 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 			expect(t, submit(p, op1, SchemaComplete, SFCType, id, sfcPayload{}), "ok")
 		}
 	}
+	at := t0
+	work := func() { // the host's owned work: the flow's deliveries and its timer
+		for range 3 {
+			at = at.Add(2 * time.Second)
+			p.tenant.Work(at)
+		}
+	}
+	flow := func(id string) platformserver.FlowInstance {
+		page, _ := p.tenant.Records(platform.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{platformserver.FlowApp: platformserver.FlowAdmin}},
+			platformserver.InstanceType, platform.Query{Domain: json.RawMessage(`[["key","=","` + id + `"]]`)}, at)
+		if len(page.Records) == 0 {
+			return platformserver.FlowInstance{}
+		}
+		return page.Records[0].(platformserver.FlowInstance)
+	}
 	order := func(id string) Order {
 		for _, o := range p.Orders() {
 			if o.ID == id {
@@ -64,20 +82,36 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	expect(t, submit(p, op1, SchemaNC, SFCType, "SO-1-002", sfcPayload{Code: "POROSITY"}), "ok")
 	expect(t, submit(p, qa1, SchemaSign, SFCType, "SO-1-002", signPayload{Action: "scrap", Meaning: "reviewed"}), "ok")
 	expect(t, submit(p, qa2, SchemaSign, SFCType, "SO-1-002", signPayload{Action: "scrap", Meaning: "approved"}), "ok")
-	expect(t, order("SO-1").ERP, "sent")
-	p.tenant.Dispatch(t0)
+	expect(t, order("SO-1").ERP, "") // the flow confirms it, as owned work
+	work()
+	expect(t, order("SO-1").ERP+" "+flow("SO-1").State, "sent waiting")
+	p.tenant.Dispatch(at)
+	work()
+	expect(t, flow("SO-1").State+" "+flow("SO-1").Trace[len(flow("SO-1").Trace)-2].Detail, "done the end: the ERP confirmed it as CONF-PO-9001-2")
 	o := order("SO-1")
 	expect(t, o.ERP+" "+o.Confirmation, "confirmed CONF-PO-9001-2") // yield 2 of 4
 	last := p.facts.Records(tenant)[len(p.facts.Records(tenant))-1].GetFact()
 	expect(t, last.GetSchema().GetName()+" "+last.GetProvenance().GetConnectorId(), schemaAnswer+" erp-api")
 	// An order the ERP did not plan is refused; the supervisors hear of it.
 	run("SO-2-001")
-	p.tenant.Dispatch(t0)
+	work()
+	p.tenant.Dispatch(at)
+	work()
 	o = order("SO-2")
 	expect(t, o.ERP+": "+o.ERPDetail, "refused: no planned order to confirm against")
 	notes, _ := p.tenant.Read(sup.Member, "notifications")
-	expect(t, notes.([]platform.Notification)[0].Title, "ERP refused the confirmation of SO-2")
-	p.tenant.Dispatch(t0) // settled effects are not sent again
+	titles := fmt.Sprint(notes.([]platform.Notification)[0].Title, " | ", notes.([]platform.Notification)[1].Title)
+	expect(t, titles, "Correct and resend SO-2 to the ERP | ERP refused the confirmation of SO-2")
+	inbox := func() string {
+		out, _ := p.tenant.Read(sup.Member, "inbox")
+		var titles []string
+		for _, task := range out.([]platformserver.WorkTask) {
+			titles = append(titles, task.Title)
+		}
+		return fmt.Sprint(titles)
+	}
+	expect(t, inbox()+" "+flow("SO-2").State, "[Correct and resend SO-2 to the ERP] waiting")
+	p.tenant.Dispatch(at) // settled effects are not sent again
 	expect(t, fmt.Sprint(calls), "2")
 
 	// The supervisor corrects the refused order: it fulfils a planned order the
@@ -91,7 +125,11 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	expect(t, fmt.Sprint(p.DeliverPlanned(erp, PlannedPage{CursorFrom: "page-1", CursorTo: "page-2", Orders: []PlannedOrder{{ERPID: "PO-9002", Product: "P-100", Quantity: 1}}}, t0)), "<nil>")
 	expect(t, submit(p, sup, SchemaResend, OrderType, "SO-2", resend{Planned: "PO-9002"}), "ok")
 	expect(t, order("SO-2").ERP, "sent")
-	p.tenant.Dispatch(t0)
+	work() // the resend closes the task; the flow waits for the answer again
+	expect(t, inbox(), "[]")
+	p.tenant.Dispatch(at)
+	work()
+	expect(t, flow("SO-2").State, "done")
 	o = order("SO-2")
 	expect(t, fmt.Sprint(o.ERP, " ", o.Confirmation, " ", o.Resent, " ", calls), "confirmed CONF-PO-9002-1 1 3")
 	var keys []string
@@ -104,16 +142,17 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	// cannot be recalled, so the confirmation waits for a person's approval.
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-3", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ok")
 	run("SO-3-001")
-	p.tenant.Dispatch(t0)
+	work()
+	p.tenant.Dispatch(at)
 	expect(t, order("SO-3").ERP, "refused")
 	expect(t, fmt.Sprint(p.DeliverPlanned(erp, PlannedPage{CursorFrom: "page-2", CursorTo: "page-3", Orders: []PlannedOrder{{ERPID: "PO-9003", Product: "P-100", Quantity: 1}}}, t0)), "<nil>")
 	expect(t, submit(p, asst, SchemaResend, OrderType, "SO-3", resend{Planned: "PO-9003"}), "ok")
 	held := p.tenant.Effects(t0)[0]
 	expect(t, held.State+" "+held.Agent, "held agent-l1")
-	p.tenant.Dispatch(t0)
+	p.tenant.Dispatch(at)
 	expect(t, fmt.Sprint(calls), "4") // not sent
-	inbox, _ := p.tenant.Read(admin, "notifications")
-	expect(t, inbox.([]platform.Notification)[0].Title, "Approve Order confirmation to the ERP for mes.order/SO-3")
+	adminNotes, _ := p.tenant.Read(admin, "notifications")
+	expect(t, adminNotes.([]platform.Notification)[0].Title, "Approve Order confirmation to the ERP for mes.order/SO-3")
 	approve := func(who platform.Member, key string) string {
 		_, err := p.tenant.Submit(who, &pb.Submission{TenantId: tenant, PrincipalId: who.ID, Authority: platformserver.PlatformApp, IdempotencyKey: key,
 			Target: &pb.EntityRef{Type: platformserver.EffectType, Id: held.ID}, Schema: &pb.SchemaRef{Name: platformserver.SchemaEffectApprove, Version: 1}, Payload: []byte("{}")}, t0)
@@ -126,7 +165,7 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	robot.ID, robot.Agent = "admin-bot", true
 	expect(t, approve(robot, "a1"), "ERROR_CODE_POLICY_DENIED") // an agent cannot approve, whatever its role
 	expect(t, approve(admin, "a2"), "ok")
-	p.tenant.Dispatch(t0)
+	p.tenant.Dispatch(at)
 	o = order("SO-3")
 	expect(t, fmt.Sprint(o.ERP, " ", o.Confirmation, " ", calls), "confirmed CONF-PO-9003-1 5")
 }

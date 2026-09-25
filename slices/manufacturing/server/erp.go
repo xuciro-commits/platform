@@ -35,7 +35,7 @@ type Confirmation struct {
 }
 
 // finishOrder completes an order once all its SFCs have ended, in the decision
-// r that ended the last one, and confirms it to the ERP.
+// r that ended the last one; the confirmation flow then confirms it to the ERP.
 func (p *Plant) finishOrder(c platform.Caller, r *pb.ChangeRecord, order string, now time.Time) {
 	o, known := platform.Get[Order](c, order)
 	if !known || o.Status == "completed" {
@@ -47,7 +47,53 @@ func (p *Plant) finishOrder(c platform.Caller, r *pb.ChangeRecord, order string,
 		}
 	}
 	o.Status = "completed"
-	p.confirm(c, r, o, now)
+	c.Put(r, o)
+}
+
+// confirmation is the plant's flow from a completed order to the ERP's
+// acceptance (ADR-0020): confirm it, wait for the ERP's answer; when the ERP
+// refuses, ask the line's supervisors to correct and resend it and wait again;
+// when the ERP is silent for an hour, tell them.
+func (p *Plant) confirmation() platform.Flow {
+	order := func(c platform.Caller, r *platform.Run) Order { o, _ := platform.Get[Order](c, r.Key); return o }
+	supervisors := func(c platform.Caller, r *platform.Run) []platform.Recipient {
+		return []platform.Recipient{p.supervisorsOfOrder(order(c, r))}
+	}
+	id := func(_ platform.Caller, r *platform.Run) string { return r.Key }
+	return platform.Flow{Name: "erp-confirmation", Title: "Confirm to the ERP", Version: 1, Owners: []string{string(Supervisor)},
+		Start: platform.Start{On: []string{SchemaComplete, SchemaSign}, Begin: func(c platform.Caller, e platform.Event) (string, any, bool) {
+			sfc, _ := platform.Get[SFC](c, e.Record.GetSubmission().GetTarget().GetId())
+			o, known := platform.Get[Order](c, string(sfc.Order))
+			return o.ID, nil, known && o.Status == "completed" && o.ERP == ""
+		}},
+		Steps: []platform.Step{
+			{Name: "confirm", Title: "Confirm the order", Act: &platform.Act{Action: SchemaConfirm, Target: id}, Next: "answer"},
+			{Name: "answer", Title: "Wait for the ERP's answer", Timeout: time.Hour, OnTimeout: "silent",
+				Wait: &platform.Wait{Until: func(c platform.Caller, r *platform.Run) bool { e := order(c, r).ERP; return e != "" && e != "sent" }},
+				Choose: func(c platform.Caller, r *platform.Run) (string, string) {
+					o := order(c, r)
+					if o.ERP == "confirmed" {
+						return "", "the ERP confirmed it as " + o.Confirmation
+					}
+					return "correct", "the ERP " + o.ERP + " it: " + o.ERPDetail
+				}},
+			{Name: "correct", Title: "Correct and resend", Ask: &platform.Ask{To: supervisors, Answers: []string{"give up"},
+				Title: func(c platform.Caller, r *platform.Run) string { return "Correct and resend " + r.Key + " to the ERP" },
+				Body:  func(c platform.Caller, r *platform.Run) string { return "The ERP " + order(c, r).ERP + " it: " + order(c, r).ERPDetail },
+				Ref:   func(_ platform.Caller, r *platform.Run) string { return OrderType + "/" + r.Key },
+				On:    SchemaResend, Match: func(_ platform.Caller, r *platform.Run, e platform.Event) bool {
+					return e.Record.GetSubmission().GetTarget().GetId() == r.Key
+				}},
+				Choose: func(_ platform.Caller, r *platform.Run) (string, string) {
+					if r.Answer == "give up" {
+						return "", "a supervisor gave up"
+					}
+					return "answer", "it was resent"
+				}},
+			{Name: "silent", Title: "Tell the supervisors", Next: "answer", Ask: &platform.Ask{To: supervisors,
+				Title: func(_ platform.Caller, r *platform.Run) string { return "The ERP has not answered the confirmation of " + r.Key },
+				Ref:   func(_ platform.Caller, r *platform.Run) string { return OrderType + "/" + r.Key }}},
+		}}
 }
 
 // key names the order's current confirmation: the order, then "<order>#<n>"

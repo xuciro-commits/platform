@@ -36,7 +36,8 @@
       "memstay": "keeper",
       "ai": "admin",
       "hr": "hr",
-      "work": "admin"
+      "work": "admin",
+      "flow": "admin"
     },
     "units": [
       {

@@ -2,16 +2,21 @@ package mes
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"platformserver"
 	"platformserver/platform"
 )
 
+// schemas are the plant's and the platform's actions of a catalog; every member
+// also has the work app's (tasks, approvals, saved views).
 func schemas(actions []platform.Action) []string {
 	var out []string
 	for _, a := range actions {
-		out = append(out, a.Schema)
+		if !strings.HasPrefix(a.Schema, "work.") {
+			out = append(out, a.Schema)
+		}
 	}
 	return out
 }
@@ -25,7 +30,7 @@ func TestCatalogPerCaller(t *testing.T) {
 		who  platform.Caller
 		want []string
 	}{
-		{sup, []string{read, SchemaRelease, SchemaReason, SchemaResend}},
+		{sup, []string{read, SchemaRelease, SchemaReason, SchemaConfirm, SchemaResend}},
 		{op1, []string{read, SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
 		{qa1, []string{read, SchemaNC, SchemaSign}},
 		{assistant, []string{read, SchemaReason, SchemaResend}},

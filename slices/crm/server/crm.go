@@ -27,6 +27,7 @@ const (
 	SchemaOpen    = "crm.opportunity.open"
 	SchemaClose   = "crm.opportunity.close"
 	SchemaBook    = "crm.opportunity.book"
+	SchemaPlan    = "crm.opportunity.plan"
 
 	Sales   Role = "sales"
 	Manager Role = "sales-manager"
@@ -49,6 +50,12 @@ type Opportunity struct {
 	Owner   string                `json:"owner" field:"readonly"`
 	Stage   string                `json:"stage" field:"readonly" choices:"open,won,lost"`
 	Booked  int                   `json:"booked" field:"readonly" title:"Stays booked"`
+	// The group's stay, planned while the opportunity is open; won, the
+	// group-stay flow books it (ADR-0020).
+	Rooms    int    `json:"rooms,omitempty" field:"readonly" title:"Group rooms"`
+	RoomType string `json:"roomType,omitempty" field:"readonly" title:"Room type"`
+	Arrive   string `json:"arrive,omitempty" field:"readonly" type:"date"`
+	Depart   string `json:"depart,omitempty" field:"readonly" type:"date"`
 }
 
 // Entities declares the CRM's types. Accounts are master data with generated
@@ -76,6 +83,12 @@ func Actions() *platform.Catalog {
 		platform.Action{Schema: SchemaClose, Target: OpportunityType, Capability: "opportunities", Title: "Close opportunity",
 			Description: "Close an open opportunity as won or lost; only its owner or a sales manager.",
 			Payload:     []platform.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost"}}, Roles: both},
+		platform.Action{Schema: SchemaPlan, Target: OpportunityType, Capability: "stays", Title: "Plan group stay",
+			Description: "Plan the rooms a group needs if the opportunity is won: the group-stay flow books them then, and asks the owner to confirm them with the customer.",
+			Payload: []platform.Field{{Name: "rooms", Type: "integer", Required: true, Description: "Rooms, 1 to 20"},
+				{Name: "roomType", Type: "string", Required: true, Description: "The provider's room type"},
+				{Name: "arrive", Type: "date", Required: true, Description: "First night"}, {Name: "depart", Type: "date", Required: true, Description: "Departure"}},
+			Roles: both},
 		platform.Action{Schema: SchemaBook, Target: OpportunityType, Capability: "stays", Title: "Book stay",
 			Description: "Book a stay for an opportunity with the tenant's lodging provider and link it to the opportunity; the provider decides with your role there.",
 			Payload:     lodging.Protocol().Actions[0].Payload, Roles: both, Uses: []string{platform.ProtocolAction(lodging.ID, "reserve")}},
@@ -106,12 +119,16 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	}
 	id := s.GetTarget().GetId()
 	o, known := platform.Get[Opportunity](who, id)
-	owns := func() bool { // closing is for the owner or a manager
-		return s.GetSchema().GetName() != SchemaClose || who.Role() == string(Manager) || known && o.Owner == who.ID
+	owns := func() bool { // closing and planning are for the owner or a manager
+		schema := s.GetSchema().GetName()
+		return schema != SchemaClose && schema != SchemaPlan || who.Role() == string(Manager) || known && o.Owner == who.ID
 	}
 	return c.ledger.Receive(who, s, now, owns, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		invalid := fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
-		var p struct{ Account, Title, Outcome string }
+		var p struct {
+			Account, Title, Outcome, RoomType, Arrive, Depart string
+			Rooms                                             int
+		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
 		}
@@ -142,6 +159,20 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				return nil, err
 			}
 			o.Booked++
+		case SchemaPlan:
+			if !known {
+				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+			}
+			if o.Stage != "open" {
+				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+			}
+			if p.Rooms < 1 || p.Rooms > 20 || strings.TrimSpace(p.RoomType) == "" || p.Depart <= p.Arrive {
+				return nil, invalid
+			}
+			o.Rooms, o.RoomType, o.Arrive, o.Depart = p.Rooms, p.RoomType, p.Arrive, p.Depart
+			if err := who.Check(o); err != nil {
+				return nil, invalid
+			}
 		case SchemaClose:
 			if p.Outcome != "won" && p.Outcome != "lost" {
 				return nil, invalid
@@ -170,6 +201,7 @@ func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) 
 
 func (c *CRM) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "crm", Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
+		Flows: []platform.Flow{GroupStay()},
 		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }
 

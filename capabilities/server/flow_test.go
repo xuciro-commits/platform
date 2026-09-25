@@ -90,7 +90,7 @@ var clerks = func(platform.Caller, *platform.Run) []platform.Recipient {
 // fulfil v1: reserve, wait for payment (an hour, then chase), ship.
 func fulfil(version int) platform.Flow {
 	f := platform.Flow{Name: "fulfil", Title: "Fulfil order", Version: version, Owners: []string{"clerk"},
-		Start: platform.Start{On: "shop.order.place", Begin: func(_ platform.Caller, e platform.Event) (string, any, bool) {
+		Start: platform.Start{On: []string{"shop.order.place"}, Begin: func(_ platform.Caller, e platform.Event) (string, any, bool) {
 			return e.Record.GetSubmission().GetTarget().GetId(), map[string]string{"placed": "yes"}, true
 		}},
 		Steps: []platform.Step{
@@ -121,7 +121,7 @@ func fulfil(version int) platform.Flow {
 
 // bill is called by fulfil v2: it bills the order in the evening.
 var bill = platform.Flow{Name: "bill", Title: "Bill", Version: 1,
-	Start: platform.Start{On: "shop.order.bill", Begin: func(platform.Caller, platform.Event) (string, any, bool) { return "", nil, false }},
+	Start: platform.Start{On: []string{"shop.order.bill"}, Begin: func(platform.Caller, platform.Event) (string, any, bool) { return "", nil, false }},
 	Steps: []platform.Step{
 		{Name: "later", Wait: &platform.Wait{At: func(_ platform.Caller, r *platform.Run) time.Time {
 			return time.Date(2026, 10, 1, 20, 0, 0, 0, time.UTC)
@@ -282,10 +282,10 @@ func TestFlows(t *testing.T) {
 
 	// Declarations are checked at composition.
 	for _, bad := range []platform.Flow{
-		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: "shop.order.place", Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Next: "b", Act: shopAct("ship")}}},
-		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: "crm.won", Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Act: shopAct("ship")}}},
-		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: "shop.order.place", Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Act: shopAct("ship"), Ask: &platform.Ask{}}}},
-		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: "shop.order.place", Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Wait: &platform.Wait{On: "shop.order.pay"}, Timeout: time.Hour}}},
+		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: []string{"shop.order.place"}, Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Next: "b", Act: shopAct("ship")}}},
+		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: []string{"crm.won"}, Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Act: shopAct("ship")}}},
+		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: []string{"shop.order.place"}, Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Act: shopAct("ship"), Ask: &platform.Ask{}}}},
+		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: []string{"shop.order.place"}, Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Wait: &platform.Wait{On: "shop.order.pay"}, Timeout: time.Hour}}},
 	} {
 		if _, err := NewTenant("t", NewFlows("t"), newShop("t", bad)); err == nil {
 			t.Errorf("flow accepted: %+v", bad.Steps)

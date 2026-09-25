@@ -28,12 +28,12 @@ type Flow struct {
 	From map[string]string
 }
 
-// Start is what starts an instance: an event (an action of the app, or a
-// protocol event "<protocol id>#<event>" the app consumes) and the decision
-// whether it starts one, with the instance's key (one running instance per
-// key) and its first data.
+// Start is what starts an instance: events (actions of the app, or protocol
+// events "<protocol id>#<event>" the app consumes) and the decision whether one
+// starts an instance, with the instance's key (one running instance per key)
+// and its first data.
 type Start struct {
-	On    string
+	On    []string
 	Begin func(c Caller, e Event) (key string, data any, ok bool)
 }
 
