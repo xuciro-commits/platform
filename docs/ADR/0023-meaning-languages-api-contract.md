@@ -1,6 +1,6 @@
 # ADR-0023: The model speaks — meaning, languages and the API contract
 
-**Status:** Proposed (2026-09-26, #114, the architecture gate of stage 6 in Platform.md §10.5). The owner opened the gate and delegated where languages live ("你看多语言放到哪一层"); D2 to D6 are decided as recommended on that delegation, and batch 6a is built (see "As built"). D1 and D7 to D9 await the owner.
+**Status:** Accepted (2026-09-26, #114, the architecture gate of stage 6 in Platform.md §10.5). The owner delegated where languages live ("你看多语言放到哪一层"), so D2 to D6 were decided as recommended and batch 6a built first. Then the owner decided D1 (yes, and very restrained: a tenant may layer a glossary on top, never change a declaration's identity or meaning), D7 (the platform's core stays typed code: the contract is generated from it, never the source), D8 (the developer kit's path: create app → declare entities → declare actions → declare flows → add translations → run), and left D9 to the agent (decided below). What is built is under "As built".
 
 ## Context
 
@@ -46,32 +46,32 @@ Our constraints:
 4. **What is not translated:** record data people wrote, the journal, audit, error codes (the UI translates their messages), agents' instructions. Notifications and task titles are texts apps write at the time; they become a key and arguments rendered in the reader's language in 6b.
 5. **Agents answer in the person's language.** A run records the language it was started in (part of its start payload, so replay sees the same prompt), and the prompt asks the model to answer in it; instructions stay English.
 6. **Formats** (dates, numbers, money) follow the browser's own locale through `Intl` in 6a, and the chosen language once members keep a preference (6b).
-7. **Meaning (the semantic model):** entity types, fields, states and actions gain a description, examples and synonyms, declared in code (`Entity.Description`, field tags `help:"…"` and `synonyms:"…"`, `State.Description`). They are served by `/v1/entities` in the reader's language, put into agents' prompts and MCP tool schemas, the A2A cards, search (synonyms) and forms (help text). A tenant's own glossary is knowledge (ADR-0022).
-8. **The host API contract:** the host describes its routes and, per tenant, each entity type and action as JSON Schema, served as OpenAPI 3.1 at `/v1/openapi.json`; TypeScript types are generated from it and the hand-written ones deleted.
-9. **The developer kit:** an app developer guide (`docs/Apps.md`), a scaffold (`scripts/new-app.sh`: manifest, entity, lifecycle, test with `CheckReplay`, UI package), and a `new-app` skill for coding agents.
+7. **Meaning (the semantic model):** entity types, fields, states and actions gain a description, examples and synonyms, declared in code (`Entity.Description`, field tags `help:"…"` and `synonyms:"…"`, `State.Description`). They are served by `/v1/entities` in the reader's language, put into agents' prompts and MCP tool schemas, search (synonyms) and forms (help text). **A tenant's glossary** is records of the knowledge app (`knowledge.term`: a term, what it means here, its synonyms, and the declaration it refers to). It is layered on top: agents read it and search expands by it, but it never renames, retitles or redefines a declaration; the declaration's name, type and meaning stay the code's.
+8. **The host API contract:** the Go types are the source. The host describes its routes and, per tenant, each entity type and action as JSON Schema, served as OpenAPI 3.1 at `/v1/openapi.json`; the TypeScript types of the host API are generated from the same Go types by a Go command and never edited, and the hand-written ones are deleted.
+9. **The developer kit** follows one path: create app → declare entities → declare actions → declare flows → add translations → run. A scaffold creates a working app at the first step (manifest, an entity with a lifecycle, an action, a flow, `i18n/zh-CN.json`, tests with `CheckReplay` and the Chinese check, and a development host that runs it in the workspace); the guide (`docs/Apps.md`) walks each step; a `new-app` skill lets a coding agent walk it.
 
 ## Decision points for the owner
 
 | # | Question | Options | Recommendation |
 |---|---|---|---|
-| D1 | Where meaning is declared | (a) In code with the declarations (descriptions, examples, synonyms), a tenant's glossary as knowledge. (b) As tenant metadata edited in Settings (Dataverse's curated semantic model) | **(a)**: meaning is part of the model and reviewed with it (ADR-0008) |
+| D1 | Where meaning is declared | (a) In code with the declarations (descriptions, examples, synonyms), a tenant's glossary as knowledge. (b) As tenant metadata edited in Settings (Dataverse's curated semantic model) | **(a), decided:** very restrained; the glossary layers on top and never changes a declaration's identity or meaning |
 | D2 | Where languages live | (a) A platform capability: apps ship dictionaries with their manifests and UI packages, the host translates declarations, the kit owns `t()` and formats. (b) Each app translates itself. (c) Translations as tenant data | **(a)**, decided on the owner's delegation |
 | D3 | Dictionary keys | (a) The English source text. (b) Qualified keys (`field:crm.opportunity.amount`) | **(a)**, decided: nothing is renamed, English is the fallback; a qualified key can override one text later if a word means two things in one app |
 | D4 | Choosing the language | (a) Per browser now, as `Accept-Language`; a member's preference and a tenant default next. (b) Member preference first | **(a)**, decided: the owner can test at once |
 | D5 | What is translated | Declarations and the UI now; notifications and task titles as keys with arguments next; never record data, the journal or instructions | As listed, decided |
 | D6 | Agents' language | The run's language in its start payload; the model answers in it | As listed, decided |
-| D7 | The API contract | (a) OpenAPI 3.1 generated by the host from routes and manifests; TypeScript types generated with `openapi-typescript` (a new development dependency). (b) Keep hand-written types | **(a)** |
-| D8 | The developer kit | Guide, scaffold, skill | As listed |
-| D9 | Proof | (1) CRM and MES used in Chinese end to end. (2) An evaluation shows the sales assistant choosing better with descriptions than without. (3) The workspace compiles against generated types. (4) A scaffolded app passes `CheckReplay` and `boundaries.sh` unchanged | As listed |
+| D7 | The API contract | (a) OpenAPI 3.1 generated by the host from routes and manifests; TypeScript types generated from it. (b) Keep hand-written types | **(a), decided:** typed Go code stays the source; OpenAPI and the TypeScript types are both generated from it by the host's own code, so no new dependency |
+| D8 | The developer kit | Guide, scaffold, skill | **Decided:** the path create app → entities → actions → flows → translations → run |
+| D9 | Proof | (1) CRM and MES used in Chinese end to end, and an agent answering in Chinese on a real model. (2) Meaning reaches every reader: tests show descriptions and the glossary in agents' prompts and tool schemas, forms' help and search by synonym; a before/after evaluation is optional, as free models are rate-limited. (3) `/v1/openapi.json` is valid OpenAPI and the workspace compiles with the hand-written host types deleted. (4) A scaffolded app runs in its development host and passes `CheckReplay`, `boundaries.sh` and the Chinese check in CI | **Decided by the agent on the owner's delegation, as listed** |
 
 ## Build items
 
 | Batch | Item | Done when |
 |---|---|---|
-| 6a | Languages: `Manifest.Languages`, the host's translation of declarations by `Accept-Language`, the kit's `t()` and switcher, dictionaries for the platform, CRM, MES and the workspace in Simplified Chinese; agents answer in the run's language | The owner switches to 中文 and works in CRM and MES; a test fails when a declared title of CRM or MES has no Chinese translation |
-| 6b | Member language preference and tenant default; notifications and tasks in the reader's language; meaning (D1) | A notification written in English reads in Chinese; the sales assistant's evaluation compares runs with and without descriptions |
+| 6a (built) | Languages: `Manifest.Languages`, the host's translation of declarations by `Accept-Language`, the kit's `t()` and switcher, dictionaries for the platform, CRM, MES and the workspace in Simplified Chinese; agents answer in the run's language | The owner switches to 中文 and works in CRM and MES; a test fails when a declared title of CRM or MES has no Chinese translation |
+| 6b | Meaning (D1) with the tenant glossary; a member's language and a tenant default; notifications, tasks and mail in the reader's language | Descriptions and the glossary reach prompts, tool schemas, forms and search (tests); a notification written in English reads in Chinese for a member who prefers it |
 | 6c | The host API contract and generated types | `/v1/openapi.json` validates; the workspace compiles with the hand-written types deleted |
-| 6d | The developer kit | A scaffolded app runs in the sales solution and passes its tests |
+| 6d | The developer kit | A scaffolded app runs in its development host and passes its tests in CI |
 
 ## Consequences
 
@@ -90,5 +90,6 @@ Our constraints:
 - **UI** (`@platform/ui` `i18n.ts`): `t()` with `{name}` placeholders, `language()`, `setLanguage()` (kept per browser, the page reloads), `register()`; the page's language is `<html lang>`, which `@platform/kernel`'s client sends as `Accept-Language`. The profile menu switches between English and 简体中文. The kit, `@platform/app`, the workspace, Settings and the UI packages of CRM, MES, HR, the helpdesk, Hotel and lodging translate their words from their own `i18n.ts`; the kit shows choice titles and history by field title. A kit test fails when any package's `t()` text lacks Chinese.
 - **Found on the way:** generated descriptions said "a account"; they now take their article from the title.
 - **Checked in the browser** (headless, the sales host on development tokens): the home page, a CRM opportunity's record page with its stage and history, and Settings → Members in Chinese.
+- **Checked on a real model** (OpenRouter, `inclusionai/ling-3.0-flash-fin:free`, 2026-09-26): the CRM's sales assistant, asked in Chinese about an opportunity, read its context and answered in Chinese (two steps, 5 203 tokens). Most free models were rate-limited upstream, and some do not call tools.
 - **Not yet (6b):** a member's language as a preference and a tenant default; notifications and task titles in the reader's language; dates in the chosen language; a qualified key where one English word means two things in one tenant (the plant's `active` and a memory's `active`).
 
