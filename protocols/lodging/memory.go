@@ -34,7 +34,7 @@ func NewMemory(tenant string) *Memory {
 }
 
 func (m *Memory) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "memstay", Version: "1", Actions: m.ledger.Catalog, Reads: []string{"memstay-bookings"},
+	return platform.Manifest{ID: "memstay", Title: "Memstay", Version: "1", Actions: m.ledger.Catalog, Reads: []string{"memstay-bookings"},
 		Provides: []platform.Provision{{Protocol: Protocol(),
 			Actions: map[string]string{"reserve": "memstay.reserve", "change": "memstay.change", "cancel": "memstay.cancel"},
 			Reads:   map[string]string{"bookings": "memstay-bookings"},

@@ -1,0 +1,23 @@
+{
+  "name": "@platform/app",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "true",
+    "build": "true"
+  },
+  "dependencies": {
+    "@platform/kernel": "workspace:*",
+    "@platform/ui": "workspace:*",
+    "@tanstack/react-query": "^5.103.2",
+    "react": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -65,7 +65,7 @@ func NewRelations(tenant string) *Relations {
 }
 
 func (r *Relations) Manifest() platform.Manifest {
-	return platform.Manifest{ID: RelationsApp, Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"}}
+	return platform.Manifest{ID: RelationsApp, Title: "Relations", Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"}}
 }
 
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }

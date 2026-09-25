@@ -147,7 +147,9 @@ func TestLeaveApprovals(t *testing.T) {
 	do("alice", SchemaSubmit, LeaveType, "L6", struct{}{})
 	tn.Work(now.Add(72 * time.Hour))
 	notes, _ := tn.Read(member("bob"), "notifications")
-	overdue := slices.ContainsFunc(notes.([]platform.Notification), func(n platform.Notification) bool { return n.Title == "Overdue: Approve: Submit for approval hr.leave/L6" })
+	overdue := slices.ContainsFunc(notes.([]platform.Notification), func(n platform.Notification) bool {
+		return n.Title == "Overdue: Approve: Submit for approval hr.leave/L6"
+	})
 	expect("overdue", fmt.Sprint(overdue), "true")
 
 	platformserver.CheckReplay(t, tn, journal, build)

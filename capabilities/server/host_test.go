@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -190,5 +192,50 @@ func TestHostHTTPAndConsole(t *testing.T) {
 	}
 	if _, body := call("GET", "/v1/actions", "bo-token", ""); strings.Contains(body, `"b.note"`) || !strings.Contains(body, `"a.note"`) {
 		t.Fatalf("after revoking b, bo sees %s", body)
+	}
+}
+
+// ADR-0018: one sign-in reaches every tenant the person is a member of on this
+// host; /v1/me names the apps they may open; the host serves the workspace.
+func TestWorkspaceSurface(t *testing.T) {
+	one, _, _ := setup(t, nil)
+	other, err := NewTenant("t-2", NewConsole("t-2", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana-2", Roles: map[string]string{"b": "writer"}}}),
+		newNotes("t-2", "b"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	web := t.TempDir()
+	os.WriteFile(filepath.Join(web, "index.html"), []byte("<title>Workspace</title>"), 0o644)
+	os.WriteFile(filepath.Join(web, "app.js"), []byte("js"), 0o644)
+	h := NewHost(Tokens(map[string]string{"ana-token": "ana", "bo-token": "bo"}), one, other)
+	h.Web, h.Development = web, true
+	call := func(path, token, tenant string) string {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		if tenant != "" {
+			req.Header.Set(TenantHeader, tenant)
+		}
+		rec := httptest.NewRecorder()
+		h.Handler().ServeHTTP(rec, req)
+		return fmt.Sprint(rec.Code, " ", strings.TrimSpace(rec.Body.String()))
+	}
+	for _, c := range []struct{ path, token, tenant, contains string }{
+		{"/v1/me", "ana-token", "", `"apps":[{"id":"platform","title":"Settings","role":"admin"},{"id":"a","title":"a","role":"writer"},{"id":"b","title":"b","role":"writer"}]`},
+		{"/v1/me", "ana-token", "", `"tenants":["t-1","t-2"]`},
+		{"/v1/me", "ana-token", "t-2", `"principalId":"ana-2"`},
+		{"/v1/me", "bo-token", "t-2", `401`},
+		{"/v1/me", "bo-token", "", `"apps":[{"id":"b","title":"b","role":"writer"}]`},
+		{"/v1/sign-in", "", "", `{"identities":[{"token":"ana","tenant":"t-1","member":"ana"`},
+		{"/", "", "", `200 <title>Workspace</title>`},
+		{"/app.js", "", "", `200 js`},
+		{"/crm/customers", "", "", `200 <title>Workspace</title>`},
+	} {
+		if got := call(c.path, c.token, c.tenant); !strings.Contains(got, c.contains) {
+			t.Errorf("%s as %s in %q: %s", c.path, c.token, c.tenant, got)
+		}
+	}
+	h.Issuer, h.Client = "https://id.example/", "platform-web"
+	if got := call("/v1/sign-in", "", ""); got != `200 {"client":"platform-web","issuer":"https://id.example/"}` {
+		t.Errorf("a production host signs in with %s", got)
 	}
 }

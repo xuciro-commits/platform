@@ -100,7 +100,7 @@ func New(tenant string) *App {
 }
 
 func (a *App) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "hr", Version: "1", Actions: a.ledger.Catalog, Entities: Entities()}
+	return platform.Manifest{ID: "hr", Title: "HR", Version: "1", Actions: a.ledger.Catalog, Entities: Entities()}
 }
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }

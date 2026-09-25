@@ -1,0 +1,9 @@
+@import "@platform/ui/styles.css";
+@import "@pkg/hotel/styles.css";
+@import "@pkg/lodging/styles.css";
+/* The app UI packages composed here (ADR-0018). */
+@source "../../../packages/app/src";
+@source "../../../packages/crm/src";
+@source "../../../packages/hr/src";
+@source "../../../packages/mes/src";
+@source "../../../packages/platform/src";

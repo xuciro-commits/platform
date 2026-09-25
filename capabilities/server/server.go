@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,6 +41,14 @@ type Host struct {
 	consoles     map[*Tenant]*Console
 	authenticate Authenticate
 	Now          func() time.Time
+	// Web is the directory of the workspace's build (ADR-0018), served at "/"
+	// from the API's origin; empty serves no pages.
+	Web string
+	// SignIn tells the workspace how to sign in (GET /v1/sign-in): the OpenID
+	// issuer and the workspace's client, or, with neither, the development
+	// identities of a host whose tokens are the subjects.
+	Issuer, Client string
+	Development    bool
 }
 
 // NewHost serves tenants; a tenant's members come from its console (the platform app).
@@ -51,19 +62,38 @@ func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
 	return h
 }
 
+// TenantHeader names the tenant a request is for, when the caller is a member
+// of several on this host (ADR-0018 D7); without it, the first that knows them.
+const TenantHeader = "Platform-Tenant"
+
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	subject, ok := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	if !ok {
 		return platform.Member{}, nil, false
 	}
+	want := r.Header.Get(TenantHeader)
 	for _, t := range h.tenants {
-		if d := h.consoles[t]; d == nil {
+		if d := h.consoles[t]; d == nil || want != "" && t.ID != want {
 			continue
 		} else if m, ok := d.Member(subject); ok {
 			return m, t, true
 		}
 	}
 	return platform.Member{}, nil, false
+}
+
+// tenantsOf are the tenants on this host where the request's subject is a member.
+func (h *Host) tenantsOf(r *http.Request) []string {
+	subject, _ := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	out := []string{}
+	for _, t := range h.tenants {
+		if d := h.consoles[t]; d != nil {
+			if _, ok := d.Member(subject); ok {
+				out = append(out, t.ID)
+			}
+		}
+	}
+	return out
 }
 
 // Handler serves the host's HTTP surface, with CORS for browser clients.
@@ -95,8 +125,8 @@ func (h *Host) Handler() http.Handler {
 		record, _ := out.(*pb.ChangeRecord)
 		Reply(w, record, err)
 	})
-	handle("GET /v1/me", func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, map[string]any{"tenantId": m.Tenant, "principalId": m.ID, "profile": m})
+	handle("GET /v1/me", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, map[string]any{"tenantId": m.Tenant, "principalId": m.ID, "profile": m, "apps": t.AppsOf(m), "tenants": h.tenantsOf(r)})
 	})
 	handle("GET /v1/declarations", func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}
@@ -191,9 +221,34 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
+	mux.HandleFunc("GET /v1/sign-in", func(w http.ResponseWriter, _ *http.Request) {
+		out := map[string]any{}
+		if h.Issuer != "" {
+			out["issuer"], out["client"] = h.Issuer, h.Client
+		} else if h.Development {
+			identities := []Identity{}
+			for _, t := range h.tenants {
+				if d := h.consoles[t]; d != nil {
+					identities = append(identities, d.Identities()...)
+				}
+			}
+			out["identities"] = identities
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
+	if h.Web != "" {
+		// The workspace is one page: a path that is not a file is its route.
+		pages := http.FileServer(http.Dir(h.Web))
+		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+			if _, err := os.Stat(filepath.Join(h.Web, filepath.FromSlash(path.Clean("/"+r.URL.Path)))); err != nil {
+				r.URL.Path = "/"
+			}
+			pages.ServeHTTP(w, r)
+		})
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, "+TenantHeader)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

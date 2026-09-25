@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -408,6 +409,26 @@ func (t *Tenant) Apps() []AppInfo {
 			}
 		}
 		out = append(out, info)
+	}
+	return out
+}
+
+// AppEntry is an app a member may open in the workspace (ADR-0018 D4): the
+// tenant runs it and the member holds a role in it.
+type AppEntry struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Role  string `json:"role"`
+}
+
+// AppsOf are the apps the member holds a role in, in the order the tenant runs them.
+func (t *Tenant) AppsOf(m platform.Member) []AppEntry {
+	out := []AppEntry{}
+	for _, a := range t.apps {
+		man := a.Manifest()
+		if role := m.Roles[man.ID]; role != "" {
+			out = append(out, AppEntry{ID: man.ID, Title: cmp.Or(man.Title, man.ID), Role: role})
+		}
 	}
 	return out
 }

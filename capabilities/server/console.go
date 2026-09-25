@@ -91,6 +91,29 @@ func NewConsole(tenant string, seats ...Seat) *Console {
 	return d
 }
 
+// Identity is a development identity: the token that signs in as a member.
+type Identity struct {
+	Token  string            `json:"token"`
+	Tenant string            `json:"tenant"`
+	Member string            `json:"member"`
+	Roles  map[string]string `json:"roles"`
+}
+
+// Identities are the tenant's subjects with the members they sign in as, for
+// a host on development tokens (the token is the subject).
+func (d *Console) Identities() []Identity {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := []Identity{}
+	for subject, id := range d.subjects {
+		if m := d.members[id]; m != nil {
+			out = append(out, Identity{Token: subject, Tenant: d.tenant, Member: id, Roles: maps.Clone(m.Roles)})
+		}
+	}
+	slices.SortFunc(out, func(a, b Identity) int { return strings.Compare(a.Token, b.Token) })
+	return out
+}
+
 // Member is the member a subject signs in as, with its current roles.
 func (d *Console) Member(subject string) (platform.Member, bool) {
 	d.mu.Lock()
@@ -140,7 +163,7 @@ func clone(m *platform.Member) platform.Member {
 }
 
 func (d *Console) Manifest() platform.Manifest {
-	return platform.Manifest{ID: PlatformApp, Version: "1", Actions: d.ledger.Catalog,
+	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog,
 		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects"},
 		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false}}
 }

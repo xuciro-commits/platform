@@ -236,7 +236,7 @@ func (h *Hotel) Declarations() []*pb.AuthorityDeclaration { return h.ledger.Decl
 
 // Manifest declares the hotel as an app (ADR-0010).
 func (h *Hotel) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "hotel", Version: "1", Actions: h.ledger.Catalog, Entities: h.entities,
+	return platform.Manifest{ID: "hotel", Title: "Hotel", Version: "1", Actions: h.ledger.Catalog, Entities: h.entities,
 		Reads: []string{"lodging-bookings"}, Inputs: map[string]bool{"channel-bookings": true},
 		Jobs: []platform.Job{{Name: JobArrivals, Title: "Send the front desk the arrivals list", Every: time.Hour}},
 		Settings: []platform.Setting{

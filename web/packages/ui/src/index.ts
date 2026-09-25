@@ -13,7 +13,7 @@ export { EntityCard, PropertyList } from "./components/EntityCard";
 export { PageHeader } from "./components/PageHeader";
 export { NotificationList, type NotificationItem } from "./components/NotificationList";
 export { Sheet } from "./primitives/sheet";
-export { Workspace, useWorkspace, notify, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
+export { Workspace, useWorkspace, notify, type Launcher, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
 export { Inbox, RecordList, RecordPage, StatusBar, entityFrom, type InboxTask, type Lifecycle, type State, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";

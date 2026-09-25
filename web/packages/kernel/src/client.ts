@@ -30,8 +30,14 @@ export class EdgeClient {
     return /HTTP 401/.test(String(error)) ? "sign-in required: this host accepts identity-provider tokens only" : "host unreachable";
   }
 
+  /** The bearer token, and the tenant once known: a person may be a member of several on one host (ADR-0018). */
+  private headers(json = false): Record<string, string> {
+    return { Authorization: `Bearer ${this.connection.token}`, ...(this.connection.tenant ? { "Platform-Tenant": this.connection.tenant } : {}),
+      ...(json ? { "Content-Type": "application/json" } : {}) };
+  }
+
   async get<T>(path: string): Promise<T> {
-    const response = await fetch(this.connection.server + path, { headers: { Authorization: `Bearer ${this.connection.token}` } });
+    const response = await fetch(this.connection.server + path, { headers: this.headers() });
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
     return response.json() as Promise<T>;
   }
@@ -39,7 +45,7 @@ export class EdgeClient {
   /** Calls a host service that is not a submission, such as a model call (ADR-0015): the answer's JSON comes back whatever its status. */
   async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ ok: boolean; status: number; body: T }> {
     const response = await fetch(this.connection.server + path, {
-      method, headers: { Authorization: `Bearer ${this.connection.token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+      method, headers: this.headers(body !== undefined),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     return { ok: response.ok, status: response.status, body: (await response.json().catch(() => ({}))) as T };
@@ -99,7 +105,7 @@ export class EdgeClient {
       try {
         const response = await fetch(`${this.connection.server}/v1/submissions`, {
           method: "POST", body: JSON.stringify(entry.submission), signal: AbortSignal.timeout(timeoutMs),
-          headers: { Authorization: `Bearer ${this.connection.token}`, "Content-Type": "application/json" },
+          headers: this.headers(true),
         });
         const body = await response.json().catch(() => ({})) as { record?: { changeId?: string }; error?: { code?: string } };
         if (response.ok || body.error?.code) {

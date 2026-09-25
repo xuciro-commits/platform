@@ -19,6 +19,6 @@ const columns: ColumnDef<Booking, any>[] = [
     cell: (c) => <StatusTag status={c.getValue()} registry={bookingStatuses} /> },
 ];
 
-export function BookingTable({ data, height = "120px", empty = "No bookings" }: { data: Booking[]; height?: string; empty?: string }) {
-  return <DataTable data={data} columns={columns} getRowId={(b) => b.id} height={height} empty={empty} />;
+export function BookingTable({ data, height = "120px", empty = "No bookings", onOpen }: { data: Booking[]; height?: string; empty?: string; onOpen?: (b: Booking) => void }) {
+  return <DataTable data={data} columns={columns} getRowId={(b) => b.id} height={height} empty={empty} onRowClick={onOpen} />;
 }

@@ -116,7 +116,7 @@ func NewAI(tenant string) *AI {
 }
 
 func (a *AI) Manifest() platform.Manifest {
-	return platform.Manifest{ID: AIApp, Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage"},
+	return platform.Manifest{ID: AIApp, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage"},
 		Everyone: []string{"ai-models", "ai-usage"}, Roles: []string{AIUser}} // the user role opens models with access "users"
 }
 

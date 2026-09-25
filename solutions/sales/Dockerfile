@@ -13,5 +13,7 @@ RUN CGO_ENABLED=0 go build -trimpath -o /sales-server ./cmd/sales-server
 
 FROM alpine:3.22
 COPY --from=build /sales-server /usr/local/bin/sales-server
+# The workspace (ADR-0018), built beforehand: pnpm --dir web/apps/workspace build
+COPY web/apps/workspace/dist /web
 USER nobody
 ENTRYPOINT ["sales-server"]

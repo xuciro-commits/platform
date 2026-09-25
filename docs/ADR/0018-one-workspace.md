@@ -1,6 +1,6 @@
 # ADR-0018: One workspace — sign in once, open every app you may use
 
-**Status:** Proposed (2026-09-25, #108). The owner raised it: a platform's apps should open like programs on an operating system, not as separate sites that each sign in. The owner decides D1–D8; the build items follow.
+**Status:** Accepted (2026-09-25, #108). The owner raised it: a platform's apps should open like programs on an operating system, not as separate sites that each sign in. The owner accepted D1–D8 as recommended. What is built is under "As built".
 
 ## Context
 
@@ -98,3 +98,33 @@ They agree on four things:
 - An app's UI becomes a contribution to one workspace, not a product with its own sign-in, chrome and inbox.
 - The workspace is where later stages attach: dashboards (stage 3), flows (stage 4), the assistant panel (stage 5), and the kit's families (stage 6).
 - Solutions (`solutions/sales`) compose apps on the server. They no longer need a site of their own.
+
+## As built (#108)
+
+- **Host.**
+  - `GET /v1/me` adds `apps`, the apps the member may open (`Tenant.AppsOf`, titled by the new `Manifest.Title`), and `tenants`, the tenants on the host that know them.
+  - A request names its tenant with the `Platform-Tenant` header. Without it, the first tenant that knows the caller answers, as before.
+  - `GET /v1/sign-in` tells the workspace how to sign in: the issuer and the `platform-web` client, or, on development tokens, the development identities.
+  - `-web` serves the workspace's build at `/`; a path that is not a file is a route of the page.
+- **App API for UIs** (`@platform/app`, the browser's `platformserver/platform`):
+  - `defineApp` declares an app's UI: `{ id, title, icon, views, nav(host), home, opens, commands }`.
+  - `useHost` gives the host: `me`, `role`, `can`, `decide`, the outbox, entities and the record source.
+  - `useRead`, `useOpenRecord`, and the generated `Records`, `RecordDetail` and `GeneratedForm`.
+- **UI packages:** `@pkg/crm`, `@pkg/hotel/app`, `@pkg/hr`, `@pkg/mes` and `@pkg/platform` (Settings, for members with a role in the platform, the organisation or AI; each section only to those it concerns).
+  - The CRM no longer imports the Hotel. A stay is a `lodging.booking`, which opens in the view of the app the tenant binds as the lodging provider.
+  - The booking form takes the provider's room type as text, because the lodging protocol offers no room-type read yet.
+- **The workspace** (`web/apps/workspace`):
+  - It signs in once, loads the UI packages of the apps the member may open, and composes them in the kit's `Workspace`. The kit gained a launcher (the app menu, the palette's apps and a home page of tiles) and `onActiveRoute`, so the current app follows the active tab.
+  - The shared "You" section holds the apps, inbox, my requests, notifications, all records, and the outbox while something waits.
+  - The profile menu switches tenant, or development identity.
+- **Removed:**
+  - the sites `apps/sales`, `apps/mes` and `apps/settings`;
+  - the OIDC clients `sales-web`, `mes-web` and `platform-settings`, replaced by `platform-web`.
+- **Proven:**
+  - the host test `TestWorkspaceSurface`, and the rehearsal (the page, sign-in and a member's apps on both hosts);
+  - in the browser, on one page and without signing in again: the launcher; a CRM account, opportunity and stay; the stay opened in the Hotel's view; a leave request submitted as `sales-1`, and approved twice from the manager's inbox.
+- **Not yet:**
+  - global search across records;
+  - the backend-for-frontend token (D3 (b), stage 7);
+  - UI bundles loaded at run time (D2 (b), stage 7).
+

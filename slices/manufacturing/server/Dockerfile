@@ -9,5 +9,7 @@ RUN CGO_ENABLED=0 go build -trimpath -o /mes-server ./cmd/mes-server
 
 FROM alpine:3.22
 COPY --from=build /mes-server /usr/local/bin/mes-server
+# The workspace (ADR-0018), built beforehand: pnpm --dir web/apps/workspace build
+COPY web/apps/workspace/dist /web
 USER nobody
 ENTRYPOINT ["mes-server"]

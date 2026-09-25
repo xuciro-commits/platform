@@ -80,7 +80,7 @@ func NewOrganization(tenant string, seed platform.OrgSeed) *Organization {
 }
 
 func (o *Organization) Manifest() platform.Manifest {
-	return platform.Manifest{ID: OrgApp, Version: "1", Actions: o.ledger.Catalog, Reads: []string{"organization"}}
+	return platform.Manifest{ID: OrgApp, Title: "Organisation", Version: "1", Actions: o.ledger.Catalog, Reads: []string{"organization"}}
 }
 
 func (o *Organization) Declarations() []*pb.AuthorityDeclaration { return o.ledger.Declarations() }

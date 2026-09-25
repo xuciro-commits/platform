@@ -8,6 +8,12 @@
 
 需要先有 Docker（OrbStack：`orb start`）。
 
+每个主机自己提供工作台页面（ADR-0018），所以先构建一次工作台：
+
+```bash
+pnpm --dir web/apps/workspace build
+```
+
 ```bash
 cd deploy/local && docker compose up -d --build
 ```
@@ -17,7 +23,7 @@ cd deploy/local && docker compose ps
 ```
 
 - 停止：`docker compose stop`。数据保存在 Docker 卷 `pgdata` 和 `rauthy` 里，下次启动会重放日志，数据还在。
-- 只重建主机：`docker compose up -d --build mes-server sales-server webhook-sink`。
+- 只重建主机：`docker compose up -d --build mes-server sales-server webhook-sink`。改了前端要先重新构建工作台。
 - 灌 sales 演示数据：`./seed-sales.sh`。可以重复执行，结果不变。
 - 完整演练：在仓库根目录运行 `scripts/verify.sh deploy`。它用另一组端口和一套全新的数据，不会动你的本地数据。
 
@@ -34,15 +40,18 @@ OPENROUTER_API_KEY=sk-or-...
 | 服务 | 地址 | 说明 |
 |---|---|---|
 | 身份认证 Rauthy | http://localhost:8480/auth/v1/ | OIDC 签发方；管理后台是 http://localhost:8480/auth/v1/admin |
-| MES 主机（租户 `plant-sz`） | http://localhost:8490 | 生产路径：PostgreSQL 日志 + OIDC |
-| Sales 主机（租户 `hotel-a`） | http://localhost:8495 | 同上 |
+| **工作台（Sales 主机，租户 `hotel-a`）** | http://localhost:8495 | 登录一次，按角色打开 CRM、酒店、HR、设置、收件箱，不用换页面 |
+| **工作台（MES 主机，租户 `plant-sz`）** | http://localhost:8490 | 同一个工作台，显示工厂的应用 |
 | webhook-sink | http://localhost:8497 | 本地的外部系统替身：webhook 接收方、ERP、邮件服务器、本地模型 |
 | PostgreSQL | `localhost:5433`，库 `platform`，用户 `platform`，密码 `platform-local-only` | 两个租户的日志表 `journal` |
-| MES 前端 | http://localhost:5175 | 启动配置 `mes-oidc`（登录）或 `mes-demo`（开发令牌） |
-| Sales 前端 | http://localhost:5176 | `sales-oidc`（登录）或 `sales`（开发令牌） |
-| Settings 前端 | http://localhost:5177 | `settings-oidc`（登录，右上角切换 sales / plant 主机）或 `settings`（开发令牌） |
 
-前端用 `pnpm --dir web/apps/<app> dev` 启动，或者在 Claude 桌面应用里用 `.claude/launch.json` 里的配置启动。登录模式要先启动本地环境。
+主机的接口也在同一个地址下（`/v1/...`）。开发工作台时用 `.claude/launch.json` 的配置：`workspace`（连内存里的 sales 主机 8496，开发令牌）、`workspace-plant`（连 8491）、`workspace-oidc`（连 Docker 里的 8495，要登录），页面在 http://localhost:5176（`workspace-plant` 是 5175）。
+
+**本地 Rauthy 已经运行过的话**：它只在第一次启动时读取初始数据，所以还不认识新的登录客户端 `platform-web`，登录会报找不到客户端。重建一次身份认证的数据卷即可（里面只有测试账号，会按 `rauthy/bootstrap` 重新生成，账号密码不变）：
+
+```bash
+cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy
+```
 
 ## 人员账号（登录用）
 
@@ -86,7 +95,7 @@ cd slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRE
 - sales：`manager`、`sales`、`sales-only`、`desk`
 - MES：`supervisor`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`erp`、`assistant-l1`（AI 代理）
 
-Settings 和 Sales 的演示模式连 8495 / 8490。这两个端口被 Docker 占着时，先 `docker compose stop sales-server`（或 `mes-server`），再在 `solutions/sales` 下运行 `go run ./cmd/sales-server`。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
+开发令牌的主机不占 Docker 的端口：在 `solutions/sales` 下运行 `go run ./cmd/sales-server -addr 127.0.0.1:8496`，或在 `slices/manufacturing/server` 下运行 `go run ./cmd/mes-server -addr 127.0.0.1:8491`，再用启动配置 `workspace` / `workspace-plant` 打开工作台，右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
 
 ## 接入外部系统时填什么
 

@@ -1,7 +1,8 @@
 # The platform host's two deployments on their production path, locally (#87, #92):
 # mes-server (manufacturing) and sales-server (the sales solution: CRM and Hotel).
 # PostgreSQL keeps the journal, Rauthy issues identities, mes-server replays the
-# journal on start. `docker compose -f deploy/local/compose.yaml up -d --build`
+# journal on start. Each host serves the workspace (ADR-0018), built first:
+# `pnpm --dir web/apps/workspace build && docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.
 name: platform
 
@@ -39,6 +40,7 @@ services:
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -directory=/etc/mes/directory.json
+      - -web=/web
     ports: ["127.0.0.1:${MES_PORT:-8490}:8490"]
     volumes: [./mes/directory.json:/etc/mes/directory.json:ro]
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}" }
@@ -55,6 +57,7 @@ services:
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
       - -directory=/etc/sales/directory.json
+      - -web=/web
     ports: ["127.0.0.1:${SALES_PORT:-8495}:8495"]
     volumes: [./sales/directory.json:/etc/sales/directory.json:ro]
     # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.

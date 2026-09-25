@@ -119,7 +119,7 @@ func (w *Work) entities() []platform.Entity {
 }
 
 func (w *Work) Manifest() platform.Manifest {
-	return platform.Manifest{ID: WorkApp, Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
+	return platform.Manifest{ID: WorkApp, Title: "Work", Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
 		Reads: []string{"inbox", "requests"}, Everyone: []string{"inbox", "requests"},
 		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}}}
 }

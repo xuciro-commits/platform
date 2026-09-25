@@ -164,7 +164,7 @@ func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declar
 
 // Manifest declares the CRM as an app (ADR-0010).
 func (c *CRM) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "crm", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
+	return platform.Manifest{ID: "crm", Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
 		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }
 

@@ -1,6 +1,6 @@
 # ADR-0019: Read models, analytics and snapshots
 
-**Status:** Proposed (2026-09-25, #109, the architecture gate of stage 3 in Platform.md §10.4). The owner decides D1–D7; the build items follow.
+**Status:** Accepted (2026-09-25, #109, the architecture gate of stage 3 in Platform.md §10.4). The owner accepted D1–D7 as recommended, with D5 amended: Apache ECharts 6 is the default renderer, and the platform's contract is a small visualization spec of its own, never ECharts options.
 
 ## Context
 
@@ -39,6 +39,7 @@ Two points carry over:
    - Money sums per currency.
    - It runs over the host's record store, the same one the lists read.
 2. **Analysis in the kit.**
+   - Charts are described by the platform's visualization spec (D5): a mark (bar, line, area, point, arc, KPI), encodings of fields onto x, y, colour, size and theta with their types (nominal, ordinal, temporal, quantitative), and an aggregate per encoding. The kit compiles the spec to the renderer.
    - A pivot (rows, columns, measures, drill down to the records) and charts (bar, line, pie, KPI tiles), fed by the aggregate read.
    - Each list page gains "group by" and a pivot and chart view of the same filter.
 3. **Dashboards.**
@@ -63,7 +64,7 @@ Two points carry over:
 | D2 | Where aggregates run | (a) Over the host's record store in memory, where lists run. (b) In PostgreSQL projections | **(a)**: the same code as lists and the same scope, and 100 000 records in tens of milliseconds. Keeping records themselves in the database is stage 7's scale question |
 | D3 | Projections for outside tools | (a) Typed tables per entity type, rebuilt from records, read-only role per tenant. (b) One JSON table for all types. (c) None yet | **(a)**: BI tools read plain columns; rebuilding instead of migrating keeps them simple |
 | D4 | Dashboards | (a) Apps' dashboards in typed code, plus members' saved views as data. (b) Dashboards built by administrators at run time as configuration | **(a)**: AGENTS.md rule 5 (UI in typed code); saved views are a member's data, like Odoo favourites |
-| D5 | Chart library for the kit (a download, ADR-0004) | (a) Apache ECharts (canvas, large data, every chart family including time views for stage 6). (b) Recharts (small, SVG, React-native, fewer families). (c) Observable Plot | **(a)**: one library through stage 6. The kit wraps it, so apps never import it |
+| D5 | Charts | The owner's decision: **a renderer-independent visualization spec** is the contract, informed by the Grammar of Graphics and Vega-Lite (data, a mark, encodings of fields onto channels, with types and aggregates). **Apache ECharts 6** is the default renderer behind it. Apps, dashboards and saved views hold specs, never ECharts options, so the renderer can change without touching them | Decided |
 | D6 | Snapshots | (a) Host-owned state at a journal position, valid for the app versions that wrote it; full replay when they change. (b) Snapshots across versions, with migrations of state | **(a)**: replay through the new code stays the way apps evolve; a snapshot only saves time |
 | D7 | Proof | Hotel: occupancy by room type and month, pipeline by stage and owner. Plant: SFCs completed per line per day, nonconformances by disposition, downtime by reason. A tenant with 1 000 000 journal entries restarts from a snapshot in seconds, and `CheckReplay` agrees | As listed |
 

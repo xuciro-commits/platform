@@ -1,6 +1,6 @@
 import { Command } from "cmdk";
 import { DockviewReact, themeLight, type DockviewApi, type IDockviewPanelProps } from "dockview-react";
-import { ChevronDown, PanelLeft, Search } from "lucide-react";
+import { ChevronDown, LayoutGrid, PanelLeft, Search } from "lucide-react";
 import { DropdownMenu, Menubar } from "radix-ui";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
@@ -23,6 +23,9 @@ export type Session = {
   options: { id: string; label: string }[]; current: string; onSwitch: (id: string) => void;
 };
 
+/** The apps a member may open (ADR-0018): the launcher in the menu bar and the palette switch between them. */
+export type Launcher = { apps: { id: string; title: string; icon?: ReactNode }[]; current?: string; onSelect: (id: string) => void };
+
 type OpenOptions = { window?: "tab" | "float" | "popout" };
 type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; notify: typeof toast };
 
@@ -42,9 +45,10 @@ export const notify = toast;
  * tabs are routes (one per entity), a command palette (⌘K) and notifications.
  * The layout survives restarts (per `storageKey`); the active tab is in the URL.
  */
-export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status }: {
+export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, onActiveRoute }: {
   product: string; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
+  launcher?: Launcher; onActiveRoute?: (route: Route) => void;
 }) {
   const dock = useRef<DockviewApi>(null);
   const [active, setActive] = useState<string>();
@@ -52,6 +56,8 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(true);
   const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
+  const followed = useRef(onActiveRoute);
+  followed.current = onActiveRoute;
 
   const open = useCallback((route: Route, options: OpenOptions = {}) => {
     const api = dock.current;
@@ -94,7 +100,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
       setOpenTabs(api.panels.map((p) => ({ key: p.id, title: p.title ?? p.id })));
       setActive(api.activePanel?.id);
       const route = (api.activePanel?.params as { route?: Route } | undefined)?.route;
-      if (route) history.replaceState(null, "", routeToHash(route));
+      if (route) { history.replaceState(null, "", routeToHash(route)); followed.current?.(route); }
       try { localStorage.setItem(storageKey, JSON.stringify(api.toJSON())); } catch { /* storage unavailable */ }
     };
     api.onDidLayoutChange(sync);
@@ -135,7 +141,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
         <header className="flex items-center gap-2 border-b border-border bg-surface px-2">
           <button type="button" aria-label="Toggle navigation" onClick={() => setNavOpen(!navOpen)}
             className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
-          <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>
+          {launcher ? <AppMenu launcher={launcher} product={product} /> : <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>}
           <Menubar.Root className="flex items-center">
             {[...menus, ...builtInMenus].map((menu) => (
               <Menubar.Menu key={menu.label}>
@@ -194,6 +200,14 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
         <Command.Input placeholder="Go to, open, run…" className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
         <Command.List className="max-h-80 overflow-auto p-1">
           <Command.Empty className="p-3 text-sm text-muted">No results</Command.Empty>
+          {launcher && (
+            <Command.Group heading="Apps" className={paletteGroup}>
+              {launcher.apps.map((a) => (
+                <Command.Item key={a.id} value={`app ${a.title}`} className={paletteItem}
+                  onSelect={() => { launcher.onSelect(a.id); setPaletteOpen(false); }}>{a.icon}{a.title}</Command.Item>
+              ))}
+            </Command.Group>
+          )}
           {nav.map((section) => (
             <Command.Group key={section.label} heading={section.label} className={paletteGroup}>
               {section.items.map((item) => (
@@ -224,6 +238,28 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
       </Command.Dialog>
       <Toaster position="bottom-right" toastOptions={{ className: "!rounded-md !border-border !bg-surface !text-foreground !text-sm" }} />
     </WorkspaceContext.Provider>
+  );
+}
+
+function AppMenu({ launcher, product }: { launcher: Launcher; product: string }) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger aria-label="Apps" className="flex h-7 items-center gap-2 rounded-md px-2 text-sm font-semibold tracking-tight hover:bg-row-hover">
+        <LayoutGrid className="size-4 text-muted" />{product}<ChevronDown className="size-3.5 text-muted" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={4} className={menuPanel}>
+          <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">Apps</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={launcher.current ?? ""} onValueChange={launcher.onSelect}>
+            {launcher.apps.map((a) => (
+              <DropdownMenu.RadioItem key={a.id} value={a.id} className={cn(menuItem, "gap-2 [&_svg]:size-3.5")}>
+                <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{a.icon}{a.title}
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 

@@ -14,6 +14,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 wait_for() { for _ in $(seq 60); do curl -sf -o /dev/null "$1" && return; sleep 1; done; fail "$1 never answered"; }
 
 compose down -v --remove-orphans >/dev/null 2>&1 || true
+pnpm --dir ../../web/apps/workspace build >/dev/null # served by both hosts (ADR-0018)
 compose up -d --build --quiet-pull >/dev/null 2>&1
 wait_for "$IDP/.well-known/openid-configuration"
 [[ $(curl -s "$IDP/.well-known/openid-configuration" | jq -r .issuer) == "http://localhost:$IDP_PORT/auth/v1/" ]] || fail "issuer"
@@ -28,6 +29,11 @@ code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" "$
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/me" | jq -r .principalId) == sup-1 ]] || fail "OIDC principal"
 [[ $(code supervisor) == 401 ]] || fail "demo token accepted in production mode"
+# One workspace per host (ADR-0018): the page, how to sign in, and the apps a member may open.
+curl -s "$MES/" | grep -q "<title>Workspace</title>" || fail "workspace page"
+[[ $(curl -s "$SALES/v1/sign-in" | jq -c .) == "{\"client\":\"platform-web\",\"issuer\":\"$IDP/\"}" ]] || fail "sign-in: $(curl -s "$SALES/v1/sign-in")"
+[[ $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/me" | jq -c '[.apps[].id]') == '["ai","mes"]' ]] || fail "apps of op1: $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/me" | jq -c '[.apps[].id]')"
+echo "ok   workspace: served by the host; one client signs in for every app; a member sees the apps they hold a role in"
 IFS=. read -r head claims sig <<<"$OP2"
 while (( ${#claims} % 4 )); do claims+="="; done
 forged=$(printf %s "$claims" | tr _- /+ | base64 -d | jq -c '.email = "sup@plant.test"' | base64 | tr +/ -_ | tr -d '=\n')

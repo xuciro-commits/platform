@@ -75,6 +75,7 @@ type Runtime interface {
 // unique within a tenant; the host routes by them.
 type Manifest struct {
 	ID      string
+	Title   string // the app's name in the workspace's launcher (ADR-0018)
 	Version string
 	Actions *Catalog
 	Reads   []string

@@ -14,7 +14,7 @@ import (
 // Deployment is how a host binary runs (ADR-0007, ADR-0010): in memory with
 // development tokens, or with a PostgreSQL journal and an OpenID provider.
 type Deployment struct {
-	Addr, Database, Issuer, Keys, Directory string
+	Addr, Database, Issuer, Keys, Directory, Web string
 }
 
 // Flags registers the deployment flags on the default flag set.
@@ -25,6 +25,7 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.Issuer, "oidc-issuer", "", "OpenID issuer whose access tokens are accepted (empty: development tokens, the token is the subject)")
 	flag.StringVar(&d.Keys, "oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
 	flag.StringVar(&d.Directory, "directory", "", "JSON file with the seats of every tenant (empty: the built-in development seats)")
+	flag.StringVar(&d.Web, "web", "", "directory of the workspace's build, served at / (ADR-0018; empty: API only)")
 	return d
 }
 
@@ -80,7 +81,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	}
 	RunWork(tenants...)
 	log.Printf("host on http://%s", d.Addr)
-	return http.ListenAndServe(d.Addr, NewHost(authenticate, tenants...).Handler())
+	host := NewHost(authenticate, tenants...)
+	host.Web, host.Issuer, host.Client, host.Development = d.Web, d.Issuer, "platform-web", d.Issuer == ""
+	return http.ListenAndServe(d.Addr, host.Handler())
 }
 
 // RunWork runs the tenants' owned work (ADR-0013) and sends their outbound
