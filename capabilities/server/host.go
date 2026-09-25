@@ -75,6 +75,7 @@ type Tenant struct {
 	ai       *AI
 	records  *recordStore // the apps' entity records (ADR-0016)
 	work     *Work        // approvals and tasks (ADR-0017)
+	flows    *Flows       // long-running processes (ADR-0020)
 	probing  bool         // a submission for approval is being checked, not applied
 }
 
@@ -137,6 +138,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if w, ok := a.(*Work); ok {
 			t.work, w.t = w, t
 		}
+		if f, ok := a.(*Flows); ok {
+			t.flows, f.t = f, t
+		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {
 				if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
@@ -174,6 +178,17 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 			if err := claim(n, a); err != nil {
 				return nil, err
 			}
+		}
+	}
+	for _, a := range apps { // flows, once every app is composed (ADR-0020)
+		if len(a.Manifest().Flows) == 0 {
+			continue
+		}
+		if t.flows == nil {
+			return nil, fmt.Errorf("tenant %s: %s declares flows, and the tenant runs no flow app", id, a.Manifest().ID)
+		}
+		if err := t.flows.declare(a); err != nil {
+			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
 	return t, nil
@@ -299,7 +314,11 @@ func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []b
 		return
 	}
 	member, _ := json.Marshal(m)
-	t.Record(Entry{App: a.Manifest().ID, Kind: kind, Principal: member, Body: body, At: now})
+	var versions map[string]int
+	if t.flows != nil {
+		versions, t.flows.chosen = t.flows.chosen, nil
+	}
+	t.Record(Entry{App: a.Manifest().ID, Kind: kind, Principal: member, Body: body, At: now, Versions: versions})
 }
 
 // Replay feeds recorded inputs through the apps that first accepted them, as the
@@ -307,7 +326,13 @@ func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []b
 func (t *Tenant) Replay(entries []Entry) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.flows != nil {
+		defer func() { t.flows.pins = nil }()
+	}
 	for i, e := range entries {
+		if t.flows != nil {
+			t.flows.pins = e.Versions
+		}
 		var m platform.Member
 		a := t.app(e.App)
 		if a == nil || json.Unmarshal(e.Principal, &m) != nil {

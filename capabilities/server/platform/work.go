@@ -17,6 +17,8 @@ type Assignment struct {
 	To    []Recipient
 	Due   time.Time
 	Key   string
+	// Answers are what the person may answer (a flow's Ask); none: "done".
+	Answers []string
 }
 
 // Assign creates a task as part of the decision r (inside its input, so

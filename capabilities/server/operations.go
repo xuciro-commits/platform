@@ -65,13 +65,21 @@ func (t *Tenant) enqueue(now time.Time) {
 					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", maxHops)})
 				continue
 			}
-			ev := e
-			t.opsMu.Lock()
-			t.queues[id] = append(t.queues[id], &Task{ID: "delivery:" + id + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: id,
-				Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now, event: &ev})
-			t.opsMu.Unlock()
+			t.deliver(id, e, now)
+		}
+		if t.flows != nil && e.App != FlowApp && t.flows.interested(names, e.Event) { // flows start and wait on events (ADR-0020)
+			t.deliver(FlowApp, e, now)
 		}
 	}
+}
+
+// deliver queues an event for a subscriber as owned work.
+func (t *Tenant) deliver(subscriber string, e caused, now time.Time) {
+	s := e.Record.GetSubmission()
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	t.queues[subscriber] = append(t.queues[subscriber], &Task{ID: "delivery:" + subscriber + ":" + e.App + "/" + e.Record.GetChangeId(), Kind: "delivery", App: subscriber,
+		Title: s.GetSchema().GetName() + " " + target(s), State: "queued", Due: now, event: &e})
 }
 
 func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }
@@ -123,11 +131,17 @@ func (t *Tenant) Work(now time.Time) {
 
 // attempt hands a queued event to its subscriber once; the outcome is journaled.
 func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
-	sub := t.app(task.App).(platform.Subscriber)
 	generation, _, _ := t.works.Start(task.ID, "host")
 	t.hops = task.event.hops + 1
 	outcome := "ok"
-	if err := sub.Handle(t.automation(task.App, replaying), task.event.Event); err != nil {
+	var err *kernel.Error
+	if f, ok := t.app(task.App).(*Flows); ok { // the host's own subscriber, on the attempt's clock
+		names := append([]string{task.event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.event.Event)...)
+		err = f.handle(t.automation(task.App, replaying), task.event.Event, names, now)
+	} else {
+		err = t.app(task.App).(platform.Subscriber).Handle(t.automation(task.App, replaying), task.event.Event)
+	}
+	if err != nil {
 		outcome = err.Error()
 	}
 	t.hops = 0

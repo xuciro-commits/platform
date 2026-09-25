@@ -24,6 +24,10 @@ type Entry struct {
 	Principal json.RawMessage `json:"principal"`
 	Body      json.RawMessage `json:"body"`
 	At        time.Time       `json:"at"`
+	// Versions are the flow versions instances started with while the entry was
+	// handled (ADR-0020 D6): replay starts them on the same ones, whatever the
+	// code declares since.
+	Versions map[string]int `json:"versions,omitempty"`
 }
 
 // Journal keeps entries in PostgreSQL. Each tenant's entries are numbered; an
@@ -45,6 +49,7 @@ var schema = []string{
 	`create table if not exists snapshots (
 		tenant text not null, seq bigint not null, code text not null, state bytea not null,
 		at timestamptz not null default now(), primary key (tenant, seq))`,
+	`alter table journal add column if not exists versions jsonb`,
 }
 
 func OpenJournal(ctx context.Context, url string) (*Journal, error) {
@@ -64,7 +69,7 @@ func OpenJournal(ctx context.Context, url string) (*Journal, error) {
 // Entries reads a tenant's entries after position after (0: all) in order;
 // appends continue after the last.
 func (j *Journal) Entries(ctx context.Context, tenant string, after int64) ([]Entry, error) {
-	rows, err := j.pool.Query(ctx, `select seq, app, kind, principal, body, at from journal where tenant = $1 and seq > $2 order by seq`, tenant, after)
+	rows, err := j.pool.Query(ctx, `select seq, app, kind, principal, body, at, versions from journal where tenant = $1 and seq > $2 order by seq`, tenant, after)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +78,7 @@ func (j *Journal) Entries(ctx context.Context, tenant string, after int64) ([]En
 	last := after
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&last, &e.App, &e.Kind, &e.Principal, &e.Body, &e.At); err != nil {
+		if err := rows.Scan(&last, &e.App, &e.Kind, &e.Principal, &e.Body, &e.At, &e.Versions); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -134,8 +139,8 @@ func (j *Journal) Append(ctx context.Context, tenant string, e Entry) error {
 	if !read {
 		return fmt.Errorf("journal: append to %s before reading its entries", tenant)
 	}
-	if _, err := j.pool.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at) values ($1, $2, $3, $4, $5, $6, $7)`,
-		tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At); err != nil {
+	if _, err := j.pool.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions); err != nil {
 		return err
 	}
 	j.next[tenant] = seq + 1

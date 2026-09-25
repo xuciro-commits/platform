@@ -91,6 +91,7 @@ type Manifest struct {
 	Settings   []Setting     // typed values administrators set in Settings
 	Emits      []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0014)
 	Entities   []Entity      // entity types whose records the host keeps (ADR-0016)
+	Flows      []Flow        // long-running processes the host runs for the app (ADR-0020)
 	// Roles are roles that grant no action but open something else, such as
 	// models (ADR-0015); the roles its actions grant need not be listed.
 	Roles []string

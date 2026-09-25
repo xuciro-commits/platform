@@ -1,6 +1,6 @@
 # ADR-0020: Flows — long-running processes across apps
 
-**Status:** Proposed (2026-09-25, #110, the architecture gate of stage 4 in Platform.md §10.4). The owner decides D1–D9; the build items follow.
+**Status:** Accepted (2026-09-25, #110, the architecture gate of stage 4 in Platform.md §10.4). The owner accepted D1–D9 as recommended.
 
 ## Context
 

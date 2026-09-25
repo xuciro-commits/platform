@@ -91,6 +91,11 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			if err != nil {
 				return fmt.Errorf("replay %s: %w", t.ID, err)
 			}
+			if t.flows != nil {
+				if err := t.flows.Check(); err != nil { // running instances need their flow's version (ADR-0020 D6)
+					return fmt.Errorf("tenant %s: %w", t.ID, err)
+				}
+			}
 			if after > 0 {
 				log.Printf("restored %s from the snapshot at %d, then replayed %d entries", t.ID, after, len(entries))
 			} else {

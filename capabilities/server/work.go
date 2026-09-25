@@ -68,6 +68,8 @@ type WorkTask struct {
 	Assignee   string    `json:"assignee,omitempty" field:"readonly"`
 	Due        time.Time `json:"due,omitzero" field:"readonly"`
 	State      string    `json:"state" field:"readonly" choices:"open,done,canceled"`
+	Answers    []string  `json:"answers,omitempty" field:"readonly"` // what the person may answer (a flow's Ask)
+	Answer     string    `json:"answer,omitempty" field:"readonly"`
 }
 
 // SavedView is a member's view of an entity type's list: its search, grouping,
@@ -132,6 +134,7 @@ func (w *Work) entities() []platform.Entity {
 					{Name: "claim", Title: "Take", From: []string{"open"}, To: []string{"open"}, Roles: everyone, Capability: "tasks",
 						Description: "Take a task offered to you, so others see it is yours.", Do: w.claim},
 					{Name: "complete", Title: "Done", From: []string{"open"}, To: []string{"done"}, Roles: everyone, Capability: "tasks",
+						Payload: []platform.Field{{Name: "answer", Type: "string", Description: "One of the task's answers, when it has any"}},
 						Description: "Mark a task of yours done.", Do: w.completer},
 				}}},
 		{Type: ViewType, Title: "Saved view", Model: SavedView{}},
@@ -373,8 +376,14 @@ func (w *Work) claim(c platform.Caller, record any, _ json.RawMessage, _ time.Ti
 	return nil
 }
 
-func (w *Work) completer(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+func (w *Work) completer(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
 	t := record.(*WorkTask)
+	var p struct{ Answer string }
+	json.Unmarshal(payload, &p)
+	if len(t.Answers) > 0 && !slices.Contains(t.Answers, p.Answer) || len(t.Answers) == 0 && p.Answer != "" {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	t.Answer = p.Answer
 	if strings.HasPrefix(t.Ref, ApprovalType+"/") {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} // an approval's task ends with the approval
 	}
@@ -473,7 +482,7 @@ func (t *Tenant) assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assign
 	if existing, ok := platform.Get[WorkTask](work, id); ok && existing.State == "open" {
 		return nil // one open task per app and key
 	}
-	task := WorkTask{Record: platform.Record{ID: id}, Title: a.Title, Body: a.Body, Ref: a.Ref, App: c.App, Key: a.Key, Candidates: candidates, Due: a.Due, State: "open"}
+	task := WorkTask{Record: platform.Record{ID: id}, Title: a.Title, Body: a.Body, Ref: a.Ref, App: c.App, Key: a.Key, Candidates: candidates, Due: a.Due, State: "open", Answers: a.Answers}
 	if err := work.Put(r, task); err != nil {
 		return err
 	}
@@ -483,6 +492,16 @@ func (t *Tenant) assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assign
 	}
 	work.Notify(platform.Notification{Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, r.GetRecordedTime().AsTime(), to...)
 	return nil
+}
+
+// closeTask cancels an open task as part of the decision r: a flow's wait
+// ended another way, or its path stopped (ADR-0020).
+func (t *Tenant) closeTask(c platform.Caller, r *pb.ChangeRecord, id string) {
+	work := platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + WorkApp, Tenant: t.ID, Roles: map[string]string{}}, WorkApp, c.Replaying, true)
+	if task, ok := platform.Get[WorkTask](work, id); ok && task.State == "open" {
+		task.State = "canceled"
+		work.Put(r, task)
+	}
 }
 
 // member is a member of the tenant by ID, with its current roles.
