@@ -6,8 +6,8 @@ package sales
 
 import (
 	"crm"
-	"hotel"
 	"helpdesk"
+	"hotel"
 	"hr"
 	"lodging"
 	"platformserver"

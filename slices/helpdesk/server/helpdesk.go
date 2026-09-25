@@ -190,11 +190,20 @@ func serviceLevel() platform.Flow {
 		Due time.Time `json:"due"`
 	}
 	ticket := func(c platform.Caller, r *platform.Run) Ticket { t, _ := platform.Get[Ticket](c, r.Key); return t }
-	answered := func(c platform.Caller, r *platform.Run) bool { s := ticket(c, r).Status; return s == "answered" || s == "closed" }
-	desk := func(platform.Caller, *platform.Run) []platform.Recipient { return []platform.Recipient{{AppRole: Desk}} }
-	leads := func(platform.Caller, *platform.Run) []platform.Recipient { return []platform.Recipient{{AppRole: Lead}} }
+	answered := func(c platform.Caller, r *platform.Run) bool {
+		s := ticket(c, r).Status
+		return s == "answered" || s == "closed"
+	}
+	desk := func(platform.Caller, *platform.Run) []platform.Recipient {
+		return []platform.Recipient{{AppRole: Desk}}
+	}
+	leads := func(platform.Caller, *platform.Run) []platform.Recipient {
+		return []platform.Recipient{{AppRole: Lead}}
+	}
 	ref := func(_ platform.Caller, r *platform.Run) string { return TicketType + "/" + r.Key }
-	replied := func(_ platform.Caller, r *platform.Run, e platform.Event) bool { return e.Record.GetSubmission().GetTarget().GetId() == r.Key }
+	replied := func(_ platform.Caller, r *platform.Run, e platform.Event) bool {
+		return e.Record.GetSubmission().GetTarget().GetId() == r.Key
+	}
 	return platform.Flow{Name: "service-level", Title: "Ticket service level", Version: 1, Owners: []string{Lead},
 		Start: platform.Start{On: []string{SchemaOpen}, Begin: func(c platform.Caller, e platform.Event) (string, any, bool) {
 			t, _ := platform.Get[Ticket](c, e.Record.GetSubmission().GetTarget().GetId())
@@ -232,7 +241,9 @@ func serviceLevel() platform.Flow {
 			{Name: "lead", Title: "A lead sees to it",
 				Ask: &platform.Ask{To: leads, Ref: ref, On: SchemaReply, Match: replied,
 					Title: func(c platform.Caller, r *platform.Run) string { return "Late ticket: " + ticket(c, r).Subject },
-					Body:  func(c platform.Caller, r *platform.Run) string { return "Answer it, or have it answered: it was due " + ticket(c, r).Due.Format(time.DateTime) }}},
+					Body: func(c platform.Caller, r *platform.Run) string {
+						return "Answer it, or have it answered: it was due " + ticket(c, r).Due.Format(time.DateTime)
+					}}},
 		}}
 }
 
@@ -254,7 +265,9 @@ func triager() platform.Agent {
 			}
 			return nil
 		},
-		To: func(platform.Caller, platform.AgentRun) []platform.Recipient { return []platform.Recipient{{AppRole: Desk}} }}
+		To: func(platform.Caller, platform.AgentRun) []platform.Recipient {
+			return []platform.Recipient{{AppRole: Desk}}
+		}}
 }
 
 func cmpOr(a, b string) string {
