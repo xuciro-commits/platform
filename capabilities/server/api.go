@@ -50,7 +50,7 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/settings", Summary: "Every app's settings with their values, in the caller's language (administrators)", Answer: []AppSettings{}},
 	{Pattern: "GET /v1/endpoints", Summary: "Outbound endpoints (administrators)", Answer: []EndpointView{}},
 	{Pattern: "GET /v1/effects", Summary: "Outbound effects and their state (administrators)", Answer: []platform.Effect{}},
-	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []WorkTask{}},
+	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []InboxTask{}},
 	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []ApprovalRequest{}},
 	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []SavedView{}},
 	{Pattern: "GET /v1/agents", Summary: "The agents the apps declare", Answer: []AgentInfo{}},
@@ -63,6 +63,13 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []FlowDefinition{}},
 	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []Link{}},
 	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []Note{}},
+}
+
+// InboxTask is a task as the inbox serves it: with its answers in the
+// reader's language, beside the values submitted.
+type InboxTask struct {
+	WorkTask
+	AnswerTitles []string `json:"answerTitles,omitempty"`
 }
 
 // SubmissionAnswer is what a decision's route answers: the accepted change

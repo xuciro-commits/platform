@@ -69,9 +69,9 @@ Our constraints:
 | Batch | Item | Done when |
 |---|---|---|
 | 6a (built) | Languages: `Manifest.Languages`, the host's translation of declarations by `Accept-Language`, the kit's `t()` and switcher, dictionaries for the platform, CRM, MES and the workspace in Simplified Chinese; agents answer in the run's language | The owner switches to 中文 and works in CRM and MES; a test fails when a declared title of CRM or MES has no Chinese translation |
-| 6b | Meaning (D1) with the tenant glossary; a member's language and a tenant default; notifications, tasks and mail in the reader's language | Descriptions and the glossary reach prompts, tool schemas, forms and search (tests); a notification written in English reads in Chinese for a member who prefers it |
-| 6c | The host API contract and generated types | `/v1/openapi.json` validates; the workspace compiles with the hand-written types deleted |
-| 6d | The developer kit | A scaffolded app runs in its development host and passes its tests in CI |
+| 6b (built) | Meaning (D1) with the tenant glossary; a member's language and a tenant default; notifications, tasks and mail in the reader's language | Descriptions and the glossary reach prompts, tool schemas, forms and search (tests); a notification written in English reads in Chinese for a member who prefers it |
+| 6c (built) | The host API contract and generated types | `/v1/openapi.json` validates; the workspace compiles with the hand-written types deleted |
+| 6d (built) | The developer kit | A scaffolded app runs in its development host and passes its tests in CI |
 
 ## Consequences
 
@@ -112,3 +112,13 @@ Our constraints:
 - **Proven:** `TestAPIContract` (OpenAPI 3.1, every reference resolves, every route described with a unique operation, the member's entity and payload schemas with meaning, every documented read served by an app, and `host.ts` exactly what the Go types generate, so a stale file fails CI); the workspace and every package typecheck against the generated types.
 - **Not yet:** the plant's own reads (`@pkg/mes` `model.ts`) are an app's, not the host's, and stay typed by hand until apps' reads declare their types; the answers to named reads are documented, not checked against the app's actual type at run time.
 
+
+### 6d: the developer kit
+
+- **The guide** (`docs/Apps.md`): the path of D8, one section per step, each naming the declarations it uses and the reference app that shows it at larger size.
+- **The scaffold** (`capabilities/server/cmd/new-app`): writes `apps/<id>/server` — an entity type with meaning, standard actions, a lifecycle with a manager's transition, a review flow that asks a manager and finishes the record, its dictionary, `TestApp` (create, a refused transition, the flow's task and answer, `CheckReplay`) and `TestChinese`, and a development host with the tokens `manager` and `member` — and `web/packages/<id>`, a UI package of generated lists and forms, registered in the workspace. Each step is marked in the generated code.
+- **The skill** (`.claude/skills/new-app`): for a coding agent, the path and the rules that keep an app an app (the app API only, declarations over hand-written code, every change an action, every text in Chinese, the kit's components).
+- **Found on the way:** a generated action ("Create purchase request") and a question's answers had no Chinese unless an app listed each; the host now says generated sentences through the platform's patterns from the app's own words (a lower-case title finds its title's entry), and the inbox serves each task's `answerTitles` beside the answers it submits. `Tenant.Untranslated` counts a text a pattern can say as translated. `Tenant.Member` gives tests and hosts a member by ID.
+- **Kept honest in CI:** `scripts/verify.sh capabilities` scaffolds an app in `.build/scaffold` and runs its tests; `composition` checks every Go module under `apps/` and `protocols/` (tests and `boundaries.sh`) without a list, and the kit's i18n test reads every UI package with a dictionary, so a new app is verified as soon as it exists.
+- **Checked by hand:** a scaffolded purchasing app on its development host with the workspace's build: a member created a request, the manager's inbox showed 审核 PR-1 with the answers 完成 and 保持进行中, the manager answered 完成 in the browser, and the request read 已完成.
+- **Not yet:** a developer MCP (coding agents read the repository, not the host); a scaffold for a protocol or an agent.

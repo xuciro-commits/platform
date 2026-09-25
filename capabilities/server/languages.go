@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"platformserver/platform"
 )
@@ -127,9 +128,10 @@ func (t *Tenant) Dictionary(lang string) map[string]string {
 	return d
 }
 
-// Translate returns v, as JSON, with every declaration text translated.
-func Translate(v any, dict map[string]string) any {
-	if len(dict) == 0 {
+// Translate returns v, as JSON, with every declaration text said in a
+// language: exactly, or by a pattern (a generated action's "Create {thing}").
+func (t *Tenant) Translate(v any, lang string) any {
+	if lang == "" {
 		return v
 	}
 	raw, err := json.Marshal(v)
@@ -140,12 +142,7 @@ func Translate(v any, dict map[string]string) any {
 	if json.Unmarshal(raw, &tree) != nil {
 		return v
 	}
-	tr := func(s string) string {
-		if out, ok := dict[s]; ok && out != "" {
-			return out
-		}
-		return s
-	}
+	tr := func(s string) string { return t.Say(lang, s) }
 	walkTexts(tree, tr)
 	walkChoices(tree, func(m map[string]any, choices []any) {
 		titles := make([]any, len(choices))
@@ -247,17 +244,55 @@ func (t *Tenant) Texts(app string) []string {
 	return out
 }
 
-// Untranslated are the app's declaration texts the tenant's dictionary for a
-// language lacks. Apps' tests require none for the languages they ship.
+// Untranslated are the app's declaration texts a language cannot say: no
+// entry, and no pattern whose every value it can say. Apps' tests require
+// none for the languages they ship.
 func (t *Tenant) Untranslated(app, lang string) []string {
-	dict := t.Dictionary(lang)
 	out := []string{}
 	for _, s := range t.Texts(app) {
-		if _, ok := dict[s]; !ok {
+		if !t.says(lang, s, 0) {
 			out = append(out, s)
 		}
 	}
 	return out
+}
+
+// lookup is a text's entry in a language's dictionary; a text in lower case,
+// as generated sentences hold a title ("Create purchase request"), finds its
+// title's entry too.
+func (t *Tenant) lookup(lang, s string) (string, bool) {
+	dict := t.Dictionary(lang)
+	if tr, ok := dict[s]; ok && tr != "" {
+		return tr, true
+	}
+	if s != "" {
+		if tr, ok := dict[strings.ToUpper(s[:1])+s[1:]]; ok && tr != "" {
+			return tr, true
+		}
+	}
+	return "", false
+}
+
+// says tells whether a language can say a text: by its entry, or by a
+// pattern whose values it can say in turn (numbers and names need none).
+func (t *Tenant) says(lang, s string, depth int) bool {
+	if _, ok := t.lookup(lang, s); ok || depth > 3 || !strings.ContainsFunc(s, unicode.IsLetter) {
+		return ok || depth <= 3
+	}
+	for _, p := range t.patterns(lang) {
+		m := p.re.FindStringSubmatch(s)
+		if m == nil {
+			continue
+		}
+		all := true
+		for _, v := range m[1:] {
+			all = all && t.says(lang, v, depth+1)
+		}
+		if all {
+			return true
+		}
+	}
+	return false
 }
 
 // meaning describes an app's entity types as their declarations explain them
@@ -445,8 +480,7 @@ func (t *Tenant) say(lang, s string, depth int) string {
 	if lang == "" || s == "" || depth > 3 {
 		return s
 	}
-	dict := t.Dictionary(lang)
-	if tr, ok := dict[s]; ok && tr != "" {
+	if tr, ok := t.lookup(lang, s); ok {
 		return tr
 	}
 	for _, p := range t.patterns(lang) {
@@ -486,6 +520,14 @@ func (t *Tenant) TranslateMessages(v any, lang string) any {
 	walk = func(v any) {
 		switch x := v.(type) {
 		case map[string]any:
+			if answers, ok := x["answers"].([]any); ok { // a question's answers stay the values submitted
+				titles := make([]any, len(answers))
+				for i, a := range answers {
+					s, _ := a.(string)
+					titles[i] = t.Say(lang, s)
+				}
+				x["answerTitles"] = titles
+			}
 			for k, child := range x {
 				if s, ok := child.(string); ok && (k == "title" || k == "body") {
 					x[k] = t.Say(lang, s)

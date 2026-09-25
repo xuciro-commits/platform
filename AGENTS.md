@@ -24,13 +24,14 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 | `web/` | pnpm workspace: `packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `packages/app` (`@platform/app`: `defineApp` and `useHost`, the app API of UIs, ADR-0018; the assistant, agent runs and global search, ADR-0021), `apps/workspace` (the one workspace every host serves: one sign-in, a launcher, every app a member may open), `apps/gallery` (every component with cross-industry data), `apps/hotel-desk` (Hotel client UI, loaded by Tauri, offline), app UI packages `packages/crm`, `packages/helpdesk`, `packages/hotel`, `packages/hr`, `packages/mes`, `packages/platform` (Settings), and `packages/lodging` (`@pkg/lodging`, the lodging protocol's UI) |
 | `i18n/`, `i18n.ts` | Languages (ADR-0023): each Go app embeds `i18n/<language>.json` (the host's own in `capabilities/server/i18n`), each web package registers `src/i18n.ts`; both keyed by the English text, and tests fail on a text without Chinese |
 | `docs/Platform.md` | The platform design. §2 the product model: layers, how it fits together, where data lives, the capability map (what exists), terminology, effects and replay, invariants, open ADR promises. §4 kernel hypotheses K1–K9 and contract rules. §8 validation and what the stages taught. §9 risks. §10 where it is going: the reference platforms, their 2026 direction and what we take, what is missing, the order of stages |
+| `docs/Apps.md` | Building an app (ADR-0023 D8): create app → declare entities → declare actions → declare flows → add translations → run; `capabilities/server/cmd/new-app` scaffolds one that already runs |
 | `docs/Intent.md` | The owner's intent and direction: what the platform is, how capabilities are chosen (from reference platforms, not one product's pull), what stays true, working with AI |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
 | `web/packages/kernel/src/gen/host.ts` | The host API's TypeScript types (exported as `Api` from `@platform/kernel`), generated from the host's Go types by `capabilities/server/cmd/api-types`; never edited (ADR-0023 D7) |
 | `.github/workflows/verify.yml` | CI: `scripts/verify.sh ci`, `web` and `hotel` on every push (Swift and the Docker rehearsal stay on the owner's Mac; timing bounds off with `PLATFORM_TIMING=0`) |
 | `scripts/verify.sh` | All checks (`scripts/boundaries.sh`: dependency boundaries between apps and the host) |
-| `.claude/skills/` | Procedures for coding agents in this repository: `architecture-gate` (open a stage with an ADR the owner decides), `close-out` (finish a batch: checks, documents, commit) |
+| `.claude/skills/` | Procedures for coding agents in this repository: `architecture-gate` (open a stage with an ADR the owner decides), `close-out` (finish a batch: checks, documents, commit), `new-app` (build or extend an app along docs/Apps.md) |
 
 ## Rules
 

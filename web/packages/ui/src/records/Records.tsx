@@ -306,7 +306,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
 }
 
 /** A task offered to a member; `answers` are what a flow's question offers (ADR-0020), none: done. */
-export type InboxTask = Api.WorkTask;
+export type InboxTask = Api.InboxTask;
 
 /** A member's open tasks (ADR-0017), overdue first; each can open what it is about and offers the actions the app gives it. */
 export function Inbox({ tasks, onOpen, actions, empty = t("Nothing for you") }: {

@@ -59,7 +59,7 @@ func TestLanguages(t *testing.T) {
 		}
 	}
 	// Records are what people wrote: never translated, whatever they say.
-	if got := Translate(map[string]any{"record": map[string]any{"name": "Settings"}, "title": "Settings"}, tn.Dictionary("zh-CN")).(map[string]any); got["title"] != "设置" || got["record"].(map[string]any)["name"] != "Settings" {
+	if got := tn.Translate(map[string]any{"record": map[string]any{"name": "Settings"}, "title": "Settings"}, "zh-CN").(map[string]any); got["title"] != "设置" || got["record"].(map[string]any)["name"] != "Settings" {
 		t.Errorf("translated %v", got)
 	}
 
@@ -72,10 +72,15 @@ func TestLanguages(t *testing.T) {
 		{"Overdue: Approve: Grant role platform.member/bo", "逾期：审批：授予角色 platform.member/bo"},
 		{"Settings", "设置"},
 		{"Something no dictionary knows", "Something no dictionary knows"},
+		{"Move a task from open or done to canceled.", "把任务从进行中或已完成改为已取消。"}, // a generated sentence, by its words
+		{"Create saved view", "新建已保存视图"},
 	} {
 		if got := tn.Say("zh-CN", c.in); got != c.want {
 			t.Errorf("Say(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+	if !tn.says("zh-CN", "Archive a task: it leaves lists but stays referenced and in history.", 0) || tn.says("zh-CN", "Archive a gizmo: it leaves lists but stays referenced and in history.", 0) {
+		t.Errorf("a pattern counts only when the language says its every value")
 	}
 	if got := tn.Say("", "Overdue: x"); got != "Overdue: x" {
 		t.Errorf("English is as written: %q", got)

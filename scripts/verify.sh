@@ -42,6 +42,16 @@ format() {
 
 capabilities() {
   step capability-server bash -c 'cd capabilities/server && go vet ./... && go test -count=1 ./...'
+  step app-scaffold scaffold
+}
+
+# The scaffold (cmd/new-app) writes an app whose tests pass, in a scratch copy
+# of the repository's layout, so docs/Apps.md's first step always works.
+scaffold() {
+  local root=.build/scaffold
+  rm -rf "$root" && mkdir -p "$root" && ln -s ../../contract ../../capabilities "$root"/ &&
+    (cd capabilities/server && go run ./cmd/new-app -root "../../$root" -id scaffolded -entity request -web=false) &&
+    (cd "$root/apps/scaffolded/server" && go vet ./... && go test -count=1 ./...)
 }
 
 manufacturing() {
@@ -56,9 +66,12 @@ composition() {
   # Apps know no other app; they meet through protocols (ADR-0011).
   step app-boundaries scripts/boundaries.sh
   step lodging-protocol bash -c 'cd protocols/lodging && go vet ./... && go test -count=1 ./...'
-  step crm-server bash -c 'cd apps/crm/server && go vet ./... && go test -count=1 ./...'
-  step hr-server bash -c 'cd apps/hr/server && go vet ./... && go test -count=1 ./...'
-  step helpdesk-server bash -c 'cd apps/helpdesk/server && go vet ./...'
+  # Every other app, including a new one, is checked as soon as it exists.
+  local dir
+  for dir in apps/*/server; do
+    [[ -f $dir/go.mod && $dir != apps/hotel/* && $dir != apps/manufacturing/* ]] || continue
+    step "$(basename "$(dirname "$dir")")-server" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
+  done
   step sales-solution bash -c 'cd solutions/sales && go vet ./... && go test -count=1 ./...'
 }
 

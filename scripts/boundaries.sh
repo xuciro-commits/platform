@@ -10,8 +10,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
 
-apps=(apps/hotel/server:hotel apps/crm/server:crm apps/manufacturing/server:mes apps/hr/server:hr apps/helpdesk/server:helpdesk)
-protocols=(protocols/lodging:lodging)
+# Every Go module under apps/ and protocols/, named by its module path.
+modules() { for m in "$@"; do [[ ! -f $m/go.mod ]] || echo "$m:$(awk '/^module /{print $2}' "$m/go.mod")"; done; }
+apps=($(modules apps/*/server))   # macOS bash 3.2 has no mapfile
+protocols=($(modules protocols/*))
 names=$(for x in "${apps[@]}"; do echo "${x#*:}"; done)
 
 for x in "${apps[@]}" "${protocols[@]}"; do
@@ -24,4 +26,4 @@ for x in "${apps[@]}" "${protocols[@]}"; do
   hits=$(cd "$dir" && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./... | grep -vE '/cmd/|test:' | grep -E ' platformserver( |$)' || true)
   [[ -z $hits ]] || fail "app code imports the host runtime, not the app API:"$'\n'"$hits"
 done
-echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocol"
+echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocols"

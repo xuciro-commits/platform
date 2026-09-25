@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { language, register, t } from "./i18n";
@@ -23,8 +23,11 @@ test("every translated text of every package reads in Chinese", () => {
   const keys = (file: string) => new Set([...readFileSync(file, "utf8").matchAll(/^\s*("(?:[^"\\]|\\.)*"): /gm)].map((m) => JSON.parse(m[1]!) as string));
   const kit = keys(join(web, "packages/ui/src/i18n/zh-CN.ts"));
   const missing: string[] = [];
-  for (const src of ["packages/ui/src", "packages/app/src", "packages/platform/src", "packages/crm/src", "packages/mes/src", "packages/hr/src",
-    "packages/helpdesk/src", "packages/hotel/src", "packages/lodging/src", "apps/workspace/src"]) {
+  // The kit, and every package or app with its own dictionary, a new one included.
+  const sources = ["packages", "apps"].flatMap((d) => readdirSync(join(web, d)).map((p) => `${d}/${p}/src`))
+    .filter((src) => src === "packages/ui/src" || existsSync(join(web, src, "i18n.ts")));
+  expect(sources.length).toBeGreaterThan(9);
+  for (const src of sources) {
     const own = src === "packages/ui/src" ? kit : keys(join(web, src, "i18n.ts"));
     for (const file of files(join(web, src))) {
       for (const m of readFileSync(file, "utf8").matchAll(/\bt\(("(?:[^"\\]|\\.)*")/g)) {

@@ -205,3 +205,8 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
 11. **多语言**（任一主机，ADR-0023）：右上角头像菜单 → 语言 → 简体中文，页面会重新加载：导航、按钮、列表、记录页、设置，以及各应用的实体、字段、状态、动作名称都变成中文（记录内容是谁写的就是什么语言，不翻译）；在记录上"问助手"，智能体会用中文写理由和结果（需要真实模型，本地替身 echo 不会说中文）。切回 English 同样在这个菜单。你选的语言会存成你自己的偏好，换浏览器登录也一样；管理员可以在 App settings → Settings 设"Default language"（如 `zh-CN`）作为租户默认。通知、收件箱任务、审批和邮件也会按读者的语言显示（应用写的英文按词典里的句式翻译）。
     术语表：设置 → 知识 → 术语表 → 新建术语，比如术语 `单子`，含义"销售对商机的叫法"，指向 `crm.opportunity`；之后在搜索里输入"单子 年度"会只在商机里找"年度"，智能体的提示词里也会带上这些术语。术语只能指向已有的实体、字段或动作，不会改变它们本身。
 12. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+13. **新建一个应用**（不需要 Docker，按 `docs/Apps.md`，ADR-0023）：
+    1. 在 `capabilities/server` 运行 `go run ./cmd/new-app -id purchasing -entity request -title "Purchase request" -zh 采购申请 -app-title Purchasing -app-zh 采购`，它会写好 `apps/purchasing/server`（实体、动作、审核流程、中文词典、测试、开发主机）和 `web/packages/purchasing`（界面，已登记到工作台）；
+    2. `cd apps/purchasing/server && go test ./...` 应该直接通过；
+    3. `pnpm --dir web/apps/workspace build`，再在 `apps/purchasing/server` 运行 `go run ./cmd/purchasing-server -web ../../../web/apps/workspace/dist`，打开 `http://127.0.0.1:8499`，用令牌 `member` 新建一张采购申请，再用令牌 `manager` 登录，收件箱里会有"审核 …"，点"完成"后申请变成"已完成"；
+    4. 用完删掉：`rm -rf apps/purchasing web/packages/purchasing`，再 `git checkout web/apps/workspace web/pnpm-lock.yaml`。也可以让编码智能体用 `new-app` 技能照着这条路径加实体、动作、流程和翻译。

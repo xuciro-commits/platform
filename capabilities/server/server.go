@@ -136,8 +136,8 @@ func (h *Host) Handler() http.Handler {
 	})
 	handle(Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		lang := t.Language(m, r)
-		WriteJSON(w, http.StatusOK, Translate(MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
-			Language: lang, Languages: t.languages(), Preferred: m.Language}, t.Dictionary(lang)))
+		WriteJSON(w, http.StatusOK, t.Translate(MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
+			Language: lang, Languages: t.languages(), Preferred: m.Language}, lang))
 	})
 	handle(Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}
@@ -148,13 +148,13 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	handle(Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language (ADR-0008)", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, Translate(t.Catalog(m), t.Dictionary(t.Language(m, r))))
+		WriteJSON(w, http.StatusOK, t.Translate(t.Catalog(m), t.Language(m, r)))
 	})
 	handle(Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []AppInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, Translate(t.Apps(), t.Dictionary(t.Language(m, r))))
+		WriteJSON(w, http.StatusOK, t.Translate(t.Apps(), t.Language(m, r)))
 	})
 	handle(Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each (ADR-0011)", Answer: []ProtocolInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, Translate(t.Protocols(), t.Dictionary(t.Language(m, r))))
+		WriteJSON(w, http.StatusOK, t.Translate(t.Protocols(), t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/protocols/{protocol}/{version}/{action}", Summary: "Call a protocol's action at the provider the tenant binds", Body: ProtocolCall{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var call struct {
@@ -199,7 +199,7 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, Vendors)
 	})
 	handle(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, Translate(t.Entities(m), t.Dictionary(t.Language(m, r))))
+		WriteJSON(w, http.StatusOK, t.Translate(t.Entities(m), t.Language(m, r)))
 	})
 	handle(Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []Param{{"domain", "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated; -field for descending"}, {"offset", "Records to skip"}, {"limit", "Records in the page"}, {"archived", "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
@@ -277,7 +277,7 @@ func (h *Host) Handler() http.Handler {
 			return
 		}
 		if declarationReads[r.PathValue("read")] {
-			out = Translate(out, t.Dictionary(t.Language(m, r)))
+			out = t.Translate(out, t.Language(m, r))
 		}
 		if messageReads[r.PathValue("read")] {
 			out = t.TranslateMessages(out, t.Language(m, r))

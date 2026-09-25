@@ -557,3 +557,13 @@ func checkManifest(a platform.App) error {
 	}
 	return nil
 }
+
+// Member is a member of the tenant's directory, as the console holds it now:
+// for tests and tools that act as a member.
+func (t *Tenant) Member(id string) (platform.Member, bool) {
+	d, ok := t.app(PlatformApp).(*Console)
+	if !ok {
+		return platform.Member{}, false
+	}
+	return d.Member(id)
+}

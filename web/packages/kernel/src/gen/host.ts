@@ -366,6 +366,26 @@ export type Identity = {
   roles: Record<string, string>;
 };
 
+export type InboxTask = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  title: string;
+  body?: string;
+  ref?: string;
+  app: string;
+  key?: string;
+  candidates: string[];
+  assignee?: string;
+  due?: string;
+  state: "open" | "done" | "canceled";
+  answers?: string[];
+  answer?: string;
+  answerTitles?: string[];
+};
+
 export type LifecycleInfo = {
   field: string;
   initial: string;
@@ -706,23 +726,4 @@ export type Vendor = {
   name: string;
   baseUrl: string;
   wire: string;
-};
-
-export type WorkTask = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  title: string;
-  body?: string;
-  ref?: string;
-  app: string;
-  key?: string;
-  candidates: string[];
-  assignee?: string;
-  due?: string;
-  state: "open" | "done" | "canceled";
-  answers?: string[];
-  answer?: string;
 };

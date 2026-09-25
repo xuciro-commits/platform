@@ -51,7 +51,7 @@ function MyInbox() {
         </> : <>
           {!task.assignee && <Button size="sm" onClick={() => void decide("work.task.claim", { type: "work.task", id: task.id }, {})}>{t("Take")}</Button>}
           {task.answers?.length // a flow's question: each answer takes its own path (ADR-0020)
-            ? task.answers.map((a) => <Button key={a} size="sm" variant="primary" onClick={() => void decide("work.task.complete", { type: "work.task", id: task.id }, { answer: a })}>{a}</Button>)
+            ? task.answers.map((a, i) => <Button key={a} size="sm" variant="primary" onClick={() => void decide("work.task.complete", { type: "work.task", id: task.id }, { answer: a })}>{task.answerTitles?.[i] ?? a}</Button>)
             : <Button size="sm" variant="primary" onClick={() => void decide("work.task.complete", { type: "work.task", id: task.id }, {})}>{t("Done")}</Button>}
         </>} />
     </>
