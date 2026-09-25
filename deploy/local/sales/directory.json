@@ -37,7 +37,8 @@
       "ai": "admin",
       "hr": "hr",
       "work": "admin",
-      "flow": "admin"
+      "flow": "admin",
+      "agent": "admin"
     },
     "units": [
       {

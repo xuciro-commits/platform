@@ -35,7 +35,7 @@ func seat(subject, id string, role mes.Role, units ...string) platformserver.Sea
 	s := platformserver.Seat{Subjects: []string{subject}, Member: platform.Member{ID: id, Roles: map[string]string{"mes": string(role)}}}
 	if subject == "supervisor" {
 		s.Roles[platformserver.PlatformApp], s.Roles[platformserver.OrgApp], s.Roles[platformserver.AIApp] = platformserver.Admin, platformserver.OrgAdmin, platformserver.AIAdmin
-		s.Roles[platformserver.FlowApp] = platformserver.FlowAdmin
+		s.Roles[platformserver.FlowApp], s.Roles[platformserver.AgentApp] = platformserver.FlowAdmin, platformserver.AgentAdmin
 	}
 	for _, u := range units {
 		s.Units = append(s.Units, platform.Membership{Unit: u, Role: string(role)})
@@ -55,7 +55,7 @@ func main() {
 	}
 	seats := deployment.Seats(demo)
 	t, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seats...),
-		platformserver.NewOrganization(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), platformserver.NewAI(tenant), platformserver.NewWork(tenant), platformserver.NewFlows(tenant), plant)
+		platformserver.NewOrganization(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), platformserver.NewAI(tenant), platformserver.NewWork(tenant), platformserver.NewFlows(tenant), platformserver.NewAgents(tenant), plant)
 	if err == nil {
 		err = t.Connect(mes.DemoConnectors(tenant)...)
 	}

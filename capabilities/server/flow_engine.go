@@ -195,9 +195,11 @@ func (ss *session) next(x *FlowInstance, token int, to string) {
 	if to == "" {
 		if step := ss.def(x).steps[tok.Step]; step != nil {
 			to = step.Next
-			if step.Choose != nil {
+			if step.Choose != nil { // it may keep what it read: the run's data is saved
 				var reason string
-				to, reason = step.Choose(ss.app(x), ss.run(x))
+				r := ss.run(x)
+				to, reason = step.Choose(ss.app(x), r)
+				x.Data = string(r.Data)
 				ss.trace(x, tok.Step, "chose", cmpOr(to, "the end")+": "+reason, "")
 			}
 		}

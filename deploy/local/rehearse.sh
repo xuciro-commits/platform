@@ -96,7 +96,7 @@ submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | 
 agent() { (cd ../../slices/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MES" -oidc-token "$IDP/oidc/token" "$@"); }
-[[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") | not)]') == '["platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
+[[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") | not)]') == '["platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
 event=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"
@@ -148,6 +148,28 @@ chat() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/jso
 [[ $(chat "$AGENT" | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "the assistant called a model open to ai users only"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage" | jq -c '[.totals[] | {member, model, calls, input, output}]') == '[{"member":"op-l1","model":"local/echo","calls":1,"input":4,"output":5}]' ]] || fail "AI usage: $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage")"
 echo "ok   AI providers: a local model server added and a model opened to ai users; an operator's call answered and metered, the assistant refused"
+
+# Agents (ADR-0021): the confirmation flow's agent corrects a refused order. For
+# WO-4 (P-200, released without a planned order) the ERP refuses; the plant's
+# agent, on the local model, reads the planned orders and proposes PO-9002; the
+# supervisor approves in the inbox; the flow resends it and the ERP confirms.
+AUTHORITY=platform submit "$SUP" ag-1 platform.setting.set platform.setting agent/model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "agents' model"
+submit "$SUP" r-4 mes.order.release mes.order WO-4 '{"product":"P-200","quantity":8,"sfcs":1}' | jq -e .record >/dev/null || fail "release WO-4"
+rev=0
+for resource in CNC-21 ASM-1 TEST-1; do
+  submit "$OP2" "w4-s$rev" mes.sfc.start mes.sfc WO-4-001 "{\"resource\":\"$resource\"}" $rev | jq -e .record >/dev/null || fail "start WO-4 at $resource"
+  submit "$OP2" "w4-c$rev" mes.sfc.complete mes.sfc WO-4-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-4 at $resource"
+  rev=$((rev + 2))
+done
+proposal() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/inbox" | jq -r '.[] | select(.title | startswith("Resend WO-4")) | .title + "|" + .id'; }
+for _ in $(seq 40); do [[ -n $(proposal) ]] && break; sleep 0.5; done
+[[ $(proposal) == "Resend WO-4 to the ERP against PO-9002?|"* ]] || fail "the agent's proposal: $(proposal) / $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/agent.run" | jq -c '[.records[] | {state, stopped, steps: [.steps[] | .tool + " " + .outcome[:60]]}]')"
+AUTHORITY=work submit "$SUP" ag-2 work.task.complete work.task "$(proposal | cut -d'|' -f2)" '{"answer":"resend"}' >/dev/null
+wo4() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -r '.records[] | select(.id == "WO-4") | .erp + " " + .planned'; }
+for _ in $(seq 30); do [[ $(wo4) == confirmed* ]] && break; sleep 0.5; done
+[[ $(wo4) == "confirmed PO-9002" ]] || fail "WO-4 after the agent's correction: $(wo4)"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/agent.run" | jq -r '.records[0] | .agent + " " + .state + " " + ([.steps[].tool] | join(","))') == "mes.erp-fixer done read_planned_orders,finish" ]] || fail "the agent's run"
+echo "ok   agents: a refused order corrected by the plant's agent on the local model, approved by the supervisor in the inbox, resent by the flow and confirmed"
 
 # The sales solution: the CRM books a stay through the lodging protocol and the
 # hotel provides it (ADR-0011); the platform app revokes a role and the catalog
@@ -223,11 +245,11 @@ echo "ok   sales solution: a stay through the lodging protocol; the administrato
 sales crm-server "$SALES_TOKEN" f-1 crm.opportunity.open crm.opportunity OPP-9 '{"account":"ACME","title":"Group retreat"}' | jq -e .record >/dev/null || fail "open for the flow"
 sales crm-server "$SALES_TOKEN" f-2 crm.opportunity.plan crm.opportunity OPP-9 '{"rooms":2,"roomType":"standard","arrive":"2026-12-01","depart":"2026-12-03"}' | jq -e .record >/dev/null || fail "plan the group stay"
 sales crm-server "$SALES_TOKEN" f-3 crm.opportunity.close crm.opportunity OPP-9 '{"outcome":"won"}' | jq -e .record >/dev/null || fail "win for the flow"
-flowstate() { curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/records/flow.instance/crm.group-stay:OPP-9" | jq -r '.record.state + " " + ([.record.trace[].what] | join(","))'; }
+flowstate() { curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/records/flow.instance/crm.group-stay:OPP-9" | jq -r '.record.state + " " + ([.record.trace[]?.what] | join(","))'; }
 for _ in $(seq 20); do [[ $(flowstate) == waiting* ]] && break; sleep 0.5; done
 [[ $(flowstate) == "waiting started,acted,chose,acted,chose,asked" ]] || fail "group-stay flow: $(flowstate)"
 before=$(state)
-[[ $(jq -s '.[1].total' <<<"$before") == 4 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
+[[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
 compose restart mes-server sales-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done

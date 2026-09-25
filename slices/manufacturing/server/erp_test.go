@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,6 +59,7 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	work := func() { // the host's owned work: the flow's deliveries and its timer
 		for range 3 {
 			at = at.Add(2 * time.Second)
+			p.tenant.Think(at) // the flow's agent, without a model here: it stops, and the supervisors correct
 			p.tenant.Work(at)
 		}
 	}
@@ -168,4 +171,101 @@ func TestOrderConfirmedToTheERP(t *testing.T) {
 	p.tenant.Dispatch(at)
 	o = order("SO-3")
 	expect(t, fmt.Sprint(o.ERP, " ", o.Confirmation, " ", calls), "confirmed CONF-PO-9003-1 5")
+}
+
+// ADR-0021 D10 (1): the ERP refuses a confirmation that names no planned order;
+// the confirmation flow's agent reads the planned orders and proposes the one
+// the order fulfils; a supervisor approves in the inbox, the flow resends it,
+// and the ERP confirms. The agent itself acts on nothing.
+func TestERPCorrectionByAgent(t *testing.T) {
+	erpAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var c struct{ Data Confirmation }
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &c)
+		w.Header().Set("Content-Type", "application/json")
+		if c.Data.Planned == "" {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			w.Write([]byte(`{"error":"no planned order to confirm against"}`))
+			return
+		}
+		fmt.Fprintf(w, `{"confirmation":"CONF-%s"}`, c.Data.Planned)
+	}))
+	defer erpAPI.Close()
+	// The model reads the planned orders, then proposes the first one the goal does not name.
+	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Messages []map[string]any }
+		json.NewDecoder(r.Body).Decode(&req)
+		goal, _ := req.Messages[1]["content"].(string)
+		last := req.Messages[len(req.Messages)-1]
+		name, args := "read_planned_orders", `{"rationale":"read first"}`
+		if last["role"] == "tool" {
+			found := ""
+			for _, id := range regexp.MustCompile(`PO-\d+`).FindAllString(fmt.Sprint(last["content"]), -1) {
+				if !strings.Contains(goal, id) {
+					found = id
+					break
+				}
+			}
+			name, args = "finish", fmt.Sprintf(`{"result":"{\"planned\":\"%s\"}","rationale":"the planned order no other order fulfils"}`, found)
+		}
+		raw, _ := json.Marshal(args)
+		fmt.Fprintf(w, `{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":%q,"arguments":%s}}]}}],"usage":{"prompt_tokens":60,"completion_tokens":12}}`, name, raw)
+	}))
+	defer model.Close()
+	p := newPlant(t)
+	p.tenant.Secrets = func(string) ([]byte, bool) { return []byte("s3cret"), true }
+	admin := platform.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, platformserver.AIApp: platformserver.AIAdmin}}
+	keys := 0
+	as := func(m platform.Member, authority, schema, typ, id string, payload any) string {
+		keys++
+		raw, _ := json.Marshal(payload)
+		_, err := p.tenant.Submit(m, &pb.Submission{TenantId: tenant, PrincipalId: m.ID, Authority: authority, IdempotencyKey: fmt.Sprint("x", keys),
+			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, t0)
+		if err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+	expect(t, as(admin, platformserver.PlatformApp, platformserver.SchemaEndpointAdd, platformserver.EndpointType, "erp-api",
+		map[string]any{"url": erpAPI.URL, "secret": "erp", "effects": []string{"mes/" + EffectConfirmation}, "allowPrivate": true}), "ok")
+	expect(t, as(admin, platformserver.AIApp, platformserver.SchemaProviderAdd, platformserver.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}), "ok")
+	expect(t, as(admin, platformserver.AIApp, platformserver.SchemaModelEnable, platformserver.ModelType, "lm/agent", map[string]string{"access": "users"}), "ok")
+	expect(t, as(admin, platformserver.PlatformApp, platformserver.SchemaSettingSet, platformserver.SettingType, "agent/model", map[string]string{"value": "lm/agent"}), "ok")
+	expect(t, fmt.Sprint(p.DeliverPlanned(erp, PlannedPage{CursorTo: "page-1", Orders: []PlannedOrder{{ERPID: "PO-9001", Product: "P-100", Quantity: 1}, {ERPID: "PO-9002", Product: "P-100", Quantity: 1}}}, t0)), "<nil>")
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1, Planned: "PO-9001"}, p.Planned()[0].FactID), "ok")
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-2", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}), "ok") // no planned order
+	for _, resource := range []string{"FURNACE-1", "CNC-11", "CMM-1"} {
+		expect(t, submit(p, op1, SchemaStart, SFCType, "SO-2-001", sfcPayload{Resource: resource}), "ok")
+		expect(t, submit(p, op1, SchemaComplete, SFCType, "SO-2-001", sfcPayload{}), "ok")
+	}
+	at := t0
+	work := func(n int) {
+		for range n {
+			at = at.Add(2 * time.Second)
+			p.tenant.Think(at)
+			p.tenant.Work(at)
+			p.tenant.Dispatch(at)
+		}
+	}
+	work(8)
+	inbox := func() []platformserver.WorkTask {
+		out, _ := p.tenant.Read(sup.Member, "inbox")
+		return out.([]platformserver.WorkTask)
+	}
+	tasks := inbox()
+	if len(tasks) != 1 || tasks[0].Title != "Resend SO-2 to the ERP against PO-9002?" {
+		t.Fatalf("inbox %+v", tasks)
+	}
+	runs, _ := p.tenant.Records(platform.Member{ID: "x", Tenant: tenant, Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}, platformserver.RunType, platform.Query{}, at)
+	run := runs.Records[0].(platformserver.AgentRunRecord)
+	expect(t, fmt.Sprint(run.State, " ", run.Steps[0].Tool, " ", run.Steps[1].Tool, " ", run.ActionsUsed), "done read_planned_orders finish 0")
+	expect(t, as(sup.Member, platformserver.WorkApp, "work.task.complete", platformserver.TaskType, tasks[0].ID, map[string]string{"answer": "resend"}), "ok")
+	work(6)
+	var o Order
+	for _, x := range p.Orders() {
+		if x.ID == "SO-2" {
+			o = x
+		}
+	}
+	expect(t, fmt.Sprint(o.ERP, " ", o.Confirmation, " ", o.Planned), "confirmed CONF-PO-9002 PO-9002")
 }

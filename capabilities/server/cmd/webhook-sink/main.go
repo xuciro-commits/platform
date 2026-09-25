@@ -10,7 +10,10 @@
 //	POST /fail?on=true|false   answer 503 to every webhook until switched off
 //	GET  /mail      [{"messageId", "to", "from", "subject", "text"}], oldest first
 //	GET  /v1/models, POST /v1/chat/completions   a local model server on the
-//	                OpenAI wire (ADR-0015): model "echo" repeats the last message
+//	                OpenAI wire (ADR-0015): model "echo" repeats the last message;
+//	                given tools (an agent, ADR-0021), it calls a read tool first,
+//	                then finishes proposing the first item read whose ID the goal
+//	                does not name and whose product it does
 package main
 
 import (
@@ -29,6 +32,7 @@ import (
 	"net/mail"
 	"net/textproto"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -121,6 +125,9 @@ func main() {
 		var req struct {
 			Model    string
 			Messages []struct{ Role, Content string }
+			Tools    []struct {
+				Function struct{ Name string }
+			}
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil || req.Model != "echo" || len(req.Messages) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -128,6 +135,34 @@ func main() {
 			return
 		}
 		last := req.Messages[len(req.Messages)-1].Content
+		if len(req.Tools) > 0 { // an agent (ADR-0021): read first, then propose the first ID read that the goal does not name
+			call := func(name string, args map[string]string) {
+				raw, _ := json.Marshal(args)
+				json.NewEncoder(w).Encode(map[string]any{"model": "echo", "usage": map[string]int{"prompt_tokens": 50, "completion_tokens": 10},
+					"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "", "tool_calls": []map[string]any{
+						{"id": "c1", "type": "function", "function": map[string]string{"name": name, "arguments": string(raw)}}}}}}})
+			}
+			if req.Messages[len(req.Messages)-1].Role != "tool" {
+				for _, t := range req.Tools {
+					if strings.HasPrefix(t.Function.Name, "read_") {
+						call(t.Function.Name, map[string]string{"rationale": "Read what is there before proposing anything."})
+						return
+					}
+				}
+			}
+			goal, found := req.Messages[1].Content, ""
+			var items []map[string]any // a list read: the first item whose product the goal names, and whose ID it does not
+			json.Unmarshal([]byte(last), &items)
+			for _, item := range items {
+				id := regexp.MustCompile(`[A-Z]{2,}-\d+`).FindString(fmt.Sprint(item))
+				if product, _ := item["product"].(string); id != "" && !strings.Contains(goal, id) && (product == "" || strings.Contains(goal, product)) {
+					found = id
+					break
+				}
+			}
+			call("finish", map[string]string{"result": `{"planned":"` + found + `"}`, "rationale": "The first planned order read that no other order fulfils: " + cmpOr(found, "none") + "."})
+			return
+		}
 		json.NewEncoder(w).Encode(map[string]any{"model": "echo", "choices": []map[string]any{{"message": map[string]string{"role": "assistant", "content": "echo: " + last}}},
 			"usage": map[string]int{"prompt_tokens": len(strings.Fields(last)), "completion_tokens": len(strings.Fields(last)) + 1}})
 	})
@@ -197,4 +232,11 @@ func serveSMTP(addr string, keep func(message)) {
 			}
 		}()
 	}
+}
+
+func cmpOr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

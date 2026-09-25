@@ -51,7 +51,8 @@ type Step struct {
 	Any   []string // branches: the flow goes on when the first has ended; the others are canceled
 	Agent *AgentStep
 	Next  string
-	// Choose picks the next step and gives the reason kept in the trace.
+	// Choose picks the next step and gives the reason kept in the trace; data
+	// it sets on the run is kept.
 	Choose func(c Caller, r *Run) (next, reason string)
 	// Timeout ends a Wait or an Ask after this long, at OnTimeout.
 	Timeout   time.Duration

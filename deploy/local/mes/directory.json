@@ -10,7 +10,8 @@
       "org": "admin",
       "ai": "admin",
       "work": "admin",
-      "flow": "admin"
+      "flow": "admin",
+      "agent": "admin"
     },
     "units": [
       {

@@ -218,7 +218,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 	catalog := func(who string) []string {
 		var out []string
 		for _, a := range w.tenant.Catalog(w.members[who]) {
-			if !strings.HasPrefix(a.Schema, "platform.") && !strings.HasPrefix(a.Schema, "work.") { // offered to every member
+			if !strings.HasPrefix(a.Schema, "platform.") && !strings.HasPrefix(a.Schema, "work.") && !strings.HasPrefix(a.Schema, "agent.") { // offered to every member
 				out = append(out, a.Schema)
 			}
 		}

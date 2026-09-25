@@ -10,11 +10,11 @@ import (
 )
 
 // schemas are the plant's and the platform's actions of a catalog; every member
-// also has the work app's (tasks, approvals, saved views).
+// also has the work app's (tasks, approvals, saved views) and may ask agents.
 func schemas(actions []platform.Action) []string {
 	var out []string
 	for _, a := range actions {
-		if !strings.HasPrefix(a.Schema, "work.") {
+		if !strings.HasPrefix(a.Schema, "work.") && !strings.HasPrefix(a.Schema, "agent.") {
 			out = append(out, a.Schema)
 		}
 	}
