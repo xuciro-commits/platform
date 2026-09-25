@@ -12,10 +12,13 @@ import { z } from "zod";
 
 type Account = { id: string; name: string; kind: string; revision: number };
 type Note = { entity: string; at: string; by: string; text: string };
-type Opportunity = { id: string; account: string; title: string; owner: string; stage: "open" | "won" | "lost"; revision: number; stays: Booking[] };
+type Opportunity = { id: string; account: string; title: string; owner: string; stage: "open" | "won" | "lost"; revision: number; stays: Booking[];
+  rooms?: number; roomType?: string; arrive?: string; depart?: string };
 type Customer = Account & { opportunities: Opportunity[] };
 
 const stages = defineStatuses({ open: { label: "Open", tone: "info" }, won: { label: "Won", tone: "success" }, lost: { label: "Lost", tone: "neutral" } });
+const group = z.object({ rooms: z.number().int().min(1).max(20), roomType: z.string().trim().min(1, "Required"), arrive: z.iso.date(), depart: z.iso.date() })
+  .refine((g) => g.depart > g.arrive, { message: "Departure after arrival", path: ["depart"] });
 const stay = z.object({ guest: z.string().trim().min(1, "Required"), roomType: z.string().trim().min(1, "Required"), checkIn: z.iso.date(), checkOut: z.iso.date() })
   .refine((s) => s.checkOut > s.checkIn, { message: "Check-out after check-in", path: ["checkOut"] });
 
@@ -50,6 +53,7 @@ function CustomerDetail({ id }: { id: string }) {
   const openRecord = useOpenRecord();
   const [opening, setOpening] = useState(false);
   const [booking, setBooking] = useState<Opportunity>();
+  const [planning, setPlanning] = useState<Opportunity>();
   if (!customer) return <p className="text-sm text-muted">No account {id}.</p>;
   const close = (o: Opportunity, outcome: "won" | "lost") =>
     decide("crm.opportunity.close", { type: "crm.opportunity", id: o.id }, { outcome }, { expectedRevision: o.revision });
@@ -63,8 +67,9 @@ function CustomerDetail({ id }: { id: string }) {
           <div className="mb-2 flex items-center gap-2">
             <h2 className="text-sm font-semibold">{o.title}</h2>
             <StatusTag status={o.stage} registry={stages} />
-            <span className="text-xs text-muted">{o.id} · owner {o.owner}</span>
+            <span className="text-xs text-muted">{o.id} · owner {o.owner}{o.rooms ? ` · group: ${o.rooms} × ${o.roomType}, ${o.arrive} → ${o.depart}` : ""}</span>
             <span className="ml-auto flex gap-2">
+              {o.stage === "open" && can("crm.opportunity.plan") && <Button size="sm" onClick={() => setPlanning(o)}>Plan group stay</Button>}
               {o.stage !== "lost" && can("crm.opportunity.book") && <Button size="sm" onClick={() => setBooking(o)}><BedDouble />Book stay</Button>}
               {o.stage === "open" && can("crm.opportunity.close") && <>
                 <Button size="sm" onClick={() => void close(o, "won")}>Won</Button>
@@ -82,6 +87,18 @@ function CustomerDetail({ id }: { id: string }) {
           onSubmit={async (v) => {
             if (await decide("crm.opportunity.open", { type: "crm.opportunity", id: newId("OPP") }, { account: customer.id, title: v.title }, { expectedRevision: 0 })) setOpening(false);
           }} />
+      </Dialog>
+      <Dialog open={!!planning} onOpenChange={(o) => !o && setPlanning(undefined)} title={`Plan the group stay of ${planning?.title ?? ""}`}>
+        {planning && (
+          <div className="grid gap-2">
+            <p className="text-xs text-muted">Won, the group-stay flow books these rooms through the lodging provider and asks you to confirm them with the customer.</p>
+            <EntityForm schema={group} defaultValues={{ rooms: planning.rooms ?? 2, roomType: planning.roomType ?? "", arrive: planning.arrive ?? "", depart: planning.depart ?? "" }}
+              fields={[{ name: "rooms", label: "Rooms", kind: "number" }, { name: "roomType", label: "Room type (the provider's)" },
+                { name: "arrive", label: "Arrival", kind: "date" }, { name: "depart", label: "Departure", kind: "date" }]}
+              submitLabel="Plan" onCancel={() => setPlanning(undefined)}
+              onSubmit={async (v) => { if (await decide("crm.opportunity.plan", { type: "crm.opportunity", id: planning.id }, v, { expectedRevision: planning.revision })) setPlanning(undefined); }} />
+          </div>
+        )}
       </Dialog>
       <Dialog open={!!booking} onOpenChange={(o) => !o && setBooking(undefined)} title={`Book stay for ${booking?.title ?? ""}`}>
         {booking && (

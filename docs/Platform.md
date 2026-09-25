@@ -134,7 +134,7 @@ Status legend:
 | 0017 | Lifecycles, approvals, tasks and the inbox | Implemented (#107); the helpdesk proof, delegation and calendars deferred |
 | 0018 | One workspace: one sign-in, a launcher, apps as contributions, cross-app references | Implemented (#108); global search, the backend-for-frontend and run-time UI bundles deferred |
 | 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
-| 0020 | Flows: declared steps, waits, people, compensation, versions, decision traces | Proposed (#110, stage 4) |
+| 0020 | Flows: declared steps, waits, people, compensation, versions, decision traces | Implemented (#110, stage 4) |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
@@ -215,6 +215,7 @@ decision or app input ──emit──▶ pending ──attempt──▶ deliver
 | `<input>` (connector batch or page) | An input declared journaled is accepted | Runs the same app code (cursor checks included) |
 | `delivery` | Each attempt of an event for a subscriber | Attempts again and must reach the same outcome, otherwise replay stops |
 | `job` | A run that decided or notified something | Runs again at the recorded time and must reach the same outcome |
+| (any, with `versions`) | A flow instance started while handling the entry (ADR-0020) | Starts it on the recorded version, whatever the code declares since |
 | `effect` | Each attempt of an outbound effect | Applies the recorded outcome and hands the answer to the app; never sends |
 | `usage` | Each model call (ADR-0015) | Applies the meter reading; never calls a model |
 
@@ -480,6 +481,10 @@ Entities are declared once (ADR-0016) and move through declared lifecycles with 
 
 Aggregates over any entity type within the member's scope; the platform's visualization spec with ECharts 6 behind it; pivot, charts and saved views on every list; app dashboards; typed PostgreSQL projections with a reader role per tenant; snapshots. What held: the record store (ADR-0016) made analytics one generic read, and replay-as-truth made snapshots checkable everywhere at once — `CheckReplay` restores a snapshot at four points of every test journal. What it cost: every app implements `platform.Snapshotter` (for most, its ledger alone), and the Go kernel gained restore functions that add no contract rule.
 
+### Flows (#110, stage 4)
+
+Declared flows run as records of a flow app, each step a decision inside the owned work that caused it: the plant's ERP confirmation (a hand-written chain before) and the CRM's group stay across the lodging protocol. What held: owned work, tasks and protocols were the parts; replay and snapshots covered flows with no new mechanism except one — the journal now records which flow version an instance started with, because replay through newer code must not pick a newer version. What it cost: every tenant whose apps declare flows composes the flow app.
+
 ### Shared capability models (candidates, layer 2)
 
 Across domains the business differs but the data is organised alike. These are **capability candidates**, not kernel: they carry domain-like vocabulary and are promoted only when two domains use them without exceptions (§4 rules). The UI kit (`web/packages/ui`, ADR-0004) already gives them one presentation.
@@ -591,7 +596,7 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 | Lifecycles (state machines) | States and transitions declared with the entity; transitions are actions with guards; the UI shows a status bar | Odoo status bar, ServiceNow state flows, Salesforce paths | have (ADR-0017; manufacturing, HR, the work app itself) |
 | Approvals | Approval chains by organisation structure, role, amount or rule; delegation and substitutes; a person's decision journaled | ServiceNow approvals, SAP release strategies, Salesforce approval processes | have (ADR-0017); delegation and substitutes missing |
 | Tasks and inbox | Work items assigned to members, roles or units, with due dates, SLA timers and escalation; one inbox across apps | ServiceNow task and SLA, Odoo activities | have (ADR-0017); business calendars for SLAs missing |
-| Flows (orchestration) | Long-running processes across apps: steps, waits, timers, human tasks, compensation, versioned and replay-safe, built on owned work and effects | ServiceNow Flow Designer, Temporal, Camunda | partial: subscriptions, jobs and effects are the parts |
+| Flows (orchestration) | Long-running processes across apps: steps, waits, timers, human tasks, compensation, versioned and replay-safe, built on owned work and effects | ServiceNow Flow Designer, Temporal, Camunda | have (ADR-0020): the plant's ERP confirmation, the CRM's group stay; record-state triggers and calendars missing |
 | Automation rules | "When X, if Y, do Z" declared in code on entities and events | Odoo automated actions, ServiceNow business rules | partial: subscriptions in code |
 | Scheduling and capacity | Resources, calendars and allocation over time (rooms, machines, people) | Odoo planning, SAP capacity planning | missing (candidate in §8) |
 
@@ -637,7 +642,7 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 | Knowledge: documents and records indexed for retrieval, cited answers | missing |
 | AI in the workspace: an assistant panel on any record, with the record as context; stating an intent instead of navigating apps | missing |
 | Context graph: records, links, protocols and the decision history as one typed graph that people and agents query across apps, the grounding for every agent | Palantir Ontology, SAP Knowledge Graph | partial: records, relations, the journal; no graph read |
-| Decision traces: each decision with its reasons, evidence (K4 facts), the branch a rule or flow took, the agent's rationale and the approvals it passed; corrections (rejections, reversals) kept as signals | SAP decision traces, Foundry action logs | partial: the journal and audit hold who, what and when, not why |
+| Decision traces: each decision with its reasons, evidence (K4 facts), the branch a rule or flow took, the agent's rationale and the approvals it passed; corrections (rejections, reversals) kept as signals | SAP decision traces, Foundry action logs | partial: flows keep why each step went where it went (ADR-0020); single decisions do not yet |
 | Agent harness: an agent as a principal with narrower grants than a role, budgets (calls, cost, actions), memory, guardrails and observability of each run; goals decomposed and delegated, exceptions to people | SAP harness engineering, Agentforce, AIP | partial: agents as members, catalog-only actions, D6 approval |
 | Evaluation: runs replayed against past decisions and corrections before a model, prompt or agent changes | — | missing |
 | Agent interoperability: MCP for tools (have), Agent2Agent for other vendors' agents | MCP, A2A | partial |

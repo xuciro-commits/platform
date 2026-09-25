@@ -16,6 +16,7 @@ export { Sheet } from "./primitives/sheet";
 export { Workspace, useWorkspace, notify, type Launcher, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
+export { FlowView, flowStates, type FlowDefinition, type FlowInstanceData, type FlowStep, type FlowToken, type FlowTrace } from "./flows/FlowView";
 export { Chart, useChartData, type ChartSource } from "./charts/Chart";
 export { Pivot, groupDomain } from "./charts/Pivot";
 export { aggregateQuery, aggregateValues, columnOf, type ChartSpec, type ChartData, type Channels, type Encoding, type Mark, type MeasureType, type AggregateOp, type TimeUnit, type AggregateData, type AggregateColumn, type AggregateQuery } from "./charts/spec";

@@ -16,13 +16,13 @@ type Notification = { read: boolean };
 type ProtocolInfo = { id: string; bound?: string };
 
 // The UI packages this workspace is built with (D2): each loads only when the
-// member holds a role in an app it serves. Settings serves three platform apps.
+// member holds a role in an app it serves. Settings serves the platform's apps.
 const packages: { serves: string[]; load: () => Promise<{ default: AppUI }> }[] = [
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["hotel"], load: () => import("@pkg/hotel/app") },
   { serves: ["hr"], load: () => import("@pkg/hr") },
   { serves: ["mes"], load: () => import("@pkg/mes") },
-  { serves: ["platform", "org", "ai"], load: () => import("@pkg/platform") },
+  { serves: ["platform", "org", "ai", "flow"], load: () => import("@pkg/platform") },
 ];
 
 const remembered = (key: string) => { try { return sessionStorage.getItem(key) ?? undefined; } catch { return undefined; } };
@@ -45,11 +45,12 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     client.refreshDeclarations().then(() => setReady(true), () => notify.error("Host unreachable"));
   }, [client, me]);
 
-  const [apps, setApps] = useState<AppUI[]>();
+  const [apps, setApps] = useState<(AppUI & { serves?: string[] })[]>();
   useEffect(() => {
     if (!me) return;
     const held = new Set(me.apps.map((a) => a.id));
-    void Promise.all(packages.filter((p) => p.serves.some((id) => held.has(id))).map((p) => p.load().then((m) => m.default))).then(setApps);
+    void Promise.all(packages.filter((p) => p.serves.some((id) => held.has(id)))
+      .map((p) => p.load().then((m) => ({ ...m.default, serves: p.serves })))).then(setApps);
   }, [me]);
 
   const read = <T,>(path: string, refetchInterval: number | false = false) =>
@@ -90,7 +91,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     const opens = new Map<string, string>();
     for (const app of apps ?? []) {
       for (const [type, view] of Object.entries(app.opens ?? {})) {
-        const own = type.startsWith(`${app.id}.`);
+        const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));
         if (own || protocols.some((p) => p.id.startsWith(`${type}/`) && p.bound === app.id)) opens.set(type, view);
       }
     }

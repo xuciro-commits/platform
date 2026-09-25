@@ -1,6 +1,6 @@
 # ADR-0020: Flows — long-running processes across apps
 
-**Status:** Accepted (2026-09-25, #110, the architecture gate of stage 4 in Platform.md §10.4). The owner accepted D1–D9 as recommended.
+**Status:** Accepted (2026-09-25, #110, the architecture gate of stage 4 in Platform.md §10.4). The owner accepted D1–D9 as recommended. What is built is under "As built".
 
 ## Context
 
@@ -113,3 +113,42 @@ They split on how a process is defined, and there are three ways:
 - A process becomes a declaration people can read and a trace they can follow, instead of state fields and hooks spread through an app.
 - Agents (stage 5) get a governed place to act: a step with a goal, a budget and a person behind it, inside a traced process.
 - Flows add a fourth journaled kind of owned work beside deliveries, jobs and effects. Replay and snapshots cover it with the same checks.
+
+## As built (#110)
+
+- **Declaration** (`platform/flow.go`):
+  - `Manifest.Flows` lists `platform.Flow` values: `Name`, `Title`, `Version`, `Start` (events it starts on, and `Begin`, which gives the key and the data), `Steps`, `Owners` (app roles asked when an instance is stuck), and `From` (the mapping from the previous version).
+  - A `Step` is one of `Act`, `Wait`, `Ask`, `Call`, `All`, `Any` or `Agent`. It carries `Next` or `Choose` (the next step and the reason), a `Timeout` with `OnTimeout`, a `Fault` path and an `Undo` act.
+  - `platform.Compensate` is a next step that undoes the flow's acts.
+  - Step functions get a `platform.Run`: the key, the instance's data (`DataOf`, `Set`), the last answer and the event that ended the wait.
+  - `NewTenant` checks every declaration: one kind per step, steps that exist, waits that match, timeouts that go somewhere, ascending versions, start events that are the app's own actions or events of a protocol it consumes, and a flow app composed.
+- **The flow app** (`capabilities/server/flow.go`, `flow_engine.go`):
+  - `flow.instance` records hold the tokens (paths, as in BPMN, one per parallel branch), the undo stack and the trace.
+  - Every move of an instance is one decision of the flow app (`flow.instance.start`, `flow.instance.step`), taken inside the owned work that caused it. That is a delivery of an event: the host gives the flow app the events flows start or wait on, and the completion of their tasks. Or it is the flow app's `timers` job every second, for retries, timeouts, times and conditions. Replay takes each again.
+  - Acts are the declaring app's own actions, or protocol actions through the host, submitted as its automation principal with keys made from the instance. The starter is kept on the instance as "on behalf of", not on each act's submission.
+  - Ask steps are tasks the declaring app assigns. Tasks gain answers (`WorkTask.Answers`, and the answer in `work.task.complete`). An event can close an ask instead.
+  - Parallel branches join on All, or on the first under Any; Call runs a sub-flow, and its end state is the answer. An agent step is, until stage 5, a person's task.
+  - A failing act retries five times with backoff, then takes its fault path, then compensates. Compensating runs the undo acts newest first, and an undo that keeps failing makes the instance stuck and asks the owners.
+  - `flow.instance.retry`, `.skip`, `.cancel` and `.move` are administrators' decisions.
+- **Versions** (D6): new instances take the highest version.
+  - The journal records the version each started with: `Entry.Versions`, the column `versions`, added forward-only. So replay through newer code starts them on the same one.
+  - Start-up refuses a journal whose running instance needs a version the code dropped (`Flows.Check`).
+- **Proofs:**
+  - **The plant:** the order's confirmation to the ERP is the flow `mes.erp-confirmation`. It starts when the last SFC completes or is signed off, acts `mes.order.confirm` (new; completing an order no longer confirms it by hand), waits until the ERP answers, and on a refusal asks the line's supervisors to correct and resend. The resend closes their task; an hour of silence tells them. The refusal notice stays, and is still mailed.
+  - **The CRM:** `crm.opportunity.plan` plans a group's rooms. The flow `crm.group-stay` books them one by one through the lodging protocol when the opportunity is won, then asks the owner to confirm them with the customer within two days. Released, unanswered, or refused by the provider, the bookings are canceled again through the protocol, newest first. The ADR's "provider's confirmation" became the customer's, because the lodging protocol confirms synchronously.
+- **UI:**
+  - The kit's `FlowView` draws a flow's steps with the path taken and where each path stands, and lists the trace as "why it moved".
+  - Settings has Flows (definitions and instances) and the instance page with retry, skip, cancel and move.
+  - The inbox shows a question's answers as buttons.
+  - The CRM plans group stays.
+- **Proven:**
+  - `TestFlows` in the host: every step kind, timeouts, answers, retries, compensation, stuck and skip, cancel, pinned versions and moving, a parallel pack with a timed sub-flow, the check of dropped versions and of declarations, and replay with snapshots.
+  - The plant's ERP test, and the sales group-stay test: refused by the provider, confirmed, released, and unanswered.
+  - The rehearsal: a flow waits across a restart, then ends on the owner's answer.
+  - The browser: the question answered "release" undid both bookings, and the instance page showed each step's reason.
+- **Not yet:**
+  - record-state triggers (a flow starts on events only);
+  - business calendars for timeouts;
+  - a drawn graph beyond the step list;
+  - agent steps run by agents (stage 5).
+

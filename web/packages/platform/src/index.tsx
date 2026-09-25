@@ -3,13 +3,14 @@
 // with their protocol graph, the capability matrix read from the registry,
 // connectors and endpoints, app settings, owned work (ADR-0013), AI providers
 // and usage (ADR-0015) and the audit trail. Every change is a decision.
-import { defineApp, useHost, useReadQuery as useRead } from "@platform/app";
+import { Records, defineApp, useHost, useReadQuery as useRead } from "@platform/app";
 import type { EdgeClient } from "@platform/kernel";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Select, Tag, useWorkspace, type ColumnDef, type View,
+  Button, DataTable, Dialog, EntityCard, EntityForm, FlowView, Input, PageHeader, Select, Tag, useWorkspace,
+  type ColumnDef, type FlowDefinition, type FlowInstanceData, type View,
 } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Blocks, Bot, Cable, Grid3x3, History, MessageSquare, Network, PlugZap, SlidersHorizontal, Users, Workflow } from "lucide-react";
+import { BarChart3, Blocks, Bot, Cable, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -765,7 +766,57 @@ function AIUsage() {
   );
 }
 
+
+// Flows (ADR-0020): the flows the tenant's apps declare, their instances, and
+// one instance drawn with the path it took and why; administrators retry,
+// skip, cancel or move stuck and running instances.
+function Flows() {
+  const flows = useRead<FlowDefinition[]>("/v1/flows").data ?? [];
+  const columns: ColumnDef<FlowDefinition, any>[] = [
+    { accessorKey: "title", header: "Flow" },
+    { accessorKey: "id", header: "ID", meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "version", header: "Version", meta: { width: 80, align: "right" } },
+    { id: "start", header: "Starts on", meta: { width: 260 }, accessorFn: (f) => f.start.join(", ") },
+    { id: "steps", header: "Steps", meta: { width: 70, align: "right" }, accessorFn: (f) => f.steps.length },
+  ];
+  return (
+    <>
+      <PageHeader title="Flows" description="Long-running processes the apps declare. Each instance is a record: open one to see where it stands and why it moved." />
+      <DataTable data={flows} columns={columns} getRowId={(f) => `${f.id}@${f.version}`} height={180} empty="No app declares a flow" />
+      <h2 className="mt-4 mb-2 text-sm font-semibold">Instances</h2>
+      <Records type="flow.instance" description="Every run of every flow, newest changes first." />
+    </>
+  );
+}
+
+function FlowPage({ id }: { id: string }) {
+  const { decide, can } = useHost();
+  const view = useRead<{ record: FlowInstanceData }>(`/v1/records/flow.instance/${encodeURIComponent(id)}`, 3000).data;
+  const flows = useRead<FlowDefinition[]>("/v1/flows").data ?? [];
+  const x = view?.record;
+  if (!x) return <p className="text-sm text-muted">Loading {id}…</p>;
+  const definition = flows.find((f) => f.id === x.flow && f.version === x.version);
+  const target = { type: "flow.instance", id: x.id };
+  const live = !["done", "compensated", "canceled"].includes(x.state);
+  const next = flows.some((f) => f.id === x.flow && f.version > x.version);
+  return (
+    <div className="grid max-w-4xl gap-3">
+      {live && (
+        <div className="flex gap-2">
+          {can("flow.instance.retry") && <Button size="sm" onClick={() => void decide("flow.instance.retry", target, {})}>Retry</Button>}
+          {can("flow.instance.move") && next && <Button size="sm" onClick={() => void decide("flow.instance.move", target, {})}>Move to the next version</Button>}
+          {can("flow.instance.cancel") && <Button size="sm" variant="danger" onClick={() => void decide("flow.instance.cancel", target, {})}>Cancel</Button>}
+        </div>
+      )}
+      <FlowView definition={definition} instance={x} actions={(t) => live && can("flow.instance.skip") && (t.waits === "stuck" || t.waits === "retry" || t.waits === "undo")
+        ? <Button size="sm" variant="ghost" onClick={() => void decide("flow.instance.skip", target, { token: t.id })}>Skip</Button> : null} />
+    </div>
+  );
+}
+
 const views: View[] = [
+  { id: "flows", title: () => "Flows", render: () => <Flows /> },
+  { id: "flow", title: (p) => p.id ?? "Flow", render: (p) => <FlowPage id={p.id ?? ""} /> },
   { id: "members", title: () => "Members", render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? "Member", render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "organization", title: () => "Organisation", render: () => <Organization /> },
@@ -789,6 +840,7 @@ export default defineApp({
   title: "Settings",
   icon: <SlidersHorizontal />,
   home: { view: "members" },
+  opens: { "flow.instance": "flow" },
   views,
   nav: (host) => {
     const nav = (label: string, icon: React.ReactNode, view: string) => ({ label, icon, route: { view } });
@@ -798,6 +850,7 @@ export default defineApp({
       ...(admin ? [{ label: "Apps", items: [nav("Apps", <Blocks />, "apps"), nav("App settings", <SlidersHorizontal />, "app-settings"), nav("Capability matrix", <Grid3x3 />, "matrix"), nav("Protocols", <Cable />, "protocols")] }] : []),
       ...(host.role("ai") ? [{ label: "AI", items: [...(host.role("ai") === "admin" ? [nav("Providers and models", <Bot />, "ai-providers")] : []), nav("Playground", <MessageSquare />, "ai-playground"), nav("Usage", <BarChart3 />, "ai-usage")] }] : []),
       ...(admin ? [{ label: "Operations", items: [nav("Integrations", <PlugZap />, "integrations"), nav("Automation", <Workflow />, "automation"), nav("Audit", <History />, "audit")] }] : []),
+      ...(host.role("flow") ? [{ label: "Processes", items: [nav("Flows", <Route />, "flows")] }] : []),
     ];
   },
 });

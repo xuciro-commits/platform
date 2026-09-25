@@ -4,7 +4,7 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **110 · gate: awaiting owner** | Stage 4 of the capability plan (Platform.md §10.4): flows (ADR-0020). Declared steps in typed code (act, wait with correlation and timeouts, ask, call, all/any; agent steps declared for stage 5), instances as records of a `flow` app with journaled steps, the app's principal on behalf of the starter, retries then compensation, versions pinned, decision traces on every step. Proof: the plant's ERP confirmation and a sales group booking across apps | The owner has decided D1–D9; then the build items of ADR-0020 |
+| **111 · next: architecture gate** | Stage 5 of the capability plan (Platform.md §10.4): agents. An ADR compares SAP Joule and its agents, Salesforce Agentforce, ServiceNow AI agents, Palantir AIP and Microsoft Copilot Studio, and proposes the harness: agents as principals with scoped grants and budgets, runs as owned work with traces, memory and guardrails, grounding in a context graph over records, links and decision traces, flows' agent steps run by agents, the assistant panel and intents in the workspace, evaluation from corrections, and A2A beside MCP — with decision points for the owner | The owner has decided the ADR's points; the build items are queued with their done-when |
 | **105 · batch 1 done, owner testing** | AI providers (ADR-0015): providers, catalogs, enabled models with access, calls with journaled usage, Settings (providers, playground, usage) | The owner has tested with OpenRouter; batch 2 (quotas and rate limits, the Anthropic adapter, app calls as effects, streaming) is ordered |
 
 ## Open friction (temporary; delete entries once resolved)

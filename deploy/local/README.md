@@ -164,4 +164,10 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
    1. `sales@hotel.test` 在 Leave requests 新建一条请假，打开后点 Submit，提示"已提交审批"，My requests 里能看到；
    2. `manager@hotel.test` 在 Inbox 里批准；超过 5 天的请假还要第二级（部门负责人，也是 `manager-1`），再批一次；
    3. 批完后请假变成 approved，`sales` 收到通知。也可以试驳回、撤回，或者在审批期间取消请假（最后批准时会被拒绝并写明原因）。
-5. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+5. **流程**（Sales）：
+   1. `sales@hotel.test` 在 CRM 的客户页给一个商机点 "Plan group stay"（比如 2 间 standard，填入住和离店日期），再点 Won；
+   2. "团队住宿"流程会通过住宿协议一间一间订房，然后在收件箱问你：confirmed 还是 release；
+   3. 选 release（或者两天没人回答），已订的房会按倒序取消；选 confirmed，流程结束；
+   4. `manager@hotel.test` 在设置 → Processes → Flows 看所有流程和实例，点开实例能看到每一步和原因，卡住的可以重试、跳过、取消。
+   工厂那边：订单最后一个 SFC 完成后，"ERP 确认"流程自动发确认；ERP 拒绝时主管收件箱里会有"修正并重发"的任务，重发后任务自动关闭。
+6. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。

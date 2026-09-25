@@ -217,6 +217,15 @@ sales crm-server "$MGR" s-b3 crm.opportunity.book crm.opportunity OPP-1 '{"roomT
 [[ $(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/customers" | jq -c '[.[].opportunities[] | select(.id == "OPP-1") | .stays[].roomType]') == '["suite","loft"]' ]] || fail "stays across providers"
 echo "ok   sales solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants; the cancellation reached a webhook endpoint signed, once"
 
+# Flows (ADR-0020): a won opportunity's planned rooms are booked through the
+# lodging protocol by the group-stay flow, which then waits for its owner; the
+# wait survives the restart below.
+sales crm-server "$SALES_TOKEN" f-1 crm.opportunity.open crm.opportunity OPP-9 '{"account":"ACME","title":"Group retreat"}' | jq -e .record >/dev/null || fail "open for the flow"
+sales crm-server "$SALES_TOKEN" f-2 crm.opportunity.plan crm.opportunity OPP-9 '{"rooms":2,"roomType":"standard","arrive":"2026-12-01","depart":"2026-12-03"}' | jq -e .record >/dev/null || fail "plan the group stay"
+sales crm-server "$SALES_TOKEN" f-3 crm.opportunity.close crm.opportunity OPP-9 '{"outcome":"won"}' | jq -e .record >/dev/null || fail "win for the flow"
+flowstate() { curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/records/flow.instance/crm.group-stay:OPP-9" | jq -r '.record.state + " " + ([.record.trace[].what] | join(","))'; }
+for _ in $(seq 20); do [[ $(flowstate) == waiting* ]] && break; sleep 0.5; done
+[[ $(flowstate) == "waiting started,acted,chose,acted,chose,asked" ]] || fail "group-stay flow: $(flowstate)"
 before=$(state)
 [[ $(jq -s '.[1].total' <<<"$before") == 4 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
@@ -229,6 +238,11 @@ for host in mes-server sales-server; do
   logged $host "saved a snapshot of" || fail "$host saved no snapshot at shutdown"
   logged $host "from the snapshot at" || fail "$host did not start from its snapshot"
 done
+task=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$SALES/v1/inbox" | jq -r '.[] | select(.title | contains("Group retreat")) | .id')
+sales work "$SALES_TOKEN" f-4 work.task.complete work.task "$task" '{"answer":"confirmed"}' | jq -e .record >/dev/null || fail "answer the flow's question after the restart"
+for _ in $(seq 20); do [[ $(flowstate) == done* ]] && break; sleep 0.5; done
+[[ $(flowstate) == done* ]] || fail "flow after the restart: $(flowstate)"
+echo "ok   flows: a won opportunity's rooms booked by the group-stay flow through the lodging protocol; its question to the owner survived the restart and its answer ended it"
 sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == 1 ]] || fail "a delivered webhook was sent again after the restart"
 echo "ok   restart: each host saved a snapshot at shutdown and started from it (mes $(compose logs mes-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
 

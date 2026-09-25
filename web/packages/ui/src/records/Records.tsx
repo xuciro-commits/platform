@@ -304,7 +304,9 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   );
 }
 
-export type InboxTask = { id: string; title: string; body?: string; ref?: string; app: string; candidates: string[]; assignee?: string; due?: string; state: string };
+export type InboxTask = { id: string; title: string; body?: string; ref?: string; app: string; candidates: string[]; assignee?: string; due?: string; state: string;
+  /** What the person may answer (a flow's question, ADR-0020); none: done. */
+  answers?: string[] };
 
 /** A member's open tasks (ADR-0017), overdue first; each can open what it is about and offers the actions the app gives it. */
 export function Inbox({ tasks, onOpen, actions, empty = "Nothing for you" }: {
