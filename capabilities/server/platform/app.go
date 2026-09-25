@@ -72,6 +72,8 @@ type Runtime interface {
 	// Work (ADR-0017): tasks for people, and whether decisions are only probed.
 	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *kernel.Error
 	Probing() bool
+	// Next numbers a document of an accepted decision (ADR-0024).
+	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error)
 }
 
 // Manifest declares an app (ADR-0010). Names of actions, reads and inputs are
@@ -96,6 +98,7 @@ type Manifest struct {
 	Entities   []Entity      // entity types whose records the host keeps (ADR-0016)
 	Flows      []Flow        // long-running processes the host runs for the app (ADR-0020)
 	Agents     []Agent       // AI agents the host runs for the app (ADR-0021)
+	Sequences  []Sequence    // numbers of its documents, without gaps (ADR-0024)
 	// Roles are roles that grant no action but open something else, such as
 	// models (ADR-0015); the roles its actions grant need not be listed.
 	Roles []string

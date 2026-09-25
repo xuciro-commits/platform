@@ -17,6 +17,7 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 | `apps/hr/` | HR reference app (ADR-0017): leave requests with a lifecycle and approvals along the organisation; runs in the sales solution |
 | `apps/helpdesk/` | Helpdesk reference app (ADR-0021): tickets with a lifecycle, a service-level flow, and a triage agent whose replies are mailed after a person approves them; runs in the sales solution |
 | `apps/crm/` | CRM app: accounts, opportunities, stays booked through the lodging protocol; knows no other app |
+| `apps/erp/` | ERP app (ADR-0024): chart of accounts, journal entries posted with gapless numbers, reversal, periods, the trial balance; `cmd/erp-server` is its development host; purchasing, inventory and production orders follow |
 | `protocols/` | Protocols apps provide and consume (ADR-0011): `lodging` (`lodging.booking/1` and a reference provider; `lodgingtest` checks any provider's conformance) |
 | `solutions/sales/` | The sales solution: platform, relations, a lodging provider, the CRM, HR and the helpdesk; `cmd/sales-server` |
 | `apps/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |

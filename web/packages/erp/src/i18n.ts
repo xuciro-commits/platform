@@ -1,0 +1,30 @@
+// Simplified Chinese for the ERP's UI (ADR-0023), keyed by the English source text.
+import { register } from "@platform/ui";
+
+register("zh-CN", {
+  "Account": "科目",
+  "Accounting": "财务",
+  "Accounts": "科目",
+  "Balance": "余额",
+  "Code": "科目代码",
+  "Create": "创建",
+  "Credit": "贷方",
+  "Debit": "借方",
+  "Every account with postings: the sums of its debits and credits, and its balance. Debits equal credits when the books balance.": "每个有分录的科目：借方合计、贷方合计和余额。账平时借方合计等于贷方合计。",
+  "Journal entries": "会计凭证",
+  "Kind": "类别",
+  "Month": "月份",
+  "New account": "新建科目",
+  "New entry": "新建凭证",
+  "Open period": "开放期间",
+  "Periods": "会计期间",
+  "Postings": "分录",
+  "Save draft": "保存草稿",
+  "Total": "合计",
+  "Trial balance": "试算平衡表",
+  "asset": "资产",
+  "equity": "权益",
+  "expense": "费用",
+  "income": "收入",
+  "liability": "负债",
+});

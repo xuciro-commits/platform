@@ -210,3 +210,9 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
     2. `cd apps/purchasing/server && go test ./...` 应该直接通过；
     3. `pnpm --dir web/apps/workspace build`，再在 `apps/purchasing/server` 运行 `go run ./cmd/purchasing-server -web ../../../web/apps/workspace/dist`，打开 `http://127.0.0.1:8499`，用令牌 `member` 新建一张采购申请，再用令牌 `manager` 登录，收件箱里会有"审核 …"，点"完成"后申请变成"已完成"；
     4. 用完删掉：`rm -rf apps/purchasing web/packages/purchasing`，再 `git checkout web/apps/workspace web/pnpm-lock.yaml`。也可以让编码智能体用 `new-app` 技能照着这条路径加实体、动作、流程和翻译。
+14. **ERP 记账**（不需要 Docker，ADR-0024）：
+    1. `pnpm --dir web/apps/workspace build`，再在 `apps/erp/server` 运行 `go run ./cmd/erp-server -web ../../../web/apps/workspace/dist`，打开 `http://127.0.0.1:8499`，用令牌 `controller`（主管会计）登录；开发主机已经建好一套科目、打开本月的会计期间，本位币是 CNY；
+    2. 财务 → 会计凭证 → 新建凭证：选科目、填借方和贷方（可以"添加一行"），保存草稿；打开这张凭证点"过账"：借贷不平、科目不存在、期间已关账都会被拒绝，被拒绝的不占编号；过账成功后得到编号 `GJ/2026/00001`，下面"分录"列出每一行；
+    3. 过账后的凭证不能再改，只能"冲销"：会生成一张借贷互换的冲销凭证，编号接着排；
+    4. 试算平衡表：每个科目的借方、贷方合计和余额，借方合计等于贷方合计；会计期间：关账后该月的凭证不能过账，"重新打开"后可以；
+    5. 帮助台（Sales 主机）新开的工单也会有连续编号 `HD-2026-0001`。

@@ -102,6 +102,7 @@ type MeView struct {
 	Language    string          `json:"language"`            // the language the host serves this member in; "" is English
 	Languages   []string        `json:"languages"`           // the languages the tenant has dictionaries for
 	Preferred   string          `json:"preferred,omitempty"` // the member's own choice
+	Currency    string          `json:"currency"`            // the tenant's, the default of amounts people enter (ADR-0024)
 }
 
 // SignIn tells the workspace how to sign in: an OpenID issuer and client, or

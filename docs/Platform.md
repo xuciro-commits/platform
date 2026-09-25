@@ -95,7 +95,8 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 | Work ownership (K9) | Kernel | Generations, stale results, owner close (checkpoints unused) | `kernel.Works` | the host |
 | Composition and routing | Host runtime | Manifests checked at start; routing by action, read and input | `NewTenant`, `checkManifest`, `Tenant` | every host |
 | Journal, replay and snapshots | Host runtime | One ordered journal per tenant; fail-stop; replay through the same code; snapshots valid for their code | `Journal`, `Tenant.Replay`, `CheckReplay`, `snapshot.go` | every host |
-| Record store and generic reads (ADR-0016) | App API, host runtime | Entity types as Go structs; generic reads with domain, search, sort and pages; scope per role; history; related records; generated create, edit, archive and forms | `platform.Entity`, `Caller.Put`, `Get`/`Find`, `/v1/entities`, `/v1/records` | CRM, Hotel, manufacturing, HR, helpdesk |
+| Record store and generic reads (ADR-0016) | App API, host runtime | Entity types as Go structs; generic reads with domain, search, sort and pages; scope per role; history; related records; generated create, edit, archive and forms, with choices for references and child lines edited as rows (ADR-0024) | `platform.Entity`, `Caller.Put`, `Get`/`Find`, `/v1/entities`, `/v1/records` | CRM, Hotel, manufacturing, HR, helpdesk, ERP |
+| Number sequences (ADR-0024) | App API, host runtime | Document numbers per sequence and year from a pattern (`GJ/{year}/{n:5}`), taken only by accepted decisions, so without gaps; rebuilt by replay, kept in snapshots | `platform.Sequence`, `Caller.Next`, `sequence.go` | ERP (journal entries), helpdesk (tickets) |
 | Aggregates and projections (ADR-0019) | Host runtime | Group and measure within scope; typed PostgreSQL tables per entity type with a reader role per tenant | `/v1/aggregates`, `-project` | CRM, Hotel, manufacturing |
 | Action catalog | App API, host runtime | Declared actions; each caller receives only what its role permits; start-up deactivation | `platform.Action`, `/v1/actions` | all |
 | Reads and read authorization | Host runtime | Named reads; role in the app, or open to every member | `Tenant.Read`, `Manifest.Everyone` | all |
@@ -110,7 +111,7 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 | Host API contract (ADR-0023) | Host runtime | OpenAPI 3.1 of every route and named read, generated from the Go types, with the caller's entity types and action payloads; TypeScript types generated from it | `api.go`, `/v1/openapi.json`, `cmd/api-types`, `@platform/kernel` `Api` | every web package |
 | Developer kit (ADR-0023) | App API, host runtime | The app guide, a scaffold that writes an app already on all six steps (entity, lifecycle, flow, translations, tests with `CheckReplay`, development host, UI package), and the `new-app` skill; CI scaffolds one and runs its tests, and checks every app under `apps/` without a list | `docs/Apps.md`, `cmd/new-app`, `.claude/skills/new-app` | CI |
 | Agent doors | Host runtime | A caller's catalog as MCP tools; published agents over A2A 1.0 (JSON-RPC, agent cards) | `POST /mcp`, `/a2a/<tenant>/<agent>`, `cmd/mes-agent` | every host; helpdesk published |
-| Console | Platform app `platform` | Members, roles, service accounts and agents; audit and deliveries; app settings; protocol binding; endpoints; approval and retry of effects | `console.go` | every host |
+| Console | Platform app `platform` | Members, roles, service accounts and agents; audit and deliveries; app settings; the tenant's default language and currency (`platform/currency`, the books' currency and the default of amounts people enter); protocol binding; endpoints; approval and retry of effects | `console.go` | every host |
 | Organisation (ADR-0012) | Platform app `org` | Units in dated structures, memberships; rules ask for a member's units at the input's time | `org.go`, `Caller.Units` | manufacturing, HR, sales |
 | Links and timeline | Platform app `relations` | Relations between entities; protocol events told on linked timelines | `Caller.Link`, `Caller.Links` | CRM |
 | Notifications | Host, read state in `platform` | To members, a unit's role or an app role; deduplicated; mailed through an email endpoint | `Caller.Notify` | manufacturing, Hotel, helpdesk, `work` |
@@ -243,7 +244,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0010 | Enable and disable an app per tenant as a recorded decision | Amended (#104): apps are composed per tenant in code; capabilities are deactivated at start-up |
 | 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
 | 0010 | Logs and correlation; health | Partial: correlation IDs pass through protocol calls and runs; no structured logs; connectors and endpoints have health, apps and the journal do not |
-| 0010 | Number sequences, files, analysis datasets, retention, preferences | Deferred (§10.4) |
+| 0010 | Files, analysis datasets, retention, preferences | Deferred (§10.4); number sequences are built (ADR-0024) |
 | 0011 | Protocol versions side by side; routing an action on an existing entity to its provider | Deferred |
 | 0011 | Cross-industry protocols (party, documents, calendar) | Partial: notification, links and timeline are platform capabilities |
 | 0012 | Successors of merged or split units; posts; delegation; federation | Deferred |
@@ -252,12 +253,13 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0014 | Per-endpoint limits; a breaker per destination | Partial: a fixed 10 s timeout and 64 KiB answer; the ordered queue holds the rest behind a failing head |
 | 0014 | Webhooks filtered by who may see an event | Amended (#104): an endpoint has the administrator's view |
 | 0015 | Quotas and rate limits, app calls as effects, streaming | Deferred (batch 2); agents have a daily token quota |
-| 0016 | References to a protocol's entity type; a reference picker in generated forms | Deferred |
+| 0016 | References to a protocol's entity type | Deferred; generated forms offer choices for references (ADR-0024 7a) |
 | 0017 | Delegation and substitutes; business calendars | Deferred |
 | 0018 | The backend-for-frontend token; UI bundles loaded at run time | Deferred (stage 9) |
 | 0019 | Capturing state without the tenant's lock; parallel restore; the plant's downtime as records | Deferred |
 | 0020 | Record-state triggers; business calendars for timeouts; a drawn graph | Deferred |
 | 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
+| 0024 | Purchasing and inventory (7b); production orders through `production.orders/1` with the plant (7c); the external-ERP adapter and one path from the plant to an ERP (7d) | Partial: 7a (accounting, number sequences) built |
 
 ## 3. Runtimes and languages
 
@@ -365,7 +367,7 @@ Applications are pressure environments for the platform, not its source of truth
 | Hotel | Reference app modelled on OPERA Cloud and Mews | Server authority, several principals, capacity over time, a channel connector | Realism — it can confirm our own assumptions |
 | Manufacturing | Reference app modelled on Opcenter and SAP ME (ISA-95 practice), desk-studied, no plant yet | Observation streams, device edge, hierarchy, quality, work orders, ERP integration | A real plant's volume and exceptions |
 | CRM | Target app | Parties, opportunities, activities, protocols to other apps, the sales assistant | — |
-| ERP | Target app, to build, modelled on SAP S/4HANA and Odoo | Money and units, double-entry posting (several changes that stand or fall together: K4's open case), number sequences, periods, purchasing and inventory, production orders the MES executes | Depth: one company's full chart of accounts, tax, localisation |
+| ERP | Target app, being built (ADR-0024; accounting built), modelled on SAP S/4HANA and Odoo | Money and units, double-entry posting (several changes that stand or fall together: K4's open case), number sequences, periods, purchasing and inventory, production orders the MES executes | Depth: one company's full chart of accounts, tax, localisation |
 | HR, helpdesk | Thin reference apps | Lifecycles, approvals, flows, agents, knowledge | Depth in either function |
 
 Two tests for every abstraction: **cross-domain comparison** (does any app need exceptions, bypasses, duplicated infrastructure or awkward mappings? are we abstracting a capability or naming two unrelated things alike?) and **evolution drills**:
@@ -477,10 +479,9 @@ Built capabilities are in the capability map (§2.4). This is what remains, with
 | Area | Capability | What an app gets | Reference |
 |---|---|---|---|
 | Application model | Attachments and files | Files on records, object storage, preview, retention; files as knowledge | Odoo `ir.attachment`, ServiceNow attachments |
-| | Number sequences | Readable document numbers per tenant, unit and year, without gaps across replays | Odoo `ir.sequence` |
 | | Comments, mentions and followers | A conversation on any record, followers notified (timeline notes exist) | Odoo `mail.thread`, Salesforce Chatter |
 | | Import and export | CSV/Excel in and out through the same actions | Odoo import, Salesforce Data Loader |
-| | Money, units, calendars | Currency amounts (money fields exist), units of measure, business calendars, time zones | Odoo `res.currency`, `uom`, `resource.calendar` |
+| | Money, units, calendars | Several currencies and rates (money fields and the tenant's currency exist), units of measure, business calendars, time zones | Odoo `res.currency`, `uom`, `resource.calendar` |
 | | Customer analysis models | Customers' own models and dashboards beside packages (ADR-0008) | Foundry Contour, Power BI on Dataverse |
 | Process | Record-state triggers | Flows and automation that start when a record reaches a state, not only on events | ServiceNow business rules, Odoo automated actions |
 | | Scheduling and capacity | Resources, calendars and allocation over time | Odoo planning, SAP capacity planning |
@@ -520,4 +521,4 @@ Stages 1–5 are built: the application model (ADR-0016), lifecycles, approvals 
 | 8. AI control plane | Quotas, rate limits and streaming (ADR-0015 batch 2); the agents overview with value and an off switch; evaluation suites; traces across agents; MCP authorization and resources | Agents exist in three apps and outside ones call in; governing them at scale is the next gap the references closed in 2026 | An administrator sees every agent's use and value, switches one off, and a standard MCP client signs in and acts within its grants |
 | 9. Scale and delivery | Many tenants per process, provisioning, package upgrades, the backend-for-frontend token, run-time UI bundles, bulk data out | When a second real organisation or team comes | A new team ships an app without touching the host |
 
-The target apps are CRM, MES and ERP; CRM and MES exist, the ERP is next (#115). Hotel, HR and the helpdesk stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.
+The target apps are CRM, MES and ERP; CRM and MES exist, the ERP is being built (ADR-0024, #115: accounting and number sequences built, purchasing and inventory next). Hotel, HR and the helpdesk stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.

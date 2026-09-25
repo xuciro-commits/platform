@@ -184,7 +184,9 @@ type FieldInfo struct {
 	Help     string `json:"help,omitempty"`
 	Synonyms string `json:"synonyms,omitempty"`
 	Example  string `json:"example,omitempty"`
-	Index    []int  `json:"-"`
+	// Fields are a lines field's columns (ADR-0024): each line is a struct of them.
+	Fields []FieldInfo `json:"fields,omitempty"`
+	Index  []int       `json:"-"`
 }
 
 // EntityInfo is an entity type as the host and the UI see it.
@@ -242,69 +244,11 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	default:
 		info.Plural = t + "s"
 	}
-	for i := 1; i < t.NumField(); i++ {
-		sf := t.Field(i)
-		name, _, _ := strings.Cut(sf.Tag.Get("json"), ",")
-		if !sf.IsExported() || name == "-" {
-			continue
-		}
-		if name == "" {
-			return EntityInfo{}, fmt.Errorf("entity %s: field %s needs a json name", e.Type, sf.Name)
-		}
-		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true",
-			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example")}
-		if f.Title == "" {
-			f.Title = strings.ToUpper(name[:1]) + name[1:]
-		}
-		for _, flag := range strings.Split(sf.Tag.Get("field"), ",") {
-			switch flag {
-			case "required":
-				f.Required = true
-			case "search":
-				f.Search = true
-			case "readonly":
-				f.ReadOnly = true
-			case "":
-			default:
-				return EntityInfo{}, fmt.Errorf("entity %s: field %s has an unknown flag %q", e.Type, name, flag)
-			}
-		}
-		refined := sf.Tag.Get("type")
-		switch ft := sf.Type; {
-		case ft.Implements(refIface):
-			f.Type = "reference"
-			f.Ref = typeOf(reflect.Zero(ft).Interface().(reference).refType())
-		case ft.Kind() == reflect.Slice && ft.Elem().Implements(refIface):
-			f.Type = "references"
-			f.Ref = typeOf(reflect.Zero(ft.Elem()).Interface().(reference).refType())
-		case ft == timeType:
-			f.Type = "datetime"
-		case ft == moneyType:
-			f.Type = "money"
-		case ft.Kind() == reflect.String && refined == "date", ft.Kind() == reflect.String && refined == "longtext":
-			f.Type = refined
-		case ft.Kind() == reflect.String && sf.Tag.Get("choices") != "":
-			f.Type, f.Choices = "choice", strings.Split(sf.Tag.Get("choices"), ",")
-		case ft.Kind() == reflect.String:
-			f.Type = "text"
-		case ft.Kind() == reflect.Bool:
-			f.Type = "boolean"
-		case ft.Kind() >= reflect.Int && ft.Kind() <= reflect.Uint64:
-			f.Type = "integer"
-		case ft.Kind() == reflect.Float64:
-			f.Type = "decimal"
-		case ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.String:
-			f.Type = "tags"
-		case ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.Struct:
-			f.Type = "lines" // child lines kept inside the record (Frappe child tables, Odoo one2many)
-		default:
-			return EntityInfo{}, fmt.Errorf("entity %s: field %s has a type the kit does not know (%s)", e.Type, name, ft)
-		}
-		if (f.Type == "reference" || f.Type == "references") && f.Ref == "" {
-			return EntityInfo{}, fmt.Errorf("entity %s: field %s refers to a struct that is not an entity type of the app", e.Type, name)
-		}
-		info.Fields = append(info.Fields, f)
+	fields, err := describeFields(e, t, 1, typeOf)
+	if err != nil {
+		return EntityInfo{}, err
 	}
+	info.Fields = fields
 	if info.Display == "" {
 		info.Display = "id"
 		if i := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Search }); i >= 0 {
@@ -508,4 +452,78 @@ func article(title string) string {
 		return "an " + t
 	}
 	return "a " + t
+}
+
+// describeFields describes the fields of an entity's struct from its field
+// from on: 1 skips the embedded Record; a line's struct starts at 0 and may not
+// hold lines itself.
+func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type) string) ([]FieldInfo, error) {
+	out := []FieldInfo{}
+	for i := from; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		name, _, _ := strings.Cut(sf.Tag.Get("json"), ",")
+		if !sf.IsExported() || name == "-" {
+			continue
+		}
+		if name == "" {
+			return nil, fmt.Errorf("entity %s: field %s needs a json name", e.Type, sf.Name)
+		}
+		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true",
+			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example")}
+		if f.Title == "" {
+			f.Title = strings.ToUpper(name[:1]) + name[1:]
+		}
+		for _, flag := range strings.Split(sf.Tag.Get("field"), ",") {
+			switch flag {
+			case "required":
+				f.Required = true
+			case "search":
+				f.Search = true
+			case "readonly":
+				f.ReadOnly = true
+			case "":
+			default:
+				return nil, fmt.Errorf("entity %s: field %s has an unknown flag %q", e.Type, name, flag)
+			}
+		}
+		refined := sf.Tag.Get("type")
+		switch ft := sf.Type; {
+		case ft.Implements(refIface):
+			f.Type = "reference"
+			f.Ref = typeOf(reflect.Zero(ft).Interface().(reference).refType())
+		case ft.Kind() == reflect.Slice && ft.Elem().Implements(refIface):
+			f.Type = "references"
+			f.Ref = typeOf(reflect.Zero(ft.Elem()).Interface().(reference).refType())
+		case ft == timeType:
+			f.Type = "datetime"
+		case ft == moneyType:
+			f.Type = "money"
+		case ft.Kind() == reflect.String && refined == "date", ft.Kind() == reflect.String && refined == "longtext":
+			f.Type = refined
+		case ft.Kind() == reflect.String && sf.Tag.Get("choices") != "":
+			f.Type, f.Choices = "choice", strings.Split(sf.Tag.Get("choices"), ",")
+		case ft.Kind() == reflect.String:
+			f.Type = "text"
+		case ft.Kind() == reflect.Bool:
+			f.Type = "boolean"
+		case ft.Kind() >= reflect.Int && ft.Kind() <= reflect.Uint64:
+			f.Type = "integer"
+		case ft.Kind() == reflect.Float64:
+			f.Type = "decimal"
+		case ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.String:
+			f.Type = "tags"
+		case ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.Struct && from > 0:
+			f.Type = "lines" // child lines kept inside the record (Frappe child tables, Odoo one2many)
+			if columns, err := describeFields(e, ft.Elem(), 0, typeOf); err == nil {
+				f.Fields = columns // lines whose columns the kit cannot show stay read-only
+			}
+		default:
+			return nil, fmt.Errorf("entity %s: field %s has a type the kit does not know (%s)", e.Type, name, ft)
+		}
+		if (f.Type == "reference" || f.Type == "references") && f.Ref == "" {
+			return nil, fmt.Errorf("entity %s: field %s refers to a struct that is not an entity type of the app", e.Type, name)
+		}
+		out = append(out, f)
+	}
+	return out, nil
 }

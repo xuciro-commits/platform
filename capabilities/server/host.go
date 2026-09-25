@@ -72,6 +72,8 @@ type Tenant struct {
 	notices     []platform.Notification
 	noticeSeq   int
 	settings    map[string]string // "<app>/<name>" → value
+	seqMu       sync.Mutex
+	sequences   map[string]int // "<app>/<sequence>/<year>" → the last number taken (ADR-0024)
 	endpoints   []*Endpoint
 	outbound    []*effect
 	// Secrets resolves a secret's name (default: PLATFORM_SECRETS_DIR, then
@@ -121,7 +123,7 @@ func (t *Tenant) remember(e AuditEntry) {
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 	t := &Tenant{ID: id, apps: apps, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
-		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}}
+		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}, sequences: map[string]int{}}
 	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {
 			return fmt.Errorf("tenant %s: %q is declared by %s and %s", id, name, other.Manifest().ID, a.Manifest().ID)
@@ -537,6 +539,11 @@ func checkManifest(a platform.App) error {
 			return fmt.Errorf("setting %q: unnamed, repeated, or its default is not a %s", s.Name, s.Type)
 		}
 	}
+	for i, s := range m.Sequences {
+		if err := s.Check(); err != nil || slices.ContainsFunc(m.Sequences[:i], func(x platform.Sequence) bool { return x.Name == s.Name }) {
+			return fmt.Errorf("sequence %q: badly declared or repeated", s.Name)
+		}
+	}
 	for i, e := range m.Emits {
 		if e.Name == "" || strings.Contains(e.Name, "/") || slices.ContainsFunc(m.Emits[:i], func(x platform.EffectKind) bool { return x.Name == e.Name }) {
 			return fmt.Errorf("effect kind %q: unnamed, repeated or containing '/'", e.Name)
@@ -565,5 +572,11 @@ func (t *Tenant) Member(id string) (platform.Member, bool) {
 	if !ok {
 		return platform.Member{}, false
 	}
-	return d.Member(id)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	m := d.members[id] // by ID, not by a subject it signs in as
+	if m == nil {
+		return platform.Member{}, false
+	}
+	return clone(m), true
 }

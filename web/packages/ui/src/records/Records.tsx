@@ -40,6 +40,10 @@ export type RecordSource = {
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
 };
 
+// The tenant's currency (ADR-0024): the default of amounts people enter; the workspace sets it from /v1/me.
+let tenantCurrency = "EUR";
+export const setCurrency = (currency: string) => { if (currency) tenantCurrency = currency; };
+
 const money = (o: { label: string; required?: boolean; readOnly?: boolean }): FieldType<Money> => ({
   type: "money", align: "right", ...o, compare: (a, b) => (a?.amount ?? 0) - (b?.amount ?? 0), operators: [],
   text: (v) => (v ? `${(v.amount / 100).toFixed(2)} ${v.currency}` : ""),
@@ -48,18 +52,24 @@ const money = (o: { label: string; required?: boolean; readOnly?: boolean }): Fi
     : <span className="text-muted">—</span>),
   editor: ({ id, value, onChange }) => (
     <span className="flex gap-1">
-      <Input id={id} type="number" step={0.01} value={value ? value.amount / 100 : ""} className="flex-1"
-        onChange={(e) => onChange(e.target.value === "" ? undefined : { amount: Math.round(Number(e.target.value) * 100), currency: value?.currency ?? "EUR" })} />
-      <Input aria-label={t("Currency")} value={value?.currency ?? "EUR"} maxLength={3} className="w-16 uppercase"
+      <Input id={id} type="number" step={0.01} value={value ? value.amount / 100 : ""} className="min-w-28 flex-1"
+        onChange={(e) => onChange(e.target.value === "" ? undefined : { amount: Math.round(Number(e.target.value) * 100), currency: value?.currency || tenantCurrency })} />
+      <Input aria-label={t("Currency")} value={value?.currency || tenantCurrency} maxLength={3} className="w-16 uppercase"
         onChange={(e) => onChange({ amount: value?.amount ?? 0, currency: e.target.value.toUpperCase() })} />
     </span>
   ),
 });
 
-/** A kit entity from the host's description; `options` gives the choices of reference fields. */
-export function entityFrom(info: EntityInfo, options: Record<string, { value: string; label: string }[]> = {}): Entity<EntityRecord> {
+export type Options = Record<string, { value: string; label: string }[]>;
+
+/** A kit entity from the host's description; `options` gives the choices of reference fields, a line's by "<lines>.<column>". */
+export function entityFrom(info: EntityInfo, options: Options = {}): Entity<EntityRecord> {
+  return defineEntity<EntityRecord>({ name: info.type, fields: fieldsOf(info, info.fields, options), primary: info.display === "id" ? "id" : info.display });
+}
+
+function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options): Record<string, FieldType<any, EntityRecord>> {
   const fields: Record<string, FieldType<any, EntityRecord>> = {};
-  for (const f of info.fields) {
+  for (const f of infos) {
     const common = { label: f.title, help: f.help, required: f.required, readOnly: f.readOnly };
     fields[f.name] = (() => {
       switch (f.type) {
@@ -74,13 +84,55 @@ export function entityFrom(info: EntityInfo, options: Record<string, { value: st
           : singleSelect({ ...common, options: (f.choices ?? []).map((c, i) => ({ value: c, label: f.choiceTitles?.[i] ?? c })) });
         case "reference": return options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
         case "references": case "tags": return multiSelect({ ...common, readOnly: f.type === "references" || f.readOnly, options: options[f.name] ?? [] });
-        case "lines": return { ...text(common), readOnly: true, display: (v: unknown) => <span className="text-muted">{Array.isArray(v) ? `${v.length} lines` : "—"}</span> } as FieldType<any>;
+        case "lines": return f.fields?.length
+          ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : []))))
+          : { ...text(common), readOnly: true, display: (v: unknown) => <span className="text-muted">{Array.isArray(v) ? `${v.length} lines` : "—"}</span> } as FieldType<any>;
         default: return text(common);
       }
     })();
   }
-  return defineEntity<EntityRecord>({ name: info.type, fields, primary: info.display === "id" ? "id" : info.display });
+  return fields;
 }
+
+// Lists show a record per row: its lines are for its page.
+const listed = (entity: Entity<EntityRecord>) => Object.keys(entity.fields).filter((k) => entity.fields[k]!.type !== "lines");
+
+type Line = Record<string, unknown>;
+
+// Child lines (Odoo's one2many, ADR-0024): a table on record pages, and rows
+// to add, edit and remove in forms; the app's rules check them.
+const lines = (common: { label: string; help?: string; required?: boolean; readOnly?: boolean }, columns: Record<string, FieldType<any>>): FieldType<Line[]> => {
+  const shown = Object.entries(columns);
+  return {
+    type: "lines", ...common, schema: z.array(z.record(z.string(), z.unknown())), compare: (a, b) => (a?.length ?? 0) - (b?.length ?? 0), operators: [],
+    text: (v) => (v ? String(v.length) : ""),
+    display: (v) => !v?.length ? <span className="text-muted">—</span> : (
+      <table className="w-full text-sm">
+        <thead><tr>{shown.map(([k, c]) => <th key={k} className={`px-1 text-xs font-medium text-muted ${c.align === "right" ? "text-right" : "text-left"}`}>{c.label}</th>)}</tr></thead>
+        <tbody>{v.map((line, i) => <tr key={i} className="border-t border-border">
+          {shown.map(([k, c]) => <td key={k} className={`px-1 py-0.5 ${c.align === "right" ? "text-right" : ""}`}>{c.display(line[k] as never, line)}</td>)}</tr>)}</tbody>
+      </table>
+    ),
+    editor: ({ id, value, onChange }) => {
+      const rows = value ?? [];
+      const set = (i: number, k: string, v: unknown) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+      return (
+        <div id={id} className="grid gap-1 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr>{shown.map(([k, c]) => <th key={k} className="px-1 text-left text-xs font-medium text-muted">{c.label}{c.required ? " *" : ""}</th>)}<th /></tr></thead>
+            <tbody>{rows.map((line, i) => (
+              <tr key={i}>
+                {shown.map(([k, c]) => <td key={k} className="min-w-28 px-1 py-0.5">{c.editor?.({ value: line[k] as never, onChange: (v) => set(i, k, v) }) ?? c.display(line[k] as never, line)}</td>)}
+                <td><Button size="sm" variant="ghost" aria-label={t("Remove line")} onClick={() => onChange(rows.filter((_, j) => j !== i))}>×</Button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+          <div><Button size="sm" onClick={() => onChange([...rows, {}])}>{t("Add line")}</Button></div>
+        </div>
+      );
+    },
+  };
+};
 
 // A status field shows its state with the lifecycle's tones.
 const lifecycleField = (common: { label: string }, l: Lifecycle): FieldType<string> => ({
@@ -169,7 +221,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   }, [source, type, info, search, sort, offset, archived, pageSize, domain, view]);
   if (!info || !entity) return <p className="text-sm text-muted">{t("Unknown entity type")} {type}.</p>;
   const columnsOf = [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    ...columnsFor(entity).map((c) => ({ ...c, enableSorting: false }))];
+    ...columnsFor(entity, listed(entity)).map((c) => ({ ...c, enableSorting: false }))];
   const total = page?.total ?? 0;
   const aggregate = source.aggregate;
   const query = { domain, search, archived };
@@ -280,7 +332,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         return relEntity && (
           <section key={`${rel.type}.${rel.field}`}>
             <h2 className="mb-1 text-sm font-semibold">{rel.title} <span className="font-normal text-muted">({rel.total}{t(", by")} {rel.field})</span></h2>
-            <DataTable data={rel.records} columns={[{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 } }, ...columnsFor(relEntity)] as never}
+            <DataTable data={rel.records} columns={[{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 } }, ...columnsFor(relEntity, listed(relEntity))] as never}
               getRowId={(x: EntityRecord) => x.id} height={Math.min(40 + rel.records.length * 28, 260)} searchable={false}
               onRowClick={onOpen && ((x: EntityRecord) => onOpen(rel.type, x))} empty={t("None")} />
           </section>

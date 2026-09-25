@@ -1,17 +1,9 @@
 {
-  "name": "workspace",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "typecheck": "tsc -p .",
-    "test": "true",
-    "build": "vite build"
-  },
   "dependencies": {
     "@pkg/crm": "workspace:*",
-    "@pkg/hotel": "workspace:*",
+    "@pkg/erp": "workspace:*",
     "@pkg/helpdesk": "workspace:*",
+    "@pkg/hotel": "workspace:*",
     "@pkg/hr": "workspace:*",
     "@pkg/lodging": "workspace:*",
     "@pkg/mes": "workspace:*",
@@ -32,5 +24,14 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"
-  }
+  },
+  "name": "workspace",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "test": "true",
+    "typecheck": "tsc -p ."
+  },
+  "type": "module"
 }

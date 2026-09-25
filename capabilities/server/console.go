@@ -29,6 +29,7 @@ const (
 	// SchemaLanguage sets a member's language: their own, or anyone's by an administrator (ADR-0023 6b).
 	SchemaLanguage  = "platform.member.language"
 	SettingLanguage = "language"
+	SettingCurrency = "currency"
 	Admin           = "admin"
 )
 
@@ -196,7 +197,9 @@ func (d *Console) Manifest() platform.Manifest {
 		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects"},
 		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: []platform.Setting{{Name: SettingLanguage, Title: "Default language", Type: "text", Default: "",
-			Description: "The language members read until they choose their own, such as zh-CN; empty: what each browser asks for, else English."}}}
+			Description: "The language members read until they choose their own, such as zh-CN; empty: what each browser asks for, else English."},
+			{Name: SettingCurrency, Title: "Currency", Type: "text", Default: "EUR",
+				Description: "The tenant's currency (ISO 4217): the default of every amount people enter, and the currency the books are kept in."}}}
 }
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }

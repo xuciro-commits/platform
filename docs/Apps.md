@@ -33,6 +33,7 @@ An app is a `platform.App`: `Manifest` (what it declares), `Submit` (deciding it
 
 An entity type is a Go struct embedding `platform.Record`, declared by a `platform.Entity` (`platform/entity.go`):
 
+- **Child lines** are a slice of a struct (`Lines []Line`): each line's fields are columns, edited as rows in generated forms (a journal entry's debits and credits, `apps/erp`).
 - **Fields** by Go types and struct tags: `field:"required,search,readonly"`, `title:"…"`, `choices:"open,done"`, `type:"date"` or `type:"longtext"` on a string; `time.Time` is a date and time, `platform.Money` money, `platform.Ref[T]` a reference to another type. What they mean: `help:"…"`, `synonyms:"…"`, `example:"…"`.
 - **Meaning**: `Title`, `Plural`, `Description`, `Synonyms`; states have `Description` too. Agents read it in their prompts, tool schemas and forms show it, and search finds a type by its names. Declare what a word means in the app; a tenant's glossary may explain it further but never redefines it (ADR-0023 D1).
 - **Who sees what**: `Scope` (an owner field and each role's level: own, unit, below, tenant).
@@ -46,7 +47,7 @@ Every change is an action: a schema, the roles that may call it, a title, a desc
 - A `Lifecycle` generates one action per `Transition`, with its roles, the states it leaves and enters, and an optional `Do` for its own rule.
 - An action with rules of its own is a `platform.Action` in the catalog (`apps/hr/server/hr.go` `Actions`) decided in `Submit` after `ledger.Generated`, through `ledger.Receive`: validate the payload, refuse with a kernel error, return what to put.
 
-Roles are checked by the catalog before the app's rules run; a refused action is recorded nowhere. Agents, MCP clients and forms call the same actions.
+Roles are checked by the catalog before the app's rules run; a refused action is recorded nowhere. A document that needs a number without gaps declares a `platform.Sequence` in its manifest and takes it with `Caller.Next` in the function the decision applies, never in its rules, so a refusal takes none (`apps/erp` numbers journal entries, `apps/helpdesk` tickets). Agents, MCP clients and forms call the same actions.
 
 ## 4. Declare flows
 
