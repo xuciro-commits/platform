@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"lodging"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 )
 
@@ -20,7 +20,10 @@ type groupStay struct {
 // again, newest first (ADR-0020). The CRM knows no provider: it books through
 // the lodging protocol, and the provider's own rules decide each room.
 func GroupStay() platform.Flow {
-	opp := func(c platform.Caller, r *platform.Run) Opportunity { o, _ := platform.Get[Opportunity](c, r.Key); return o }
+	opp := func(c platform.Caller, r *platform.Run) Opportunity {
+		o, _ := platform.Get[Opportunity](c, r.Key)
+		return o
+	}
 	id := func(_ platform.Caller, r *platform.Run) string { return r.Key }
 	return platform.Flow{Name: "group-stay", Title: "Group stay", Version: 1, Owners: []string{string(Manager)},
 		Start: platform.Start{On: []string{SchemaClose}, Begin: func(c platform.Caller, e platform.Event) (string, any, bool) {
@@ -60,7 +63,9 @@ func GroupStay() platform.Flow {
 						return "Released or unanswered in two days, the rooms are canceled again."
 					},
 					Ref: func(_ platform.Caller, r *platform.Run) string { return OpportunityType + "/" + r.Key },
-					To:  func(c platform.Caller, r *platform.Run) []platform.Recipient { return []platform.Recipient{{Member: opp(c, r).Owner}} }},
+					To: func(c platform.Caller, r *platform.Run) []platform.Recipient {
+						return []platform.Recipient{{Member: opp(c, r).Owner}}
+					}},
 				Choose: func(_ platform.Caller, r *platform.Run) (string, string) {
 					if r.Answer == "release" {
 						return platform.Compensate, "the customer released the rooms"

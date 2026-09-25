@@ -125,9 +125,11 @@ func (p *Plant) confirmation() platform.Flow {
 				Payload: func(_ platform.Caller, r *platform.Run) any { return platform.DataOf[map[string]string](r) }}},
 			{Name: "correct", Title: "Correct and resend", Ask: &platform.Ask{To: supervisors, Answers: []string{"give up"},
 				Title: func(c platform.Caller, r *platform.Run) string { return "Correct and resend " + r.Key + " to the ERP" },
-				Body:  func(c platform.Caller, r *platform.Run) string { return "The ERP " + order(c, r).ERP + " it: " + order(c, r).ERPDetail },
-				Ref:   func(_ platform.Caller, r *platform.Run) string { return OrderType + "/" + r.Key },
-				On:    SchemaResend, Match: func(_ platform.Caller, r *platform.Run, e platform.Event) bool {
+				Body: func(c platform.Caller, r *platform.Run) string {
+					return "The ERP " + order(c, r).ERP + " it: " + order(c, r).ERPDetail
+				},
+				Ref: func(_ platform.Caller, r *platform.Run) string { return OrderType + "/" + r.Key },
+				On:  SchemaResend, Match: func(_ platform.Caller, r *platform.Run, e platform.Event) bool {
 					return e.Record.GetSubmission().GetTarget().GetId() == r.Key
 				}},
 				Choose: func(_ platform.Caller, r *platform.Run) (string, string) {
@@ -137,8 +139,10 @@ func (p *Plant) confirmation() platform.Flow {
 					return "answer", "it was resent"
 				}},
 			{Name: "silent", Title: "Tell the supervisors", Next: "answer", Ask: &platform.Ask{To: supervisors,
-				Title: func(_ platform.Caller, r *platform.Run) string { return "The ERP has not answered the confirmation of " + r.Key },
-				Ref:   func(_ platform.Caller, r *platform.Run) string { return OrderType + "/" + r.Key }}},
+				Title: func(_ platform.Caller, r *platform.Run) string {
+					return "The ERP has not answered the confirmation of " + r.Key
+				},
+				Ref: func(_ platform.Caller, r *platform.Run) string { return OrderType + "/" + r.Key }}},
 		}}
 }
 
@@ -237,8 +241,8 @@ func (p *Plant) fulfilled(c platform.Caller) []string {
 func (p *Plant) fixer() platform.Agent {
 	return platform.Agent{Name: "erp-fixer", Title: "ERP correction",
 		Instructions: `The ERP refused a shop order's confirmation, usually because it names no planned order, or the wrong one. Find the ERP planned order the shop order fulfils: the same product and quantity, and not fulfilled by another shop order. Read the planned orders first. Finish with the result as JSON: {"planned": "<ERP planned order ID>"}, or {"planned": ""} when none fits.`,
-		Tools:  []string{"read:planned-orders"},
-		Budget: platform.Budget{Steps: 6, Actions: 1},
+		Tools:        []string{"read:planned-orders"},
+		Budget:       platform.Budget{Steps: 6, Actions: 1},
 		To: func(c platform.Caller, r platform.AgentRun) []platform.Recipient {
 			id := strings.TrimPrefix(r.Ref, OrderType+"/")
 			o, _ := platform.Get[Order](c, id)

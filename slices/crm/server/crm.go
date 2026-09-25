@@ -201,7 +201,7 @@ func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) 
 
 func (c *CRM) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "crm", Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
-		Flows: []platform.Flow{GroupStay()},
+		Flows:    []platform.Flow{GroupStay()},
 		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }
 
