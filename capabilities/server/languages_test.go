@@ -38,9 +38,9 @@ func TestLanguages(t *testing.T) {
 		{"/v1/me", "zh-CN,zh;q=0.9,en;q=0.8", `{"id":"platform","role":"admin","title":"设置"}`},
 		{"/v1/me", "zh-Hans", `"language":"zh-CN"`},
 		{"/v1/me", "zh", `"languages":["zh-CN"]`},
-		{"/v1/me", "zh-TW", `"title":"Settings"`},  // no traditional dictionary: English
+		{"/v1/me", "zh-TW", `"title":"Settings"`},          // no traditional dictionary: English
 		{"/v1/me", "en-GB,zh;q=0.5", `"title":"Settings"`}, // the first language wins
-		{"/v1/me", "fr,zh;q=0.5", `"title":"设置"`},        // the first the tenant speaks
+		{"/v1/me", "fr,zh;q=0.5", `"title":"设置"`},          // the first the tenant speaks
 		{"/v1/actions", "zh-CN", `"title":"授予角色"`},
 		{"/v1/entities", "zh-CN", `"title":"任务"`},
 		{"/v1/entities", "zh-CN", `"choiceTitles":["进行中",`}, // a task's states; the choices stay the values records hold
