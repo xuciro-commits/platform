@@ -55,8 +55,8 @@ OPENROUTER_API_KEY=sk-or-...
 | `op2@plant.test` | MES | `op-l2` | mes 操作员；ai 用户 | 产线 `L2` |
 | `qa1@plant.test` | MES | `qa-1` | mes 质量；ai 用户 | — |
 | `qa2@plant.test` | MES | `qa-2` | mes 质量；ai 用户（报废需要两个质量签名） | — |
-| `sales@hotel.test` | Sales `hotel-a` | `sales-1` | crm 销售、hotel 前台、memstay 管家；ai 用户 | 销售组、2026 年会项目 |
-| `manager@hotel.test` | Sales | `manager-1` | crm 销售经理、hotel 经理、memstay 管家；platform、org、ai 管理员 | 酒店总经理等 |
+| `sales@hotel.test` | Sales `hotel-a` | `sales-1` | crm 销售、hotel 前台、memstay 管家、hr 员工；ai 用户 | 销售组、2026 年会项目 |
+| `manager@hotel.test` | Sales | `manager-1` | crm 销售经理、hotel 经理、memstay 管家、hr 人事、work 管理员；platform、org、ai 管理员 | 酒店总经理等；`hotel-a` 经理、`hospitality` 负责人（两级审批人） |
 
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
 - 成员名单来自 `mes/directory.json` 和 `sales/directory.json`。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
@@ -138,4 +138,8 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
    2. 在 Protocols 把供应商从 hotel 切到 memstay 后再订一次；
    3. 两个供应商的入住记录都挂在同一个商机上。
 3. **AI**（任一主机的管理员）：添加 OpenRouter → 启用一个免费模型 → Playground 提问 → Usage 看用量；再换 `op1` 或 `sales` 登录，看不同访问范围的效果。
-4. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+4. **请假审批**（Sales）：
+   1. `sales@hotel.test` 在 Leave requests 新建一条请假，打开后点 Submit，提示"已提交审批"，My requests 里能看到；
+   2. `manager@hotel.test` 在 Inbox 里批准；超过 5 天的请假还要第二级（部门负责人，也是 `manager-1`），再批一次；
+   3. 批完后请假变成 approved，`sales` 收到通知。也可以试驳回、撤回，或者在审批期间取消请假（最后批准时会被拒绝并写明原因）。
+5. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
