@@ -112,7 +112,7 @@ Status legend:
 | 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
 | 0010 | Logs and correlation | Partial: correlation IDs pass through protocol calls; no structured logs |
 | 0010 | Health | Partial: connectors and endpoints have health; apps and the journal do not |
-| 0010 | App launcher and navigation from manifests | Deferred: each web app declares its own navigation |
+| 0010 | App launcher and navigation from manifests | Proposed in ADR-0018 (#108): one workspace, apps contributed through `defineApp` |
 | 0010 | Cross-app links in the UI | Partial: links and timeline exist; opening another app's entity view does not |
 | 0010 | Number sequences, files, analysis datasets, retention, preferences | Deferred |
 | 0011 | Protocols with conformance; providers and consumers; binding by protocol; choice in Settings; links and timeline; MCP | Implemented |
@@ -131,6 +131,8 @@ Status legend:
 | 0014 | Webhooks filtered by the catalog rules of who may see an event | Amended (#104): an endpoint is the administrator's, so it has the administrator's view — any event the tenant declares; an undeclared event is refused |
 | 0016 | Entity declarations, the record store, generic reads, scope, history, generated actions and pages | Implemented (#106); CRM, Hotel, manufacturing |
 | 0017 | Lifecycles, approvals, tasks and the inbox | Implemented (#107); the helpdesk proof, delegation and calendars deferred |
+| 0018 | One workspace: one sign-in, a launcher, apps as contributions, cross-app references | Proposed (#108) |
+| 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Proposed (#109, stage 3) |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
@@ -627,7 +629,7 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 
 | Family | Examples | Status |
 |---|---|---|
-| Shell and navigation | Docking workspace, command palette, entity routes, session, hosts | have |
+| Shell and navigation | Docking workspace, command palette, entity routes, session, hosts; one workspace with a launcher across apps (ADR-0018) | partial: one site per product, each signing in |
 | Lists and tables | Data table with filter and sort | have, with server paging (ADR-0016); saved views missing |
 | Record page | Header, status bar, fields in sections, tabs, related lists, history and comments panel | partial: header, fields, related lists, history (ADR-0016); status bar with stage 2, comments later |
 | Forms | Typed fields, validation | have, generated from entity declarations (ADR-0016) |

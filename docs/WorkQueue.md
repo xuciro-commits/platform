@@ -4,7 +4,8 @@ The only list of active platform work. Each item: goal, boundary, done-when, sta
 
 | # · Status | Task | Done when |
 |---|---|---|
-| **108 · next: architecture gate** | Stage 3 of the capability plan (Platform.md §10.4): read models and analytics. ADR-0018 compares Odoo's pivot and graph views, Salesforce reports and dashboards, ServiceNow Performance Analytics and Palantir's Contour and Quiver. It proposes projections of the record store into PostgreSQL rebuilt from the journal, snapshots so start-up does not replay all history, and the kit's pivot, charts and dashboards, with decision points for the owner | The owner has decided the ADR's points; the build items are queued with their done-when |
+| **108 · gate: awaiting owner** | One workspace (ADR-0018, raised by the owner): sign in once and open every app the tenant runs and the member holds a role in, from a launcher, without another sign-in or site. The host serves the workspace; app UIs contribute through `defineApp`; records open across apps by reference; sales, MES and Settings fold in and their sites go | The owner has decided D1–D8; then the build items of ADR-0018 |
+| **109 · gate: awaiting owner** | Stage 3 of the capability plan (Platform.md §10.4): aggregates over entity types with the list's domain and scope, pivot and charts in the kit, dashboards and saved views, PostgreSQL projections for outside tools, snapshots for start-up (ADR-0019) | The owner has decided D1–D7; then the build items of ADR-0019, after #108 so dashboards live in the workspace |
 | **105 · batch 1 done, owner testing** | AI providers (ADR-0015): providers, catalogs, enabled models with access, calls with journaled usage, Settings (providers, playground, usage) | The owner has tested with OpenRouter; batch 2 (quotas and rate limits, the Anthropic adapter, app calls as effects, streaming) is ordered |
 
 ## Open friction (temporary; delete entries once resolved)
