@@ -1,13 +1,8 @@
-module sales
+module helpdesk
 
 go 1.27.1
 
 require (
-	crm v0.0.0
-	helpdesk v0.0.0
-	hotel v0.0.0
-	hr v0.0.0
-	lodging v0.0.0
 	platformkernel v0.0.0
 	platformserver v0.0.0
 )
@@ -36,16 +31,6 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace platformkernel => ../../contract/go
+replace platformkernel => ../../../contract/go
 
-replace platformserver => ../../capabilities/server
-
-replace lodging => ../../protocols/lodging
-
-replace crm => ../../slices/crm/server
-
-replace hr => ../../slices/hr/server
-
-replace helpdesk => ../../slices/helpdesk/server
-
-replace hotel => ../../slices/hotel/server
+replace platformserver => ../../../capabilities/server

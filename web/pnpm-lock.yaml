@@ -257,6 +257,9 @@ importers:
       '@pkg/crm':
         specifier: workspace:*
         version: link:../../packages/crm
+      '@pkg/helpdesk':
+        specifier: workspace:*
+        version: link:../../packages/helpdesk
       '@pkg/hotel':
         specifier: workspace:*
         version: link:../../packages/hotel
@@ -343,6 +346,37 @@ importers:
       '@pkg/lodging':
         specifier: workspace:*
         version: link:../lodging
+      '@platform/app':
+        specifier: workspace:*
+        version: link:../app
+      '@platform/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@platform/ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@tanstack/react-query':
+        specifier: ^5.103.2
+        version: 5.103.2(react@19.3.0)
+      lucide-react:
+        specifier: ^1.47.0
+        version: 1.47.0(react@19.3.0)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/helpdesk:
+    dependencies:
       '@platform/app':
         specifier: workspace:*
         version: link:../app

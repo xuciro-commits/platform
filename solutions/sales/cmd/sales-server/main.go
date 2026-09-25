@@ -23,12 +23,12 @@ var demo = []platformserver.Seat{
 		platform.Membership{Unit: "sales-team", Role: "account executive", Primary: true},
 		platform.Membership{Unit: "offsite-2026", Role: "project lead"}),
 	seat("sales-only", "sales-2", map[string]string{"crm": "sales"}),
-	withUnits(seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper, "platform": "admin", "org": "admin", "ai": "admin", "hr": "hr", "work": "admin", "flow": "admin", "agent": "admin"}),
+	withUnits(seat("manager", "manager-1", map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper, "platform": "admin", "org": "admin", "ai": "admin", "hr": "hr", "work": "admin", "flow": "admin", "agent": "admin", "helpdesk": "lead"}),
 		platform.Membership{Unit: "hotel-a", Role: "general manager", Primary: true},
 		platform.Membership{Unit: "hotel-a", Role: "manager"}, platform.Membership{Unit: "hospitality", Role: "head"}, // HR's approvers (ADR-0017)
 		platform.Membership{Unit: "hotel-a-co", Role: "director"},
 		platform.Membership{Unit: "guest-committee", Role: "chair"}),
-	withUnits(seat("desk", "desk-1", map[string]string{"hotel": "front-desk", "hr": "employee"}), platform.Membership{Unit: "front-office", Role: "receptionist", Primary: true}),
+	withUnits(seat("desk", "desk-1", map[string]string{"hotel": "front-desk", "hr": "employee", "helpdesk": "desk"}), platform.Membership{Unit: "front-office", Role: "receptionist", Primary: true}),
 }
 
 func withUnits(s platformserver.Seat, units ...platform.Membership) platformserver.Seat {

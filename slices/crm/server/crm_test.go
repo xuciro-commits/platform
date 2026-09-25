@@ -16,7 +16,7 @@ func TestOpportunityOwnership(t *testing.T) {
 	}
 	var journal []platformserver.Entry
 	build := func() *platformserver.Tenant {
-		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ana", Sales), seat("bo", Sales), seat("lead", Manager), seat("desk", "front-desk")), platformserver.NewWork("t"), platformserver.NewFlows("t"), New("t"))
+		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ana", Sales), seat("bo", Sales), seat("lead", Manager), seat("desk", "front-desk")), platformserver.NewWork("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), New("t"))
 		if err != nil {
 			t.Fatal(err)
 		}

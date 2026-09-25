@@ -6,6 +6,7 @@ COPY capabilities/server capabilities/server
 COPY slices/hotel/server slices/hotel/server
 COPY slices/crm/server slices/crm/server
 COPY slices/hr/server slices/hr/server
+COPY slices/helpdesk/server slices/helpdesk/server
 COPY protocols/lodging protocols/lodging
 COPY solutions/sales solutions/sales
 WORKDIR /src/solutions/sales

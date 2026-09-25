@@ -21,6 +21,7 @@ const packages: { serves: string[]; load: () => Promise<{ default: AppUI }> }[] 
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["hotel"], load: () => import("@pkg/hotel/app") },
   { serves: ["hr"], load: () => import("@pkg/hr") },
+  { serves: ["helpdesk"], load: () => import("@pkg/helpdesk") },
   { serves: ["mes"], load: () => import("@pkg/mes") },
   { serves: ["platform", "org", "ai", "flow", "agent"], load: () => import("@pkg/platform") },
 ];

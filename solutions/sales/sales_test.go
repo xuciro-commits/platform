@@ -22,8 +22,8 @@ var (
 	seats = []platformserver.Seat{
 		{Subjects: []string{"sales"}, Member: platform.Member{ID: "sales-1", Roles: map[string]string{"crm": "sales", "hotel": "front-desk", "memstay": lodging.Keeper}}},
 		{Subjects: []string{"sales-only"}, Member: platform.Member{ID: "sales-2", Roles: map[string]string{"crm": "sales"}}},
-		{Subjects: []string{"desk"}, Member: platform.Member{ID: "desk-1", Roles: map[string]string{"hotel": "front-desk"}}},
-		{Subjects: []string{"manager"}, Member: platform.Member{ID: "manager-1", Roles: map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper}}},
+		{Subjects: []string{"desk"}, Member: platform.Member{ID: "desk-1", Roles: map[string]string{"hotel": "front-desk", "helpdesk": "desk"}}},
+		{Subjects: []string{"manager"}, Member: platform.Member{ID: "manager-1", Roles: map[string]string{"crm": "sales-manager", "hotel": "manager", "memstay": lodging.Keeper, "helpdesk": "lead"}}},
 	}
 )
 
@@ -231,7 +231,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 		t.Fatal("booking is offered without the provider's grant")
 	}
 	// Without any provider the optional protocol is unbound and booking is not offered.
-	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), platformserver.NewRelations("t"), platformserver.NewFlows("t"), crm.New("t"))
+	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), platformserver.NewRelations("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), crm.New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -201,7 +201,7 @@ func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) 
 
 func (c *CRM) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "crm", Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
-		Flows:    []platform.Flow{GroupStay()},
+		Flows: []platform.Flow{GroupStay()}, Agents: []platform.Agent{Assistant()},
 		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }
 
@@ -259,4 +259,14 @@ func (c *CRM) customers(who platform.Caller) (any, *kernel.Error) {
 
 func (c *CRM) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
+}
+
+// Assistant is the CRM's assistant (ADR-0021): asked about an account or an
+// opportunity, it reads what the tenant knows and drafts the change — a new
+// opportunity, a plan for rooms, an outcome — that the member confirms.
+func Assistant() platform.Agent {
+	return platform.Agent{Name: "assistant", Title: "Sales assistant",
+		Instructions: `You help a salesperson with their accounts and opportunities. Read the record's context, and search when you need another record. When the goal asks for a change, make it with the one action that fits — open an opportunity, plan a group stay (rooms, room type, arrival and departure), or close an opportunity won or lost — and the salesperson confirms it. When the goal only asks a question, finish with the answer. Never guess an ID: search for it.`,
+		Tools:        []string{SchemaOpen, SchemaPlan, SchemaClose, "read:customers"},
+		Budget:       platform.Budget{Steps: 8, Actions: 2}}
 }

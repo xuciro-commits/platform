@@ -38,7 +38,8 @@
       "hr": "hr",
       "work": "admin",
       "flow": "admin",
-      "agent": "admin"
+      "agent": "admin",
+      "helpdesk": "lead"
     },
     "units": [
       {
