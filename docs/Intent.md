@@ -36,6 +36,7 @@ The deepest goal is a platform that **supports change itself**. It must not enco
 - **One path per responsibility.** Migrations are closed; no two long-lived paths. Delete old code once it is confirmed unused, and protect existing valid work.
 - **Replay is the truth test.** Everything durable enters as a journaled input and rebuilds by replay (ADR-0007); outside calls never happen in replay.
 - **AI is an authorized caller.** It sees and does only what its grants allow, and a person approves what cannot be recalled (ADR-0008, ADR-0014 D6).
+- **AI-native, governed (2026-09-25, after SAP's AI-native North Star).** The platform is a *system of context*: typed records, their links and protocols, and every decision with who made it, why and on what evidence, which people and agents reason over across apps. Rules in code stay the deterministic path that decides; agents are the probabilistic path, first-class principals bounded by grants, budgets and approvals, whose every run leaves a trace. Exceptions go to people, and corrections become evidence for the next decision. The harness, not the model, sets the ceiling (Platform.md §10).
 
 ## Technology direction
 

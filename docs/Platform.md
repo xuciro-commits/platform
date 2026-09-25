@@ -134,6 +134,7 @@ Status legend:
 | 0017 | Lifecycles, approvals, tasks and the inbox | Implemented (#107); the helpdesk proof, delegation and calendars deferred |
 | 0018 | One workspace: one sign-in, a launcher, apps as contributions, cross-app references | Implemented (#108); global search, the backend-for-frontend and run-time UI bundles deferred |
 | 0019 | Aggregates, pivot and charts, dashboards, projections, snapshots | Implemented (#109, stage 3); ECharts 6 behind the platform's own visualization spec |
+| 0020 | Flows: declared steps, waits, people, compensation, versions, decision traces | Proposed (#110, stage 4) |
 | 0015 | AI providers, catalogs, enabled models with access, calls with journaled usage, Settings | Implemented (#105, batch 1) |
 | 0015 | The Anthropic adapter | Implemented: the official Go SDK, no SDK retries, the host's guarded client |
 | 0015 | Quotas and rate limits; app calls as effects; streaming | Deferred (batch 2) |
@@ -536,7 +537,7 @@ The owner's direction (Intent.md, "How we decide what the platform has"): build 
 | **Start** (Aug–Sep 2026) | MSRU: an Apple app with a framework (AppFoundation) inside it; a blueprint for a reusable Apple app framework | Ownership of state and tasks, identity apart from views, the need for a platform below any one app |
 | | The kernel contract (K1–K9) and two slices (Hotel, manufacturing), then the drills | Identity, facts, decisions, authority, tenancy and connectors hold across very different domains |
 | **Now** (#105) | A host running apps from manifests: journal and replay, OIDC, the console (members, roles, operations), organisation, relations, protocols, owned work, connectors, outbound effects (webhooks, email, approval), AI providers, MCP, Settings, one UI kit | The runtime and governance half of a business platform. Each app still hand-writes its own entities, lists, lifecycles and screens |
-| **End** | A platform comparable to Odoo, ServiceNow, Salesforce Platform, Oracle Fusion Cloud and APEX, SAP BTP, Power Platform or Palantir Foundry, in typed code | A team builds a business app mostly by declaring its models, lifecycles, actions and views. The platform gives lists, record pages, search, history, files, comments, approvals, tasks, flows, reports, integration, agents and administration. Apps compose through protocols and evolve without losing data, history or work in progress |
+| **End** | A platform comparable to Odoo, ServiceNow, Salesforce Platform, Oracle Fusion Cloud and APEX, SAP BTP, Power Platform or Palantir Foundry, in typed code | A team builds a business app mostly by declaring its models, lifecycles, actions and views. The platform gives lists, record pages, search, history, files, comments, approvals, tasks, flows, reports, integration, agents and administration. Apps compose through protocols and evolve without losing data, history or work in progress. It is AI-native: one system of context — records, links, protocols and decisions with their reasons — that people and governed agents reason over across apps, with rules deciding, agents acting within grants and budgets, exceptions routed to people, and every run traced |
 
 The largest gap between now and the end is the **application half**: how an app declares its data and processes, and what it gets for free.
 
@@ -634,7 +635,12 @@ Status: **have** (built and used), **partial**, **missing**. The reference colum
 | Quotas and rate limits, streaming, app calls as effects (batch 2) | missing |
 | Agents: a model with the caller's catalog as tools, runs as owned work, approvals for what cannot be recalled (batch 3) | partial: MCP, D6 |
 | Knowledge: documents and records indexed for retrieval, cited answers | missing |
-| AI in the workspace: an assistant panel on any record, with the record as context | missing |
+| AI in the workspace: an assistant panel on any record, with the record as context; stating an intent instead of navigating apps | missing |
+| Context graph: records, links, protocols and the decision history as one typed graph that people and agents query across apps, the grounding for every agent | Palantir Ontology, SAP Knowledge Graph | partial: records, relations, the journal; no graph read |
+| Decision traces: each decision with its reasons, evidence (K4 facts), the branch a rule or flow took, the agent's rationale and the approvals it passed; corrections (rejections, reversals) kept as signals | SAP decision traces, Foundry action logs | partial: the journal and audit hold who, what and when, not why |
+| Agent harness: an agent as a principal with narrower grants than a role, budgets (calls, cost, actions), memory, guardrails and observability of each run; goals decomposed and delegated, exceptions to people | SAP harness engineering, Agentforce, AIP | partial: agents as members, catalog-only actions, D6 approval |
+| Evaluation: runs replayed against past decisions and corrections before a model, prompt or agent changes | — | missing |
+| Agent interoperability: MCP for tools (have), Agent2Agent for other vendors' agents | MCP, A2A | partial |
 
 **G. Workspace UI (the kit's families; each is one component set used by every app).**
 
@@ -673,8 +679,8 @@ Each stage opens with an architecture gate (an ADR with the owner's decisions), 
 | 1. Application model | Entity declarations; generic reads with filter, sort and paging; record history; record page and generated forms in the kit; one reference app moved onto it | Everything in B, E and G depends on the platform knowing an app's entities | CRM and Hotel declare their entities and lose their hand-written lists and forms; paging works on 100k records |
 | 2. Lifecycles, approvals, tasks | State machines on entities; approval chains from the organisation; tasks and one inbox with SLA timers | The most common business shape after the model: documents that move through states | A purchase-request or leave-request reference app built from declarations only, plus the MES order lifecycle moved |
 | 3. Read models and analytics | Projections into PostgreSQL rebuilt from the journal; pivot, charts, dashboards; snapshots for start-up | Scale and reporting need the same projection machinery | Dashboards on plant and hotel data; a restart without full replay |
-| 4. Flows and automation | Orchestrated processes over owned work and effects: waits, timers, human steps, compensation | Needs lifecycles and tasks as its steps | An order-to-delivery flow across two apps through protocols |
-| 5. Agents | Model plus catalog tools, runs as owned work, approvals; knowledge retrieval; the assistant panel | Agents act through everything above, which must exist first | An agent handles a helpdesk ticket end to end under a person's approvals |
+| 4. Flows and automation | Orchestrated processes over owned work and effects: waits, timers, human steps, compensation; agent steps declared (run in stage 5); every step's reason kept as a decision trace | Needs lifecycles and tasks as its steps; agents need flows as their orchestration | An order-to-delivery flow across two apps through protocols |
+| 5. Agents | The harness (agent principals with scoped grants and budgets, memory, guardrails, traced runs), the context graph for grounding, knowledge retrieval, the assistant panel and intents, evaluation from corrections, A2A | Agents act through everything above, which must exist first | An agent handles a helpdesk ticket end to end under a person's approvals, grounded in the context graph, every run traced |
 | 6. UI families and field clients | Trees, boards, time views, files, mobile tasks — each family once in the kit | Grows with stages 1–5; listed so none is built twice | Every reference app uses the kit's families, none its own |
 | 7. Scale and delivery | Many tenants per process, provisioning, package upgrades, developer kit | When a second real organisation or team comes | A new team scaffolds an app and ships it without touching the host |
 
