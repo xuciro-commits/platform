@@ -46,10 +46,12 @@ export const notify = toast;
  * tabs are routes (one per entity), a command palette (⌘K) and notifications.
  * The layout survives restarts (per `storageKey`); the active tab is in the URL.
  */
-export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, onActiveRoute }: {
+export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, onActiveRoute, onLanguage }: {
   product: string; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
   launcher?: Launcher; onActiveRoute?: (route: Route) => void;
+  /** Keeps a chosen language beyond this browser, e.g. as the member's preference; the page reloads in it after. */
+  onLanguage?: (id: string) => unknown;
 }) {
   const dock = useRef<DockviewApi>(null);
   const [active, setActive] = useState<string>();
@@ -167,7 +169,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
           </button>
           <div className="ml-auto flex items-center gap-2">
             {status}
-            {session && <SessionMenu session={session} />}
+            {session && <SessionMenu session={session} onLanguage={onLanguage} />}
           </div>
         </header>
         <div className={cn("grid min-h-0", navOpen ? "grid-cols-[220px_1fr]" : "grid-cols-1")}>
@@ -264,7 +266,7 @@ function AppMenu({ launcher, product }: { launcher: Launcher; product: string })
   );
 }
 
-function SessionMenu({ session }: { session: Session }) {
+function SessionMenu({ session, onLanguage }: { session: Session; onLanguage?: (id: string) => unknown }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger className="flex h-7 items-center gap-2 rounded-md border border-border px-2 text-sm hover:bg-row-hover">
@@ -289,7 +291,7 @@ function SessionMenu({ session }: { session: Session }) {
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
           <DropdownMenu.Label className="px-2 py-1 text-xs text-muted">{t("Language")}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={language()} onValueChange={setLanguage}>
+          <DropdownMenu.RadioGroup value={language()} onValueChange={(id) => void Promise.resolve(onLanguage?.(id)).catch(() => undefined).finally(() => setLanguage(id))}>
             {languages.map((l) => (
               <DropdownMenu.RadioItem key={l.id} value={l.id} className={menuItem}>
                 <DropdownMenu.ItemIndicator className="absolute left-2">•</DropdownMenu.ItemIndicator>{l.name}

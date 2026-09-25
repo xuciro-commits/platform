@@ -52,12 +52,16 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
-	Type    string // a data class the app is authority for, e.g. "crm.opportunity"
-	Title   string // "Opportunity"
-	Plural  string // "Opportunities"; default: Title with the English plural rule
-	Model   any    // the struct's zero value, e.g. Opportunity{}
-	Display string // the field naming a record; default: the first search field, else the ID
-	Scope   Scope
+	Type   string // a data class the app is authority for, e.g. "crm.opportunity"
+	Title  string // "Opportunity"
+	Plural string // "Opportunities"; default: Title with the English plural rule
+	// Description says what a record of this type is, for people and agents
+	// (ADR-0023 D1); Synonyms are other names people use for it, comma-separated.
+	Description string
+	Synonyms    string
+	Model       any    // the struct's zero value, e.g. Opportunity{}
+	Display     string // the field naming a record; default: the first search field, else the ID
+	Scope       Scope
 	// Standard asks for generated create, edit and archive actions (D5),
 	// named <type>.create, <type>.edit and <type>.archive.
 	Standard Standard
@@ -80,9 +84,10 @@ type Lifecycle struct {
 }
 
 type State struct {
-	Name  string `json:"name"`
-	Title string `json:"title"`
-	Tone  string `json:"tone,omitempty"` // info, success, warning, danger, neutral
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Tone        string `json:"tone,omitempty"`        // info, success, warning, danger, neutral
+	Description string `json:"description,omitempty"` // what a record in this state means (ADR-0023 D1)
 }
 
 // Transition moves a record from one of From to one of To. Do, when set,
@@ -170,22 +175,29 @@ type FieldInfo struct {
 	Ref      string   `json:"ref,omitempty"` // the entity type a reference points to
 	// Knowledge marks a text field agents and members find through the
 	// knowledge app (ADR-0022 D1), tag knowledge:"true".
-	Knowledge bool  `json:"knowledge,omitempty"`
-	Index     []int `json:"-"`
+	Knowledge bool `json:"knowledge,omitempty"`
+	// Meaning (ADR-0023 D1), from the tags help:"…", synonyms:"a,b" and
+	// example:"…": what the field holds, other names for it, a typical value.
+	Help     string `json:"help,omitempty"`
+	Synonyms string `json:"synonyms,omitempty"`
+	Example  string `json:"example,omitempty"`
+	Index    []int  `json:"-"`
 }
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
-	Type      string         `json:"type"`
-	Title     string         `json:"title"`
-	Plural    string         `json:"plural"`
-	App       string         `json:"app"`
-	Display   string         `json:"display"`
-	Fields    []FieldInfo    `json:"fields"`
-	Standard  []string       `json:"standard"` // the generated actions' schemas
-	Lifecycle *LifecycleInfo `json:"lifecycle,omitempty"`
-	Go        reflect.Type   `json:"-"`
-	Scope     Scope          `json:"-"`
+	Type        string         `json:"type"`
+	Title       string         `json:"title"`
+	Plural      string         `json:"plural"`
+	Description string         `json:"description,omitempty"`
+	Synonyms    string         `json:"synonyms,omitempty"`
+	App         string         `json:"app"`
+	Display     string         `json:"display"`
+	Fields      []FieldInfo    `json:"fields"`
+	Standard    []string       `json:"standard"` // the generated actions' schemas
+	Lifecycle   *LifecycleInfo `json:"lifecycle,omitempty"`
+	Go          reflect.Type   `json:"-"`
+	Scope       Scope          `json:"-"`
 }
 
 // Field is the named field's description.
@@ -213,7 +225,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{Type: e.Type, Title: e.Title, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}}
 	if info.Title == "" {
 		info.Title = e.Type
 	}
@@ -236,7 +248,8 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		if name == "" {
 			return EntityInfo{}, fmt.Errorf("entity %s: field %s needs a json name", e.Type, sf.Name)
 		}
-		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true"}
+		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true",
+			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example")}
 		if f.Title == "" {
 			f.Title = strings.ToUpper(name[:1]) + name[1:]
 		}
@@ -363,8 +376,14 @@ func EntityActions(e Entity) []Action {
 			typ = "string"
 		}
 		description := f.Title
+		if f.Help != "" {
+			description += ": " + f.Help
+		}
 		if len(f.Choices) > 0 {
-			description += ": " + strings.Join(f.Choices, ", ")
+			description += " (" + strings.Join(f.Choices, ", ") + ")"
+		}
+		if f.Example != "" {
+			description += ", e.g. " + f.Example
 		}
 		fields = append(fields, Field{Name: f.Name, Type: typ, Required: f.Required, Description: description})
 		editable = append(editable, Field{Name: f.Name, Type: typ, Description: description})

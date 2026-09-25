@@ -18,12 +18,12 @@ import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/s
 import { t } from "../i18n";
 
 export type FieldInfo = {
-  name: string; title: string; required?: boolean; search?: boolean; readOnly?: boolean; choices?: string[]; choiceTitles?: string[]; ref?: string;
+  name: string; title: string; required?: boolean; search?: boolean; readOnly?: boolean; choices?: string[]; choiceTitles?: string[]; ref?: string; help?: string; synonyms?: string; example?: string;
   type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines";
 };
 export type State = { name: string; title: string; tone?: "info" | "success" | "warning" | "danger" | "neutral" };
 export type Lifecycle = { field: string; initial: string; states: State[]; transitions: { name: string; schema: string; title: string; from: string[]; to: string[] }[] };
-export type EntityInfo = { type: string; title: string; plural: string; app: string; display: string; fields: FieldInfo[]; standard: string[]; lifecycle?: Lifecycle };
+export type EntityInfo = { type: string; title: string; plural: string; description?: string; synonyms?: string; app: string; display: string; fields: FieldInfo[]; standard: string[]; lifecycle?: Lifecycle };
 export type Stamp = { by?: string; at?: string; change?: string };
 export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;
 export type RecordQuery = { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean };
@@ -60,7 +60,7 @@ const money = (o: { label: string; required?: boolean; readOnly?: boolean }): Fi
 export function entityFrom(info: EntityInfo, options: Record<string, { value: string; label: string }[]> = {}): Entity<EntityRecord> {
   const fields: Record<string, FieldType<any, EntityRecord>> = {};
   for (const f of info.fields) {
-    const common = { label: f.title, required: f.required, readOnly: f.readOnly };
+    const common = { label: f.title, help: f.help, required: f.required, readOnly: f.readOnly };
     fields[f.name] = (() => {
       switch (f.type) {
         case "longtext": return longText(common);

@@ -13,6 +13,8 @@
  "Escalate": "升级",
  "Escalated": "已升级",
  "Helpdesk": "帮助台",
+ "Its answer was due {when}.": "回复期限是 {when}。",
+ "Late: {subject}": "逾期：{subject}",
  "Log a customer's request, from mail or the phone.": "登记客户通过邮件或电话提出的请求。",
  "Mark a ticket late: its leads are told.": "把工单标记为逾期：通知负责人。",
  "New": "新建",

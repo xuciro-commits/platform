@@ -338,13 +338,14 @@ const noticesKept = 2000
 
 func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Time, to []platform.Recipient) []string {
 	members := t.recipients(c, now, to)
-	address := map[string]string{} // members who sign in as user:<email> may be mailed (mail.go)
+	address := map[string]string{}  // members who sign in as user:<email> may be mailed (mail.go)
+	language := map[string]string{} // and read their mail in their language (ADR-0023 6b)
 	if d, ok := t.app(PlatformApp).(*Console); ok {
 		for _, m := range members {
-			address[m] = d.address(m)
+			address[m], language[m] = d.address(m), d.language(m)
 		}
 	}
-	return t.notice(c, n, now, members, address)
+	return t.notice(c, n, now, members, address, language)
 }
 
 // recipients are the members to resolves to on now's day (ADR-0012).
@@ -374,7 +375,7 @@ func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Reci
 	return members
 }
 
-func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Time, members []string, address map[string]string) []string {
+func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Time, members []string, address, language map[string]string) []string {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	var out []string
@@ -386,7 +387,7 @@ func (t *Tenant) notice(c platform.Caller, n platform.Notification, now time.Tim
 		x := n
 		x.ID, x.Member, x.App, x.At, x.Read = fmt.Sprintf("n-%d", t.noticeSeq), m, c.App, now, false
 		t.notices = append(t.notices, x)
-		t.mailNotice(x, address[m])
+		t.mailNotice(x, address[m], language[m])
 		out = append(out, m)
 	}
 	if len(t.notices) > noticesKept {

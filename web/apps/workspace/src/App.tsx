@@ -5,7 +5,7 @@
 import "./i18n";
 import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t } from "@platform/ui";
+import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -43,6 +43,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!me) return;
+    if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser (ADR-0023)
     Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
     client.refreshDeclarations().then(() => setReady(true), () => notify.error(t("Host unreachable")));
   }, [client, me]);
@@ -146,6 +147,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     <HostContext.Provider value={host}>
       <Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         views={views} home={{ view: "home" }}
+        onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
         launcher={{ apps: apps.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
           onSelect: (id) => { select(id); const home = apps.find((a) => a.id === id)?.home; if (home) location.hash = `#/${home.view}`; } }}
         onActiveRoute={(route: Route) => { const id = owner.get(route.view); if (id && id !== current) select(id); }}

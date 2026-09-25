@@ -64,6 +64,7 @@ function FieldForm({ schema, fields, defaultValues, onSubmit, submitLabel = t("S
         return (
           <div key={name} className="grid gap-1">
             <label htmlFor={id} className="text-xs font-medium text-muted">{type.label}{type.required ? " *" : ""}</label>
+            {type.help && <p className="-mt-0.5 text-xs text-muted/80">{type.help}</p>}
             <Controller control={control} name={name} render={({ field }) => (
               <span aria-describedby={error ? `${id}-error` : undefined}>
                 {type.editor?.({ id, value: field.value, onChange: field.onChange, invalid: !!error })}

@@ -106,10 +106,10 @@ type Signature struct {
 type SFC struct {
 	platform.Record
 	Order      platform.Ref[Order] `json:"order" field:"readonly"`
-	Product    string              `json:"product" field:"readonly,search"`
-	Step       int                 `json:"step" field:"readonly"` // index into the product's operations
+	Product    string              `json:"product" field:"readonly,search" help:"The product this lot becomes"`
+	Step       int                 `json:"step" field:"readonly" help:"The index of its current operation in the product's routing"` // index into the product's operations
 	State      string              `json:"state" field:"readonly" choices:"queued,active,hold,done,scrapped"`
-	Resource   string              `json:"resource,omitempty" field:"readonly"`
+	Resource   string              `json:"resource,omitempty" field:"readonly" help:"The machine or station working on it now"`
 	NCs        []NC                `json:"ncs" field:"readonly" title:"Nonconformances"`
 	Signatures []Signature         `json:"signatures" field:"readonly"`
 }
@@ -118,9 +118,9 @@ type SFC struct {
 type Order struct {
 	platform.Record
 	Product  string              `json:"product" field:"readonly,search"`
-	Quantity int                 `json:"quantity" field:"readonly"`
+	Quantity int                 `json:"quantity" field:"readonly" help:"Units to make"`
 	SFCs     []platform.Ref[SFC] `json:"sfcs" field:"readonly" title:"SFCs"`
-	Planned  string              `json:"planned,omitempty" field:"readonly" title:"Planned order"`
+	Planned  string              `json:"planned,omitempty" field:"readonly" title:"Planned order" help:"The ERP's planned order this order fulfils" synonyms:"PO"`
 	Status   string              `json:"status" field:"readonly" choices:"released,completed"`
 	// The confirmation written back to the ERP when the last SFC ends: sent,
 	// confirmed (with the ERP's number), refused or failed, read from its answer.
@@ -373,92 +373,94 @@ func Entities(p *Plant) []platform.Entity {
 		p.finishOrder(c, r, string(sfcOf(record).Order), now)
 	}
 	return []platform.Entity{
-		{Type: OrderType, Title: "Shop order", Model: Order{},
+		{Type: OrderType, Title: "Shop order", Model: Order{}, Synonyms: "work order,production order",
+			Description: "An order released to the shop floor to make a quantity of a product; it is split into SFCs and confirmed to the ERP when its last SFC ends.",
 			Lifecycle: &platform.Lifecycle{Field: "status", Initial: "released",
 				States: []platform.State{{Name: "released", Title: "Released", Tone: "info"}, {Name: "completed", Title: "Completed", Tone: "success"}}}},
-		{Type: SFCType, Title: "SFC", Model: SFC{}, Lifecycle: &platform.Lifecycle{Field: "state", Initial: "queued",
-			States: []platform.State{{Name: "queued", Title: "Queued", Tone: "info"}, {Name: "active", Title: "In work", Tone: "warning"},
-				{Name: "hold", Title: "On hold", Tone: "danger"}, {Name: "done", Title: "Done", Tone: "success"}, {Name: "scrapped", Title: "Scrapped", Tone: "neutral"}},
-			Transitions: []platform.Transition{
-				{Name: "start", Title: "Start operation", Capability: "execution", From: []string{"queued"}, To: []string{"active"}, Roles: roles(Operator),
-					Description: "Start the SFC's current operation on a resource of its work center.",
-					Payload:     []platform.Field{{Name: "resource", Type: "string", Required: true, Description: "Resource of the operation's work center"}},
-					Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
-						sfc := sfcOf(record)
-						var st sfcPayload
-						json.Unmarshal(payload, &st)
-						prod := p.product(sfc.Product)
-						if wc := p.workCenter(prod.Operations[sfc.Step].WorkCenter); wc == nil || !slices.Contains(wc.Resources, st.Resource) {
-							return invalid
-						}
-						sfc.Resource = st.Resource
-						return nil
-					}},
-				{Name: "complete", Title: "Complete operation", Capability: "execution", From: []string{"active"}, To: []string{"queued", "done"}, Roles: roles(Operator),
-					Description: "Complete the SFC's active operation; it moves to the next operation or is done.",
-					Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
-						sfc := sfcOf(record)
-						sfc.Resource = ""
-						if sfc.Step+1 < len(p.product(sfc.Product).Operations) {
-							sfc.Step, sfc.State = sfc.Step+1, "queued"
-						} else {
-							sfc.State = "done"
-						}
-						return nil
-					}, After: finished},
-				{Name: "nc", Title: "Log nonconformance", Capability: "quality", From: []string{"queued", "active"}, To: []string{"hold"}, Roles: roles(Operator, Quality),
-					Description: "Log a nonconformance at the current operation; the SFC is held until quality signs a disposition.",
-					Payload:     []platform.Field{{Name: "code", Type: "string", Required: true, Description: "NC code: POROSITY, DIMENSION, SURFACE, LEAK"}},
-					Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
-						sfc := sfcOf(record)
-						var st sfcPayload
-						if json.Unmarshal(payload, &st) != nil || st.Code == "" {
-							return invalid
-						}
-						sfc.Resource = ""
-						sfc.NCs = append(sfc.NCs, NC{Step: sfc.Step, Code: st.Code, By: c.ID})
-						return nil
-					}},
-				{Name: "sign", Title: "Sign disposition", Capability: "quality", From: []string{"hold"}, To: []string{"hold", "queued", "scrapped"}, Roles: roles(Quality),
-					Description: "Sign the disposition of a held SFC (electronic signature with meaning); two people, reviewed and approved, on the same disposition release it.",
-					Payload: []platform.Field{{Name: "action", Type: "string", Required: true, Description: "rework, scrap or use-as-is"},
-						{Name: "meaning", Type: "string", Required: true, Description: "reviewed or approved"},
-						{Name: "reworkStep", Type: "integer", Description: "Operation step to rework from"}},
-					Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
-						sfc := sfcOf(record)
-						var sg signPayload
-						if json.Unmarshal(payload, &sg) != nil || !slices.Contains([]string{"rework", "scrap", "use-as-is"}, sg.Action) ||
-							!slices.Contains([]string{"reviewed", "approved"}, sg.Meaning) {
-							return invalid
-						}
-						if slices.ContainsFunc(sfc.Signatures, func(x Signature) bool { return x.By == c.ID || x.Meaning == sg.Meaning && x.Action == sg.Action }) {
-							return conflict // one signature per person, one per meaning
-						}
-						if sg.Action == "rework" && (sg.ReworkStep < 0 || sg.ReworkStep > sfc.Step) {
-							return invalid
-						}
-						sfc.Signatures = append(sfc.Signatures, Signature{Action: sg.Action, Meaning: sg.Meaning, By: c.ID})
-						agreed := 0
-						for _, x := range sfc.Signatures {
-							if x.Action == sg.Action {
-								agreed++
+		{Type: SFCType, Title: "SFC", Model: SFC{}, Synonyms: "lot,batch",
+			Description: "A shop floor control: one lot of a shop order moving through the product's routing, operation by operation.", Lifecycle: &platform.Lifecycle{Field: "state", Initial: "queued",
+				States: []platform.State{{Name: "queued", Title: "Queued", Tone: "info"}, {Name: "active", Title: "In work", Tone: "warning"},
+					{Name: "hold", Title: "On hold", Tone: "danger", Description: "held by a nonconformance until two quality engineers sign one disposition"}, {Name: "done", Title: "Done", Tone: "success"}, {Name: "scrapped", Title: "Scrapped", Tone: "neutral"}},
+				Transitions: []platform.Transition{
+					{Name: "start", Title: "Start operation", Capability: "execution", From: []string{"queued"}, To: []string{"active"}, Roles: roles(Operator),
+						Description: "Start the SFC's current operation on a resource of its work center.",
+						Payload:     []platform.Field{{Name: "resource", Type: "string", Required: true, Description: "Resource of the operation's work center"}},
+						Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+							sfc := sfcOf(record)
+							var st sfcPayload
+							json.Unmarshal(payload, &st)
+							prod := p.product(sfc.Product)
+							if wc := p.workCenter(prod.Operations[sfc.Step].WorkCenter); wc == nil || !slices.Contains(wc.Resources, st.Resource) {
+								return invalid
 							}
-						}
-						if agreed < 2 { // two people, reviewed and approved, on the same disposition
+							sfc.Resource = st.Resource
 							return nil
-						}
-						switch sg.Action {
-						case "rework":
-							sfc.Step, sfc.State = sg.ReworkStep, "queued"
-						case "scrap":
-							sfc.State = "scrapped"
-						default:
-							sfc.State = "queued"
-						}
-						sfc.Signatures = []Signature{}
-						return nil
-					}, After: finished},
-			}}},
+						}},
+					{Name: "complete", Title: "Complete operation", Capability: "execution", From: []string{"active"}, To: []string{"queued", "done"}, Roles: roles(Operator),
+						Description: "Complete the SFC's active operation; it moves to the next operation or is done.",
+						Do: func(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
+							sfc := sfcOf(record)
+							sfc.Resource = ""
+							if sfc.Step+1 < len(p.product(sfc.Product).Operations) {
+								sfc.Step, sfc.State = sfc.Step+1, "queued"
+							} else {
+								sfc.State = "done"
+							}
+							return nil
+						}, After: finished},
+					{Name: "nc", Title: "Log nonconformance", Capability: "quality", From: []string{"queued", "active"}, To: []string{"hold"}, Roles: roles(Operator, Quality),
+						Description: "Log a nonconformance at the current operation; the SFC is held until quality signs a disposition.",
+						Payload:     []platform.Field{{Name: "code", Type: "string", Required: true, Description: "NC code: POROSITY, DIMENSION, SURFACE, LEAK"}},
+						Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+							sfc := sfcOf(record)
+							var st sfcPayload
+							if json.Unmarshal(payload, &st) != nil || st.Code == "" {
+								return invalid
+							}
+							sfc.Resource = ""
+							sfc.NCs = append(sfc.NCs, NC{Step: sfc.Step, Code: st.Code, By: c.ID})
+							return nil
+						}},
+					{Name: "sign", Title: "Sign disposition", Capability: "quality", From: []string{"hold"}, To: []string{"hold", "queued", "scrapped"}, Roles: roles(Quality),
+						Description: "Sign the disposition of a held SFC (electronic signature with meaning); two people, reviewed and approved, on the same disposition release it.",
+						Payload: []platform.Field{{Name: "action", Type: "string", Required: true, Description: "rework, scrap or use-as-is"},
+							{Name: "meaning", Type: "string", Required: true, Description: "reviewed or approved"},
+							{Name: "reworkStep", Type: "integer", Description: "Operation step to rework from"}},
+						Do: func(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
+							sfc := sfcOf(record)
+							var sg signPayload
+							if json.Unmarshal(payload, &sg) != nil || !slices.Contains([]string{"rework", "scrap", "use-as-is"}, sg.Action) ||
+								!slices.Contains([]string{"reviewed", "approved"}, sg.Meaning) {
+								return invalid
+							}
+							if slices.ContainsFunc(sfc.Signatures, func(x Signature) bool { return x.By == c.ID || x.Meaning == sg.Meaning && x.Action == sg.Action }) {
+								return conflict // one signature per person, one per meaning
+							}
+							if sg.Action == "rework" && (sg.ReworkStep < 0 || sg.ReworkStep > sfc.Step) {
+								return invalid
+							}
+							sfc.Signatures = append(sfc.Signatures, Signature{Action: sg.Action, Meaning: sg.Meaning, By: c.ID})
+							agreed := 0
+							for _, x := range sfc.Signatures {
+								if x.Action == sg.Action {
+									agreed++
+								}
+							}
+							if agreed < 2 { // two people, reviewed and approved, on the same disposition
+								return nil
+							}
+							switch sg.Action {
+							case "rework":
+								sfc.Step, sfc.State = sg.ReworkStep, "queued"
+							case "scrap":
+								sfc.State = "scrapped"
+							default:
+								sfc.State = "queued"
+							}
+							sfc.Signatures = []Signature{}
+							return nil
+						}, After: finished},
+				}}},
 	}
 }
 

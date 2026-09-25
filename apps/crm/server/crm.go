@@ -47,16 +47,16 @@ type Role string
 // keeps their records and gives them lists, record pages and history.
 type Account struct {
 	platform.Record
-	Name string `json:"name" field:"required,search"`
-	Kind string `json:"kind" field:"required" choices:"company,person"`
+	Name string `json:"name" field:"required,search" help:"The customer's legal or everyday name" example:"Acme Corp"`
+	Kind string `json:"kind" field:"required" choices:"company,person" help:"Whether the customer is an organisation or one person"`
 }
 
 type Opportunity struct {
 	platform.Record
 	Account platform.Ref[Account] `json:"account" field:"required"`
-	Title   string                `json:"title" field:"required,search"`
-	Owner   string                `json:"owner" field:"readonly"`
-	Stage   string                `json:"stage" field:"readonly" choices:"open,won,lost"`
+	Title   string                `json:"title" field:"required,search" help:"What is being sold, in the customer's words" example:"Board offsite, 12 rooms"`
+	Owner   string                `json:"owner" field:"readonly" help:"The salesperson who owns it; only they and managers may close it"`
+	Stage   string                `json:"stage" field:"readonly" choices:"open,won,lost" help:"open while it is being worked on; won or lost once closed"`
 	Booked  int                   `json:"booked" field:"readonly" title:"Stays booked"`
 	// The group's stay, planned while the opportunity is open; won, the
 	// group-stay flow books it (ADR-0020).
@@ -73,10 +73,12 @@ type Opportunity struct {
 func Entities() []platform.Entity {
 	both := []string{string(Sales), string(Manager)}
 	return []platform.Entity{
-		{Type: AccountType, Title: "Account", Model: Account{},
-			Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: both, Capability: "accounts"}},
-		{Type: OpportunityType, Title: "Opportunity", Model: Opportunity{},
-			Scope: platform.Scope{Owner: "owner", Levels: map[string]string{string(Sales): platform.ScopeOwn}}},
+		{Type: AccountType, Title: "Account", Model: Account{}, Synonyms: "customer,client",
+			Description: "A customer the company sells to: an organisation or a person.",
+			Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: both, Capability: "accounts"}},
+		{Type: OpportunityType, Title: "Opportunity", Model: Opportunity{}, Synonyms: "deal,lead",
+			Description: "A chance to sell something to an account, followed until it is won or lost; stays for a group can be booked through the lodging protocol.",
+			Scope:       platform.Scope{Owner: "owner", Levels: map[string]string{string(Sales): platform.ScopeOwn}}},
 	}
 }
 

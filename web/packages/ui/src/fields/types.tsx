@@ -17,6 +17,8 @@ export type Operator<V> = { id: string; label: string; needsArg: boolean; test: 
 export type FieldType<V = any, R = any> = {
   type: string;
   label: string;
+  /** What the field holds, from its declaration (ADR-0023 D1): shown under the label of forms. */
+  help?: string;
   required?: boolean;
   readOnly?: boolean;
   align?: "left" | "right";
@@ -32,19 +34,19 @@ export type FieldType<V = any, R = any> = {
   text: (value: V | undefined) => string;
 };
 
-type Common = { label: string; required?: boolean; readOnly?: boolean; width?: number };
+type Common = { label: string; help?: string; required?: boolean; readOnly?: boolean; width?: number };
 const empty = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 const muted = <span className="text-muted">—</span>;
 const byString = (a: unknown, b: unknown) => String(a).localeCompare(String(b));
 const byNumber = (a: number, b: number) => a - b;
 const isEmpty: Operator<any> = { id: "empty", label: t("is empty"), needsArg: false, test: (v) => empty(v) };
 const notEmpty: Operator<any> = { id: "notEmpty", label: t("is not empty"), needsArg: false, test: (v) => !empty(v) };
-const equals: Operator<any> = { id: "is", label: "is", needsArg: true, test: (v, a) => v === a };
+const equals: Operator<any> = { id: "is", label: t("is"), needsArg: true, test: (v, a) => v === a };
 const numberOps: Operator<number>[] = [equals,
   { id: "gt", label: ">", needsArg: true, test: (v, a) => v !== undefined && a !== undefined && v > a },
   { id: "lt", label: "<", needsArg: true, test: (v, a) => v !== undefined && a !== undefined && v < a }, isEmpty, notEmpty];
 const textOps: Operator<string>[] = [
-  { id: "contains", label: "contains", needsArg: true, test: (v, a) => !a || (v ?? "").toLowerCase().includes(a.toLowerCase()) },
+  { id: "contains", label: t("contains"), needsArg: true, test: (v, a) => !a || (v ?? "").toLowerCase().includes(a.toLowerCase()) },
   equals, isEmpty, notEmpty];
 const timeOps: Operator<string>[] = [equals,
   { id: "before", label: t("is before"), needsArg: true, test: (v, a) => !!v && !!a && v < a },

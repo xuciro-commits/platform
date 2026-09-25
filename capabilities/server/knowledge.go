@@ -29,6 +29,7 @@ import (
 const (
 	KnowledgeApp          = "knowledge"
 	DocumentType          = "knowledge.document"
+	TermType              = "knowledge.term"
 	KnowledgeEditor       = "editor"
 	SettingEmbeddingModel = "embedding-model"
 	passageChars          = 3200 // about 800 tokens
@@ -42,6 +43,19 @@ type Document struct {
 	Text   string   `json:"text" field:"required" type:"longtext"`
 	Source string   `json:"source,omitempty" title:"Where it comes from"`
 	Apps   []string `json:"apps,omitempty" title:"Read by members of"` // the apps whose members may read it; none: every member
+}
+
+// Term is a word of the tenant's own glossary (ADR-0023 D1): what it means
+// here, other words for it, and the declaration it refers to. It is layered on
+// top of the model: agents read it and search expands by it, but it never
+// renames, retitles or redefines a declaration.
+type Term struct {
+	platform.Record
+	Term     string   `json:"term" field:"required,search" help:"The word people here use" example:"PO"`
+	Meaning  string   `json:"meaning" field:"required" type:"longtext" help:"What it means in this organisation"`
+	Synonyms string   `json:"synonyms,omitempty" help:"Other words for it, comma-separated"`
+	RefersTo string   `json:"refersTo,omitempty" title:"Refers to" help:"The declaration it names: an entity type, <type>.<field> or an action" example:"mes.order"`
+	Apps     []string `json:"apps,omitempty" title:"Read by members of"`
 }
 
 // Passage is one piece of knowledge a search found, with where it comes from.
@@ -82,13 +96,18 @@ type Knowledge struct {
 
 func NewKnowledge(tenant string) *Knowledge {
 	k := &Knowledge{docs: map[string]string{}, chunks: map[string][]*chunk{}}
-	k.ledger = platform.NewLedger(tenant, KnowledgeApp, platform.NewCatalog(platform.EntityActions(knowledgeEntities()[0])...), DocumentType)
+	es := knowledgeEntities()
+	k.ledger = platform.NewLedger(tenant, KnowledgeApp, platform.NewCatalog(append(platform.EntityActions(es[0]), platform.EntityActions(es[1])...)...), DocumentType, TermType)
 	return k
 }
 
 func knowledgeEntities() []platform.Entity {
 	return []platform.Entity{{Type: DocumentType, Title: "Document", Model: Document{}, Display: "title",
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{KnowledgeEditor}, Capability: "documents"}}}
+		Description: "A text people upload for agents and members to find and cite: house rules, manuals, FAQs, contracts.",
+		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{KnowledgeEditor}, Capability: "documents"}},
+		{Type: TermType, Title: "Term", Model: Term{}, Display: "term", Synonyms: "glossary",
+			Description: "A word of this organisation's own glossary, layered on the platform's model: agents read it and search understands it; it never changes what a declaration is.",
+			Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{KnowledgeEditor}, Capability: "glossary"}}}
 }
 
 func (k *Knowledge) Manifest() platform.Manifest {
@@ -108,6 +127,13 @@ func (k *Knowledge) Input(platform.Caller, string, []byte, time.Time) (any, *ker
 }
 
 func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if name := s.GetSchema().GetName(); (name == TermType+".create" || name == TermType+".edit") && !c.Replaying {
+		var p struct{ RefersTo *string }
+		json.Unmarshal(s.GetPayload(), &p)
+		if p.RefersTo != nil && *p.RefersTo != "" && !k.t.declares(*p.RefersTo) {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // a term names what exists; it cannot make a declaration
+		}
+	}
 	if record, err, ok := k.ledger.Generated(c, s, now, nil, knowledgeEntities()...); ok {
 		return record, err
 	}
@@ -538,6 +564,31 @@ func decodeVector(b []byte) []float32 {
 	out := make([]float32, len(b)/4)
 	for i := range out {
 		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[4*i:]))
+	}
+	return out
+}
+
+// terms are the glossary terms an app's members may read ("" for every term).
+func (k *Knowledge) terms(t *Tenant, app string) []Term {
+	all, _, _ := platform.Find[Term](t.automation(KnowledgeApp, false), platform.Query{Limit: 500, Sort: []string{"term"}})
+	out := all[:0]
+	for _, x := range all {
+		if app == "" || len(x.Apps) == 0 || slices.Contains(x.Apps, app) {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+// termsFor are the words the glossary gives a declaration: each term that
+// refers to it, and its synonyms.
+func (k *Knowledge) termsFor(t *Tenant, declaration string) []string {
+	var out []string
+	for _, x := range k.terms(t, "") {
+		if x.RefersTo == declaration {
+			out = append(out, x.Term)
+			out = append(out, strings.Split(x.Synonyms, ",")...)
+		}
 	}
 	return out
 }

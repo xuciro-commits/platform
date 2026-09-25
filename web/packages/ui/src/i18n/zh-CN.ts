@@ -1,5 +1,7 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "contains": "包含",
+  "is": "是",
   "{n} rows": "{n} 行",
   ", attempt {n}": "，第 {n} 次尝试",
   ", by": "，按",

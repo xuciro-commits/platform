@@ -18,6 +18,8 @@ export type Me = {
   tenantId: string; principalId: string;
   profile: { id: string; roles: Record<string, string>; agent?: boolean };
   apps: AppEntry[]; tenants: string[];
+  /** The language the host serves this member in, and the member's own choice (ADR-0023). */
+  language?: string; languages?: string[]; preferred?: string;
 };
 export type Decision = { evidence?: string[]; expectedRevision?: number };
 
@@ -135,7 +137,7 @@ export function Records({ type, description, actions, saved }: { type: string; d
   return (
     <>
       <PageHeader title={saved?.title ?? info?.plural ?? type} actions={actions}
-        description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
+        description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
       <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
       <Dialog open={!!saving} onOpenChange={(o) => !o && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
         <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (title.trim()) void save(); }}>

@@ -43,6 +43,7 @@ type Tenant struct {
 	transcripts  []Transcript
 	knowledge    *Knowledge
 	dictionaries sync.Map // language → map[string]string, merged from the platform's and the apps' (ADR-0023)
+	patternCache sync.Map // language → []pattern
 	agentRun     string   // the run whose agent is submitting, under mu: its effects name it
 	mu           sync.Mutex
 	apps         []platform.App

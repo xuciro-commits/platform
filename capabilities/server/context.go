@@ -127,7 +127,11 @@ func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit 
 		return out
 	}
 	for _, info := range t.Entities(m) {
-		page, err := t.Records(m, info.Type, platform.Query{Search: q, Limit: 5}, now)
+		query := platform.Query{Search: q, Limit: 5}
+		if rest, named := t.names(info, q); named { // "open opportunities" searches opportunities for "open" (ADR-0023 D1)
+			query.Search = rest
+		}
+		page, err := t.Records(m, info.Type, query, now)
 		if err != nil {
 			continue
 		}

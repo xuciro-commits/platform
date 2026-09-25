@@ -6,6 +6,7 @@
  "Cancel reservation": "取消预订",
  "Change fields of a room type; fields left out keep their value.": "修改房型字段；未填写的字段保持原值。",
  "Change the room type or dates of a reservation.": "修改预订的房型或日期。",
+ "Channel booking {id}": "渠道预订 {id}",
  "Check-in": "入住",
  "Check-out": "退房",
  "Create a room type.": "新建一个房型。",
@@ -34,5 +35,8 @@
  "Who is notified of each booking the channel manager delivers.": "渠道管理器每送来一笔预订时通知谁。",
  "front-desk": "前台",
  "manager": "经理",
- "off": "关闭"
+ "off": "关闭",
+ "{n} arrivals on {day}": "{day} 有 {n} 位客人到店",
+ "{roomType} oversold on {day}": "{roomType} 在 {day} 超订",
+ "{sold} sold for {rooms} rooms: someone may have to be walked.": "{rooms} 间房卖出了 {sold} 间：可能需要为客人安排别处入住。"
 }

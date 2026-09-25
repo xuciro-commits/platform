@@ -12,7 +12,7 @@ import {
   type ColumnDef, type FlowDefinition, type FlowInstanceData, type View,
  t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, BookOpen, Blocks, Bot, BrainCircuit, Cable, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
+import { BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Cable, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -864,6 +864,22 @@ function Evaluations() {
   );
 }
 
+// The tenant's glossary (ADR-0023 D1): its own words, layered on the model.
+function Glossary() {
+  const { can, decide } = useHost();
+  const [writing, setWriting] = useState(false);
+  return (
+    <>
+      <Records type="knowledge.term" description={t("This organisation's own words: what each means here and what it refers to. Agents read them and Search understands them; they never change what an entity, field or action is.")}
+        actions={can("knowledge.term.create") && <Button variant="primary" onClick={() => setWriting(true)}><BookA />{t("New term")}</Button>} />
+      <Dialog open={writing} onOpenChange={setWriting} title={t("New term")}>
+        <GeneratedForm type="knowledge.term" submitLabel={t("Save")} onCancel={() => setWriting(false)}
+          onSubmit={async (v) => { if (await decide("knowledge.term.create", { type: "knowledge.term", id: newId("TERM") }, v, { expectedRevision: 0 })) setWriting(false); }} />
+      </Dialog>
+    </>
+  );
+}
+
 // Knowledge (ADR-0022): documents agents and members find by words and, with
 // an embedding model, by meaning; each is read by members of the apps it names.
 function Knowledge() {
@@ -897,6 +913,7 @@ function Knowledge() {
 
 const views: View[] = [
   { id: "knowledge", title: () => t("Knowledge"), render: () => <Knowledge /> },
+  { id: "glossary", title: () => t("Glossary"), render: () => <Glossary /> },
   { id: "agents", title: () => t("Agents"), render: () => <Agents /> },
   { id: "evaluations", title: () => t("Evaluations"), render: () => <Evaluations /> },
   { id: "flows", title: () => t("Flows"), render: () => <Flows /> },
@@ -936,7 +953,7 @@ export default defineApp({
       ...(admin ? [{ label: t("Operations"), items: [nav(t("Integrations"), <PlugZap />, "integrations"), nav(t("Automation"), <Workflow />, "automation"), nav(t("Audit"), <History />, "audit")] }] : []),
       ...(host.role("flow") || host.role("agent") ? [{ label: t("Processes"), items: [...(host.role("flow") ? [nav(t("Flows"), <Route />, "flows")] : []),
         ...(host.role("agent") ? [nav(t("Agents"), <BrainCircuit />, "agents"), nav(t("Evaluations"), <FlaskConical />, "evaluations")] : [])] }] : []),
-      ...(host.role("knowledge") ? [{ label: t("Knowledge"), items: [nav(t("Documents"), <BookOpen />, "knowledge")] }] : []),
+      ...(host.role("knowledge") ? [{ label: t("Knowledge"), items: [nav(t("Documents"), <BookOpen />, "knowledge"), nav(t("Glossary"), <BookA />, "glossary")] }] : []),
     ];
   },
 });

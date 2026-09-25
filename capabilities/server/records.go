@@ -100,6 +100,18 @@ func (s *recordStore) declare(a platform.App) error {
 	return nil
 }
 
+// sortedTypes are the declared entity types, by name.
+func (s *recordStore) sortedTypes() []*entityType {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]*entityType, 0, len(s.types))
+	for _, et := range s.types {
+		out = append(out, et)
+	}
+	slices.SortFunc(out, func(a, b *entityType) int { return strings.Compare(a.info.Type, b.info.Type) })
+	return out
+}
+
 // of is c's app's entity type for a Go type; other apps' types are not reachable (D3).
 func (s *recordStore) of(c platform.Caller, t reflect.Type) *entityType {
 	et := s.byGo[t]

@@ -18,7 +18,7 @@ import (
 // desk is a test app: tickets answered by people or by its triage agent.
 type Ticket struct {
 	platform.Record
-	Subject string `json:"subject" field:"required,search"`
+	Subject string `json:"subject" field:"required,search" help:"What the customer asks, in their words" synonyms:"topic"`
 	Status  string `json:"status" field:"readonly" choices:"open,answered"`
 	Reply   string `json:"reply,omitempty" field:"readonly" type:"longtext" knowledge:"true"`
 }
@@ -78,8 +78,9 @@ var clerksOf = func(platform.Caller, *platform.Run) []platform.Recipient {
 
 func (d *desk) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "desk", Version: "1", Actions: d.ledger.Catalog, Reads: []string{"queue"},
-		Entities: []platform.Entity{{Type: "desk.ticket", Title: "Ticket", Model: Ticket{}, Display: "subject"}},
-		Agents:   []platform.Agent{triage, scout}, Flows: []platform.Flow{handle},
+		Entities: []platform.Entity{{Type: "desk.ticket", Title: "Ticket", Model: Ticket{}, Display: "subject", Synonyms: "case,issue",
+			Description: "A customer's request the desk answers."}},
+		Agents: []platform.Agent{triage, scout}, Flows: []platform.Flow{handle},
 		Emits: []platform.EffectKind{{Name: "lookup", Title: "Ask the partner", Description: "Ask the partner's agent a question."}}}
 }
 func (d *desk) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }

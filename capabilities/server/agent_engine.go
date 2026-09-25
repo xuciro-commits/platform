@@ -129,6 +129,12 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 		goal += "\nAbout " + run.Ref + ":\n" + run.Seen
 	}
 	system := preamble + "\n\n" + d.Instructions
+	if meaning := a.t.meaning(d.app); meaning != "" {
+		system += "\n\nWhat the records of your app mean:\n" + meaning
+	}
+	if terms := a.t.glossary(d.app); terms != "" {
+		system += "\n\nThis organisation's own words (its glossary; the records above keep their meaning):\n" + terms
+	}
 	if name := languageNames[run.Language]; name != "" {
 		system += "\n\nWrite your rationale, questions, drafts' free text and result in " + name + ", the language of the person you work for; keep IDs, codes and field names as they are."
 	}
