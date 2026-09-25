@@ -16,4 +16,7 @@ export { Sheet } from "./primitives/sheet";
 export { Workspace, useWorkspace, notify, type Launcher, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
-export { Inbox, RecordList, RecordPage, StatusBar, entityFrom, type InboxTask, type Lifecycle, type State, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";
+export { Chart, useChartData, type ChartSource } from "./charts/Chart";
+export { Pivot, groupDomain } from "./charts/Pivot";
+export { aggregateQuery, aggregateValues, columnOf, type ChartSpec, type ChartData, type Channels, type Encoding, type Mark, type MeasureType, type AggregateOp, type TimeUnit, type AggregateData, type AggregateColumn, type AggregateQuery } from "./charts/spec";
+export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, StatusBar, entityFrom, type InboxTask, type Lifecycle, type State, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";

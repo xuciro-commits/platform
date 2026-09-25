@@ -244,40 +244,19 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 
 // find selects records of a type; visible, when set, is the caller's scope.
 func (s *recordStore) find(et *entityType, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, int, *kernel.Error) {
-	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	match, err := compileDomain(et.info, q.Domain)
-	if err != nil {
-		return nil, 0, invalid
-	}
-	search := strings.ToLower(strings.TrimSpace(q.Search))
-	var searched []platform.FieldInfo
-	for _, f := range et.info.Fields {
-		if f.Search {
-			searched = append(searched, f)
-		}
-	}
 	var sorts []sortKey
 	for _, name := range q.Sort {
 		desc := strings.HasPrefix(name, "-")
 		bare := strings.TrimPrefix(name, "-")
 		f, ok := et.info.Field(bare)
 		if !ok && bare != "id" && bare != "created" && bare != "changed" {
-			return nil, 0, invalid
+			return nil, 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		sorts = append(sorts, sortKey{field: f, stamp: map[bool]string{true: bare, false: ""}[!ok], desc: desc})
 	}
-	var out []reflect.Value
-	for _, r := range et.rows {
-		v := r.value
-		if !q.Archived && recordOf(v).Archived || visible != nil && !visible(v) || !match(v) {
-			continue
-		}
-		if search != "" && !strings.Contains(strings.ToLower(recordOf(v).ID), search) && !slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
-			return strings.Contains(strings.ToLower(fmt.Sprint(v.FieldByIndex(f.Index).Interface())), search)
-		}) {
-			continue
-		}
-		out = append(out, v)
+	out, err := s.matching(et, q.Domain, q.Search, q.Archived, visible)
+	if err != nil {
+		return nil, 0, err
 	}
 	keys := make([][]any, len(out)) // sort keys read once, then compared
 	for i, v := range out {
@@ -313,6 +292,36 @@ func (s *recordStore) find(et *entityType, q platform.Query, visible func(reflec
 		page = append(page, out[i])
 	}
 	return page, total, nil
+}
+
+// matching are the records of a type in the caller's scope that match a
+// domain and a search, archived ones only when asked; the caller holds s.mu.
+func (s *recordStore) matching(et *entityType, domain json.RawMessage, search string, archived bool, visible func(reflect.Value) bool) ([]reflect.Value, *kernel.Error) {
+	match, err := compileDomain(et.info, domain)
+	if err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	search = strings.ToLower(strings.TrimSpace(search))
+	var searched []platform.FieldInfo
+	for _, f := range et.info.Fields {
+		if f.Search {
+			searched = append(searched, f)
+		}
+	}
+	var out []reflect.Value
+	for _, r := range et.rows {
+		v := r.value
+		if !archived && recordOf(v).Archived || visible != nil && !visible(v) || !match(v) {
+			continue
+		}
+		if search != "" && !strings.Contains(strings.ToLower(recordOf(v).ID), search) && !slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
+			return strings.Contains(strings.ToLower(fmt.Sprint(v.FieldByIndex(f.Index).Interface())), search)
+		}) {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out, nil
 }
 
 type sortKey struct {
@@ -440,6 +449,13 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 	switch {
 	case name == "id":
 		f, read = platform.FieldInfo{Name: "id", Type: "text"}, func(v reflect.Value) any { return recordOf(v).ID }
+	case name == "created" || name == "changed": // the record's stamps, as datetimes
+		f, read = platform.FieldInfo{Name: name, Type: "datetime"}, func(v reflect.Value) any {
+			if name == "created" {
+				return recordOf(v).Created.At
+			}
+			return recordOf(v).Changed.At
+		}
 	case !ok:
 		return nil, fmt.Errorf("unknown field %s", name)
 	}
@@ -451,10 +467,12 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 		value = map[bool]float64{true: 1, false: 0}[b]
 	}
 	if f.Type == "datetime" {
-		if s, ok := value.(string); ok {
+		if s, ok := value.(string); ok { // a time, or a day from its midnight (UTC)
 			t, err := time.Parse(time.RFC3339, s)
 			if err != nil {
-				return nil, err
+				if t, err = time.Parse(time.DateOnly, s); err != nil {
+					return nil, err
+				}
 			}
 			value = t
 		}

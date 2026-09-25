@@ -161,6 +161,8 @@ func TestRecords(t *testing.T) {
 		{"lead", platform.Query{Search: "bol"}, "1 [I1]"},
 		{"lead", platform.Query{Sort: []string{"name"}, Offset: 1, Limit: 1}, "2 [I2]"},
 		{"lead", platform.Query{Domain: domain([]any{"nope", "=", 1})}, "ERROR_CODE_INVALID_ARGUMENT"},
+		{"lead", platform.Query{Domain: domain([]any{"created", ">=", "2026-09-25"}, []any{"created", "<", "2026-09-26"})}, "2 [I1 I2]"}, // a drill-down into a day
+		{"lead", platform.Query{Domain: domain([]any{"changed", "<", "2026-09-25"})}, "0 []"},
 		// Scope (D4): a clerk sees their own, a line member their line, a lead the plant and below.
 		{"ana", platform.Query{Archived: true}, "2 [I1 I3]"},
 		{"bo", platform.Query{}, "1 [I2]"},
@@ -195,6 +197,36 @@ func TestRecords(t *testing.T) {
 	if len(bin.Related) != 1 || bin.Related[0].Total != 1 { // I3 is archived
 		t.Fatalf("related %+v", bin.Related)
 	}
+	// Aggregates (ADR-0019 D1): the list's domain and scope, grouped and measured.
+	agg := func(who string, q AggregateQuery) string {
+		out, err := tn.Aggregate(member(who), "stock.item", q, now)
+		if err != nil {
+			return err.Error()
+		}
+		raw, _ := json.Marshal(out.Rows)
+		return string(raw)
+	}
+	for _, c := range []struct {
+		who  string
+		q    AggregateQuery
+		want string
+	}{
+		{"lead", AggregateQuery{}, `[{"count":2}]`},
+		{"lead", AggregateQuery{Groups: []string{"line"}, Measures: []string{"count", "sum:qty"}, Archived: true}, `[{"count":2,"line":"L1","sum:qty":46},{"count":1,"line":"L2","sum:qty":2}]`},
+		{"lead", AggregateQuery{Groups: []string{"kind", "due:month"}}, `[{"count":1,"due:month":"2026-10","kind":"part"},{"count":1,"due:month":"","kind":"tool"}]`},
+		{"lead", AggregateQuery{Measures: []string{"sum:price", "avg:qty", "max:qty"}}, `[{"avg:qty":2,"max:qty":2,"price.currency":"","sum:price":0},{"avg:qty":6,"max:qty":6,"price.currency":"EUR","sum:price":150}]`},
+		{"lead", AggregateQuery{Groups: []string{"created:month"}, Domain: domain([]any{"kind", "=", "tool"})}, `[{"count":1,"created:month":"2026-09"}]`},
+		{"ana", AggregateQuery{Groups: []string{"line"}, Archived: true}, `[{"count":2,"line":"L1"}]`}, // scope: never a record ana could not list
+		{"bo", AggregateQuery{Measures: []string{"sum:qty"}}, `[{"sum:qty":2}]`},
+		{"lead", AggregateQuery{Groups: []string{"tags"}}, "ERROR_CODE_INVALID_ARGUMENT"},
+		{"lead", AggregateQuery{Measures: []string{"sum:name"}}, "ERROR_CODE_INVALID_ARGUMENT"},
+		{"lead", AggregateQuery{Groups: []string{"kind:month"}}, "ERROR_CODE_INVALID_ARGUMENT"},
+		{"lead", AggregateQuery{Groups: []string{"line:month"}}, `[{"count":2,"line:month":""}]`}, // text that is not a date has no bucket
+	} {
+		if got := agg(c.who, c.q); got != c.want {
+			t.Errorf("%s %+v: %s, want %s", c.who, c.q, got, c.want)
+		}
+	}
 	CheckReplay(t, tn, journal, func() *Tenant { return stockTenant(t) })
 }
 
@@ -228,5 +260,20 @@ func TestRecordsAtScale(t *testing.T) {
 	t.Logf("filtered, sorted page of 100 000 records in %v", elapsed)
 	if elapsed > 100*time.Millisecond && !testing.Short() {
 		t.Fatalf("took %v", elapsed)
+	}
+	// ADR-0019's done-when: grouped and measured in under 100 ms.
+	var agg Aggregate
+	elapsed = time.Hour
+	for range 3 {
+		started := time.Now()
+		agg, err = tn.Aggregate(lead, "stock.item", AggregateQuery{Groups: []string{"line", "created:month"}, Measures: []string{"count", "sum:qty", "avg:qty"}}, time.Now())
+		elapsed = min(elapsed, time.Since(started))
+	}
+	if err != nil || len(agg.Rows) != 2 || agg.Rows[0]["count"] != 50_000 {
+		t.Fatalf("aggregate %v %v", agg.Rows, err)
+	}
+	t.Logf("grouped and measured 100 000 records in %v", elapsed)
+	if elapsed > 100*time.Millisecond && !testing.Short() {
+		t.Fatalf("aggregate took %v", elapsed)
 	}
 }

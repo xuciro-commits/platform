@@ -63,6 +63,17 @@ export class EdgeClient {
     return this.get<T>(`/v1/records/${encodeURIComponent(type)}?${p}`);
   }
 
+  /** Groups and measures of an entity type's records within the caller's scope (ADR-0019): `groups` like "stage" or "checkIn:month", `measures` like "count" or "sum:amount". */
+  aggregate<T = unknown>(type: string, q: { domain?: unknown[]; search?: string; archived?: boolean; groups?: string[]; measures?: string[] } = {}): Promise<T> {
+    const p = new URLSearchParams();
+    if (q.domain?.length) p.set("domain", JSON.stringify(q.domain));
+    if (q.search) p.set("search", q.search);
+    if (q.archived) p.set("archived", "true");
+    if (q.groups?.length) p.set("group", q.groups.join(","));
+    if (q.measures?.length) p.set("measure", q.measures.join(","));
+    return this.get<T>(`/v1/aggregates/${encodeURIComponent(type)}?${p}`);
+  }
+
   /** One record with its history and related records. */
   record<T = unknown>(type: string, id: string): Promise<T> {
     return this.get<T>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);

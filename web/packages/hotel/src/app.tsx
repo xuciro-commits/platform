@@ -22,11 +22,21 @@ function ReservationDetail({ id }: { id: string }) {
   return r ? <div className="max-w-md"><ReservationCard reservation={r} /></div> : <p className="text-sm text-muted">No reservation {id}.</p>;
 }
 
+const stays = { entity: "hotel.reservation", domain: [["canceled", "=", false]] };
+const count = { aggregate: "count", type: "quantitative" } as const;
+
 export default defineApp({
   id: "hotel",
   title: "Hotel",
   icon: <Hotel />,
   home: { view: "reservations" },
+  dashboards: [{ id: "occupancy", title: "Occupancy", description: "Reservations by arrival month and room type; cancellations apart.", charts: [
+    { title: "Confirmed reservations", data: stays, mark: "kpi", encoding: { y: count } },
+    { title: "Arrivals per month", data: stays, mark: { type: "bar", stack: true },
+      encoding: { x: { field: "checkIn", timeUnit: "month", type: "temporal" }, y: count, color: { field: "roomType", type: "nominal", title: "Room type" } } },
+    { title: "Room types", data: stays, mark: { type: "arc", donut: true }, encoding: { theta: count, color: { field: "roomType", type: "nominal" } } },
+    { title: "Confirmed and canceled", data: { entity: "hotel.reservation" }, mark: "arc", encoding: { theta: count, color: { field: "canceled", type: "nominal" } } },
+  ] }],
   opens: { "hotel.reservation": "reservation", "lodging.booking": "reservation" },
   views: [
     { id: "reservations", title: () => "Reservations", render: () => <Reservations /> },

@@ -2,11 +2,11 @@
 // open on this host. The host decides who sees what — the apps the tenant runs
 // and the member holds a role in (`/v1/me`), the actions of their catalog — and
 // each app's UI package contributes its views and navigation through defineApp.
-import { HostContext, type AppUI, type Host, type Me } from "@platform/app";
+import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession } from "@platform/kernel";
-import { Workspace, notify, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route } from "@platform/ui";
+import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Database, Inbox, LayoutGrid, Send, Upload } from "lucide-react";
+import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Send, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { chromeViews } from "./chrome";
 
@@ -58,6 +58,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const entities = read<EntityInfo[]>("/v1/entities").data ?? [];
   const protocols = read<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const unread = (read<Notification[]>("/v1/notifications", 3000).data ?? []).filter((n) => !n.read).length;
+  const saved = read<SavedView[]>("/v1/views", 5000).data ?? [];
   const [outbox, setOutbox] = useState<Entry[]>([]);
   useEffect(() => setOutbox([...client.authorities.outbox]), [client]);
   const queries = useQueryClient();
@@ -82,6 +83,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
       get: (type, id) => client.record<RecordView>(type, id),
+      aggregate: (type, q) => client.aggregate<AggregateData>(type, q),
     };
     // A record opens in its app's view; a protocol's record (lodging.booking)
     // in the view of the app the tenant binds as its provider (D5).
@@ -153,6 +155,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
             { label: "Records", icon: <Database />, route: { view: "records" } },
             ...(waiting ? [{ label: "Outbox", icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] : []),
           ] },
+          ...(saved.length ? [{ label: "Saved views", items: saved.map((v) => ({ label: v.title, icon: <Bookmark />, route: { view: "saved", params: { id: v.id } } })) }] : []),
+          ...(app?.dashboards?.some((d) => !d.for || d.for(host)) ? [{ label: "Dashboards", items: app.dashboards.filter((d) => !d.for || d.for(host))
+            .map((d) => ({ label: d.title, icon: <Gauge />, route: { view: "dashboard", params: { app: app.id, id: d.id } } })) }] : []),
           ...(app?.nav(host) ?? []),
         ]}
         commands={[{ id: "resend", label: "Send unanswered decisions again", run: () => void host.resend() }, ...(app?.commands?.(host) ?? [])]}

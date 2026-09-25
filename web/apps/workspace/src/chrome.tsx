@@ -1,7 +1,7 @@
 // The workspace's own views, shared by every app (ADR-0018 point 6): the
 // launcher, the inbox and requests (the work app, ADR-0017), notifications
 // (ADR-0013), the outbox (K5) and every record the member may read (ADR-0016).
-import { RecordDetail, useHost, useOpenRecord, useRead, type AppUI } from "@platform/app";
+import { DashboardView, RecordDetail, Records, useHost, useOpenRecord, useRead, type AppUI, type SavedView } from "@platform/app";
 import type { Entry } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -118,7 +118,18 @@ function AllRecords() {
   );
 }
 
+// A member's saved view (ADR-0019 D4), opened from the navigation.
+function Saved({ id }: { id: string }) {
+  const views = useRead<SavedView[]>("/v1/views");
+  const view = views?.find((v) => v.id === id);
+  if (!views) return <p className="text-sm text-muted">Loading…</p>;
+  return view ? <Records type={view.entity} saved={view} /> : <p className="text-sm text-muted">No saved view {id}.</p>;
+}
+
 export const chromeViews = (apps: AppUI[], select: (id: string) => void): View[] => [
+  { id: "saved", title: () => "Saved view", render: (p) => <Saved id={p.id ?? ""} /> },
+  { id: "dashboard", title: (p) => apps.find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? "Dashboard",
+    render: (p) => { const d = apps.find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">No dashboard.</p>; } },
   { id: "home", title: () => "Apps", render: () => <Home apps={apps} onSelect={select} /> },
   { id: "inbox", title: () => "Inbox", render: () => <MyInbox /> },
   { id: "requests", title: () => "My requests", render: () => <MyRequests /> },

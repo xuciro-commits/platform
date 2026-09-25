@@ -22,6 +22,9 @@
   --tone-success: oklch(0.55 0.14 150);
   --tone-warning: oklch(0.62 0.15 70);
   --tone-danger: oklch(0.56 0.19 25);
+  /* Series colours after the tones (ADR-0019 charts). */
+  --chart-5: oklch(0.55 0.15 300);
+  --chart-6: oklch(0.6 0.1 195);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,6 +40,8 @@
     --tone-success: oklch(0.74 0.14 150);
     --tone-warning: oklch(0.8 0.13 75);
     --tone-danger: oklch(0.7 0.17 25);
+    --chart-5: oklch(0.72 0.13 300);
+    --chart-6: oklch(0.76 0.1 195);
   }
 }
 
@@ -52,6 +57,8 @@
   --tone-success: oklch(0.74 0.14 150);
   --tone-warning: oklch(0.8 0.13 75);
   --tone-danger: oklch(0.7 0.17 25);
+  --chart-5: oklch(0.72 0.13 300);
+  --chart-6: oklch(0.76 0.1 195);
 }
 
 @theme inline {

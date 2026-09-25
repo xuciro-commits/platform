@@ -234,11 +234,24 @@ function Equipment() {
   );
 }
 
+const sfcs = { entity: "mes.sfc" };
+const count = { aggregate: "count", type: "quantitative" } as const;
+
 export default defineApp({
   id: "mes",
   title: "Plant operations",
   icon: <Factory />,
   home: { view: "queue" },
+  dashboards: [{ id: "shop-floor", title: "Shop floor", description: "SFCs by state and product, lots finished per day, and orders confirmed to the ERP.", charts: [
+    { title: "In work", data: { ...sfcs, domain: [["state", "=", "active"]] }, mark: "kpi", encoding: { y: count } },
+    { title: "On quality hold", data: { ...sfcs, domain: [["state", "=", "hold"]] }, mark: "kpi", encoding: { y: count } },
+    { title: "SFCs by state", data: sfcs, mark: { type: "arc", donut: true }, encoding: { theta: count, color: { field: "state", type: "nominal" } } },
+    { title: "By product and state", data: sfcs, mark: { type: "bar", stack: true },
+      encoding: { x: { field: "product", type: "nominal" }, y: count, color: { field: "state", type: "nominal" } } },
+    { title: "Finished per day", data: { ...sfcs, domain: [["state", "in", ["done", "scrapped"]]] }, mark: { type: "bar", stack: true },
+      encoding: { x: { field: "changed", timeUnit: "day", type: "temporal" }, y: count, color: { field: "state", type: "nominal" } } },
+    { title: "Orders confirmed to the ERP", data: { entity: "mes.order" }, mark: "bar", encoding: { x: { field: "erp", type: "nominal", title: "ERP answer" }, y: count } },
+  ] }],
   opens: { "mes.sfc": "sfc", "mes.downtime": "equipment" },
   views: [
     { id: "planned", title: () => "Planned orders", render: () => <PlannedOrders /> },

@@ -4,11 +4,11 @@
 // through its Caller. The workspace signs in once, for every app.
 import type { ActionDeclaration, EdgeClient, Entry } from "@platform/kernel";
 import {
-  Button, Dialog, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
-  type EntityInfo, type EntityRecord, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
+  Button, Chart, Dialog, Input, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
+  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
 } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
 export type AppEntry = { id: string; title: string; role: string };
@@ -73,6 +73,9 @@ export function useOpenRecord(): (ref: string | { type: string; id: string }) =>
   };
 }
 
+/** A dashboard an app ships (ADR-0019 D4): charts in the platform's visualization spec, for the members `for` admits. */
+export type Dashboard = { id: string; title: string; description?: string; for?: (host: Host) => boolean; charts: ChartSpec[] };
+
 /** An app's contribution to the workspace, in typed code (AGENTS.md rule 5). */
 export type AppUI = {
   /** The host app it is the UI of. */
@@ -86,6 +89,7 @@ export type AppUI = {
   /** Entity type → the id of the view that shows one record, given `{ id }`. */
   opens?: Record<string, string>;
   commands?: (host: Host) => ShellCommand[];
+  dashboards?: Dashboard[];
 };
 
 export const defineApp = (app: AppUI): AppUI => app;
@@ -104,16 +108,58 @@ export function GeneratedForm({ type, record, onSubmit, onCancel, submitLabel }:
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 
-/** The list page of an entity type: the host's search, sort and pages, within the member's scope. */
-export function Records({ type, description, actions }: { type: string; description?: string; actions?: ReactNode }) {
-  const { source } = useHost();
+/** A member's saved view of a list (the work app's `views` read). */
+export type SavedView = { id: string; title: string; entity: string; state: string };
+
+/**
+ * The list page of an entity type: the host's search, sort and pages, within
+ * the member's scope, grouped, pivoted or charted (ADR-0019); a member saves
+ * where they are as a view of their own.
+ */
+export function Records({ type, description, actions, saved }: { type: string; description?: string; actions?: ReactNode; saved?: SavedView }) {
+  const { source, decide } = useHost();
   const openRecord = useOpenRecord();
+  const { open } = useWorkspace();
   const info = source.entity(type);
+  const [saving, setSaving] = useState<ListState>();
+  const [title, setTitle] = useState(saved?.title ?? "");
+  const initial = useMemo<ListState>(() => { try { return saved ? JSON.parse(saved.state) as ListState : {}; } catch { return {}; } }, [saved]);
+  const save = async () => {
+    const id = saved?.id ?? newId("VIEW");
+    if (await decide("work.view.save", { type: "work.view", id }, { title, entity: type, state: JSON.stringify(saving) })) {
+      setSaving(undefined);
+      if (!saved) open({ view: "saved", params: { id } });
+    }
+  };
   return (
     <>
-      <PageHeader title={info?.plural ?? type} actions={actions}
-        description={description ?? "Generated from the entity's declaration: search, sort and pages come from the host, within what you may see."} />
-      <RecordList source={source} type={type} onOpen={(r) => openRecord({ type, id: r.id })} />
+      <PageHeader title={saved?.title ?? info?.plural ?? type} actions={actions}
+        description={saved ? `Your saved view of ${info?.plural.toLowerCase() ?? type}.` : description ?? "Generated from the entity's declaration: search, sort and pages come from the host, within what you may see."} />
+      <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
+      <Dialog open={!!saving} onOpenChange={(o) => !o && setSaving(undefined)} title={saved ? `Save ${saved.title}` : "Save view"}>
+        <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (title.trim()) void save(); }}>
+          <Input aria-label="Name" placeholder="Name of the view" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+          <div className="flex justify-end gap-2">
+            <Button type="button" onClick={() => setSaving(undefined)}>Cancel</Button>
+            <Button type="submit" variant="primary" disabled={!title.trim()}>Save</Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
+  );
+}
+
+/** An app's dashboard: its charts, each over the host's aggregates within the member's scope. */
+export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
+  const { source } = useHost();
+  const aggregate = source.aggregate;
+  return (
+    <>
+      <PageHeader title={dashboard.title} description={dashboard.description} />
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-3">
+        {dashboard.charts.map((spec, i) => <Chart key={i} spec={spec} source={aggregate ? { aggregate } : undefined}
+          height={typeof spec.mark === "string" && spec.mark === "kpi" ? 60 : 240} />)}
+      </div>
     </>
   );
 }

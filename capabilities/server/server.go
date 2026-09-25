@@ -204,6 +204,22 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
+	handle("GET /v1/aggregates/{type}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		p := r.URL.Query()
+		q := AggregateQuery{Domain: json.RawMessage(p.Get("domain")), Search: p.Get("search"), Archived: p.Get("archived") == "true"}
+		if g := p.Get("group"); g != "" {
+			q.Groups = strings.Split(g, ",")
+		}
+		if m := p.Get("measure"); m != "" {
+			q.Measures = strings.Split(m, ",")
+		}
+		out, err := t.Aggregate(m, r.PathValue("type"), q, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	handle("GET /v1/records/{type}/{id}", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		view, err := t.RecordOf(m, r.PathValue("type"), r.PathValue("id"), h.Now())
 		if err != nil {

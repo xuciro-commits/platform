@@ -26,6 +26,10 @@ const (
 	WorkAdmin    = "admin"
 	// SchemaRequest holds a submission for approval; the host submits it for the requester.
 	SchemaRequest = "work.approval.request"
+	// A member's saved views of a list (ADR-0019 D4): their data, not configuration.
+	ViewType         = "work.view"
+	SchemaViewSave   = "work.view.save"
+	SchemaViewRemove = "work.view.remove"
 )
 
 // ApprovalRequest is a held submission and its chain of approvers.
@@ -66,6 +70,16 @@ type WorkTask struct {
 	State      string    `json:"state" field:"readonly" choices:"open,done,canceled"`
 }
 
+// SavedView is a member's view of an entity type's list: its search, grouping,
+// pivot or chart (ADR-0019 D4), kept as the kit's state. Only its owner sees it.
+type SavedView struct {
+	platform.Record
+	Title  string `json:"title" field:"required,search"`
+	Entity string `json:"entity" field:"required,readonly"`
+	State  string `json:"state" type:"longtext"`
+	Owner  string `json:"owner" field:"readonly"`
+}
+
 type Work struct {
 	mu     sync.Mutex
 	t      *Tenant // the tenant running it, once composed (NewTenant)
@@ -82,8 +96,13 @@ func NewWork(tenant string) *Work {
 		actions = append(actions, platform.EntityActions(e)...)
 	}
 	actions = append(actions, platform.Action{Schema: SchemaRequest, Target: ApprovalType, Capability: "approvals", Title: "Request approval",
-		Description: "Hold a submission until its approvers agree (made by the host when an action needs approval).", Payload: []platform.Field{}, Roles: []string{WorkAdmin}})
-	w.ledger = platform.NewLedger(tenant, WorkApp, platform.NewCatalog(actions...), ApprovalType, TaskType)
+		Description: "Hold a submission until its approvers agree (made by the host when an action needs approval).", Payload: []platform.Field{}, Roles: []string{WorkAdmin}},
+		platform.Action{Schema: SchemaViewSave, Target: ViewType, Capability: "views", Title: "Save view", Description: "Save a view of a list under a name, or change your own.",
+			Payload: []platform.Field{{Name: "title", Type: "string", Required: true, Description: "Its name"}, {Name: "entity", Type: "string", Required: true, Description: "The entity type listed"},
+				{Name: "state", Type: "string", Description: "The list's state: search, grouping, pivot or chart"}}, Roles: []string{platform.AnyMember}},
+		platform.Action{Schema: SchemaViewRemove, Target: ViewType, Capability: "views", Title: "Remove view", Description: "Remove one of your saved views.",
+			Payload: []platform.Field{}, Roles: []string{platform.AnyMember}})
+	w.ledger = platform.NewLedger(tenant, WorkApp, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType)
 	return w
 }
 
@@ -115,12 +134,13 @@ func (w *Work) entities() []platform.Entity {
 					{Name: "complete", Title: "Done", From: []string{"open"}, To: []string{"done"}, Roles: everyone, Capability: "tasks",
 						Description: "Mark a task of yours done.", Do: w.completer},
 				}}},
+		{Type: ViewType, Title: "Saved view", Model: SavedView{}},
 	}
 }
 
 func (w *Work) Manifest() platform.Manifest {
 	return platform.Manifest{ID: WorkApp, Title: "Work", Version: "1", Actions: w.ledger.Catalog, Entities: w.entities(),
-		Reads: []string{"inbox", "requests"}, Everyone: []string{"inbox", "requests"},
+		Reads: []string{"inbox", "requests", "views"}, Everyone: []string{"inbox", "requests", "views"},
 		Jobs: []platform.Job{{Name: "overdue", Title: "Tell people about overdue tasks", Every: time.Minute}}}
 }
 
@@ -137,6 +157,10 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 		return record, err
 	}
 	return w.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		switch s.GetSchema().GetName() {
+		case SchemaViewSave, SchemaViewRemove:
+			return w.view(c, s)
+		}
 		if w.t == nil || s.GetSchema().GetName() != SchemaRequest {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 		}
@@ -374,9 +398,39 @@ func (w *Work) inbox(c platform.Caller, now time.Time) []WorkTask {
 }
 
 // Read "inbox": the caller's open tasks; "requests": the caller's approval requests.
+// view saves or removes a member's own view; nobody changes another's.
+func (w *Work) view(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	v, exists := platform.Get[SavedView](c, id)
+	if exists && v.Owner != c.ID {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	if s.GetSchema().GetName() == SchemaViewRemove {
+		if !exists || v.Archived {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		v.Archived = true
+		return func(r *pb.ChangeRecord) { c.Put(r, v) }, nil
+	}
+	var p struct{ Title, Entity, State string }
+	if json.Unmarshal(s.GetPayload(), &p) != nil || exists && p.Entity != v.Entity {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	v.ID, v.Title, v.Entity, v.State, v.Owner, v.Archived = id, p.Title, p.Entity, p.State, c.ID, false
+	if err := c.Check(v); err != nil {
+		return nil, err
+	}
+	return func(r *pb.ChangeRecord) { c.Put(r, v) }, nil
+}
+
 func (w *Work) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name == "inbox" {
 		return w.inbox(c, time.Now()), nil
+	}
+	if name == "views" {
+		mine, _ := json.Marshal([]any{[]any{"owner", "=", c.ID}})
+		out, _, _ := platform.Find[SavedView](c, platform.Query{Domain: mine, Sort: []string{"title"}})
+		return out, nil
 	}
 	mine, _ := json.Marshal([]any{[]any{"requester", "=", c.ID}})
 	out, _, _ := platform.Find[ApprovalRequest](c, platform.Query{Domain: mine, Sort: []string{"-id"}})

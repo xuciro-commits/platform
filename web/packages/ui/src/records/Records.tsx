@@ -12,6 +12,9 @@ import { columnsFor, defineEntity, type Entity } from "../fields/entity";
 import { checkbox, date, datetime, longText, multiSelect, number, singleSelect, text, type FieldType } from "../fields/types";
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
+import { Chart } from "../charts/Chart";
+import { Pivot } from "../charts/Pivot";
+import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
 
 export type FieldInfo = {
   name: string; title: string; required?: boolean; search?: boolean; readOnly?: boolean; choices?: string[]; ref?: string;
@@ -28,11 +31,12 @@ export type RecordChange = { change: string; schema: string; by: string; at: str
 export type RecordView = { record: EntityRecord; history: RecordChange[]; related: { type: string; field: string; title: string; records: EntityRecord[]; total: number }[] };
 export type Money = { amount: number; currency: string };
 
-/** Where records come from: the host's reads, wired by the app. */
+/** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart (ADR-0019). */
 export type RecordSource = {
   entity: (type: string) => EntityInfo | undefined;
   list: (type: string, query: RecordQuery) => Promise<RecordPageData>;
   get: (type: string, id: string) => Promise<RecordView>;
+  aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
 };
 
 const money = (o: { label: string; required?: boolean; readOnly?: boolean }): FieldType<Money> => ({
@@ -102,50 +106,137 @@ export function StatusBar({ lifecycle, state, can, onTransition }: {
 const displayOf = (info: EntityInfo, r: EntityRecord) => String((info.display === "id" ? r.id : r[info.display]) ?? r.id);
 
 /** A list of one entity type: server-side search, sort and paging; a row opens the record. */
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100 }: {
+/** The fields a list can group by (ADR-0019): values that repeat, and dates by bucket. */
+export function groupable(info: EntityInfo): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = [];
+  for (const f of info.fields) {
+    const repeats = ["choice", "reference", "boolean", "integer"].includes(f.type) || f.type === "text" && !f.search; // searched text is mostly names
+    if (repeats) out.push({ value: f.name, label: f.title });
+    if (f.type === "date" || f.type === "datetime") for (const u of ["month", "week", "day", "year"]) out.push({ value: `${f.name}:${u}`, label: `${f.title} (${u})` });
+  }
+  for (const u of ["month", "week", "day"]) out.push({ value: `created:${u}`, label: `Created (${u})` });
+  return out;
+}
+
+/** The measures a list can show: the count, and sums and averages of numbers and money. */
+export function measurable(info: EntityInfo): { value: string; label: string }[] {
+  return [{ value: "count", label: "Count" }, ...info.fields.filter((f) => ["integer", "decimal", "money"].includes(f.type))
+    .flatMap((f) => [{ value: `sum:${f.name}`, label: `${f.title} (sum)` }, { value: `avg:${f.name}`, label: `${f.title} (average)` }])];
+}
+
+type ListView = "list" | "pivot" | "chart";
+/** What a list shows: kept by a member as a saved view (ADR-0019 D4). */
+export type ListState = {
+  view?: ListView; search?: string; sort?: string; archived?: boolean; drilled?: unknown[];
+  group?: string; columns?: string; measure?: string; mark?: Mark;
+};
+
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave }: {
   source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
+  /** Always applied, like an app's own view of the type. */
+  domain?: unknown[];
+  /** Where the list starts, such as a saved view; `onSave` offers to save where it is. */
+  initial?: ListState; onSave?: (state: ListState) => void;
 }) {
   const info = source.entity(type);
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("-changed");
+  const [search, setSearch] = useState(initial.search ?? "");
+  const [sort, setSort] = useState(initial.sort ?? "-changed");
   const [offset, setOffset] = useState(0);
-  const [archived, setArchived] = useState(false);
+  const [archived, setArchived] = useState(initial.archived ?? false);
   const [page, setPage] = useState<RecordPageData>();
   const [error, setError] = useState<string>();
+  const [view, setView] = useState<ListView>(initial.view ?? "list");
+  const [drilled, setDrilled] = useState<unknown[] | undefined>(initial.drilled);
+  const groups = useMemo(() => (info ? groupable(info) : []), [info]);
+  const measures = useMemo(() => (info ? measurable(info) : []), [info]);
+  const [group, setGroup] = useState(initial.group ?? "");
+  const [columns, setColumns] = useState(initial.columns ?? "");
+  const [measure, setMeasure] = useState(initial.measure ?? "count");
+  const [mark, setMark] = useState<Mark>(initial.mark ?? "bar");
+  const rows = group || (info?.lifecycle?.field ?? groups[0]?.value ?? "");
+  const domain = useMemo(() => [...(fixed ?? []), ...(drilled ?? [])], [fixed, drilled]);
   const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
   useEffect(() => {
-    if (!info) return;
+    if (!info || view !== "list") return;
     const field = sort.replace(/^-/, "");
     const known = ["id", "created", "changed"].includes(field) || info.fields.some((f) => f.name === field);
     const handle = setTimeout(() => {
-      source.list(type, { search, sort: known ? [sort] : ["id"], offset, limit: pageSize, archived })
+      source.list(type, { domain, search, sort: known ? [sort] : ["id"], offset, limit: pageSize, archived })
         .then((p) => { setPage(p); setError(undefined); }, (e) => setError(String(e)));
     }, 150);
     return () => clearTimeout(handle);
-  }, [source, type, info, search, sort, offset, archived, pageSize]);
+  }, [source, type, info, search, sort, offset, archived, pageSize, domain, view]);
   if (!info || !entity) return <p className="text-sm text-muted">Unknown entity type {type}.</p>;
-  const columns = [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
+  const columnsOf = [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity).map((c) => ({ ...c, enableSorting: false }))];
   const total = page?.total ?? 0;
+  const aggregate = source.aggregate;
+  const query = { domain, search, archived };
+  const measureEncoding = measure === "count" ? { type: "quantitative" as const, aggregate: "count" as const }
+    : { type: "quantitative" as const, aggregate: measure.split(":")[0] as "sum" | "avg", field: measure.split(":")[1] };
+  const groupEncoding = { field: rows.split(":")[0], type: rows.includes(":") ? "temporal" as const : "nominal" as const, ...(rows.includes(":") ? { timeUnit: rows.split(":")[1] as "month" } : {}) };
+  const spec: ChartSpec = {
+    data: { entity: type, domain, search, archived }, mark,
+    encoding: mark === "arc" ? { theta: measureEncoding, color: groupEncoding } : { x: groupEncoding, y: measureEncoding },
+  };
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Input aria-label="Search" placeholder={`Search ${info.plural.toLowerCase()}`} value={search} className="w-56"
           onChange={(e) => { setSearch(e.target.value); setOffset(0); }} />
-        <Select aria-label="Sort" value={sort} className="w-48" onChange={(e) => { setSort(e.target.value); setOffset(0); }}>
-          {[["-changed", "Recently changed"], ["id", "ID"], ...info.fields.filter((f) => f.type !== "references" && f.type !== "tags").flatMap((f) =>
-            [[f.name, `${f.title} ↑`], [`-${f.name}`, `${f.title} ↓`]])].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </Select>
+        {view === "list" ? (
+          <Select aria-label="Sort" value={sort} className="w-48" onChange={(e) => { setSort(e.target.value); setOffset(0); }}>
+            {[["-changed", "Recently changed"], ["id", "ID"], ...info.fields.filter((f) => f.type !== "references" && f.type !== "tags").flatMap((f) =>
+              [[f.name, `${f.title} ↑`], [`-${f.name}`, `${f.title} ↓`]])].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </Select>
+        ) : <>
+          <Select aria-label="Group by" value={rows} className="w-44" onChange={(e) => setGroup(e.target.value)}>
+            {groups.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+          </Select>
+          {view === "pivot" && (
+            <Select aria-label="Columns" value={columns} className="w-40" onChange={(e) => setColumns(e.target.value)}>
+              <option value="">No columns</option>
+              {groups.filter((g) => g.value !== rows).map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+            </Select>
+          )}
+          <Select aria-label="Measure" value={measure} className="w-40" onChange={(e) => setMeasure(e.target.value)}>
+            {measures.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </Select>
+          {view === "chart" && (
+            <Select aria-label="Chart" value={mark} className="w-28" onChange={(e) => setMark(e.target.value as Mark)}>
+              {([["bar", "Bars"], ["line", "Line"], ["area", "Area"], ["arc", "Pie"]] as const).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Select>
+          )}
+        </>}
         <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />archived</label>
+        {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>Clear drill-down ×</Button>}
         {toolbar}
-        <span className="ml-auto flex items-center gap-1 text-xs text-muted">
-          {error ?? (total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : "none")}
-          <Button size="sm" variant="ghost" aria-label="Previous page" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}><ChevronLeft /></Button>
-          <Button size="sm" variant="ghost" aria-label="Next page" disabled={offset + pageSize >= total} onClick={() => setOffset(offset + pageSize)}><ChevronRight /></Button>
-        </span>
+        {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark })}>Save view…</Button>}
+        {aggregate && (
+          <span role="group" aria-label="View" className="flex rounded-md border border-border">
+            {(["list", "pivot", "chart"] as const).map((v) => (
+              <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
+                className={`h-7 px-2 text-xs capitalize ${view === v ? "bg-row-selected font-medium" : "hover:bg-row-hover"}`}>{v}</button>
+            ))}
+          </span>
+        )}
+        {view === "list" && (
+          <span className="ml-auto flex items-center gap-1 text-xs text-muted">
+            {error ?? (total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : "none")}
+            <Button size="sm" variant="ghost" aria-label="Previous page" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}><ChevronLeft /></Button>
+            <Button size="sm" variant="ghost" aria-label="Next page" disabled={offset + pageSize >= total} onClick={() => setOffset(offset + pageSize)}><ChevronRight /></Button>
+          </span>
+        )}
       </div>
-      <DataTable data={page?.records ?? []} columns={columns as never} getRowId={(r: EntityRecord) => r.id} height={height} searchable={false}
-        onRowClick={onOpen} empty={page ? `No ${info.plural.toLowerCase()}` : "Loading…"} />
+      {view === "list" && (
+        <DataTable data={page?.records ?? []} columns={columnsOf as never} getRowId={(r: EntityRecord) => r.id} height={height} searchable={false}
+          onRowClick={onOpen} empty={page ? `No ${info.plural.toLowerCase()}` : "Loading…"} />
+      )}
+      {view === "pivot" && aggregate && rows && (
+        <Pivot source={{ aggregate }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}
+          onDrill={(d) => { setDrilled([...(drilled ?? []), ...d]); setOffset(0); setView("list"); }} />
+      )}
+      {view === "chart" && aggregate && rows && <Chart spec={spec} source={{ aggregate }} height={360} />}
     </div>
   );
 }

@@ -127,11 +127,23 @@ function Timeline({ opportunity: o }: { opportunity: Opportunity }) {
   );
 }
 
+const opportunities = { entity: "crm.opportunity" };
+const count = { aggregate: "count", type: "quantitative" } as const;
+
 export default defineApp({
   id: "crm",
   title: "CRM",
   icon: <Handshake />,
   home: { view: "customers" },
+  // The pipeline within what the member may see: a sales rep's own opportunities, a manager's all (ADR-0019).
+  dashboards: [{ id: "pipeline", title: "Pipeline", description: "Opportunities you may see, by stage, owner and month.", charts: [
+    { title: "Open opportunities", data: { ...opportunities, domain: [["stage", "=", "open"]] }, mark: "kpi", encoding: { y: count } },
+    { title: "Stays booked", data: opportunities, mark: "kpi", encoding: { y: { field: "booked", aggregate: "sum", type: "quantitative" } } },
+    { title: "By stage", data: opportunities, mark: { type: "arc", donut: true }, encoding: { theta: count, color: { field: "stage", type: "nominal" } } },
+    { title: "By owner and stage", data: opportunities, mark: { type: "bar", stack: true },
+      encoding: { x: { field: "owner", type: "nominal" }, y: count, color: { field: "stage", type: "nominal" } } },
+    { title: "Opened per month", data: opportunities, mark: "line", encoding: { x: { field: "created", timeUnit: "month", type: "temporal" }, y: count } },
+  ] }],
   views: [
     { id: "customers", title: () => "Customers", render: () => <Customers /> },
     { id: "customer", title: (p) => p.id ?? "Customer", render: (p) => <CustomerDetail id={p.id ?? ""} /> },
