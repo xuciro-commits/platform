@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -215,6 +216,15 @@ func (h *Host) Handler() http.Handler {
 	handle("GET /v1/search", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Search(&m, r.URL.Query().Get("q"), h.Now()))
 	})
+	mux.HandleFunc("GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", func(w http.ResponseWriter, r *http.Request) {
+		i := slices.IndexFunc(h.tenants, func(t *Tenant) bool { return t.ID == r.PathValue("tenant") })
+		if i < 0 || !h.tenants[i].published(r.PathValue("agent")) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		WriteJSON(w, http.StatusOK, h.agentCard(r, h.tenants[i], r.PathValue("agent")))
+	})
+	mux.HandleFunc("POST /a2a/{tenant}/{agent}", h.serveA2A)
 	handle("GET /v1/knowledge", func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Knowledge(&m, "", r.URL.Query().Get("q"), 8, h.Now()))
 	})

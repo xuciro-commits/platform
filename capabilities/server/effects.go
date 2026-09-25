@@ -44,7 +44,7 @@ import (
 // apps it names (mail.go).
 type Endpoint struct {
 	ID            string   `json:"id"`
-	Kind          string   `json:"kind"`             // webhook, email
+	Kind          string   `json:"kind"`             // webhook, email, a2a
 	URL           string   `json:"url"`              // https://… or smtp://[user@]host[:port]
 	Secret        string   `json:"secret,omitempty"` // a secret's name in the store, never the secret
 	Events        []string `json:"events,omitempty"` // action schemas or "<protocol id>#<event>"
@@ -52,6 +52,9 @@ type Endpoint struct {
 	From          string   `json:"from,omitempty"`          // email: the sender
 	Notifications []string `json:"notifications,omitempty"` // email: apps whose notifications it mails
 	AllowPrivate  bool     `json:"allowPrivate,omitempty"`
+	// Irreversible: what is sent here cannot be recalled (an external agent
+	// that acts), so an agent's effects wait for a person whatever their kind.
+	Irreversible bool `json:"irreversible,omitempty"`
 }
 
 // effect is an Effect with the dispatcher's bookkeeping.
@@ -126,9 +129,9 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 	if i < 0 {
 		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	state, agent, run := "pending", "", ""
-	if a.Manifest().Emits[i].Irreversible && c.Agent {
-		state, agent, run = "held", c.ID, t.agentRun
+	agent, run := "", ""
+	if c.Agent {
+		agent, run = c.ID, t.agentRun
 	}
 	name := c.App + "/" + kind
 	body, _ := json.Marshal(map[string]any{"type": name, "timestamp": now, "data": data})
@@ -138,6 +141,10 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
 		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id }) {
 			continue
+		}
+		state := "pending"
+		if c.Agent && (a.Manifest().Emits[i].Irreversible || ep.Irreversible) {
+			state = "held"
 		}
 		t.outbound = append(t.outbound, &effect{Effect: platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
 			State: state, Agent: agent, Run: run, Due: now, Body: string(body)}})
@@ -255,6 +262,9 @@ func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Ou
 	if ep.Kind == "email" {
 		return t.sendMail(ep, x, now)
 	}
+	if ep.Kind == "a2a" {
+		return t.sendA2A(ep, x)
+	}
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
 	secret, ok := t.secret(ep.Secret)
@@ -352,6 +362,10 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 			a.Answer(t.automation(x.App, replaying), x, o, at)
 			t.enqueue(at)
 		}
+		if t.agents != nil { // an agent that sent it waits for the answer (ADR-0022 D7)
+			t.agents.effectEnded(t.automation(AgentApp, replaying), nil, x, o, at)
+			t.enqueue(at)
+		}
 	}
 	return true
 }
@@ -402,7 +416,8 @@ func effectActions() []platform.Action {
 				{Name: "secret", Type: "string", Required: true, Description: "Name of the signing secret in the secret store"},
 				{Name: "events", Type: "string[]", Description: "Action schemas or <protocol id>#<event> to send as webhooks"},
 				{Name: "effects", Type: "string[]", Description: "Effect kinds apps emit, <app>/<kind>, to send here"},
-				{Name: "kind", Type: "string", Description: "webhook (default) or email"},
+				{Name: "kind", Type: "string", Description: "webhook (default), email, or a2a (an external agent's A2A 1.0 JSON-RPC URL; the secret is its bearer token)"},
+				{Name: "irreversible", Type: "boolean", Description: "What the receiver does cannot be recalled: effects agents cause wait for a person"},
 				{Name: "from", Type: "string", Description: "email: the sender address"},
 				{Name: "notifications", Type: "string[]", Description: "email: apps whose notifications are mailed to members"},
 				{Name: "allowPrivate", Type: "boolean", Description: "Allow private addresses and plain http (inside the deployment only)"}}, Roles: admin},
@@ -453,6 +468,10 @@ func (t *Tenant) decideEndpoint(_ platform.Caller, s *pb.Submission, _ time.Time
 			return nil, invalid
 		}
 		ep.Kind = "webhook"
+	case "a2a":
+		if len(ep.Effects) == 0 || len(ep.Events)+len(ep.Notifications) > 0 || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
+			return nil, invalid
+		}
 	case "email":
 		if u.Scheme != "smtp" || !strings.Contains(ep.From, "@") || len(ep.Notifications) == 0 || len(ep.Events)+len(ep.Effects) > 0 || u.User != nil && ep.Secret == "" {
 			return nil, invalid
@@ -520,6 +539,9 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			t.opsMu.Unlock()
 			if held && x.Run != "" && t.agents != nil { // a person refused what the agent caused (ADR-0022 D9)
 				t.agents.signal(c, r, x.Run, Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
+			}
+			if t.agents != nil {
+				t.agents.effectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
 			}
 		}, nil
 	}

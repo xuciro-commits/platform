@@ -342,6 +342,22 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	if run.ActionsUsed >= d.Budget.Actions {
 		return fmt.Sprintf("refused: its budget of %d actions is spent", d.Budget.Actions), nil
 	}
+	if tool.kind == "effect" { // sent to the endpoints bound to it, an external agent's answer awaited (ADR-0022 D7)
+		key := fmt.Sprintf("%s:%d", run.ID, len(run.Steps)+1)
+		sender := platform.NewCaller(runtime{t}, a.member(run.Agent), d.app, c.Replaying, true)
+		t.agentRun = run.ID
+		n, err := sender.Emit(tool.schema, key, cmpOr(run.Ref, RunType+"/"+run.ID), map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent}, now)
+		t.agentRun = ""
+		switch {
+		case err != nil:
+			return "refused: " + err.Error(), nil
+		case n == 0:
+			return "refused: no endpoint receives " + d.app + "/" + tool.schema, nil
+		}
+		run.ActionsUsed++
+		run.State, run.Task = "waiting", "effect:"+d.app+"/"+tool.schema+":"+key
+		return fmt.Sprintf("sent %s/%s to %d receivers; waiting for the answer", d.app, tool.schema, n), nil
+	}
 	target := str("target")
 	var payload map[string]any
 	json.Unmarshal(raw, &payload)
@@ -373,7 +389,9 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 			if !ok || !owner.Manifest().Actions.Permits(person.Roles[owner.Manifest().ID], provided) {
 				return "refused: " + person.ID + " may not " + schema + " at the provider", nil
 			}
-			return draft("")
+			if !run.Acts {
+				return draft("")
+			}
 		}
 		t.agentRun = run.ID // effects it causes name the run (discarded, a signal)
 		_, _, err := agent.Invoke(protocol, schema, target, body, key, run.ID, now)
@@ -394,7 +412,9 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + person.ID + " may not do this (" + err.Error() + ")", nil
 		}
-		return draft(tool.target)
+		if !run.Acts {
+			return draft(tool.target)
+		}
 	}
 	t.agentRun = run.ID
 	record, err := app.Submit(agent, s, now)
@@ -464,4 +484,37 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 		return err
 	}
 	return nil
+}
+
+// effectEnded resumes the run that sent an effect, with what came of it: the
+// receiver's answer, its refusal, or a person discarding it. r is the decision
+// it happens in, or nil for one of its own.
+func (a *Agents) effectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.Effect, o platform.Outcome, now time.Time) {
+	task := "effect:" + x.Event + ":" + x.Key
+	for _, run := range a.runs(a.t.automation(AgentApp, c.Replaying), "waiting") {
+		if run.Task != task {
+			continue
+		}
+		last := &run.Steps[len(run.Steps)-1]
+		switch o.Result {
+		case "delivered":
+			last.Outcome += "\nanswered: " + clip(answerOf(o), outcomeLimit)
+		case "discarded":
+			last.Outcome += "\n" + o.Detail
+		default:
+			last.Outcome += "\nthe receiver " + x.State + " it: " + o.Detail
+		}
+		run.State, run.Task = "running", ""
+		if r != nil {
+			a.t.automation(AgentApp, c.Replaying).Put(r, run)
+			return
+		}
+		ac := a.t.automation(AgentApp, c.Replaying)
+		s := &pb.Submission{TenantId: a.t.ID, PrincipalId: ac.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
+			Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
+		a.ledger.Receive(ac, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+			return func(r *pb.ChangeRecord) { ac.Put(r, run) }, nil
+		})
+		return
+	}
 }

@@ -15,7 +15,10 @@
 //	                then finishes proposing the first item read whose ID the goal
 //	                does not name and whose product it does; the helpdesk's
 //	                triage agent searches knowledge, triages a ticket as normal and
-//	                replies citing what it found; model "embed" embeds hashed words
+//	                replies citing what it found; model "embed" embeds hashed words;
+//	                the plant's planner asks the supplier's agent, then answers
+//	POST /a2a       a supplier's agent over A2A 1.0 (card at /a2a/.well-known/agent-card.json):
+//	                every SendMessage gets a completed task with a lead time of 12 days
 package main
 
 import (
@@ -126,6 +129,36 @@ func main() {
 	http.HandleFunc("GET /v1/models", func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "echo", "name": "Echo", "context_length": 4096}, {"id": "embed", "name": "Hashed words", "context_length": 8192}}})
 	})
+	// A supplier's agent over A2A 1.0 (ADR-0022): it answers every SendMessage
+	// with a completed task, the lead time of the product the message names.
+	http.HandleFunc("GET /a2a/.well-known/agent-card.json", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"name": "Harbour Metals planner", "description": "Lead times of Harbour Metals' products.", "version": "1",
+			"supportedInterfaces": []map[string]string{{"url": "http://" + r.Host + "/a2a", "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}},
+			"capabilities":        map[string]bool{"streaming": false}, "defaultInputModes": []string{"text/plain"}, "defaultOutputModes": []string{"application/json"},
+			"skills": []map[string]any{{"id": "lead-time", "name": "Lead time", "description": "How many days until a product can be delivered.", "tags": []string{"supply"}}}})
+	})
+	http.HandleFunc("POST /a2a", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID     json.RawMessage
+			Method string
+			Params struct {
+				Message struct {
+					MessageID string
+					Parts     []struct{ Text string }
+				}
+			}
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		text := ""
+		for _, p := range req.Params.Message.Parts {
+			text += p.Text
+		}
+		product := cmpOr(regexp.MustCompile(`P-\d+`).FindString(text), "unknown")
+		json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": map[string]any{"task": map[string]any{
+			"id": "task-" + req.Params.Message.MessageID, "contextId": req.Params.Message.MessageID, "status": map[string]string{"state": "TASK_STATE_COMPLETED"},
+			"artifacts": []map[string]any{{"artifactId": "lead-time", "name": "lead time",
+				"parts": []map[string]any{{"data": map[string]any{"supplier": "Harbour Metals", "product": product, "leadTimeDays": 12}}}}}}}})
+	})
 	http.HandleFunc("POST /v1/embeddings", func(w http.ResponseWriter, r *http.Request) { // "embed": each word hashed into 64 dimensions
 		var req struct{ Input []string }
 		json.NewDecoder(r.Body).Decode(&req)
@@ -162,6 +195,16 @@ func main() {
 				json.NewEncoder(w).Encode(map[string]any{"model": "echo", "usage": map[string]int{"prompt_tokens": 50, "completion_tokens": 10},
 					"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": "", "tool_calls": []map[string]any{
 						{"id": "c1", "type": "function", "function": map[string]string{"name": name, "arguments": string(raw)}}}}}}})
+			}
+			// The plant's planner: ask the supplier's agent, then answer with what it said.
+			if slices.ContainsFunc(req.Tools, func(t struct{ Function struct{ Name string } }) bool { return t.Function.Name == "emit_lead_time" }) {
+				if req.Messages[len(req.Messages)-1].Role != "tool" {
+					call("emit_lead_time", map[string]string{"message": req.Messages[1].Content, "rationale": "Only the supplier knows its lead time."})
+					return
+				}
+				_, answer, _ := strings.Cut(last, "answered: ")
+				call("finish", map[string]string{"result": cmpOr(answer, last), "rationale": "The supplier's agent answered."})
+				return
 			}
 			// The helpdesk's triage agent: triage as normal, reply, finish.
 			if slices.ContainsFunc(req.Tools, func(t struct{ Function struct{ Name string } }) bool {

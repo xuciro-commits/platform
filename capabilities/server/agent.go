@@ -45,7 +45,8 @@ type AgentRunRecord struct {
 	Ref         string     `json:"ref,omitempty" field:"readonly"`
 	Seen        string     `json:"seen,omitempty" field:"readonly" type:"longtext" title:"What it saw of the record"` // at the start: the prompt's context, the evaluation's too
 	OnBehalf    string     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
-	Flow        string     `json:"flow,omitempty" field:"readonly"` // the flow instance whose step started it
+	Acts        bool       `json:"acts,omitempty" field:"readonly" title:"Acts without drafts"` // for its person, within their grants: an A2A caller
+	Flow        string     `json:"flow,omitempty" field:"readonly"`                             // the flow instance whose step started it
 	Token       int        `json:"token,omitempty" field:"readonly"`
 	Step        string     `json:"step,omitempty" field:"readonly"` // that step's name
 	State       string     `json:"state" field:"readonly" choices:"running,waiting,done,stopped"`
@@ -136,7 +137,8 @@ func NewAgents(tenant string) *Agents {
 		platform.Action{Schema: SchemaRunStart, Target: RunType, Capability: "runs", Title: "Ask an agent", Roles: []string{platform.AnyMember},
 			Description: "Give one of your apps' agents a goal; it works on your behalf, within what you may do yourself.",
 			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
-				{Name: "goal", Type: "string", Required: true, Description: "What it should achieve"}, {Name: "ref", Type: "string", Description: "The record it is about, <type>/<id>"}}},
+				{Name: "goal", Type: "string", Required: true, Description: "What it should achieve"}, {Name: "ref", Type: "string", Description: "The record it is about, <type>/<id>"},
+				{Name: "act", Type: "boolean", Description: "Act within your grants instead of drafting for you to confirm (how A2A callers run agents)"}}},
 		platform.Action{Schema: SchemaRunStep, Target: RunType, Capability: "runs", Title: "Take step", Payload: []platform.Field{}, Roles: []string{AgentAdmin},
 			Description: "Made by the host: a step the model chose."},
 		platform.Action{Schema: SchemaRunCancel, Target: RunType, Capability: "runs", Title: "Stop run", Payload: []platform.Field{}, Roles: []string{AgentAdmin, platform.AnyMember},
@@ -167,6 +169,8 @@ func (a *Agents) Manifest() platform.Manifest {
 				Description: "The enabled model agents call, <provider>/<model>; it must call tools. Empty: agents stop and hand their goal to a person."},
 			{Name: SettingAgentDaily, Title: "Tokens per agent per day", Type: "integer", Default: "200000",
 				Description: "An agent that has used this many tokens today stops its runs until tomorrow."},
+			{Name: SettingPublished, Title: "Published over A2A", Type: "text", Default: "",
+				Description: "Agents other systems may call over A2A 1.0, comma-separated <app>.<name>; their cards are at /a2a/<tenant>/<agent>/.well-known/agent-card.json."},
 			{Name: SettingTranscriptDays, Title: "Days transcripts are kept", Type: "integer", Default: "30",
 				Description: "Every model call's full request and answer are kept this many days outside the journal, for agent administrators; they may hold personal data."},
 		}}
@@ -210,6 +214,15 @@ func (a *Agents) declare(app platform.App) error {
 		for _, name := range ag.Tools {
 			var tool agentTool
 			switch {
+			case strings.HasPrefix(name, "emit:"):
+				kind := strings.TrimPrefix(name, "emit:")
+				i := slices.IndexFunc(m.Emits, func(e platform.EffectKind) bool { return e.Name == kind })
+				if i < 0 {
+					return fmt.Errorf("agent %s emits %s, not an effect kind of %s", id, kind, m.ID)
+				}
+				tool = agentTool{kind: "effect", schema: kind, tool: Tool{Description: m.Emits[i].Title + ": " + m.Emits[i].Description + " Waits for the receiver's answer.",
+					Properties: map[string]any{"message": map[string]any{"type": "string", "description": "What to ask or tell the receiver"}, "rationale": rationale()},
+					Required:   []string{"message", "rationale"}}}
 			case strings.HasPrefix(name, "read:"):
 				read := strings.TrimPrefix(name, "read:")
 				if !slices.Contains(m.Reads, read) {
@@ -311,6 +324,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	}
 	var p struct {
 		Agent, Goal, Ref, Reason, Model string
+		Act                             bool
 		Payload                         json.RawMessage
 	}
 	json.Unmarshal(s.GetPayload(), &p)
@@ -338,6 +352,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now)
+			run.Acts = p.Act
 			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
 		case SchemaEvalStart:
 			return a.startEvaluation(c, id, struct{ Agent, Model string }{p.Agent, p.Model})
@@ -345,7 +360,10 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			if !known || run.State == "done" || run.State == "stopped" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
-			return func(r *pb.ChangeRecord) { a.stop(c, r, &run, "stopped by "+c.ID, now) }, nil
+			return func(r *pb.ChangeRecord) {
+				a.stop(c, r, &run, "stopped by "+c.ID, now)
+				a.t.automation(AgentApp, c.Replaying).Put(r, run)
+			}, nil
 		case SchemaRunConfirm, SchemaRunReject:
 			if len(run.Draft) == 0 || run.State != "waiting" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}

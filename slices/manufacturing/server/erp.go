@@ -187,6 +187,9 @@ type answer struct {
 // endpoint as provenance, and tells the line's supervisors when it was refused.
 // The answer to a confirmation since corrected is recorded, and changes nothing.
 func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome, now time.Time) *kernel.Error {
+	if e.Event != "mes/"+EffectConfirmation { // a supplier's answer goes to the agent that asked
+		return nil
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	id, _, _ := strings.Cut(e.Key, "#")
@@ -292,4 +295,18 @@ func (p *Plant) fits(c platform.Caller, o Order, id string) string {
 		}
 	}
 	return ""
+}
+
+// EffectLeadTime asks a supplier's agent, over A2A, how soon it can deliver.
+const EffectLeadTime = "lead-time"
+
+// planner is the plant's planning agent (ADR-0022 D9 (3)): it asks the
+// supplier's agent — an external A2A agent the tenant binds to the lead-time
+// effect — and answers with what it said.
+func (p *Plant) planner() platform.Agent {
+	return platform.Agent{Name: "planner", Title: "Material planner",
+		Description:  "Answers planning questions about the plant's products and planned orders, asking suppliers' agents for lead times.",
+		Instructions: `You answer a supervisor's planning question. Read the planned orders when the question is about them. For a supplier's lead time, ask the supplier's agent with emit_lead_time, naming the product, and wait for its answer. Finish with the answer as JSON: {"product": "...", "leadTimeDays": n, "supplier": "..."} when you have one, else in a sentence.`,
+		Tools:        []string{"emit:" + EffectLeadTime, "read:planned-orders"},
+		Budget:       platform.Budget{Steps: 6, Actions: 2}}
 }

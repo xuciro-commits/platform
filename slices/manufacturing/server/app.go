@@ -57,12 +57,14 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 // reads, its connector inputs (batches and pages, both journaled; the host keeps
 // the connectors), its settings, its scheduled job (ADR-0013) and its flow (ADR-0020).
 func (p *Plant) Manifest() platform.Manifest {
-	return platform.Manifest{ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer()},
+	return platform.Manifest{ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
 		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,
 		Inputs: map[string]bool{"states": true, "planned-orders": true},
 		Jobs:   []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
 		Emits: []platform.EffectKind{{Name: EffectConfirmation, Title: "Order confirmation to the ERP", Irreversible: true,
-			Description: "When the last SFC of an order ends, its yield and scrap are confirmed to the ERP (SAP production order confirmation); the ERP answers with its confirmation number."}},
+			Description: "When the last SFC of an order ends, its yield and scrap are confirmed to the ERP (SAP production order confirmation); the ERP answers with its confirmation number."},
+			{Name: EffectLeadTime, Title: "Lead time from a supplier",
+				Description: "A question to a supplier's agent about how soon it can deliver a product; bind it to the supplier's A2A endpoint."}},
 		Settings: []platform.Setting{
 			{Name: SettingNotifyDowntime, Title: "Tell supervisors about new downtime", Type: "boolean", Default: "true",
 				Description: "Each downtime that starts notifies the supervisors of its line."},

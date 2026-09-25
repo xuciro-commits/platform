@@ -170,6 +170,16 @@ for _ in $(seq 30); do [[ $(wo4) == confirmed* ]] && break; sleep 0.5; done
 [[ $(wo4) == "confirmed PO-9002" ]] || fail "WO-4 after the agent's correction: $(wo4)"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/agent.run" | jq -r '.records[0] | .agent + " " + .state + " " + ([.steps[].tool] | join(","))') == "mes.erp-fixer done read_planned_orders,finish" ]] || fail "the agent's run"
 echo "ok   agents: a refused order corrected by the plant's agent on the local model, approved by the supervisor in the inbox, resent by the flow and confirmed"
+# Agent-to-agent (ADR-0022 D7): the plant's planner asks the supplier's agent
+# (the sink, over A2A 1.0) for a lead time through an effect; the answer comes
+# back journaled and the run finishes with it.
+AUTHORITY=platform submit "$SUP" a2a-1 platform.endpoint.add platform.endpoint supplier \
+  '{"kind":"a2a","url":"http://webhook-sink:8080/a2a","effects":["mes/lead-time"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "supplier's agent endpoint"
+AUTHORITY=agent submit "$SUP" a2a-2 agent.run.start agent.run PLAN-1 '{"agent":"mes.planner","goal":"What is the lead time of P-200?"}' | jq -e .record >/dev/null || fail "ask the planner"
+plan() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/agent.run/PLAN-1" | jq -r '.record.state + " " + (.record.result // "")'; }
+for _ in $(seq 40); do [[ $(plan) == done* ]] && break; sleep 0.5; done
+[[ $(plan) == *'"leadTimeDays":12'* ]] || fail "the planner's answer: $(plan)"
+echo "ok   agent-to-agent: the plant's planner asked the supplier's agent over A2A through an effect and answered with its lead time"
 
 # The sales solution: the CRM books a stay through the lodging protocol and the
 # hotel provides it (ADR-0011); the platform app revokes a role and the catalog
@@ -273,7 +283,14 @@ held=$(curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/effects" | jq -r '.[] 
 sales platform "$MGR" hd-6 platform.effect.approve platform.effect "${held#* }" '{}' | jq -e .record >/dev/null || fail "approve the reply"
 for _ in $(seq 20); do [[ $(curl -s "$SINK/received" | jq '[.kept[] | select(.type == "helpdesk/reply")] | length') == 1 ]] && break; sleep 0.5; done
 [[ $(curl -s "$SINK/received" | jq -r '.kept[] | select(.type == "helpdesk/reply") | .data.to') == anna@acme.test ]] || fail "reply mailed: $(curl -s "$SINK/received")"
-echo "ok   helpdesk: the triage agent found the house rules (knowledge, embedded on the local model), triaged and replied citing them; its transcripts kept; its reply's mail held, approved by the manager, and sent to the mail gateway"
+# A client outside calls the helpdesk's triage agent over A2A 1.0 once the
+# manager publishes it: the card, then a task answered for the manager.
+sales platform "$MGR" hd-7 platform.setting.set platform.setting agent/published '{"value":"helpdesk.triage"}' | jq -e .record >/dev/null || fail "publish the agent"
+[[ $(curl -s "$SALES/a2a/hotel-a/helpdesk.triage/.well-known/agent-card.json" | jq -r '.supportedInterfaces[0].protocolBinding + " " + .securitySchemes.oidc.openIdConnectSecurityScheme.openIdConnectUrl') == "JSONRPC "*/.well-known/openid-configuration ]] || fail "agent card"
+a2a=$(curl -s -H "Authorization: Bearer $MGR" -H 'A2A-Version: 1.0' -H 'Content-Type: application/json' "$SALES/a2a/hotel-a/helpdesk.triage" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"messageId":"ext-1","role":"ROLE_USER","parts":[{"text":"Triage and answer ticket T-1 from anna@acme.test (account ACME).\nSubject: Wifi keeps dropping"}]}}}')
+[[ $(jq -r .result.task.status.state <<<"$a2a") == TASK_STATE_COMPLETED ]] || fail "A2A task: $a2a"
+echo "ok   helpdesk: published over A2A and answered a client outside; the triage agent found the house rules (knowledge, embedded on the local model), triaged and replied citing them; its transcripts kept; its reply's mail held, approved by the manager, and sent to the mail gateway"
 before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 

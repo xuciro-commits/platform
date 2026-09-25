@@ -14,12 +14,17 @@ import (
 // record of the host's agent app; each step the model chose is journaled with
 // its rationale, and replay applies it without calling the model.
 type Agent struct {
-	Name         string // unique in the app; the agent is "<app>.<name>"
-	Title        string
+	Name  string // unique in the app; the agent is "<app>.<name>"
+	Title string
+	// Description says what it does for others: its A2A card's (ADR-0022),
+	// where its instructions stay private.
+	Description  string
 	Instructions string
 	// Tools are the app's actions, protocol actions "<protocol id>#<action>" it
-	// consumes, and its reads as "read:<name>". Every agent also has context,
-	// search, ask and finish.
+	// consumes, its reads as "read:<name>", and its effect kinds as
+	// "emit:<kind>": the agent sends one and waits for the receiver's answer
+	// (an external agent over A2A, ADR-0022). Every agent also has context,
+	// search, knowledge, remember, ask and finish.
 	Tools  []string
 	Budget Budget
 	// Guard may refuse an action the model chose, before it is submitted.

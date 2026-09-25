@@ -47,6 +47,9 @@ var triage = platform.Agent{Name: "triage", Title: "Triage", Instructions: "Answ
 		return []platform.Recipient{{AppRole: "clerk"}}
 	}}
 
+// scout asks a partner's agent through an effect and waits for its answer (ADR-0022 D7).
+var scout = platform.Agent{Name: "scout", Title: "Scout", Instructions: "Ask the partner.", Tools: []string{"emit:lookup"}}
+
 // handle: a ticket whose subject says "auto" is drafted by the agent; stopped, a clerk answers.
 var handle = platform.Flow{Name: "handle", Title: "Handle ticket", Version: 1,
 	Start: platform.Start{On: []string{"desk.ticket.open"}, Begin: func(c platform.Caller, e platform.Event) (string, any, bool) {
@@ -76,7 +79,8 @@ var clerksOf = func(platform.Caller, *platform.Run) []platform.Recipient {
 func (d *desk) Manifest() platform.Manifest {
 	return platform.Manifest{ID: "desk", Version: "1", Actions: d.ledger.Catalog, Reads: []string{"queue"},
 		Entities: []platform.Entity{{Type: "desk.ticket", Title: "Ticket", Model: Ticket{}, Display: "subject"}},
-		Agents:   []platform.Agent{triage}, Flows: []platform.Flow{handle}}
+		Agents:   []platform.Agent{triage, scout}, Flows: []platform.Flow{handle},
+		Emits:    []platform.EffectKind{{Name: "lookup", Title: "Ask the partner", Description: "Ask the partner's agent a question."}}}
 }
 func (d *desk) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 func (d *desk) Snapshot() (json.RawMessage, error)       { return d.ledger.Snapshot() }
@@ -131,6 +135,8 @@ func scriptedModel(t *testing.T) *httptest.Server {
 			fmt.Fprint(w, `{"error":{"message":"the model is down"}}`)
 		case is("remember") && n == 0:
 			call("remember", map[string]any{"fact": "ana signs replies with her first name", "about_person": true})
+		case is("scout") && n == 0:
+			call("emit_lookup", map[string]any{"message": "What is the lead time of P-200?"})
 		case is("loop"):
 			call("search", map[string]any{"query": "T"})
 		case is("ask") && n == 0:
