@@ -58,7 +58,7 @@ func Actions() *platform.Catalog {
 		{Name: "checkOut", Type: "date", Required: true, Description: "Departure, exclusive"}}
 	book := []string{string(FrontDesk), string(Manager), string(Channel)}
 	return platform.NewCatalog(append(platform.EntityActions(Entities(nil)[0]),
-		platform.Action{Schema: SchemaCreate, Target: ReservationType, Capability: "reservations", Title: "Create reservation",
+		platform.Action{Schema: SchemaCreate, Target: ReservationType, New: true, Capability: "reservations", Title: "Create reservation",
 			Description: "Reserve a room type for a stay; refused when the type is sold out for any night.",
 			Payload:     append(stay, platform.Field{Name: "guest", Type: "string", Required: true, Description: "Guest name"}), Roles: book},
 		platform.Action{Schema: SchemaModify, Target: ReservationType, Capability: "reservations", Title: "Modify stay",

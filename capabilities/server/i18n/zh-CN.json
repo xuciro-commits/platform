@@ -134,6 +134,7 @@
  "Flow": "流程",
  "Flow instance": "流程实例",
  "Flow instances": "流程实例",
+ "Flow {flow} failed at {step}": "流程 {flow} 在 {step} 这一步失败",
  "Flow {flow} is stuck": "流程 {flow} 卡住了",
  "Flows": "流程",
  "For a vendor: its ID": "厂商：填其 ID",
@@ -364,5 +365,6 @@
  "{field}: {help}": "{field}：{help}",
  "{requester} asks, level {level} of {levels}: {step}.": "{requester} 提交的申请，第 {level}/{levels} 级：{step}。",
  "{text}, e.g. {example}": "{text}，例如 {example}",
- "{why}. Retry, skip the step or cancel the instance in Settings.": "{why}。请在设置中重试、跳过这一步或取消该实例。"
+ "{why}. Retry, skip the step or cancel the instance in Settings.": "{why}。请在设置中重试、跳过这一步或取消该实例。",
+ "{why}. What it had done is undone; see what to do next, then mark this done.": "{why}。它已做的已被撤销；请决定下一步怎么办，然后标记完成。"
 }

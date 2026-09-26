@@ -86,7 +86,7 @@ func Entities() []platform.Entity {
 func Actions() *platform.Catalog {
 	both := []string{string(Sales), string(Manager)}
 	return platform.NewCatalog(append(platform.EntityActions(Entities()[0]),
-		platform.Action{Schema: SchemaOpen, Target: OpportunityType, Capability: "opportunities", Title: "Open opportunity",
+		platform.Action{Schema: SchemaOpen, Target: OpportunityType, New: true, Capability: "opportunities", Title: "Open opportunity",
 			Description: "Open a sales opportunity for an account; the caller owns it.",
 			Payload: []platform.Field{{Name: "account", Type: "string", Required: true, Description: "Account ID"},
 				{Name: "title", Type: "string", Required: true, Description: "What is being sold"}}, Roles: both},

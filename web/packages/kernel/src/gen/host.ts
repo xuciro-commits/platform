@@ -17,6 +17,7 @@ export type Action = {
   payload: Field[];
   uses?: string[];
   needsApproval?: boolean;
+  new?: boolean;
 };
 
 export type AgentInfo = {

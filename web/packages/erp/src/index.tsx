@@ -17,7 +17,7 @@ function Coded({ type, label, placeholder }: { type: string; label: string; plac
   const [code, setCode] = useState("");
   return (
     <>
-      <Records type={type} actions={can(`${type}.create`) && <Button variant="primary" onClick={() => setCreating(true)}><Plus />{label}</Button>} />
+      <Records type={type} covers={[`${type}.create`]} actions={can(`${type}.create`) && <Button variant="primary" onClick={() => setCreating(true)}><Plus />{label}</Button>} />
       <Dialog open={creating} onOpenChange={setCreating} title={label}>
         <div className="grid gap-3">
           <label className="grid gap-1 text-xs font-medium text-muted">{t("Code")} *<Input value={code} onChange={(e) => setCode(e.target.value.trim())} placeholder={placeholder} /></label>
@@ -35,7 +35,7 @@ function Drafted({ type, label, prefix, initial, wide }: { type: string; label: 
   const [creating, setCreating] = useState(false);
   return (
     <>
-      <Records type={type} actions={can(`${type}.create`) && <Button variant="primary" onClick={() => setCreating(true)}><Plus />{label}</Button>} />
+      <Records type={type} covers={[`${type}.create`]} actions={can(`${type}.create`) && <Button variant="primary" onClick={() => setCreating(true)}><Plus />{label}</Button>} />
       <Dialog wide={wide} open={creating} onOpenChange={setCreating} title={label}>
         <GeneratedForm type={type} record={initial as never} submitLabel={t("Save draft")} onCancel={() => setCreating(false)}
           onSubmit={async (v) => { if (await decide(`${type}.create`, { type, id: newId(prefix) }, v, { expectedRevision: 0 })) setCreating(false); }} />
@@ -69,7 +69,7 @@ function Periods() {
   const { can, decide } = useHost();
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   return (
-    <Records type="erp.period" actions={can("erp.period.open") && (
+    <Records type="erp.period" covers={["erp.period.open"]} actions={can("erp.period.open") && (
       <span className="flex gap-2">
         <Input type="month" aria-label={t("Month")} value={month} onChange={(e) => setMonth(e.target.value)} className="w-40" />
         <Button variant="primary" onClick={() => decide("erp.period.open", { type: "erp.period", id: month }, {}, { expectedRevision: 0 })}><Plus />{t("Open period")}</Button>

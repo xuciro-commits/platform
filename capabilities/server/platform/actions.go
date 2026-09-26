@@ -26,6 +26,10 @@ type Action struct {
 	Approval *Approval `json:"-"`
 	// NeedsApproval tells callers the action waits for approval (set by NewCatalog).
 	NeedsApproval bool `json:"needsApproval,omitempty"`
+	// New marks an action that makes a new record of Target, whose ID the
+	// caller gives: generated views offer it on the type's list; every other
+	// action on Target is offered on each record's page (F-33).
+	New bool `json:"new,omitempty"`
 }
 
 // Approval is the chain of approvers an action waits for (ADR-0017 D2–D4):

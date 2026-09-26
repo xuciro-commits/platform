@@ -118,6 +118,8 @@ func (h *Host) Handler() http.Handler {
 			f(w, r, m, t)
 		})
 	}
+	handle(Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: \"changed\" each time the tenant takes inputs, so a client reads again what it shows (F-32)", Answer: ""},
+		func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) { followChanges(w, r, t) })
 	handle(Route{Pattern: "POST /v1/submissions", Summary: "Submit a decision: an action on a target, received in the kernel's order (K6) and journaled once accepted", Body: pb.Submission{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
 		sub := &pb.Submission{}

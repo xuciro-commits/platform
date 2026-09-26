@@ -34,5 +34,5 @@ export default defineApp({
   icon: <Users />,
   home: { view: "leave" },
   views: [{ id: "leave", title: () => t("Leave requests"), render: () => <LeaveRequests /> }],
-  nav: () => [{ label: "HR", items: [{ label: t("Leave requests"), icon: <CalendarDays />, route: { view: "leave" } }] }],
+  nav: () => [{ label: t("HCM"), items: [{ label: t("Leave requests"), icon: <CalendarDays />, route: { view: "leave" } }] }],
 });

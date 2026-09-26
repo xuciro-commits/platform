@@ -129,7 +129,7 @@ func accounting() []platform.Entity {
 }
 
 func Actions() *platform.Catalog {
-	actions := []platform.Action{{Schema: SchemaPeriodOpen, Target: PeriodType, Capability: "periods", Title: "Open period",
+	actions := []platform.Action{{Schema: SchemaPeriodOpen, Target: PeriodType, New: true, Capability: "periods", Title: "Open period",
 		Description: "Open an accounting month for posting; its ID is the month, 2026-10.", Roles: []string{Controller}, Payload: []platform.Field{}}}
 	for _, e := range Entities() {
 		actions = append(actions, platform.EntityActions(e)...)

@@ -38,6 +38,8 @@ export type RecordSource = {
   list: (type: string, query: RecordQuery) => Promise<RecordPageData>;
   get: (type: string, id: string) => Promise<RecordView>;
   aggregate?: (type: string, query: AggregateQuery) => Promise<AggregateData>;
+  /** Moves each time the host's data changed (F-32): lists, pages, charts and pivots read again. */
+  revision?: number;
 };
 
 // The tenant's currency (ADR-0024): the default of amounts people enter; the workspace sets it from /v1/me.
@@ -286,10 +288,10 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
           onRowClick={onOpen} empty={page ? t("No {things}", { things: info.plural.toLowerCase() }) : t("Loading…")} />
       )}
       {view === "pivot" && aggregate && rows && (
-        <Pivot source={{ aggregate }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}
+        <Pivot source={{ aggregate, revision: source.revision }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}
           onDrill={(d) => { setDrilled([...(drilled ?? []), ...d]); setOffset(0); setView("list"); }} />
       )}
-      {view === "chart" && aggregate && rows && <Chart spec={spec} source={{ aggregate }} height={360} />}
+      {view === "chart" && aggregate && rows && <Chart spec={spec} source={{ aggregate, revision: source.revision }} height={360} />}
     </div>
   );
 }

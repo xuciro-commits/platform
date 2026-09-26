@@ -29,7 +29,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
 }) {
   const [data, setData] = useState<AggregateData>();
   const [error, setError] = useState<string>();
-  const key = JSON.stringify([type, query, rows, columns, measure]);
+  const key = JSON.stringify([type, query, rows, columns, measure, source.revision ?? 0]);
   const from = useRef(source);
   from.current = source;
   useEffect(() => {

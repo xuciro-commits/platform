@@ -433,8 +433,28 @@ func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why s
 		ss.trace(x, tok.Step, "fault", why, "")
 		ss.next(x, token, step.Fault)
 	default:
+		ss.failedUnhandled(x, tok.Step, why)
 		ss.compensate(x, tok.Step+": "+why)
 	}
+}
+
+// failedUnhandled tells the flow's owners, and whoever started the instance,
+// that a step failed with no fault path of its own: the flow undoes what it
+// did, and the business it was doing needs a person (#118). No flow ends
+// silently.
+func (ss *session) failedUnhandled(x *FlowInstance, step, why string) {
+	d := ss.def(x)
+	a := platform.Assignment{Key: fmt.Sprintf("flow:%s:%d", x.ID, x.Seq), Ref: InstanceType + "/" + x.ID,
+		Title: fmt.Sprintf("Flow %s failed at %s", x.Title, step),
+		Body:  why + ". What it had done is undone; see what to do next, then mark this done."}
+	x.Seq++
+	for _, role := range d.Owners {
+		a.To = append(a.To, platform.Recipient{AppRole: role})
+	}
+	if x.OnBehalf != "" && !strings.HasPrefix(x.OnBehalf, "app:") {
+		a.To = append(a.To, platform.Recipient{Member: x.OnBehalf})
+	}
+	ss.assigns = append(ss.assigns, flowTask{app: d.app, Assignment: a})
 }
 
 // compensate stops every path and undoes the completed acts, newest first.

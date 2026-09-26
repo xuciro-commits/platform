@@ -85,7 +85,10 @@ function Notifications() {
   return <>
     <PageHeader title={t("Notifications")} description={t("What your apps tell you.")} />
     <NotificationList items={items} onRead={(n) => void decide("platform.notification.read", { type: "platform.notification", id: n.id }, {})}
-      onOpen={(n) => n.ref && openRecord(n.ref)} />
+      onOpen={(n) => {
+        if (!n.read) void decide("platform.notification.read", { type: "platform.notification", id: n.id }, {}, { quiet: true }); // opened is read
+        if (n.ref) openRecord(n.ref);
+      }} />
   </>;
 }
 

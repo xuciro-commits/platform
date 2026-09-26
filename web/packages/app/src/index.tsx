@@ -9,13 +9,15 @@ import {
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type Options, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { NewActions, RecordActions, useTransition } from "./actions";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
 export type AppEntry = Api.AppEntry;
 /** The signed-in member on this host, with their language (ADR-0023). */
 export type Me = Api.MeView;
-export type Decision = { evidence?: string[]; expectedRevision?: number };
+/** `quiet`: no word on success, as for a notification marked read by opening it; a refusal is still told. */
+export type Decision = { evidence?: string[]; expectedRevision?: number; quiet?: boolean };
 
 /** What an app's UI may use of the host, for the signed-in member. */
 export type Host = {
@@ -26,6 +28,8 @@ export type Host = {
   /** Whether the member's catalog offers the action: render from it, never re-check roles. */
   can: (schema: string) => boolean;
   action: (schema: string) => ActionDeclaration | undefined;
+  /** Every action the member's catalog offers. */
+  catalog: ActionDeclaration[];
   /** Submits one decision through the outbox and tells the member the answer; true when confirmed. */
   decide: (schema: string, target: { type: string; id: string }, payload: unknown, options?: Decision) => Promise<boolean>;
   /** Decisions not yet answered by the host (K5). */
@@ -124,7 +128,11 @@ export type SavedView = Api.SavedView;
  * the member's scope, grouped, pivoted or charted (ADR-0019); a member saves
  * where they are as a view of their own.
  */
-export function Records({ type, description, actions, saved }: { type: string; description?: string; actions?: ReactNode; saved?: SavedView }) {
+/**
+ * A type's generated list. It offers every action that makes a new record of
+ * the type (F-33); an app that offers one itself names it in `covers`.
+ */
+export function Records({ type, description, actions, covers, saved }: { type: string; description?: string; actions?: ReactNode; covers?: string[]; saved?: SavedView }) {
   const { source, decide } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
@@ -141,7 +149,7 @@ export function Records({ type, description, actions, saved }: { type: string; d
   };
   return (
     <>
-      <PageHeader title={saved?.title ?? info?.plural ?? type} actions={actions}
+      <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} /></>}
         description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
       <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
       <Dialog open={!!saving} onOpenChange={(o) => !o && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
@@ -165,7 +173,7 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
     <>
       <PageHeader title={dashboard.title} description={dashboard.description} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-3">
-        {dashboard.charts.map((spec, i) => <Chart key={i} spec={spec} source={aggregate ? { aggregate } : undefined}
+        {dashboard.charts.map((spec, i) => <Chart key={i} spec={spec} source={aggregate ? { aggregate, revision: source.revision } : undefined}
           height={typeof spec.mark === "string" && spec.mark === "kpi" ? 60 : 240} />)}
       </div>
     </>
@@ -178,19 +186,21 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
-  const [reload, setReload] = useState(0);
+  const transition = useTransition(type);
   const act = async (schema: string, r: EntityRecord, payload: object) => {
-    if (await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision })) { setEditing(undefined); setReload(reload + 1); }
+    if (await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision })) setEditing(undefined);
   };
   return (
     <>
-      <RecordPage source={source} type={type} id={id} reload={reload} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
-        can={can} onTransition={(schema, r) => void act(schema, r, {})}
+      <RecordPage source={source} type={type} id={id} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
+        can={can} onTransition={transition.take}
         actions={(r) => <>
+          <RecordActions type={type} record={r} />
           {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}
           {can(`${type}.edit`) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
           {can(`${type}.archive`) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>{t("Archive")}</Button>}
         </>} />
+      {transition.dialog}
       <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
         {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onCancel={() => setEditing(undefined)}
           onSubmit={(v) => act(`${type}.edit`, editing, v)} />}
@@ -202,3 +212,5 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 
 export { Assistant, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./agents";
+
+export { NewActions, PayloadFields, RecordActions } from "./actions";

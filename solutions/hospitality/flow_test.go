@@ -77,6 +77,14 @@ func TestGroupStayFlow(t *testing.T) {
 	work(time.Minute)
 	w.expect(instance("OPP-1").State+" / "+canceled(), "compensated / OPP-1-B1:true")
 	w.expect(trace("OPP-1"), "started, book acted, book chose, book retry, compensating, book undone, ended")
+	// It does not end silently (#118): whoever won it is given a task, and may open the flow.
+	told, _ := w.tenant.Read(w.members["sales"], "inbox")
+	failure := told.([]platformserver.WorkTask)
+	w.expect(fmt.Sprint(len(failure), " ", failure[0].Title), "1 Flow Group stay OPP-1 failed at book")
+	if _, err := w.tenant.RecordOf(w.members["sales"], platformserver.InstanceType, instance("OPP-1").ID, now); err != nil {
+		t.Fatalf("the one who started it cannot open it: %v", err)
+	}
+	w.expect(w.submit("sales", platformserver.WorkApp, "work.task.complete", platformserver.TaskType, failure[0].ID, "seen-OPP-1", map[string]string{}), "ok")
 
 	// One suite: booked, then the owner confirms it with the customer.
 	win("OPP-2", 1, "2026-10-01", "2026-10-03")

@@ -57,6 +57,7 @@ type Tenant struct {
 	events     []caused // published during the current input, queued after it
 	bindings   map[string]binding
 	observers  []host.Observer // the platform's views derived from events, inside the input
+	change     changes         // what clients follow to refetch (F-32)
 	linker     host.Linker     // serves Caller.Link and Caller.Links
 	directory  host.Directory  // the organisation, when composed
 	hops       int             // of the event being handled, for the events it causes
@@ -349,6 +350,7 @@ func (t *Tenant) Deliveries() []Delivery {
 }
 
 func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []byte, now time.Time) {
+	t.changed()
 	if t.Record == nil {
 		return
 	}

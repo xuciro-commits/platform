@@ -13,7 +13,7 @@ func Actions() *platform.Catalog {
 		return out
 	}
 	return platform.NewCatalog(append(append([]platform.Action{
-		{Schema: SchemaRelease, Target: OrderType, Capability: "orders", Title: "Release shop order",
+		{Schema: SchemaRelease, Target: OrderType, New: true, Capability: "orders", Title: "Release shop order",
 			Description: "Release a shop order for a product; it splits into SFCs that start at the routing's first operation. Name the ERP planned order it fulfils.",
 			Payload: []platform.Field{{Name: "product", Type: "string", Required: true, Description: "Product ID"},
 				{Name: "quantity", Type: "integer", Required: true, Description: "Units to make"},

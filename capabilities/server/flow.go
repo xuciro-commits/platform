@@ -146,7 +146,8 @@ func NewFlows(tenant string) *Flows {
 }
 
 func flowEntities() []platform.Entity {
-	return []platform.Entity{{Type: InstanceType, Title: "Flow instance", Model: FlowInstance{}, Display: "title"}}
+	return []platform.Entity{{Type: InstanceType, Title: "Flow instance", Model: FlowInstance{}, Display: "title",
+		Scope: platform.Scope{Participants: func(record any) []string { return []string{record.(FlowInstance).OnBehalf} }}}}
 }
 
 func (f *Flows) Manifest() platform.Manifest {

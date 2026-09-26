@@ -408,7 +408,7 @@ function Integrations() {
 // once with a stable key; outcomes are journaled, a replay never sends.
 function Webhooks() {
   const endpoints = useRead<EndpointView[]>("/v1/endpoints", 5000);
-  const effects = useRead<Effect[]>("/v1/effects", 5000);
+  const effects = useRead<Effect[]>("/v1/effects");
   const protocols = useRead<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const { apps, decideOn } = useAdmin();
   const [adding, setAdding] = useState(false);
@@ -734,7 +734,7 @@ function AIPlayground() {
 }
 
 function AIUsage() {
-  const usage = useRead<{ calls: Usage[]; totals: Total[] }>("/v1/ai-usage", 5000).data;
+  const usage = useRead<{ calls: Usage[]; totals: Total[] }>("/v1/ai-usage").data;
   const totals: ColumnDef<Total, any>[] = [
     { accessorKey: "day", header: t("Day"), meta: { width: 110 } },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },

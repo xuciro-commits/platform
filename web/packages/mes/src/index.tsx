@@ -147,7 +147,7 @@ function ShopOrders() {
     .refine((v) => v.sfcs <= v.quantity, { path: ["sfcs"], message: t("At most the quantity") });
   return (
     <>
-      <Records type="mes.order" actions={can("mes.order.release") && <Button variant="primary" onClick={() => setReleasing(true)}><Plus />{t("Release shop order")}</Button>} />
+      <Records type="mes.order" covers={["mes.order.release"]} actions={can("mes.order.release") && <Button variant="primary" onClick={() => setReleasing(true)}><Plus />{t("Release shop order")}</Button>} />
       <Dialog open={releasing} onOpenChange={setReleasing} title={t("Release shop order")}>
         {releasing && (
           <EntityForm schema={schema} defaultValues={{ order: newId("SO"), product: products[0]?.id ?? "", quantity: 1, sfcs: 1, planned: "" }}

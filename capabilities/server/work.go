@@ -112,6 +112,14 @@ func (w *Work) entities() []platform.Entity {
 	everyone := []string{platform.AnyMember}
 	return []platform.Entity{
 		{Type: ApprovalType, Title: "Approval request", Model: ApprovalRequest{},
+			Scope: platform.Scope{Participants: func(record any) []string {
+				a := record.(ApprovalRequest)
+				out := []string{a.Requester}
+				for _, l := range a.Levels {
+					out = append(out, l.Approvers...)
+				}
+				return out
+			}},
 			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "pending",
 				States: []platform.State{{Name: "pending", Title: "Pending", Tone: "warning"}, {Name: "approved", Title: "Approved", Tone: "success"},
 					{Name: "rejected", Title: "Rejected", Tone: "danger"}, {Name: "refused", Title: "Refused when run", Tone: "danger"},
@@ -128,6 +136,10 @@ func (w *Work) entities() []platform.Entity {
 						Description: "Withdraw your own request.", Do: w.requester, After: w.closed},
 				}}},
 		{Type: TaskType, Title: "Task", Model: WorkTask{},
+			Scope: platform.Scope{Participants: func(record any) []string {
+				task := record.(WorkTask)
+				return append([]string{task.Assignee}, task.Candidates...)
+			}},
 			Lifecycle: &platform.Lifecycle{Field: "state", Initial: "open",
 				States: []platform.State{{Name: "open", Title: "Open", Tone: "info"}, {Name: "done", Title: "Done", Tone: "success"}, {Name: "canceled", Title: "Canceled", Tone: "neutral"}},
 				Transitions: []platform.Transition{
@@ -135,7 +147,10 @@ func (w *Work) entities() []platform.Entity {
 						Description: "Take a task offered to you, so others see it is yours.", Do: w.claim},
 					{Name: "complete", Title: "Done", From: []string{"open"}, To: []string{"done"}, Roles: everyone, Capability: "tasks",
 						Payload:     []platform.Field{{Name: "answer", Type: "string", Description: "One of the task's answers, when it has any"}},
-						Description: "Mark a task of yours done.", Do: w.completer},
+						Description: "Mark a task of yours done.", Do: w.completer,
+						After: func(_ platform.Caller, _ *pb.ChangeRecord, record any, _ time.Time) {
+							w.t.taskClosed(record.(*WorkTask).ID)
+						}},
 				}}},
 		{Type: ViewType, Title: "Saved view", Model: SavedView{}},
 	}
@@ -278,6 +293,7 @@ func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, l
 	if t, ok := platform.Get[WorkTask](c, fmt.Sprintf("%s#%d", a.ID, level+1)); ok && t.State == "open" {
 		t.State = state
 		c.Put(r, t)
+		w.t.taskClosed(t.ID)
 	}
 }
 
@@ -499,6 +515,20 @@ func (t *Tenant) closeTask(c platform.Caller, r *pb.ChangeRecord, id string) {
 	if task, ok := platform.Get[WorkTask](work, id); ok && task.State == "open" {
 		task.State = "canceled"
 		work.Put(r, task)
+		t.taskClosed(id)
+	}
+}
+
+// taskClosed marks what the work app told people about a task read for
+// every recipient once it closes: done, or ended another way (F-30). It runs
+// inside the closing decision, so replay marks them again.
+func (t *Tenant) taskClosed(id string) {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	for i, n := range t.notices {
+		if n.App == WorkApp && (n.Key == "task:"+id || n.Key == "overdue:"+id) {
+			t.notices[i].Read = true
+		}
 	}
 }
 

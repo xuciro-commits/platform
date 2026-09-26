@@ -39,6 +39,35 @@ export class EdgeClient {
     return response.json() as Promise<T>;
   }
 
+  /**
+   * Follows the tenant's changes (`GET /v1/changes`, server-sent events): calls
+   * `onChange` each time the host took inputs, until `signal` aborts; reconnects
+   * after a dropped stream, waiting longer each time up to 30 s (F-32). Read
+   * with fetch, as EventSource sends no Authorization header.
+   */
+  async follow(onChange: () => void, signal: AbortSignal): Promise<void> {
+    for (let wait = 1000; !signal.aborted; wait = Math.min(wait * 2, 30000)) {
+      try {
+        const response = await fetch(this.connection.server + "/v1/changes", { headers: this.headers(), signal });
+        if (!response.ok || !response.body) throw new Error(`/v1/changes: HTTP ${response.status}`);
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          wait = 1000;
+          buffer += value;
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+          if (events.some((e) => e.startsWith("event: changed"))) onChange();
+        }
+      } catch {
+        if (signal.aborted) return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+
   /** Calls a host service that is not a submission, such as a model call (ADR-0015): the answer's JSON comes back whatever its status. */
   async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ ok: boolean; status: number; body: T }> {
     const response = await fetch(this.connection.server + path, {

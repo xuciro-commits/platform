@@ -11,6 +11,7 @@ register("zh-CN", {
   "Assistant": "助手",
   "Cancel": "取消",
   "Confirm": "确认",
+  "Create": "创建",
   "Done": "已完成",
   "Earlier": "之前的",
   "Edit": "编辑",

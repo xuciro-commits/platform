@@ -8,7 +8,7 @@ import { aggregateQuery, aggregateValues, columnOf, markOf, type AggregateColumn
 import { t } from "../i18n";
 
 /** Where aggregates come from: the host's `GET /v1/aggregates/<type>`, wired by the workspace. */
-export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData> };
+export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number };
 
 // The kit's tokens as colours a canvas understands (they are oklch in CSS).
 function resolve(variable: string): string {
@@ -32,7 +32,7 @@ function theme(): Theme {
 /** Loads a spec's rows: the host aggregates records; inline values are aggregated here the same way. */
 export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: AggregateData; error?: string } {
   const [state, setState] = useState<{ data?: AggregateData; error?: string }>({});
-  const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding);
+  const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + (source?.revision ?? 0);
   const from = useRef(source); // read when the spec changes, not whenever a caller builds a new source object
   from.current = source;
   useEffect(() => {

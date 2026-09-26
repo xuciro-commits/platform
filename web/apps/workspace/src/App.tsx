@@ -64,11 +64,27 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const actions = read<ActionDeclaration[]>("/v1/actions").data;
   const entities = read<EntityInfo[]>("/v1/entities").data ?? [];
   const protocols = read<ProtocolInfo[]>("/v1/protocols").data ?? [];
-  const unread = (read<Notification[]>("/v1/notifications", 3000).data ?? []).filter((n) => !n.read).length;
-  const saved = read<SavedView[]>("/v1/views", 5000).data ?? [];
+  const unread = (read<Notification[]>("/v1/notifications").data ?? []).filter((n) => !n.read).length;
+  const saved = read<SavedView[]>("/v1/views").data ?? [];
   const [outbox, setOutbox] = useState<Entry[]>([]);
   useEffect(() => setOutbox([...client.authorities.outbox]), [client]);
   const queries = useQueryClient();
+  // Moves with every change the host reports and every decision taken here: views that read through the source read again.
+  const [revision, setRevision] = useState(0);
+  // The host says when anything changed (F-32): whatever is on screen is read
+  // again, whoever changed it — another member, an agent, a flow, a system outside.
+  useEffect(() => {
+    if (!ready) return;
+    const stop = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let first = true; // the stream opens with where the tenant stands
+    void client.follow(() => {
+      if (first) { first = false; return; }
+      clearTimeout(timer);
+      timer = setTimeout(() => { void queries.invalidateQueries(); setRevision((r) => r + 1); }, 200);
+    }, stop.signal);
+    return () => { stop.abort(); clearTimeout(timer); };
+  }, [client, queries, ready]);
 
   const decide = useCallback<Host["decide"]>(async (schema, target, payload, options = {}) => {
     client.draft(schema, target, payload, options.evidence, options.expectedRevision);
@@ -77,10 +93,11 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       ok = entry.state === "SUBMISSION_STATE_CONFIRMED";
       const declared = actions?.find((a) => a.schema === schema);
       const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree (ADR-0017)
-      (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? schema, target: target.id, outcome: ok ? done : entry.outcome ?? "" }));
+      if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? schema, target: target.id, outcome: ok ? done : entry.outcome ?? "" }));
     }
     setOutbox([...client.authorities.outbox]);
     await queries.invalidateQueries();
+    setRevision((r) => r + 1);
     return ok;
   }, [actions, client, queries]);
 
@@ -91,6 +108,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       list: (type, q) => client.records<RecordPageData>(type, q),
       get: (type, id) => client.record<RecordView>(type, id),
       aggregate: (type, q) => client.aggregate<AggregateData>(type, q),
+      revision,
     };
     // A record opens in its app's view; a protocol's record (lodging.booking)
     // in the view of the app the tenant binds as its provider (D5).
@@ -106,9 +124,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       role: (app) => me.profile.roles[app] || undefined,
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),
+      catalog: actions ?? [],
       resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); await queries.invalidateQueries(); },
     };
-  }, [actions, apps, client, decide, entities, me, outbox, protocols, queries]);
+  }, [actions, apps, client, decide, entities, me, outbox, protocols, queries, revision]);
 
   const [current, setCurrent] = useState(remembered("workspace:app"));
   const app = apps?.find((a) => a.id === current);

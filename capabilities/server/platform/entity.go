@@ -143,6 +143,10 @@ type Scope struct {
 	Structure string // organisation structure for unit and below
 	Unit      string // field holding the record's unit
 	Owner     string // field holding the member who owns the record
+	// Participants are the members a record concerns — a request's requester
+	// and approvers, a task's candidates: they read it whatever their role in
+	// the app, so whoever is told about a record can open it (F-31).
+	Participants func(record any) []string
 }
 
 const (
@@ -341,7 +345,7 @@ func EntityActions(e Entity) []Action {
 		capability = e.Type
 	}
 	if e.Standard.Create {
-		out = append(out, Action{Schema: e.Type + ".create", Target: e.Type, Capability: capability, Title: "Create " + strings.ToLower(info.Title),
+		out = append(out, Action{Schema: e.Type + ".create", Target: e.Type, New: true, Capability: capability, Title: "Create " + strings.ToLower(info.Title),
 			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: e.Standard.Roles})
 	}
 	if e.Standard.Edit {

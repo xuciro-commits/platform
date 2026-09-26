@@ -109,6 +109,25 @@ func TestLeaveApprovals(t *testing.T) {
 	expect("carol approves", do("carol", "work.approval.approve", platformserver.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
 	expect("bob approves", do("bob", "work.approval.approve", platformserver.ApprovalType, a1.ID, struct{}{}), "work.approval.approve")
 	expect("after approval", leave("L1").State+" "+request("L1").State, "approved approved")
+	// The task bob answered is no longer unread in his notifications (F-30).
+	bobs, _ := tn.Read(member("bob"), "notifications")
+	told := ""
+	for _, n := range bobs.([]platform.Notification) {
+		if n.Title == "Approve: Submit for approval hcm.leave/L1" {
+			told = fmt.Sprint(n.Read)
+		}
+	}
+	expect("bob's answered task, read", told, "true")
+	// Whoever a request concerns opens it without a role in the work app (F-31): alice asked, bob approved; dave did neither.
+	opens := func(who string) string {
+		if _, err := tn.RecordOf(member(who), platformserver.ApprovalType, a1.ID, now); err != nil {
+			return err.Error()
+		}
+		return "ok"
+	}
+	expect("the requester opens it", opens("alice"), "ok")
+	expect("the approver opens it", opens("bob"), "ok")
+	expect("another does not see it", opens("dave"), "ERROR_CODE_NOT_FOUND")
 	expect("bob's inbox after", fmt.Sprint(inbox("bob")), "[]")
 
 	// Seven days: the manager, then the department head.

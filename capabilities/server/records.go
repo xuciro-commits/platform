@@ -591,7 +591,7 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	defer t.records.mu.Unlock()
 	out := []platform.EntityInfo{}
 	for _, et := range t.records.types {
-		if m.Roles[et.info.App] != "" {
+		if m.Roles[et.info.App] != "" || et.info.Scope.Participants != nil { // a participant opens records of types it holds no role in
 			out = append(out, et.info)
 		}
 	}
@@ -601,10 +601,25 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 
 // visible is m's scope over a type's records on now's day (D4).
 func (t *Tenant) visible(m platform.Member, et *entityType, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
-	role := m.Roles[et.info.App]
-	if role == "" {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	role, scope := m.Roles[et.info.App], et.info.Scope
+	participant := func(v reflect.Value) bool {
+		return scope.Participants != nil && slices.Contains(scope.Participants(v.Interface()), m.ID)
 	}
+	if role == "" {
+		if scope.Participants == nil {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		return participant, nil
+	}
+	base, err := t.scoped(m, et, role, now)
+	if base == nil || err != nil || scope.Participants == nil {
+		return base, err
+	}
+	return func(v reflect.Value) bool { return base(v) || participant(v) }, nil
+}
+
+// scoped is the scope m's role gives over a type's records (nil: all of them).
+func (t *Tenant) scoped(m platform.Member, et *entityType, role string, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
 	scope := et.info.Scope
 	field := func(name string) func(reflect.Value) string {
 		f, _ := et.info.Field(name)

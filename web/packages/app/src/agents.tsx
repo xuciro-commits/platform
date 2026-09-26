@@ -6,6 +6,7 @@ import "./i18n";
 import { Button, Card, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses, t, language } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
+import { PayloadFields } from "./actions";
 import { newId, useHost, useOpenRecord, useRead, useReadQuery } from "./index";
 
 // Generated from the host's Go types (ADR-0023 D7).
@@ -28,8 +29,8 @@ const signalTones = { confirmed: "success", accepted: "success", approved: "succ
 /** One run: read from the member's own runs, or as an administrator of the agent app. */
 function useRun(id: string): AgentRun | undefined {
   const { role } = useHost();
-  const mine = useRead<AgentRun[]>("/v1/runs", 1500)?.find((r) => r.id === id);
-  const any = useReadQuery<{ record: AgentRun }>(`/v1/records/agent.run/${encodeURIComponent(id)}`, 1500);
+  const mine = useRead<AgentRun[]>("/v1/runs")?.find((r) => r.id === id);
+  const any = useReadQuery<{ record: AgentRun }>(`/v1/records/agent.run/${encodeURIComponent(id)}`);
   return mine ?? (role("agent") ? any.data?.record : undefined);
 }
 
@@ -45,13 +46,7 @@ function DraftCard({ run, draft }: { run: AgentRun; draft: RunDraft }) {
     <Card className="grid gap-2 border-[var(--tone-warning)] p-3">
       <div className="text-sm font-semibold">{declared?.title ?? draft.action} <span className="font-mono text-xs text-muted">{draft.target}</span></div>
       {draft.rationale && <p className="text-sm text-muted">{draft.rationale}</p>}
-      {fields.map((f) => (
-        <label key={f.name} className="grid gap-1 text-xs text-muted">{f.description || f.name}
-          {f.type === "string" && String(values[f.name] ?? "").length > 60
-            ? <Textarea rows={4} value={String(values[f.name] ?? "")} onChange={(e) => setValues({ ...values, [f.name]: e.target.value })} />
-            : <Input value={String(values[f.name] ?? "")} onChange={(e) => setValues({ ...values, [f.name]: f.type === "integer" || f.type === "number" ? Number(e.target.value) : e.target.value })} />}
-        </label>
-      ))}
+      <PayloadFields fields={fields} values={values} onChange={setValues} />
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="primary" onClick={() => void decide("agent.run.confirm", target, { payload: values })}>{t("Confirm")}</Button>
         <Input className="w-64" placeholder={t("Why not, for the agent")} value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -158,7 +153,7 @@ function Transcripts({ run }: { run: string }) {
 export function Assistant({ about }: { about?: string }) {
   const { me, decide, can } = useHost();
   const agents = (useRead<AgentInfo[]>("/v1/agents") ?? []).filter((a) => me.apps.some((x) => x.id === a.app));
-  const runs = useRead<AgentRun[]>("/v1/runs", 3000) ?? [];
+  const runs = useRead<AgentRun[]>("/v1/runs") ?? [];
   const type = about?.split("/")[0] ?? "";
   const suited = [...agents].sort((a, b) => Number(type.startsWith(`${b.app}.`)) - Number(type.startsWith(`${a.app}.`)));
   const [agent, setAgent] = useState("");
@@ -199,7 +194,7 @@ export function Assistant({ about }: { about?: string }) {
 /** What agents remember about the member (ADR-0022 D5): proposals from their corrections to keep, and facts to forget. */
 function Remembered() {
   const { decide } = useHost();
-  const memories = useRead<Memory[]>("/v1/memories", 5000) ?? [];
+  const memories = useRead<Memory[]>("/v1/memories") ?? [];
   if (memories.length === 0) return null;
   const act = (m: Memory, t: string) => void decide(`agent.memory.${t}`, { type: "agent.memory", id: m.id }, {});
   return (

@@ -225,6 +225,7 @@ func TestFlows(t *testing.T) {
 	place("O4", "none")
 	tick(time.Minute)
 	expect("O4", instance("shop.fulfil:O4").State+" "+status("O4"), "compensated placed")
+	expect("O4's failure told to the owners (#118)", fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w WorkTask) bool { return strings.HasPrefix(w.Title, "Flow Fulfil order O4 failed at ") })), "true")
 	do("ana", "shop", "shop.order.place", "shop.order", "O5", map[string]string{"item": "stuck"})
 	tick(time.Second)
 	now = now.Add(2 * time.Hour) // unpaid past the chase; the clerk cancels; the release is refused
@@ -236,7 +237,7 @@ func TestFlows(t *testing.T) {
 	expect("O5 stuck", stuck.State+" "+fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w WorkTask) bool { return w.Title == "Flow Fulfil order O5 is stuck" })), "stuck true")
 	expect("skip", do("ana", FlowApp, SchemaFlowSkip, InstanceType, "shop.fulfil:O5", map[string]int{"token": stuck.Tokens[0].ID}), "ok")
 	expect("O5 ended", instance("shop.fulfil:O5").State+" "+status("O5"), "compensated reserved")
-	expect("stuck task closed", fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w WorkTask) bool { return strings.HasPrefix(w.Title, "Flow") })), "false")
+	expect("stuck task closed", fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w WorkTask) bool { return w.Title == "Flow Fulfil order O5 is stuck" })), "false")
 
 	// One running instance per key; a new one once it ended.
 	place("O6", "fig")

@@ -128,7 +128,7 @@ func late(c platform.Caller, _ *pb.ChangeRecord, record any, now time.Time) {
 }
 
 func Actions() *platform.Catalog {
-	return platform.NewCatalog(append([]platform.Action{{Schema: SchemaOpen, Target: TicketType, Capability: "tickets", Title: "Open ticket",
+	return platform.NewCatalog(append([]platform.Action{{Schema: SchemaOpen, Target: TicketType, New: true, Capability: "tickets", Title: "Open ticket",
 		Description: "Log a customer's request, from mail or the phone.", Roles: []string{Desk, Lead},
 		Payload: []platform.Field{{Name: "subject", Type: "string", Required: true, Description: "Subject"},
 			{Name: "body", Type: "string", Description: "What the customer wrote"},
