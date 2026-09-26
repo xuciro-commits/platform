@@ -87,7 +87,10 @@ type Period struct {
 
 var month = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
 
-func Entities() []platform.Entity {
+// Entities are the ERP's entity types: accounting, then purchasing and inventory.
+func Entities() []platform.Entity { return append(accounting(), purchasing()...) }
+
+func accounting() []platform.Entity {
 	both := []string{Accountant, Controller}
 	return []platform.Entity{
 		{Type: AccountType, Title: "Account", Model: Account{}, Synonyms: "ledger account, GL account",
@@ -144,7 +147,8 @@ type App struct {
 }
 
 func New(tenant string) *App {
-	return &App{ledger: platform.NewLedger(tenant, ID, Actions(), AccountType, EntryType, PostingType, PeriodType)}
+	return &App{ledger: platform.NewLedger(tenant, ID, Actions(), AccountType, EntryType, PostingType, PeriodType,
+		PartnerType, ProductType, PurchaseType, MoveType)}
 }
 
 func (a *App) Manifest() platform.Manifest {
@@ -153,7 +157,9 @@ func (a *App) Manifest() platform.Manifest {
 		sequences[i] = platform.Sequence{Name: "entry." + j, Pattern: strings.ToUpper(j[:1]) + "J/{year}/{n:5}", Yearly: true}
 	}
 	return platform.Manifest{ID: ID, Title: "ERP", Version: "1", Actions: a.ledger.Catalog, Entities: Entities(), Languages: languages,
-		Reads: []string{TrialBalance}, Sequences: sequences}
+		Reads: []string{TrialBalance, OnHand}, Sequences: append(sequences, platform.Sequence{Name: "purchase", Pattern: "PO/{year}/{n:5}", Yearly: true}),
+		Settings: []platform.Setting{{Name: "approval-limit", Title: "Approval limit", Type: "integer", Default: "10000",
+			Description: "A purchase order of this total or more (in whole units of the currency) waits for a controller's approval."}}}
 }
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
@@ -297,8 +303,11 @@ type Balance struct {
 
 // Read serves the trial balance: every account with postings, and their sums.
 func (a *App) Read(c platform.Caller, name string) (any, *kernel.Error) {
-	if name != TrialBalance || c.Role() == "" {
+	if name != TrialBalance && name != OnHand || c.Role() == "" {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if name == OnHand {
+		return onHand(c), nil
 	}
 	sums := map[string]*Balance{}
 	for _, p := range platform.Records[Posting](c) {
@@ -330,6 +339,6 @@ func Chart() []Account {
 		a("1403", "Raw materials", "asset"), a("1405", "Finished goods", "asset"), a("5001", "Work in progress", "asset"),
 		a("2202", "Accounts payable", "liability"), a("2203", "Goods received not invoiced", "liability"),
 		a("4001", "Share capital", "equity"), a("6001", "Sales", "income"),
-		a("6401", "Cost of goods sold", "expense"), a("6602", "Administrative expenses", "expense"), a("6711", "Scrap", "expense"),
+		a("6401", "Cost of goods sold", "expense"), a("6403", "Purchase price variance", "expense"), a("6602", "Administrative expenses", "expense"), a("6711", "Scrap", "expense"),
 	}
 }

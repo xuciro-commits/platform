@@ -259,7 +259,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0019 | Capturing state without the tenant's lock; parallel restore; the plant's downtime as records | Deferred |
 | 0020 | Record-state triggers; business calendars for timeouts; a drawn graph | Deferred |
 | 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
-| 0024 | Purchasing and inventory (7b); production orders through `production.orders/1` with the plant (7c); the external-ERP adapter and one path from the plant to an ERP (7d) | Partial: 7a (accounting, number sequences) built |
+| 0024 | Production orders through `production.orders/1` with the plant (7c); the external-ERP adapter and one path from the plant to an ERP (7d) | Partial: 7a (accounting, number sequences) and 7b (purchasing and inventory) built |
 
 ## 3. Runtimes and languages
 
@@ -367,7 +367,7 @@ Applications are pressure environments for the platform, not its source of truth
 | Hotel | Reference app modelled on OPERA Cloud and Mews | Server authority, several principals, capacity over time, a channel connector | Realism — it can confirm our own assumptions |
 | Manufacturing | Reference app modelled on Opcenter and SAP ME (ISA-95 practice), desk-studied, no plant yet | Observation streams, device edge, hierarchy, quality, work orders, ERP integration | A real plant's volume and exceptions |
 | CRM | Target app | Parties, opportunities, activities, protocols to other apps, the sales assistant | — |
-| ERP | Target app, being built (ADR-0024; accounting built), modelled on SAP S/4HANA and Odoo | Money and units, double-entry posting (several changes that stand or fall together: K4's open case), number sequences, periods, purchasing and inventory, production orders the MES executes | Depth: one company's full chart of accounts, tax, localisation |
+| ERP | Target app, being built (ADR-0024; accounting, purchasing and inventory built), modelled on SAP S/4HANA and Odoo | Money and units, double-entry posting (several changes that stand or fall together: K4's open case), number sequences, periods, purchasing and inventory, production orders the MES executes | Depth: one company's full chart of accounts, tax, localisation |
 | HR, helpdesk | Thin reference apps | Lifecycles, approvals, flows, agents, knowledge | Depth in either function |
 
 Two tests for every abstraction: **cross-domain comparison** (does any app need exceptions, bypasses, duplicated infrastructure or awkward mappings? are we abstracting a capability or naming two unrelated things alike?) and **evolution drills**:
@@ -521,4 +521,4 @@ Stages 1–5 are built: the application model (ADR-0016), lifecycles, approvals 
 | 8. AI control plane | Quotas, rate limits and streaming (ADR-0015 batch 2); the agents overview with value and an off switch; evaluation suites; traces across agents; MCP authorization and resources | Agents exist in three apps and outside ones call in; governing them at scale is the next gap the references closed in 2026 | An administrator sees every agent's use and value, switches one off, and a standard MCP client signs in and acts within its grants |
 | 9. Scale and delivery | Many tenants per process, provisioning, package upgrades, the backend-for-frontend token, run-time UI bundles, bulk data out | When a second real organisation or team comes | A new team ships an app without touching the host |
 
-The target apps are CRM, MES and ERP; CRM and MES exist, the ERP is being built (ADR-0024, #115: accounting and number sequences built, purchasing and inventory next). Hotel, HR and the helpdesk stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.
+The target apps are CRM, MES and ERP; CRM and MES exist, the ERP is being built (ADR-0024, #115: accounting, number sequences, purchasing and inventory built; production orders with the MES next). Hotel, HR and the helpdesk stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.

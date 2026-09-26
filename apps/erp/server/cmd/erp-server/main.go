@@ -1,7 +1,7 @@
 // Command erp-server runs the ERP app on a development host (docs/Apps.md
 // step 6) with a demo chart of accounts and the current month open. With -web
-// the host serves the workspace's build; the development tokens "controller"
-// and "accountant" sign in.
+// the host serves the workspace's build; the development tokens "controller",
+// "accountant" and "buyer" sign in.
 package main
 
 import (
@@ -27,6 +27,7 @@ func main() {
 		seat("controller", "controller-1", map[string]string{erp.ID: erp.Controller, platformserver.PlatformApp: platformserver.Admin,
 			platformserver.WorkApp: platformserver.WorkAdmin, platformserver.FlowApp: platformserver.FlowAdmin}),
 		seat("accountant", "accountant-1", map[string]string{erp.ID: erp.Accountant}),
+		seat("buyer", "buyer-1", map[string]string{erp.ID: erp.Buyer}),
 	})
 	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), platformserver.NewWork("dev"), platformserver.NewFlows("dev"), erp.New("dev"))
 	if err == nil && deployment.Database == "" {
@@ -38,7 +39,8 @@ func main() {
 	log.Fatal(err)
 }
 
-// seed gives a development host its books in CNY, the demo chart of accounts and this month open.
+// seed gives a development host its books in CNY, the demo chart of accounts,
+// this month open, a supplier and three products.
 func seed(t *platformserver.Tenant, now time.Time) error {
 	m, _ := t.Member("controller-1")
 	submit := func(schema, typ, id string, payload any) error {
@@ -60,5 +62,22 @@ func seed(t *platformserver.Tenant, now time.Time) error {
 			return err
 		}
 	}
-	return submit(erp.SchemaPeriodOpen, erp.PeriodType, now.Format("2006-01"), map[string]any{})
+	if err := submit(erp.SchemaPeriodOpen, erp.PeriodType, now.Format("2006-01"), map[string]any{}); err != nil {
+		return err
+	}
+	if err := submit(erp.PartnerType+".create", erp.PartnerType, "BP-STEEL", map[string]string{"name": "Suzhou Steel Co.", "role": "supplier"}); err != nil {
+		return err
+	}
+	for _, p := range []struct {
+		id, name, kind, unit string
+		cost                 int64
+	}{
+		{"M-STEEL", "Steel sheet", "material", "kg", 500}, {"M-BOLT", "Bolt M8", "material", "pcs", 20}, {"P-100", "Bracket", "finished", "pcs", 4000},
+	} {
+		if err := submit(erp.ProductType+".create", erp.ProductType, p.id, map[string]any{"name": p.name, "kind": p.kind, "unit": p.unit,
+			"cost": map[string]any{"amount": p.cost, "currency": "CNY"}}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

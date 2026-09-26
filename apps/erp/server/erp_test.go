@@ -32,7 +32,7 @@ func build(t *testing.T) *platformserver.Tenant {
 	}
 	controller := seat("cy", Controller)
 	controller.Roles[platformserver.PlatformApp] = platformserver.Admin // sets the tenant's currency
-	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ada", Accountant), controller),
+	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ada", Accountant), controller, seat("bo", Buyer)),
 		platformserver.NewWork("t"), platformserver.NewFlows("t"), New("t"))
 	if err != nil {
 		t.Fatal(err)
@@ -48,9 +48,13 @@ func (b *books) as(authority, who, schema, typ, id string, payload any) string {
 	b.keys++
 	m, _ := b.tn.Member(who)
 	raw, _ := json.Marshal(payload)
-	if _, err := b.tn.Submit(m, &pb.Submission{TenantId: "t", PrincipalId: who, Authority: authority, IdempotencyKey: fmt.Sprint("k", b.keys),
-		Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, b.now); err != nil {
+	r, err := b.tn.Submit(m, &pb.Submission{TenantId: "t", PrincipalId: who, Authority: authority, IdempotencyKey: fmt.Sprint("k", b.keys),
+		Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, b.now)
+	switch {
+	case err != nil:
 		return err.Error()
+	case r.GetSubmission().GetSchema().GetName() != schema: // held for approval (ADR-0017)
+		return r.GetSubmission().GetSchema().GetName()
 	}
 	return "ok"
 }

@@ -341,8 +341,8 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       <section>
         <h2 className="mb-1 flex items-center gap-1 text-sm font-semibold"><HistoryIcon className="size-3.5" />{t("History")}</h2>
         <ol className="grid gap-2">
-          {view.history.map((h) => (
-            <li key={h.change} className="rounded-md border border-border bg-surface p-2 text-xs">
+          {view.history.map((h, i) => (
+            <li key={`${h.change}:${i}`} className="rounded-md border border-border bg-surface p-2 text-xs">
               <div className="flex gap-2"><span className="font-mono">{h.schema}</span><span className="text-muted">{h.by} · {new Date(h.at).toLocaleString()}</span></div>
               {h.fields.length > 0 && (
                 <ul className="mt-1 grid gap-0.5">
