@@ -40,6 +40,7 @@ type tenantState struct {
 	Settings   map[string]string          `json:"settings"`
 	Endpoints  []*Endpoint                `json:"endpoints"`
 	Outbound   []effectState              `json:"outbound"`
+	Sequences  map[string]int             `json:"sequences,omitempty"`
 }
 
 type recordState struct {
@@ -152,6 +153,9 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	}
 	s.Marks, s.LastError = marks, maps.Clone(t.lastError)
 	s.Notices, s.NoticeSeq, s.Settings, s.Endpoints = slices.Clone(t.notices), t.noticeSeq, maps.Clone(t.settings), t.endpoints
+	t.seqMu.Lock()
+	s.Sequences = maps.Clone(t.sequences)
+	t.seqMu.Unlock()
 	for _, x := range t.outbound {
 		s.Outbound = append(s.Outbound, effectState{Effect: x.Effect, Since: x.since})
 	}
@@ -262,6 +266,12 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if t.settings == nil {
 		t.settings = map[string]string{}
 	}
+	t.seqMu.Lock()
+	t.sequences = s.Sequences
+	if t.sequences == nil {
+		t.sequences = map[string]int{}
+	}
+	t.seqMu.Unlock()
 	t.outbound = nil
 	for _, x := range s.Outbound {
 		t.outbound = append(t.outbound, &effect{Effect: x.Effect, since: x.Since})

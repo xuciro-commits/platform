@@ -414,7 +414,11 @@ func (t *Tenant) notificationsFor(member string) []platform.Notification {
 // App settings.
 
 func (t *Tenant) setting(c platform.Caller, name string) string {
-	a := t.app(c.App)
+	app := c.App
+	if tenantWide, ok := strings.CutPrefix(name, PlatformApp+"/"); ok { // the tenant's own settings, such as its currency
+		app, name = PlatformApp, tenantWide
+	}
+	a := t.app(app)
 	if a == nil {
 		return ""
 	}
@@ -424,7 +428,7 @@ func (t *Tenant) setting(c platform.Caller, name string) string {
 	}
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
-	if v, ok := t.settings[c.App+"/"+name]; ok {
+	if v, ok := t.settings[app+"/"+name]; ok {
 		return v
 	}
 	return a.Manifest().Settings[i].Default

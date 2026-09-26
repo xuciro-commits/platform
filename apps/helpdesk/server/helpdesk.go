@@ -46,6 +46,7 @@ var Levels = map[string]time.Duration{"urgent": time.Hour, "high": 4 * time.Hour
 // Ticket is a customer's request.
 type Ticket struct {
 	platform.Record
+	Number    string    `json:"number,omitempty" field:"readonly,search" help:"The ticket's number, given when it is opened: HD-2026-0001"`
 	Subject   string    `json:"subject" field:"required,search"`
 	Body      string    `json:"body,omitempty" type:"longtext"`
 	Customer  string    `json:"customer" field:"required,search" title:"Customer e-mail"`
@@ -152,7 +153,8 @@ func (a *App) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: "helpdesk", Title: "Helpdesk", Version: "1", Actions: a.ledger.Catalog, Entities: Entities(),
 		Emits: []platform.EffectKind{{Name: EffectReply, Title: "Reply to the customer",
 			Description: "A ticket's reply, for the mail gateway to send to the customer.", Irreversible: true}},
-		Flows: []platform.Flow{serviceLevel()}, Agents: []platform.Agent{triager()}}
+		Flows: []platform.Flow{serviceLevel()}, Agents: []platform.Agent{triager()},
+		Sequences: []platform.Sequence{{Name: "ticket", Pattern: "HD-{year}-{n:4}", Yearly: true}}}
 }
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
@@ -184,7 +186,10 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 		if err := c.Check(t); err != nil {
 			return nil, err
 		}
-		return func(r *pb.ChangeRecord) { c.Put(r, t) }, nil
+		return func(r *pb.ChangeRecord) {
+			t.Number, _ = c.Next(r, "ticket", now)
+			c.Put(r, t)
+		}, nil
 	})
 }
 

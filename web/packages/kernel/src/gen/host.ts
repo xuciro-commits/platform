@@ -327,6 +327,7 @@ export type FieldInfo = {
   help?: string;
   synonyms?: string;
   example?: string;
+  fields?: FieldInfo[];
 };
 
 export type FlowDefinition = {
@@ -409,6 +410,7 @@ export type MeView = {
   language: string;
   languages: string[];
   preferred?: string;
+  currency: string;
 };
 
 export type Member = {

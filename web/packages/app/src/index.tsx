@@ -6,7 +6,7 @@ import "./i18n";
 import type { ActionDeclaration, Api, EdgeClient, Entry } from "@platform/kernel";
 import {
   Button, Chart, Dialog, Input, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
-  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
+  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type Options, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
@@ -99,9 +99,20 @@ export function GeneratedForm({ type, record, onSubmit, onCancel, submitLabel }:
 }) {
   const { source } = useHost();
   const info = source.entity(type);
-  if (!info) return null;
+  // The choices of reference fields and of lines' reference columns: the referred records the member may list.
+  const refs = (info?.fields ?? []).flatMap((f) => f.type === "reference" && !f.readOnly ? [[f.name, f.ref!] as const]
+    : f.type === "lines" ? (f.fields ?? []).filter((c) => c.type === "reference").map((c) => [`${f.name}.${c.name}`, c.ref!] as const) : []);
+  const options = useQuery({
+    queryKey: ["options", type, refs], enabled: refs.length > 0,
+    queryFn: async () => Object.fromEntries(await Promise.all(refs.map(async ([key, ref]) => {
+      const refInfo = source.entity(ref);
+      const page = await source.list(ref, { limit: 500 });
+      return [key, page.records.map((r) => ({ value: r.id, label: refInfo && refInfo.display !== "id" && r[refInfo.display] ? `${r.id} ${String(r[refInfo.display])}` : r.id }))];
+    }))) as Options,
+  });
+  if (!info || (refs.length > 0 && !options.data)) return null;
   const editable = info.fields.filter((f) => !f.readOnly).map((f) => f.name);
-  return <RecordForm entity={entityFrom(info)} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
+  return <RecordForm entity={entityFrom(info, options.data)} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 
@@ -180,7 +191,7 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
           {can(`${type}.edit`) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
           {can(`${type}.archive`) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>{t("Archive")}</Button>}
         </>} />
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
+      <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
         {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onCancel={() => setEditing(undefined)}
           onSubmit={(v) => act(`${type}.edit`, editing, v)} />}
       </Dialog>

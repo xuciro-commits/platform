@@ -273,11 +273,15 @@ func (t *Tenant) lookup(lang, s string) (string, bool) {
 	return "", false
 }
 
+// maxSay bounds how deep patterns nest: a list of choices is said one item a
+// level ("{a}, {b}"), so eight lets a field name up to six of them.
+const maxSay = 8
+
 // says tells whether a language can say a text: by its entry, or by a
 // pattern whose values it can say in turn (numbers and names need none).
 func (t *Tenant) says(lang, s string, depth int) bool {
-	if _, ok := t.lookup(lang, s); ok || depth > 3 || !strings.ContainsFunc(s, unicode.IsLetter) {
-		return ok || depth <= 3
+	if _, ok := t.lookup(lang, s); ok || depth > maxSay || !strings.ContainsFunc(s, unicode.IsLetter) {
+		return ok || depth <= maxSay
 	}
 	for _, p := range t.patterns(lang) {
 		m := p.re.FindStringSubmatch(s)
@@ -477,7 +481,7 @@ func (t *Tenant) patterns(lang string) []pattern {
 func (t *Tenant) Say(lang, s string) string { return t.say(lang, s, 0) }
 
 func (t *Tenant) say(lang, s string, depth int) string {
-	if lang == "" || s == "" || depth > 3 {
+	if lang == "" || s == "" || depth > maxSay {
 		return s
 	}
 	if tr, ok := t.lookup(lang, s); ok {

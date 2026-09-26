@@ -5,6 +5,7 @@
  "Answers planning questions about the plant's products and planned orders, asking suppliers' agents for lead times.": "回答关于工厂产品和计划订单的计划问题，并向供应商的智能体询问交期。",
  "Assign downtime reason": "填写停机原因",
  "Assign the reason of a downtime event on a resource of your lines.": "为你所在产线某资源的停机事件填写原因。",
+ "Code": "代码",
  "Complete operation": "完成工序",
  "Complete the SFC's active operation; it moves to the next operation or is done.": "完成 SFC 当前工序；它进入下一道工序或完工。",
  "Completed": "已完成",

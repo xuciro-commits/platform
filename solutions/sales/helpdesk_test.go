@@ -153,7 +153,11 @@ func TestHelpdeskTriage(t *testing.T) {
 	w.expect(runOf("T-1").Signals[0].Kind+" "+runOf("T-1").Signals[0].By, "approved ops") // the reply approved: an accepted outcome (ADR-0022 D9)
 
 	// A reply discarded instead: a signal, and a memory proposed to the agent.
+	// Numbers are taken only by accepted decisions (ADR-0024 D3): the refused
+	// ticket before it leaves no gap.
+	w.expect(do(desk, "helpdesk", helpdesk.SchemaOpen, helpdesk.TicketType, "T-X", map[string]string{"subject": "Who?", "customer": "nobody"}), "ERROR_CODE_INVALID_ARGUMENT")
 	open("T-4", "Wifi slow in the lobby")
+	w.expect(ticket("T-1").Number+" "+ticket("T-4").Number, fmt.Sprintf("HD-%d-0001 HD-%d-0002", now.Year(), now.Year()))
 	work(8 * time.Second)
 	effects, _ = w.tenant.Read(ops, "effects")
 	i := slices.IndexFunc(effects.([]platform.Effect), func(e platform.Effect) bool { return e.State == "held" })

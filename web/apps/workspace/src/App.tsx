@@ -5,7 +5,7 @@
 import "./i18n";
 import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
-import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage } from "@platform/ui";
+import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,6 +24,7 @@ const packages: { serves: string[]; load: () => Promise<{ default: AppUI }> }[] 
   { serves: ["hr"], load: () => import("@pkg/hr") },
   { serves: ["helpdesk"], load: () => import("@pkg/helpdesk") },
   { serves: ["mes"], load: () => import("@pkg/mes") },
+  { serves: ["erp"], load: () => import("@pkg/erp") },
   { serves: ["platform", "org", "ai", "flow", "agent", "knowledge"], load: () => import("@pkg/platform") },
 ];
 
@@ -45,6 +46,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (!me) return;
     if (me.preferred && me.preferred !== language()) return setLanguage(me.preferred); // the member's own language, on any browser (ADR-0023)
     Object.assign(client.connection, { principal: me.principalId, tenant: me.tenantId });
+    setCurrency(me.currency); // the default of amounts people enter (ADR-0024)
     client.refreshDeclarations().then(() => setReady(true), () => notify.error(t("Host unreachable")));
   }, [client, me]);
 
@@ -73,8 +75,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     for (const entry of await client.send()) {
       ok = entry.state === "SUBMISSION_STATE_CONFIRMED";
       const declared = actions?.find((a) => a.schema === schema);
-      const done = declared?.needsApproval ? "sent for approval" : "done"; // held by the host until its approvers agree (ADR-0017)
-      (ok ? notify.success : notify.error)(`${declared?.title ?? schema} ${target.id}: ${ok ? done : entry.outcome}`);
+      const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree (ADR-0017)
+      (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? schema, target: target.id, outcome: ok ? done : entry.outcome ?? "" }));
     }
     setOutbox([...client.authorities.outbox]);
     await queries.invalidateQueries();

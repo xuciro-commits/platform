@@ -43,7 +43,8 @@ func (s Setting) Accepts(v string) bool {
 	return s.Type == "text"
 }
 
-// Setting is the current value of the calling app's setting (its default until set).
+// Setting is the current value of the calling app's setting (its default
+// until set); "platform/<name>" is the tenant's own, such as "platform/currency".
 func (c Caller) Setting(name string) string {
 	if c.rt == nil {
 		return ""

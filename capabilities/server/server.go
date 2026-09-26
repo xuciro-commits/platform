@@ -137,7 +137,7 @@ func (h *Host) Handler() http.Handler {
 	handle(Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		lang := t.Language(m, r)
 		WriteJSON(w, http.StatusOK, t.Translate(MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
-			Language: lang, Languages: t.languages(), Preferred: m.Language}, lang))
+			Language: lang, Languages: t.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}, lang))
 	})
 	handle(Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}
