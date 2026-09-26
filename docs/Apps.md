@@ -6,7 +6,7 @@ How a person, or a coding agent, builds an app on the platform (ADR-0023 D8). An
 create app → declare entities → declare actions → declare flows → add translations → run
 ```
 
-The app API is `platformserver/platform` (`capabilities/server/platform`); an app never imports the host runtime `platformserver` except in its tests and its `cmd/` binaries, and never another app (`scripts/boundaries.sh`). Apps meet through protocols (ADR-0011).
+The app API is `platformserver/platform` (`capabilities/server/platform`); an app never imports the host runtime `platformserver` except in its tests and its `cmd/` binaries, and never another app (`scripts/boundaries.sh`). Apps meet through protocols (ADR-0011). A decision changes only its own app: its rules may probe a provider (`Caller.Probe`), and once it is accepted it requests what it needs (`Caller.Request`); the provider's answer comes back to one of the app's own actions, which a person takes when no provider is bound (ADR-0026).
 
 ## 1. Create app
 
@@ -51,7 +51,7 @@ Roles are checked by the catalog before the app's rules run; a refused action is
 
 ## 4. Declare flows
 
-A `platform.Flow` (ADR-0020) is a long-running process started by an action: steps that `Ask` people (a task in their inbox, with answers), `Act` (call an action as the flow), `Wait` for an event or a time, `Call` a protocol, run an `Agent`, branch (`All`, `Any`), or choose the next step with a reason. Instances are journaled and replayed; `platformserver.CheckReplay` in the app's test proves it. Agents (`platform.Agent`, ADR-0021) are declared the same way when the app needs one.
+A `platform.Flow` (ADR-0020) is a long-running process started by an action: steps that `Ask` people (a task in their inbox, with answers), `Act` (take one of the app's actions, or a protocol's, as the flow), `Wait` for an event or a time, `Call` another of the app's flows, run an `Agent`, branch (`All`, `Any`), or choose the next step with a reason. Instances are journaled and replayed; `platformserver.CheckReplay` in the app's test proves it. Agents (`platform.Agent`, ADR-0021) are declared the same way when the app needs one.
 
 ## 5. Add translations
 

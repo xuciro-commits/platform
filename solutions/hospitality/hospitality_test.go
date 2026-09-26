@@ -97,7 +97,7 @@ func (w *world) read(who, name string) any {
 }
 
 func (w *world) stays(who string) []lodging.Booking {
-	return w.read(who, "customers").([]crm.Customer)[0].Opportunities[0].Stays
+	return w.read(who, "customers").([]crm.Customer)[0].Opportunities[0].Bookings
 }
 
 func (w *world) timeline(who, entity string) []string {
@@ -140,7 +140,7 @@ func TestStaysThroughTheLodgingProtocol(t *testing.T) {
 	// The hotel cancels on its own; the platform timeline tells the opportunity, as
 	// the protocol's event, through the link — no app in between.
 	w.expect(w.submit("manager", pms.ID, pms.SchemaCancel, pms.ReservationType, "OPP-1-B1", "c-1", struct{}{}), "ok")
-	if !w.stays("sales")[0].Canceled {
+	if w.stays("sales")[0].Status != lodging.Canceled {
 		t.Fatal("the cancellation does not show on the customer")
 	}
 	told := w.timeline("sales", "crm.opportunity/OPP-1")
@@ -225,7 +225,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 		}
 		return out
 	}
-	if got := catalog("sales"); !slices.Equal(got, []string{pms.SchemaCreate, pms.SchemaModify, crm.SchemaAccount, "crm.account.edit", "crm.account.archive", crm.SchemaOpen, crm.SchemaClose, crm.SchemaPlan, crm.SchemaBook}) {
+	if got := catalog("sales"); !slices.Equal(got, []string{pms.SchemaCreate, pms.SchemaModify, pms.SchemaHold, pms.SchemaConfirm, pms.SchemaRelease, crm.SchemaAccount, "crm.account.edit", "crm.account.archive", crm.SchemaOpen, crm.SchemaClose, crm.SchemaPlan, crm.SchemaBook, crm.SchemaAnswer}) {
 		t.Fatalf("sales catalog %v", got)
 	}
 	if slices.Contains(catalog("sales-only"), crm.SchemaBook) {

@@ -41,6 +41,7 @@ type FlowInstance struct {
 	Title    string      `json:"title" field:"readonly,search"`
 	Version  int         `json:"version" field:"readonly"`
 	Key      string      `json:"key" field:"readonly,search"`
+	Subject  string      `json:"subject,omitempty" field:"readonly"` // "<type>/<key>" when the flow declares its subject
 	State    string      `json:"state" field:"readonly" choices:"running,waiting,done,compensating,compensated,canceled,stuck"`
 	OnBehalf string      `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
 	Data     string      `json:"data,omitempty" field:"readonly" type:"longtext"`

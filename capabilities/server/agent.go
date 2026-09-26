@@ -414,7 +414,7 @@ func (a *Agents) confirm(c platform.Caller, run AgentRunRecord, d Draft, payload
 	key := fmt.Sprintf("agent:%s:%d:confirm", run.ID, d.Step+1)
 	if d.Kind == "protocol" {
 		protocol, schema, _ := strings.Cut(d.Action, "#")
-		_, _, err := platform.NewCaller(runtime{t}, c.Member, a.defs[run.Agent].app, c.Replaying, false).Invoke(protocol, schema, d.Target, []byte(payload), key, run.ID, now)
+		_, _, err := t.invoke(platform.NewCaller(runtime{t}, c.Member, a.defs[run.Agent].app, c.Replaying, false), protocol, schema, d.Target, []byte(payload), key, run.ID, now)
 		if err != nil {
 			return "", err
 		}

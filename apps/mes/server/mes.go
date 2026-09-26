@@ -325,12 +325,19 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 			return nil, conflict // a completed order, confirmed once; corrections are resent
 		}
 		return p.confirm(who, s, o, now), nil
-	case SchemaAnswer: // the flow records the answer of an ERP outside once its provider shows it
+	case SchemaAnswer: // the provider's answer to the confirmation, or, for an ERP outside, the flow once its adapter shows it
 		o, known := platform.Get[Order](who, id)
+		var a platform.Answer
 		if !known {
 			return nil, notFound
 		}
-		answer, ok := awaited(who, o)
+		if json.Unmarshal(s.GetPayload(), &a) != nil {
+			return nil, invalid
+		}
+		answer, ok := p.answer(who, o, a)
+		if !ok && a.Outcome == "accepted" {
+			return nil, nil // sent: the ERP outside answers later
+		}
 		if !ok {
 			return nil, conflict
 		}

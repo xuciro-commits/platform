@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -54,14 +55,65 @@ type ProviderResult struct {
 	Result   any
 }
 
-// Invoke calls a protocol action on the tenant's provider, as the member with its
-// role there; id names the new or existing entity. It returns the entity the
-// provider acted on. Only a consumer of the protocol may invoke it.
-func (c Caller) Invoke(protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+// Probe asks the tenant's provider, in a decision's rules, whether it would
+// accept a protocol action from the member now: its policy and rules run, and
+// nothing is recorded or applied. NOT_FOUND says no provider is bound. In a
+// replay it holds, as it did, when a provider is bound. Rules never change another app (ADR-0026 D1):
+// what they need of one is a Request, made once the decision is accepted.
+func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *kernel.Error {
 	if c.rt == nil {
-		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	return c.rt.Invoke(c, protocol, action, id, payload, key, correlation, now)
+	return c.rt.Probe(c, protocol, action, id, Raw(payload), now)
+}
+
+// Request is a protocol action an accepted decision asks of the tenant's provider
+// (ADR-0026 D2). The host submits it after the decision, as the member, and
+// submits the provider's Answer to the app's Reply action on the decision's target.
+type Request struct {
+	Protocol, Action string
+	Target           string // the provider's record the action is about
+	Payload          any
+	Reply            string // the app's own action that receives the Answer; a member may take it too (D5)
+}
+
+// Answer is how the provider answered a Request: the payload of the Reply action.
+// A member who records an answer themselves gives the same fields.
+type Answer struct {
+	Call    string `json:"call"`             // the request's target at the provider
+	Action  string `json:"action,omitempty"` // the protocol action
+	Outcome string `json:"outcome"`          // accepted or refused; a protocol's events may add their own, e.g. released
+	Code    string `json:"code,omitempty"`   // the refusal's code
+	Ref     string `json:"ref,omitempty"`    // "<type>/<id>" of the provider's record
+}
+
+// AnswerFields are the payload fields of a Reply action.
+func AnswerFields() []Field {
+	return []Field{{Name: "call", Type: "string", Required: true, Description: "What was asked of the provider"},
+		{Name: "action", Type: "string", Description: "The protocol action"},
+		{Name: "outcome", Type: "string", Required: true, Description: "accepted or refused"},
+		{Name: "code", Type: "string", Description: "Why it was refused"},
+		{Name: "ref", Type: "string", Description: "The provider's record"}}
+}
+
+// Request asks for a protocol action once the decision r is accepted: made in
+// the decision's apply, run by the host after it in order, and run again by a replay.
+func (c Caller) Request(r *pb.ChangeRecord, q Request) {
+	if c.rt != nil && !c.rt.Probing() {
+		c.rt.Request(c, r, q)
+	}
+}
+
+// Raw is a payload as JSON: bytes as they are, anything else marshalled.
+func Raw(v any) []byte {
+	if b, ok := v.([]byte); ok {
+		return b
+	}
+	if b, ok := v.(json.RawMessage); ok {
+		return b
+	}
+	out, _ := json.Marshal(v)
+	return out
 }
 
 // Query reads a protocol read from every provider of the tenant, the bound one

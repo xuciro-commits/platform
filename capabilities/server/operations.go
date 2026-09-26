@@ -43,10 +43,17 @@ type Task struct {
 	job      platform.Job
 }
 
-// enqueue queues the input's events for their subscribers, after the platform's
-// own observers have seen them; it runs inside the input, and inside a replay.
+// enqueue runs the input's requests of other apps and queues its events for
+// their subscribers, after the platform's own observers have seen them; it runs
+// inside the input, and inside a replay.
 func (t *Tenant) enqueue(now time.Time) {
-	for len(t.events) > 0 {
+	for len(t.requests) > 0 || len(t.events) > 0 {
+		if len(t.events) == 0 { // a decision's requests after its events, in the order a replay meets them
+			q := t.requests[0]
+			t.requests = t.requests[1:]
+			t.answer(q, now)
+			continue
+		}
 		e := t.events[0]
 		t.events = t.events[1:]
 		s := e.Record.GetSubmission()

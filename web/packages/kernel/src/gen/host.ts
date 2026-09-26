@@ -548,6 +548,7 @@ export type RecordView = {
   record: unknown;
   history: RecordChange[];
   related: Related[];
+  processes: unknown[];
 };
 
 export type Related = {

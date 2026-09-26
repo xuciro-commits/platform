@@ -679,12 +679,14 @@ func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now ti
 	return out, nil
 }
 
-// RecordView is one record with its history, newest first, and the records of
-// the app's other types that refer to it.
+// RecordView is one record with its history, newest first, the records of
+// the app's other types that refer to it, and the processes about it the
+// member may read (ADR-0026 D4).
 type RecordView struct {
-	Record  any            `json:"record"`
-	History []RecordChange `json:"history"`
-	Related []Related      `json:"related"`
+	Record    any            `json:"record"`
+	History   []RecordChange `json:"history"`
+	Related   []Related      `json:"related"`
+	Processes []any          `json:"processes"`
 }
 
 type Related struct {
@@ -714,7 +716,13 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	if r == nil || visible != nil && !visible(r.value) {
 		return RecordView{}, notFound
 	}
-	view := RecordView{Record: r.value.Interface(), History: []RecordChange{}, Related: []Related{}}
+	view := RecordView{Record: r.value.Interface(), History: []RecordChange{}, Related: []Related{}, Processes: []any{}}
+	if t.flows != nil {
+		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
+		if page, err := t.Records(m, InstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
+			view.Processes = page.Records
+		}
+	}
 	for i := len(r.history) - 1; i >= 0; i-- {
 		view.History = append(view.History, r.history[i])
 	}

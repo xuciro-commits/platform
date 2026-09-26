@@ -38,7 +38,7 @@ function ReservationDetail({ id }: { id: string }) {
   return (
     <div className="max-w-md">
       <ReservationCard reservation={r}
-        actions={!r.canceled && <>
+        actions={r.status === "booked" && <>
           <Button onClick={() => run(api.draft("modify", r.id, { roomType: r.roomType, checkIn: r.checkIn,
             checkOut: nextDay(r.checkOut) }, r.revision)).then(() => notify("Extension queued in the outbox"))}>Extend 1 night</Button>
           <Button variant="danger" onClick={() => run(api.draft("cancel", r.id, {}, r.revision)).then(() => notify("Cancellation queued in the outbox"))}>Cancel</Button>

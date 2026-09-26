@@ -20,6 +20,9 @@ type Flow struct {
 	Version int // from 1
 	Start   Start
 	Steps   []Step // an instance starts at the first
+	// Subject is the entity type whose record an instance's key names: the
+	// record's page shows the processes about it (ADR-0026 D4).
+	Subject string
 	// Owners are roles of the app asked when an instance is stuck: a failed
 	// compensation, or a version the code no longer runs.
 	Owners []string

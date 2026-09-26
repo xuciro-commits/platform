@@ -29,7 +29,11 @@ export type EntityRecord = { id: string; revision: number; created: Stamp; chang
 export type RecordQuery = { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean };
 export type RecordPageData = Omit<Api.RecordPage, "records"> & { records: EntityRecord[] };
 export type RecordChange = Api.RecordChange;
-export type RecordView = Omit<Api.RecordView, "record" | "related"> & { record: EntityRecord; related: (Omit<Api.Related, "records"> & { records: EntityRecord[] })[] };
+export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes"> & {
+  record: EntityRecord; related: (Omit<Api.Related, "records"> & { records: EntityRecord[] })[];
+  /** The flow instances about the record (ADR-0026 D4). */
+  processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];
+};
 export type Money = { amount: number; currency: string };
 
 /** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart (ADR-0019). */
@@ -328,6 +332,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           [t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
           [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
       </section>
+      {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
       {view.related.map((rel) => {
         const relInfo = source.entity(rel.type);
         const relEntity = relInfo && entityFrom(relInfo);
@@ -356,6 +361,28 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         </ol>
       </section>
     </div>
+  );
+}
+
+const processTone = (state: string) =>
+  state === "done" ? "success" : state === "stuck" || state === "compensated" || state === "canceled" ? "danger" : state === "compensating" ? "warning" : "info";
+
+/** The processes about a record: each flow, its state, and the steps it stands at. */
+function Processes({ source, processes, onOpen }: { source: RecordSource; processes: RecordView["processes"]; onOpen?: (type: string, r: EntityRecord) => void }) {
+  const state = source.entity("flow.instance")?.fields.find((f) => f.name === "state");
+  return (
+    <section>
+      <h2 className="mb-1 text-sm font-semibold">{t("Processes")}</h2>
+      <ul className="grid gap-1">
+        {processes.map((p) => (
+          <li key={p.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
+            <button type="button" className="font-medium hover:underline" onClick={() => onOpen?.("flow.instance", p)}>{p.title}</button>
+            <Tag label={state?.choiceTitles?.[state.choices?.indexOf(p.state) ?? -1] ?? p.state} tone={processTone(p.state)} />
+            {!!p.tokens?.length && <span className="text-xs text-muted">{t("at {steps}", { steps: p.tokens.map((x) => x.step).join(", ") })}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

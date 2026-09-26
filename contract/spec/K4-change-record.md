@@ -32,4 +32,4 @@ Schema: `proto/platform/kernel/v1alpha1/change.proto`. Vectors: `vectors/k4-chan
 - A rejection is not remembered: the same key may be submitted again and succeed later (C9). Senders therefore retry a key only after no answer (K5 `UNKNOWN`), never after a rejection.
 - C12 replaces the preconditions two domain slices each carried in their payloads (friction F-20). Domain-specific conditions still belong to C10.
 - `correlation_id` groups related changes for tracing; v1alpha1 attaches no rule to it.
-- Grouping several changes atomically is an open question recorded as K4's falsification condition in `docs/Platform.md`.
+- Several changes of one authority stand or fall together: a decision's rules return one application of all of them. Grouping changes of several authorities atomically is declined (ADR-0026): a decision changes one authority's data, and what it needs of another is that authority's own decision, requested once the first is accepted and answered back to it.

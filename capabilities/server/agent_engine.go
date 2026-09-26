@@ -403,7 +403,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 			}
 		}
 		t.agentRun = run.ID // effects it causes name the run (discarded, a signal)
-		_, _, err := agent.Invoke(protocol, schema, target, body, key, run.ID, now)
+		_, _, err := t.invoke(agent, protocol, schema, target, body, key, run.ID, now)
 		t.agentRun = ""
 		if err != nil {
 			return "refused: " + err.Error(), nil

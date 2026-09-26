@@ -39,6 +39,8 @@ export default {
   "Group by": "分组",
   "Hide navigation": "隐藏导航",
   "History": "历史",
+  "Processes": "流程",
+  "at {steps}": "位于 {steps}",
   "ID": "ID",
   "Language": "语言",
   "Line": "折线图",

@@ -197,7 +197,7 @@ hosp crm "$SALES_TOKEN" s-b crm.opportunity.book crm.opportunity OPP-1 '{"roomTy
 [[ $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -r '.[] | select(.id == "lodging.booking/1") | "\(.bound) \(.consumers)"') == 'pms ["crm"]' ]] || fail "protocol binding"
 hosp platform "$MGR" s-r platform.member.revoke platform.member sales-1 '{"app":"pms"}' | jq -e .record >/dev/null || fail "revoke"
 catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$HOSPITALITY/v1/actions" | jq -c '[.[].schema | select(startswith("crm.") or startswith("pms."))]')
-[[ $catalog == '["crm.account.create","crm.account.edit","crm.account.archive","crm.opportunity.open","crm.opportunity.close","crm.opportunity.plan"]' ]] || fail "catalog after revocation: $catalog"
+[[ $catalog == '["crm.account.create","crm.account.edit","crm.account.archive","crm.opportunity.open","crm.opportunity.close","crm.opportunity.plan","crm.opportunity.answer"]' ]] || fail "catalog after revocation: $catalog"
 [[ $(hosp crm "$SALES_TOKEN" s-b2 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
 # Outbound effects (ADR-0014): the administrator subscribes a webhook endpoint to
 # the protocol's cancellation; the cancellation below reaches the sink signed, once.
@@ -220,17 +220,17 @@ mcp "$SALES_TOKEN" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"nam
 records() { curl -s -H "Authorization: Bearer $1" "$HOSPITALITY/v1/records/$2"; }
 [[ $(records "$SALES_TOKEN" 'crm.opportunity?sort=-id&limit=1' | jq -c '[.total, .records[0].id, .records[0].owner]') == '[2,"OPP-2","sales-1"]' ]] || fail "records: $(records "$SALES_TOKEN" 'crm.opportunity')"
 [[ $(records "$SALES_TOKEN" 'crm.opportunity?domain=%5B%5B%22title%22,%22like%22,%22board%22%5D%5D' | jq -r '.records[].id') == OPP-1 ]] || fail "records domain"
-[[ $(records "$MGR" 'crm.opportunity/OPP-1' | jq -c '[.record.booked, [.history[].schema]]') == '[1,["crm.opportunity.book","crm.opportunity.open"]]' ]] || fail "record history: $(records "$MGR" 'crm.opportunity/OPP-1')"
+[[ $(records "$MGR" 'crm.opportunity/OPP-1' | jq -c '[[.record.stays[].status], [.history[].schema]]') == '[["booked"],["crm.opportunity.answer","crm.opportunity.book","crm.opportunity.open"]]' ]] || fail "record history: $(records "$MGR" 'crm.opportunity/OPP-1')"
 [[ $(records "$MGR" 'crm.account/ACME' | jq -r '.related[0].total') == 2 ]] || fail "related records"
 echo "ok   application model: generic reads with a domain, the owner's scope, a record's history and its related records"
 # Analytics (ADR-0019): aggregates with the member's scope; the records projected
 # into PostgreSQL, readable by the tenant's reader role and no other tenant's.
 agg() { curl -s -H "Authorization: Bearer $1" "$HOSPITALITY/v1/aggregates/$2"; }
-[[ $(agg "$MGR" 'crm.opportunity?group=owner&measure=count,sum:booked' | jq -c .rows) == '[{"count":2,"owner":"sales-1","sum:booked":1}]' ]] || fail "aggregate: $(agg "$MGR" 'crm.opportunity?group=owner&measure=count,sum:booked')"
+[[ $(agg "$MGR" 'crm.opportunity?group=owner&measure=count,sum:rooms' | jq -c .rows) == '[{"count":2,"owner":"sales-1","sum:rooms":0}]' ]] || fail "aggregate: $(agg "$MGR" 'crm.opportunity?group=owner&measure=count,sum:rooms')"
 sql() { compose exec -T postgres psql -U platform -d platform -qtAc "$1" 2>&1; }
 for _ in $(seq 10); do [[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_hotel_a.crm_opportunity") == 2 ]] && break; sleep 1; done
-[[ $(sql "set role tenant_hotel_a_reader; select string_agg(id || ':' || booked, ',' order by id) from tenant_hotel_a.crm_opportunity") == "OPP-1:1,OPP-2:0" ]] || fail "projection: $(sql "select * from tenant_hotel_a.crm_opportunity")"
-[[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_hotel_a.crm_opportunity_changes where record_id = 'OPP-1'") == 2 ]] || fail "projected history"
+[[ $(sql "set role tenant_hotel_a_reader; select string_agg(id || ':' || stage, ',' order by id) from tenant_hotel_a.crm_opportunity") == "OPP-1:open,OPP-2:open" ]] || fail "projection: $(sql "select * from tenant_hotel_a.crm_opportunity")"
+[[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_hotel_a.crm_opportunity_changes where record_id = 'OPP-1'") == 3 ]] || fail "projected history"
 [[ $(sql "set role tenant_hotel_a_reader; select count(*) from tenant_plant_sz.mes_sfc") == *"permission denied"* ]] || fail "a reader of another tenant"
 echo "ok   analytics: an aggregate within the manager's scope; records and their history in PostgreSQL for the tenant's reader role only"
 # Lifecycles, approvals and tasks (ADR-0017): a leave request waits for the
@@ -249,18 +249,15 @@ echo "ok   approvals: a leave request held, found in the manager's inbox through
 # apartments; the hotel's stay stays on the opportunity, and the restart keeps the choice.
 SERVER=$HOSPITALITY TENANT=hotel-a AUTHORITY=platform submit "$MGR" p-1 platform.protocol.bind platform.protocol lodging.booking/1 '{"provider":"memstay"}' | jq -e .record >/dev/null || fail "choose provider"
 hosp crm "$MGR" s-b3 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"loft","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -e .record >/dev/null || fail "book at the chosen provider"
-[[ $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/customers" | jq -c '[.[].opportunities[] | select(.id == "OPP-1") | .stays[].roomType]') == '["suite","loft"]' ]] || fail "stays across providers"
+[[ $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/customers" | jq -c '[.[].opportunities[] | select(.id == "OPP-1") | .bookings[].roomType]') == '["suite","loft"]' ]] || fail "stays across providers"
 echo "ok   hospitality solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants; the cancellation reached a webhook endpoint signed, once"
 
-# Flows (ADR-0020): a won opportunity's planned rooms are booked through the
-# lodging protocol by the group-stay flow, which then waits for its owner; the
-# wait survives the restart below.
-hosp crm "$SALES_TOKEN" f-1 crm.opportunity.open crm.opportunity OPP-9 '{"account":"ACME","title":"Group retreat"}' | jq -e .record >/dev/null || fail "open for the flow"
-hosp crm "$SALES_TOKEN" f-2 crm.opportunity.plan crm.opportunity OPP-9 '{"rooms":2,"roomType":"standard","arrive":"2026-12-01","depart":"2026-12-03"}' | jq -e .record >/dev/null || fail "plan the group stay"
-hosp crm "$SALES_TOKEN" f-3 crm.opportunity.close crm.opportunity OPP-9 '{"outcome":"won"}' | jq -e .record >/dev/null || fail "win for the flow"
-flowstate() { curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/records/flow.instance/crm.group-stay:OPP-9" | jq -r '.record.state + " " + ([.record.trace[]?.what] | join(","))'; }
-for _ in $(seq 20); do [[ $(flowstate) == waiting* ]] && break; sleep 0.5; done
-[[ $(flowstate) == "waiting started,acted,chose,acted,chose,asked" ]] || fail "group-stay flow: $(flowstate)"
+# Decisions across apps (ADR-0026): a group's rooms held at the provider until a
+# cutoff, each answer on the opportunity; the hold survives the restart below.
+hosp crm "$SALES_TOKEN" f-1 crm.opportunity.open crm.opportunity OPP-9 '{"account":"ACME","title":"Group retreat"}' | jq -e .record >/dev/null || fail "open for the block"
+hosp crm "$SALES_TOKEN" f-2 crm.opportunity.plan crm.opportunity OPP-9 '{"rooms":2,"roomType":"standard","arrive":"2026-12-01","depart":"2026-12-03","cutoff":"2026-11-20"}' | jq -e .record >/dev/null || fail "plan the group block"
+blockstate() { records "$MGR" 'crm.opportunity/OPP-9' | jq -r '.record.block + " " + ([.record.stays[].status] | join(","))'; }
+[[ $(blockstate) == "held held,held" ]] || fail "group block: $(blockstate)"
 # Customer service (ADR-0021 D10 (2)): a ticket's triage agent, on the local model,
 # triages and replies; the reply's mail is held because an agent wrote it, and
 # reaches the mail gateway (the sink) once the manager approves it.
@@ -306,11 +303,10 @@ for host in manufacturing-server hospitality-server; do
   logged $host "saved a snapshot of" || fail "$host saved no snapshot at shutdown"
   logged $host "from the snapshot at" || fail "$host did not start from its snapshot"
 done
-task=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$HOSPITALITY/v1/inbox" | jq -r '.[] | select(.title | contains("Group retreat")) | .id')
-hosp work "$SALES_TOKEN" f-4 work.task.complete work.task "$task" '{"answer":"confirmed"}' | jq -e .record >/dev/null || fail "answer the flow's question after the restart"
-for _ in $(seq 20); do [[ $(flowstate) == done* ]] && break; sleep 0.5; done
-[[ $(flowstate) == done* ]] || fail "flow after the restart: $(flowstate)"
-echo "ok   flows: a won opportunity's rooms booked by the group-stay flow through the lodging protocol; its question to the owner survived the restart and its answer ended it"
+hosp crm "$SALES_TOKEN" f-3 crm.opportunity.close crm.opportunity OPP-9 '{"outcome":"won"}' | jq -e .record >/dev/null || fail "win the group after the restart"
+[[ $(blockstate) == "confirmed booked,booked" ]] || fail "group block after winning: $(blockstate)"
+echo "ok   decisions across apps: a group's rooms held at the provider until a cutoff survived the restart, and winning confirmed them, each answer on the opportunity"
+before=$(state) # what the backup below holds
 sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == "$calls" ]] || fail "a delivered webhook was sent again after the restart"
 echo "ok   restart: each host saved a snapshot at shutdown and started from it (plant $(compose logs manufacturing-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
 

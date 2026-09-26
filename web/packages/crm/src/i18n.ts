@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Failed": "失败",
+  "Released": "已释放",
+  "Releasing": "释放中",
+  "Confirmed": "已确认",
+  "Confirming": "确认中",
+  "Held": "已保留",
+  "Holding": "保留中",
+  "Held until": "保留至",
+  "The provider holds these rooms until the cutoff: won, they are confirmed; lost, or past the cutoff, released.": "提供方保留这些房间直到截止日：赢单则确认；输单或过了截止日则释放。",
+  "Cutoff before arrival": "截止日须早于到达",
   "Account": "客户",
   "Accounts": "客户",
   "Accounts with their opportunities, and the stays booked for them through the lodging protocol.": "客户及其商机，以及通过住宿协议为其预订的住宿。",
@@ -30,6 +40,7 @@ register("zh-CN", {
   "No account": "没有客户",
   "No accounts yet": "还没有客户",
   "No activity yet.": "还没有动态。",
+  "Group rooms confirmed": "已确认的团队房间",
   "No stays booked": "没有已订住宿",
   "Note": "备注",
   "Open": "进行中",
@@ -46,9 +57,7 @@ register("zh-CN", {
   "Room type (the provider's)": "房型（提供方的）",
   "Rooms": "房间数",
   "Stays": "住宿",
-  "Stays booked": "已订住宿",
   "What is being sold": "销售内容",
   "Won": "赢单",
-  "Won, the group-stay flow books these rooms through the lodging provider and asks you to confirm them with the customer.": "赢单后，团队住宿流程会通过住宿提供方预订这些房间，并请你与客户确认。",
   "· owner": "· 负责人",
 });

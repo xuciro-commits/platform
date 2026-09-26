@@ -93,6 +93,7 @@ type Tenant struct {
 	flows    *Flows       // long-running processes (ADR-0020)
 	agents   *Agents      // AI agents (ADR-0021)
 	probing  bool         // a submission for approval is being checked, not applied
+	requests []request    // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -262,11 +263,16 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb
 	}
 	record, err := a.Submit(t.caller(m, a, false), s, now)
 	if err == nil {
-		t.remember(submitted(m.ID, a, s, now))
-		body, _ := protojson.Marshal(s)
-		t.record(a, "submission", m, body, now)
+		t.journal(a, m, s, now)
 	}
 	return record, err
+}
+
+// journal records an accepted submission as the member's, for the audit and the journal.
+func (t *Tenant) journal(a platform.App, m platform.Member, s *pb.Submission, now time.Time) {
+	t.remember(submitted(m.ID, a, s, now))
+	body, _ := protojson.Marshal(s)
+	t.record(a, "submission", m, body, now)
 }
 
 // request holds a submission whose action needs approval (ADR-0017): its

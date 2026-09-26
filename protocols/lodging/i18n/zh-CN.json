@@ -11,5 +11,16 @@
  "Memstay": "Memstay 公寓",
  "Reserve a stay; refused when the provider cannot sell it.": "预订住宿；提供方无法出售时拒绝。",
  "Reserve stay": "预订住宿",
- "Room type the provider sells": "提供方出售的房型"
+ "Room type the provider sells": "提供方出售的房型",
+ "Book a held stay.": "预订已保留的住宿。",
+ "Confirm hold": "确认保留",
+ "Give a held room back.": "退回保留的房间。",
+ "Guest or group name": "客人或团队名称",
+ "Hold a room for a stay until a date, without booking it; refused when the provider cannot sell it.": "为一次住宿保留房间直到某日，但不预订；提供方无法出售时拒绝。",
+ "Hold confirmed": "保留已确认",
+ "Hold released": "保留已释放",
+ "Hold stay": "保留住宿",
+ "Release hold": "释放保留",
+ "Release holds past their date": "释放过期的保留",
+ "The hold's last day; the provider releases it after": "保留的最后一天；之后提供方会释放它"
 }

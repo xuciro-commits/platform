@@ -99,6 +99,10 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	work()
 	o := order("SO-1")
 	expect("confirmed through the protocol", o.ERP+" "+o.Confirmation, "confirmed MJ/2026/00001")
+	// The order's page shows the process about it (ADR-0026 D4).
+	if v, _ := tn.RecordOf(sup, mes.OrderType, "SO-1", now); len(v.Processes) != 1 || v.Processes[0].(platformserver.FlowInstance).State != "done" {
+		t.Fatalf("processes of SO-1: %+v", v.Processes)
+	}
 	mo := production("MO-1")
 	expect("the ERP's order", fmt.Sprint(mo.State, " ", mo.ShopOrder, " ", mo.Yield, " ", mo.Scrap), "confirmed SO-1 4 0")
 	stock, _ := tn.Read(sup, erp.OnHand)

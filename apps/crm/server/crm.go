@@ -1,14 +1,16 @@
 // Package crm is a customer and opportunity app (#91), modelled on the
 // account/opportunity core of Salesforce and Dynamics 365 Sales. It knows no
 // other app. It consumes the lodging protocol when a tenant has a provider
-// (ADR-0011): stays booked for an opportunity are linked to it through the
-// platform, and the platform's timeline tells what happens to them.
+// (ADR-0011): stays booked and rooms held for an opportunity are linked to it
+// through the platform, and the platform's timeline tells what happens to them.
 package crm
 
 import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +38,7 @@ const (
 	SchemaClose   = "crm.opportunity.close"
 	SchemaBook    = "crm.opportunity.book"
 	SchemaPlan    = "crm.opportunity.plan"
+	SchemaAnswer  = "crm.opportunity.answer"
 
 	Sales   Role = "sales"
 	Manager Role = "sales-manager"
@@ -57,13 +60,28 @@ type Opportunity struct {
 	Title   string                `json:"title" field:"required,search" help:"What is being sold, in the customer's words" example:"Board offsite, 12 rooms"`
 	Owner   string                `json:"owner" field:"readonly" help:"The salesperson who owns it; only they and managers may close it"`
 	Stage   string                `json:"stage" field:"readonly" choices:"open,won,lost" help:"open while it is being worked on; won or lost once closed"`
-	Booked  int                   `json:"booked" field:"readonly" title:"Stays booked"`
-	// The group's stay, planned while the opportunity is open; won, the
-	// group-stay flow books it (ADR-0020).
+	// The group's block (ADR-0026 D6), as a hotel sales system keeps it: planned
+	// rooms are held until a cutoff date; won, they are confirmed; lost, or past
+	// the cutoff, they are released.
 	Rooms    int    `json:"rooms,omitempty" field:"readonly" title:"Group rooms"`
 	RoomType string `json:"roomType,omitempty" field:"readonly" title:"Room type"`
 	Arrive   string `json:"arrive,omitempty" field:"readonly" type:"date"`
 	Depart   string `json:"depart,omitempty" field:"readonly" type:"date"`
+	Cutoff   string `json:"cutoff,omitempty" field:"readonly" type:"date" help:"The last day the rooms are held without being confirmed"`
+	Block    string `json:"block,omitempty" field:"readonly" title:"Group block" choices:"holding,held,confirming,confirmed,releasing,released,failed" help:"Where the group's rooms stand with the provider"`
+	Plans    int    `json:"plans,omitempty" field:"readonly"` // how many blocks were planned: the current one's rooms carry its number
+	Stays    []Stay `json:"stays" field:"readonly" title:"Rooms and stays"`
+}
+
+// Stay is one room the opportunity asked of the lodging provider: held for the
+// group's block, or booked on its own; its status is the provider's last answer.
+type Stay struct {
+	Booking string `json:"booking" title:"Booking"`
+	Kind    string `json:"kind" choices:"hold,booking"`
+	Plan    int    `json:"plan,omitempty"`
+	Status  string `json:"status" choices:"asked,held,booked,refused,released,canceled" help:"asked until the provider, or a person, answers"`
+	Detail  string `json:"detail,omitempty"`
+	Manual  bool   `json:"manual,omitempty" help:"No provider was bound: a person asks the hotel and records its answers"`
 }
 
 // Entities declares the CRM's types. Accounts are master data with generated
@@ -94,14 +112,18 @@ func Actions() *platform.Catalog {
 			Description: "Close an open opportunity as won or lost; only its owner or a sales manager.",
 			Payload:     []platform.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost"}}, Roles: both},
 		platform.Action{Schema: SchemaPlan, Target: OpportunityType, Capability: "stays", Title: "Plan group stay",
-			Description: "Plan the rooms a group needs if the opportunity is won: the group-stay flow books them then, and asks the owner to confirm them with the customer.",
+			Description: "Hold the rooms a group needs until a cutoff date: won, they are confirmed; lost, or past the cutoff, they are released. Refused at once when the provider cannot hold such a room; when it cannot hold them all, the block fails and the rooms held are given back.",
 			Payload: []platform.Field{{Name: "rooms", Type: "integer", Required: true, Description: "Rooms, 1 to 20"},
 				{Name: "roomType", Type: "string", Required: true, Description: "The provider's room type"},
-				{Name: "arrive", Type: "date", Required: true, Description: "First night"}, {Name: "depart", Type: "date", Required: true, Description: "Departure"}},
+				{Name: "arrive", Type: "date", Required: true, Description: "First night"}, {Name: "depart", Type: "date", Required: true, Description: "Departure"},
+				{Name: "cutoff", Type: "date", Required: true, Description: "The last day the rooms are held"}},
 			Roles: both},
 		platform.Action{Schema: SchemaBook, Target: OpportunityType, Capability: "stays", Title: "Book stay",
 			Description: "Book a stay for an opportunity with the tenant's lodging provider and link it to the opportunity; the provider decides with your role there.",
 			Payload:     lodging.Protocol().Actions[0].Payload, Roles: both, Uses: []string{platform.ProtocolAction(lodging.ID, "reserve")}},
+		platform.Action{Schema: SchemaAnswer, Target: OpportunityType, Capability: "stays", Title: "Record the provider's answer",
+			Description: "Record how the lodging provider answered for one of the opportunity's rooms: the platform does it when a provider is bound; a person does it when the hotel answers by phone or email.",
+			Payload:     platform.AnswerFields(), Roles: both},
 	)...)
 }
 
@@ -136,50 +158,66 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	return c.ledger.Receive(who, s, now, owns, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		invalid := fail(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		var p struct {
-			Account, Title, Outcome, RoomType, Arrive, Depart string
-			Rooms                                             int
+			Account, Title, Outcome, RoomType, Arrive, Depart, Cutoff string
+			Rooms                                                     int
 		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
+		}
+		if s.GetSchema().GetName() != SchemaOpen && !known {
+			return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+		}
+		// asks requests each stay of the provider once the decision is accepted
+		// (ADR-0026 D2); unbound, nothing is asked and a person records the answers.
+		var asks []platform.Request
+		ask := func(action, booking string, payload any) {
+			asks = append(asks, platform.Request{Protocol: lodging.ID, Action: action, Target: booking, Payload: payload, Reply: SchemaAnswer})
 		}
 		switch s.GetSchema().GetName() {
 		case SchemaOpen:
 			if known {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
-			o = Opportunity{Record: platform.Record{ID: id}, Account: platform.Ref[Account](p.Account), Title: strings.TrimSpace(p.Title), Owner: who.ID, Stage: "open"}
+			o = Opportunity{Record: platform.Record{ID: id}, Account: platform.Ref[Account](p.Account), Title: strings.TrimSpace(p.Title), Owner: who.ID, Stage: "open", Stays: []Stay{}}
 			if err := who.Check(o); err != nil {
 				return nil, invalid
 			}
 		case SchemaBook:
-			// The stay is the provider's decision, taken as this decision's rule (K4 C10):
-			// its refusal refuses the booking, and nothing is linked.
-			if !known {
-				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
-			}
+			// The provider decides; it is asked first, so that what it cannot sell is refused at once.
 			if o.Stage == "lost" {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
-			booking := fmt.Sprintf("%s-B%d", id, o.Booked+1)
-			stay, _, err := who.Invoke(lodging.ID, "reserve", booking, s.GetPayload(), "crm:"+s.GetIdempotencyKey(), s.GetIdempotencyKey(), now)
+			booking := fmt.Sprintf("%s-B%d", id, len(o.Stays)+1)
+			bound, err := probe(who, "reserve", booking, s.GetPayload(), now)
 			if err != nil {
 				return nil, err
 			}
-			if err := who.Link(&pb.EntityRef{Type: OpportunityType, Id: id}, stay, "crm:link:"+s.GetIdempotencyKey(), now); err != nil {
-				return nil, err
+			o.Stays = append(o.Stays, Stay{Booking: booking, Kind: "booking", Status: "asked", Manual: !bound})
+			if bound {
+				ask("reserve", booking, json.RawMessage(s.GetPayload()))
 			}
-			o.Booked++
 		case SchemaPlan:
-			if !known {
-				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+			if o.Stage != "open" || o.Block == "holding" || o.Block == "held" || o.Block == "releasing" {
+				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT) // one block at a time; a failed or released one may be planned again
 			}
-			if o.Stage != "open" {
-				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
-			}
-			if p.Rooms < 1 || p.Rooms > 20 || strings.TrimSpace(p.RoomType) == "" || p.Depart <= p.Arrive {
+			if p.Rooms < 1 || p.Rooms > 20 || strings.TrimSpace(p.RoomType) == "" || p.Depart <= p.Arrive || p.Cutoff == "" || p.Cutoff >= p.Arrive {
 				return nil, invalid
 			}
-			o.Rooms, o.RoomType, o.Arrive, o.Depart = p.Rooms, p.RoomType, p.Arrive, p.Depart
+			o.Rooms, o.RoomType, o.Arrive, o.Depart, o.Cutoff, o.Block = p.Rooms, p.RoomType, p.Arrive, p.Depart, p.Cutoff, "holding"
+			o.Plans++
+			hold := map[string]string{"roomType": p.RoomType, "checkIn": p.Arrive, "checkOut": p.Depart, "until": p.Cutoff}
+			for i := range p.Rooms {
+				booking := fmt.Sprintf("%s-H%d", id, len(o.Stays)+1)
+				hold["guest"] = fmt.Sprintf("%s, room %d", o.Title, i+1)
+				bound, err := probe(who, "hold", booking, hold, now)
+				if err != nil {
+					return nil, err
+				}
+				o.Stays = append(o.Stays, Stay{Booking: booking, Kind: "hold", Plan: o.Plans, Status: "asked", Manual: !bound})
+				if bound {
+					ask("hold", booking, maps.Clone(hold))
+				}
+			}
 			if err := who.Check(o); err != nil {
 				return nil, invalid
 			}
@@ -187,18 +225,149 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if p.Outcome != "won" && p.Outcome != "lost" {
 				return nil, invalid
 			}
-			if !known {
-				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
-			}
 			if o.Stage != "open" {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
 			o.Stage = p.Outcome
+			if o.Block == "held" { // won, the block is confirmed; lost, it is given back
+				o.Block = map[bool]string{true: "confirming", false: "releasing"}[p.Outcome == "won"]
+				for _, st := range o.block() {
+					if !st.Manual {
+						ask(map[bool]string{true: "confirm", false: "release"}[p.Outcome == "won"], st.Booking, struct{}{})
+					}
+				}
+			}
+		case SchemaAnswer:
+			var a platform.Answer
+			if json.Unmarshal(s.GetPayload(), &a) != nil {
+				return nil, invalid
+			}
+			i := slices.IndexFunc(o.Stays, func(st Stay) bool { return st.Booking == a.Call })
+			if i < 0 {
+				return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
+			}
+			status, ok := answered(o.Stays[i], a)
+			if !ok {
+				return nil, invalid
+			}
+			o.Stays[i].Status, o.Stays[i].Detail = status, a.Code
+			asks = append(asks, o.settle(o.Stays[i])...)
+			return func(r *pb.ChangeRecord) {
+				who.Put(r, o)
+				if a.Ref != "" && a.Outcome == "accepted" && (a.Action == "reserve" || a.Action == "hold") {
+					who.Link(&pb.EntityRef{Type: OpportunityType, Id: id}, refOf(a.Ref), "crm:link:"+a.Call, now)
+				}
+				for _, q := range asks {
+					who.Request(r, q)
+				}
+			}, nil
 		default:
 			return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 		}
-		return func(r *pb.ChangeRecord) { who.Put(r, o) }, nil
+		return func(r *pb.ChangeRecord) {
+			who.Put(r, o)
+			for _, q := range asks {
+				who.Request(r, q)
+			}
+		}, nil
 	})
+}
+
+// probe asks the provider whether it would take the stay; bound is false when
+// the tenant has no provider, and the stay then waits for a person's answer.
+func probe(who platform.Caller, action, booking string, payload any, now time.Time) (bound bool, err *kernel.Error) {
+	err = who.Probe(lodging.ID, action, booking, payload, now)
+	if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// answered is a stay's status after the provider's answer to what it was asked.
+func answered(st Stay, a platform.Answer) (string, bool) {
+	switch {
+	case a.Outcome == "released" || a.Outcome == "accepted" && a.Action == "release":
+		return "released", st.Status == "held"
+	case a.Outcome == "refused":
+		return map[bool]string{true: "refused", false: st.Status}[st.Status == "asked"], st.Status != "released"
+	case a.Outcome != "accepted":
+		return "", false
+	case a.Action == "hold":
+		return "held", st.Status == "asked"
+	case a.Action == "reserve", a.Action == "confirm":
+		return "booked", st.Status == "asked" || st.Status == "held"
+	}
+	return "", false
+}
+
+// block are the current block's rooms.
+func (o Opportunity) block() []Stay {
+	var out []Stay
+	for _, st := range o.Stays {
+		if st.Kind == "hold" && st.Plan == o.Plans {
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
+// settle moves the block on after an answer about one of its rooms, and says
+// what to ask the provider next: a block that cannot be held whole is given
+// back, a room held after that too.
+func (o *Opportunity) settle(changed Stay) []platform.Request {
+	if changed.Kind != "hold" || changed.Plan != o.Plans {
+		return nil
+	}
+	release := func(st Stay) platform.Request {
+		return platform.Request{Protocol: lodging.ID, Action: "release", Target: st.Booking, Payload: struct{}{}, Reply: SchemaAnswer}
+	}
+	count := map[string]int{}
+	for _, st := range o.block() {
+		count[st.Status]++
+	}
+	all := func(status string) bool { return count[status] == len(o.block()) }
+	switch {
+	case o.Block == "failed" && changed.Status == "held" && !changed.Manual:
+		return []platform.Request{release(changed)}
+	case o.Block == "holding" && (changed.Status == "refused" || changed.Status == "released"):
+		o.Block = "failed"
+		var out []platform.Request
+		for _, st := range o.block() {
+			if st.Status == "held" && !st.Manual {
+				out = append(out, release(st))
+			}
+		}
+		return out
+	case o.Block == "holding" && all("held"):
+		o.Block = "held"
+	case o.Block == "confirming" && all("booked"):
+		o.Block = "confirmed"
+	case o.Block == "confirming" && changed.Status != "booked":
+		o.Block = "failed"
+	case (o.Block == "held" || o.Block == "releasing") && count["released"]+count["refused"] == len(o.block()):
+		o.Block = "released"
+	}
+	return nil
+}
+
+func refOf(ref string) *pb.EntityRef {
+	t, id, _ := strings.Cut(ref, "/")
+	return &pb.EntityRef{Type: t, Id: id}
+}
+
+// Handle hears the provider release a held room on its own, past the cutoff,
+// and records it as the provider's answer.
+func (c *CRM) Handle(who platform.Caller, e platform.Event) *kernel.Error {
+	booking := e.Record.GetSubmission().GetTarget().GetId()
+	opp := booking[:max(strings.LastIndex(booking, "-"), 0)]
+	o, known := platform.Get[Opportunity](who, opp)
+	if !known || !slices.ContainsFunc(o.Stays, func(st Stay) bool { return st.Booking == booking && st.Status == "held" }) {
+		return nil // not ours, or already answered
+	}
+	payload, _ := json.Marshal(platform.Answer{Call: booking, Action: "release", Outcome: "released"})
+	_, err := c.Submit(who, &pb.Submission{TenantId: c.tenant, PrincipalId: who.ID, Authority: ID, Target: &pb.EntityRef{Type: OpportunityType, Id: opp},
+		Schema: &pb.SchemaRef{Name: SchemaAnswer, Version: 1}, IdempotencyKey: "released:" + booking, Payload: payload}, e.Record.GetRecordedTime().AsTime())
+	return err
 }
 
 func (c *CRM) Declarations() []*pb.AuthorityDeclaration { return c.ledger.Declarations() }
@@ -211,8 +380,9 @@ func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) 
 
 func (c *CRM) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
-		Flows: []platform.Flow{GroupStay()}, Agents: []platform.Agent{Assistant()},
-		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
+		Agents:     []platform.Agent{Assistant()},
+		Consumes:   []platform.Consumption{{Protocol: lodging.ID, Optional: true}},
+		Subscribes: []string{platform.ProtocolAction(lodging.ID, "released")}}
 }
 
 // Read "customers": accounts with their opportunities and stays. Plain lists
@@ -230,7 +400,7 @@ type Customer struct {
 
 type OpportunityStays struct {
 	Opportunity
-	Stays []lodging.Booking `json:"stays"`
+	Bookings []lodging.Booking `json:"bookings"` // as the providers hold them
 }
 
 // customers shows each opportunity with the stays linked to it, from whichever
@@ -260,7 +430,7 @@ func (c *CRM) customers(who platform.Caller) (any, *kernel.Error) {
 					stays = append(stays, b)
 				}
 			}
-			customer.Opportunities = append(customer.Opportunities, OpportunityStays{Opportunity: o, Stays: stays})
+			customer.Opportunities = append(customer.Opportunities, OpportunityStays{Opportunity: o, Bookings: stays})
 		}
 		out = append(out, customer)
 	}
@@ -276,7 +446,7 @@ func (c *CRM) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Er
 // opportunity, a plan for rooms, an outcome — that the member confirms.
 func Assistant() platform.Agent {
 	return platform.Agent{Name: "assistant", Title: "Sales assistant",
-		Instructions: `You help a salesperson with their accounts and opportunities. Read the record's context, and search when you need another record. When the goal asks for a change, make it with the one action that fits — open an opportunity, plan a group stay (rooms, room type, arrival and departure), or close an opportunity won or lost — and the salesperson confirms it. When the goal only asks a question, finish with the answer. Never guess an ID: search for it.`,
+		Instructions: `You help a salesperson with their accounts and opportunities. Read the record's context, and search when you need another record. When the goal asks for a change, make it with the one action that fits — open an opportunity, plan a group stay (rooms, room type, arrival, departure and the cutoff date until which the rooms are held), or close an opportunity won or lost — and the salesperson confirms it. When the goal only asks a question, finish with the answer. Never guess an ID: search for it.`,
 		Tools:        []string{SchemaOpen, SchemaPlan, SchemaClose, "read:customers"},
 		Budget:       platform.Budget{Steps: 8, Actions: 2}}
 }

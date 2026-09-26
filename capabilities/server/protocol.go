@@ -1,7 +1,9 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"slices"
 	"strings"
 	"time"
@@ -98,7 +100,8 @@ func (t *Tenant) consumes(c platform.Caller, protocol string) bool {
 	return self != nil && slices.ContainsFunc(self.Manifest().Consumes, func(x platform.Consumption) bool { return x.Protocol == protocol })
 }
 
-// invoke calls a protocol action for a consumer (Caller.Invoke).
+// invoke calls a protocol action for a consumer: a flow's step, an agent, or a
+// decision's request once it is accepted (ADR-0026).
 func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 	if !t.consumes(c, protocol) {
 		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -113,6 +116,58 @@ func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload 
 	record, err := provider.Submit(called, &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(declared.Target),
 		Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}, now)
 	return target, record, err
+}
+
+// probe runs a protocol action's policy and rules at the provider, for a
+// consumer's rules, applying nothing (Caller.Probe). A replay does not ask
+// again: the decision held; only whether a provider is bound is said again.
+func (t *Tenant) probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error {
+	if c.Replaying {
+		if _, _, bound := t.provider(platform.ProtocolAction(protocol, action)); !bound {
+			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		return nil
+	}
+	was := t.probing
+	t.probing = true
+	defer func() { t.probing = was }()
+	_, _, err := t.invoke(c, protocol, action, id, payload, "probe", "", now)
+	return err
+}
+
+// request is a protocol action an accepted decision asked for (Caller.Request).
+type request struct {
+	platform.Request
+	caller platform.Caller
+	record *pb.ChangeRecord
+	n      int
+}
+
+// answer runs a decision's request at the provider, as the member who decided,
+// and submits the answer to the requesting app's reply action on the
+// decision's target (ADR-0026 D2). Both are journaled as submissions of their
+// apps: a replay runs what was recorded and never asks the provider again.
+func (t *Tenant) answer(q request, now time.Time) {
+	s := q.record.GetSubmission()
+	key := fmt.Sprintf("%s:%s#%d", q.caller.App, s.GetIdempotencyKey(), q.n)
+	answer := platform.Answer{Call: q.Target, Action: q.Action, Outcome: "accepted"}
+	ref, done, err := t.invoke(q.caller, q.Protocol, q.Action, q.Target, platform.Raw(q.Payload), key, s.GetIdempotencyKey(), now)
+	if err != nil {
+		answer.Outcome, answer.Code = "refused", err.Code.String()
+	} else {
+		answer.Ref = ref.GetType() + "/" + ref.GetId()
+		t.journal(t.app(t.owner["action:"+done.GetSubmission().GetSchema().GetName()].Manifest().ID), q.caller.Member, done.GetSubmission(), now)
+	}
+	app := t.app(q.caller.App)
+	payload, _ := json.Marshal(answer)
+	c := t.automation(q.caller.App, false)
+	reply := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: s.GetAuthority(), Target: s.GetTarget(),
+		Schema: &pb.SchemaRef{Name: q.Reply, Version: 1}, IdempotencyKey: "answer:" + key, CorrelationId: s.GetIdempotencyKey(), Payload: payload}
+	if _, err := app.Submit(c, reply, now); err != nil {
+		log.Printf("tenant %s: %s refused the answer %s to its request %s: %v", t.ID, q.caller.App, payload, key, err) // a defect of the app
+		return
+	}
+	t.journal(app, c.Member, reply, now)
 }
 
 // query reads a protocol read from every provider, the bound one first (Caller.Query).

@@ -57,10 +57,36 @@ func (m *Memory) Restore(raw json.RawMessage) error {
 
 func (m *Memory) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: "memstay", Title: "Memstay", Version: "1", Actions: m.ledger.Catalog, Reads: []string{"memstay-bookings"},
+		Jobs: []platform.Job{{Name: JobHolds, Title: "Release holds past their date", Every: time.Hour}},
 		Provides: []platform.Provision{{Protocol: Protocol(),
-			Actions: map[string]string{"reserve": "memstay.reserve", "change": "memstay.change", "cancel": "memstay.cancel"},
-			Reads:   map[string]string{"bookings": "memstay-bookings"},
-			Events:  map[string]string{"changed": "memstay.change", "canceled": "memstay.cancel"}}}}
+			Actions: map[string]string{"reserve": "memstay.reserve", "change": "memstay.change", "cancel": "memstay.cancel",
+				"hold": "memstay.hold", "confirm": "memstay.confirm", "release": "memstay.release"},
+			Reads: map[string]string{"bookings": "memstay-bookings"},
+			Events: map[string]string{"changed": "memstay.change", "canceled": "memstay.cancel",
+				"confirmed": "memstay.confirm", "released": "memstay.release"}}}}
+}
+
+// JobHolds releases the holds whose last day has passed.
+const JobHolds = "holds"
+
+// Run releases every hold whose last day is before now's day, as the provider.
+func (m *Memory) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
+	m.mu.Lock()
+	var expired []string
+	for id, b := range m.bookings {
+		if b.Status == Held && b.Until < now.UTC().Format(time.DateOnly) {
+			expired = append(expired, id)
+		}
+	}
+	m.mu.Unlock()
+	slices.Sort(expired)
+	for _, id := range expired {
+		if _, err := m.Submit(c, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: "memstay", Target: &pb.EntityRef{Type: "memstay.booking", Id: id},
+			Schema: &pb.SchemaRef{Name: "memstay.release", Version: 1}, IdempotencyKey: "expired:" + id, Payload: []byte("{}")}, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *Memory) Declarations() []*pb.AuthorityDeclaration { return m.ledger.Declarations() }
@@ -76,28 +102,39 @@ func (m *Memory) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 		var b Booking
 		json.Unmarshal(s.GetPayload(), &b)
 		id, existing := s.GetTarget().GetId(), m.bookings[s.GetTarget().GetId()]
-		switch s.GetSchema().GetName() {
-		case "memstay.reserve":
+		notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		switch schema := s.GetSchema().GetName(); schema {
+		case "memstay.reserve", "memstay.hold":
 			if existing != nil {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 			}
-			if b.RoomType == "" || b.Guest == "" || b.CheckOut <= b.CheckIn {
+			held := schema == "memstay.hold"
+			if b.RoomType == "" || b.Guest == "" || b.CheckOut <= b.CheckIn || held && b.Until == "" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
-			b.ID = id
+			b.ID, b.Status = id, map[bool]string{true: Held, false: Booked}[held]
+			if !held {
+				b.Until = ""
+			}
 			return func(*pb.ChangeRecord) { m.bookings[id] = &b }, nil
 		case "memstay.change":
-			if existing == nil || existing.Canceled {
-				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			if existing == nil || !existing.Open() {
+				return nil, notFound
 			}
 			return func(*pb.ChangeRecord) {
 				existing.RoomType, existing.CheckIn, existing.CheckOut = b.RoomType, b.CheckIn, b.CheckOut
 			}, nil
+		case "memstay.confirm", "memstay.release":
+			if existing == nil || existing.Status != Held {
+				return nil, notFound
+			}
+			to := map[bool]string{true: Booked, false: Released}[schema == "memstay.confirm"]
+			return func(*pb.ChangeRecord) { existing.Status, existing.Until = to, "" }, nil
 		}
-		if existing == nil || existing.Canceled {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		if existing == nil || !existing.Open() {
+			return nil, notFound
 		}
-		return func(*pb.ChangeRecord) { existing.Canceled = true }, nil
+		return func(*pb.ChangeRecord) { existing.Status = Canceled }, nil
 	})
 }
 

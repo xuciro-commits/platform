@@ -205,6 +205,9 @@ func (ss *session) create(d *flowDef, id, key string, data any, onBehalf, parent
 	x := &FlowInstance{Record: platform.Record{ID: id}, Flow: d.app + "." + d.Name, Title: fmt.Sprintf("%s %s", d.Title, key), Version: d.Version, Key: key,
 		State: "running", OnBehalf: onBehalf, Data: string(raw), Parent: parent, Tokens: []Token{{ID: 1, Step: d.Steps[0].Name, Waits: "ready", Attempts: 0}},
 		Undo: []UndoEntry{}, Seq: 1}
+	if d.Subject != "" {
+		x.Subject = d.Subject + "/" + key
+	}
 	ss.changed[id], ss.order = x, append(ss.order, id)
 	ss.trace(x, "", "started", fmt.Sprintf("version %d, key %s", d.Version, key), onBehalf)
 	return x
@@ -397,7 +400,7 @@ func (ss *session) act(appID, protocol, action, target string, payload json.RawM
 	t := ss.f.t
 	c := t.automation(appID, ss.c.Replaying)
 	if protocol != "" {
-		ref, _, err := c.Invoke(protocol, action, target, payload, key, key, ss.now)
+		ref, _, err := t.invoke(c, protocol, action, target, payload, key, key, ss.now)
 		return ref, err
 	}
 	app := t.app(appID)

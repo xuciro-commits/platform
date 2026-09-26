@@ -55,7 +55,8 @@ func NewCaller(rt Runtime, m Member, app string, replaying, automation bool) Cal
 // it. Each method acts as c, for c's app, within the input being handled.
 type Runtime interface {
 	Publish(c Caller, record *pb.ChangeRecord)
-	Invoke(c Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)
+	Probe(c Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error
+	Request(c Caller, r *pb.ChangeRecord, q Request)
 	Query(c Caller, protocol, read string) ([]ProviderResult, *kernel.Error)
 	Notify(c Caller, n Notification, now time.Time, to []Recipient) []string
 	Setting(c Caller, name string) string

@@ -18,8 +18,21 @@ func (r runtime) Publish(c platform.Caller, record *pb.ChangeRecord) {
 	r.t.publish(platform.Event{App: c.App, Record: record})
 }
 
-func (r runtime) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
-	return r.t.invoke(c, protocol, action, id, payload, key, correlation, now)
+func (r runtime) Probe(c platform.Caller, protocol, action, id string, payload []byte, now time.Time) *kernel.Error {
+	return r.t.probe(c, protocol, action, id, payload, now)
+}
+
+func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
+	if c.Replaying {
+		return // the journal holds what the request decided
+	}
+	n := 0 // the decision's requests are numbered for their keys
+	for _, x := range r.t.requests {
+		if x.record == rec {
+			n++
+		}
+	}
+	r.t.requests = append(r.t.requests, request{Request: q, caller: c, record: rec, n: n})
 }
 
 func (r runtime) Query(c platform.Caller, protocol, read string) ([]platform.ProviderResult, *kernel.Error) {

@@ -7,13 +7,15 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 export type Stay = { roomType: string; checkIn: string; checkOut: string };
-export type Reservation = Stay & { id: string; guest: string; revision: number; canceled: boolean };
+export type Reservation = Stay & { id: string; guest: string; revision: number; status: "held" | "booked" | "canceled" | "released"; until?: string };
 /** A room type as the host keeps it (ADR-0016): records a manager maintains. */
 export type RoomType = { id: string; name: string; rooms: number; overbooking: number; hourly?: boolean; minUnits?: number; archived?: boolean };
 
 export const reservationStatuses = defineStatuses({
-  confirmed: { label: t("Confirmed"), tone: "success" },
+  held: { label: t("Held"), tone: "info" },
+  booked: { label: t("Booked"), tone: "success" },
   canceled: { label: t("Canceled"), tone: "neutral" },
+  released: { label: t("Released"), tone: "neutral" },
 });
 
 /** Choices for a stay's room type: the nightly types the hotel sells, as its records say. */
@@ -30,7 +32,7 @@ export const newReservation = stay.and(z.object({ guest: z.string().trim().min(1
 const short = (id: string) => id.slice(0, 12);
 
 export function ReservationStatus({ reservation }: { reservation: Reservation }) {
-  return <StatusTag status={reservation.canceled ? "canceled" : "confirmed"} registry={reservationStatuses} />;
+  return <StatusTag status={reservation.status} registry={reservationStatuses} />;
 }
 
 const columns: ColumnDef<Reservation, any>[] = [
@@ -40,7 +42,7 @@ const columns: ColumnDef<Reservation, any>[] = [
   { accessorKey: "checkIn", header: t("Check-in"), meta: { width: 110 } },
   { accessorKey: "checkOut", header: t("Check-out"), meta: { width: 110 } },
   { accessorKey: "revision", header: t("Rev."), meta: { width: 60, align: "right" } },
-  { id: "status", accessorFn: (r) => (r.canceled ? "canceled" : "confirmed"), header: t("Status"), meta: { width: 110 },
+  { id: "status", accessorFn: (r) => r.status, header: t("Status"), meta: { width: 110 },
     cell: (c) => <StatusTag status={c.getValue()} registry={reservationStatuses} /> },
 ];
 

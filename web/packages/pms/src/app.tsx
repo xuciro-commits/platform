@@ -23,7 +23,7 @@ function ReservationDetail({ id }: { id: string }) {
   return r ? <div className="max-w-md"><ReservationCard reservation={r} /></div> : <p className="text-sm text-muted">{t("No reservation")} {id}.</p>;
 }
 
-const stays = { entity: "pms.reservation", domain: [["canceled", "=", false]] };
+const stays = { entity: "pms.reservation", domain: [["status", "=", "booked"]] };
 const count = { aggregate: "count", type: "quantitative" } as const;
 
 export default defineApp({
@@ -32,11 +32,11 @@ export default defineApp({
   icon: <Hotel />,
   home: { view: "reservations" },
   dashboards: [{ id: "occupancy", title: t("Occupancy"), description: t("Reservations by arrival month and room type; cancellations apart."), charts: [
-    { title: t("Confirmed reservations"), data: stays, mark: "kpi", encoding: { y: count } },
+    { title: t("Booked reservations"), data: stays, mark: "kpi", encoding: { y: count } },
     { title: t("Arrivals per month"), data: stays, mark: { type: "bar", stack: true },
       encoding: { x: { field: "checkIn", timeUnit: "month", type: "temporal" }, y: count, color: { field: "roomType", type: "nominal", title: t("Room type") } } },
     { title: t("Room types"), data: stays, mark: { type: "arc", donut: true }, encoding: { theta: count, color: { field: "roomType", type: "nominal" } } },
-    { title: t("Confirmed and canceled"), data: { entity: "pms.reservation" }, mark: "arc", encoding: { theta: count, color: { field: "canceled", type: "nominal" } } },
+    { title: t("By status"), data: { entity: "pms.reservation" }, mark: "arc", encoding: { theta: count, color: { field: "status", type: "nominal" } } },
   ] }],
   opens: { "pms.reservation": "reservation", "lodging.booking": "reservation" },
   views: [

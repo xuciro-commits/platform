@@ -50,7 +50,7 @@ func (p *Plant) confirmation() platform.Flow {
 		}
 		return "propose", "the ERP " + o.ERP + " it: " + o.ERPDetail
 	}
-	return platform.Flow{Name: "erp-confirmation", Title: "Confirm to the ERP", Version: 1, Owners: []string{string(Supervisor)},
+	return platform.Flow{Name: "erp-confirmation", Title: "Confirm to the ERP", Version: 1, Owners: []string{string(Supervisor)}, Subject: OrderType,
 		Start: platform.Start{On: []string{SchemaComplete, SchemaSign}, Begin: func(c platform.Caller, e platform.Event) (string, any, bool) {
 			sfc, _ := platform.Get[SFC](c, e.Record.GetSubmission().GetTarget().GetId())
 			o, known := platform.Get[Order](c, string(sfc.Order))
@@ -271,9 +271,10 @@ func (p *Plant) made(who platform.Caller, o Order) (yield, scrap int) {
 	return yield, o.Quantity - yield
 }
 
-// confirm confirms o to the provider of its planned order in the rules of the
-// plant's decision s, and returns how to record the outcome: refused at once,
-// answered at once, or sent.
+// confirm confirms o to the provider of its planned order once the plant's
+// decision is accepted (ADR-0026 D2): refused at once when there is nothing to
+// confirm against, otherwise sent, and the provider's answer comes back to
+// mes.order.answer.
 func (p *Plant) confirm(who platform.Caller, s *pb.Submission, o Order, now time.Time) func(*pb.ChangeRecord) {
 	key := s.GetIdempotencyKey()
 	if o.Planned == "" {
@@ -282,20 +283,22 @@ func (p *Plant) confirm(who platform.Caller, s *pb.Submission, o Order, now time
 		}
 	}
 	yield, scrap := p.made(who, o)
-	raw, _ := json.Marshal(production.Confirmation{ShopOrder: o.ID, Yield: float64(yield), Scrap: float64(scrap)})
-	_, _, err := who.Invoke(production.ID, "confirm", o.Planned, raw, "mes:"+key, key, now)
-	planned, _ := erpOrder(who, o.Planned)
+	confirmation := production.Confirmation{ShopOrder: o.ID, Yield: float64(yield), Scrap: float64(scrap)}
 	return func(r *pb.ChangeRecord) {
-		switch {
-		case err != nil:
-			p.answered(who, r, o, production.Order{State: "refused", Detail: err.Error()}, key, now)
-		case planned.Answered(o.ID):
-			p.answered(who, r, o, planned, key, now)
-		default:
-			o.ERP = "sent"
-			who.Put(r, o)
-		}
+		o.ERP = "sent"
+		who.Put(r, o)
+		who.Request(r, platform.Request{Protocol: production.ID, Action: "confirm", Target: o.Planned, Payload: confirmation, Reply: SchemaAnswer})
 	}
+}
+
+// answer is how the ERP answered a sent order: refused by the provider at once;
+// accepted, as the provider's order now shows it — answered by an ERP in the
+// host at once, or still sent until an ERP outside answers its adapter.
+func (p *Plant) answer(who platform.Caller, o Order, a platform.Answer) (production.Order, bool) {
+	if a.Outcome == "refused" {
+		return production.Order{State: "refused", Detail: a.Code}, o.ERP == "sent"
+	}
+	return awaited(who, o)
 }
 
 // answered records the ERP's answer on the order and tells the line's
