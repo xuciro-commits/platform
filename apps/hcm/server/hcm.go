@@ -62,8 +62,8 @@ func Entities() []platform.Entity {
 				{Name: "submit", Title: "Submit for approval", From: []string{"draft"}, To: []string{"approved"}, Roles: []string{Employee},
 					Description: "Ask for the leave; it is approved once the manager (and, above five days, the department head) agree.",
 					Approval: &platform.Approval{Levels: []platform.ApprovalLevel{
-						{Title: "Manager", Structure: Structure, Role: "manager", Due: 48 * time.Hour},
-						{Title: "Department head", Structure: Structure, Role: "head", Due: 48 * time.Hour, When: longerThan(5)},
+						{Title: "Manager", Structure: Structure, Role: "manager", WorkingDays: 2},
+						{Title: "Department head", Structure: Structure, Role: "head", WorkingDays: 2, When: longerThan(5)},
 					}},
 					Do: own},
 				{Name: "cancel", Title: "Cancel", From: []string{"draft", "approved"}, To: []string{"canceled"}, Roles: []string{Employee, HR},

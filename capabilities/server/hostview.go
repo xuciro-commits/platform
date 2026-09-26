@@ -106,3 +106,5 @@ func (h hostView) Readable(m platform.Member, ref string, now time.Time) bool {
 func (h hostView) Stored(tenant, hash string) bool {
 	return h.t.files().Exists(context.Background(), tenant+"/"+hash)
 }
+
+func (h hostView) Record(ref string) (any, bool) { return h.t.Held(ref) }

@@ -177,8 +177,12 @@ func (f *Flows) Declare(a platform.App) error {
 	for _, fl := range m.Flows {
 		id := m.ID + "." + fl.Name
 		d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
-		if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || len(fl.Start.On) == 0 || fl.Start.Begin == nil {
-			return fmt.Errorf("flow %s: name, title, version, a start and steps are required", id)
+		byEvent, byState := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil
+		if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || byEvent == byState {
+			return fmt.Errorf("flow %s: name, title, version, steps and one start — on events, or on a record's state — are required", id)
+		}
+		if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) {
+			return fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
 		}
 		versions := f.defs[id]
 		if len(versions) > 0 && versions[len(versions)-1].Version >= fl.Version {
@@ -223,7 +227,7 @@ func (f *Flows) Declare(a platform.App) error {
 					return fmt.Errorf("flow %s: step %s goes to %s, not a step", id, s.Name, r)
 				}
 			}
-			if s.Timeout > 0 && s.OnTimeout == "" {
+			if (s.Timeout > 0 || s.WorkingDays > 0) && s.OnTimeout == "" {
 				return fmt.Errorf("flow %s: step %s times out to nowhere", id, s.Name)
 			}
 			if act := s.Act; act != nil && (act.Action == "" || act.Target == nil) {
@@ -301,6 +305,9 @@ func (f *Flows) Interested(names []string, e platform.Event) bool {
 		if d := versions[len(versions)-1]; slices.ContainsFunc(d.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			return true
 		}
+		if d := versions[len(versions)-1]; d.Start.Type != "" && slices.ContainsFunc(e.Changed, func(ref string) bool { return strings.HasPrefix(ref, d.Start.Type+"/") }) {
+			return true
+		}
 		for _, d := range versions {
 			for _, s := range d.Steps {
 				if s.Wait != nil && slices.Contains(names, s.Wait.On) || s.Ask != nil && s.Ask.On != "" && slices.Contains(names, s.Ask.On) {
@@ -319,6 +326,29 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 	s := e.Record.GetSubmission()
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		latest, _ := f.latest(id)
+		if latest.Start.Type != "" { // a record's state (ADR-0028 D8): once per record, when a decision first brings it there
+			for _, ref := range e.Changed {
+				key, ok := strings.CutPrefix(ref, latest.Start.Type+"/")
+				if !ok {
+					continue
+				}
+				if _, started := platform.Get[FlowInstance](c, id+":"+key); started {
+					continue
+				}
+				record, held := f.host.Record(ref)
+				if !held || !latest.Start.When(f.host.Automation(latest.app, c.Replaying), record) {
+					continue
+				}
+				d, err := f.version(c, id)
+				if err != nil {
+					return err
+				}
+				if err := f.start(c, d, key, nil, s.GetPrincipalId(), &e, "", now); err != nil {
+					return err
+				}
+			}
+			continue
+		}
 		if !slices.ContainsFunc(latest.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			continue
 		}
@@ -416,7 +446,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 					if tok.Task != "" {
 						ss.close = append(ss.close, tok.Task)
 					}
-					ss.trace(in, tok.Step, "timeout", step.Timeout.String(), "")
+					ss.trace(in, tok.Step, "timeout", map[bool]string{true: fmt.Sprintf("%d working days", step.WorkingDays), false: step.Timeout.String()}[step.WorkingDays > 0], "")
 					ss.next(in, tok.ID, step.OnTimeout)
 				})
 			}

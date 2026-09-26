@@ -312,3 +312,51 @@ func (o *Organization) Read(platform.Caller, string) (any, *kernel.Error) {
 	json.Unmarshal(raw, &out) // a deep copy, with empty lists rather than null
 	return out, nil
 }
+
+// Calendar is the working calendar of party on day: that of its primary unit,
+// else of any of its units, found up any structure; else the tenant's first;
+// else Monday to Friday (ADR-0028 D7).
+func (o *Organization) Calendar(party string, day platform.Date) platform.Calendar {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	byID := func(id string) (platform.Calendar, bool) {
+		i := slices.IndexFunc(o.chart.Calendars, func(c platform.Calendar) bool { return c.ID == id })
+		if i < 0 {
+			return platform.Calendar{}, false
+		}
+		return o.chart.Calendars[i], true
+	}
+	var units []string
+	for _, m := range o.chart.Memberships {
+		if m.Party == party && activeOn(m.From, m.Until, day) {
+			if m.Primary {
+				units = append([]string{m.Unit}, units...)
+			} else {
+				units = append(units, m.Unit)
+			}
+		}
+	}
+	seen := map[string]bool{}
+	for len(units) > 0 {
+		u := units[0]
+		units = units[1:]
+		if seen[u] {
+			continue
+		}
+		seen[u] = true
+		if x := o.unit(u); x != nil && x.Calendar != "" {
+			if c, ok := byID(x.Calendar); ok {
+				return c
+			}
+		}
+		for _, e := range o.chart.Edges {
+			if e.Unit == u && activeOn(e.From, e.Until, day) {
+				units = append(units, e.Parent)
+			}
+		}
+	}
+	if len(o.chart.Calendars) > 0 {
+		return o.chart.Calendars[0]
+	}
+	return platform.Calendar{}
+}

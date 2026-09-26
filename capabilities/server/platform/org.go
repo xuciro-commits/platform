@@ -1,6 +1,9 @@
 package platform
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // The organisation's vocabulary (ADR-0012): units of any kind, in any number of
 // structures, with memberships of members or of other units, all with valid
@@ -18,6 +21,46 @@ type Unit struct {
 	From     Date   `json:"from,omitempty"`
 	Until    Date   `json:"until,omitempty"`
 	Closed   string `json:"closed,omitempty"` // why it ended: dissolved, merged into <unit> …
+	// Calendar is the unit's working calendar (ADR-0028 D7); empty: the one
+	// found above it in any structure, else the tenant's first.
+	Calendar string `json:"calendar,omitempty"`
+}
+
+// Calendar is when a unit works: its working weekdays and its holidays.
+type Calendar struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Workdays []int  `json:"workdays,omitempty"` // 1 Monday … 7 Sunday; empty: Monday to Friday
+	Holidays []Date `json:"holidays,omitempty"`
+}
+
+// Works reports whether day is a working day of the calendar.
+func (c Calendar) Works(day time.Time) bool {
+	wd := int(day.Weekday())
+	if wd == 0 {
+		wd = 7
+	}
+	workdays := c.Workdays
+	if len(workdays) == 0 {
+		workdays = []int{1, 2, 3, 4, 5}
+	}
+	if !slices.Contains(workdays, wd) {
+		return false
+	}
+	return !slices.Contains(c.Holidays, day.Format(time.DateOnly))
+}
+
+// After is from moved n working days on, at the same time of day: the due
+// time of work that may take n working days.
+func (c Calendar) After(from time.Time, n int) time.Time {
+	at := from
+	for n > 0 {
+		at = at.AddDate(0, 0, 1)
+		if c.Works(at) {
+			n--
+		}
+	}
+	return at
 }
 
 type Structure struct {
@@ -48,6 +91,7 @@ type Membership struct {
 
 // OrgSeed is an organisation's starting shape (an industry package's, or a deployment's).
 type OrgSeed struct {
+	Calendars   []Calendar   `json:"calendars,omitempty"`
 	Structures  []Structure  `json:"structures"`
 	Units       []Unit       `json:"units"`
 	Edges       []Edge       `json:"edges"`

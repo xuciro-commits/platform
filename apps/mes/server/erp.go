@@ -51,11 +51,12 @@ func (p *Plant) confirmation() platform.Flow {
 		return "propose", "the ERP " + o.ERP + " it: " + o.ERPDetail
 	}
 	return platform.Flow{Name: "erp-confirmation", Title: "Confirm to the ERP", Version: 1, Owners: []string{string(Supervisor)}, Subject: OrderType,
-		Start: platform.Start{On: []string{SchemaComplete, SchemaSign}, Begin: func(c platform.Caller, e platform.Event) (string, any, bool) {
-			sfc, _ := platform.Get[SFC](c, e.Record.GetSubmission().GetTarget().GetId())
-			o, known := platform.Get[Order](c, string(sfc.Order))
+		// It starts when a decision first completes an order — the last SFC's
+		// completion or signed disposition — with an ERP to confirm to (ADR-0028 D8).
+		Start: platform.Start{Type: OrderType, When: func(c platform.Caller, record any) bool {
+			o := record.(Order)
 			_, erp := erpOrders(c)
-			return o.ID, nil, erp && known && o.Status == "completed" && o.ERP == ""
+			return erp && o.Status == "completed" && o.ERP == ""
 		}},
 		Steps: []platform.Step{
 			{Name: "confirm", Title: "Confirm the order", Act: &platform.Act{Action: SchemaConfirm, Target: id}, Next: "answer"},

@@ -42,6 +42,8 @@ type Host interface {
 	Readable(m platform.Member, ref string, now time.Time) bool
 	// Stored reports whether the tenant's file store holds the bytes with this sha256 (ADR-0028).
 	Stored(tenant, hash string) bool
+	// Record is a record by "<type>/<id>" as its app holds it (an event's Changed ones, ADR-0028 D8).
+	Record(ref string) (any, bool)
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
 	Declares(name string) bool
 	// Seen marks an app's notifications with any of keys read for everyone.
@@ -138,4 +140,7 @@ type Directory interface {
 	Units(party, structure string, day platform.Date) []string
 	// Holders are the members with role (any, when empty) in unit or a unit above it in structure on day.
 	Holders(structure, unit, role string, day platform.Date) []string
+	// Calendar is the working calendar of party ("member:<id>"; "" for the
+	// tenant's) on day (ADR-0028 D7).
+	Calendar(party string, day platform.Date) platform.Calendar
 }

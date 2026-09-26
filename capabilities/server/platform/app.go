@@ -136,6 +136,8 @@ type App interface {
 type Event struct {
 	App    string
 	Record *pb.ChangeRecord
+	// Changed are the records ("<type>/<id>") the decision put, whichever it named (ADR-0028 D8).
+	Changed []string
 }
 
 // Subscriber is an app that handles the events its manifest subscribes to, as

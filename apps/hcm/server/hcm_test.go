@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,10 +165,16 @@ func TestLeaveApprovals(t *testing.T) {
 	draft("L6", "2027-01-04", "2027-01-05")
 	expect("probe", do("dave", SchemaSubmit, LeaveType, "L6", struct{}{}), "ERROR_CODE_POLICY_DENIED")
 
-	// An overdue task tells its approvers once.
+	// An overdue task tells its approvers once: due in two working days, a
+	// Thursday's request is late on Monday morning (ADR-0028 D7).
 	do("alice", SchemaSubmit, LeaveType, "L6", struct{}{})
-	tn.Work(now.Add(72 * time.Hour))
+	tn.Work(now.Add(72 * time.Hour)) // Sunday: not yet
 	notes, _ := tn.Read(member("bob"), "notifications")
+	if slices.ContainsFunc(notes.([]platform.Notification), func(n platform.Notification) bool { return strings.HasPrefix(n.Title, "Overdue") }) {
+		t.Fatal("overdue over the weekend")
+	}
+	tn.Work(now.Add(4*24*time.Hour + time.Minute))
+	notes, _ = tn.Read(member("bob"), "notifications")
 	overdue := slices.ContainsFunc(notes.([]platform.Notification), func(n platform.Notification) bool {
 		return n.Title == "Overdue: Approve: Submit for approval hcm.leave/L6"
 	})

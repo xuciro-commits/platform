@@ -38,6 +38,11 @@ type Flow struct {
 type Start struct {
 	On    []string
 	Begin func(c Caller, e Event) (key string, data any, ok bool)
+	// Type and When start an instance the first time a decision brings a
+	// record of Type into a state When accepts, whichever record the decision
+	// named (ADR-0028 D8); its key is the record's ID. Either this or On.
+	Type string
+	When func(c Caller, record any) bool
 }
 
 // Step is one step: exactly one of Act, Wait, Ask, Call, All, Any or Agent.
@@ -60,6 +65,9 @@ type Step struct {
 	// Timeout ends a Wait or an Ask after this long, at OnTimeout.
 	Timeout   time.Duration
 	OnTimeout string
+	// WorkingDays, when set, times the step out after that many working days
+	// of the calendar of whom the instance runs for, or the tenant's (ADR-0028 D7).
+	WorkingDays int
 	// Fault is where an Act goes once its retries are spent; without it the
 	// flow compensates: each completed Act's Undo runs, newest first.
 	Fault string

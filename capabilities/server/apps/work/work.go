@@ -228,6 +228,13 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 		if level.Due > 0 {
 			step.Due = now.Add(level.Due)
 		}
+		if level.WorkingDays > 0 { // in the requester's working days (ADR-0028 D7)
+			cal := platform.Calendar{}
+			if d := w.host.Directory(); d != nil {
+				cal = d.Calendar("member:"+requester.ID, now.UTC().Format(time.DateOnly))
+			}
+			step.Due = cal.After(now, level.WorkingDays)
+		}
 		steps = append(steps, step)
 	}
 	raw, _ := protojson.Marshal(held)

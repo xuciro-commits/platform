@@ -141,6 +141,13 @@ export type Budget = {
   Actions: number;
 };
 
+export type Calendar = {
+  id: string;
+  name: string;
+  workdays?: number[];
+  holidays?: string[];
+};
+
 export type CapabilityInfo = {
   name: string;
   enabled: boolean;
@@ -500,6 +507,7 @@ export type Notification = {
 };
 
 export type OrgSeed = {
+  calendars?: Calendar[];
   structures: Structure[];
   units: Unit[];
   edges: Edge[];
@@ -752,6 +760,7 @@ export type Unit = {
   from?: string;
   until?: string;
   closed?: string;
+  calendar?: string;
 };
 
 export type Upload = {

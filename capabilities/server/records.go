@@ -29,6 +29,47 @@ type recordStore struct {
 	byGo  map[reflect.Type]*entityType
 	// touched, when set, hears of each record put, under mu (the PostgreSQL projection, ADR-0019).
 	touched func(typ, id string)
+	// changed are the records each recent decision put ("<app>/<change>" →
+	// "<type>/<id>"), for flows started by a record's state (ADR-0028 D8).
+	changed map[string][]string
+	order   []string
+}
+
+const changesKept = 10000
+
+func (s *recordStore) remember(change, ref string) {
+	if s.changed == nil {
+		s.changed = map[string][]string{}
+	}
+	if _, known := s.changed[change]; !known {
+		s.order = append(s.order, change)
+		if len(s.order) > changesKept {
+			delete(s.changed, s.order[0])
+			s.order = s.order[1:]
+		}
+	}
+	if !slices.Contains(s.changed[change], ref) {
+		s.changed[change] = append(s.changed[change], ref)
+	}
+}
+
+// Changed are the records the decision of event e put.
+func (t *Tenant) Changed(e platform.Event) []string {
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	return slices.Clone(t.records.changed[e.App+"/"+e.Record.GetChangeId()])
+}
+
+// Held is a record by "<type>/<id>", as its app holds it, for the platform's own apps.
+func (t *Tenant) Held(ref string) (any, bool) {
+	typ, id, _ := strings.Cut(ref, "/")
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	et := t.records.types[typ]
+	if et == nil || et.rows[id] == nil {
+		return nil, false
+	}
+	return et.rows[id].value.Interface(), true
 }
 
 type entityType struct {
@@ -233,6 +274,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		rec.Revision = r.GetRevision()
 	}
 	et.rows[rec.ID] = &row{value: v, history: append(history, change)}
+	s.remember(c.App+"/"+r.GetChangeId(), et.info.Type+"/"+rec.ID)
 	if s.touched != nil {
 		s.touched(et.info.Type, rec.ID)
 	}

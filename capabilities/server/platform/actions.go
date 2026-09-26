@@ -53,6 +53,9 @@ type ApprovalLevel struct {
 	All             bool
 	When            func(c Caller, s *pb.Submission) bool
 	Due             time.Duration
+	// WorkingDays, when set, is the due time in working days of the
+	// requester's calendar instead (ADR-0028 D7).
+	WorkingDays int
 }
 
 // Field describes one payload field of an action.

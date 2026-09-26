@@ -48,6 +48,8 @@ func DemoOrganization() platform.OrgSeed {
 	}
 	group, company := unit("group", "Harbour Hospitality Group", "group"), unit("hotel-a-co", "Hotel A Ltd.", "subsidiary")
 	group.Legal, company.Legal = true, true
+	frontOffice := unit("front-office", "Front office", "department")
+	frontOffice.Calendar = "front-office"
 	offsite := unit("offsite-2026", "Autumn offsite programme", "project")
 	offsite.Until = "2027-01-01"
 	committee := unit("guest-committee", "Guest experience committee", "committee")
@@ -55,11 +57,16 @@ func DemoOrganization() platform.OrgSeed {
 	acme := unit("acme", "Acme Corp", "partner")
 	acme.Legal, acme.External = true, true
 	return platform.OrgSeed{
+		// The office works Monday to Friday, closed for National Day week; the
+		// hotel's front office works every day (ADR-0028 D7).
+		Calendars: []platform.Calendar{
+			{ID: "office", Name: "Office", Holidays: []platform.Date{"2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07"}},
+			{ID: "front-office", Name: "Front office", Workdays: []int{1, 2, 3, 4, 5, 6, 7}}},
 		Structures: []platform.Structure{{ID: "legal", Name: "Legal entities", Kind: "legal"},
 			{ID: "management", Name: "Management", Kind: "management"}, {ID: "governance", Name: "Committees", Kind: "governance"},
 			{ID: "projects", Name: "Projects", Kind: "project"}},
 		Units: []platform.Unit{group, company, unit("hospitality", "Hospitality business group", "business group"),
-			unit("hotel-a", "Hotel A", "property"), unit("front-office", "Front office", "department"), unit("sales-team", "Sales", "team"),
+			unit("hotel-a", "Hotel A", "property"), frontOffice, unit("sales-team", "Sales", "team"),
 			offsite, committee, acme},
 		Edges: []platform.Edge{
 			{Structure: "legal", Unit: "hotel-a-co", Parent: "group", Relation: "owned by", Share: 1},

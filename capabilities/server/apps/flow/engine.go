@@ -309,8 +309,8 @@ func (ss *session) take(x *FlowInstance, token int) {
 				return
 			}
 			tok.Due = at
-		} else if step.Timeout > 0 {
-			tok.Due = ss.now.Add(step.Timeout)
+		} else if due, ok := ss.timeout(x, step); ok {
+			tok.Due = due
 		}
 		ss.trace(x, tok.Step, "waiting", waitingFor(step), "")
 	case step.Agent != nil && ss.f.host.Runs() != nil: // the app's agent takes the step (ADR-0021); its run ends it
@@ -322,8 +322,8 @@ func (ss *session) take(x *FlowInstance, token int) {
 			ref = ag.Ref(app, run)
 		}
 		tok.Waits, tok.Child = "agent", id
-		if step.Timeout > 0 {
-			tok.Due = ss.now.Add(step.Timeout)
+		if due, ok := ss.timeout(x, step); ok {
+			tok.Due = due
 		}
 		ss.runs = append(ss.runs, host.RunStart{ID: id, Agent: d.app + "." + ag.Agent, Goal: goal, Ref: ref, Flow: x.ID, Step: tok.Step, Token: tok.ID})
 		ss.trace(x, tok.Step, "agent", ag.Agent+": "+goal, "")
@@ -341,8 +341,8 @@ func (ss *session) take(x *FlowInstance, token int) {
 			a.Title, a.To, a.Body = step.Agent.Goal(app, run), step.Agent.To(app, run), "An agent's step, done by a person."
 		}
 		x.Seq++
-		if step.Timeout > 0 {
-			tok.Due, a.Due = ss.now.Add(step.Timeout), ss.now.Add(step.Timeout)
+		if due, ok := ss.timeout(x, step); ok {
+			tok.Due, a.Due = due, due
 		}
 		tok.Waits, tok.Task = "ask", d.app+":"+a.Key
 		ss.assigns = append(ss.assigns, flowTask{app: d.app, Assignment: a})
@@ -360,8 +360,8 @@ func (ss *session) take(x *FlowInstance, token int) {
 			data = step.Call.Data(app, run)
 		}
 		tok.Waits, tok.Child = "call", id
-		if step.Timeout > 0 {
-			tok.Due = ss.now.Add(step.Timeout)
+		if due, ok := ss.timeout(x, step); ok {
+			tok.Due = due
 		}
 		ss.trace(x, tok.Step, "called", child.Title+" "+id, "")
 		ss.advance(ss.create(child, id, id, data, x.OnBehalf, x.ID))
@@ -676,3 +676,20 @@ func clip(s string, n int) string {
 func backoff(attempts int) time.Duration { return time.Second << attempts }
 
 func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }
+
+// timeout is when a step times out: after its Timeout, or after its working
+// days in the calendar of whom the instance runs for, else the tenant's (ADR-0028 D7).
+func (ss *session) timeout(x *FlowInstance, step *platform.Step) (time.Time, bool) {
+	if step.WorkingDays > 0 {
+		cal := platform.Calendar{}
+		if d := ss.f.host.Directory(); d != nil {
+			party := ""
+			if x.OnBehalf != "" {
+				party = "member:" + x.OnBehalf
+			}
+			cal = d.Calendar(party, ss.now.UTC().Format(time.DateOnly))
+		}
+		return cal.After(ss.now, step.WorkingDays), true
+	}
+	return ss.now.Add(step.Timeout), step.Timeout > 0
+}

@@ -377,6 +377,7 @@ type caused struct {
 
 // publish queues an accepted decision for its subscribers (Ledger, through Runtime).
 func (t *Tenant) publish(e platform.Event) {
+	e.Changed = t.Changed(e)
 	t.events = append(t.events, caused{e, t.hops, t.current()})
 	t.acted++
 }
