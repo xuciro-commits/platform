@@ -23,7 +23,7 @@ export function Members() {
         actions={<Button variant="primary" onClick={() => setAdding(true)}>{t("Add member")}</Button>} />
       {members.error ? <p className="text-sm text-[var(--tone-danger)]">{String(members.error)} {t("— administrators only.")}</p> :
         <DataTable data={members.data ?? []} columns={columns} getRowId={(m) => m.id} height="calc(100dvh - 190px)"
-          onRowClick={(m) => open({ view: "member", params: { id: m.id } })} />}
+          onRowClick={(m) => open({ view: "member", params: { id: m.id } }, { window: "float" })} />}
       <Dialog open={adding} onOpenChange={setAdding} title={t("Add member")}>
         <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t(t("Lower case, digits, dashes"))), subject: z.string().regex(/^(user|client):.+/, t("user:<email> or client:<id>")), agent: z.boolean() })}
           defaultValues={{ id: "", subject: "", agent: false }} submitLabel={t("Add")} onCancel={() => setAdding(false)}

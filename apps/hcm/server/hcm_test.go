@@ -72,12 +72,13 @@ func TestLeaveApprovals(t *testing.T) {
 	}
 	request := func(leave string) work.ApprovalRequest {
 		out, _ := tn.Read(member("alice"), "requests")
+		var found work.ApprovalRequest // the pending request about the leave, else any
 		for _, r := range out.([]work.ApprovalRequest) {
-			if r.Target == LeaveType+"/"+leave {
-				return r
+			if r.Target == LeaveType+"/"+leave && (found.ID == "" || r.State == "pending") {
+				found = r
 			}
 		}
-		return work.ApprovalRequest{}
+		return found
 	}
 	inbox := func(who string) []string {
 		out, _ := tn.Read(member(who), "inbox")
@@ -103,7 +104,7 @@ func TestLeaveApprovals(t *testing.T) {
 	// Three days: the manager approves, and the leave is approved by that decision.
 	draft("L1", "2026-10-12", "2026-10-14")
 	expect("submit", do("alice", SchemaSubmit, LeaveType, "L1", struct{}{}), work.SchemaRequest) // held, not applied
-	expect("while pending", leave("L1").State, "draft")
+	expect("while pending", leave("L1").State, "pending")
 	a1 := request("L1")
 	expect("levels", fmt.Sprint(len(a1.Levels), a1.Levels[0].Approvers), "1 [bob bot]")
 	expect("bob's inbox", fmt.Sprint(inbox("bob")), "[Approve: Submit for approval hcm.leave/L1]")
@@ -138,28 +139,51 @@ func TestLeaveApprovals(t *testing.T) {
 	a2 := request("L2")
 	expect("two levels", fmt.Sprint(len(a2.Levels), a2.Levels[1].Approvers), "2 [carol]")
 	do("bob", "work.approval.approve", work.ApprovalType, a2.ID, struct{}{})
-	expect("level two", fmt.Sprintf("%d %s %v", request("L2").Level, leave("L2").State, inbox("carol")), "1 draft [Approve: Submit for approval hcm.leave/L2]")
+	expect("level two", fmt.Sprintf("%d %s %v", request("L2").Level, leave("L2").State, inbox("carol")), "1 pending [Approve: Submit for approval hcm.leave/L2]")
 	do("carol", "work.approval.approve", work.ApprovalType, a2.ID, struct{}{})
 	expect("after both", leave("L2").State, "approved")
 
-	// The rules decide when the last approver agrees (D3): a leave canceled
-	// meanwhile is refused, and the request says why.
+	// A pending leave is neither canceled nor asked for again; withdrawn, it is a draft again.
 	draft("L3", "2026-12-01", "2026-12-02")
 	do("alice", SchemaSubmit, LeaveType, "L3", struct{}{})
-	do("alice", SchemaCancel, LeaveType, "L3", struct{}{})
-	do("bob", "work.approval.approve", work.ApprovalType, request("L3").ID, struct{}{})
-	expect("stale", request("L3").State+" "+request("L3").Outcome+" "+leave("L3").State, "refused ERROR_CODE_CONFLICT canceled")
+	expect("cancel while pending", do("alice", SchemaCancel, LeaveType, "L3", struct{}{}), "ERROR_CODE_CONFLICT")
+	expect("ask again while pending", do("alice", SchemaSubmit, LeaveType, "L3", struct{}{}), "ERROR_CODE_CONFLICT")
+	expect("bob withdraws", do("bob", "work.approval.withdraw", work.ApprovalType, request("L3").ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
+	do("alice", "work.approval.withdraw", work.ApprovalType, request("L3").ID, struct{}{})
+	expect("withdrawn", request("L3").State+" "+leave("L3").State+" "+fmt.Sprint(inbox("bob")), "withdrawn draft []")
+	expect("canceled", do("alice", SchemaCancel, LeaveType, "L3", struct{}{}), SchemaCancel)
 
-	// Rejected and withdrawn requests leave the leave a draft.
+	// A rejection leaves the leave rejected with the approver's note, told to
+	// the requester; submitted again, it is approved (F-38).
 	draft("L4", "2026-12-10", "2026-12-10")
 	do("alice", SchemaSubmit, LeaveType, "L4", struct{}{})
 	do("bob", "work.approval.reject", work.ApprovalType, request("L4").ID, map[string]string{"note": "busy week"})
-	expect("rejected", request("L4").State+" "+leave("L4").State, "rejected draft")
-	draft("L5", "2026-12-20", "2026-12-20")
+	r4 := request("L4")
+	expect("rejected", r4.State+" "+r4.RejectedBy+" "+r4.Outcome+" "+leave("L4").State, "rejected bob busy week rejected")
+	told = func() string {
+		notes, _ := tn.Read(member("alice"), "notifications")
+		for _, n := range notes.([]platform.Notification) {
+			if strings.Contains(n.Title, "hcm.leave/L4: rejected") {
+				return n.Title + " / " + n.Body
+			}
+		}
+		return ""
+	}()
+	expect("alice told", told, "Submit for approval hcm.leave/L4: rejected by bob / busy week")
+	expect("submit again", do("alice", SchemaSubmit, LeaveType, "L4", struct{}{}), work.SchemaRequest)
+	expect("pending again", leave("L4").State, "pending")
+	do("bob", "work.approval.approve", work.ApprovalType, request("L4").ID, struct{}{})
+	expect("approved at last", leave("L4").State, "approved")
+
+	// The department head rejects what the manager approved: the manager is told too.
+	draft("L5", "2027-02-01", "2027-02-07")
 	do("alice", SchemaSubmit, LeaveType, "L5", struct{}{})
-	expect("bob withdraws", do("bob", "work.approval.withdraw", work.ApprovalType, request("L5").ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
-	do("alice", "work.approval.withdraw", work.ApprovalType, request("L5").ID, struct{}{})
-	expect("withdrawn", request("L5").State+" "+fmt.Sprint(inbox("bob")), "withdrawn []")
+	do("bob", "work.approval.approve", work.ApprovalType, request("L5").ID, struct{}{})
+	do("carol", "work.approval.reject", work.ApprovalType, request("L5").ID, map[string]string{"note": "overlaps the audit"})
+	bobs, _ = tn.Read(member("bob"), "notifications")
+	expect("bob told", fmt.Sprint(slices.ContainsFunc(bobs.([]platform.Notification), func(n platform.Notification) bool {
+		return n.Title == "Submit for approval hcm.leave/L5: rejected by carol" && n.Body == "overlaps the audit"
+	})), "true")
 
 	// A request is checked when made: HR cannot submit Alice's leave for her.
 	draft("L6", "2027-01-04", "2027-01-05")

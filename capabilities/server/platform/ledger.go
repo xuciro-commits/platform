@@ -144,11 +144,38 @@ func (l *Ledger) Generated(c Caller, s *pb.Submission, now time.Time, allowed fu
 			})
 			return record, err, true
 		}
+		for _, suffix := range []string{ApprovalHeld, ApprovalRejected, ApprovalReturned} {
+			name, found := strings.CutSuffix(verb, suffix)
+			i := slices.IndexFunc(e.Lifecycle.Transitions, func(t Transition) bool { return t.Name == name && t.Approval != nil && t.Approval.Pending != "" })
+			if !found || i < 0 {
+				continue
+			}
+			record, err := l.Receive(c, s, now, allowed, func() (func(*pb.ChangeRecord), *kernel.Error) {
+				return transition(c, e, approvalMove(e.Lifecycle.Transitions[i], suffix), s, now)
+			})
+			return record, err, true
+		}
 	}
 	return nil, nil, false
 }
 
+// approvalMove is the move of a record whose transition t waits for approval
+// (F-38): into its pending state, or out of it on a rejection or a return.
+func approvalMove(t Transition, suffix string) Transition {
+	back := t.From[0]
+	switch suffix {
+	case ApprovalHeld:
+		return Transition{Name: t.Name + suffix, From: t.From, To: []string{t.Approval.Pending}}
+	case ApprovalRejected:
+		if t.Approval.Rejected != "" {
+			back = t.Approval.Rejected
+		}
+	}
+	return Transition{Name: t.Name + suffix, From: []string{t.Approval.Pending}, To: []string{back}}
+}
+
 // transition moves a record along its lifecycle, through the transition's Do.
+// A transition that waits in a pending state also leaves it, once approved.
 func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	if c.rt == nil {
 		return nil, notFound()
@@ -164,7 +191,8 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	v.Elem().Set(reflect.ValueOf(existing))
 	status := v.Elem().FieldByIndex(f.Index)
 	from := status.String()
-	if v.Elem().Field(0).Interface().(Record).Archived || !slices.Contains(t.From, from) {
+	pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.rt.Probing() // run by its approval, not asked again
+	if v.Elem().Field(0).Interface().(Record).Archived || !slices.Contains(t.From, from) && !pending {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} // not in a state the transition leaves
 	}
 	if t.Do != nil {

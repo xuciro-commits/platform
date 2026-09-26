@@ -14,6 +14,7 @@ import (
 	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/apps/relations"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -817,6 +818,7 @@ type RecordView struct {
 	History   []RecordChange `json:"history"`
 	Related   []Related      `json:"related"`
 	Processes []any          `json:"processes"`
+	Approvals []any          `json:"approvals"` // requests to move it, newest first (F-38)
 	Files     []any          `json:"files"`     // attached to it (ADR-0028)
 	Comments  []any          `json:"comments"`  // on it, oldest first (ADR-0028 D6)
 	Following bool           `json:"following"` // the member follows it
@@ -851,7 +853,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		return RecordView{}, notFound
 	}
 	seen, hidden := viewOf(m, et)
-	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Files: []any{}, Comments: []any{}}
+	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Files: []any{}, Comments: []any{}}
 	if c := t.app(relations.ID); c != nil && typ != relations.CommentType && typ != relations.FollowType {
 		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
 		if page, err := t.Records(m, relations.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
@@ -872,6 +874,12 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
 		if page, err := t.Records(m, flow.InstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
 			view.Processes = page.Records
+		}
+	}
+	if typ != work.ApprovalType && t.app(work.ID) != nil {
+		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
+		if page, err := t.Records(m, work.ApprovalType, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 20}, now); err == nil {
+			view.Approvals = page.Records
 		}
 	}
 	history := maskedHistory(r.history, hidden)

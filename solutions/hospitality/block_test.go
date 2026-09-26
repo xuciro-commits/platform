@@ -62,7 +62,7 @@ func TestGroupBlock(t *testing.T) {
 	w.expect(block(w, "OPP-1"), "held OPP-1-H1:held")
 	w.expect(reservation("OPP-1-H1"), lodging.Held)
 	closeAs(w, "OPP-1", "won")
-	w.expect(block(w, "OPP-1")+" "+reservation("OPP-1-H1"), "confirmed OPP-1-H1:booked booked")
+	w.expect(block(w, "OPP-1")+" "+reservation("OPP-1-H1")+" "+opportunity(w, "OPP-1").Stage, "confirmed OPP-1-H1:booked booked won")
 
 	// What the hotel cannot hold at all is refused at once, and nothing is recorded.
 	open(w, "OPP-2")
@@ -101,9 +101,22 @@ func TestGroupBlock(t *testing.T) {
 	w.expect(alone.submit("sales", crm.ID, crm.SchemaAnswer, crm.OpportunityType, "OPP-1", "phone",
 		map[string]string{"call": "OPP-1-H1", "action": "hold", "outcome": "accepted"}), "ok")
 	closeAs(alone, "OPP-1", "won")
-	w.expect(block(alone, "OPP-1"), "confirming OPP-1-H1:held")
+	w.expect(block(alone, "OPP-1")+" "+opportunity(alone, "OPP-1").Stage, "confirming OPP-1-H1:held open") // won once confirmed (F-40)
+	w.expect(alone.submit("sales", crm.ID, crm.SchemaClose, crm.OpportunityType, "OPP-1", "close-again", map[string]string{"outcome": "lost"}), "ERROR_CODE_CONFLICT")
 	w.expect(alone.submit("sales", crm.ID, crm.SchemaAnswer, crm.OpportunityType, "OPP-1", "phone-2",
 		map[string]string{"call": "OPP-1-H1", "action": "confirm", "outcome": "accepted"}), "ok")
-	w.expect(block(alone, "OPP-1"), "confirmed OPP-1-H1:booked")
+	w.expect(block(alone, "OPP-1")+" "+opportunity(alone, "OPP-1").Stage, "confirmed OPP-1-H1:booked won")
+
+	// The hotel cannot confirm: the block fails and the opportunity stays open, to be planned again or lost.
+	open(alone, "OPP-5")
+	w.expect(plan(alone, "OPP-5", 1, "2026-10-20", "2026-10-10"), "ok")
+	w.expect(alone.submit("sales", crm.ID, crm.SchemaAnswer, crm.OpportunityType, "OPP-5", "phone-3",
+		map[string]string{"call": "OPP-5-H1", "action": "hold", "outcome": "accepted"}), "ok")
+	closeAs(alone, "OPP-5", "won")
+	w.expect(alone.submit("sales", crm.ID, crm.SchemaAnswer, crm.OpportunityType, "OPP-5", "phone-4",
+		map[string]string{"call": "OPP-5-H1", "action": "confirm", "outcome": "refused"}), "ok")
+	w.expect(block(alone, "OPP-5")+" "+opportunity(alone, "OPP-5").Stage, "failed OPP-5-H1:held open")
+	w.expect(alone.submit("sales", crm.ID, crm.SchemaClose, crm.OpportunityType, "OPP-5", "close-lost", map[string]string{"outcome": "lost"}), "ok")
+	w.expect(block(alone, "OPP-5")+" "+opportunity(alone, "OPP-5").Stage, "releasing OPP-5-H1:held lost")
 	platformserver.CheckReplay(t, alone.tenant, alone.journal, func() *platformserver.Tenant { return newWorld(t).tenant })
 }

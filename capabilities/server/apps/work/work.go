@@ -49,7 +49,8 @@ type ApprovalRequest struct {
 	Level      int            `json:"level" field:"readonly"`                      // the level deciding now
 	Levels     []ApprovalStep `json:"levels" field:"readonly"`
 	State      string         `json:"state" field:"readonly" choices:"pending,approved,rejected,refused,withdrawn"`
-	Outcome    string         `json:"outcome,omitempty" field:"readonly"` // why a request was refused when it ran
+	Outcome    string         `json:"outcome,omitempty" field:"readonly"` // why a request was refused when it ran, or rejected
+	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by"`
 }
 
 // ApprovalStep is one level: who may approve, and who did.
@@ -160,7 +161,7 @@ func (w *Work) entities() []platform.Entity {
 						Do:          w.approve, After: w.opened},
 					{Name: "reject", Title: "Reject", From: []string{"pending"}, To: []string{"rejected"}, Roles: everyone, Capability: "approvals",
 						Description: "Reject the request at the level you are an approver of.", Payload: []platform.Field{{Name: "note", Type: "string", Description: "Why"}},
-						Do: w.decider, After: w.ended},
+						Do: w.reject, After: w.ended},
 					{Name: "withdraw", Title: "Withdraw", From: []string{"pending"}, To: []string{"withdrawn"}, Roles: everyone, Capability: "approvals",
 						Description: "Withdraw your own request.", Do: w.requester, After: w.ended},
 				}}},
@@ -278,6 +279,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 		}
 		c.Put(r, request)
 		w.offer(c, r, request, now)
+		w.move(c, request, platform.ApprovalHeld, now)
 	}, nil
 }
 
@@ -395,6 +397,7 @@ func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now
 	_, err := w.host.Submit(w.host.Caller(requester, a.App, c.Replaying), held, now)
 	if err != nil {
 		a.State, a.Outcome = "refused", err.Error()
+		w.move(c, a, platform.ApprovalReturned, now)
 	} else {
 		a.State = "approved"
 	}
@@ -403,13 +406,52 @@ func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now
 		Key: "request:" + a.ID}, now, platform.Recipient{Member: a.Requester})
 }
 
+// ended follows a rejection or a withdrawal: the level's task closes and the
+// record leaves its pending state; a rejection is told, with its note, to the
+// requester and to whoever approved before it (F-38).
 func (w *Work) ended(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
 	a := *record.(*ApprovalRequest)
 	w.close(c, r, a, a.Level, "canceled")
-	if a.State == "rejected" {
-		c.Notify(platform.Notification{Title: fmt.Sprintf("%s %s: rejected", a.Title, a.Target), Ref: ApprovalType + "/" + a.ID,
-			Key: "request:" + a.ID}, now, platform.Recipient{Member: a.Requester})
+	if a.State != "rejected" {
+		w.move(c, a, platform.ApprovalReturned, now)
+		return
 	}
+	w.move(c, a, platform.ApprovalRejected, now)
+	to := []platform.Recipient{{Member: a.Requester}}
+	for _, l := range a.Levels[:a.Level+1] {
+		for _, m := range l.Approved {
+			to = append(to, platform.Recipient{Member: m})
+		}
+	}
+	c.Notify(platform.Notification{Title: fmt.Sprintf("%s %s: rejected by %s", a.Title, a.Target, a.RejectedBy), Body: a.Outcome, Ref: ApprovalType + "/" + a.ID,
+		Key: "request:" + a.ID}, now, to...)
+}
+
+// reject records who rejected the request and why.
+func (w *Work) reject(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
+	if err := w.decider(c, record, payload, now); err != nil {
+		return err
+	}
+	var p struct{ Note string }
+	json.Unmarshal(payload, &p)
+	a := record.(*ApprovalRequest)
+	a.RejectedBy, a.Outcome = c.ID, strings.TrimSpace(p.Note)
+	return nil
+}
+
+// move moves the requested record into or out of the pending state its
+// transition declares (platform.Approval.Pending), as its app's automation,
+// inside this input; a transition without one has no such action.
+func (w *Work) move(c platform.Caller, a ApprovalRequest, suffix string, now time.Time) {
+	held := &pb.Submission{}
+	protojson.Unmarshal([]byte(a.Submission), held)
+	schema := a.Action + suffix
+	if _, _, known := w.host.Action(schema); !known {
+		return
+	}
+	automation := w.host.Automation(a.App, c.Replaying)
+	w.host.Submit(automation, &pb.Submission{TenantId: held.GetTenantId(), PrincipalId: automation.ID, Authority: a.App, IdempotencyKey: "approval:" + a.ID + suffix,
+		Target: held.GetTarget(), Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte("{}")}, now)
 }
 
 func (w *Work) requester(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {

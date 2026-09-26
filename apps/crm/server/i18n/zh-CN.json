@@ -12,7 +12,7 @@
  "Booking": "预订",
  "CRM": "CRM",
  "Change fields of an account; fields left out keep their value.": "修改客户字段；未填写的字段保持原值。",
- "Close an open opportunity as won or lost; only its owner or a sales manager.": "把进行中的商机关闭为赢单或输单；只有负责人或销售经理可以操作。",
+ "Close an open opportunity as won or lost; only its owner or a sales manager. Won with rooms held, it is won once the provider confirms them all, and stays open if it cannot.": "把进行中的商机关闭为赢单或输单；只有负责人或销售经理可以操作。有预留房间时，供应方确认全部房间后才算赢单，确认不了就保持进行中。",
  "Close opportunity": "关闭商机",
  "Create account": "新建客户",
  "Create an account.": "新建一个客户。",

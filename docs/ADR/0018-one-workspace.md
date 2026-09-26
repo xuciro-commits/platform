@@ -123,6 +123,7 @@ They agree on four things:
 - **Proven:**
   - the host test `TestWorkspaceSurface`, and the rehearsal (the page, sign-in and a member's apps on both hosts);
   - in the browser, on one page and without signing in again: the launcher; a CRM account, opportunity and stay; the stay opened in the Hotel's view; a leave request submitted as `sales-1`, and approved twice from the manager's inbox.
+- **Records open floating** (2026-09-27): a record opened from a list, a link or a notification opens in one floating window above the page (`useOpenRecord`, `open(route, { window: "float" })`); what opens next joins it as a tab, and it docks by dragging.
 - **Not yet:**
   - the backend-for-frontend token (D3 (b), now stage 9);
   - UI bundles loaded at run time (D2 (b), now stage 9).

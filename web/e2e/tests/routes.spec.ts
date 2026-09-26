@@ -36,20 +36,32 @@ test("route 5: a group block is held, then confirmed", async ({ page, request })
   await expect(value(page, "confirmed")).toBeVisible(); // the page follows without a reload
 });
 
-// Route 4 (#118): a leave request approved by the manager; the requester's open
-// page turns approved by itself, and the requester may open the approval.
+// Route 4 (#118, F-38): a leave request waits as pending, is approved by the
+// manager, and the requester's open page follows; a rejection shows its reason.
 test("route 4: an approval reaches the requester's page", async ({ page, request }) => {
   const leave = fresh("LEA");
   const day = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
   await decide(request, "sales", "hcm", "hcm.leave.create", { type: "hcm.leave", id: leave }, { kind: "vacation", from: day(30), until: day(31) });
   const submitted = await decide(request, "sales", "hcm", "hcm.leave.submit", { type: "hcm.leave", id: leave }, {});
   await open(page, "sales", `/record?type=hcm.leave&id=${leave}`);
-  await expect(value(page, "Draft")).toBeVisible();
+  await expect(value(page, "Pending approval")).toBeVisible();
+  await expect(page.getByText(/^waiting for Manager:/)).toBeVisible();
   const approval = `hcm.${submitted.key}`;
   await decide(request, "manager", "work", "work.approval.approve", { type: "work.approval", id: approval }, {});
   await expect(value(page, "Approved")).toBeVisible();
   const opened = await request.get(`/v1/records/work.approval/${encodeURIComponent(approval)}`, { headers: { Authorization: "Bearer sales" } });
   expect(opened.status()).toBe(200);
+
+  // Rejected with a reason (F-38): the leave says so and may be submitted again.
+  const second = fresh("LEA");
+  await decide(request, "sales", "hcm", "hcm.leave.create", { type: "hcm.leave", id: second }, { kind: "vacation", from: day(40), until: day(41) });
+  const asked = await decide(request, "sales", "hcm", "hcm.leave.submit", { type: "hcm.leave", id: second }, {});
+  await open(page, "sales", `/record?type=hcm.leave&id=${second}`);
+  await decide(request, "manager", "work", "work.approval.reject", { type: "work.approval", id: `hcm.${asked.key}` }, { note: "busy week" });
+  await expect(value(page, "Rejected")).toBeVisible();
+  await expect(page.getByText("rejected by manager-1: busy week")).toBeVisible();
+  await decide(request, "sales", "hcm", "hcm.leave.submit", { type: "hcm.leave", id: second }, {});
+  await expect(value(page, "Pending approval")).toBeVisible();
 });
 
 // Route 18 (ADR-0027): the process answers /healthz; Settings → Automation shows the tenant's health.

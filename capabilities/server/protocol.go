@@ -108,16 +108,43 @@ func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload 
 	if !t.consumes(c, protocol) {
 		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	provider, schema, ok := t.provider(platform.ProtocolAction(protocol, action))
-	if !ok {
+	b, ok := t.resolve(protocol)
+	if _, mapped := b.provision.Actions[action]; !ok || !mapped {
 		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND} // no provider bound
 	}
-	declared, _ := provider.Manifest().Actions.Action(schema)
-	target := &pb.EntityRef{Type: declared.Target, Id: id}
-	called := platform.NewCaller(runtime{t}, c.Member, provider.Manifest().ID, c.Replaying, c.Automation)
-	record, err := provider.Submit(called, &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(declared.Target),
-		Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}, now)
-	return target, record, err
+	call := func(b binding) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+		schema := b.provision.Actions[action]
+		declared, _ := b.provider.Manifest().Actions.Action(schema)
+		target := &pb.EntityRef{Type: declared.Target, Id: id}
+		called := platform.NewCaller(runtime{t}, c.Member, b.provider.Manifest().ID, c.Replaying, c.Automation)
+		record, err := b.provider.Submit(called, &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(declared.Target),
+			Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}, now)
+		return target, record, err
+	}
+	return call(t.holder(b, protocol, action, call))
+}
+
+// holder is the provider a call about an existing target goes to: the bound
+// one, unless it does not know the target and another provider does — a hold
+// made before the tenant rebound the protocol is confirmed or released where
+// it was made (F-39). Asking applies nothing.
+func (t *Tenant) holder(bound binding, protocol, action string, call func(binding) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)) binding {
+	was := t.probing
+	t.probing = true
+	defer func() { t.probing = was }()
+	knows := func(b binding) bool {
+		_, _, err := call(b)
+		return err == nil || err.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND
+	}
+	if knows(bound) {
+		return bound
+	}
+	for _, b := range t.providers(protocol) {
+		if _, mapped := b.provision.Actions[action]; mapped && b.provider != bound.provider && knows(b) {
+			return b
+		}
+	}
+	return bound
 }
 
 // probe runs a protocol action's policy and rules at the provider, for a

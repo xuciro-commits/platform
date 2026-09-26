@@ -70,7 +70,7 @@ export function useOpenRecord(): (ref: string | { type: string; id: string }) =>
   const { open } = useWorkspace();
   return (ref) => {
     const { type, id } = typeof ref === "string" ? { type: ref.split("/")[0]!, id: ref.split("/").slice(1).join("/") } : ref;
-    open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } });
+    open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, { window: "float" });
   };
 }
 

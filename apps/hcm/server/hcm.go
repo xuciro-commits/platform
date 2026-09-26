@@ -49,7 +49,7 @@ type Leave struct {
 	// Health is the medical reason of a sick leave: HR alone reads it, and its
 	// reads are audited (ADR-0028 D3, D4); the employee gives it when drafting.
 	Health string `json:"health,omitempty" type:"longtext" title:"Medical reason" read:"hr" personal:"health" help:"Why a sick leave was taken; only HR reads it"`
-	State  string `json:"state" field:"readonly" choices:"draft,approved,canceled"`
+	State  string `json:"state" field:"readonly" choices:"draft,pending,approved,rejected,canceled"`
 }
 
 // Entities declares the leave, its lifecycle and the approval of submitting it.
@@ -57,16 +57,17 @@ func Entities() []platform.Entity {
 	return []platform.Entity{{Type: LeaveType, Title: "Leave request", Model: Leave{}, Display: "id",
 		Scope: platform.Scope{Owner: "employee", Levels: map[string]string{Employee: platform.ScopeOwn, HR: platform.ScopeTenant}},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
-			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "info"}, {Name: "approved", Title: "Approved", Tone: "success"}, {Name: "canceled", Title: "Canceled", Tone: "neutral"}},
+			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "info"}, {Name: "pending", Title: "Pending approval", Tone: "warning"},
+				{Name: "approved", Title: "Approved", Tone: "success"}, {Name: "rejected", Title: "Rejected", Tone: "danger"}, {Name: "canceled", Title: "Canceled", Tone: "neutral"}},
 			Transitions: []platform.Transition{
-				{Name: "submit", Title: "Submit for approval", From: []string{"draft"}, To: []string{"approved"}, Roles: []string{Employee},
-					Description: "Ask for the leave; it is approved once the manager (and, above five days, the department head) agree.",
-					Approval: &platform.Approval{Levels: []platform.ApprovalLevel{
+				{Name: "submit", Title: "Submit for approval", From: []string{"draft", "rejected"}, To: []string{"approved"}, Roles: []string{Employee},
+					Description: "Ask for the leave; it waits as pending until the manager (and, above five days, the department head) agree, and a rejection may be submitted again.",
+					Approval: &platform.Approval{Pending: "pending", Rejected: "rejected", Levels: []platform.ApprovalLevel{
 						{Title: "Manager", Structure: Structure, Role: "manager", WorkingDays: 2},
 						{Title: "Department head", Structure: Structure, Role: "head", WorkingDays: 2, When: longerThan(5)},
 					}},
 					Do: own},
-				{Name: "cancel", Title: "Cancel", From: []string{"draft", "approved"}, To: []string{"canceled"}, Roles: []string{Employee, HR},
+				{Name: "cancel", Title: "Cancel", From: []string{"draft", "approved", "rejected"}, To: []string{"canceled"}, Roles: []string{Employee, HR},
 					Description: "Cancel a leave request: your own, or any when you work in HR.", Do: ownOrHR},
 			}}}}
 }

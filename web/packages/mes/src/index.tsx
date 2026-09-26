@@ -143,7 +143,7 @@ function ShopOrders() {
     .filter((p) => p.state !== "sent" && p.state !== "confirmed" && !orders.some((o) => o.planned === p.erpId));
   const [releasing, setReleasing] = useState(false);
   const products = master?.products ?? [];
-  const schema = z.object({ order: z.string().min(1), product: z.string().min(1), quantity: z.number().int().min(1), sfcs: z.number().int().min(1), planned: z.string() })
+  const schema = z.object({ order: z.string().min(1), product: z.string().min(1), quantity: z.number().int().min(1), sfcs: z.number().int().min(1), planned: z.string().optional() })
     .refine((v) => v.sfcs <= v.quantity, { path: ["sfcs"], message: t("At most the quantity") });
   return (
     <>
@@ -186,7 +186,7 @@ function SFCTable({ filter, title, description }: { filter: (s: SFC) => boolean;
     <>
       <PageHeader title={title} description={description} />
       <DataTable data={sfcs} columns={columns} getRowId={(s) => s.id} height="calc(100dvh - 190px)"
-        onRowClick={(s) => open({ view: "sfc", params: { id: s.id } })} empty={t("Nothing here")} />
+        onRowClick={(s) => open({ view: "sfc", params: { id: s.id } }, { window: "float" })} empty={t("Nothing here")} />
     </>
   );
 }

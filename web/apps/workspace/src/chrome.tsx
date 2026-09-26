@@ -68,7 +68,8 @@ function MyRequests() {
     { id: "level", header: t("Waiting for"), meta: { width: 220 }, accessorFn: (r) => r.state === "pending" ? `${r.levels[r.level]?.title}: ${r.levels[r.level]?.approvers.join(", ")}` : "" },
     { id: "delegated", header: t("Decided for"), meta: { width: 200 }, accessorFn: (r) => r.levels.flatMap((l) => Object.entries(l.decidedBy ?? {}))
       .map(([approver, delegate]) => t("{delegate} for {approver}", { delegate, approver })).join(", ") },
-    { accessorKey: "state", header: t("State"), meta: { width: 140 }, cell: ({ row: { original: r } }) => <span title={r.outcome}><StatusTag status={r.state} registry={requestStates} /></span> },
+    { accessorKey: "state", header: t("State"), meta: { width: 260 }, cell: ({ row: { original: r } }) => <span className="flex items-center gap-2"><StatusTag status={r.state} registry={requestStates} />
+      {r.outcome && <span className="truncate text-xs text-muted" title={r.outcome}>{r.rejectedBy ? `${r.rejectedBy}: ${r.outcome}` : r.outcome}</span>}</span> },
     { id: "act", header: "", meta: { width: 100 }, cell: ({ row: { original: r } }) => r.state === "pending" &&
       <Button size="sm" onClick={(e) => { e.stopPropagation(); void decide("work.approval.withdraw", { type: "work.approval", id: r.id }, {}); }}>{t("Withdraw")}</Button> },
   ];

@@ -102,5 +102,10 @@ They agree on three separate things. We take them apart the same way:
   - The sales workspace has leave requests, the inbox and "my requests". The MES has the inbox.
   - The kit's record page shows a status bar with the transitions the member may take.
 - **Proven** by the HR test and the rehearsal: approval along the organisation, a stale request refused when run, rejection, withdrawal, a refused probe, an agent refused, escalation of an overdue task, and replay. Checked in the browser: submit, the manager's inbox, two levels approved, the requester told.
-- **Not yet:** delegation and substitutes; business calendars. The helpdesk reference app, stage 2's second proof, was built as the CSM (ADR-0021 batch 2).
+- **Pending and rejected states** (F-38, 2026-09-27): a transition's `Approval` may name `Pending`, the state the record waits in, and `Rejected`, where a rejection leaves it.
+  - They generate `<type>.<transition>.held`, `.rejected` and `.returned`, which no role holds (`Action.Automation`); the work app takes them as the app's automation inside the decision that opens, rejects, withdraws or refuses the request.
+  - The transition leaves the pending state when its approval runs it, and only then: a pending record is neither asked for again nor moved by its other transitions.
+  - A rejection keeps who rejected it and the note (`RejectedBy`, `Outcome`), told to the requester and to whoever approved an earlier level. A record's page lists its approvals (`RecordView.Approvals`).
+  - HCM's leave is pending while approvers decide, rejected with the note, and may be submitted again (`TestLeaveApprovals`, Playwright route 4).
+- **Not yet:** delegation of tasks outside approvals (delegation of approvals and business calendars are built, ADR-0028). The helpdesk reference app, stage 2's second proof, was built as the CSM (ADR-0021 batch 2).
 

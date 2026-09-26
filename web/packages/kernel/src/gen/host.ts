@@ -18,6 +18,7 @@ export type Action = {
   uses?: string[];
   needsApproval?: boolean;
   new?: boolean;
+  automation?: boolean;
 };
 
 export type AgentInfo = {
@@ -107,6 +108,7 @@ export type ApprovalRequest = {
   levels: ApprovalStep[];
   state: "pending" | "approved" | "rejected" | "refused" | "withdrawn";
   outcome?: string;
+  rejectedBy?: string;
 };
 
 export type ApprovalStep = {
@@ -593,6 +595,7 @@ export type RecordView = {
   history: RecordChange[];
   related: Related[];
   processes: unknown[];
+  approvals: unknown[];
   files: unknown[];
   comments: unknown[];
   following: boolean;

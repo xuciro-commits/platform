@@ -42,7 +42,7 @@ function Customers() {
       <PageHeader title={t("Customers")} description={t("Accounts with their opportunities, and the stays booked for them through the lodging protocol.")}
         actions={can("crm.account.create") && <Button variant="primary" onClick={() => setCreating(true)}>{t("New account")}</Button>} />
       <DataTable data={customers} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 190px)"
-        onRowClick={(c) => open({ view: "customer", params: { id: c.id } })} empty={t("No accounts yet")} />
+        onRowClick={(c) => open({ view: "customer", params: { id: c.id } }, { window: "float" })} empty={t("No accounts yet")} />
       <Dialog open={creating} onOpenChange={setCreating} title={t("New account")}>
         <GeneratedForm type="crm.account" submitLabel={t("Create")} onCancel={() => setCreating(false)}
           onSubmit={async (v) => { if (await decide("crm.account.create", { type: "crm.account", id: newId("ACC") }, v, { expectedRevision: 0 })) setCreating(false); }} />

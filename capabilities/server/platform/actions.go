@@ -30,6 +30,9 @@ type Action struct {
 	// caller gives: generated views offer it on the type's list; every other
 	// action on Target is offered on each record's page (F-33).
 	New bool `json:"new,omitempty"`
+	// Automation marks an action only the platform's own apps take, as
+	// automation: it has no roles and is in no member's catalog.
+	Automation bool `json:"automation,omitempty"`
 }
 
 // Approval is the chain of approvers an action waits for (ADR-0017 D2–D4):
@@ -37,7 +40,20 @@ type Action struct {
 // rules decide at that time.
 type Approval struct {
 	Levels []ApprovalLevel
+	// Pending, on a lifecycle transition, is the state the record waits in
+	// while its approvers decide; Rejected is where a rejection leaves it
+	// (else where it was). A withdrawn request, or one its rules refuse when
+	// run, returns it to where it was (F-38).
+	Pending, Rejected string
 }
+
+// Suffixes of the actions a transition with a pending state generates for
+// the work app alone: the record held, rejected, or returned.
+const (
+	ApprovalHeld     = ".held"
+	ApprovalRejected = ".rejected"
+	ApprovalReturned = ".returned"
+)
 
 // ApprovalLevel names its approvers: holders of Role in the requester's units
 // or above them in Structure (a manager, a department head), holders of

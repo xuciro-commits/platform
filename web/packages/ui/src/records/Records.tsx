@@ -35,7 +35,9 @@ export type AttachedFile = EntityRecord & { name: string; size: number; contentT
 /** A comment on a record (ADR-0028 D6). */
 export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };
 
-export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes" | "files" | "comments"> & {
+export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes" | "approvals" | "files" | "comments"> & {
+  /** The approval requests to move the record, newest first (F-38). */
+  approvals: Api.ApprovalRequest[];
   files: AttachedFile[];
   comments: RecordComment[];
   record: EntityRecord; related: (Omit<Api.Related, "records"> & { records: EntityRecord[] })[];
@@ -330,7 +332,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   if (!info || !entity || !view) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const r = view.record;
   return (
-    <div className="grid max-w-5xl gap-4">
+    <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">
       <header className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold">{displayOf(info, r)}</h1>
         <span className="font-mono text-xs text-muted">{info.title} · {r.id} {t("· rev")} {r.revision}</span>
@@ -344,6 +346,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           [t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
           [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
       </section>
+      {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} />}
       {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
       {(view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
       {(view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
@@ -437,6 +440,34 @@ function Comments({ list, following, comments }: { list: RecordComment[]; follow
 
 const processTone = (state: string) =>
   state === "done" ? "success" : state === "stuck" || state === "compensated" || state === "canceled" ? "danger" : state === "compensating" ? "warning" : "info";
+
+const approvalTone = (state: string) => state === "approved" ? "success" : state === "pending" ? "warning" : state === "withdrawn" ? "neutral" : "danger";
+
+/** The approvals asked for a record: each request, its state, whom it waits for, and who rejected it and why. */
+function Approvals({ source, approvals }: { source: RecordSource; approvals: Api.ApprovalRequest[] }) {
+  const state = source.entity("work.approval")?.fields.find((f) => f.name === "state");
+  return (
+    <section>
+      <h2 className="mb-1 text-sm font-semibold">{t("Approvals")}</h2>
+      <ul className="grid gap-1">
+        {approvals.map((a) => {
+          const level = a.levels[a.level];
+          const by = a.levels.flatMap((l) => l.approved.map((m) => l.decidedBy?.[m] ? t("{delegate} for {approver}", { delegate: l.decidedBy[m]!, approver: m }) : m));
+          return (
+            <li key={a.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
+              <span className="font-medium">{a.title}</span>
+              <Tag label={state?.choiceTitles?.[state.choices?.indexOf(a.state) ?? -1] ?? a.state} tone={approvalTone(a.state)} />
+              {a.state === "pending" && level && <span className="text-xs text-muted">{t("waiting for {level}: {approvers}", { level: level.title, approvers: level.approvers.join(", ") })}</span>}
+              {by.length > 0 && <span className="text-xs text-muted">{t("approved by {members}", { members: by.join(", ") })}</span>}
+              {a.rejectedBy && <span className="text-xs">{t("rejected by {member}", { member: a.rejectedBy })}{a.outcome ? `: ${a.outcome}` : ""}</span>}
+              {a.state === "refused" && a.outcome && <span className="text-xs">{a.outcome}</span>}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 /** The processes about a record: each flow, its state, and the steps it stands at. */
 function Processes({ source, processes, onOpen }: { source: RecordSource; processes: RecordView["processes"]; onOpen?: (type: string, r: EntityRecord) => void }) {

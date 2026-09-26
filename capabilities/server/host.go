@@ -573,7 +573,7 @@ func checkManifest(a platform.App) error {
 		return fmt.Errorf("manifest without ID or action catalog")
 	}
 	for _, action := range m.Actions.All() {
-		if action.Title == "" || action.Description == "" || action.Target == "" || action.Payload == nil || len(action.Roles) == 0 {
+		if action.Title == "" || action.Description == "" || action.Target == "" || action.Payload == nil || len(action.Roles) == 0 && !action.Automation {
 			return fmt.Errorf("action %s lacks a title, description, target, payload fields or roles", action.Schema)
 		}
 	}

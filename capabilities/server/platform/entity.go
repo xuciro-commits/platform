@@ -389,6 +389,13 @@ func EntityActions(e Entity) []Action {
 			}
 			out = append(out, Action{Schema: e.Type + "." + t.Name, Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
 				Description: description, Payload: payload, Roles: t.Roles, Approval: t.Approval})
+			if t.Approval != nil && t.Approval.Pending != "" { // the work app's alone: no role holds them
+				for _, m := range [][2]string{{ApprovalHeld, "Hold for approval"}, {ApprovalRejected, "Mark rejected"}, {ApprovalReturned, "Return from approval"}} {
+					suffix, title := m[0], m[1]
+					out = append(out, Action{Schema: e.Type + "." + t.Name + suffix, Target: e.Type, Capability: c, Title: title,
+						Description: "Moves the record while its approval runs; only the approval takes it.", Payload: []Field{}, Automation: true})
+				}
+			}
 		}
 	}
 	return out

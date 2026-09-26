@@ -67,8 +67,17 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     const view = byId.get(route.view);
     if (!api || !view) return;
     const key = routeKey(route);
-    const panel = api.getPanel(key) ?? api.addPanel({ id: key, component: "view", title: view.title(route.params ?? {}), params: { route } });
-    if (options.window === "float") api.addFloatingGroup(panel);
+    const title = view.title(route.params ?? {});
+    let panel = api.getPanel(key);
+    if (!panel && options.window === "float") {
+      // One floating window above the page: what opens next joins it as a tab, so people click back and forth.
+      const floating = api.groups.find((g) => g.api.location.type === "floating");
+      const width = Math.min(820, api.width - 48), height = Math.max(280, api.height - 64);
+      panel = floating
+        ? api.addPanel({ id: key, component: "view", title, params: { route }, position: { referenceGroup: floating } })
+        : api.addPanel({ id: key, component: "view", title, params: { route }, floating: { width, height, x: api.width - width - 24, y: 32 } });
+    }
+    panel ??= api.addPanel({ id: key, component: "view", title, params: { route } });
     if (options.window === "popout") void api.addPopoutGroup(panel);
     panel.api.setActive();
   }, [byId]);

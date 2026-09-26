@@ -1,5 +1,6 @@
 {
- "Ask for the leave; it is approved once the manager (and, above five days, the department head) agree.": "提交请假；经理同意（超过五天还需部门负责人同意）后即获批准。",
+ "Ask for the leave; it waits as pending until the manager (and, above five days, the department head) agree, and a rejection may be submitted again.": "提交请假；经理同意（超过五天还需部门负责人同意）之前处于待审批，被驳回后可以再次提交。",
+ "Pending approval": "待审批",
  "Cancel a leave request: your own, or any when you work in HR.": "取消请假申请：自己的，或者你在 HR 时可取消任何人的。",
  "Days": "天数",
  "Department head": "部门负责人",

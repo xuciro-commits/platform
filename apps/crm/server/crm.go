@@ -114,7 +114,7 @@ func Actions() *platform.Catalog {
 			Payload: []platform.Field{{Name: "account", Type: "string", Required: true, Description: "Account ID", Ref: AccountType},
 				{Name: "title", Type: "string", Required: true, Description: "What is being sold"}}, Roles: both},
 		platform.Action{Schema: SchemaClose, Target: OpportunityType, Capability: "opportunities", Title: "Close opportunity",
-			Description: "Close an open opportunity as won or lost; only its owner or a sales manager.",
+			Description: "Close an open opportunity as won or lost; only its owner or a sales manager. Won with rooms held, it is won once the provider confirms them all, and stays open if it cannot.",
 			Payload:     []platform.Field{{Name: "outcome", Type: "string", Required: true, Description: "won or lost", Choices: []string{"won", "lost"}}}, Roles: both},
 		platform.Action{Schema: SchemaPlan, Target: OpportunityType, Capability: "stays", Title: "Plan group stay",
 			Description: "Hold the rooms a group needs until a cutoff date: won, they are confirmed; lost, or past the cutoff, they are released. Refused at once when the provider cannot hold such a room; when it cannot hold them all, the block fails and the rooms held are given back.",
@@ -202,7 +202,7 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				ask("reserve", booking, json.RawMessage(s.GetPayload()))
 			}
 		case SchemaPlan:
-			if o.Stage != "open" || o.Block == "holding" || o.Block == "held" || o.Block == "releasing" {
+			if o.Stage != "open" || o.Block == "holding" || o.Block == "held" || o.Block == "confirming" || o.Block == "releasing" {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT) // one block at a time; a failed or released one may be planned again
 			}
 			if p.Rooms < 1 || p.Rooms > 20 || strings.TrimSpace(p.RoomType) == "" || p.Depart <= p.Arrive || p.Cutoff == "" || p.Cutoff >= p.Arrive {
@@ -230,17 +230,30 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if p.Outcome != "won" && p.Outcome != "lost" {
 				return nil, invalid
 			}
-			if o.Stage != "open" {
+			if o.Stage != "open" || o.Block == "confirming" {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 			}
-			o.Stage = p.Outcome
-			if o.Block == "held" { // won, the block is confirmed; lost, it is given back
-				o.Block = map[bool]string{true: "confirming", false: "releasing"}[p.Outcome == "won"]
+			// Won with rooms held, it stays open until the provider confirms them
+			// all, and is won then; a failed confirmation leaves it open (F-40).
+			// Lost, the rooms are given back.
+			won := p.Outcome == "won"
+			if o.Block != "held" || !won {
+				o.Stage = p.Outcome
+			}
+			if o.Block == "held" || !won && o.Block == "failed" { // lost, what a failed confirmation left held is given back too
+				action := map[bool]string{true: "confirm", false: "release"}[won]
 				for _, st := range o.block() {
-					if !st.Manual {
-						ask(map[bool]string{true: "confirm", false: "release"}[p.Outcome == "won"], st.Booking, struct{}{})
+					if st.Manual || st.Status != "held" {
+						continue
 					}
+					if won { // the provider would confirm each room, or it is refused at once
+						if _, err := probe(who, action, st.Booking, struct{}{}, now); err != nil {
+							return nil, err
+						}
+					}
+					ask(action, st.Booking, struct{}{})
 				}
+				o.Block = map[bool]string{true: "confirming", false: "releasing"}[won]
 			}
 		case SchemaAnswer:
 			var a platform.Answer
@@ -346,9 +359,9 @@ func (o *Opportunity) settle(changed Stay) []platform.Request {
 	case o.Block == "holding" && all("held"):
 		o.Block = "held"
 	case o.Block == "confirming" && all("booked"):
-		o.Block = "confirmed"
+		o.Block, o.Stage = "confirmed", "won"
 	case o.Block == "confirming" && changed.Status != "booked":
-		o.Block = "failed"
+		o.Block = "failed" // still open: planned again, or closed lost
 	case (o.Block == "held" || o.Block == "releasing") && count["released"]+count["refused"] == len(o.block()):
 		o.Block = "released"
 	}

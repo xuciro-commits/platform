@@ -109,7 +109,14 @@ body {
   --dv-active-sash-color: var(--primary);
   --dv-drag-over-background-color: color-mix(in oklch, var(--primary) 18%, transparent);
   --dv-drag-over-border-color: var(--primary);
-  --dv-floating-box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
+  --dv-floating-box-shadow: 0 2px 6px rgb(0 0 0 / 0.08), 0 18px 48px rgb(0 0 0 / 0.22);
   --dv-icon-hover-background-color: var(--row-hover);
   font-family: var(--font-sans);
+}
+
+/* A floating window (a record opened above the page) is a rounded card that floats. */
+.platform-dock .dv-resize-container {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
 }
