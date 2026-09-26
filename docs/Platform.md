@@ -260,7 +260,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0020 | Record-state triggers; business calendars for timeouts; a drawn graph | Deferred |
 | 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
 | 0026 | A request retried when its provider is unavailable; an outside provider's later answer through the same reply action | Deferred: providers in the host answer at once (D2); the ERP adapter's later answer still reaches the MES through its flow; #120 |
-| 0025 | The host's own apps as apps (8c) | Partial: 8a (Swift deleted, the rules in Intent.md) and 8b (industry names, one layout checked, a development host for every app) built |
+| 0025 | The host's own apps as apps | Built (8a to 8c); the agent runtime and the console stay in the host by the amended D4 |
 
 ## 3. Runtimes and languages
 
@@ -410,7 +410,7 @@ Reference apps model their domain on leading systems, not on invention, so that 
 3. **ERP can swallow the plan.** It is the deepest of the target apps; keep it thin. Its value to the platform is the pressure of money, posting, periods and production orders, not breadth of features.
 4. **Inner-platform effect:** "supporting change" must not slide into configuring everything. Change is absorbed by quickly modifiable app code.
 5. **The server is not the kernel;** treating it as such re-binds the platform to one deployment shape.
-6. **The host runtime holds its own apps** (#113, ADR-0025 D4, 8c in progress). `relations` and `org` are packages under `capabilities/server/apps` on the app API and `internal/host`, reached through roles (`host.Attached`, `Observer`, `Linker`, `Directory`) and checked by `scripts/boundaries.sh`; `platform`, `work`, `flow`, `agent`, `knowledge` and `ai` are still types in the host package that it calls by name. Lesson 6 applies to the host itself.
+6. **The host runtime holds its own apps** (#113, ADR-0025 D4, 8c built). `relations`, `org`, `work`, `flow`, `ai` and `knowledge` are packages under `capabilities/server/apps` on the app API and `internal/host`, reached through roles the host detects (`Attached`, `Observer`, `Linker`, `Directory`, `Tasks`, `Processes`, `Runs`, `Listener`) and checked by `scripts/boundaries.sh`. The agent runtime and the console stay in the host by decision (D4 amended): the first is the host's execution — model calls, tools over every app, search, journaled steps — and the second is the configuration the host reads on every request; moving them would put nearly the whole host behind `internal/host`. Lesson 6 applies to the host itself.
 7. **Documents drift.** Before this review, the same status was kept in five places and all of them were stale. One home per fact (the header of this document); every batch closes with its documents (AGENTS.md rule 8).
 8. **Verification on one machine** was the risk until CI (#112); the Docker rehearsal still runs only on the owner's Mac, and timing bounds only where `PLATFORM_TIMING` is not `0`.
 9. **Agents depend on models the platform does not control.** Signals and evaluation are the guard; per-tenant quotas and rate limits are still missing (ADR-0015 batch 2).
