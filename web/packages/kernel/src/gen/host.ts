@@ -128,6 +128,13 @@ export type AuditEntry = {
 /** The kernel contract's AuthorityDeclaration (contract/proto). */
 export type AuthorityDeclaration = AuthorityDeclarationJson;
 
+export type Breaker = {
+  destination: string;
+  state: string;
+  failures: number;
+  until?: string;
+};
+
 export type Budget = {
   Steps: number;
   Tokens: number;
@@ -531,6 +538,12 @@ export type Provider = {
   wire: string;
 };
 
+export type QueueHealth = {
+  app: string;
+  depth: number;
+  oldestSeconds: number;
+};
+
 export type RecordChange = {
   change: string;
   schema: string;
@@ -649,6 +662,18 @@ export type TaskSummary = {
   title: string;
   state: string;
   answer?: string;
+};
+
+export type TenantHealth = {
+  status: string;
+  apps: number;
+  queues: QueueHealth[];
+  failed: number;
+  deferred: string[];
+  breakers: Breaker[];
+  openBreakers: number;
+  connectorsFailing: number;
+  endpointsFailing: number;
 };
 
 export type Tool = {

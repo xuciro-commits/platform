@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
 	"slices"
 	"strings"
 	"time"
@@ -245,6 +246,12 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 	generation, _, _ := t.works.Start(task.ID, "host")
 	t.hops = task.event.hops + 1
 	outcome := "ok"
+	end := func(string) {}
+	if !replaying { // the delivery continues the trace of the input that caused the event
+		end = t.begin("deliver "+task.event.Record.GetSubmission().GetSchema().GetName()+" to "+task.App, task.event.span,
+			attribute.String("platform.app", task.App), attribute.String("platform.target", target(task.event.Record.GetSubmission())))
+		defer func() { end(outcome); counted(t, "delivery", task.App, outcome) }()
+	}
 	var err *kernel.Error
 	if x, ok := t.app(task.App).(host.Listener); ok { // the platform's own listeners, on the attempt's clock
 		names := append([]string{task.event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.event.Event)...)

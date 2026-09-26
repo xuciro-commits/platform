@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "probing": "试探中",
+  "open": "打开",
+  "closed": "关闭",
+  "{destination}: breaker {state} after {n} failures": "{destination}：连续失败 {n} 次，熔断器{state}",
+  "{app} past its quota": "{app} 超出配额",
+  "{n} gave up": "{n} 项已放弃",
+  "{app}: {n} waiting, oldest {s} s": "{app}：{n} 项等待，最早 {s} 秒",
+  "Needs attention": "需要处理",
+  "Healthy": "正常",
   "Glossary": "术语表",
   "New term": "新建术语",
   "This organisation's own words: what each means here and what it refers to. Agents read them and Search understands them; they never change what an entity, field or action is.": "本组织自己的用词：每个词在这里的意思和所指。智能体会读取它们，搜索能理解它们；它们不会改变任何实体、字段或动作本身。",

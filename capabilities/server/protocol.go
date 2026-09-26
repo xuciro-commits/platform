@@ -3,6 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"log"
 	"slices"
 	"strings"
@@ -148,12 +150,16 @@ type request struct {
 // decision's target (ADR-0026 D2). Both are journaled as submissions of their
 // apps: a replay runs what was recorded and never asks the provider again.
 func (t *Tenant) answer(q request, now time.Time) {
+	end := t.begin("request "+q.Protocol+"#"+q.Action, trace.SpanContext{}, attribute.String("platform.app", q.caller.App), attribute.String("platform.target", q.Target))
+	outcome := "ok"
+	defer func() { end(outcome) }()
 	s := q.record.GetSubmission()
 	key := fmt.Sprintf("%s:%s#%d", q.caller.App, s.GetIdempotencyKey(), q.n)
 	answer := platform.Answer{Call: q.Target, Action: q.Action, Outcome: "accepted"}
 	ref, done, err := t.invoke(q.caller, q.Protocol, q.Action, q.Target, platform.Raw(q.Payload), key, s.GetIdempotencyKey(), now)
 	if err != nil {
 		answer.Outcome, answer.Code = "refused", err.Code.String()
+		outcome = answer.Code
 	} else {
 		answer.Ref = ref.GetType() + "/" + ref.GetId()
 		t.journal(t.app(t.owner["action:"+done.GetSubmission().GetSchema().GetName()].Manifest().ID), q.caller.Member, done.GetSubmission(), now)

@@ -1,4 +1,5 @@
 // Settings: owned work, integrations, app settings and the audit trail (ADR-0013, ADR-0014).
+import type { Api } from "@platform/kernel";
 import { useReadQuery as useRead } from "@platform/app";
 import { Button, DataTable, Dialog, Input, PageHeader, Select, Tag, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
@@ -10,6 +11,7 @@ export function Automation() {
   const { apps, decideOn } = useAdmin();
   const deliveries = useRead<Delivery[]>("/v1/deliveries", 5000);
   const work = useRead<Task[]>("/v1/work", 5000);
+  const health = useRead<Api.TenantHealth>("/v1/health", 5000).data;
   const tone = (state: string) => (({ failed: "danger", retrying: "warning", queued: "info" }) as const)[state as "failed"] ?? "neutral";
   const taskColumns: ColumnDef<Task, any>[] = [
     { accessorKey: "kind", header: t("Kind"), meta: { width: 90 } },
@@ -39,6 +41,14 @@ export function Automation() {
         {subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
           subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
       </div>
+      {health && <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <Tag label={health.status === "ok" ? t("Healthy") : t("Needs attention")} tone={health.status === "ok" ? "success" : "warning"} />
+        {health.queues.map((q) => <Tag key={q.app} label={t("{app}: {n} waiting, oldest {s} s", { app: q.app, n: q.depth, s: Math.round(q.oldestSeconds) })} tone="info" />)}
+        {health.failed > 0 && <Tag label={t("{n} gave up", { n: health.failed })} tone="danger" />}
+        {health.deferred.map((a) => <Tag key={a} label={t("{app} past its quota", { app: a })} tone="warning" />)}
+        {health.breakers.map((b) => <Tag key={b.destination} label={t("{destination}: breaker {state} after {n} failures", { destination: b.destination, state: t(b.state), n: b.failures })}
+          tone={b.state === "closed" ? "neutral" : "danger"} />)}
+      </div>}
       <h2 className="mb-1 text-sm font-semibold">{t("Owned work")}</h2>
       <DataTable data={work.data ?? []} columns={taskColumns} getRowId={(t) => t.id} height={200} searchable={false} empty={t("Nothing queued, no jobs")} />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Delivery attempts")}</h2>

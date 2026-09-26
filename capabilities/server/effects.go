@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"hash/fnv"
 	"io"
 	"net"
@@ -62,6 +64,7 @@ type effect struct {
 	platform.Effect
 	since   int // attempts before the last manual retry: each retry gets a full schedule
 	sending bool
+	span    trace.SpanContext // the work that caused it: its attempts continue that trace
 }
 
 // effectRetry is how an effect tries again: 5 s … 1 h apart, about seven hours, then failed.
@@ -105,7 +108,7 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 		body, _ := json.Marshal(map[string]any{"type": names[i], "timestamp": at, "data": map[string]any{
 			"app": e.App, "action": s.GetSchema().GetName(), "schemaVersion": s.GetSchema().GetVersion(), "entity": target(s), "changeId": e.Record.GetChangeId(),
 			"principal": s.GetPrincipalId(), "revision": e.Record.GetRevision(), "payload": payload}})
-		t.outbound = append(t.outbound, &effect{Effect: platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
+		t.outbound = append(t.outbound, &effect{span: t.current(), Effect: platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
 			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)}})
 	}
 	t.trimEffects()
@@ -148,7 +151,7 @@ func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, 
 		if c.Agent && (a.Manifest().Emits[i].Irreversible || ep.Irreversible) {
 			state = "held"
 		}
-		t.outbound = append(t.outbound, &effect{Effect: platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
+		t.outbound = append(t.outbound, &effect{span: t.current(), Effect: platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
 			State: state, Agent: agent, Run: run, Due: now, Body: string(body)}})
 		n++
 		if state == "held" {
@@ -244,6 +247,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	type job struct {
 		effect   platform.Effect
 		endpoint Endpoint
+		span     trace.SpanContext
 	}
 	var jobs []job
 	t.opsMu.Lock()
@@ -257,13 +261,17 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 			continue
 		}
 		t.outbound[i].sending = true
-		jobs = append(jobs, job{t.outbound[i].Effect, *ep})
+		jobs = append(jobs, job{t.outbound[i].Effect, *ep, t.outbound[i].span})
 	}
 	t.opsMu.Unlock()
 	var sends []func()
 	for _, j := range jobs {
 		sends = append(sends, func() {
+			span := outside(j.span, "send "+j.effect.Event+" to "+j.endpoint.ID, attribute.String("platform.tenant", t.ID),
+				attribute.String("platform.endpoint", j.endpoint.ID), attribute.String("platform.effect", j.effect.ID))
 			outcome := t.send(j.endpoint, j.effect, now)
+			end(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
+			counted(t, "effect", j.effect.App, outcome.Result)
 			t.breakers.report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
 			t.settle(j.effect.ID, outcome, now)
 		})

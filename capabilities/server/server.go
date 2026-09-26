@@ -305,6 +305,11 @@ func (h *Host) Handler() http.Handler {
 	handle(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees (ADR-0023)"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
+	// The process is alive and holds its tenants (ADR-0027 D6); a tenant's own
+	// health is the administrators' read /v1/health.
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "tenants": len(h.tenants)})
+	})
 	if h.Web != "" {
 		// The workspace is one page: a path that is not a file is its route.
 		pages := http.FileServer(http.Dir(h.Web))

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -65,6 +66,8 @@ func (d *Deployment) Seats(development []Seat) []Seat {
 // shutdown (ADR-0019), and serves until SIGINT or SIGTERM.
 func (d *Deployment) Serve(tenants ...*Tenant) error {
 	ctx := context.Background()
+	flush := exportTelemetry(ctx, filepath.Base(os.Args[0])) // traces and metrics, when an OTLP endpoint is set (ADR-0027 D5)
+	defer flush(context.Background())
 	var journal *Journal
 	code := CodeOf(tenants...)
 	restored := map[string]int64{} // each tenant's snapshot position at start-up, 0 without one
@@ -150,6 +153,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 	}
 	RunWork(tenants...)
+	observe(tenants)
 	var snapshots *snapshotter
 	if journal != nil && d.SnapshotEvery > 0 {
 		snapshots = &snapshotter{journal: journal, code: code, every: d.SnapshotEvery, saved: map[string]int64{}}

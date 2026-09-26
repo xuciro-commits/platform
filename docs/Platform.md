@@ -243,7 +243,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0010 | Requirement graph between apps; scoped grants by member attributes | Superseded by the protocol graph (ADR-0011) and the organisation (ADR-0012) |
 | 0010 | Enable and disable an app per tenant as a recorded decision | Amended (#104): apps are composed per tenant in code; capabilities are deactivated at start-up |
 | 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
-| 0010 | Logs and correlation; health | Partial: correlation IDs pass through protocol calls and runs; no structured logs; connectors and endpoints have health, apps and the journal do not |
+| 0010 | Logs and correlation; health | Partial: OpenTelemetry traces and metrics, `/healthz` and tenant health (ADR-0027 10c); logs are still unstructured |
 | 0010 | Files, analysis datasets, retention, preferences | Deferred (§10.4); number sequences are built (ADR-0024) |
 | 0011 | Protocol versions side by side; routing an action on an existing entity to its provider | Deferred |
 | 0011 | Cross-industry protocols (party, documents, calendar) | Partial: notification, links and timeline are platform capabilities |
@@ -264,7 +264,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0024 | Financial statements beyond the trial balance; partial receipts, bills, returns and payments; stock that may not go below zero; partial confirmations and consumption per component; a real SAP binding | Deferred: the ERP stays thin (Intent.md) |
 | 0025 | An outside key on records for reconciliation; inbound webhooks and mail as connector inputs | Deferred (§10.4) |
 | 0025 | The host's own apps as apps | Built (8a to 8c); the agent runtime and the console stay in the host by the amended D4 |
-| 0027 | One runtime for durable work | Accepted; 10a to 10c to build (#120) |
+| 0027 | Checkpoints for evaluations; spans for acting jobs and whole HTTP requests | Deferred (10a to 10c built) |
 
 ## 3. Runtimes and languages
 

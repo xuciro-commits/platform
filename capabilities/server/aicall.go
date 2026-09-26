@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
 	"slices"
@@ -121,7 +123,15 @@ func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req Cha
 	if pv.Wire == "anthropic" {
 		complete = t.completeAnthropic
 	}
+	span := outside(trace.SpanContext{}, "chat "+model.Model, attribute.String("gen_ai.operation.name", "chat"),
+		attribute.String("gen_ai.provider.name", pv.ID), attribute.String("gen_ai.request.model", model.Model), attribute.String("platform.tenant", t.ID))
 	answer, u, failure := complete(pv, model.Model, req)
+	span.SetAttributes(attribute.Int("gen_ai.usage.input_tokens", u.Input), attribute.Int("gen_ai.usage.output_tokens", u.Output))
+	if failure != nil {
+		end(span, failure.Detail)
+	} else {
+		end(span, "ok")
+	}
 	t.breakers.report("ai:"+pv.ID, failure == nil || !unavailable(failure), now)
 	u.At, u.Member, u.Agent, u.Model, u.Millis, u.Outcome = now, m.ID, m.Agent, model.Name(), time.Since(started).Milliseconds(), "ok"
 	if failure != nil {

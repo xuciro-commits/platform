@@ -159,6 +159,8 @@ func (j *Journal) Append(ctx context.Context, tenant string, e Entry) error {
 	if !read {
 		return fmt.Errorf("journal: append to %s before reading its entries", tenant)
 	}
+	started := time.Now()
+	defer func() { meters.append.Record(ctx, float64(time.Since(started).Microseconds())/1000) }()
 	if _, err := j.pool.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions); err != nil {
 		return err

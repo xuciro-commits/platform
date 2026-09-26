@@ -194,7 +194,7 @@ func clone(m *platform.Member) platform.Member {
 
 func (d *Console) Manifest() platform.Manifest {
 	return platform.Manifest{ID: PlatformApp, Title: "Settings", Version: "1", Actions: d.ledger.Catalog,
-		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects"},
+		Reads:    []string{"members", "audit", "deliveries", "work", "connectors", "settings", "notifications", "endpoints", "effects", "health"},
 		Everyone: []string{"notifications"}, Inputs: map[string]bool{"heartbeat": false},
 		Settings: []platform.Setting{{Name: SettingLanguage, Title: "Default language", Type: "text", Default: "",
 			Description: "The language members read until they choose their own, such as zh-CN; empty: what each browser asks for, else English."},
@@ -306,6 +306,8 @@ func (d *Console) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		return t.Endpoints(), nil
 	case "effects":
 		return t.Effects(time.Now()), nil
+	case "health":
+		return t.Health(time.Now()), nil
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()

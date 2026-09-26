@@ -54,6 +54,7 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/settings", Summary: "Every app's settings with their values, in the caller's language (administrators)", Answer: []AppSettings{}},
 	{Pattern: "GET /v1/endpoints", Summary: "Outbound endpoints (administrators)", Answer: []EndpointView{}},
 	{Pattern: "GET /v1/effects", Summary: "Outbound effects and their state (administrators)", Answer: []platform.Effect{}},
+	{Pattern: "GET /v1/health", Summary: "How the tenant's work stands: queues, failed work, deferral, breakers, failing connectors and endpoints (administrators)", Answer: TenantHealth{}},
 	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []InboxTask{}},
 	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []work.ApprovalRequest{}},
 	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []work.SavedView{}},

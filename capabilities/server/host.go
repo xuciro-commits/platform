@@ -2,8 +2,11 @@ package platformserver
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"slices"
 	"strings"
@@ -95,14 +98,15 @@ type Tenant struct {
 	// AIClient sends model calls (default: a client refusing private addresses
 	// unless the provider is local); tests replace it (ADR-0015).
 	AIClient  func(req *http.Request) (*http.Response, error)
-	ai        models         // the AI app: the models the host calls (ADR-0015)
-	records   *recordStore   // the apps' entity records (ADR-0016)
-	tasks     host.Tasks     // serves Caller.Assign: the work app (ADR-0017)
-	procs     host.Processes // the flow app (ADR-0020)
-	listeners []string       // platform apps given other apps' events as owned work (host.Listener)
-	agents    *Agents        // AI agents (ADR-0021)
-	probing   bool           // a submission for approval is being checked, not applied
-	requests  []request      // accepted decisions' requests of other apps, run with their events (ADR-0026)
+	ai        models          // the AI app: the models the host calls (ADR-0015)
+	records   *recordStore    // the apps' entity records (ADR-0016)
+	tasks     host.Tasks      // serves Caller.Assign: the work app (ADR-0017)
+	procs     host.Processes  // the flow app (ADR-0020)
+	listeners []string        // platform apps given other apps' events as owned work (host.Listener)
+	agents    *Agents         // AI agents (ADR-0021)
+	ctx       context.Context // the span of the work being done under mu (telemetry.go)
+	probing   bool            // a submission for approval is being checked, not applied
+	requests  []request       // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -262,22 +266,32 @@ func (t *Tenant) caller(m platform.Member, app platform.App, replaying bool) pla
 func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
 
 // Submit routes a submission to the app declaring its action and records it when accepted.
-func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, err *kernel.Error) {
 	a := t.owner["action:"+s.GetSchema().GetName()]
 	if a == nil {
 		return nil, unknown()
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
+		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
+	defer func() { end(outcomeOf(err)) }()
 	defer t.enqueue(now)
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil && t.owner["action:"+work.SchemaRequest] != nil {
 		return t.request(m, a, s, now)
 	}
-	record, err := a.Submit(t.caller(m, a, false), s, now)
+	record, err = a.Submit(t.caller(m, a, false), s, now)
 	if err == nil {
 		t.journal(a, m, s, now)
 	}
 	return record, err
+}
+
+func outcomeOf(err *kernel.Error) string {
+	if err != nil {
+		return err.Code.String()
+	}
+	return "ok"
 }
 
 // journal records an accepted submission as the member's, for the audit and the journal.
@@ -315,15 +329,17 @@ func (t *Tenant) request(m platform.Member, a platform.App, s *pb.Submission, no
 }
 
 // Input routes a connector input (push batch, poll page, heartbeat) to its app.
-func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (any, *kernel.Error) {
+func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
 	a := t.owner["input:"+name]
 	if a == nil {
 		return nil, unknown()
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	end := t.begin("input "+name, trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID), attribute.String("platform.member", m.ID))
+	defer func() { end(outcomeOf(err)) }()
 	defer t.enqueue(now)
-	out, err := a.Input(t.caller(m, a, false), name, body, now)
+	out, err = a.Input(t.caller(m, a, false), name, body, now)
 	if err != nil {
 		t.refused(m.ID, name, err, now)
 	}
@@ -351,11 +367,12 @@ func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
 type caused struct {
 	platform.Event
 	hops int
+	span trace.SpanContext // the input that caused it, whose trace its delivery continues
 }
 
 // publish queues an accepted decision for its subscribers (Ledger, through Runtime).
 func (t *Tenant) publish(e platform.Event) {
-	t.events = append(t.events, caused{e, t.hops})
+	t.events = append(t.events, caused{e, t.hops, t.current()})
 	t.acted++
 }
 

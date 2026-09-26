@@ -102,6 +102,9 @@ func TestIOLane(t *testing.T) {
 	if bs := tn.Breakers(at); len(bs) != 1 || bs[0].Destination != "endpoint:slow" || bs[0].Failures < breakerAfter {
 		t.Fatalf("breakers %+v", bs)
 	}
+	if h := tn.Health(at); h.Status != "degraded" || h.OpenBreakers != 1 || len(h.Breakers) != 1 {
+		t.Fatalf("health %+v", h)
+	}
 	told := tn.notificationsFor("ana")
 	if !slices.ContainsFunc(told, func(n platform.Notification) bool { return strings.HasPrefix(n.Title, "Effect to slow failed") }) {
 		t.Fatalf("the administrator was not told: %+v", told)

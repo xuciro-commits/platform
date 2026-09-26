@@ -40,6 +40,10 @@ forged=$(printf %s "$claims" | tr _- /+ | base64 -d | jq -c '.email = "sup@plant
 [[ -n $forged ]] || fail "could not forge"
 [[ $(code "$head.$forged.$sig") == 401 ]] || fail "forged claims accepted"
 echo "ok   principals come from Rauthy (demo tokens and forged claims refused)"
+# Health (ADR-0027 D6): the process, and each tenant's work for its administrators.
+[[ $(curl -s "$MANUFACTURING/healthz" | jq -r .status) == ok && $(curl -s "$HOSPITALITY/healthz" | jq -r .status) == ok ]] || fail "healthz"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/health" | jq -r '.status + " " + (.apps|tostring)') =~ ^(ok|degraded)\ [0-9]+$ ]] || fail "tenant health: $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/health")"
+echo "ok   health: the processes are alive; the plant's administrator reads its tenant's health"
 
 submit() { # token key schema target-type target-id payload [expected-revision]
   local body who
