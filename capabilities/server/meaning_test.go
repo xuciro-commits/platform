@@ -10,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
 	"platformserver/apps/flow"
+	"platformserver/apps/knowledge"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -21,8 +22,8 @@ func TestMeaning(t *testing.T) {
 	seat := func(id string, roles map[string]string) Seat {
 		return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 	}
-	tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", KnowledgeApp: KnowledgeEditor, PlatformApp: Admin, AgentApp: AgentAdmin})),
-		ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), NewKnowledge("t-1"), newDesk("t-1"))
+	tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", knowledge.ID: knowledge.Editor, PlatformApp: Admin, AgentApp: AgentAdmin})),
+		ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), knowledge.New("t-1"), newDesk("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +56,8 @@ func TestMeaning(t *testing.T) {
 	subject, _ := desk.Field("subject")
 	expect("entity", desk.Description == "A customer's request the desk answers." && desk.Synonyms == "case,issue" && subject.Help != "", desk)
 	terms := platform.Field{}
-	for _, a := range tn.app(KnowledgeApp).Manifest().Actions.All() {
-		if a.Schema == TermType+".create" {
+	for _, a := range tn.app(knowledge.ID).Manifest().Actions.All() {
+		if a.Schema == knowledge.TermType+".create" {
 			for _, f := range a.Payload {
 				if f.Name == "term" {
 					terms = f
@@ -81,8 +82,8 @@ func TestMeaning(t *testing.T) {
 	expect("a type's name alone lists it", hits("issue") == "desk.ticket/T1 desk.ticket/T2" || hits("issue") == "desk.ticket/T2 desk.ticket/T1", hits("issue"))
 
 	// The glossary: a term refers to what exists, never makes or renames it.
-	expect("a term for nothing", do(KnowledgeApp, TermType+".create", TermType, "X", map[string]string{"term": "Gizmo", "meaning": "?", "refersTo": "desk.gizmo"}) == "ERROR_CODE_INVALID_ARGUMENT", nil)
-	expect("a term", do(KnowledgeApp, TermType+".create", TermType, "SR", map[string]string{"term": "SR", "meaning": "A service request: what the desk calls a ticket", "synonyms": "Anfrage", "refersTo": "desk.ticket"}) == "ok", nil)
+	expect("a term for nothing", do(knowledge.ID, knowledge.TermType+".create", knowledge.TermType, "X", map[string]string{"term": "Gizmo", "meaning": "?", "refersTo": "desk.gizmo"}) == "ERROR_CODE_INVALID_ARGUMENT", nil)
+	expect("a term", do(knowledge.ID, knowledge.TermType+".create", knowledge.TermType, "SR", map[string]string{"term": "SR", "meaning": "A service request: what the desk calls a ticket", "synonyms": "Anfrage", "refersTo": "desk.ticket"}) == "ok", nil)
 	expect("search by the glossary", strings.Contains(hits("SR breakfast"), "desk.ticket/T2") && !strings.Contains(hits("SR breakfast"), "T1"), hits("SR breakfast"))
 	for _, e := range tn.Entities(ana) {
 		if e.Type == "desk.ticket" {

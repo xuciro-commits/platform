@@ -20,6 +20,7 @@ import (
 	"platformserver"
 	"platformserver/apps/ai"
 	"platformserver/apps/flow"
+	"platformserver/apps/knowledge"
 	"platformserver/apps/org"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -35,7 +36,7 @@ func main() {
 	supervisor := seat(mes.Supervisor)
 	for app, role := range map[string]string{erp.ID: erp.Controller, erpadapter.ID: erpadapter.Planner, platformserver.PlatformApp: platformserver.Admin,
 		org.ID: org.Admin, ai.ID: ai.Admin, flow.ID: flow.Admin,
-		platformserver.AgentApp: platformserver.AgentAdmin, platformserver.KnowledgeApp: platformserver.KnowledgeEditor, work.ID: work.Admin} {
+		platformserver.AgentApp: platformserver.AgentAdmin, knowledge.ID: knowledge.Editor, work.ID: work.Admin} {
 		supervisor[app] = role
 	}
 	assistant := manufacturing.Seat("assistant-l1", "agent-l1", seat(mes.Assistant), "L1")

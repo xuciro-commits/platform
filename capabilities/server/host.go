@@ -44,7 +44,8 @@ type Tenant struct {
 	derivedMu    sync.Mutex
 	vectorMemory map[string][]float32
 	transcripts  []Transcript
-	knowledge    *Knowledge
+	knowledge    glossary // the knowledge app: documents are searched, terms read (ADR-0022)
+	index        index    // passages cut from documents and knowledge fields
 	dictionaries sync.Map // language → map[string]string, merged from the platform's and the apps' (ADR-0023)
 	patternCache sync.Map // language → []pattern
 	agentRun     string   // the run whose agent is submitting, under mu: its effects name it
@@ -174,8 +175,8 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if x, ok := a.(*Agents); ok {
 			t.agents, x.t = x, t
 		}
-		if x, ok := a.(*Knowledge); ok {
-			t.knowledge, x.t = x, t
+		if x, ok := a.(glossary); ok {
+			t.knowledge = x
 		}
 		for _, action := range m.Subscribes {
 			if protocol, _, ok := strings.Cut(action, "#"); ok {

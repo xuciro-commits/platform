@@ -392,7 +392,7 @@ func (t *Tenant) termsFor(declaration string) []string {
 	if t.knowledge == nil {
 		return nil
 	}
-	return t.knowledge.termsFor(t, declaration)
+	return t.knowledge.TermsFor(declaration)
 }
 
 // declares tells whether a name is one of the tenant's declarations: an entity
@@ -422,7 +422,7 @@ func (t *Tenant) glossary(app string) string {
 		return ""
 	}
 	var b strings.Builder
-	for _, x := range t.knowledge.terms(t, app) {
+	for _, x := range t.knowledge.Terms(app) {
 		b.WriteString("- " + x.Term + ": " + x.Meaning)
 		if x.Synonyms != "" {
 			b.WriteString(" (also: " + x.Synonyms + ")")

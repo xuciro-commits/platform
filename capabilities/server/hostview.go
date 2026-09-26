@@ -95,3 +95,5 @@ func (h hostView) Runs() host.Runs {
 	}
 	return h.t.agents
 }
+
+func (h hostView) Declares(name string) bool { return h.t.declares(name) }

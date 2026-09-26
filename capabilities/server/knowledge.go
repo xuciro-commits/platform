@@ -15,50 +15,17 @@ import (
 	"time"
 	"unicode"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/apps/ai"
+	"platformserver/apps/knowledge"
 	"platformserver/platform"
 )
 
-// The knowledge app (ADR-0022): documents people upload, and fields apps
+// Knowledge search (ADR-0022), the host's engine over the knowledge app's documents: documents people upload, and fields apps
 // declare as knowledge, cut into passages and searched by words and, when an
 // embedding model is set, by meaning — only what the reader may read. Vectors
 // are derived: embedded as owned work outside the journal and kept by the
 // passage's hash, so losing them costs only embedding again. What an agent
 // found is journaled with its step (agent_engine.go), so replay never searches.
-const (
-	KnowledgeApp          = "knowledge"
-	DocumentType          = "knowledge.document"
-	TermType              = "knowledge.term"
-	KnowledgeEditor       = "editor"
-	SettingEmbeddingModel = "embedding-model"
-	passageChars          = 3200 // about 800 tokens
-	embedBatch            = 32
-)
-
-// Document is a text people upload for agents and members to find.
-type Document struct {
-	platform.Record
-	Title  string   `json:"title" field:"required,search"`
-	Text   string   `json:"text" field:"required" type:"longtext"`
-	Source string   `json:"source,omitempty" title:"Where it comes from"`
-	Apps   []string `json:"apps,omitempty" title:"Read by members of"` // the apps whose members may read it; none: every member
-}
-
-// Term is a word of the tenant's own glossary (ADR-0023 D1): what it means
-// here, other words for it, and the declaration it refers to. It is layered on
-// top of the model: agents read it and search expands by it, but it never
-// renames, retitles or redefines a declaration.
-type Term struct {
-	platform.Record
-	Term     string   `json:"term" field:"required,search" help:"The word people here use" example:"PO"`
-	Meaning  string   `json:"meaning" field:"required" type:"longtext" help:"What it means in this organisation"`
-	Synonyms string   `json:"synonyms,omitempty" help:"Other words for it, comma-separated"`
-	RefersTo string   `json:"refersTo,omitempty" title:"Refers to" help:"The declaration it names: an entity type, <type>.<field> or an action" example:"mes.order"`
-	Apps     []string `json:"apps,omitempty" title:"Read by members of"`
-}
-
 // Passage is one piece of knowledge a search found, with where it comes from.
 type Passage struct {
 	Document string  `json:"document"` // knowledge.document/<id>, or <type>/<id>#<field>
@@ -87,58 +54,22 @@ type Store interface {
 	PurgeTranscripts(tenant string, before time.Time)
 }
 
-type Knowledge struct {
-	t      *Tenant
-	ledger *platform.Ledger
+const (
+	passageChars = 3200 // about 800 tokens
+	embedBatch   = 32
+)
+
+// glossary is the knowledge app as search and agents read it (ADR-0023 D1).
+type glossary interface {
+	Terms(app string) []knowledge.Term
+	TermsFor(declaration string) []string
+}
+
+// index is the passages cut from the tenant's documents and knowledge fields.
+type index struct {
 	mu     sync.Mutex
 	docs   map[string]string   // source key → the revision indexed
 	chunks map[string][]*chunk // by source key
-}
-
-func NewKnowledge(tenant string) *Knowledge {
-	k := &Knowledge{docs: map[string]string{}, chunks: map[string][]*chunk{}}
-	es := knowledgeEntities()
-	k.ledger = platform.NewLedger(tenant, KnowledgeApp, platform.NewCatalog(append(platform.EntityActions(es[0]), platform.EntityActions(es[1])...)...), DocumentType, TermType)
-	return k
-}
-
-func knowledgeEntities() []platform.Entity {
-	return []platform.Entity{{Type: DocumentType, Title: "Document", Model: Document{}, Display: "title",
-		Description: "A text people upload for agents and members to find and cite: house rules, manuals, FAQs, contracts.",
-		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{KnowledgeEditor}, Capability: "documents"}},
-		{Type: TermType, Title: "Term", Model: Term{}, Display: "term", Synonyms: "glossary",
-			Description: "A word of this organisation's own glossary, layered on the platform's model: agents read it and search understands it; it never changes what a declaration is.",
-			Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{KnowledgeEditor}, Capability: "glossary"}}}
-}
-
-func (k *Knowledge) Manifest() platform.Manifest {
-	return platform.Manifest{ID: KnowledgeApp, Title: "Knowledge", Version: "1", Actions: k.ledger.Catalog, Entities: knowledgeEntities(),
-		Settings: []platform.Setting{{Name: SettingEmbeddingModel, Title: "Embedding model", Type: "text", Default: "",
-			Description: "The enabled model that embeds passages, <provider>/<model>, on the OpenAI wire. Empty: knowledge is searched by words only."}}}
-}
-
-func (k *Knowledge) Declarations() []*pb.AuthorityDeclaration { return k.ledger.Declarations() }
-func (k *Knowledge) Snapshot() (json.RawMessage, error)       { return k.ledger.Snapshot() }
-func (k *Knowledge) Restore(raw json.RawMessage) error        { return k.ledger.Restore(raw) }
-func (k *Knowledge) Read(platform.Caller, string) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-}
-func (k *Knowledge) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
-}
-
-func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	if name := s.GetSchema().GetName(); (name == TermType+".create" || name == TermType+".edit") && !c.Replaying {
-		var p struct{ RefersTo *string }
-		json.Unmarshal(s.GetPayload(), &p)
-		if p.RefersTo != nil && *p.RefersTo != "" && !k.t.declares(*p.RefersTo) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} // a term names what exists; it cannot make a declaration
-		}
-	}
-	if record, err, ok := k.ledger.Generated(c, s, now, nil, knowledgeEntities()...); ok {
-		return record, err
-	}
-	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
 // source is one text to index: a document, or an app's knowledge field.
@@ -148,12 +79,11 @@ type source struct {
 }
 
 // sources are the tenant's documents and the fields apps declare as knowledge.
-func (k *Knowledge) sources() []source {
-	t := k.t
+func (t *Tenant) sources() []source {
 	var out []source
-	docs, _, _ := platform.Find[Document](t.automation(KnowledgeApp, false), platform.Query{Limit: 100000})
+	docs, _, _ := platform.Find[knowledge.Document](t.automation(knowledge.ID, false), platform.Query{Limit: 100000})
 	for _, d := range docs {
-		out = append(out, source{key: DocumentType + "/" + d.ID, title: d.Title, text: d.Text, revision: fmt.Sprint(d.Revision), apps: d.Apps})
+		out = append(out, source{key: knowledge.DocumentType + "/" + d.ID, title: d.Title, text: d.Text, revision: fmt.Sprint(d.Revision), apps: d.Apps})
 	}
 	t.records.mu.Lock()
 	types := slices.Collect(func(yield func(*entityType) bool) {
@@ -188,8 +118,12 @@ func (k *Knowledge) sources() []source {
 }
 
 // sync cuts new and changed sources into passages and forgets removed ones.
-func (k *Knowledge) sync() {
-	srcs := k.sources()
+func (t *Tenant) sync() {
+	k := &t.index
+	srcs := t.sources()
+	if k.docs == nil {
+		k.docs, k.chunks = map[string]string{}, map[string][]*chunk{}
+	}
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	seen := map[string]bool{}
@@ -309,13 +243,13 @@ func readable(c *chunk, reader *platform.Member, app string) bool {
 // runs outside the tenant's lock.
 func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, now time.Time) []Passage {
 	out := []Passage{}
-	k := t.knowledge
-	if k == nil || strings.TrimSpace(q) == "" {
+	k := &t.index
+	if t.knowledge == nil || strings.TrimSpace(q) == "" {
 		return out
 	}
-	k.sync()
+	t.sync()
 	var query []float32
-	model := t.setting(t.automation(KnowledgeApp, false), SettingEmbeddingModel)
+	model := t.setting(t.automation(knowledge.ID, false), knowledge.SettingEmbeddingModel)
 	if model != "" {
 		if vs, err := t.embed(model, []string{q}, now); err == nil {
 			query = vs[0]
@@ -429,15 +363,15 @@ func cosine(a, b []float32) float64 {
 // Embed gives passages without a vector theirs, as owned work outside the
 // tenant's lock; the host calls it apart from other work.
 func (t *Tenant) Embed(now time.Time) {
-	k := t.knowledge
-	if k == nil || t.ai == nil {
+	k := &t.index
+	if t.knowledge == nil || t.ai == nil {
 		return
 	}
-	model := t.setting(t.automation(KnowledgeApp, false), SettingEmbeddingModel)
+	model := t.setting(t.automation(knowledge.ID, false), knowledge.SettingEmbeddingModel)
 	if model == "" {
 		return
 	}
-	k.sync()
+	t.sync()
 	k.mu.Lock()
 	var hashes []string
 	texts := map[string]string{}
@@ -500,7 +434,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 			Prompt int `json:"prompt_tokens"`
 		} `json:"usage"`
 	}
-	u := ai.Usage{At: now, Member: "app:" + KnowledgeApp, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
+	u := ai.Usage{At: now, Member: "app:" + knowledge.ID, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
 	switch {
 	case failure != nil:
 		u.Outcome = failure.Detail
@@ -565,31 +499,6 @@ func decodeVector(b []byte) []float32 {
 	out := make([]float32, len(b)/4)
 	for i := range out {
 		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[4*i:]))
-	}
-	return out
-}
-
-// terms are the glossary terms an app's members may read ("" for every term).
-func (k *Knowledge) terms(t *Tenant, app string) []Term {
-	all, _, _ := platform.Find[Term](t.automation(KnowledgeApp, false), platform.Query{Limit: 500, Sort: []string{"term"}})
-	out := all[:0]
-	for _, x := range all {
-		if app == "" || len(x.Apps) == 0 || slices.Contains(x.Apps, app) {
-			out = append(out, x)
-		}
-	}
-	return out
-}
-
-// termsFor are the words the glossary gives a declaration: each term that
-// refers to it, and its synonyms.
-func (k *Knowledge) termsFor(t *Tenant, declaration string) []string {
-	var out []string
-	for _, x := range k.terms(t, "") {
-		if x.RefersTo == declaration {
-			out = append(out, x.Term)
-			out = append(out, strings.Split(x.Synonyms, ",")...)
-		}
 	}
 	return out
 }

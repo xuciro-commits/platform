@@ -38,6 +38,8 @@ type Host interface {
 	Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string
 	// Directory is the organisation, or nil when the tenant runs none.
 	Directory() Directory
+	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
+	Declares(name string) bool
 	// Seen marks an app's notifications with any of keys read for everyone.
 	Seen(app string, keys ...string)
 	// Invoke submits a protocol action to the tenant's provider for c's app,

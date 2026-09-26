@@ -18,6 +18,7 @@ import (
 	"platformserver"
 	"platformserver/apps/ai"
 	"platformserver/apps/flow"
+	"platformserver/apps/knowledge"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -129,7 +130,7 @@ func TestCSMTriage(t *testing.T) {
 			map[string]string{"subject": subject, "customer": "anna@acme.test", "account": "ACME", "body": "The wifi in our rooms drops."}), "ok")
 	}
 
-	w.expect(do(lead, platformserver.KnowledgeApp, platformserver.DocumentType+".create", platformserver.DocumentType, "RULES",
+	w.expect(do(lead, knowledge.ID, knowledge.DocumentType+".create", knowledge.DocumentType, "RULES",
 		map[string]any{"title": "House rules", "text": "# Wifi\n\nThe wifi password is on the key card; the front desk resets it."}), "ok")
 
 	// Grounded in the CRM and the house rules, cited: the account's opportunity is named in the reply; the

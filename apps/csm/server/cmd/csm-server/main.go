@@ -13,6 +13,7 @@ import (
 	"platformserver"
 	"platformserver/apps/ai"
 	"platformserver/apps/flow"
+	"platformserver/apps/knowledge"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -26,11 +27,11 @@ func main() {
 	seats := deployment.Seats([]platformserver.Seat{
 		seat("lead", "lead-1", map[string]string{csm.ID: csm.Lead, platformserver.PlatformApp: platformserver.Admin, ai.ID: ai.Admin,
 			work.ID: work.Admin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin,
-			platformserver.KnowledgeApp: platformserver.KnowledgeEditor}),
+			knowledge.ID: knowledge.Editor}),
 		seat("desk", "desk-1", map[string]string{csm.ID: csm.Desk}),
 	})
 	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), ai.New("dev"), work.New("dev"),
-		flow.New("dev"), platformserver.NewAgents("dev"), platformserver.NewKnowledge("dev"), csm.New("dev"))
+		flow.New("dev"), platformserver.NewAgents("dev"), knowledge.New("dev"), csm.New("dev"))
 	if err == nil {
 		err = deployment.Serve(t)
 	}

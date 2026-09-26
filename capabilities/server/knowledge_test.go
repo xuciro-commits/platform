@@ -13,6 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/ai"
 	"platformserver/apps/flow"
+	"platformserver/apps/knowledge"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -58,8 +59,8 @@ func TestKnowledge(t *testing.T) {
 		seat := func(id string, roles map[string]string) Seat {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", KnowledgeApp: KnowledgeEditor, PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
-			seat("cy", map[string]string{"other": "x"})), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), NewKnowledge("t-1"), newDesk("t-1"))
+		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", knowledge.ID: knowledge.Editor, PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
+			seat("cy", map[string]string{"other": "x"})), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), knowledge.New("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -95,11 +96,11 @@ func TestKnowledge(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	expect("rules", do("ana", KnowledgeApp, DocumentType+".create", DocumentType, "RULES", map[string]any{"title": "House rules",
+	expect("rules", do("ana", knowledge.ID, knowledge.DocumentType+".create", knowledge.DocumentType, "RULES", map[string]any{"title": "House rules",
 		"text": "# Arrival\n\nCheck-in from 15:00.\n\n# Wifi\n\nThe wifi password is on the key card; the front desk resets it."}), "ok")
-	expect("playbook", do("ana", KnowledgeApp, DocumentType+".create", DocumentType, "PLAYBOOK", map[string]any{"title": "Desk playbook",
+	expect("playbook", do("ana", knowledge.ID, knowledge.DocumentType+".create", knowledge.DocumentType, "PLAYBOOK", map[string]any{"title": "Desk playbook",
 		"text": "Answer wifi complaints within the hour.", "apps": []string{"desk"}}), "ok")
-	expect("a reader of desk", do("cy", KnowledgeApp, DocumentType+".create", DocumentType, "X", map[string]any{"title": "x", "text": "x"}), "ERROR_CODE_POLICY_DENIED")
+	expect("a reader of desk", do("cy", knowledge.ID, knowledge.DocumentType+".create", knowledge.DocumentType, "X", map[string]any{"title": "x", "text": "x"}), "ERROR_CODE_POLICY_DENIED")
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T1", map[string]string{"subject": "Wifi"})
 	do("ana", "desk", "desk.ticket.answer", "desk.ticket", "T1", map[string]string{"reply": "Reset the wifi router in room 12."})
 

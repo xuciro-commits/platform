@@ -14,6 +14,7 @@ import (
 	"platformserver"
 	"platformserver/apps/ai"
 	"platformserver/apps/flow"
+	"platformserver/apps/knowledge"
 	"platformserver/apps/org"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -41,7 +42,7 @@ func seat(subject, id string, role mes.Role, units ...string) platformserver.Sea
 	if subject == "supervisor" {
 		s.Roles[platformserver.PlatformApp], s.Roles[org.ID], s.Roles[ai.ID] = platformserver.Admin, org.Admin, ai.Admin
 		s.Roles[flow.ID], s.Roles[platformserver.AgentApp] = flow.Admin, platformserver.AgentAdmin
-		s.Roles[platformserver.KnowledgeApp] = platformserver.KnowledgeEditor
+		s.Roles[knowledge.ID] = knowledge.Editor
 	}
 	for _, u := range units {
 		s.Units = append(s.Units, platform.Membership{Unit: u, Role: string(role)})
@@ -61,7 +62,7 @@ func main() {
 	}
 	seats := deployment.Seats(demo)
 	t, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seats...),
-		org.New(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), platformserver.NewKnowledge(tenant), plant)
+		org.New(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), knowledge.New(tenant), plant)
 	if err == nil {
 		err = t.Connect(mes.DemoConnectors(tenant)...)
 	}
