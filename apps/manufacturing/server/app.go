@@ -10,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
+	"production"
 )
 
 // languages translate the app's titles and descriptions (ADR-0023).
@@ -67,8 +68,9 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 func (p *Plant) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
 		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,
-		Inputs: map[string]bool{"states": true, "planned-orders": true},
-		Jobs:   []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
+		Consumes: []platform.Consumption{{Protocol: production.ID, Optional: true}},
+		Inputs:   map[string]bool{"states": true, "planned-orders": true},
+		Jobs:     []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
 		Emits: []platform.EffectKind{{Name: EffectConfirmation, Title: "Order confirmation to the ERP", Irreversible: true,
 			Description: "When the last SFC of an order ends, its yield and scrap are confirmed to the ERP (SAP production order confirmation); the ERP answers with its confirmation number."},
 			{Name: EffectLeadTime, Title: "Lead time from a supplier",
@@ -97,12 +99,18 @@ func (p *Plant) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 	return nil
 }
 
-func (p *Plant) Read(_ platform.Caller, name string) (any, *kernel.Error) {
+func (p *Plant) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case "master":
 		return p.Master(), nil
-	case "planned-orders":
-		return p.Planned(), nil
+	case "planned-orders": // the external ERP's claims, and the ERP app's released orders
+		planned := p.Planned()
+		for _, o := range erpOrders(c) {
+			if o.State == "released" {
+				planned = append(planned, PlannedOrder{ERPID: o.ID, Product: o.Product, Quantity: int(o.Quantity), Due: o.Due})
+			}
+		}
+		return planned, nil
 	}
 	return p.Downtime(), nil
 }

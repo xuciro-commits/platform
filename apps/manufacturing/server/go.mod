@@ -6,6 +6,7 @@ require (
 	google.golang.org/protobuf v1.36.12
 	platformkernel v0.0.0
 	platformserver v0.0.0
+	production v0.0.0
 )
 
 require (
@@ -34,3 +35,5 @@ require (
 replace platformkernel => ../../../contract/go
 
 replace platformserver => ../../../capabilities/server
+
+replace production => ../../../protocols/production

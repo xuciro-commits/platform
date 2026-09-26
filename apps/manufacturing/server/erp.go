@@ -158,9 +158,8 @@ func (o *Order) key() string {
 	return fmt.Sprintf("%s#%d", o.ID, o.Resent+1)
 }
 
-// confirm emits the order's confirmation (#101) with its current key and
-// stores the order as changed by r.
-func (p *Plant) confirm(who platform.Caller, r *pb.ChangeRecord, o Order, now time.Time) {
+// confirmed is what the order made and lost, by its SFCs.
+func (p *Plant) confirmed(who platform.Caller, o Order) Confirmation {
 	done := 0
 	var sfcs []string
 	for _, id := range o.SFCs {
@@ -170,7 +169,13 @@ func (p *Plant) confirm(who platform.Caller, r *pb.ChangeRecord, o Order, now ti
 		}
 	}
 	yield := o.Quantity * done / len(o.SFCs)
-	c := Confirmation{Order: o.ID, Planned: o.Planned, Product: o.Product, Quantity: o.Quantity, Yield: yield, Scrap: o.Quantity - yield, SFCs: sfcs}
+	return Confirmation{Order: o.ID, Planned: o.Planned, Product: o.Product, Quantity: o.Quantity, Yield: yield, Scrap: o.Quantity - yield, SFCs: sfcs}
+}
+
+// confirm emits the order's confirmation (#101) with its current key and
+// stores the order as changed by r.
+func (p *Plant) confirm(who platform.Caller, r *pb.ChangeRecord, o Order, now time.Time) {
+	c := p.confirmed(who, o)
 	if n, _ := who.Emit(EffectConfirmation, o.key(), OrderType+"/"+o.ID, c, now); n > 0 {
 		o.ERP = "sent"
 	}
@@ -274,6 +279,12 @@ func (p *Plant) orderLine(o Order) string {
 // product and at least the quantity, and no other order fulfils it.
 func (p *Plant) fits(c platform.Caller, o Order, id string) string {
 	var planned *PlannedOrder
+	if e, ok := erpOrder(c, id); ok { // the ERP app's (production.orders/1)
+		if e.State != "released" {
+			return id + " is " + e.State + ", not released"
+		}
+		planned = &PlannedOrder{ERPID: e.ID, Product: e.Product, Quantity: int(e.Quantity), Due: e.Due}
+	}
 	for _, r := range p.facts.Records(p.tenant) {
 		if f := r.GetFact(); f.GetSchema().GetName() == schemaPlanned && f.GetSubject().GetId() == id {
 			planned = &PlannedOrder{}

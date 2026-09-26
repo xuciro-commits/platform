@@ -53,6 +53,8 @@ type Product struct {
 	Kind string         `json:"kind" field:"required" choices:"material,finished" help:"Material is bought and used; finished goods are made and sold"`
 	Unit string         `json:"unit" field:"required" example:"pcs"`
 	Cost platform.Money `json:"cost" title:"Standard cost" help:"What one unit is worth in the books; receipts and production are valued at it"`
+	// Components are what one unit of a finished product takes (ADR-0024 7c).
+	Components []Component `json:"components,omitempty" help:"What one unit is made of, for finished goods"`
 }
 
 // PurchaseLine is a product ordered, its quantity and its price per unit.

@@ -1,11 +1,12 @@
-module erp
+module plant
 
 go 1.27.1
 
 require (
+	erp v0.0.0
+	mes v0.0.0
 	platformkernel v0.0.0
 	platformserver v0.0.0
-	production v0.0.0
 )
 
 require (
@@ -30,10 +31,15 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
+	production v0.0.0 // indirect
 )
 
-replace platformkernel => ../../../contract/go
+replace erp => ../../apps/erp/server
 
-replace platformserver => ../../../capabilities/server
+replace mes => ../../apps/manufacturing/server
 
-replace production => ../../../protocols/production
+replace platformkernel => ../../contract/go
+
+replace platformserver => ../../capabilities/server
+
+replace production => ../../protocols/production

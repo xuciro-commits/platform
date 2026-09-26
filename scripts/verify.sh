@@ -64,15 +64,19 @@ drills() {
 
 composition() {
   # Apps know no other app; they meet through protocols (ADR-0011).
-  step app-boundaries scripts/boundaries.sh
-  step lodging-protocol bash -c 'cd protocols/lodging && go vet ./... && go test -count=1 ./...'
-  # Every other app, including a new one, is checked as soon as it exists.
   local dir
+  step app-boundaries scripts/boundaries.sh
+  for dir in protocols/*; do
+    [[ -f $dir/go.mod ]] && step "$(basename "$dir")-protocol" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
+  done
+  # Every other app, including a new one, is checked as soon as it exists.
   for dir in apps/*/server; do
     [[ -f $dir/go.mod && $dir != apps/hotel/* && $dir != apps/manufacturing/* ]] || continue
     step "$(basename "$(dirname "$dir")")-server" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
   done
-  step sales-solution bash -c 'cd solutions/sales && go vet ./... && go test -count=1 ./...'
+  for dir in solutions/*; do
+    [[ -f $dir/go.mod ]] && step "$(basename "$dir")-solution" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
+  done
 }
 
 deploy() {

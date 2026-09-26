@@ -325,6 +325,9 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		if o.Status != "completed" || o.ERP != "" {
 			return nil, conflict // a completed order, confirmed once; corrections are resent
 		}
+		if apply, ok := p.confirmThrough(who, s, o, now); ok {
+			return apply, nil
+		}
 		return func(record *pb.ChangeRecord) { p.confirm(who, record, o, now) }, nil
 	case SchemaResend:
 		var r struct {
@@ -344,14 +347,15 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		if r.Planned != "" && !who.Replaying && p.fits(who, o, r.Planned) != "" {
 			return nil, invalid
 		}
-		return func(record *pb.ChangeRecord) {
-			if r.Planned != "" {
-				o.Planned = r.Planned
-			}
-			o.Resent++
-			o.ERP, o.Confirmation, o.ERPDetail = "", "", ""
-			p.confirm(who, record, o, now)
-		}, nil
+		if r.Planned != "" {
+			o.Planned = r.Planned
+		}
+		o.Resent++
+		o.ERP, o.Confirmation, o.ERPDetail = "", "", ""
+		if apply, ok := p.confirmThrough(who, s, o, now); ok {
+			return apply, nil
+		}
+		return func(record *pb.ChangeRecord) { p.confirm(who, record, o, now) }, nil
 	}
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }

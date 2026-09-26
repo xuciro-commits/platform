@@ -33,8 +33,10 @@ const (
 	TrialBalance = "trial-balance" // the read
 )
 
-// Journals, each numbered by its own sequence per year.
+// Journals, each numbered by its own sequence per year, with its prefix.
 var Journals = []string{"general", "purchases", "production"}
+
+var journalPrefix = map[string]string{"general": "GJ", "purchases": "PJ", "production": "MJ"}
 
 // Account is one account of the chart; its ID is its code ("1400").
 type Account struct {
@@ -88,7 +90,9 @@ type Period struct {
 var month = regexp.MustCompile(`^\d{4}-(0[1-9]|1[0-2])$`)
 
 // Entities are the ERP's entity types: accounting, then purchasing and inventory.
-func Entities() []platform.Entity { return append(accounting(), purchasing()...) }
+func Entities() []platform.Entity {
+	return append(append(accounting(), purchasing()...), producing()...)
+}
 
 func accounting() []platform.Entity {
 	both := []string{Accountant, Controller}
@@ -148,16 +152,18 @@ type App struct {
 
 func New(tenant string) *App {
 	return &App{ledger: platform.NewLedger(tenant, ID, Actions(), AccountType, EntryType, PostingType, PeriodType,
-		PartnerType, ProductType, PurchaseType, MoveType)}
+		PartnerType, ProductType, PurchaseType, MoveType, ProductionType)}
 }
 
 func (a *App) Manifest() platform.Manifest {
 	sequences := make([]platform.Sequence, len(Journals))
 	for i, j := range Journals {
-		sequences[i] = platform.Sequence{Name: "entry." + j, Pattern: strings.ToUpper(j[:1]) + "J/{year}/{n:5}", Yearly: true}
+		sequences[i] = platform.Sequence{Name: "entry." + j, Pattern: journalPrefix[j] + "/{year}/{n:5}", Yearly: true}
 	}
 	return platform.Manifest{ID: ID, Title: "ERP", Version: "1", Actions: a.ledger.Catalog, Entities: Entities(), Languages: languages,
-		Reads: []string{TrialBalance, OnHand}, Sequences: append(sequences, platform.Sequence{Name: "purchase", Pattern: "PO/{year}/{n:5}", Yearly: true}),
+		Reads: []string{TrialBalance, OnHand, ProductionOrders}, Sequences: append(sequences, platform.Sequence{Name: "purchase", Pattern: "PO/{year}/{n:5}", Yearly: true},
+			platform.Sequence{Name: "production", Pattern: "MO/{year}/{n:5}", Yearly: true}),
+		Provides: []platform.Provision{Provision()},
 		Settings: []platform.Setting{{Name: "approval-limit", Title: "Approval limit", Type: "integer", Default: "10000",
 			Description: "A purchase order of this total or more (in whole units of the currency) waits for a controller's approval."}}}
 }
@@ -173,14 +179,21 @@ func (a *App) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Er
 func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	// A posted entry is final: only a draft is edited or archived (D5).
+	// A posted entry is final, and so is an order once placed or released:
+	// only a draft is edited or archived (D5).
 	draft := func() bool {
-		schema := s.GetSchema().GetName()
-		if schema != EntryType+".edit" && schema != EntryType+".archive" {
-			return true
+		switch s.GetSchema().GetName() {
+		case EntryType + ".edit", EntryType + ".archive":
+			e, _ := platform.Get[Entry](c, s.GetTarget().GetId())
+			return e.State == "draft"
+		case PurchaseType + ".edit":
+			p, _ := platform.Get[Purchase](c, s.GetTarget().GetId())
+			return p.State == "draft"
+		case ProductionType + ".edit":
+			p, _ := platform.Get[Production](c, s.GetTarget().GetId())
+			return p.State == "draft"
 		}
-		e, _ := platform.Get[Entry](c, s.GetTarget().GetId())
-		return e.State == "draft"
+		return true
 	}
 	if record, err, ok := a.ledger.Generated(c, s, now, draft, Entities()...); ok {
 		return record, err
@@ -303,6 +316,9 @@ type Balance struct {
 
 // Read serves the trial balance: every account with postings, and their sums.
 func (a *App) Read(c platform.Caller, name string) (any, *kernel.Error) {
+	if name == ProductionOrders { // the protocol's read: the host lets only its consumers ask
+		return productionOrders(c), nil
+	}
 	if name != TrialBalance && name != OnHand || c.Role() == "" {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
@@ -339,6 +355,6 @@ func Chart() []Account {
 		a("1403", "Raw materials", "asset"), a("1405", "Finished goods", "asset"), a("5001", "Work in progress", "asset"),
 		a("2202", "Accounts payable", "liability"), a("2203", "Goods received not invoiced", "liability"),
 		a("4001", "Share capital", "equity"), a("6001", "Sales", "income"),
-		a("6401", "Cost of goods sold", "expense"), a("6403", "Purchase price variance", "expense"), a("6602", "Administrative expenses", "expense"), a("6711", "Scrap", "expense"),
+		a("6401", "Cost of goods sold", "expense"), a("6403", "Purchase price variance", "expense"), a("6404", "Production variance", "expense"), a("6602", "Administrative expenses", "expense"), a("6711", "Scrap", "expense"),
 	}
 }

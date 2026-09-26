@@ -11,6 +11,7 @@ apps/manufacturing/server/cmd/mes-server/mes-server
 apps/hotel/server/cmd/hotel-server/hotel-server
 solutions/sales/cmd/sales-server/sales-server
 apps/erp/server/cmd/erp-server/erp-server
+solutions/plant/cmd/plant-server/plant-server
 node_modules/
 dist/
 

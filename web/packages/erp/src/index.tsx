@@ -1,12 +1,13 @@
 // The ERP's UI (ADR-0024): journal entries drafted with their lines and posted
 // from their page, the chart of accounts, periods, postings and the trial
 // balance; purchase orders placed, received and billed from their page,
-// partners, products, stock moves and what is on hand. Lists, pages and forms are generated from the declarations; the
+// partners, products, stock moves and what is on hand; production orders
+// released to the plant, which confirms them through production.orders/1. Lists, pages and forms are generated from the declarations; the
 // host decides who sees and does what.
 import "./i18n";
 import { GeneratedForm, Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import { Button, Dialog, Input, PageHeader, t } from "@platform/ui";
-import { ArrowLeftRight, BookOpen, CalendarRange, Handshake, Landmark, ListTree, Package, Plus, Scale, ShoppingCart, Warehouse } from "lucide-react";
+import { ArrowLeftRight, Factory, BookOpen, CalendarRange, Handshake, Landmark, ListTree, Package, Plus, Scale, ShoppingCart, Warehouse } from "lucide-react";
 import { useState } from "react";
 
 // Records whose ID is a code people choose: accounts ("1403") and products ("P-100").
@@ -120,6 +121,7 @@ export default defineApp({
     { id: "partners", title: () => t("Partners"), render: () => <Drafted type="erp.partner" label={t("New partner")} prefix="BP" /> },
     { id: "products", title: () => t("Products"), render: () => <Coded type="erp.product" label={t("New product")} placeholder="P-100" /> },
     { id: "moves", title: () => t("Stock moves"), render: () => <Records type="erp.move" /> },
+    { id: "production", title: () => t("Production orders"), render: () => <Drafted type="erp.production" label={t("New production order")} prefix="MO" /> },
     { id: "on-hand", title: () => t("On hand"), render: () => <OnHand /> },
     { id: "periods", title: () => t("Periods"), render: () => <Periods /> },
     { id: "postings", title: () => t("Postings"), render: () => <Records type="erp.posting" /> },
@@ -135,6 +137,7 @@ export default defineApp({
     ],
   }, {
     label: t("Purchasing and stock"), items: [
+      { label: t("Production orders"), icon: <Factory />, route: { view: "production" } },
       { label: t("Purchase orders"), icon: <ShoppingCart />, route: { view: "purchases" } },
       { label: t("On hand"), icon: <Warehouse />, route: { view: "on-hand" } },
       { label: t("Stock moves"), icon: <ArrowLeftRight />, route: { view: "moves" } },

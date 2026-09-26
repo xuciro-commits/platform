@@ -32,7 +32,7 @@ func build(t *testing.T) *platformserver.Tenant {
 	}
 	controller := seat("cy", Controller)
 	controller.Roles[platformserver.PlatformApp] = platformserver.Admin // sets the tenant's currency
-	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ada", Accountant), controller, seat("bo", Buyer)),
+	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ada", Accountant), controller, seat("bo", Buyer), seat("pi", Planner)),
 		platformserver.NewWork("t"), platformserver.NewFlows("t"), New("t"))
 	if err != nil {
 		t.Fatal(err)
