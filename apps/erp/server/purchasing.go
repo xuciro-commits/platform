@@ -112,7 +112,7 @@ func purchasing() []platform.Entity {
 						Do: order, After: ordered},
 					{Name: "receive", Title: "Receive", From: []string{"ordered"}, To: []string{"received"}, Roles: buying,
 						Description: "The goods arrived: move them into stock and post them at standard cost against goods received not invoiced.",
-						Do: receivable, After: received},
+						Do:          receivable, After: received},
 					{Name: "bill", Title: "Book bill", From: []string{"received"}, To: []string{"billed"}, Roles: []string{Accountant, Controller},
 						Description: "Book the supplier's bill for the order: goods received not invoiced against payables.",
 						Payload:     []platform.Field{{Name: "invoice", Type: "string", Description: "The supplier's invoice number"}},
