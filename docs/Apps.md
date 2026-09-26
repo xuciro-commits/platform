@@ -66,4 +66,4 @@ pnpm --dir web/apps/workspace build && go run ./cmd/<id>-server -web ../../../we
 
 The workspace signs in with a development token, opens the app, lists its records and forms, and shows the flow's task in the manager's inbox; the profile menu switches to 简体中文. `/v1/openapi.json` describes every route, and every entity type and action the caller may use.
 
-To ship the app, compose it into a solution (`solutions/hospitality/cmd/hospitality-server`) or a deployment of its own, and add its route to `deploy/local/README.md`.
+To ship the app, compose it into a solution (`solutions/hospitality/cmd/hospitality-server`) or a deployment of its own, and add its route to `docs/Testing.md`, walked in the UI first.

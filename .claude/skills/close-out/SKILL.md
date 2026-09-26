@@ -21,7 +21,7 @@ A batch is done when its checks pass and its documents say what now exists, in t
 | A capability now exists or changed | `docs/Platform.md` §2.4 (the capability map), and its row leaves §10.4 |
 | A promise of an accepted ADR is now built, or newly partial | `docs/Platform.md` §2.9 |
 | A new term, or a new owner of data | `docs/Platform.md` §2.5 and §2.3 |
-| Something a person can try | A route in `deploy/local/README.md` (in Chinese, like the rest of it) |
+| Something a person can try | A route in `docs/Testing.md` (in Chinese, like the rest of it), walked in the UI first; addresses, accounts and settings in `deploy/local/README.md` |
 | A new directory, platform app or skill | The map in `AGENTS.md` |
 | The item's state | `docs/WorkQueue.md`; delete the item when done |
 | Friction found on the way | An `F-n` row in `docs/WorkQueue.md` |
