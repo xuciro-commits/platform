@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -292,7 +293,7 @@ func (f *Flows) interested(names []string, e platform.Event) bool {
 		}
 	}
 	s := e.Record.GetSubmission()
-	return s.GetSchema().GetName() == "work.task.complete" && e.App == WorkApp
+	return s.GetSchema().GetName() == "work.task.complete" && e.App == work.ID
 }
 
 // handle takes an event delivered to the flow app: it starts flows and ends
@@ -336,7 +337,7 @@ func (f *Flows) handle(c platform.Caller, e platform.Event, names []string, now 
 					return err
 				}
 			case tok.Waits == "ask" && s.GetSchema().GetName() == "work.task.complete" && s.GetTarget().GetId() == tok.Task:
-				task, _ := platform.Get[WorkTask](f.t.automation(WorkApp, c.Replaying), tok.Task)
+				task, _ := platform.Get[work.WorkTask](f.t.automation(work.ID, c.Replaying), tok.Task)
 				answer := cmpOr(task.Answer, "done")
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					in.Answer = answer

@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -98,9 +99,9 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 			out.Flows = append(out.Flows, FlowSummary{ID: x.ID, Flow: x.Flow, State: x.State, Trace: trace})
 		}
 	}
-	if t.work != nil {
+	if t.tasks != nil {
 		about, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}})
-		tasks, _, _ := platform.Find[WorkTask](t.automation(WorkApp, false), platform.Query{Domain: about, Sort: []string{"id"}})
+		tasks, _, _ := platform.Find[work.WorkTask](t.automation(work.ID, false), platform.Query{Domain: about, Sort: []string{"id"}})
 		for _, x := range tasks {
 			out.Tasks = append(out.Tasks, TaskSummary{ID: x.ID, Title: x.Title, State: x.State, Answer: x.Answer})
 		}

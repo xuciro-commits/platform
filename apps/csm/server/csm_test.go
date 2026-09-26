@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -18,7 +19,7 @@ func build(t *testing.T) *platformserver.Tenant {
 	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t",
 		seat("dee", map[string]string{ID: Desk}), seat("lee", map[string]string{ID: Lead}),
 		seat("mail", map[string]string{ID: Desk})), // an outside mail gateway's service account
-		platformserver.NewAI("t"), platformserver.NewWork("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), New("t"))
+		platformserver.NewAI("t"), work.New("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +60,7 @@ func TestTicketsStandalone(t *testing.T) {
 		}
 		return v.Record.(Ticket)
 	}
-	work := func(d time.Duration) {
+	tick := func(d time.Duration) {
 		now = now.Add(d)
 		tn.Think(now)
 		tn.Work(now)
@@ -68,7 +69,7 @@ func TestTicketsStandalone(t *testing.T) {
 	expect("no subject", do("dee", SchemaOpen, "T-0", map[string]string{"customer": "a@x.test"}), "ERROR_CODE_INVALID_ARGUMENT")
 	expect("open", do("dee", SchemaOpen, "T-1", map[string]string{"subject": "Wifi keeps dropping", "customer": "anna@acme.test"}), "ok")
 	expect("numbered without a gap", ticket("T-1").Number, "CS-2026-0001")
-	work(2 * time.Second) // no model: the flow asks the desk
+	tick(2 * time.Second) // no model: the flow asks the desk
 	expect("triage", do("dee", SchemaTriage, "T-1", map[string]string{"category": "technical", "priority": "high"}), "ok")
 	expect("due", ticket("T-1").Due.Sub(ticket("T-1").Created.At), "4h0m0s")
 	expect("reply", do("dee", SchemaReply, "T-1", map[string]string{"reply": "The front desk resets it."}), "ok")
@@ -79,14 +80,14 @@ func TestTicketsStandalone(t *testing.T) {
 	expect("by mail", do("mail", SchemaOpen, "T-2", map[string]string{"subject": "Invoice", "customer": "bo@acme.test"}), "ok")
 	expect("the same numbering", ticket("T-2").Number, "CS-2026-0002")
 	expect("urgent", do("dee", SchemaTriage, "T-2", map[string]string{"category": "billing", "priority": "urgent"}), "ok")
-	work(2 * time.Second)
-	work(time.Hour) // unanswered when due
-	work(2 * time.Second)
+	tick(2 * time.Second)
+	tick(time.Hour) // unanswered when due
+	tick(2 * time.Second)
 	expect("escalated", ticket("T-2").Escalated, "true")
 	lee, _ := tn.Member("lee")
 	out, _ := tn.Read(lee, "inbox")
 	var titles []string
-	for _, task := range out.([]platformserver.WorkTask) {
+	for _, task := range out.([]work.WorkTask) {
 		titles = append(titles, task.Title)
 	}
 	expect("the lead's inbox", titles, "[Late ticket: Invoice]")

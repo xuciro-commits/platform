@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"platformserver"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -46,23 +47,23 @@ func TestPurchasing(t *testing.T) {
 	b.expect("only from a supplier", b.do("bo", PurchaseType+".order", PurchaseType, "PO-X", map[string]any{}), "ERROR_CODE_INVALID_ARGUMENT") // the rules are probed before any request
 	draft("PO-A", "S-1", line("M-1", 100, 520))
 	// Every order goes through the work app's request; under the limit no level applies and it is placed at once.
-	b.expect("order", b.do("bo", PurchaseType+".order", PurchaseType, "PO-A", map[string]any{}), platformserver.SchemaRequest)
+	b.expect("order", b.do("bo", PurchaseType+".order", PurchaseType, "PO-A", map[string]any{}), work.SchemaRequest)
 	a := purchase("PO-A")
 	b.expect("ordered", fmt.Sprint(a.State, " ", a.Number, " ", a.Total.Amount, " ", a.Total.Currency), "ordered PO/2026/00001 52000 CNY")
 
 	// 3 000 kg at 5.00: 15 000 CNY, over the limit of 10 000: a controller approves first.
 	draft("PO-B", "S-1", line("M-1", 3000, 500))
-	b.expect("held", b.do("bo", PurchaseType+".order", PurchaseType, "PO-B", map[string]any{}), platformserver.SchemaRequest)
+	b.expect("held", b.do("bo", PurchaseType+".order", PurchaseType, "PO-B", map[string]any{}), work.SchemaRequest)
 	b.expect("while held", purchase("PO-B").State, "draft")
 	m, _ := b.tn.Member("bo")
 	out, _ := b.tn.Read(m, "requests")
 	var request string
-	for _, r := range out.([]platformserver.ApprovalRequest) {
+	for _, r := range out.([]work.ApprovalRequest) {
 		if r.Target == PurchaseType+"/PO-B" {
 			request = r.ID
 		}
 	}
-	b.expect("approve", b.as(platformserver.WorkApp, "cy", "work.approval.approve", platformserver.ApprovalType, request, map[string]any{}), "ok")
+	b.expect("approve", b.as(work.ID, "cy", "work.approval.approve", work.ApprovalType, request, map[string]any{}), "ok")
 	b.expect("approved and placed", purchase("PO-B").State+" "+purchase("PO-B").Number, "ordered PO/2026/00002")
 
 	b.expect("receive", b.do("bo", PurchaseType+".receive", PurchaseType, "PO-A", map[string]any{}), "ok")

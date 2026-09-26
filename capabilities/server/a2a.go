@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -199,8 +200,8 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 	decide := func(schema, typ, id, key string, payload any) error {
 		raw, _ := json.Marshal(payload)
 		app := AgentApp
-		if typ == TaskType {
-			app = WorkApp
+		if typ == work.TaskType {
+			app = work.ID
 		}
 		_, err := t.Submit(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: app, IdempotencyKey: key,
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, h.Now())
@@ -228,11 +229,11 @@ func (h *Host) serveA2A(w http.ResponseWriter, r *http.Request) {
 				reply(nil, -32001, "task not found")
 				return
 			}
-			if x.State != "waiting" || !strings.HasPrefix(x.Task, WorkApp+":") && !strings.HasPrefix(x.Task, AgentApp+":") {
+			if x.State != "waiting" || !strings.HasPrefix(x.Task, work.ID+":") && !strings.HasPrefix(x.Task, AgentApp+":") {
 				reply(nil, -32004, "the task is not waiting for input")
 				return
 			}
-			if err := decide("work.task.complete", TaskType, x.Task, "a2a:"+p.Message.MessageID, map[string]string{"answer": p.Message.text()}); err != nil {
+			if err := decide("work.task.complete", work.TaskType, x.Task, "a2a:"+p.Message.MessageID, map[string]string{"answer": p.Message.text()}); err != nil {
 				reply(nil, -32603, err.Error())
 				return
 			}

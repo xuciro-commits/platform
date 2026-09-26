@@ -78,7 +78,17 @@ func (r runtime) Deliver(c platform.Caller, dataClass, from, to string, now time
 }
 
 func (r runtime) Assign(c platform.Caller, rec *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
-	return r.t.assign(c, rec, a)
+	if r.t.tasks == nil {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	return r.t.tasks.Assign(c, rec, a)
 }
 
 func (r runtime) Probing() bool { return r.t.probing }
+
+// closeTask cancels a task a platform app no longer waits for, when the tenant runs the work app.
+func (t *Tenant) closeTask(c platform.Caller, r *pb.ChangeRecord, id string) {
+	if t.tasks != nil {
+		t.tasks.Close(c, r, id)
+	}
+}

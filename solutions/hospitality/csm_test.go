@@ -16,6 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -89,7 +90,7 @@ func TestCSMTriage(t *testing.T) {
 		}
 		return "ok"
 	}
-	work := func(d time.Duration) {
+	tick := func(d time.Duration) {
 		for end := now.Add(d); now.Before(end); now = now.Add(time.Second) {
 			w.tenant.Think(now)
 			w.tenant.Work(now)
@@ -110,7 +111,7 @@ func TestCSMTriage(t *testing.T) {
 	inbox := func(m platform.Member) []string {
 		out, _ := w.tenant.Read(m, "inbox")
 		var titles []string
-		for _, x := range out.([]platformserver.WorkTask) {
+		for _, x := range out.([]work.WorkTask) {
 			titles = append(titles, x.Title)
 		}
 		return titles
@@ -132,7 +133,7 @@ func TestCSMTriage(t *testing.T) {
 	// Grounded in the CRM and the house rules, cited: the account's opportunity is named in the reply; the
 	// high priority makes it due in four hours; the mail waits for a person.
 	open("T-1", "Wifi keeps dropping")
-	work(8 * time.Second)
+	tick(8 * time.Second)
 	x := ticket("T-1")
 	w.expect(fmt.Sprint(x.Status, " ", x.Category, " ", x.Priority, " ", x.Due.Sub(x.Created.At), " ", x.Replied, " | ", x.Reply),
 		"answered booking high 4h0m0s agent:csm.triage | About your Board offsite: the front desk resets the wifi password (House rules). A colleague is on it.")
@@ -143,7 +144,7 @@ func TestCSMTriage(t *testing.T) {
 	held := effects.([]platform.Effect)
 	w.expect(fmt.Sprint(len(held), " ", held[0].State, " ", len(mailed)), "1 held 0")
 	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaEffectApprove, platformserver.EffectType, held[0].ID, map[string]any{}), "ok")
-	work(2 * time.Second)
+	tick(2 * time.Second)
 	w.expect(fmt.Sprint(len(mailed), " ", strings.Contains(mailed[0], `"to":"anna@acme.test"`)), "1 true")
 	w.expect(instance("T-1").State, "done")
 	runOf := func(ticket string) platformserver.AgentRunRecord {
@@ -158,7 +159,7 @@ func TestCSMTriage(t *testing.T) {
 	w.expect(do(desk, "csm", csm.SchemaOpen, csm.TicketType, "T-X", map[string]string{"subject": "Who?", "customer": "nobody"}), "ERROR_CODE_INVALID_ARGUMENT")
 	open("T-4", "Wifi slow in the lobby")
 	w.expect(ticket("T-1").Number+" "+ticket("T-4").Number, fmt.Sprintf("CS-%d-0001 CS-%d-0002", now.Year(), now.Year()))
-	work(8 * time.Second)
+	tick(8 * time.Second)
 	effects, _ = w.tenant.Read(ops, "effects")
 	i := slices.IndexFunc(effects.([]platform.Effect), func(e platform.Effect) bool { return e.State == "held" })
 	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaEffectDiscard, platformserver.EffectType, effects.([]platform.Effect)[i].ID, map[string]any{}), "ok")
@@ -168,7 +169,7 @@ func TestCSMTriage(t *testing.T) {
 
 	// The guard: a reply promising a refund is refused; the ticket stays open.
 	open("T-2", "I want a refund")
-	work(8 * time.Second)
+	tick(8 * time.Second)
 	runs, _ := w.tenant.Records(agents, platformserver.RunType,
 		platform.Query{Domain: json.RawMessage(`[["goal","like","refund"]]`)}, now)
 	run := runs.Records[0].(platformserver.AgentRunRecord)
@@ -177,13 +178,13 @@ func TestCSMTriage(t *testing.T) {
 	// Without a model's answer the desk triages by hand; nobody answers in a
 	// day, so the leads are told, and a lead's reply ends it.
 	open("T-3", "fail: the invoice is wrong")
-	work(8 * time.Second)
+	tick(8 * time.Second)
 	w.expect(fmt.Sprint(slices.Contains(inbox(desk), "Triage and answer: fail: the invoice is wrong")), "true")
 	now = now.Add(24 * time.Hour)
-	work(3 * time.Second)
+	tick(3 * time.Second)
 	w.expect(fmt.Sprint(ticket("T-3").Escalated, " ", slices.Contains(inbox(lead), "Late ticket: fail: the invoice is wrong")), "true true")
 	w.expect(do(lead, "csm", csm.SchemaReply, csm.TicketType, "T-3", map[string]string{"reply": "Corrected, sorry."}), "ok")
-	work(3 * time.Second)
+	tick(3 * time.Second)
 	w.expect(fmt.Sprint(instance("T-3").State, " ", inbox(lead), " ", len(mailed)), "done [Late ticket: I want a refund] 2") // a person's reply is mailed at once; T-2 is late too
 
 	platformserver.CheckReplay(t, w.tenant, w.journal, func() *platformserver.Tenant { return newWorld(t, hotelProvider).tenant })

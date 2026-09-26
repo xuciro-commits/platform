@@ -300,6 +300,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -312,7 +313,7 @@ func TestApp(t *testing.T) {
 			return platformserver.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{ID: role}}}
 		}
 		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ana", Member), seat("mo", Manager)),
-			platformserver.NewWork("t"), platformserver.NewFlows("t"), New("t"))
+			work.New("t"), platformserver.NewFlows("t"), New("t"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -338,7 +339,7 @@ func TestApp(t *testing.T) {
 			t.Fatalf("%s: got %s, want %s", what, got, want)
 		}
 	}
-	work := func() {
+	run := func() {
 		for range 3 {
 			now = now.Add(time.Second)
 			tn.Work(now)
@@ -354,22 +355,22 @@ func TestApp(t *testing.T) {
 
 	expect("create", do("ana", ID, [[.Type]]Type+".create", [[.Type]]Type, "X-1", map[string]string{"title": "First"}), "ok")
 	expect("a member cannot finish it", do("ana", ID, [[.Type]]Type+".finish", [[.Type]]Type, "X-1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
-	work()
+	run()
 	out, _ := tn.Read(member("mo"), "inbox")
-	tasks := out.([]platformserver.WorkTask)
-	i := slices.IndexFunc(tasks, func(x platformserver.WorkTask) bool { return x.Title == "Review X-1" })
+	tasks := out.([]work.WorkTask)
+	i := slices.IndexFunc(tasks, func(x work.WorkTask) bool { return x.Title == "Review X-1" })
 	if i < 0 {
 		t.Fatalf("no review task in %v", tasks)
 	}
-	expect("answer", do("mo", platformserver.WorkApp, "work.task.complete", platformserver.TaskType, tasks[i].ID, map[string]string{"answer": "finish"}), "ok")
-	work()
+	expect("answer", do("mo", work.ID, "work.task.complete", work.TaskType, tasks[i].ID, map[string]string{"answer": "finish"}), "ok")
+	run()
 	expect("finished by the flow", state("X-1"), "done")
 	platformserver.CheckReplay(t, tn, journal, build)
 }
 
 // Every text of the app reads in Simplified Chinese (AGENTS.md rule 10).
 func TestChinese(t *testing.T) {
-	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), platformserver.NewWork("t"), platformserver.NewFlows("t"), New("t"))
+	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), work.New("t"), platformserver.NewFlows("t"), New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,6 +391,7 @@ import (
 
 	"[[.ID]]"
 	"platformserver"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -401,10 +403,10 @@ func main() {
 	}
 	seats := deployment.Seats([]platformserver.Seat{
 		seat("manager", "manager-1", map[string]string{[[.ID]].ID: [[.ID]].Manager, platformserver.PlatformApp: platformserver.Admin,
-			platformserver.WorkApp: platformserver.WorkAdmin, platformserver.FlowApp: platformserver.FlowAdmin}),
+			work.ID: work.Admin, platformserver.FlowApp: platformserver.FlowAdmin}),
 		seat("member", "member-1", map[string]string{[[.ID]].ID: [[.ID]].Member}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), platformserver.NewWork("dev"), platformserver.NewFlows("dev"), [[.ID]].New("dev"))
+	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), work.New("dev"), platformserver.NewFlows("dev"), [[.ID]].New("dev"))
 	if err == nil {
 		err = deployment.Serve(t)
 	}

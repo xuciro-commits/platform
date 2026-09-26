@@ -12,6 +12,7 @@ import (
 	"hcm"
 	"platformserver"
 	"platformserver/apps/org"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -26,14 +27,14 @@ func main() {
 		seat("manager", "manager-1", map[string]string{hcm.ID: hcm.Employee}),
 		seat("head", "head-1", map[string]string{hcm.ID: hcm.Employee}),
 		seat("hr", "hr-1", map[string]string{hcm.ID: hcm.HR, platformserver.PlatformApp: platformserver.Admin, org.ID: org.Admin,
-			platformserver.WorkApp: platformserver.WorkAdmin}),
+			work.ID: work.Admin}),
 	})
 	org := org.New("dev", platform.OrgSeed{Structures: []platform.Structure{{ID: hcm.Structure, Name: "Management", Kind: "management"}},
 		Units: []platform.Unit{{ID: "company", Name: "Company", Kind: "company"}, {ID: "team", Name: "Team", Kind: "department"}},
 		Edges: []platform.Edge{{Structure: hcm.Structure, Unit: "team", Parent: "company"}},
 		Memberships: []platform.Membership{{Party: "member:employee-1", Unit: "team", Role: "employee"}, {Party: "member:manager-1", Unit: "team", Role: "manager"},
 			{Party: "member:head-1", Unit: "company", Role: "head"}}})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), org, platformserver.NewWork("dev"), hcm.New("dev"))
+	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), org, work.New("dev"), hcm.New("dev"))
 	if err == nil {
 		err = deployment.Serve(t)
 	}

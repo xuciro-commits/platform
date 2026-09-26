@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -138,7 +139,7 @@ func TestFlows(t *testing.T) {
 		seat := func(id, role string) Seat {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{"shop": role, FlowApp: FlowAdmin}}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", "clerk"), seat("bo", "clerk")), NewWork("t-1"), NewFlows("t-1"), newShop("t-1", flows...))
+		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", "clerk"), seat("bo", "clerk")), work.New("t-1"), NewFlows("t-1"), newShop("t-1", flows...))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -187,9 +188,9 @@ func TestFlows(t *testing.T) {
 			t.Fatalf("%s:\n got %s\nwant %s", what, got, want)
 		}
 	}
-	tasks := func(who string) []WorkTask {
+	tasks := func(who string) []work.WorkTask {
 		out, _ := tn.Read(member(who), "inbox")
-		return out.([]WorkTask)
+		return out.([]work.WorkTask)
 	}
 
 	// An order placed starts the flow: reserved, then waiting for payment; paid, it ships.
@@ -206,8 +207,8 @@ func TestFlows(t *testing.T) {
 	tick(time.Hour + 2*time.Second)
 	inbox := tasks("bo")
 	expect("chase task", fmt.Sprintf("%d %s %v", len(inbox), inbox[0].Title, inbox[0].Answers), "1 Chase payment of O2 [wait cancel]")
-	expect("a wrong answer", do("bo", WorkApp, "work.task.complete", TaskType, inbox[0].ID, map[string]string{"answer": "maybe"}), "ERROR_CODE_INVALID_ARGUMENT")
-	expect("cancel", do("bo", WorkApp, "work.task.complete", TaskType, inbox[0].ID, map[string]string{"answer": "cancel"}), "ok")
+	expect("a wrong answer", do("bo", work.ID, "work.task.complete", work.TaskType, inbox[0].ID, map[string]string{"answer": "maybe"}), "ERROR_CODE_INVALID_ARGUMENT")
+	expect("cancel", do("bo", work.ID, "work.task.complete", work.TaskType, inbox[0].ID, map[string]string{"answer": "cancel"}), "ok")
 	tick(time.Second)
 	expect("O2 compensated", instance("shop.fulfil:O2").State+" "+status("O2")+" / "+trace("shop.fulfil:O2"),
 		"compensated released / started, reserve acted, paid waiting, paid timeout, chase asked, chase answered, chase chose, compensating, reserve undone, ended")
@@ -225,19 +226,19 @@ func TestFlows(t *testing.T) {
 	place("O4", "none")
 	tick(time.Minute)
 	expect("O4", instance("shop.fulfil:O4").State+" "+status("O4"), "compensated placed")
-	expect("O4's failure told to the owners (#118)", fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w WorkTask) bool { return strings.HasPrefix(w.Title, "Flow Fulfil order O4 failed at ") })), "true")
+	expect("O4's failure told to the owners (#118)", fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w work.WorkTask) bool { return strings.HasPrefix(w.Title, "Flow Fulfil order O4 failed at ") })), "true")
 	do("ana", "shop", "shop.order.place", "shop.order", "O5", map[string]string{"item": "stuck"})
 	tick(time.Second)
 	now = now.Add(2 * time.Hour) // unpaid past the chase; the clerk cancels; the release is refused
 	tick(time.Second)
-	chase := slices.IndexFunc(tasks("ana"), func(w WorkTask) bool { return w.Title == "Chase payment of O5" })
-	do("ana", WorkApp, "work.task.complete", TaskType, tasks("ana")[chase].ID, map[string]string{"answer": "cancel"})
+	chase := slices.IndexFunc(tasks("ana"), func(w work.WorkTask) bool { return w.Title == "Chase payment of O5" })
+	do("ana", work.ID, "work.task.complete", work.TaskType, tasks("ana")[chase].ID, map[string]string{"answer": "cancel"})
 	tick(time.Minute)
 	stuck := instance("shop.fulfil:O5")
-	expect("O5 stuck", stuck.State+" "+fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w WorkTask) bool { return w.Title == "Flow Fulfil order O5 is stuck" })), "stuck true")
+	expect("O5 stuck", stuck.State+" "+fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w work.WorkTask) bool { return w.Title == "Flow Fulfil order O5 is stuck" })), "stuck true")
 	expect("skip", do("ana", FlowApp, SchemaFlowSkip, InstanceType, "shop.fulfil:O5", map[string]int{"token": stuck.Tokens[0].ID}), "ok")
 	expect("O5 ended", instance("shop.fulfil:O5").State+" "+status("O5"), "compensated reserved")
-	expect("stuck task closed", fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w WorkTask) bool { return w.Title == "Flow Fulfil order O5 is stuck" })), "false")
+	expect("stuck task closed", fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w work.WorkTask) bool { return w.Title == "Flow Fulfil order O5 is stuck" })), "false")
 
 	// One running instance per key; a new one once it ended.
 	place("O6", "fig")

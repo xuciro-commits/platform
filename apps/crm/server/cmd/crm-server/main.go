@@ -10,6 +10,7 @@ import (
 
 	"crm"
 	"platformserver"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -24,7 +25,7 @@ func main() {
 			platformserver.AIApp: platformserver.AIAdmin, platformserver.FlowApp: platformserver.FlowAdmin, platformserver.AgentApp: platformserver.AgentAdmin}),
 		seat("sales", "sales-1", map[string]string{crm.ID: string(crm.Sales)}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), platformserver.NewAI("dev"), platformserver.NewWork("dev"),
+	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), platformserver.NewAI("dev"), work.New("dev"),
 		platformserver.NewFlows("dev"), platformserver.NewAgents("dev"), crm.New("dev"))
 	if err == nil {
 		err = deployment.Serve(t)

@@ -10,6 +10,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
 	"platformserver/apps/org"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -30,7 +31,7 @@ func TestLeaveApprovals(t *testing.T) {
 		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t",
 			seat("alice", map[string]string{"hcm": Employee}, false), seat("bob", map[string]string{"hcm": Employee}, false),
 			seat("carol", map[string]string{"hcm": Employee}, false), seat("dave", map[string]string{"hcm": HR}, false),
-			seat("bot", map[string]string{"hcm": Employee}, true)), org, platformserver.NewWork("t"), New("t"))
+			seat("bot", map[string]string{"hcm": Employee}, true)), org, work.New("t"), New("t"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,7 +56,7 @@ func TestLeaveApprovals(t *testing.T) {
 		raw, _ := json.Marshal(payload)
 		authority := "hcm"
 		if typ != LeaveType {
-			authority = platformserver.WorkApp
+			authority = work.ID
 		}
 		r, err := tn.Submit(member(who), &pb.Submission{TenantId: "t", PrincipalId: who, Authority: authority, IdempotencyKey: fmt.Sprint("k", keys),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now)
@@ -68,19 +69,19 @@ func TestLeaveApprovals(t *testing.T) {
 		page, _ := tn.Records(member("dave"), LeaveType, platform.Query{Domain: json.RawMessage(`[["id","=","` + id + `"]]`)}, now)
 		return page.Records[0].(Leave)
 	}
-	request := func(leave string) platformserver.ApprovalRequest {
+	request := func(leave string) work.ApprovalRequest {
 		out, _ := tn.Read(member("alice"), "requests")
-		for _, r := range out.([]platformserver.ApprovalRequest) {
+		for _, r := range out.([]work.ApprovalRequest) {
 			if r.Target == LeaveType+"/"+leave {
 				return r
 			}
 		}
-		return platformserver.ApprovalRequest{}
+		return work.ApprovalRequest{}
 	}
 	inbox := func(who string) []string {
 		out, _ := tn.Read(member(who), "inbox")
 		var titles []string
-		for _, task := range out.([]platformserver.WorkTask) {
+		for _, task := range out.([]work.WorkTask) {
 			titles = append(titles, task.Title)
 		}
 		return titles
@@ -100,14 +101,14 @@ func TestLeaveApprovals(t *testing.T) {
 
 	// Three days: the manager approves, and the leave is approved by that decision.
 	draft("L1", "2026-10-12", "2026-10-14")
-	expect("submit", do("alice", SchemaSubmit, LeaveType, "L1", struct{}{}), platformserver.SchemaRequest) // held, not applied
+	expect("submit", do("alice", SchemaSubmit, LeaveType, "L1", struct{}{}), work.SchemaRequest) // held, not applied
 	expect("while pending", leave("L1").State, "draft")
 	a1 := request("L1")
 	expect("levels", fmt.Sprint(len(a1.Levels), a1.Levels[0].Approvers), "1 [bob bot]")
 	expect("bob's inbox", fmt.Sprint(inbox("bob")), "[Approve: Submit for approval hcm.leave/L1]")
-	expect("the agent approves", do("bot", "work.approval.approve", platformserver.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
-	expect("carol approves", do("carol", "work.approval.approve", platformserver.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
-	expect("bob approves", do("bob", "work.approval.approve", platformserver.ApprovalType, a1.ID, struct{}{}), "work.approval.approve")
+	expect("the agent approves", do("bot", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
+	expect("carol approves", do("carol", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
+	expect("bob approves", do("bob", "work.approval.approve", work.ApprovalType, a1.ID, struct{}{}), "work.approval.approve")
 	expect("after approval", leave("L1").State+" "+request("L1").State, "approved approved")
 	// The task bob answered is no longer unread in his notifications (F-30).
 	bobs, _ := tn.Read(member("bob"), "notifications")
@@ -120,7 +121,7 @@ func TestLeaveApprovals(t *testing.T) {
 	expect("bob's answered task, read", told, "true")
 	// Whoever a request concerns opens it without a role in the work app (F-31): alice asked, bob approved; dave did neither.
 	opens := func(who string) string {
-		if _, err := tn.RecordOf(member(who), platformserver.ApprovalType, a1.ID, now); err != nil {
+		if _, err := tn.RecordOf(member(who), work.ApprovalType, a1.ID, now); err != nil {
 			return err.Error()
 		}
 		return "ok"
@@ -135,9 +136,9 @@ func TestLeaveApprovals(t *testing.T) {
 	do("alice", SchemaSubmit, LeaveType, "L2", struct{}{})
 	a2 := request("L2")
 	expect("two levels", fmt.Sprint(len(a2.Levels), a2.Levels[1].Approvers), "2 [carol]")
-	do("bob", "work.approval.approve", platformserver.ApprovalType, a2.ID, struct{}{})
+	do("bob", "work.approval.approve", work.ApprovalType, a2.ID, struct{}{})
 	expect("level two", fmt.Sprintf("%d %s %v", request("L2").Level, leave("L2").State, inbox("carol")), "1 draft [Approve: Submit for approval hcm.leave/L2]")
-	do("carol", "work.approval.approve", platformserver.ApprovalType, a2.ID, struct{}{})
+	do("carol", "work.approval.approve", work.ApprovalType, a2.ID, struct{}{})
 	expect("after both", leave("L2").State, "approved")
 
 	// The rules decide when the last approver agrees (D3): a leave canceled
@@ -145,18 +146,18 @@ func TestLeaveApprovals(t *testing.T) {
 	draft("L3", "2026-12-01", "2026-12-02")
 	do("alice", SchemaSubmit, LeaveType, "L3", struct{}{})
 	do("alice", SchemaCancel, LeaveType, "L3", struct{}{})
-	do("bob", "work.approval.approve", platformserver.ApprovalType, request("L3").ID, struct{}{})
+	do("bob", "work.approval.approve", work.ApprovalType, request("L3").ID, struct{}{})
 	expect("stale", request("L3").State+" "+request("L3").Outcome+" "+leave("L3").State, "refused ERROR_CODE_CONFLICT canceled")
 
 	// Rejected and withdrawn requests leave the leave a draft.
 	draft("L4", "2026-12-10", "2026-12-10")
 	do("alice", SchemaSubmit, LeaveType, "L4", struct{}{})
-	do("bob", "work.approval.reject", platformserver.ApprovalType, request("L4").ID, map[string]string{"note": "busy week"})
+	do("bob", "work.approval.reject", work.ApprovalType, request("L4").ID, map[string]string{"note": "busy week"})
 	expect("rejected", request("L4").State+" "+leave("L4").State, "rejected draft")
 	draft("L5", "2026-12-20", "2026-12-20")
 	do("alice", SchemaSubmit, LeaveType, "L5", struct{}{})
-	expect("bob withdraws", do("bob", "work.approval.withdraw", platformserver.ApprovalType, request("L5").ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
-	do("alice", "work.approval.withdraw", platformserver.ApprovalType, request("L5").ID, struct{}{})
+	expect("bob withdraws", do("bob", "work.approval.withdraw", work.ApprovalType, request("L5").ID, struct{}{}), "ERROR_CODE_POLICY_DENIED")
+	do("alice", "work.approval.withdraw", work.ApprovalType, request("L5").ID, struct{}{})
 	expect("withdrawn", request("L5").State+" "+fmt.Sprint(inbox("bob")), "withdrawn []")
 
 	// A request is checked when made: HR cannot submit Alice's leave for her.

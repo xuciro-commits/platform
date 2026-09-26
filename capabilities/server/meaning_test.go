@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -19,7 +20,7 @@ func TestMeaning(t *testing.T) {
 		return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 	}
 	tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", KnowledgeApp: KnowledgeEditor, PlatformApp: Admin, AgentApp: AgentAdmin})),
-		NewAI("t-1"), NewWork("t-1"), NewFlows("t-1"), NewAgents("t-1"), NewKnowledge("t-1"), newDesk("t-1"))
+		NewAI("t-1"), work.New("t-1"), NewFlows("t-1"), NewAgents("t-1"), NewKnowledge("t-1"), newDesk("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}

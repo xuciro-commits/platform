@@ -22,6 +22,31 @@ type Host interface {
 	// As is c acting in app: the same member, replay and automation, with the
 	// roles it holds there (a platform app deciding for a caller of another app).
 	As(c platform.Caller, app string) platform.Caller
+	// Caller is member m acting in app; Automation is app acting as itself.
+	Caller(m platform.Member, app string, replaying bool) platform.Caller
+	Automation(app string, replaying bool) platform.Caller
+	// Member is a member of the tenant by ID, with its roles now; Holding are
+	// the members holding role in app.
+	Member(id string) (platform.Member, bool)
+	Holding(app, role string) []string
+	// Action is an action's declaration and the app declaring it.
+	Action(schema string) (app string, a platform.Action, ok bool)
+	// Submit routes s to the app declaring its action, as c's member, inside
+	// the input being handled: it is not journaled apart, the input replays it.
+	Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
+	// Recipients resolves recipients to members on now's day.
+	Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string
+	// Directory is the organisation, or nil when the tenant runs none.
+	Directory() Directory
+	// Seen marks an app's notifications with any of keys read for everyone.
+	Seen(app string, keys ...string)
+}
+
+// Tasks serves Caller.Assign for every app and closes tasks a platform app
+// no longer waits for (ADR-0017).
+type Tasks interface {
+	Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error
+	Close(c platform.Caller, r *pb.ChangeRecord, id string)
 }
 
 // Attached is an app the host hands itself to when a tenant is composed.

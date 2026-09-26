@@ -16,6 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/relations"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -52,8 +53,8 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/endpoints", Summary: "Outbound endpoints (administrators)", Answer: []EndpointView{}},
 	{Pattern: "GET /v1/effects", Summary: "Outbound effects and their state (administrators)", Answer: []platform.Effect{}},
 	{Pattern: "GET /v1/inbox", Summary: "Tasks offered to the caller, overdue first, in their language", Answer: []InboxTask{}},
-	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []ApprovalRequest{}},
-	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []SavedView{}},
+	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []work.ApprovalRequest{}},
+	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []work.SavedView{}},
 	{Pattern: "GET /v1/agents", Summary: "The agents the apps declare", Answer: []AgentInfo{}},
 	{Pattern: "GET /v1/runs", Summary: "Agent runs on the caller's behalf", Answer: []AgentRunRecord{}},
 	{Pattern: "GET /v1/memories", Summary: "What agents remember about the caller", Answer: []Memory{}},
@@ -69,7 +70,7 @@ var namedReads = []Route{
 // InboxTask is a task as the inbox serves it: with its answers in the
 // reader's language, beside the values submitted.
 type InboxTask struct {
-	WorkTask
+	work.WorkTask
 	AnswerTitles []string `json:"answerTitles,omitempty"`
 }
 

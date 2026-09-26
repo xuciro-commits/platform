@@ -349,3 +349,18 @@ func (d *Console) language(member string) string {
 	}
 	return d.t.setting(d.t.automation(PlatformApp, false), SettingLanguage)
 }
+
+// member is a member of the tenant by ID, with its current roles.
+func (t *Tenant) member(id string) (platform.Member, bool) {
+	d, ok := t.app(PlatformApp).(*Console)
+	if !ok {
+		return platform.Member{}, false
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	m := d.members[id]
+	if m == nil {
+		return platform.Member{}, false
+	}
+	return clone(m), true
+}

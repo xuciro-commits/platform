@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -471,7 +472,7 @@ func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord
 // interested: an answer to a run's question.
 func (a *Agents) interested(e platform.Event) bool {
 	s := e.Record.GetSubmission()
-	return e.App == WorkApp && s.GetSchema().GetName() == "work.task.complete" && strings.HasPrefix(s.GetTarget().GetId(), AgentApp+":")
+	return e.App == work.ID && s.GetSchema().GetName() == "work.task.complete" && strings.HasPrefix(s.GetTarget().GetId(), AgentApp+":")
 }
 
 // handle resumes the run a person answered.
@@ -481,7 +482,7 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 		if run.Task != id {
 			continue
 		}
-		task, _ := platform.Get[WorkTask](a.t.automation(WorkApp, c.Replaying), id)
+		task, _ := platform.Get[work.WorkTask](a.t.automation(work.ID, c.Replaying), id)
 		s := &pb.Submission{TenantId: a.t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -37,7 +38,7 @@ func TestA2A(t *testing.T) {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
 		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, AIApp: AIAdmin, AgentApp: AgentAdmin}),
-			seat("bo", map[string]string{"desk": "viewer"})), NewAI("t-1"), NewWork("t-1"), NewFlows("t-1"), NewAgents("t-1"), newDesk("t-1"))
+			seat("bo", map[string]string{"desk": "viewer"})), NewAI("t-1"), work.New("t-1"), NewFlows("t-1"), NewAgents("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}

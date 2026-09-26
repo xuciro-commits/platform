@@ -12,6 +12,7 @@ import (
 	"platformserver"
 	"platformserver/apps/org"
 	"platformserver/apps/relations"
+	"platformserver/apps/work"
 	"platformserver/platform"
 	"pms"
 )
@@ -27,7 +28,7 @@ func NewTenant(id string, rooms map[string]pms.RoomType, seats ...platformserver
 func Compose(id string, providers []platform.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
 	chart := DemoOrganization()
 	chart.Memberships = append(chart.Memberships, platformserver.Memberships(seats)...)
-	apps := append([]platform.App{platformserver.NewConsole(id, seats...), org.New(id, chart), relations.New(id), platformserver.NewAI(id), platformserver.NewWork(id), platformserver.NewFlows(id), platformserver.NewAgents(id), platformserver.NewKnowledge(id)}, providers...)
+	apps := append([]platform.App{platformserver.NewConsole(id, seats...), org.New(id, chart), relations.New(id), platformserver.NewAI(id), work.New(id), platformserver.NewFlows(id), platformserver.NewAgents(id), platformserver.NewKnowledge(id)}, providers...)
 	return platformserver.NewTenant(id, append(apps, crm.New(id), hcm.New(id), csm.New(id))...)
 }
 

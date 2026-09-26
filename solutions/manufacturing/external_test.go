@@ -15,6 +15,7 @@ import (
 	"mes"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -161,7 +162,7 @@ func (x *external) flow(key string) platformserver.FlowInstance {
 func (x *external) inbox() string {
 	out, _ := x.tn.Read(x.member("sup-1"), "inbox")
 	var titles []string
-	for _, task := range out.([]platformserver.WorkTask) {
+	for _, task := range out.([]work.WorkTask) {
 		titles = append(titles, task.Title)
 	}
 	return fmt.Sprint(titles)
@@ -292,7 +293,7 @@ func TestCorrectedByTheAgent(t *testing.T) {
 	run := runs.Records[0].(platformserver.AgentRunRecord)
 	x.expect("its run", fmt.Sprint(run.State, " ", run.Steps[0].Tool, " ", run.Steps[1].Tool, " ", run.ActionsUsed), "done read_planned_orders finish 0")
 	out, _ := x.tn.Read(x.member("sup-1"), "inbox")
-	x.expect("resend", x.do("sup-1", platformserver.WorkApp, "work.task.complete", platformserver.TaskType, out.([]platformserver.WorkTask)[0].ID, map[string]string{"answer": "resend"}), "ok")
+	x.expect("resend", x.do("sup-1", work.ID, "work.task.complete", work.TaskType, out.([]work.WorkTask)[0].ID, map[string]string{"answer": "resend"}), "ok")
 	x.work(6)
 	o := x.order("SO-2")
 	x.expect("confirmed", fmt.Sprint(o.ERP, " ", o.Confirmation, " ", o.Planned), "confirmed CONF-PO-9002-1 PO-9002")

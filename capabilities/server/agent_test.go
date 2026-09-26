@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -169,7 +170,7 @@ func TestAgents(t *testing.T) {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
 		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, AIApp: AIAdmin, AgentApp: AgentAdmin}),
-			seat("bo", map[string]string{"desk": "viewer"})), NewAI("t-1"), NewWork("t-1"), NewFlows("t-1"), NewAgents("t-1"), newDesk("t-1"))
+			seat("bo", map[string]string{"desk": "viewer"})), NewAI("t-1"), work.New("t-1"), NewFlows("t-1"), NewAgents("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -267,10 +268,10 @@ func TestAgents(t *testing.T) {
 	think(2)
 	expect("waiting", run("R3").State, "waiting")
 	inbox, _ := tn.Read(member("ana"), "inbox")
-	tasks := inbox.([]WorkTask)
-	task := tasks[slices.IndexFunc(tasks, func(w WorkTask) bool { return strings.HasPrefix(w.Title, "May I") })]
+	tasks := inbox.([]work.WorkTask)
+	task := tasks[slices.IndexFunc(tasks, func(w work.WorkTask) bool { return strings.HasPrefix(w.Title, "May I") })]
 	expect("question", fmt.Sprint(task.Title, task.Answers), "May I answer T3?[yes no]")
-	do("ana", WorkApp, "work.task.complete", TaskType, task.ID, map[string]string{"answer": "yes"})
+	do("ana", work.ID, "work.task.complete", work.TaskType, task.ID, map[string]string{"answer": "yes"})
 	think(3)
 	expect("R3", run("R3").State+" "+run("R3").Result, "done after 1: asked: May I answer T3?\nanswered by ana: yes")
 
@@ -282,7 +283,7 @@ func TestAgents(t *testing.T) {
 	think(6)
 	expect("budget", run("R5").State+" "+run("R5").Stopped, "stopped over its budget (5 steps, 600 tokens)")
 	inbox, _ = tn.Read(member("ana"), "inbox")
-	expect("takeover", fmt.Sprint(slices.ContainsFunc(inbox.([]WorkTask), func(w WorkTask) bool { return w.Title == "Take over from the agent: loop" })), "true")
+	expect("takeover", fmt.Sprint(slices.ContainsFunc(inbox.([]work.WorkTask), func(w work.WorkTask) bool { return w.Title == "Take over from the agent: loop" })), "true")
 
 	// In a flow: the agent drafts, the flow goes on with its answer; a model
 	// that keeps failing stops the run and the flow takes its fault path.
