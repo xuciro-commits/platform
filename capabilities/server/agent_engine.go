@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/work"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -151,7 +153,7 @@ func (a *Agents) prompt(c platform.Caller, d *agentDef, run AgentRunRecord, mode
 			continue // a failed model call or a text-only answer
 		}
 		id := fmt.Sprintf("s%d", i+1)
-		req.Messages = append(req.Messages, Message{Role: "assistant", Content: s.Rationale, ToolCalls: []ToolCall{{ID: id, Name: s.Tool, Arguments: json.RawMessage(cmpOr(s.Arguments, "{}"))}}},
+		req.Messages = append(req.Messages, Message{Role: "assistant", Content: s.Rationale, ToolCalls: []ToolCall{{ID: id, Name: s.Tool, Arguments: json.RawMessage(cmp.Or(s.Arguments, "{}"))}}},
 			Message{Role: "tool", ToolCallID: id, Content: s.Outcome})
 	}
 	for _, name := range slices.Sorted(func(yield func(string) bool) {
@@ -236,7 +238,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 	run.StepsUsed++
 	run.TokensUsed += step.Tokens
 	run.Cost += b.Usage.Cost
-	run.Model = cmpOr(b.Usage.Model, run.Model)
+	run.Model = cmp.Or(b.Usage.Model, run.Model)
 	var args map[string]any
 	json.Unmarshal(b.Arguments, &args)
 	step.Rationale, _ = args["rationale"].(string)
@@ -279,7 +281,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 			for _, p := range found {
 				run.Citations = append(run.Citations, Citation{Document: p.Document, Title: p.Title, Chunk: p.Chunk, Step: len(run.Steps)})
 			}
-			step.Outcome = cmpOr(string(b.Observation), "[]")
+			step.Outcome = cmp.Or(string(b.Observation), "[]")
 			break
 		}
 		step.Outcome, then = a.use(c, d, &run, tool, args, b.Arguments, now)
@@ -356,7 +358,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		key := fmt.Sprintf("%s:%d", run.ID, len(run.Steps)+1)
 		sender := platform.NewCaller(runtime{t}, a.member(run.Agent), d.app, c.Replaying, true)
 		t.agentRun = run.ID
-		n, err := sender.Emit(tool.schema, key, cmpOr(run.Ref, RunType+"/"+run.ID), map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent}, now)
+		n, err := sender.Emit(tool.schema, key, cmp.Or(run.Ref, RunType+"/"+run.ID), map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent}, now)
 		t.agentRun = ""
 		switch {
 		case err != nil:
@@ -464,9 +466,39 @@ func (a *Agents) stop(c platform.Caller, r *pb.ChangeRecord, run *AgentRunRecord
 
 // ended hands a flow's run back to its flow.
 func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord, now time.Time) {
-	if run.Flow != "" && a.t.flows != nil {
-		a.t.flows.agentEnded(c, run, now)
+	if run.Flow != "" && a.t.procs != nil {
+		a.t.procs.RunEnded(c, host.RunEnd{ID: run.ID, Agent: run.Agent, Flow: run.Flow, State: run.State, Result: run.Result, Stopped: run.Stopped, Token: run.Token}, now)
 	}
+}
+
+// Start, Signal and Finished serve flows' agent steps (internal/host.Runs).
+func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s host.RunStart, now time.Time) {
+	a.t.automation(AgentApp, c.Replaying).Put(r, a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now))
+}
+
+func (a *Agents) Signal(c platform.Caller, r *pb.ChangeRecord, run string, s host.RunSignal, now time.Time) {
+	a.signal(c, r, run, Signal{At: s.At, Kind: s.Kind, By: s.By, Detail: s.Detail}, now)
+}
+
+func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
+	where := []any{[]any{"flow", "=", flow}, []any{"state", "=", "done"}}
+	if step != "" {
+		where = append(where, []any{"step", "=", step})
+	}
+	domain, _ := json.Marshal(where)
+	runs, _, _ := platform.Find[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
+	var out []string
+	for _, run := range runs {
+		out = append(out, run.ID)
+	}
+	return out
+}
+
+// Interested and Listen take the events agents wait on (internal/host.Listener).
+func (a *Agents) Interested(_ []string, e platform.Event) bool { return a.interested(e) }
+
+func (a *Agents) Listen(c platform.Caller, e platform.Event, _ []string, now time.Time) *kernel.Error {
+	return a.handle(c, e, now)
 }
 
 // interested: an answer to a run's question.
@@ -487,7 +519,7 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 			Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 			last := &run.Steps[len(run.Steps)-1]
-			last.Outcome += fmt.Sprintf("\nanswered by %s: %s", task.Assignee, cmpOr(task.Answer, "done"))
+			last.Outcome += fmt.Sprintf("\nanswered by %s: %s", task.Assignee, cmp.Or(task.Answer, "done"))
 			run.State, run.Task = "running", ""
 			return func(r *pb.ChangeRecord) { c.Put(r, run) }, nil
 		})

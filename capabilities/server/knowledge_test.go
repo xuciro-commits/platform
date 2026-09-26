@@ -11,6 +11,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -57,7 +58,7 @@ func TestKnowledge(t *testing.T) {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
 		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", KnowledgeApp: KnowledgeEditor, PlatformApp: Admin, AIApp: AIAdmin, AgentApp: AgentAdmin}),
-			seat("cy", map[string]string{"other": "x"})), NewAI("t-1"), work.New("t-1"), NewFlows("t-1"), NewAgents("t-1"), NewKnowledge("t-1"), newDesk("t-1"))
+			seat("cy", map[string]string{"other": "x"})), NewAI("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), NewKnowledge("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}

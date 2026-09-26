@@ -87,14 +87,15 @@ type Tenant struct {
 	Outbound func(req *http.Request, allowPrivate bool) (*http.Response, error)
 	// AIClient sends model calls (default: a client refusing private addresses
 	// unless the provider is local); tests replace it (ADR-0015).
-	AIClient func(req *http.Request) (*http.Response, error)
-	ai       *AI
-	records  *recordStore // the apps' entity records (ADR-0016)
-	tasks    host.Tasks   // serves Caller.Assign: the work app (ADR-0017)
-	flows    *Flows       // long-running processes (ADR-0020)
-	agents   *Agents      // AI agents (ADR-0021)
-	probing  bool         // a submission for approval is being checked, not applied
-	requests []request    // accepted decisions' requests of other apps, run with their events (ADR-0026)
+	AIClient  func(req *http.Request) (*http.Response, error)
+	ai        *AI
+	records   *recordStore   // the apps' entity records (ADR-0016)
+	tasks     host.Tasks     // serves Caller.Assign: the work app (ADR-0017)
+	procs     host.Processes // the flow app (ADR-0020)
+	listeners []string       // platform apps given other apps' events as owned work (host.Listener)
+	agents    *Agents        // AI agents (ADR-0021)
+	probing   bool           // a submission for approval is being checked, not applied
+	requests  []request      // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -163,8 +164,11 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if x, ok := a.(host.Tasks); ok {
 			t.tasks = x
 		}
-		if f, ok := a.(*Flows); ok {
-			t.flows, f.t = f, t
+		if x, ok := a.(host.Processes); ok {
+			t.procs = x
+		}
+		if _, ok := a.(host.Listener); ok {
+			t.listeners = append(t.listeners, m.ID)
 		}
 		if x, ok := a.(*Agents); ok {
 			t.agents, x.t = x, t
@@ -226,10 +230,10 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if len(a.Manifest().Flows) == 0 {
 			continue
 		}
-		if t.flows == nil {
+		if t.procs == nil {
 			return nil, fmt.Errorf("tenant %s: %s declares flows, and the tenant runs no flow app", id, a.Manifest().ID)
 		}
-		if err := t.flows.declare(a); err != nil {
+		if err := t.procs.Declare(a); err != nil {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
 	}
@@ -362,8 +366,8 @@ func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []b
 	}
 	member, _ := json.Marshal(m)
 	var versions map[string]int
-	if t.flows != nil {
-		versions, t.flows.chosen = t.flows.chosen, nil
+	if t.procs != nil {
+		versions = t.procs.Versions()
 	}
 	t.Record(Entry{App: a.Manifest().ID, Kind: kind, Principal: member, Body: body, At: now, Versions: versions})
 }
@@ -373,12 +377,12 @@ func (t *Tenant) record(a platform.App, kind string, m platform.Member, body []b
 func (t *Tenant) Replay(entries []Entry) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.flows != nil {
-		defer func() { t.flows.pins = nil }()
+	if t.procs != nil {
+		defer t.procs.Pin(nil)
 	}
 	for i, e := range entries {
-		if t.flows != nil {
-			t.flows.pins = e.Versions
+		if t.procs != nil {
+			t.procs.Pin(e.Versions)
 		}
 		var m platform.Member
 		a := t.app(e.App)

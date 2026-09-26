@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"platformserver/apps/flow"
 	"platformserver/apps/org"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
@@ -20,7 +21,7 @@ import (
 func TestAPIContract(t *testing.T) {
 	tn, err := NewTenant("t-1", NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
 		Roles: map[string]string{PlatformApp: Admin, work.ID: "member", KnowledgeApp: KnowledgeEditor}}}),
-		org.New("t-1", platform.OrgSeed{}), relations.New("t-1"), work.New("t-1"), NewFlows("t-1"), NewAI("t-1"), NewAgents("t-1"), NewKnowledge("t-1"))
+		org.New("t-1", platform.OrgSeed{}), relations.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAI("t-1"), NewAgents("t-1"), NewKnowledge("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}

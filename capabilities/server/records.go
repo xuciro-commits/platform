@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/flow"
 	"platformserver/platform"
 )
 
@@ -717,9 +718,9 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		return RecordView{}, notFound
 	}
 	view := RecordView{Record: r.value.Interface(), History: []RecordChange{}, Related: []Related{}, Processes: []any{}}
-	if t.flows != nil {
+	if t.procs != nil {
 		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
-		if page, err := t.Records(m, InstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
+		if page, err := t.Records(m, flow.InstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
 			view.Processes = page.Records
 		}
 	}

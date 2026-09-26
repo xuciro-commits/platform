@@ -97,8 +97,8 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 				return fmt.Errorf("replay %s: %w", t.ID, err)
 			}
 			fresh[t.ID] = after == 0 && len(entries) == 0
-			if t.flows != nil {
-				if err := t.flows.Check(); err != nil { // running instances need their flow's version (ADR-0020 D6)
+			if t.procs != nil {
+				if err := t.procs.Check(); err != nil { // running instances need their flow's version (ADR-0020 D6)
 					return fmt.Errorf("tenant %s: %w", t.ID, err)
 				}
 			}

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -98,7 +99,7 @@ func (h *Host) agentCard(r *http.Request, t *Tenant, agent string) map[string]an
 			"openIdConnectUrl": strings.TrimSuffix(h.Issuer, "/") + "/.well-known/openid-configuration",
 			"description":      "An access token of a member of the tenant (a service account for machines); the agent acts within their grants."}}}
 	}
-	description := cmpOr(d.Description, d.Title+", an agent of the "+d.app+" app.")
+	description := cmp.Or(d.Description, d.Title+", an agent of the "+d.app+" app.")
 	return map[string]any{
 		"name": d.Title, "description": description, "version": "1",
 		"supportedInterfaces":  []map[string]any{{"url": url, "protocolBinding": "JSONRPC", "protocolVersion": A2AVersion}},
@@ -372,7 +373,7 @@ func answerOf(o platform.Outcome) string {
 	if json.Unmarshal(o.Answer, &task) == nil && len(task.Artifacts) > 0 {
 		for _, a := range task.Artifacts {
 			for _, p := range a.Parts {
-				parts = append(parts, cmpOr(p.Text, string(p.Data)))
+				parts = append(parts, cmp.Or(p.Text, string(p.Data)))
 			}
 		}
 		return strings.Join(parts, "\n")

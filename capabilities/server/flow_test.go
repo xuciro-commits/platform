@@ -10,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -137,9 +138,9 @@ func TestFlows(t *testing.T) {
 	var journal []Entry
 	build := func(flows ...platform.Flow) *Tenant {
 		seat := func(id, role string) Seat {
-			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{"shop": role, FlowApp: FlowAdmin}}}
+			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{"shop": role, flow.ID: flow.Admin}}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", "clerk"), seat("bo", "clerk")), work.New("t-1"), NewFlows("t-1"), newShop("t-1", flows...))
+		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", "clerk"), seat("bo", "clerk")), work.New("t-1"), flow.New("t-1"), newShop("t-1", flows...))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -167,8 +168,8 @@ func TestFlows(t *testing.T) {
 			tn.Work(now)
 		}
 	}
-	instance := func(id string) FlowInstance {
-		x, _ := platform.Get[FlowInstance](tn.automation(FlowApp, false), id)
+	instance := func(id string) flow.FlowInstance {
+		x, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), id)
 		return x
 	}
 	status := func(id string) string {
@@ -236,14 +237,14 @@ func TestFlows(t *testing.T) {
 	tick(time.Minute)
 	stuck := instance("shop.fulfil:O5")
 	expect("O5 stuck", stuck.State+" "+fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w work.WorkTask) bool { return w.Title == "Flow Fulfil order O5 is stuck" })), "stuck true")
-	expect("skip", do("ana", FlowApp, SchemaFlowSkip, InstanceType, "shop.fulfil:O5", map[string]int{"token": stuck.Tokens[0].ID}), "ok")
+	expect("skip", do("ana", flow.ID, flow.SchemaFlowSkip, flow.InstanceType, "shop.fulfil:O5", map[string]int{"token": stuck.Tokens[0].ID}), "ok")
 	expect("O5 ended", instance("shop.fulfil:O5").State+" "+status("O5"), "compensated reserved")
 	expect("stuck task closed", fmt.Sprint(slices.ContainsFunc(tasks("bo"), func(w work.WorkTask) bool { return w.Title == "Flow Fulfil order O5 is stuck" })), "false")
 
 	// One running instance per key; a new one once it ended.
 	place("O6", "fig")
 	tick(time.Second)
-	expect("cancel O6", do("ana", FlowApp, SchemaFlowStop, InstanceType, "shop.fulfil:O6", struct{}{}), "ok")
+	expect("cancel O6", do("ana", flow.ID, flow.SchemaFlowStop, flow.InstanceType, "shop.fulfil:O6", struct{}{}), "ok")
 	expect("canceled", instance("shop.fulfil:O6").State+" "+status("O6"), "canceled reserved")
 
 	// Version 2 ships, O7 still waits on version 1: it keeps it; moved, it packs in
@@ -257,11 +258,11 @@ func TestFlows(t *testing.T) {
 	}
 	tn, journal = v2, slices.Clone(journal)
 	tn.Record = func(e Entry) { journal = append(journal, e) }
-	if err := tn.flows.Check(); err != nil {
+	if err := tn.procs.Check(); err != nil {
 		t.Fatal(err)
 	}
 	expect("pinned", fmt.Sprint(instance("shop.fulfil:O7").Version), "1")
-	expect("move", do("ana", FlowApp, SchemaFlowMove, InstanceType, "shop.fulfil:O7", struct{}{}), "ok")
+	expect("move", do("ana", flow.ID, flow.SchemaFlowMove, flow.InstanceType, "shop.fulfil:O7", struct{}{}), "ok")
 	expect("moved", fmt.Sprint(instance("shop.fulfil:O7").Version), "2")
 	do("bo", "shop", "shop.order.pay", "shop.order", "O7", struct{}{})
 	tick(time.Second)
@@ -277,7 +278,7 @@ func TestFlows(t *testing.T) {
 	CheckReplay(t, tn, journal, func() *Tenant { return build(fulfil(1), bill, fulfil(2)) })
 	dropped := build(bill, platform.Flow{Name: "fulfil", Title: "Fulfil order", Version: 3, Start: fulfil(1).Start, Steps: fulfil(1).Steps})
 	if err := dropped.Replay(journal); err == nil {
-		if err := dropped.flows.Check(); err == nil || !strings.Contains(err.Error(), "version 2") {
+		if err := dropped.procs.Check(); err == nil || !strings.Contains(err.Error(), "version 2") {
 			t.Fatalf("a dropped version was not refused: %v", err)
 		}
 	}
@@ -289,7 +290,7 @@ func TestFlows(t *testing.T) {
 		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: []string{"shop.order.place"}, Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Act: shopAct("ship"), Ask: &platform.Ask{}}}},
 		{Name: "x", Title: "X", Version: 1, Start: platform.Start{On: []string{"shop.order.place"}, Begin: fulfil(1).Start.Begin}, Steps: []platform.Step{{Name: "a", Wait: &platform.Wait{On: "shop.order.pay"}, Timeout: time.Hour}}},
 	} {
-		if _, err := NewTenant("t", NewFlows("t"), newShop("t", bad)); err == nil {
+		if _, err := NewTenant("t", flow.New("t"), newShop("t", bad)); err == nil {
 			t.Errorf("flow accepted: %+v", bad.Steps)
 		}
 	}

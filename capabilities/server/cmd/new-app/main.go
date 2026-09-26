@@ -300,6 +300,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -313,7 +314,7 @@ func TestApp(t *testing.T) {
 			return platformserver.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{ID: role}}}
 		}
 		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ana", Member), seat("mo", Manager)),
-			work.New("t"), platformserver.NewFlows("t"), New("t"))
+			work.New("t"), flow.New("t"), New("t"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -370,7 +371,7 @@ func TestApp(t *testing.T) {
 
 // Every text of the app reads in Simplified Chinese (AGENTS.md rule 10).
 func TestChinese(t *testing.T) {
-	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), work.New("t"), platformserver.NewFlows("t"), New("t"))
+	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), work.New("t"), flow.New("t"), New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,6 +392,7 @@ import (
 
 	"[[.ID]]"
 	"platformserver"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -403,10 +405,10 @@ func main() {
 	}
 	seats := deployment.Seats([]platformserver.Seat{
 		seat("manager", "manager-1", map[string]string{[[.ID]].ID: [[.ID]].Manager, platformserver.PlatformApp: platformserver.Admin,
-			work.ID: work.Admin, platformserver.FlowApp: platformserver.FlowAdmin}),
+			work.ID: work.Admin, flow.ID: flow.Admin}),
 		seat("member", "member-1", map[string]string{[[.ID]].ID: [[.ID]].Member}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), work.New("dev"), platformserver.NewFlows("dev"), [[.ID]].New("dev"))
+	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), work.New("dev"), flow.New("dev"), [[.ID]].New("dev"))
 	if err == nil {
 		err = deployment.Serve(t)
 	}

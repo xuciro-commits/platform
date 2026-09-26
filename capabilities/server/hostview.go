@@ -79,3 +79,19 @@ func (h hostView) Seen(app string, keys ...string) {
 		}
 	}
 }
+
+func (h hostView) Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error) {
+	ref, _, err := h.t.invoke(c, protocol, action, id, payload, key, correlation, now)
+	return ref, err
+}
+
+func (h hostView) Tasks() host.Tasks { return h.t.tasks }
+
+func (h hostView) Processes() host.Processes { return h.t.procs }
+
+func (h hostView) Runs() host.Runs {
+	if h.t.agents == nil {
+		return nil
+	}
+	return h.t.agents
+}

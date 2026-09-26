@@ -10,6 +10,7 @@ import (
 	"mes"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/flow"
 	"platformserver/platform"
 )
 
@@ -17,7 +18,7 @@ const tenant = "plant-sz"
 
 var seats = []platformserver.Seat{
 	Seat("sup", "sup-1", map[string]string{"mes": string(mes.Supervisor), erp.ID: erp.Controller, platformserver.PlatformApp: platformserver.Admin,
-		platformserver.FlowApp: platformserver.FlowAdmin}, "plant-sz"),
+		flow.ID: flow.Admin}, "plant-sz"),
 	Seat("op", "op-l1", map[string]string{"mes": string(mes.Operator)}, "L1"),
 }
 
@@ -100,7 +101,7 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	o := order("SO-1")
 	expect("confirmed through the protocol", o.ERP+" "+o.Confirmation, "confirmed MJ/2026/00001")
 	// The order's page shows the process about it (ADR-0026 D4).
-	if v, _ := tn.RecordOf(sup, mes.OrderType, "SO-1", now); len(v.Processes) != 1 || v.Processes[0].(platformserver.FlowInstance).State != "done" {
+	if v, _ := tn.RecordOf(sup, mes.OrderType, "SO-1", now); len(v.Processes) != 1 || v.Processes[0].(flow.FlowInstance).State != "done" {
 		t.Fatalf("processes of SO-1: %+v", v.Processes)
 	}
 	mo := production("MO-1")

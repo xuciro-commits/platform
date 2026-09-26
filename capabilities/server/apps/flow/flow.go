@@ -1,6 +1,7 @@
-package platformserver
+package flow
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -12,18 +13,20 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/work"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
-// The flow app runs the flows apps declare (ADR-0020). An instance is a record
+// Package flow is the platform's flow app, on the app API and internal/host
+// (ADR-0025 D4). It runs the flows apps declare (ADR-0020). An instance is a record
 // of it; every step it takes is one of its decisions, made inside the owned
 // work that caused it (a delivery of an event, or its timer job), so replay
 // takes it again. Acts are submitted as the declaring app's automation
 // principal; people are asked through that app's tasks (ADR-0017).
 const (
-	FlowApp         = "flow"
+	ID              = "flow"
 	InstanceType    = "flow.instance"
-	FlowAdmin       = "admin"
+	Admin           = "admin"
 	SchemaFlowStart = "flow.instance.start"
 	SchemaFlowStep  = "flow.instance.step"
 	SchemaFlowRetry = "flow.instance.retry"
@@ -96,7 +99,7 @@ type flowDef struct {
 // Flows is a tenant's flow app.
 type Flows struct {
 	mu     sync.Mutex
-	t      *Tenant
+	host   host.Host // the tenant running it, once composed
 	ledger *platform.Ledger
 	defs   map[string][]*flowDef // "<app>.<name>" → versions, ascending
 	// chosen are the versions new instances took during the input being
@@ -126,16 +129,20 @@ func (f *Flows) version(c platform.Caller, flow string) (*flowDef, *kernel.Error
 	return d, nil
 }
 
-func NewFlows(tenant string) *Flows {
-	admin := []string{FlowAdmin}
+// Attach is called by the host when a tenant is composed.
+func (f *Flows) Attach(h host.Host) { f.host = h }
+
+// New is a tenant's flow app.
+func New(tenant string) *Flows {
+	admin := []string{Admin}
 	var actions []platform.Action
 	for _, e := range flowEntities() {
 		actions = append(actions, platform.EntityActions(e)...)
 	}
-	host := "Made by the host as the flow runs."
+	byHost := "Made by the host as the flow runs."
 	actions = append(actions,
-		platform.Action{Schema: SchemaFlowStart, Target: InstanceType, Capability: "flows", Title: "Start flow", Description: host, Payload: []platform.Field{}, Roles: admin},
-		platform.Action{Schema: SchemaFlowStep, Target: InstanceType, Capability: "flows", Title: "Take step", Description: host, Payload: []platform.Field{}, Roles: admin},
+		platform.Action{Schema: SchemaFlowStart, Target: InstanceType, Capability: "flows", Title: "Start flow", Description: byHost, Payload: []platform.Field{}, Roles: admin},
+		platform.Action{Schema: SchemaFlowStep, Target: InstanceType, Capability: "flows", Title: "Take step", Description: byHost, Payload: []platform.Field{}, Roles: admin},
 		platform.Action{Schema: SchemaFlowRetry, Target: InstanceType, Capability: "flows", Title: "Retry", Payload: []platform.Field{}, Roles: admin,
 			Description: "Try a stuck or waiting instance's steps again, with fresh attempts."},
 		platform.Action{Schema: SchemaFlowSkip, Target: InstanceType, Capability: "flows", Title: "Skip step", Roles: admin,
@@ -144,7 +151,7 @@ func NewFlows(tenant string) *Flows {
 			Description: "Stop a running instance; its open tasks close. Nothing is undone."},
 		platform.Action{Schema: SchemaFlowMove, Target: InstanceType, Capability: "flows", Title: "Move to the next version", Payload: []platform.Field{}, Roles: admin,
 			Description: "Move a running instance to its flow's next version, as that version's mapping says."})
-	return &Flows{ledger: platform.NewLedger(tenant, FlowApp, platform.NewCatalog(actions...), InstanceType), defs: map[string][]*flowDef{}}
+	return &Flows{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), InstanceType), defs: map[string][]*flowDef{}}
 }
 
 func flowEntities() []platform.Entity {
@@ -153,7 +160,7 @@ func flowEntities() []platform.Entity {
 }
 
 func (f *Flows) Manifest() platform.Manifest {
-	return platform.Manifest{ID: FlowApp, Title: "Flows", Version: "1", Actions: f.ledger.Catalog, Entities: flowEntities(), Reads: []string{"flows"},
+	return platform.Manifest{ID: ID, Title: "Flows", Version: "1", Actions: f.ledger.Catalog, Entities: flowEntities(), Reads: []string{"flows"},
 		Jobs: []platform.Job{{Name: "timers", Title: "Take flows' due steps: retries, timeouts, times and conditions", Every: time.Second}}}
 }
 
@@ -164,8 +171,8 @@ func (f *Flows) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-// declare registers the flows of the tenant's apps, checking each (NewTenant).
-func (f *Flows) declare(a platform.App) error {
+// Declare registers the flows of the tenant's apps, checking each (NewTenant).
+func (f *Flows) Declare(a platform.App) error {
 	m := a.Manifest()
 	for _, fl := range m.Flows {
 		id := m.ID + "." + fl.Name
@@ -262,8 +269,18 @@ func (f *Flows) def(id string, version int) *flowDef {
 // Check refuses a tenant whose running instances need a flow version its code
 // no longer declares (ADR-0020 D6): the host starts only when every running
 // instance can go on.
+// Versions are those new instances took during the input being handled, then forgotten.
+func (f *Flows) Versions() map[string]int {
+	v := f.chosen
+	f.chosen = nil
+	return v
+}
+
+// Pin gives a replay the versions the entry replayed took.
+func (f *Flows) Pin(versions map[string]int) { f.pins = versions }
+
 func (f *Flows) Check() error {
-	c := f.t.automation(FlowApp, true)
+	c := f.host.Automation(ID, true)
 	for _, x := range f.running(c) {
 		if f.def(x.Flow, x.Version) == nil {
 			return fmt.Errorf("flow instance %s runs %s version %d, which the code no longer declares", x.ID, x.Flow, x.Version)
@@ -278,8 +295,8 @@ func (f *Flows) running(c platform.Caller) []FlowInstance {
 	return out
 }
 
-// interested reports whether an event starts a flow or may end a wait.
-func (f *Flows) interested(names []string, e platform.Event) bool {
+// Interested reports whether an event starts a flow or may end a wait.
+func (f *Flows) Interested(names []string, e platform.Event) bool {
 	for _, versions := range f.defs {
 		if d := versions[len(versions)-1]; slices.ContainsFunc(d.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			return true
@@ -296,16 +313,16 @@ func (f *Flows) interested(names []string, e platform.Event) bool {
 	return s.GetSchema().GetName() == "work.task.complete" && e.App == work.ID
 }
 
-// handle takes an event delivered to the flow app: it starts flows and ends
+// Listen takes an event delivered to the flow app: it starts flows and ends
 // waits. It runs as owned work, so a failure is retried and replay repeats it.
-func (f *Flows) handle(c platform.Caller, e platform.Event, names []string, now time.Time) *kernel.Error {
+func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *kernel.Error {
 	s := e.Record.GetSubmission()
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		latest, _ := f.latest(id)
 		if !slices.ContainsFunc(latest.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			continue
 		}
-		key, data, ok := latest.Start.Begin(f.t.automation(latest.app, c.Replaying), e)
+		key, data, ok := latest.Start.Begin(f.host.Automation(latest.app, c.Replaying), e)
 		if !ok {
 			continue
 		}
@@ -326,7 +343,7 @@ func (f *Flows) handle(c platform.Caller, e platform.Event, names []string, now 
 		for i := range x.Tokens {
 			tok := &x.Tokens[i]
 			step := d.steps[tok.Step]
-			app := f.t.automation(d.app, c.Replaying)
+			app := f.host.Automation(d.app, c.Replaying)
 			switch {
 			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.On != "" && slices.Contains(names, step.Wait.On) && step.Wait.Match(app, run, e):
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
@@ -337,8 +354,8 @@ func (f *Flows) handle(c platform.Caller, e platform.Event, names []string, now 
 					return err
 				}
 			case tok.Waits == "ask" && s.GetSchema().GetName() == "work.task.complete" && s.GetTarget().GetId() == tok.Task:
-				task, _ := platform.Get[work.WorkTask](f.t.automation(work.ID, c.Replaying), tok.Task)
-				answer := cmpOr(task.Answer, "done")
+				task, _ := platform.Get[work.WorkTask](f.host.Automation(work.ID, c.Replaying), tok.Task)
+				answer := cmp.Or(task.Answer, "done")
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					in.Answer = answer
 					ss.trace(in, tok.Step, "answered", answer, task.Assignee)
@@ -365,13 +382,6 @@ func (f *Flows) handle(c platform.Caller, e platform.Event, names []string, now 
 	return nil
 }
 
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
-}
-
 // Run takes what is due: retries, timeouts, times and conditions.
 func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 	for _, x := range f.running(c) {
@@ -383,7 +393,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 		for _, tok := range x.Tokens {
 			step := d.steps[tok.Step]
 			due := !tok.Due.IsZero() && !tok.Due.After(now)
-			holds := tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.Until != nil && step.Wait.Until(f.t.automation(d.app, c.Replaying), run)
+			holds := tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.Until != nil && step.Wait.Until(f.host.Automation(d.app, c.Replaying), run)
 			if !due && !holds {
 				continue
 			}
@@ -396,7 +406,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 				})
 			case tok.Waits == "retry" || tok.Waits == "undo":
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) { ss.token(in, tok.ID).Waits = "ready" })
-			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.At != nil && tok.Due.Equal(step.Wait.At(f.t.automation(d.app, c.Replaying), run)):
+			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.At != nil && tok.Due.Equal(step.Wait.At(f.host.Automation(d.app, c.Replaying), run)):
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					ss.trace(in, tok.Step, "time", "reached", "")
 					ss.next(in, tok.ID, "")
@@ -420,7 +430,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 }
 
 func (f *Flows) run(x *FlowInstance) *platform.Run {
-	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, OnBehalf: x.OnBehalf, Data: json.RawMessage(cmpOr(x.Data, "null")), Answer: x.Answer}
+	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, OnBehalf: x.OnBehalf, Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
 }
 
 // Read "flows": the declared flows, for the workspace to draw.
@@ -449,7 +459,7 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 		for _, d := range f.defs[id] {
 			v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: d.Start.On}
 			for _, s := range d.Steps {
-				sv := FlowStep{Name: s.Name, Title: cmpOr(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}
+				sv := FlowStep{Name: s.Name, Title: cmp.Or(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}
 				for _, n := range append(append([]string{s.Next, s.OnTimeout, s.Fault}, s.All...), s.Any...) {
 					if n != "" && !slices.Contains(sv.Next, n) {
 						sv.Next = append(sv.Next, n)

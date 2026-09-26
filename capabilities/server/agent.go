@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -256,10 +257,10 @@ func (a *Agents) declare(app platform.App) error {
 					}
 					action = own
 				}
-				props := map[string]any{"target": map[string]any{"type": "string", "description": "The ID of the " + cmpOr(action.Target, "record") + " the action is about"}, "rationale": rationale()}
+				props := map[string]any{"target": map[string]any{"type": "string", "description": "The ID of the " + cmp.Or(action.Target, "record") + " the action is about"}, "rationale": rationale()}
 				required := []string{"target", "rationale"}
 				for _, f := range action.Payload {
-					props[f.Name] = map[string]any{"type": cmpOr(jsonTypes[f.Type], "string"), "description": f.Description}
+					props[f.Name] = map[string]any{"type": cmp.Or(jsonTypes[f.Type], "string"), "description": f.Description}
 					if f.Required {
 						required = append(required, f.Name)
 					}
@@ -373,7 +374,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			draft, proposed := run.Draft[0], (*Signal)(nil)
 			step := &run.Steps[draft.Step]
 			if s.GetSchema().GetName() == SchemaRunReject {
-				step.Outcome += "\nrejected by " + c.ID + ": " + cmpOr(p.Reason, "no reason given")
+				step.Outcome += "\nrejected by " + c.ID + ": " + cmp.Or(p.Reason, "no reason given")
 				run.Signals = append(run.Signals, Signal{At: now, Kind: "rejected", By: c.ID, Detail: p.Reason})
 				proposed = &run.Signals[len(run.Signals)-1]
 			} else {

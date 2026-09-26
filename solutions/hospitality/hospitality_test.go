@@ -14,6 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/flow"
 	"platformserver/apps/relations"
 	"platformserver/platform"
 )
@@ -232,7 +233,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 		t.Fatal("booking is offered without the provider's grant")
 	}
 	// Without any provider the optional protocol is unbound and booking is not offered.
-	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), relations.New("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), crm.New("t"))
+	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), relations.New("t"), flow.New("t"), platformserver.NewAgents("t"), crm.New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}

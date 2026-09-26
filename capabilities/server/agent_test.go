@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -170,7 +171,7 @@ func TestAgents(t *testing.T) {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
 		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, AIApp: AIAdmin, AgentApp: AgentAdmin}),
-			seat("bo", map[string]string{"desk": "viewer"})), NewAI("t-1"), work.New("t-1"), NewFlows("t-1"), NewAgents("t-1"), newDesk("t-1"))
+			seat("bo", map[string]string{"desk": "viewer"})), NewAI("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -289,11 +290,11 @@ func TestAgents(t *testing.T) {
 	// that keeps failing stops the run and the flow takes its fault path.
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T5", map[string]string{"subject": "auto wifi"})
 	think(6)
-	x, _ := platform.Get[FlowInstance](tn.automation(FlowApp, false), "desk.handle:T5")
+	x, _ := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "desk.handle:T5")
 	expect("flow", x.State+" "+ticket("T5").Status+" "+x.Answer[:7], "done answered after 2")
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T6", map[string]string{"subject": "auto fail"})
 	think(6)
-	x, _ = platform.Get[FlowInstance](tn.automation(FlowApp, false), "desk.handle:T6")
+	x, _ = platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "desk.handle:T6")
 	expect("fault", x.State+" "+x.Tokens[0].Step, "waiting manual")
 
 	// Memory (ADR-0022 D5): ana's change proposed a memory, which she keeps;

@@ -1,6 +1,7 @@
-package platformserver
+package flow
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -9,6 +10,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -21,8 +23,8 @@ type session struct {
 	changed map[string]*FlowInstance
 	order   []string
 	assigns []flowTask
-	runs    []AgentRunRecord // agent runs its steps start (ADR-0021)
-	signals []runSignal      // what people made of their proposals
+	runs    []host.RunStart // agent runs its steps start (ADR-0021)
+	signals []runSignal     // what people made of their proposals
 	close   []string
 	event   *platform.Event
 	moves   int
@@ -30,18 +32,17 @@ type session struct {
 
 type runSignal struct {
 	run string
-	Signal
+	host.RunSignal
 }
 
 // review keeps what a person made of the proposal of the agent step an Ask reviews.
 func (ss *session) review(x *FlowInstance, step *platform.Step, kind, by, detail string) {
-	if step == nil || step.Ask == nil || step.Ask.Reviews == "" || ss.f.t.agents == nil {
+	runs := ss.f.host.Runs()
+	if step == nil || step.Ask == nil || step.Ask.Reviews == "" || runs == nil {
 		return
 	}
-	domain, _ := json.Marshal([]any{[]any{"flow", "=", x.ID}, []any{"step", "=", step.Ask.Reviews}, []any{"state", "=", "done"}})
-	runs, _, _ := platform.Find[AgentRunRecord](ss.f.t.automation(AgentApp, ss.c.Replaying), platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 1})
-	if len(runs) > 0 {
-		ss.signals = append(ss.signals, runSignal{run: runs[0].ID, Signal: Signal{At: ss.now, Kind: kind, By: by, Detail: detail}})
+	if done := runs.Finished(ss.c, x.ID, step.Ask.Reviews); len(done) > 0 {
+		ss.signals = append(ss.signals, runSignal{run: done[len(done)-1], RunSignal: host.RunSignal{At: ss.now, Kind: kind, By: by, Detail: detail}})
 	}
 }
 
@@ -72,25 +73,29 @@ func (ss *session) apply(r *pb.ChangeRecord) {
 	for _, id := range ss.order {
 		ss.c.Put(r, *ss.changed[id])
 	}
-	for _, id := range ss.close {
-		ss.f.t.closeTask(ss.c, r, id)
+	if tasks := ss.f.host.Tasks(); tasks != nil {
+		for _, id := range ss.close {
+			tasks.Close(ss.c, r, id)
+		}
 	}
 	for _, x := range ss.assigns {
-		ss.f.t.automation(x.app, ss.c.Replaying).Assign(r, x.Assignment)
+		ss.f.host.Automation(x.app, ss.c.Replaying).Assign(r, x.Assignment)
 	}
-	for _, run := range ss.runs {
-		ss.f.t.automation(AgentApp, ss.c.Replaying).Put(r, run)
-	}
-	for _, x := range ss.signals {
-		ss.f.t.agents.signal(ss.c, r, x.run, x.Signal, ss.now)
+	if runs := ss.f.host.Runs(); runs != nil {
+		for _, run := range ss.runs {
+			runs.Start(ss.c, r, run, ss.now)
+		}
+		for _, x := range ss.signals {
+			runs.Signal(ss.c, r, x.run, x.RunSignal, ss.now)
+		}
 	}
 }
 
-// agentEnded goes on from an agent step when its run ends: done, with its
+// RunEnded goes on from an agent step when its run ends: done, with its
 // result as the answer; stopped, to the step's fault path, or a person does
 // the step instead.
-func (f *Flows) agentEnded(c platform.Caller, run AgentRunRecord, now time.Time) {
-	c = f.t.automation(FlowApp, c.Replaying)
+func (f *Flows) RunEnded(c platform.Caller, run host.RunEnd, now time.Time) {
+	c = f.host.Automation(ID, c.Replaying)
 	x, ok := platform.Get[FlowInstance](c, run.Flow)
 	if !ok || ended(x.State) {
 		return
@@ -137,7 +142,7 @@ func (ss *session) token(x *FlowInstance, id int) *Token {
 func (ss *session) def(x *FlowInstance) *flowDef { return ss.f.def(x.Flow, x.Version) }
 
 func (ss *session) app(x *FlowInstance) platform.Caller {
-	return ss.f.t.automation(ss.def(x).app, ss.c.Replaying)
+	return ss.f.host.Automation(ss.def(x).app, ss.c.Replaying)
 }
 
 func (ss *session) run(x *FlowInstance) *platform.Run {
@@ -148,7 +153,7 @@ func (ss *session) run(x *FlowInstance) *platform.Run {
 
 // decide makes one flow decision about instance id; build fills the session.
 func (f *Flows) decide(c platform.Caller, schema, id, key string, now time.Time, build func(ss *session) *kernel.Error) (*pb.ChangeRecord, *kernel.Error) {
-	s := &pb.Submission{TenantId: f.t.ID, PrincipalId: c.ID, Authority: FlowApp, IdempotencyKey: key,
+	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: InstanceType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte("{}")}
 	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		ss := f.session(c, now)
@@ -224,7 +229,7 @@ func (ss *session) next(x *FlowInstance, token int, to string) {
 				r := ss.run(x)
 				to, reason = step.Choose(ss.app(x), r)
 				x.Data = string(r.Data)
-				ss.trace(x, tok.Step, "chose", cmpOr(to, "the end")+": "+reason, "")
+				ss.trace(x, tok.Step, "chose", cmp.Or(to, "the end")+": "+reason, "")
 			}
 		}
 	}
@@ -308,7 +313,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 			tok.Due = ss.now.Add(step.Timeout)
 		}
 		ss.trace(x, tok.Step, "waiting", waitingFor(step), "")
-	case step.Agent != nil && ss.f.t.agents != nil: // the app's agent takes the step (ADR-0021); its run ends it
+	case step.Agent != nil && ss.f.host.Runs() != nil: // the app's agent takes the step (ADR-0021); its run ends it
 		ag := step.Agent
 		id := fmt.Sprintf("%s:%d", x.ID, x.Seq)
 		x.Seq++
@@ -320,7 +325,7 @@ func (ss *session) take(x *FlowInstance, token int) {
 		if step.Timeout > 0 {
 			tok.Due = ss.now.Add(step.Timeout)
 		}
-		ss.runs = append(ss.runs, ss.f.t.agents.create(id, d.app+"."+ag.Agent, goal, ref, "", x.ID, tok.Step, tok.ID, ss.now))
+		ss.runs = append(ss.runs, host.RunStart{ID: id, Agent: d.app + "." + ag.Agent, Goal: goal, Ref: ref, Flow: x.ID, Step: tok.Step, Token: tok.ID})
 		ss.trace(x, tok.Step, "agent", ag.Agent+": "+goal, "")
 	case step.Ask != nil, step.Agent != nil:
 		a := platform.Assignment{Key: fmt.Sprintf("flow:%s:%d", x.ID, x.Seq), Ref: InstanceType + "/" + x.ID}
@@ -397,26 +402,19 @@ func payloadOf(build func(platform.Caller, *platform.Run) any, c platform.Caller
 
 // act submits an action as the app: its own, or a protocol's through the host.
 func (ss *session) act(appID, protocol, action, target string, payload json.RawMessage, key string) (*pb.EntityRef, *kernel.Error) {
-	t := ss.f.t
-	c := t.automation(appID, ss.c.Replaying)
+	h := ss.f.host
+	c := h.Automation(appID, ss.c.Replaying)
 	if protocol != "" {
-		ref, _, err := t.invoke(c, protocol, action, target, payload, key, key, ss.now)
-		return ref, err
+		return h.Invoke(c, protocol, action, target, payload, key, key, ss.now)
 	}
-	app := t.app(appID)
-	declared, ok := app.Manifest().Actions.Action(action)
-	if !ok {
+	owner, declared, ok := h.Action(action)
+	if !ok || owner != appID {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
-	authority := ""
-	for _, d := range app.Declarations() {
-		if d.GetDataClass() == declared.Target {
-			authority = d.GetAuthorityId()
-		}
-	}
-	s := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: authority, IdempotencyKey: key,
+	authority, _ := h.OwnerOf(declared.Target)
+	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: authority, IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: declared.Target, Id: target}, Schema: &pb.SchemaRef{Name: action, Version: 1}, Payload: payload}
-	r, err := app.Submit(c, s, ss.now)
+	r, err := h.Submit(c, s, ss.now)
 	if err != nil {
 		return nil, err
 	}
@@ -465,11 +463,9 @@ func (ss *session) compensate(x *FlowInstance, why string) {
 	ss.stopPaths(x)
 	x.State = "compensating"
 	x.Tokens = []Token{{ID: ss.tokenID(x), Step: "@undo", Waits: "ready"}}
-	if ss.f.t.agents != nil { // what its agents did is undone with the rest (ADR-0022 D9)
-		domain, _ := json.Marshal([]any{[]any{"flow", "=", x.ID}, []any{"state", "=", "done"}})
-		runs, _, _ := platform.Find[AgentRunRecord](ss.f.t.automation(AgentApp, ss.c.Replaying), platform.Query{Domain: domain, Sort: []string{"id"}})
-		for _, run := range runs {
-			ss.signals = append(ss.signals, runSignal{run: run.ID, Signal: Signal{At: ss.now, Kind: "undone", By: "flow", Detail: why}})
+	if runs := ss.f.host.Runs(); runs != nil { // what its agents did is undone with the rest (ADR-0022 D9)
+		for _, run := range runs.Finished(ss.c, x.ID, "") {
+			ss.signals = append(ss.signals, runSignal{run: run, RunSignal: host.RunSignal{At: ss.now, Kind: "undone", By: "flow", Detail: why}})
 		}
 	}
 	ss.trace(x, "", "compensating", why, "")
@@ -595,7 +591,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	var p struct{ Token int }
 	json.Unmarshal(s.GetPayload(), &p)
 	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		ss := f.session(f.t.automation(FlowApp, c.Replaying), now)
+		ss := f.session(f.host.Automation(ID, c.Replaying), now)
 		x := ss.load(id)
 		if x == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -668,3 +664,15 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		return ss.apply, nil
 	})
 }
+
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
+// backoff is the wait before a failed act's next attempt: 2 s, 4 s, 8 s, 16 s.
+func backoff(attempts int) time.Duration { return time.Second << attempts }
+
+func target(s *pb.Submission) string { return s.GetTarget().GetType() + "/" + s.GetTarget().GetId() }

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -87,7 +88,7 @@ func (a *Agents) propose(c platform.Caller, r *pb.ChangeRecord, run AgentRunReco
 	case "changed":
 		fact, about = fmt.Sprintf("%s changed a draft for %q to %s.", s.By, run.Title, s.Value), run.OnBehalf
 	case "rejected":
-		fact, about = fmt.Sprintf("%s rejected a draft for %q: %s.", s.By, run.Title, cmpOr(s.Detail, "no reason given")), run.OnBehalf
+		fact, about = fmt.Sprintf("%s rejected a draft for %q: %s.", s.By, run.Title, cmp.Or(s.Detail, "no reason given")), run.OnBehalf
 	case "corrected":
 		fact = fmt.Sprintf("People corrected the proposal for %q: %s answered %q.", run.Title, s.By, s.Detail)
 	case "discarded":

@@ -16,6 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -102,10 +103,10 @@ func TestCSMTriage(t *testing.T) {
 		x, _ := v.Record.(csm.Ticket)
 		return x
 	}
-	flowAdmin := platform.Member{ID: "flows", Tenant: "hotel-a", Roles: map[string]string{platformserver.FlowApp: platformserver.FlowAdmin}}
-	instance := func(id string) platformserver.FlowInstance {
-		v, _ := w.tenant.RecordOf(flowAdmin, platformserver.InstanceType, "csm.service-level:"+id, now)
-		x, _ := v.Record.(platformserver.FlowInstance)
+	flowAdmin := platform.Member{ID: "flows", Tenant: "hotel-a", Roles: map[string]string{flow.ID: flow.Admin}}
+	instance := func(id string) flow.FlowInstance {
+		v, _ := w.tenant.RecordOf(flowAdmin, flow.InstanceType, "csm.service-level:"+id, now)
+		x, _ := v.Record.(flow.FlowInstance)
 		return x
 	}
 	inbox := func(m platform.Member) []string {

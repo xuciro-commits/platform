@@ -14,6 +14,7 @@ import (
 	"erp"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -26,11 +27,11 @@ func main() {
 	}
 	seats := deployment.Seats([]platformserver.Seat{
 		seat("controller", "controller-1", map[string]string{erp.ID: erp.Controller, platformserver.PlatformApp: platformserver.Admin,
-			work.ID: work.Admin, platformserver.FlowApp: platformserver.FlowAdmin}),
+			work.ID: work.Admin, flow.ID: flow.Admin}),
 		seat("accountant", "accountant-1", map[string]string{erp.ID: erp.Accountant}),
 		seat("buyer", "buyer-1", map[string]string{erp.ID: erp.Buyer}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), work.New("dev"), platformserver.NewFlows("dev"), erp.New("dev"))
+	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), work.New("dev"), flow.New("dev"), erp.New("dev"))
 	deployment.Seed = seed
 	if err == nil {
 		err = deployment.Serve(t)

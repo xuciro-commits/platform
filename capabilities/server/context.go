@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -31,10 +32,10 @@ type ContextView struct {
 }
 
 type FlowSummary struct {
-	ID    string      `json:"id"`
-	Flow  string      `json:"flow"`
-	State string      `json:"state"`
-	Trace []TraceLine `json:"trace"` // the last lines: why it moved
+	ID    string           `json:"id"`
+	Flow  string           `json:"flow"`
+	State string           `json:"state"`
+	Trace []flow.TraceLine `json:"trace"` // the last lines: why it moved
 }
 
 type TaskSummary struct {
@@ -87,10 +88,10 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 	if t.linker != nil {
 		out.Links = append(out.Links, t.linker.Links(t.caller(m, t.linker.(platform.App), false), typ+"/"+id)...)
 	}
-	host := t.automation(FlowApp, false)
-	if t.flows != nil {
+	host := t.automation(flow.ID, false)
+	if t.procs != nil {
 		key, _ := json.Marshal([]any{[]any{"key", "=", id}})
-		instances, _, _ := platform.Find[FlowInstance](host, platform.Query{Domain: key, Sort: []string{"id"}})
+		instances, _, _ := platform.Find[flow.FlowInstance](host, platform.Query{Domain: key, Sort: []string{"id"}})
 		for _, x := range instances {
 			trace := x.Trace
 			if len(trace) > 8 {

@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -206,7 +207,7 @@ func (t *Tenant) complete(pv Provider, model string, req ChatRequest) (ChatAnswe
 	msg := out.Choices[0].Message
 	reply := ChatAnswer{Content: msg.Content}
 	for _, c := range msg.ToolCalls {
-		reply.ToolCalls = append(reply.ToolCalls, ToolCall{ID: c.ID, Name: c.Function.Name, Arguments: json.RawMessage(cmpOr(c.Function.Arguments, "{}"))})
+		reply.ToolCalls = append(reply.ToolCalls, ToolCall{ID: c.ID, Name: c.Function.Name, Arguments: json.RawMessage(cmp.Or(c.Function.Arguments, "{}"))})
 	}
 	return reply, u, nil
 }

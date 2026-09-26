@@ -40,6 +40,62 @@ type Host interface {
 	Directory() Directory
 	// Seen marks an app's notifications with any of keys read for everyone.
 	Seen(app string, keys ...string)
+	// Invoke submits a protocol action to the tenant's provider for c's app,
+	// inside the input being handled (a flow's step, ADR-0020).
+	Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error)
+	// The roles other platform apps take in this tenant, or nil.
+	Tasks() Tasks
+	Runs() Runs
+	Processes() Processes
+}
+
+// Listener is a platform app delivered other apps' events as owned work, with
+// every name an event goes by (its action and the protocol events it is).
+type Listener interface {
+	Interested(names []string, e platform.Event) bool
+	Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *kernel.Error
+}
+
+// Processes is the flow app (ADR-0020): it takes the flows every app
+// declares, pins the versions instances took for replay, and hears an agent
+// step's run end.
+type Processes interface {
+	Declare(a platform.App) error
+	// Check refuses to start when a running instance needs a version the code no longer declares.
+	Check() error
+	// Versions are those new instances took during the input being handled
+	// (then forgotten), journaled with it; Pin gives a replay those of its entry.
+	Versions() map[string]int
+	Pin(versions map[string]int)
+	RunEnded(c platform.Caller, run RunEnd, now time.Time)
+}
+
+// Runs are agent runs (ADR-0021) a flow's agent step starts and signals.
+type Runs interface {
+	// Start puts a new run with the decision r.
+	Start(c platform.Caller, r *pb.ChangeRecord, run RunStart, now time.Time)
+	Signal(c platform.Caller, r *pb.ChangeRecord, run string, s RunSignal, now time.Time)
+	// Finished are the IDs of a flow instance's finished runs (at step, when
+	// given), oldest first.
+	Finished(c platform.Caller, flow, step string) []string
+}
+
+// RunStart is an agent run a flow's step starts: agent is "<app>.<name>".
+type RunStart struct {
+	ID, Agent, Goal, Ref, Flow, Step string
+	Token                            int
+}
+
+// RunSignal is what people made of a run's result (ADR-0021 D8).
+type RunSignal struct {
+	At               time.Time
+	Kind, By, Detail string
+}
+
+// RunEnd is how a flow's agent run ended: done, with its result, or stopped.
+type RunEnd struct {
+	ID, Agent, Flow, State, Result, Stopped string
+	Token                                   int
 }
 
 // Tasks serves Caller.Assign for every app and closes tasks a platform app

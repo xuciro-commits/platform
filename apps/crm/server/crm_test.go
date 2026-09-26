@@ -7,6 +7,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -17,7 +18,7 @@ func TestOpportunityOwnership(t *testing.T) {
 	}
 	var journal []platformserver.Entry
 	build := func() *platformserver.Tenant {
-		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ana", Sales), seat("bo", Sales), seat("lead", Manager), seat("desk", "front-desk"), seat("webform", Sales)), work.New("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), New("t"))
+		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ana", Sales), seat("bo", Sales), seat("lead", Manager), seat("desk", "front-desk"), seat("webform", Sales)), work.New("t"), flow.New("t"), platformserver.NewAgents("t"), New("t"))
 		if err != nil {
 			t.Fatal(err)
 		}

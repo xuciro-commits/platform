@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -74,11 +75,10 @@ func (t *Tenant) enqueue(now time.Time) {
 			}
 			t.deliver(id, e, now)
 		}
-		if t.flows != nil && e.App != FlowApp && t.flows.interested(names, e.Event) { // flows start and wait on events (ADR-0020)
-			t.deliver(FlowApp, e, now)
-		}
-		if t.agents != nil && t.agents.interested(e.Event) { // a person answered an agent (ADR-0021)
-			t.deliver(AgentApp, e, now)
+		for _, id := range t.listeners { // flows start and wait on events (ADR-0020); a person answered an agent (ADR-0021)
+			if id != e.App && t.app(id).(host.Listener).Interested(names, e.Event) {
+				t.deliver(id, e, now)
+			}
 		}
 	}
 }
@@ -145,11 +145,9 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 	t.hops = task.event.hops + 1
 	outcome := "ok"
 	var err *kernel.Error
-	if f, ok := t.app(task.App).(*Flows); ok { // the host's own subscribers, on the attempt's clock
+	if x, ok := t.app(task.App).(host.Listener); ok { // the platform's own listeners, on the attempt's clock
 		names := append([]string{task.event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.event.Event)...)
-		err = f.handle(t.automation(task.App, replaying), task.event.Event, names, now)
-	} else if x, ok := t.app(task.App).(*Agents); ok {
-		err = x.handle(t.automation(task.App, replaying), task.event.Event, now)
+		err = x.Listen(t.automation(task.App, replaying), task.event.Event, names, now)
 	} else {
 		err = t.app(task.App).(platform.Subscriber).Handle(t.automation(task.App, replaying), task.event.Event)
 	}

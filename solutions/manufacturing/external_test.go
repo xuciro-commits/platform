@@ -15,6 +15,7 @@ import (
 	"mes"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -33,7 +34,7 @@ type external struct {
 
 var externalSeats = []platformserver.Seat{
 	Seat("sup", "sup-1", map[string]string{"mes": string(mes.Supervisor), erpadapter.ID: erpadapter.Planner, platformserver.PlatformApp: platformserver.Admin,
-		platformserver.AIApp: platformserver.AIAdmin, platformserver.FlowApp: platformserver.FlowAdmin, platformserver.AgentApp: platformserver.AgentAdmin}, "plant-sz"),
+		platformserver.AIApp: platformserver.AIAdmin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin}, "plant-sz"),
 	Seat("op", "op-l1", map[string]string{"mes": string(mes.Operator)}, "L1"),
 	Seat("qa1", "qa-1", map[string]string{"mes": string(mes.Quality)}),
 	Seat("qa2", "qa-2", map[string]string{"mes": string(mes.Quality)}),
@@ -151,12 +152,12 @@ func (x *external) order(id string) mes.Order {
 	return v.Record.(mes.Order)
 }
 
-func (x *external) flow(key string) platformserver.FlowInstance {
-	page, _ := x.tn.Records(x.member("sup-1"), platformserver.InstanceType, platform.Query{Domain: json.RawMessage(`[["key","=","` + key + `"]]`)}, x.now)
+func (x *external) flow(key string) flow.FlowInstance {
+	page, _ := x.tn.Records(x.member("sup-1"), flow.InstanceType, platform.Query{Domain: json.RawMessage(`[["key","=","` + key + `"]]`)}, x.now)
 	if len(page.Records) == 0 {
-		return platformserver.FlowInstance{}
+		return flow.FlowInstance{}
 	}
-	return page.Records[0].(platformserver.FlowInstance)
+	return page.Records[0].(flow.FlowInstance)
 }
 
 func (x *external) inbox() string {
