@@ -333,6 +333,9 @@ export type FieldInfo = {
   choiceTitles?: string[];
   ref?: string;
   knowledge?: boolean;
+  read?: string[];
+  write?: string[];
+  personal?: string;
   help?: string;
   synonyms?: string;
   example?: string;
@@ -507,6 +510,14 @@ export type Passage = {
   chunk: number;
   text: string;
   score: number;
+};
+
+export type PersonalRead = {
+  at: string;
+  member: string;
+  type: string;
+  ids: string[];
+  fields: string[];
 };
 
 export type ProtocolCall = {

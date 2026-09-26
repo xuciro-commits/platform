@@ -277,7 +277,8 @@ func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now 
 	if err != nil {
 		return Aggregate{}, err
 	}
+	view, _ := viewOf(m, et) // what m may not read is neither grouped nor measured (ADR-0028 D3)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.aggregate(et, q, visible)
+	return s.aggregate(view, q, visible)
 }

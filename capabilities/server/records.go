@@ -35,6 +35,51 @@ type entityType struct {
 	rows map[string]*row
 }
 
+// viewOf is a type as m may see it (ADR-0028 D3): without the fields m's role
+// in the app may not read, so search, filters, sort, grouping and forms never
+// reach them; the rows are shared. hidden are those fields.
+func viewOf(m platform.Member, et *entityType) (view *entityType, hidden []platform.FieldInfo) {
+	role := m.Roles[et.info.App]
+	for _, f := range et.info.Fields {
+		if !f.Reads(role) {
+			hidden = append(hidden, f)
+		}
+	}
+	if len(hidden) == 0 {
+		return et, nil
+	}
+	info := et.info
+	info.Fields = slices.DeleteFunc(slices.Clone(info.Fields), func(f platform.FieldInfo) bool { return !f.Reads(role) })
+	return &entityType{info: info, rows: et.rows}, hidden
+}
+
+// masked is a record with the hidden fields at their zero value.
+func masked(et *entityType, v reflect.Value, hidden []platform.FieldInfo) any {
+	if len(hidden) == 0 {
+		return v.Interface()
+	}
+	c := copyOf(et.info.Go, v.Interface())
+	for _, f := range hidden {
+		c.FieldByIndex(f.Index).SetZero()
+	}
+	return c.Interface()
+}
+
+// maskedHistory drops the hidden fields from a record's changes.
+func maskedHistory(h []RecordChange, hidden []platform.FieldInfo) []RecordChange {
+	if len(hidden) == 0 {
+		return h
+	}
+	out := make([]RecordChange, 0, len(h))
+	for _, c := range h {
+		c.Fields = slices.DeleteFunc(slices.Clone(c.Fields), func(f FieldChange) bool {
+			return slices.ContainsFunc(hidden, func(x platform.FieldInfo) bool { return x.Name == f.Field })
+		})
+		out = append(out, c)
+	}
+	return out
+}
+
 type row struct {
 	value   reflect.Value // the entity struct, a private copy
 	history []RecordChange
@@ -594,7 +639,8 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	out := []platform.EntityInfo{}
 	for _, et := range t.records.types {
 		if m.Roles[et.info.App] != "" || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
-			out = append(out, et.info)
+			view, _ := viewOf(m, et)
+			out = append(out, view.info)
 		}
 	}
 	slices.SortFunc(out, func(a, b platform.EntityInfo) int { return strings.Compare(a.Type, b.Type) })
@@ -703,16 +749,20 @@ func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now ti
 	if q.Limit == 0 || q.Limit > 500 {
 		q.Limit = 500
 	}
+	view, hidden := viewOf(m, et)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	page, total, err := s.find(et, q, visible)
+	page, total, err := s.find(view, q, visible)
 	if err != nil {
 		return RecordPage{}, err
 	}
 	out := RecordPage{Records: make([]any, len(page)), Total: total}
+	var ids []string
 	for i, v := range page {
-		out.Records[i] = v.Interface()
+		out.Records[i] = masked(et, v, hidden)
+		ids = append(ids, recordOf(v).ID)
 	}
+	t.readPersonal(m, view, ids, now)
 	return out, nil
 }
 
@@ -755,7 +805,9 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	if !readable {
 		return RecordView{}, notFound
 	}
-	view := RecordView{Record: r.value.Interface(), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Files: []any{}}
+	seen, hidden := viewOf(m, et)
+	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Files: []any{}}
+	t.readPersonal(m, seen, []string{id}, now)
 	if typ != files.FileType && t.app(files.ID) != nil {
 		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
 		if page, err := t.Records(m, files.FileType, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 100}, now); err == nil {
@@ -768,8 +820,9 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 			view.Processes = page.Records
 		}
 	}
-	for i := len(r.history) - 1; i >= 0; i-- {
-		view.History = append(view.History, r.history[i])
+	history := maskedHistory(r.history, hidden)
+	for i := len(history) - 1; i >= 0; i-- {
+		view.History = append(view.History, history[i])
 	}
 	s.mu.Lock()
 	var referring []*entityType
@@ -794,4 +847,44 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		}
 	}
 	return view, nil
+}
+
+// PersonalRead is one read of personal data (ADR-0028 D4): who read which
+// records' personal fields, and when. Kept outside the journal, like transcripts.
+type PersonalRead struct {
+	At     time.Time `json:"at"`
+	Member string    `json:"member"`
+	Type   string    `json:"type"`
+	IDs    []string  `json:"ids"`
+	Fields []string  `json:"fields"`
+}
+
+const personalKept = 5000
+
+// readPersonal notes that m read the personal fields view shows of records ids.
+func (t *Tenant) readPersonal(m platform.Member, view *entityType, ids []string, now time.Time) {
+	var fields []string
+	for _, f := range view.info.Fields {
+		if f.Personal != "" {
+			fields = append(fields, f.Name)
+		}
+	}
+	if len(fields) == 0 || len(ids) == 0 || strings.HasPrefix(m.ID, "app:") {
+		return
+	}
+	t.auditMu.Lock()
+	defer t.auditMu.Unlock()
+	t.personal = append(t.personal, PersonalRead{At: now, Member: m.ID, Type: view.info.Type, IDs: ids, Fields: fields})
+	if len(t.personal) > personalKept {
+		t.personal = t.personal[len(t.personal)-personalKept:]
+	}
+}
+
+// PersonalReads are the latest reads of personal data, newest first.
+func (t *Tenant) PersonalReads() []PersonalRead {
+	t.auditMu.Lock()
+	defer t.auditMu.Unlock()
+	out := slices.Clone(t.personal)
+	slices.Reverse(out)
+	return out
 }

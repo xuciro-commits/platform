@@ -52,6 +52,8 @@ type Account struct {
 	platform.Record
 	Name string `json:"name" field:"required,search" help:"The customer's legal or everyday name" example:"Acme Corp"`
 	Kind string `json:"kind" field:"required" choices:"company,person" help:"Whether the customer is an organisation or one person"`
+	// Phone is personal data when the customer is a person: its reads are audited (ADR-0028 D4).
+	Phone string `json:"phone,omitempty" personal:"contact" help:"The customer's phone number"`
 }
 
 type Opportunity struct {
@@ -59,7 +61,9 @@ type Opportunity struct {
 	Account platform.Ref[Account] `json:"account" field:"required"`
 	Title   string                `json:"title" field:"required,search" help:"What is being sold, in the customer's words" example:"Board offsite, 12 rooms"`
 	Owner   string                `json:"owner" field:"readonly" help:"The salesperson who owns it; only they and managers may close it"`
-	Stage   string                `json:"stage" field:"readonly" choices:"open,won,lost" help:"open while it is being worked on; won or lost once closed"`
+	// Margin is the expected margin: sales managers read and set it (ADR-0028 D3).
+	Margin float64 `json:"margin,omitempty" type:"decimal" title:"Expected margin" read:"sales-manager" write:"sales-manager" help:"The margin the company expects, in percent; only sales managers see it"`
+	Stage  string  `json:"stage" field:"readonly" choices:"open,won,lost" help:"open while it is being worked on; won or lost once closed"`
 	// The group's block (ADR-0026 D6), as a hotel sales system keeps it: planned
 	// rooms are held until a cutoff date; won, they are confirmed; lost, or past
 	// the cutoff, they are released.
@@ -96,14 +100,15 @@ func Entities() []platform.Entity {
 			Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: both, Capability: "accounts"}},
 		{Type: OpportunityType, Title: "Opportunity", Model: Opportunity{}, Synonyms: "deal,lead",
 			Description: "A chance to sell something to an account, followed until it is won or lost; stays for a group can be booked through the lodging protocol.",
-			Scope:       platform.Scope{Owner: "owner", Levels: map[string]string{string(Sales): platform.ScopeOwn}}},
+			Scope:       platform.Scope{Owner: "owner", Levels: map[string]string{string(Sales): platform.ScopeOwn}},
+			Standard:    platform.Standard{Edit: true, Roles: []string{string(Manager)}, Capability: "opportunities"}},
 	}
 }
 
 // Actions is the CRM catalog (ADR-0008).
 func Actions() *platform.Catalog {
 	both := []string{string(Sales), string(Manager)}
-	return platform.NewCatalog(append(platform.EntityActions(Entities()[0]),
+	return platform.NewCatalog(append(append(platform.EntityActions(Entities()[0]), platform.EntityActions(Entities()[1])...),
 		platform.Action{Schema: SchemaOpen, Target: OpportunityType, New: true, Capability: "opportunities", Title: "Open opportunity",
 			Description: "Open a sales opportunity for an account; the caller owns it.",
 			Payload: []platform.Field{{Name: "account", Type: "string", Required: true, Description: "Account ID"},

@@ -246,6 +246,14 @@ export function AppSettingsView() {
 
 export function Audit() {
   const audit = useRead<AuditEntry[]>("/v1/audit");
+  const personal = useRead<Api.PersonalRead[]>("/v1/personal-reads").data ?? [];
+  const personalColumns: ColumnDef<Api.PersonalRead, any>[] = [
+    { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
+    { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
+    { accessorKey: "type", header: t("Record type"), meta: { width: 160 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { id: "ids", header: t("Records"), accessorFn: (r) => r.ids.join(", "), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { id: "fields", header: t("Personal fields"), meta: { width: 200 }, accessorFn: (r) => r.fields.join(", ") },
+  ];
   const columns: ColumnDef<AuditEntry, any>[] = [
     { accessorKey: "at", header: t("When"), meta: { width: 170 }, cell: (c) => new Date(c.getValue()).toLocaleString() },
     { accessorKey: "member", header: t("Member"), meta: { width: 120 } },
@@ -256,7 +264,9 @@ export function Audit() {
   return (
     <>
       <PageHeader title={t("Audit")} description={t("Accepted inputs of this tenant, newest first, rebuilt from the journal.")} />
-      <DataTable data={[...(audit.data ?? [])].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 190px)" />
+      <DataTable data={[...(audit.data ?? [])].reverse()} columns={columns} getRowId={(e) => `${e.at}${e.member}${e.action}${e.target}`} height="calc(100dvh - 460px)" />
+      <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Reads of personal data")}</h2>
+      <DataTable data={personal} columns={personalColumns} getRowId={(r) => `${r.at}${r.member}${r.type}${r.ids.join()}`} height={240} empty={t("Nobody read personal data yet")} />
     </>
   );
 }

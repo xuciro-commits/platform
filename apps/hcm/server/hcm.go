@@ -46,7 +46,10 @@ type Leave struct {
 	Until    string `json:"until" field:"required" type:"date" title:"Last day"`
 	Days     int    `json:"days" field:"readonly"`
 	Note     string `json:"note,omitempty" type:"longtext"`
-	State    string `json:"state" field:"readonly" choices:"draft,approved,canceled"`
+	// Health is the medical reason of a sick leave: HR alone reads it, and its
+	// reads are audited (ADR-0028 D3, D4); the employee gives it when drafting.
+	Health string `json:"health,omitempty" type:"longtext" title:"Medical reason" read:"hr" personal:"health" help:"Why a sick leave was taken; only HR reads it"`
+	State  string `json:"state" field:"readonly" choices:"draft,approved,canceled"`
 }
 
 // Entities declares the leave, its lifecycle and the approval of submitting it.
@@ -95,7 +98,8 @@ func Actions() *platform.Catalog {
 		Description: "Draft a request for days off, from its first to its last day.", Roles: []string{Employee},
 		Payload: []platform.Field{{Name: "kind", Type: "string", Required: true, Description: "vacation, sick or unpaid"},
 			{Name: "from", Type: "date", Required: true, Description: "First day"}, {Name: "until", Type: "date", Required: true, Description: "Last day"},
-			{Name: "note", Type: "string", Description: "For the approvers"}}}},
+			{Name: "note", Type: "string", Description: "For the approvers"},
+			{Name: "health", Type: "string", Description: "For a sick leave: the medical reason, which only HR reads"}}}},
 		platform.EntityActions(Entities()[0])...)...)
 }
 
@@ -135,7 +139,7 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 		return record, err
 	}
 	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		var p struct{ Kind, From, Until, Note string }
+		var p struct{ Kind, From, Until, Note, Health string }
 		invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		if s.GetSchema().GetName() != SchemaCreate || json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
@@ -149,7 +153,7 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 			return nil, invalid
 		}
 		leave := Leave{Record: platform.Record{ID: s.GetTarget().GetId()}, Employee: c.ID, Kind: p.Kind, From: p.From, Until: p.Until,
-			Days: int(until.Sub(from).Hours()/24) + 1, Note: strings.TrimSpace(p.Note)}
+			Days: int(until.Sub(from).Hours()/24) + 1, Note: strings.TrimSpace(p.Note), Health: strings.TrimSpace(p.Health)}
 		if err := c.Check(leave); err != nil {
 			return nil, err
 		}

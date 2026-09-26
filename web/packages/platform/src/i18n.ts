@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Nobody read personal data yet": "还没有人读取个人数据",
+  "Reads of personal data": "个人数据的读取",
+  "Personal fields": "个人数据字段",
+  "Records": "记录",
+  "Record type": "记录类型",
   "probing": "试探中",
   "open": "打开",
   "closed": "关闭",

@@ -190,7 +190,7 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.Chang
 		}
 		info, _ := Describe("", e, func(reflect.Type) string { return "?" })
 		for name := range given {
-			if f, ok := info.Field(name); !ok || f.ReadOnly {
+			if f, ok := info.Field(name); !ok || f.ReadOnly || !c.Replaying && !c.Automation && !f.Writes(c.Role()) {
 				return nil, invalid // unknown or read-only fields are never set by a generated action
 			}
 		}

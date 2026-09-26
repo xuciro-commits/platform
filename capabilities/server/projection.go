@@ -78,6 +78,9 @@ func columns(info platform.EntityInfo) []column {
 		{"archived", "boolean", func(v reflect.Value) any { return recordOf(v).Archived }},
 	}
 	for _, f := range info.Fields {
+		if len(f.Read) > 0 { // a field some roles may not read is not copied where no role applies (ADR-0028 D3)
+			continue
+		}
 		read := func(v reflect.Value) reflect.Value { return v.FieldByIndex(f.Index) }
 		name := ident(f.Name)
 		switch f.Type {

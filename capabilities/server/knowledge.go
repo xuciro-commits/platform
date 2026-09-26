@@ -112,7 +112,7 @@ func (t *Tenant) sources() []source {
 				title = fmt.Sprint(v.FieldByIndex(f.Index).Interface())
 			}
 			for _, f := range et.info.Fields {
-				if text := fmt.Sprint(v.FieldByIndex(f.Index).Interface()); f.Knowledge && strings.TrimSpace(text) != "" {
+				if text := fmt.Sprint(v.FieldByIndex(f.Index).Interface()); f.Knowledge && len(f.Read) == 0 && strings.TrimSpace(text) != "" {
 					out = append(out, source{key: et.info.Type + "/" + rec.ID + "#" + f.Name, title: et.info.Title + " " + title + ": " + f.Title,
 						text: text, revision: fmt.Sprint(rec.Revision), apps: []string{et.info.App}})
 				}

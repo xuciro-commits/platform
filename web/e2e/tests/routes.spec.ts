@@ -72,3 +72,19 @@ test("route 19: a file on a ticket", async ({ page, request }) => {
   expect(await bytes.text()).toBe("the lamp flickers");
   expect((await request.get(`/v1/files/${file.id}`, { headers: { Authorization: "Bearer sales-only" } })).status()).toBe(404);
 });
+
+// Route 20 (ADR-0028): a field only some roles read — the opportunity's
+// expected margin is shown to the sales manager, never to the salesperson.
+test("route 20: field security", async ({ page, request }) => {
+  const account = fresh("ACC"), opp = fresh("OPP");
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Margin " + account, kind: "company" });
+  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Retreat" });
+  await decide(request, "manager", "crm", "crm.opportunity.edit", { type: "crm.opportunity", id: opp }, { margin: 31.5 });
+  await open(page, "manager", `/record?type=crm.opportunity&id=${opp}`);
+  await expect(page.getByRole("term").filter({ hasText: "Expected margin" })).toBeVisible();
+  await expect(value(page, "31.50")).toBeVisible();
+  const salesPage = await page.context().newPage(); // another member: a page of its own
+  await open(salesPage, "sales", `/record?type=crm.opportunity&id=${opp}`);
+  await expect(salesPage.getByText("Retreat").first()).toBeVisible();
+  await expect(salesPage.getByText("Expected margin")).toHaveCount(0);
+});

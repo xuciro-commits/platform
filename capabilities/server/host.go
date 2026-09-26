@@ -109,6 +109,7 @@ type Tenant struct {
 	Files    FileStore
 	memFiles memoryFiles
 	uploads  map[string]time.Time // hashes uploaded and when, until attached or swept (volatile)
+	personal []PersonalRead       // reads of personal data (ADR-0028 D4), volatile
 	probing  bool                 // a submission for approval is being checked, not applied
 	requests []request            // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }

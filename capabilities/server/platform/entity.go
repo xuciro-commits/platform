@@ -190,6 +190,15 @@ type FieldInfo struct {
 	// Knowledge marks a text field agents and members find through the
 	// knowledge app (ADR-0022 D1), tag knowledge:"true".
 	Knowledge bool `json:"knowledge,omitempty"`
+	// Field security (ADR-0028 D3), from the tags read:"role,role" and
+	// write:"role": the app's roles that read the field, and those that set it
+	// through generated actions; empty: every role that reads the record.
+	// Who may not read a field may not set it either.
+	Read  []string `json:"read,omitempty"`
+	Write []string `json:"write,omitempty"`
+	// Personal marks personal data (ADR-0028 D4), tag personal:"contact",
+	// "identity", "health", "finance" …: its reads are audited.
+	Personal string `json:"personal,omitempty"`
 	// Meaning (ADR-0023 D1), from the tags help:"…", synonyms:"a,b" and
 	// example:"…": what the field holds, other names for it, a typical value.
 	Help     string `json:"help,omitempty"`
@@ -481,7 +490,13 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			return nil, fmt.Errorf("entity %s: field %s needs a json name", e.Type, sf.Name)
 		}
 		f := FieldInfo{Name: name, Title: sf.Tag.Get("title"), Index: sf.Index, Knowledge: sf.Tag.Get("knowledge") == "true",
-			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example")}
+			Help: sf.Tag.Get("help"), Synonyms: sf.Tag.Get("synonyms"), Example: sf.Tag.Get("example"), Personal: sf.Tag.Get("personal")}
+		if roles := sf.Tag.Get("read"); roles != "" {
+			f.Read = strings.Split(roles, ",")
+		}
+		if roles := sf.Tag.Get("write"); roles != "" {
+			f.Write = strings.Split(roles, ",")
+		}
 		if f.Title == "" {
 			f.Title = strings.ToUpper(name[:1]) + name[1:]
 		}
@@ -538,4 +553,14 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+// Reads reports whether a member holding role in the field's app reads it (ADR-0028 D3).
+func (f FieldInfo) Reads(role string) bool {
+	return len(f.Read) == 0 || slices.Contains(f.Read, role)
+}
+
+// Writes reports whether a member holding role sets it through generated actions.
+func (f FieldInfo) Writes(role string) bool {
+	return f.Reads(role) && (len(f.Write) == 0 || slices.Contains(f.Write, role))
 }
