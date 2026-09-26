@@ -30,7 +30,7 @@ func TestCatalogPerCaller(t *testing.T) {
 		who  platform.Caller
 		want []string
 	}{
-		{sup, []string{lang, read, SchemaRelease, SchemaReason, SchemaConfirm, SchemaResend}},
+		{sup, []string{lang, read, SchemaRelease, SchemaReason, SchemaConfirm, SchemaAnswer, SchemaResend}},
 		{op1, []string{lang, read, SchemaStart, SchemaComplete, SchemaNC, SchemaReason}},
 		{qa1, []string{lang, read, SchemaNC, SchemaSign}},
 		{assistant, []string{lang, read, SchemaReason, SchemaResend}},

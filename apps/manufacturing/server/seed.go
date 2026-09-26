@@ -42,12 +42,10 @@ func DemoOrganization(members []platform.Membership) platform.OrgSeed {
 	}
 }
 
-// DemoConnectors: the line gateway pushes equipment states, the ERP is polled for planned orders.
+// DemoConnectors: the line gateway pushes equipment states.
 func DemoConnectors(tenant string) []*pb.ConnectorDescriptor {
 	return []*pb.ConnectorDescriptor{
 		{TenantId: tenant, ConnectorId: "gateway-l1", Direction: pb.ConnectorDirection_CONNECTOR_DIRECTION_PUSH,
 			DataClasses: []string{ResourceType}, Heartbeat: durationpb.New(30e9)},
-		{TenantId: tenant, ConnectorId: "erp", Direction: pb.ConnectorDirection_CONNECTOR_DIRECTION_POLL,
-			DataClasses: []string{PlannedType}, Heartbeat: durationpb.New(600e9)},
 	}
 }

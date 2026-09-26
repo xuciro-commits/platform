@@ -27,7 +27,7 @@ const (
 	JobReasons            = "downtime-reasons"
 )
 
-// Snapshot and Restore: the plant's facts (ERP claims, gateway batches), the
+// Snapshot and Restore: the plant's facts (gateway batches), the
 // identities and redirects of downtime events, the derived downtime and the
 // decisions; orders and SFCs are the host's records (ADR-0019 D6).
 type plantState struct {
@@ -63,18 +63,17 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 }
 
 // Manifest declares the plant as the "mes" app (ADR-0010): its actions, its
-// reads, its connector inputs (batches and pages, both journaled; the host keeps
-// the connectors), its settings, its scheduled job (ADR-0013) and its flow (ADR-0020).
+// reads, its connector input (batches, journaled; the host keeps the
+// connectors), its settings, its scheduled job (ADR-0013), its flow (ADR-0020),
+// and the protocol it reaches an ERP through (ADR-0024).
 func (p *Plant) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: "mes", Title: "Plant operations", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
 		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,
 		Consumes: []platform.Consumption{{Protocol: production.ID, Optional: true}},
-		Inputs:   map[string]bool{"states": true, "planned-orders": true},
+		Inputs:   map[string]bool{"states": true},
 		Jobs:     []platform.Job{{Name: JobReasons, Title: "Remind supervisors of downtime without a reason", Every: 5 * time.Minute}},
-		Emits: []platform.EffectKind{{Name: EffectConfirmation, Title: "Order confirmation to the ERP", Irreversible: true,
-			Description: "When the last SFC of an order ends, its yield and scrap are confirmed to the ERP (SAP production order confirmation); the ERP answers with its confirmation number."},
-			{Name: EffectLeadTime, Title: "Lead time from a supplier",
-				Description: "A question to a supplier's agent about how soon it can deliver a product; bind it to the supplier's A2A endpoint."}},
+		Emits: []platform.EffectKind{{Name: EffectLeadTime, Title: "Lead time from a supplier",
+			Description: "A question to a supplier's agent about how soon it can deliver a product; bind it to the supplier's A2A endpoint."}},
 		Settings: []platform.Setting{
 			{Name: SettingNotifyDowntime, Title: "Tell supervisors about new downtime", Type: "boolean", Default: "true",
 				Description: "Each downtime that starts notifies the supervisors of its line."},
@@ -103,14 +102,8 @@ func (p *Plant) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	switch name {
 	case "master":
 		return p.Master(), nil
-	case "planned-orders": // the external ERP's claims, and the ERP app's released orders
-		planned := p.Planned()
-		for _, o := range erpOrders(c) {
-			if o.State == "released" {
-				planned = append(planned, PlannedOrder{ERPID: o.ID, Product: o.Product, Quantity: int(o.Quantity), Due: o.Due})
-			}
-		}
-		return planned, nil
+	case "planned-orders": // the orders of production.orders/1's providers
+		return planned(c), nil
 	}
 	return p.Downtime(), nil
 }
@@ -123,12 +116,6 @@ func (p *Plant) Input(c platform.Caller, name string, body []byte, now time.Time
 			return nil, invalid
 		}
 		return p.DeliverStates(c, b, now)
-	case "planned-orders":
-		var page PlannedPage
-		if json.Unmarshal(body, &page) != nil {
-			return nil, invalid
-		}
-		return nil, p.DeliverPlanned(c, page, now)
 	}
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }

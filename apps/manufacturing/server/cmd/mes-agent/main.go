@@ -28,7 +28,7 @@ import (
 )
 
 func main() {
-	server := flag.String("server", "http://127.0.0.1:8490", "mes-server URL")
+	server := flag.String("server", "http://127.0.0.1:8490", "plant host URL")
 	token := flag.String("token", "", "bearer token")
 	tokenURL := flag.String("oidc-token", "", "token endpoint for client credentials")
 	flag.Parse()

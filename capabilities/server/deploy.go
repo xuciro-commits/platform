@@ -23,6 +23,9 @@ type Deployment struct {
 	Addr, Database, Issuer, Keys, Directory, Web string
 	Project                                      bool
 	SnapshotEvery                                int64
+	// Seed gives a tenant whose journal is empty its first data, through
+	// ordinary decisions journaled like any other (in memory: every start).
+	Seed func(t *Tenant, now time.Time) error
 }
 
 // Flags registers the deployment flags on the default flag set.
@@ -56,7 +59,8 @@ func (d *Deployment) Seats(development []Seat) []Seat {
 }
 
 // Serve replays each tenant's journal, from its newest snapshot of this code
-// when there is one, then records into it (fail-stop), runs the tenants' owned
+// when there is one, then records into it (fail-stop), seeds a tenant whose
+// journal was empty, runs the tenants' owned
 // work every second (ADR-0013), saves snapshots as the journal grows and at
 // shutdown (ADR-0019), and serves until SIGINT or SIGTERM.
 func (d *Deployment) Serve(tenants ...*Tenant) error {
@@ -64,6 +68,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	var journal *Journal
 	code := CodeOf(tenants...)
 	restored := map[string]int64{} // each tenant's snapshot position at start-up, 0 without one
+	fresh := map[string]bool{}     // tenants whose journal was empty
 	if d.Database != "" {
 		var err error
 		if journal, err = OpenJournal(ctx, d.Database); err != nil {
@@ -91,6 +96,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			if err != nil {
 				return fmt.Errorf("replay %s: %w", t.ID, err)
 			}
+			fresh[t.ID] = after == 0 && len(entries) == 0
 			if t.flows != nil {
 				if err := t.flows.Check(); err != nil { // running instances need their flow's version (ADR-0020 D6)
 					return fmt.Errorf("tenant %s: %w", t.ID, err)
@@ -109,6 +115,14 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 					log.Fatalf("journal append: %v", err)
 				}
 			}
+		}
+	}
+	for _, t := range tenants {
+		if d.Seed != nil && (journal == nil || fresh[t.ID]) {
+			if err := d.Seed(t, time.Now()); err != nil {
+				return fmt.Errorf("seed %s: %w", t.ID, err)
+			}
+			log.Printf("seeded %s", t.ID)
 		}
 	}
 	authenticate := Authenticate(func(token string) (string, bool) { return token, token != "" })

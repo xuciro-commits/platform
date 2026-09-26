@@ -1,7 +1,7 @@
 # The platform host's two deployments on their production path, locally (#87, #92):
-# mes-server (manufacturing) and sales-server (the sales solution: CRM and Hotel).
-# PostgreSQL keeps the journal, Rauthy issues identities, mes-server replays the
-# journal on start. Each host serves the workspace (ADR-0018), built first:
+# plant-server (the plant solution: the MES and the ERP, ADR-0024) and
+# sales-server (the sales solution: CRM, Hotel, HR, the helpdesk). PostgreSQL
+# keeps the journal, Rauthy issues identities, each host replays the journal on start. Each host serves the workspace (ADR-0018), built first:
 # `pnpm --dir web/apps/workspace build && docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.
 name: platform
@@ -32,18 +32,18 @@ services:
       - ./rauthy/bootstrap:/app/bootstrap:ro
       - rauthy:/app/data
 
-  mes-server:
-    build: { context: ../.., dockerfile: apps/manufacturing/server/Dockerfile }
+  plant-server:
+    build: { context: ../.., dockerfile: solutions/plant/Dockerfile }
     command:
       - -addr=0.0.0.0:8490
       - -database=postgres://platform:platform-local-only@postgres:5432/platform
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
-      - -directory=/etc/mes/directory.json
+      - -directory=/etc/plant/directory.json
       - -web=/web
       - -project
-    ports: ["127.0.0.1:${MES_PORT:-8490}:8490"]
-    volumes: [./mes/directory.json:/etc/mes/directory.json:ro]
+    ports: ["127.0.0.1:${PLANT_PORT:-8490}:8490"]
+    volumes: [./plant/directory.json:/etc/plant/directory.json:ro]
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}" }
     depends_on:
       postgres: { condition: service_healthy }
@@ -69,7 +69,7 @@ services:
       rauthy: { condition: service_started }
     restart: on-failure
 
-  # A webhook receiver for local endpoints and the rehearsal (ADR-0014).
+  # A webhook receiver, mail server, model server and supplier's agent for local endpoints and the rehearsal (ADR-0014).
   webhook-sink:
     build: { context: ../.., dockerfile: capabilities/server/cmd/webhook-sink/Dockerfile }
     environment: { WEBHOOK_SECRET: sinkLocalOnly0000000000000000000000000000000000000000000000000000 }

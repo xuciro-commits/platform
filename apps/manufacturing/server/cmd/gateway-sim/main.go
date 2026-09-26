@@ -1,7 +1,6 @@
 // Command gateway-sim plays the plant's edge: a line gateway pushing equipment
-// state batches (with a stop now and then) and the ERP poller importing planned
-// orders page by page. With -oidc-token it authenticates as the OIDC clients
-// mes-gateway and mes-erp (secrets in MES_GATEWAY_SECRET and MES_ERP_SECRET).
+// state batches, with a stop now and then. With -oidc-token it authenticates as
+// the OIDC client mes-gateway (secret in MES_GATEWAY_SECRET).
 package main
 
 import (
@@ -54,22 +53,10 @@ func post(server, token, path string, body any) int {
 }
 
 func main() {
-	server := flag.String("server", "http://127.0.0.1:8490", "mes-server URL")
+	server := flag.String("server", "http://127.0.0.1:8490", "plant host URL")
 	every := flag.Duration("every", 5*time.Second, "time between gateway batches")
 	batches := flag.Int("batches", 0, "stop after this many batches (0: run forever)")
 	flag.Parse()
-
-	orders := [][]mes.PlannedOrder{
-		{{ERPID: "PO-9001", Product: "P-100", Quantity: 20, Due: "2026-10-02"}, {ERPID: "PO-9002", Product: "P-200", Quantity: 8, Due: "2026-10-03"}},
-		{{ERPID: "PO-9003", Product: "P-100", Quantity: 12, Due: "2026-10-06"}},
-	}
-	cursor := ""
-	for i, page := range orders {
-		next := fmt.Sprintf("page-%d", i+1)
-		fmt.Println("erp page", next, post(*server, credential("erp", "mes-erp", "MES_ERP_SECRET"), "/v1/connectors/planned-orders",
-			mes.PlannedPage{CursorFrom: cursor, CursorTo: next, Orders: page}))
-		cursor = next
-	}
 
 	gateway := credential("gateway-l1", "mes-gateway", "MES_GATEWAY_SECRET")
 	resources := []string{"FURNACE-1", "CNC-11", "CNC-12", "CMM-1"}

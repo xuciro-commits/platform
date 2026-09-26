@@ -24,7 +24,6 @@ const (
 	SFCType      = "mes.sfc"
 	DowntimeType = "mes.downtime"
 	ResourceType = "mes.resource"
-	PlannedType  = "mes.planned-order"
 
 	SchemaRelease  = "mes.order.release"
 	SchemaStart    = "mes.sfc.start"
@@ -34,10 +33,9 @@ const (
 	SchemaReason   = "mes.downtime.reason"
 	SchemaResend   = "mes.order.reconfirm"
 	SchemaConfirm  = "mes.order.confirm"
+	SchemaAnswer   = "mes.order.answer"
 
-	schemaStates  = "mes.resource.states"
-	schemaPlanned = "mes.erp.planned-order"
-	schemaAnswer  = "mes.erp.confirmation" // the ERP's answer to an order confirmation (ADR-0014 D4)
+	schemaStates = "mes.resource.states"
 )
 
 // Master data (Opcenter: product, workflow/spec, resource; SAP ME: material, router/operation, work center/resource).
@@ -76,7 +74,6 @@ const (
 	Quality    Role = "quality"
 	Supervisor Role = "supervisor"
 	Gateway    Role = "gateway"
-	ERP        Role = "erp"
 	Assistant  Role = "assistant" // an AI agent acting within the lines it is granted
 )
 
@@ -122,8 +119,8 @@ type Order struct {
 	SFCs     []platform.Ref[SFC] `json:"sfcs" field:"readonly" title:"SFCs"`
 	Planned  string              `json:"planned,omitempty" field:"readonly" title:"Planned order" help:"The ERP's planned order this order fulfils" synonyms:"PO"`
 	Status   string              `json:"status" field:"readonly" choices:"released,completed"`
-	// The confirmation written back to the ERP when the last SFC ends: sent,
-	// confirmed (with the ERP's number), refused or failed, read from its answer.
+	// The confirmation to the ERP when the last SFC ends (production.orders/1):
+	// sent, confirmed (with the ERP's number), refused or failed.
 	ERP          string `json:"erp,omitempty" field:"readonly" title:"ERP"`
 	Confirmation string `json:"confirmation,omitempty" field:"readonly"`
 	ERPDetail    string `json:"erpDetail,omitempty" field:"readonly" title:"ERP detail"`
@@ -145,9 +142,8 @@ type Plant struct {
 
 func NewPlant(tenant string, master MasterData) *Plant {
 	p := &Plant{tenant: tenant, master: master,
-		ledger: platform.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
-		facts: kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}, {Name: schemaPlanned, Version: 1},
-			{Name: schemaAnswer, Version: 1}}, nil)),
+		ledger:   platform.NewLedger(tenant, Authority, Actions(), OrderType, SFCType, DowntimeType),
+		facts:    kernel.NewFactLog(kernel.NewSchemaRegistry([]*pb.SchemaRef{{Name: schemaStates, Version: 1}}, nil)),
 		identity: kernel.NewIdentity(nil), downtime: map[string][]Downtime{}}
 	p.ledger.Changes.Facts = func(tenant, id string) bool {
 		return slices.ContainsFunc(p.facts.Records(tenant), func(r *pb.FactRecord) bool { return r.GetFactId() == id })
@@ -221,7 +217,7 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 		return roleOf(who) == Quality || known && onLine(p.lineOf(sfc))
 	case SchemaSign:
 		return true
-	case SchemaResend, SchemaConfirm:
+	case SchemaResend, SchemaConfirm, SchemaAnswer:
 		o, known := platform.Get[Order](who, s.GetTarget().GetId())
 		return known && onLine(p.orderLine(o))
 	case SchemaReason:
@@ -257,7 +253,7 @@ type releasePayload struct {
 	Product  string `json:"product"`
 	Quantity int    `json:"quantity"`
 	SFCs     int    `json:"sfcs"`
-	Planned  string `json:"planned,omitempty"` // the ERP planned order it fulfils (its claim is the evidence)
+	Planned  string `json:"planned,omitempty"` // the ERP planned order it fulfils
 }
 
 // sfcPayload acts on the SFC's current operation; a stale screen is refused by
@@ -325,10 +321,17 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		if o.Status != "completed" || o.ERP != "" {
 			return nil, conflict // a completed order, confirmed once; corrections are resent
 		}
-		if apply, ok := p.confirmThrough(who, s, o, now); ok {
-			return apply, nil
+		return p.confirm(who, s, o, now), nil
+	case SchemaAnswer: // the flow records the answer of an ERP outside once its provider shows it
+		o, known := platform.Get[Order](who, id)
+		if !known {
+			return nil, notFound
 		}
-		return func(record *pb.ChangeRecord) { p.confirm(who, record, o, now) }, nil
+		answer, ok := awaited(who, o)
+		if !ok {
+			return nil, conflict
+		}
+		return func(record *pb.ChangeRecord) { p.answered(who, record, o, answer, s.GetIdempotencyKey(), now) }, nil
 	case SchemaResend:
 		var r struct {
 			Planned string `json:"planned"`
@@ -352,10 +355,7 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		}
 		o.Resent++
 		o.ERP, o.Confirmation, o.ERPDetail = "", "", ""
-		if apply, ok := p.confirmThrough(who, s, o, now); ok {
-			return apply, nil
-		}
-		return func(record *pb.ChangeRecord) { p.confirm(who, record, o, now) }, nil
+		return p.confirm(who, s, o, now), nil
 	}
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }

@@ -101,36 +101,6 @@
       "profile"
     ],
     "force_mfa": false,
-    "id": "mes-erp",
-    "name": "ERP poller",
-    "confidential": true,
-    "secret": {
-      "Plain": "erpLocalOnly0000000000000000000000000000000000000000000000000000"
-    },
-    "flows_enabled": [
-      "client_credentials"
-    ]
-  },
-  {
-    "enabled": true,
-    "redirect_uris": [
-      "http://localhost/unused"
-    ],
-    "access_token_alg": "EdDSA",
-    "id_token_alg": "EdDSA",
-    "auth_code_lifetime": 60,
-    "access_token_lifetime": 900,
-    "scopes": [
-      "openid",
-      "email",
-      "profile"
-    ],
-    "default_scopes": [
-      "openid",
-      "email",
-      "profile"
-    ],
-    "force_mfa": false,
     "id": "mes-assistant",
     "name": "Plant assistant AI agent line L1",
     "confidential": true,

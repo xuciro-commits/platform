@@ -2,6 +2,7 @@
   "dependencies": {
     "@pkg/crm": "workspace:*",
     "@pkg/erp": "workspace:*",
+    "@pkg/erplink": "workspace:*",
     "@pkg/helpdesk": "workspace:*",
     "@pkg/hotel": "workspace:*",
     "@pkg/hr": "workspace:*",

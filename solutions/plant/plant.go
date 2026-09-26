@@ -1,9 +1,9 @@
-// Package plant is the plant's software as a solution (ADR-0024 7c): the
+// Package plant is the plant's software as a solution (ADR-0024 7c, 7d): the
 // platform's directory, organisation, AI, work, flows, agents and knowledge,
-// the MES and the ERP, composed without a bridge. The ERP provides
-// production.orders/1 and the MES consumes it: the ERP releases production
-// orders, the plant executes them and confirms what it made, and the ERP posts
-// its cost. Neither app knows the other.
+// the MES, and its books — the ERP app, or the adapter to an ERP outside —
+// composed without a bridge. The books provide production.orders/1 and the MES
+// consumes it: they release production orders, the plant executes them and
+// confirms what it made, and the books take its cost. Neither app knows the other.
 package plant
 
 import (
@@ -18,12 +18,17 @@ import (
 	"platformserver/platform"
 )
 
-// NewTenant composes the plant for one tenant; seats belong to the plant's units.
-func NewTenant(id string, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
-	return platformserver.NewTenant(id, platformserver.NewConsole(id, seats...),
+// NewTenant composes the plant for one tenant with its books, the provider of
+// production.orders/1 (erp.New or erplink.New); seats belong to the plant's units.
+func NewTenant(id string, books platform.App, seats ...platformserver.Seat) (*platformserver.Tenant, error) {
+	t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...),
 		platformserver.NewOrganization(id, mes.DemoOrganization(platformserver.Memberships(seats))), platformserver.NewAI(id),
 		platformserver.NewWork(id), platformserver.NewFlows(id), platformserver.NewAgents(id), platformserver.NewKnowledge(id),
-		mes.NewPlant(id, mes.DemoMaster()), erp.New(id))
+		mes.NewPlant(id, mes.DemoMaster()), books)
+	if err == nil {
+		err = t.Connect(mes.DemoConnectors(id)...)
+	}
+	return t, err
 }
 
 // Seat signs in as subject with roles by app, and belongs to units of the site structure (ADR-0012).

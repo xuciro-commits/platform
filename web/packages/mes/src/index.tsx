@@ -53,12 +53,12 @@ function PlannedOrders() {
   const attention = orders.filter((o) => o.erp === "refused" || o.erp === "failed");
   const unreleased = (useRead<Planned[]>("/v1/planned-orders") ?? []).filter((p) => !orders.some((o) => o.planned === p.erpId));
   const columns: ColumnDef<Planned & { released: string; erp: string; confirmation: string }, any>[] = [
-    { accessorKey: "erpId", header: t("ERP order"), meta: { width: 110 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "number", header: t("ERP order"), meta: { width: 140 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "product", header: t("Product"), cell: (c) => `${c.getValue()} · ${routing(master, c.getValue())?.name ?? ""}` },
     { accessorKey: "quantity", header: t("Qty"), meta: { width: 70, align: "right" } },
     { accessorKey: "due", header: t("Due"), meta: { width: 110 } },
     { accessorKey: "released", header: t("Released as"), meta: { width: 120 } },
-    // Written back when the last SFC ends (ADR-0014): the ERP's answer, or why it refused.
+    // Confirmed through production.orders/1 when the last SFC ends: the ERP's answer, or why it refused.
     { accessorKey: "erp", header: t("Confirmed to ERP"), meta: { width: 220 }, cell: ({ row: { original: p } }) => p.erp
         ? <span className="flex items-center gap-2"><StatusTag status={p.erp} registry={erpStatus} /><span className="font-mono text-xs">{p.confirmation}</span></span> : null },
     { id: "act", header: "", meta: { width: 90 }, enableSorting: false, cell: ({ row: { original: p } }) =>
@@ -67,7 +67,7 @@ function PlannedOrders() {
   ];
   return (
     <>
-      <PageHeader title={t("Planned orders")} description={t("Demand claimed by the ERP (polled connector). Releasing cites the claim as evidence.")} />
+      <PageHeader title={t("Planned orders")} description={t("Production orders the ERP released to the plant (production.orders/1); release a shop order against one.")} />
       {attention.length > 0 && (
         <section className="mb-3 rounded-md border border-border bg-surface p-3 text-sm">
           <h2 className="mb-2 font-semibold">{t("Confirmations the ERP did not accept")}</h2>
@@ -87,7 +87,7 @@ function PlannedOrders() {
             <p className="text-muted">{t("The ERP answered:")} {resending.erpDetail || resending.erp}. Name the planned order this shop order fulfils, then confirm it again.</p>
             <Select aria-label={t("Planned order")} value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)}>
               <option value="">{resending.planned ? t("Keep {id}", { id: resending.planned }) : t("No planned order")}</option>
-              {unreleased.map((p) => <option key={p.erpId} value={p.erpId}>{p.erpId} · {p.product} × {p.quantity}</option>)}
+              {unreleased.map((p) => <option key={p.erpId} value={p.erpId}>{p.number} · {p.product} × {p.quantity}</option>)}
             </Select>
             <div className="flex justify-end gap-2">
               <Button onClick={() => setResending(undefined)}>{t("Cancel")}</Button>
@@ -99,7 +99,7 @@ function PlannedOrders() {
           </div>
         )}
       </Dialog>
-      <Dialog open={!!releasing} onOpenChange={(o) => !o && setReleasing(undefined)} title={t("Release {id}", { id: releasing?.erpId ?? "" })}>
+      <Dialog open={!!releasing} onOpenChange={(o) => !o && setReleasing(undefined)} title={t("Release {id}", { id: releasing?.number ?? "" })}>
         {releasing && (
           <EntityForm schema={z.object({ order: z.string().regex(/^SO-\d+$/, t("Format SO-123")), sfcs: z.number().int().min(1).max(releasing.quantity) })}
             defaultValues={{ order: `SO-${releasing.erpId.replace(/\D/g, "")}`, sfcs: Math.min(4, releasing.quantity) }}
@@ -107,7 +107,7 @@ function PlannedOrders() {
             submitLabel={t("Release")} onCancel={() => setReleasing(undefined)}
             onSubmit={async (v) => {
               await decide("mes.order.release", { type: "mes.order", id: v.order },
-                { product: releasing.product, quantity: releasing.quantity, sfcs: v.sfcs, planned: releasing.erpId }, { evidence: [releasing.factId] });
+                { product: releasing.product, quantity: releasing.quantity, sfcs: v.sfcs, planned: releasing.erpId });
               setReleasing(undefined);
             }} />
         )}

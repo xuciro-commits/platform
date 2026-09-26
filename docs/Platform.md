@@ -102,9 +102,9 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 | Reads and read authorization | Host runtime | Named reads; role in the app, or open to every member | `Tenant.Read`, `Manifest.Everyone` | all |
 | Package ledger | App API | The kernel wired for one app, catalog role check, publishing | `platform.Ledger` | every app |
 | Owned work: deliveries and jobs (ADR-0013) | Host runtime | Events delivered as owned work with retries; scheduled jobs run as the app | `Manifest.Jobs`, `Tenant.Work` | manufacturing, Hotel, `work`, `flow`, `agent`. `Manifest.Subscribes` has no app user: apps react to events through flows |
-| Connectors, managed | Host runtime | Deliveries through the caller; cursor, health, last refusal; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | manufacturing, Hotel |
-| Outbound effects (ADR-0014, 0022) | Host runtime | Webhooks for events; effect kinds apps emit; email of notifications; A2A messages to external agents; at least once with a stable key; answers back to the app; irreversible kinds an agent causes held for a person | `Tenant.Dispatch`, `Caller.Emit`, `Answerer`, `mail.go`, `a2a.go` | sales, manufacturing, helpdesk |
-| Deployment | Host runtime | Development tokens, or journal plus OIDC, from one set of flags; the work runner | `Deployment`, `RunWork` | mes-server, sales-server, hotel-server |
+| Connectors, managed | Host runtime | Deliveries through the caller; cursor, health, last refusal; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | manufacturing (push), ERP link (poll), Hotel |
+| Outbound effects (ADR-0014, 0022) | Host runtime | Webhooks for events; effect kinds apps emit; email of notifications; A2A messages to external agents; at least once with a stable key; answers back to the app; irreversible kinds an agent causes held for a person | `Tenant.Dispatch`, `Caller.Emit`, `Answerer`, `mail.go`, `a2a.go` | sales, manufacturing, helpdesk, ERP link |
+| Deployment | Host runtime | Development tokens, or journal plus OIDC, from one set of flags; the work runner; a seed for a tenant whose journal is empty (ADR-0024) | `Deployment`, `Deployment.Seed`, `RunWork` | plant-server, sales-server, hotel-server, erp-server |
 | Identity provider | Host runtime | OIDC subjects; the directory maps them to members | `OIDC`, Rauthy | every deployed host |
 | Languages (ADR-0023) | App API, host runtime, web | Dictionaries shipped with each app's manifest and UI package, keyed by the English text; declarations in the member's language (their choice, else the browser's, else the tenant's default), choice values with translated titles; notifications, tasks and mail said in the reader's language through patterns; `t()` and a language switch in the workspace; agents answer in the run's language | `platform.Languages`, `languages.go`, `@platform/ui` `i18n.ts` | every app (English, Simplified Chinese) |
 | Meaning and glossary (ADR-0023) | App API, platform app `knowledge` | Descriptions, help, examples and synonyms declared with entity types, fields and states; served to people, forms, tool schemas and agents' prompts; search by a type's names; the tenant's glossary layered on top, never changing a declaration | `Entity.Description`, tags `help`, `synonyms`, `example`, `knowledge.term` | CRM, MES, helpdesk (test app) |
@@ -120,7 +120,7 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 | AI providers and models (ADR-0015) | Platform app `ai` | Vendor, OpenAI-compatible, Anthropic and local providers; enabled models with access; calls through the host with usage journaled; tools on both wires | `ai.go`, `aicall.go`, `anthropic.go`, `/v1/ai/chat` | every host |
 | Agents (ADR-0021, 0022) | App API, platform app `agent` | Declared agents as principals with the intersection of grants; runs journaled step by step; drafts people confirm; signals; evaluation by dry re-runs; memory; transcripts; the context graph and search as tools | `platform.Agent`, `agent*.go`, `context.go`, `/v1/context`, `/v1/search` | manufacturing, CRM, helpdesk |
 | Knowledge (ADR-0022) | Platform app `knowledge` | Documents and `knowledge:"true"` fields; passages; hybrid search (BM25 and vectors) within what the reader may read; citations journaled with an agent's step | `knowledge.go`, `/v1/knowledge` | helpdesk |
-| Protocols (ADR-0011) | Protocols | Named, versioned actions, reads and events with conformance tests | `platform.Protocol`, `protocols/lodging`, `protocols/production` | Hotel and memstay provide lodging, CRM consumes it; the ERP provides production orders, the MES consumes them (ADR-0024) |
+| Protocols (ADR-0011) | Protocols | Named, versioned actions, reads and events with conformance tests | `platform.Protocol`, `protocols/lodging`, `protocols/production` | Hotel and memstay provide lodging, CRM consumes it; the ERP app, or the ERP link to an ERP outside, provides production orders, the MES consumes them (ADR-0024) |
 | UI kit | Web | Components, docking workspace, entity routes, records (lists, pages, forms), pivot, charts from the platform's visualization spec (ECharts 6), flow view | `@platform/ui` | every web app |
 | Workspace and the UI app API (ADR-0018) | Web | One sign-in per host; apps contributed by UI packages; records opened across apps by reference; dashboards; the assistant, run pages and global search | `@platform/app`, `web/apps/workspace` | every app UI |
 | Edge client and sign-in | Web | Outbox, HTTP client, OIDC with PKCE, a host's reasons for refusing | `@platform/kernel` | workspace, Hotel Desk |
@@ -131,7 +131,7 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 
 Words that are easy to confuse:
 - An **app** is a unit of capability: a Go manifest and, usually, a UI package. **Platform apps** are the eight listed in §2.1. **Reference apps** live under `apps/` (called `slices/` until 2026-09-26, from the kernel-validation phase). "Package" in ADR-0008 and ADR-0009 means app.
-- A **solution** is a composition of apps for one host: `solutions/sales`, the plant's `mes-server`, the Hotel's `hotel-server`.
+- A **solution** is a composition of apps for one host: `solutions/sales`, `solutions/plant`, the Hotel's `hotel-server`.
 - An **event** is an accepted decision as others see it. A domain's own word "event", such as a downtime event, is not this.
 
 | Term | Is | Owned by | Durable as |
@@ -259,7 +259,6 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0019 | Capturing state without the tenant's lock; parallel restore; the plant's downtime as records | Deferred |
 | 0020 | Record-state triggers; business calendars for timeouts; a drawn graph | Deferred |
 | 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
-| 0024 | The external-ERP adapter and one path from the plant to an ERP; the rehearsal on the plant solution (7d) | Partial: 7a (accounting, number sequences), 7b (purchasing and inventory) and 7c (production orders through `production.orders/1`, `solutions/plant`) built |
 
 ## 3. Runtimes and languages
 
@@ -333,7 +332,7 @@ The kernel is defined by six parts, all in `contract/`. A part never substitutes
 - **Device authority** (data a person keeps on their own device, such as offline drafts; Music's library proved it before 2026-09-26): local changes apply immediately; the server is a replica/backup.
 - **Server authority** (reservations, work orders): the edge submits *intents*; UI shows pending until accepted or rejected.
 - **Observations** are authoritative at their source and never "conflict" — they are appended and may later be judged wrong.
-- **Authority migration** (personal → shared, device → server, external system → platform) must be possible without redesigning the domain. Replacing the plant's ERP stand-in with the ERP app is the next case.
+- **Authority migration** (personal → shared, device → server, external system → platform) must be possible without redesigning the domain. The plant proved it (ADR-0024): its own ERP connector and effect became providers of one protocol, the ERP app or the adapter to an ERP outside, without changing the plant's rules.
 
 Submission states for server-authoritative intents: `pending → sending → confirmed | conflict | rejected | unknown`. `unknown` (timeout, lost connection) retries with the **same operation ID and parameters**; conflicts and rejections keep the draft and never retry automatically; a user revision is a new operation. Transient errors and business conflicts never share an infinite retry queue. Switching tenant/account isolates queues and results; results from an old identity are never shown to a new one. Incremental sync must handle cursor expiry, pagination consistency, tombstones, permission revocation and duplicate events; push is a refresh hint, never the only source of data.
 
@@ -521,4 +520,4 @@ Stages 1–5 are built: the application model (ADR-0016), lifecycles, approvals 
 | 8. AI control plane | Quotas, rate limits and streaming (ADR-0015 batch 2); the agents overview with value and an off switch; evaluation suites; traces across agents; MCP authorization and resources | Agents exist in three apps and outside ones call in; governing them at scale is the next gap the references closed in 2026 | An administrator sees every agent's use and value, switches one off, and a standard MCP client signs in and acts within its grants |
 | 9. Scale and delivery | Many tenants per process, provisioning, package upgrades, the backend-for-frontend token, run-time UI bundles, bulk data out | When a second real organisation or team comes | A new team ships an app without touching the host |
 
-The target apps are CRM, MES and ERP; CRM and MES exist, the ERP is being built (ADR-0024, #115: accounting, number sequences, purchasing, inventory and production orders with the MES built; one path from the plant to any ERP next). Hotel, HR and the helpdesk stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.
+The target apps are CRM, MES and ERP; all three exist; the ERP (ADR-0024, #115) has accounting, number sequences, purchasing, inventory and production orders with the MES, and the plant reaches the ERP app or any ERP outside through one protocol. Hotel, HR and the helpdesk stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.

@@ -23,7 +23,7 @@ cd deploy/local && docker compose ps
 ```
 
 - 停止：`docker compose stop`。数据保存在 Docker 卷 `pgdata` 和 `rauthy` 里，下次启动会重放日志，数据还在。
-- 只重建主机：`docker compose up -d --build mes-server sales-server webhook-sink`。改了前端要先重新构建工作台。
+- 只重建主机：`docker compose up -d --build plant-server sales-server webhook-sink`。改了前端要先重新构建工作台。
 - 灌 sales 演示数据：`./seed-sales.sh`。可以重复执行，结果不变。
 - 完整演练：在仓库根目录运行 `scripts/verify.sh deploy`。它用另一组端口和一套全新的数据，不会动你的本地数据。
 
@@ -33,7 +33,7 @@ cd deploy/local && docker compose ps
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-主机按名字取密钥（ADR-0014 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `mes-server` / `sales-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
+主机按名字取密钥（ADR-0014 D5）：名字 `openrouter` 对应环境变量 `PLATFORM_SECRET_OPENROUTER`。要加新的密钥名，就在 `compose.yaml` 的 `plant-server` / `sales-server` 的 `environment` 里加一行 `PLATFORM_SECRET_<名字大写>: "${变量:-}"`，再把变量写进 `.env`。
 
 ## 地址
 
@@ -41,7 +41,7 @@ OPENROUTER_API_KEY=sk-or-...
 |---|---|---|
 | 身份认证 Rauthy | http://localhost:8480/auth/v1/ | OIDC 签发方；管理后台是 http://localhost:8480/auth/v1/admin |
 | **工作台（Sales 主机，租户 `hotel-a`）** | http://localhost:8495 | 登录一次，按角色打开 CRM、酒店、HR、设置、收件箱，不用换页面 |
-| **工作台（MES 主机，租户 `plant-sz`）** | http://localhost:8490 | 同一个工作台，显示工厂的应用 |
+| **工作台（工厂主机 plant-server，租户 `plant-sz`）** | http://localhost:8490 | 同一个工作台，显示工厂的应用：MES 和 ERP。日志为空时（第一次启动）主机给 ERP 建好科目、打开本月期间、建好钢材和两种产品 |
 | webhook-sink | http://localhost:8497 | 本地的外部系统替身：webhook 接收方、ERP、邮件服务器、本地模型 |
 | PostgreSQL | `localhost:5433`，库 `platform`，用户 `platform`，密码 `platform-local-only` | 两个租户的日志表 `journal` |
 
@@ -81,7 +81,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 
 - 本地 Rauthy 走 HTTP，所以 `rauthy/config.toml` 里设了 `[access] cookie_mode = 'danger-insecure'`：不设的话，Safari 会丢掉 Rauthy 的安全 cookie，浏览器登录会显示密码错误（密码其实是对的）。只用于本地。
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
-- 成员名单来自 `mes/directory.json` 和 `sales/directory.json`。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
+- 成员名单来自 `plant/directory.json` 和 `sales/directory.json`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
 
 ## 服务账号与 AI 代理（client credentials）
 
@@ -90,8 +90,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 | client_id | 密钥 | 成员 | 用途 |
 |---|---|---|---|
 | `mes-gateway` | `gatewayLocalOnly000000000000000000000000000000000000000000000000` | `gateway-l1` | 产线网关，推送设备状态（`cmd/gateway-sim`） |
-| `mes-erp` | `erpLocalOnly0000000000000000000000000000000000000000000000000000` | `erp` | ERP 计划订单轮询 |
-| `mes-assistant` | `assistantLocalOnly0000000000000000000000000000000000000000000000` | `agent-l1` | **AI 代理**：产线 L1 的助手；它做的不可撤回外发要人批准（D6） |
+| `mes-assistant` | `assistantLocalOnly0000000000000000000000000000000000000000000000` | `agent-l1` | **AI 代理**：产线 L1 的助手；它做的不可撤回外发要人批准（D6）；它在 ERP 没有角色，所以 ERP 会拒绝它发起的确认 |
 | `platform-cli` | `cliLocalOnly0000000000000000000000000000000000000000000000000000` | — | 脚本用密码模式为人员换令牌（`rehearse.sh`、`seed-sales.sh`） |
 
 以 AI 助手身份操作：
@@ -100,7 +99,7 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 cd apps/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 go run ./cmd/mes-agent -server http://localhost:8490 -oidc-token http://localhost:8480/auth/v1/oidc/token actions
 ```
 
-把末尾的 `actions` 换成 `do <动作> <目标> '<JSON>'` 就是执行动作，例如 `do mes.order.reconfirm WO-3 '{"planned":"PO-9001"}'`。
+把末尾的 `actions` 换成 `do <动作> <目标> '<JSON>'` 就是执行动作，例如 `do mes.downtime.reason <停机 ID> '{"reason":"Setup"}'`。
 
 ## 开发令牌（不登录的演示模式）
 
@@ -108,7 +107,7 @@ cd apps/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=
 - sales：`manager`、`sales`、`sales-only`、`desk`
 - MES：`supervisor`、`operator-l1`、`operator-l2`、`quality-1`、`quality-2`、`gateway-l1`、`erp`、`assistant-l1`（AI 代理）
 
-开发令牌的主机不占 Docker 的端口：在 `solutions/sales` 下运行 `go run ./cmd/sales-server -addr 127.0.0.1:8496`，或在 `apps/manufacturing/server` 下运行 `go run ./cmd/mes-server -addr 127.0.0.1:8491`，再用启动配置 `workspace` / `workspace-plant` 打开工作台，右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
+开发令牌的主机不占 Docker 的端口：在 `solutions/sales` 下运行 `go run ./cmd/sales-server -addr 127.0.0.1:8496`，或在 `solutions/plant` 下运行 `go run ./cmd/plant-server`（端口 8491，MES 和 ERP，开发令牌见路线 15），再用启动配置 `workspace` / `workspace-plant` 打开工作台，右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。开发主机只在内存里，停掉数据就没了。
 
 ## 接入外部系统时填什么
 
@@ -119,9 +118,8 @@ cd apps/manufacturing/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=
 | 用途 | URL | 密钥名 | 勾选 |
 |---|---|---|---|
 | 通用 webhook | `http://webhook-sink:8080/hook` | `sink` | 勾"内部地址"；事件任选，如 `lodging.booking/1#canceled` |
-| ERP 确认回写（MES） | `http://webhook-sink:8080/erp` | `sink` | 勾"内部地址"；外发类型 `mes/erp-confirmation` |
 
-sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。ERP 替身在确认里没写计划订单时返回 422，用来测试 ERP 拒绝和纠正。
+sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。工厂的 ERP 是同一主机里的 ERP 应用，不需要接收地址；接外部 ERP 见路线 16。
 
 **邮件接收地址**（Integrations → Add endpoint → Email）
 
@@ -157,12 +155,12 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
 
 ## 常用测试路线
 
-1. **ERP 回写、纠正、D6 批准、邮件**（MES，`sup@plant.test`）：
-   1. 添加 ERP 和邮件两个接收地址；
-   2. 在 MES 下达一张不带计划订单的订单，`op1` 做完三道工序；
-   3. ERP 会拒绝，主管收到通知和邮件；
-   4. 在计划订单页"Correct and resend"，或者用 AI 助手执行 `mes.order.reconfirm`；
-   5. 助手重发的那条外发会被扣住，在 Integrations 批准后 ERP 确认。
+1. **ERP 确认、纠正、邮件**（工厂主机，`sup@plant.test`，ADR-0024）：
+   1. 添加邮件接收地址；在 ERP → 生产订单新建一张 P-100、数量 1 的订单并"下达"；
+   2. 在 MES 下达一张不带计划订单的车间订单，`op1` 做完三道工序；
+   3. 工厂立刻拒绝确认（没有计划订单），主管收到通知和邮件；
+   4. 在计划订单页"Correct and resend"，选刚才下达的 ERP 生产订单，ERP 确认，车间订单上显示凭证号 `MJ/…`；
+   5. 如果让 AI 助手执行 `mes.order.reconfirm`，ERP 会拒绝（助手在 ERP 没有角色），要主管自己重发。
 2. **协议与供应商切换**（Sales，`manager@hotel.test`）：
    1. 用 CRM 订房（走 lodging 协议）；
    2. 在 Protocols 把供应商从 hotel 切到 memstay 后再订一次；
@@ -180,8 +178,8 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
    工厂那边：订单最后一个 SFC 完成后，"ERP 确认"流程自动发确认；ERP 拒绝时主管收件箱里会有"修正并重发"的任务，重发后任务自动关闭。
 6. **智能体**（MES，`sup@plant.test`）：
    1. 先在设置里给智能体选一个模型：App settings → Agents → "Model for agents"，填一个已启用、支持工具调用的模型，比如 `openrouter/<某个支持 tools 的模型>`，或者本地替身 `local/echo`（先在 AI → Providers 添加 local，地址 `http://webhook-sink:8080/v1`，再启用 echo）；
-   2. 下达一张不带计划订单的订单（比如 P-200，数量 8），让操作员把 SFC 做完；
-   3. ERP 拒绝后，"ERP 确认"流程让工厂的智能体去找对应的计划订单，主管收件箱会出现"Resend WO-x to the ERP against PO-xxxx?"，选 resend 后流程重发、ERP 确认；
+   2. 先在 ERP 下达一张 P-200、数量 8 的生产订单；再在 MES 下达一张不带计划订单的车间订单（P-200，数量 8），让 `op2` 把 SFC 做完；
+   3. 工厂拒绝后，"ERP 确认"流程让工厂的智能体去找对应的计划订单，主管收件箱会出现"Resend WO-x to the ERP against MO-x?"，选 resend 后流程重发、ERP 确认；
    4. 智能体每一步（调用了什么工具、理由、结果、用了多少 token）记在它的运行记录上：设置 → Processes → Agents 下面的 Runs，点开能看到每一步和理由；主管在收件箱的回答（接受或自己改）也记在上面，作为以后评估的依据。没设模型时，智能体会停下，主管自己改。
    5. 手工纠正时，计划订单必须对得上：同一产品、数量够、没被别的订单占用，否则会被拒绝（目前只显示 invalid argument，原因见工作队列 F-23）。
 7. **帮助台**（Sales，`manager@hotel.test`，他是帮助台 lead）：
@@ -204,7 +202,7 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
     2. Sales（`manager@hotel.test`）：按上面把 `helpdesk.triage` 发布出去，用 curl 或任一 A2A 客户端发一条 `SendMessage`，任务完成后返回分诊结果；它以调用者的权限直接行动，外发的邮件照样要人批准。
 11. **多语言**（任一主机，ADR-0023）：右上角头像菜单 → 语言 → 简体中文，页面会重新加载：导航、按钮、列表、记录页、设置，以及各应用的实体、字段、状态、动作名称都变成中文（记录内容是谁写的就是什么语言，不翻译）；在记录上"问助手"，智能体会用中文写理由和结果（需要真实模型，本地替身 echo 不会说中文）。切回 English 同样在这个菜单。你选的语言会存成你自己的偏好，换浏览器登录也一样；管理员可以在 App settings → Settings 设"Default language"（如 `zh-CN`）作为租户默认。通知、收件箱任务、审批和邮件也会按读者的语言显示（应用写的英文按词典里的句式翻译）。
     术语表：设置 → 知识 → 术语表 → 新建术语，比如术语 `单子`，含义"销售对商机的叫法"，指向 `crm.opportunity`；之后在搜索里输入"单子 年度"会只在商机里找"年度"，智能体的提示词里也会带上这些术语。术语只能指向已有的实体、字段或动作，不会改变它们本身。
-12. **重启与恢复**：`docker compose restart mes-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
+12. **重启与恢复**：`docker compose restart plant-server sales-server` 之后数据都在（日志重放）。已送达的 webhook 和邮件不会重发。
 13. **新建一个应用**（不需要 Docker，按 `docs/Apps.md`，ADR-0023）：
     1. 在 `capabilities/server` 运行 `go run ./cmd/new-app -id purchasing -entity request -title "Purchase request" -zh 采购申请 -app-title Purchasing -app-zh 采购`，它会写好 `apps/purchasing/server`（实体、动作、审核流程、中文词典、测试、开发主机）和 `web/packages/purchasing`（界面，已登记到工作台）；
     2. `cd apps/purchasing/server && go test ./...` 应该直接通过；
@@ -222,5 +220,10 @@ sink 收到的 webhook 和 ERP 确认号在 http://localhost:8497/received 查�
     1. `pnpm --dir web/apps/workspace build`，再在 `solutions/plant` 运行 `go run ./cmd/plant-server -web ../../web/apps/workspace/dist`，打开 `http://127.0.0.1:8491`，用令牌 `supervisor` 登录（他同时是 ERP 的主管会计）；ERP 已经有科目、本月期间、钢材 M-STEEL 和两种产品（P-100 泵壳每件用 2 kg 钢）；
     2. ERP → 生产订单 → 新建：产品 P-100、数量 2，保存后打开点"下达"，得到 `MO/2026/00001`；
     3. 工厂 → 下达车间订单：产品 P-100、数量 2，计划订单填 `MO-…`（ERP 生产订单的 ID）；超过计划数量或草稿状态的订单会被拒绝；
-    4. 用 `operator-l1` 登录，把 SFC 依次在 FURNACE-1、CNC-11、CMM-1 开工、完工；订单完成后，确认流程通过协议 `production.orders/1` 直接报给 ERP：工厂订单上显示"已确认 MO/2026/00001"，ERP 的生产订单变为已确认，记下车间订单和产出；
+    4. 用 `operator-l1` 登录，把 SFC 依次在 FURNACE-1、CNC-11、CMM-1 开工、完工；订单完成后，确认流程通过协议 `production.orders/1` 直接报给 ERP：工厂订单上显示"已确认 MJ/2026/00001"（ERP 生产日记账的凭证号），ERP 的生产订单变为已确认，记下车间订单和产出；
     5. ERP 里看结果：现存量里钢材减少、P-100 增加；试算平衡表里原材料转入生产成本再转入库存商品，差额计入生产差异；如果 ERP 的期间已关账，工厂会立刻收到"ERP refused"，重新打开期间后主管在工厂订单上"重新发送"即可。
+16. **外部 ERP 适配器**（不需要 Docker，ADR-0024 7d）：工厂接 SAP 这类外部 ERP 时，把 ERP 应用换成适配器 `erplink`，工厂这边完全不变：
+    1. 先起 Docker（用它的 sink 当外部 ERP），再在 `solutions/plant` 运行 `PLATFORM_SECRET_SINK=sinkLocalOnly0000000000000000000000000000000000000000000000000000 go run ./cmd/plant-server -erp external -web ../../web/apps/workspace/dist`；
+    2. 外部 ERP 的轮询程序用令牌 `erp` 送一页计划订单：`curl -H 'Authorization: Bearer erp' http://127.0.0.1:8491/v1/connectors/planned-orders -d '{"cursorTo":"p1","orders":[{"id":"PO-9001","product":"P-100","quantity":2}]}'`；同一页再送一次会被拒绝；
+    3. 用 `supervisor` 登录，Integrations 添加 Webhook 接收地址 `http://127.0.0.1:8497/hook`，密钥名 `sink`，勾"内部地址"，外发类型勾 `erplink/confirmation`（sink 收下就算 ERP 确认，但不给确认号）；
+    4. 按 PO-9001 下达车间订单并做完：工厂订单先显示"已发送"，ERP 回复后变成"已确认"；ERP 拒绝或送不到时（`POST http://127.0.0.1:8497/fail?on=true`，等重试用完）变成"失败"，主管收到通知，可以纠正后重发；ERP 订单在 ERP link → ERP 订单里能看到每次发送和回复。

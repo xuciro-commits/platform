@@ -14,7 +14,7 @@ func Actions() *platform.Catalog {
 	}
 	return platform.NewCatalog(append(append([]platform.Action{
 		{Schema: SchemaRelease, Target: OrderType, Capability: "orders", Title: "Release shop order",
-			Description: "Release a shop order for a product; it splits into SFCs that start at the routing's first operation. Name the ERP planned order it fulfils, with that claim as evidence.",
+			Description: "Release a shop order for a product; it splits into SFCs that start at the routing's first operation. Name the ERP planned order it fulfils.",
 			Payload: []platform.Field{{Name: "product", Type: "string", Required: true, Description: "Product ID"},
 				{Name: "quantity", Type: "integer", Required: true, Description: "Units to make"},
 				{Name: "sfcs", Type: "integer", Required: true, Description: "Number of SFCs (lots), at most the quantity"},
@@ -27,6 +27,9 @@ func Actions() *platform.Catalog {
 			Roles:       roles(Supervisor, Operator, Assistant)},
 		platform.Action{Schema: SchemaConfirm, Target: OrderType, Capability: "orders", Title: "Confirm order to the ERP",
 			Description: "Confirm a completed order's yield and scrap to the ERP; the plant's confirmation flow does it when the order's last SFC ends.",
+			Payload:     []platform.Field{}, Roles: roles(Supervisor)},
+		platform.Action{Schema: SchemaAnswer, Target: OrderType, Capability: "orders", Title: "Record the ERP's answer",
+			Description: "Record on a sent order how the ERP answered its confirmation; the plant's confirmation flow does it when the ERP's answer comes.",
 			Payload:     []platform.Field{}, Roles: roles(Supervisor)},
 		platform.Action{Schema: SchemaResend, Target: OrderType, Capability: "orders", Title: "Resend confirmation to the ERP",
 			Description: "Correct an order whose confirmation the ERP refused, or that never arrived, and confirm it again: name the ERP planned order it fulfils when that was missing or wrong.",

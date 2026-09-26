@@ -2,7 +2,10 @@
 // ERP provides and a plant consumes, without either knowing the other. It
 // follows ISA-95 and SAP's integration of production orders with an MES: the
 // ERP releases orders for the plant to execute and receives confirmations of
-// what was made (yield) and lost (scrap), accepting or refusing each.
+// what was made (yield) and lost (scrap), accepting or refusing each. A
+// provider that decides at once (the ERP app) confirms or refuses in the
+// consumer's decision; one that asks an ERP outside (the adapter, 7d) takes the
+// confirmation as sent and shows the ERP's answer on the order when it comes.
 package production
 
 import "platformserver/platform"
@@ -16,7 +19,18 @@ type Order struct {
 	Product  string  `json:"product"`
 	Quantity float64 `json:"quantity"`
 	Due      string  `json:"due,omitempty"`
-	State    string  `json:"state"` // released: the plant may execute it; confirmed: done
+	// State: released, the plant may execute it; sent, a confirmation is on its
+	// way to the ERP; confirmed, done; refused or failed, the last confirmation
+	// was refused or never arrived, and the order may be confirmed again.
+	State        string `json:"state"`
+	ShopOrder    string `json:"shopOrder,omitempty"`    // the consumer's order its last confirmation named
+	Confirmation string `json:"confirmation,omitempty"` // the ERP's number for the confirmation
+	Detail       string `json:"detail,omitempty"`       // why it was refused or failed
+}
+
+// Answered reports whether the ERP has answered shop order's confirmation of o.
+func (o Order) Answered(shopOrder string) bool {
+	return o.ShopOrder == shopOrder && (o.State == "confirmed" || o.State == "refused" || o.State == "failed")
 }
 
 // Confirmation is the payload of confirm.

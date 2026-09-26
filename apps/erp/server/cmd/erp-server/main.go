@@ -30,9 +30,7 @@ func main() {
 		seat("buyer", "buyer-1", map[string]string{erp.ID: erp.Buyer}),
 	})
 	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), platformserver.NewWork("dev"), platformserver.NewFlows("dev"), erp.New("dev"))
-	if err == nil && deployment.Database == "" {
-		err = seed(t, time.Now())
-	}
+	deployment.Seed = seed
 	if err == nil {
 		err = deployment.Serve(t)
 	}

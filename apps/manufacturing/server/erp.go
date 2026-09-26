@@ -3,36 +3,18 @@ package mes
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/types/known/timestamppb"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
-// Writing back to the ERP (#101, ADR-0014): when the last SFC of an order is
+// Confirming to the ERP (#101, ADR-0024 7d): when the last SFC of an order is
 // done or scrapped, the plant confirms the order to the ERP, as SAP's production
-// order confirmation does. The plant never calls the ERP itself: it emits an
-// effect the host sends to the endpoint the tenant bound to it, at least once
-// with the order as key. The ERP's answer comes back as an observation on the
-// order, which the plant then acts on (D4).
-
-const EffectConfirmation = "erp-confirmation"
-
-// Confirmation is what the ERP receives.
-type Confirmation struct {
-	Order    string   `json:"order"`
-	Planned  string   `json:"planned,omitempty"` // the ERP's planned order it fulfils
-	Product  string   `json:"product"`
-	Quantity int      `json:"quantity"`
-	Yield    int      `json:"yield"`
-	Scrap    int      `json:"scrap"`
-	SFCs     []string `json:"sfcs"`
-}
+// order confirmation does, through production.orders/1 (production.go). A
+// refusal reaches the line's supervisors, and the confirmation flow asks them,
+// or the plant's agent, to correct and resend it.
 
 // finishOrder completes an order once all its SFCs have ended, in the decision
 // r that ended the last one; the confirmation flow then confirms it to the ERP.
@@ -60,23 +42,35 @@ func (p *Plant) confirmation() platform.Flow {
 		return []platform.Recipient{p.supervisorsOfOrder(order(c, r))}
 	}
 	id := func(_ platform.Caller, r *platform.Run) string { return r.Key }
+	verdict := func(c platform.Caller, r *platform.Run) (string, string) {
+		o := order(c, r)
+		if o.ERP == "confirmed" {
+			return "", "the ERP confirmed it as " + o.Confirmation
+		}
+		return "propose", "the ERP " + o.ERP + " it: " + o.ERPDetail
+	}
 	return platform.Flow{Name: "erp-confirmation", Title: "Confirm to the ERP", Version: 1, Owners: []string{string(Supervisor)},
 		Start: platform.Start{On: []string{SchemaComplete, SchemaSign}, Begin: func(c platform.Caller, e platform.Event) (string, any, bool) {
 			sfc, _ := platform.Get[SFC](c, e.Record.GetSubmission().GetTarget().GetId())
 			o, known := platform.Get[Order](c, string(sfc.Order))
-			return o.ID, nil, known && o.Status == "completed" && o.ERP == ""
+			_, erp := erpOrders(c)
+			return o.ID, nil, erp && known && o.Status == "completed" && o.ERP == ""
 		}},
 		Steps: []platform.Step{
 			{Name: "confirm", Title: "Confirm the order", Act: &platform.Act{Action: SchemaConfirm, Target: id}, Next: "answer"},
 			{Name: "answer", Title: "Wait for the ERP's answer", Timeout: time.Hour, OnTimeout: "silent",
-				Wait: &platform.Wait{Until: func(c platform.Caller, r *platform.Run) bool { e := order(c, r).ERP; return e != "" && e != "sent" }},
-				Choose: func(c platform.Caller, r *platform.Run) (string, string) {
+				Wait: &platform.Wait{Until: func(c platform.Caller, r *platform.Run) bool {
 					o := order(c, r)
-					if o.ERP == "confirmed" {
-						return "", "the ERP confirmed it as " + o.Confirmation
-					}
-					return "propose", "the ERP " + o.ERP + " it: " + o.ERPDetail
+					_, answered := awaited(c, o)
+					return answered || o.ERP != "" && o.ERP != "sent"
 				}},
+				Choose: func(c platform.Caller, r *platform.Run) (string, string) {
+					if order(c, r).ERP == "sent" {
+						return "record", "the ERP answered"
+					}
+					return verdict(c, r)
+				}},
+			{Name: "record", Title: "Record the ERP's answer", Act: &platform.Act{Action: SchemaAnswer, Target: id}, Choose: verdict},
 			// The plant's agent looks for the planned order the order fulfils
 			// (ADR-0021); a supervisor approves its proposal before it is resent.
 			// Stopped, or without a proposal, the supervisors correct it themselves.
@@ -149,103 +143,6 @@ func (p *Plant) confirmation() platform.Flow {
 		}}
 }
 
-// key names the order's current confirmation: the order, then "<order>#<n>"
-// for the n-th corrected one, so the ERP receives a correction as a new message.
-func (o *Order) key() string {
-	if o.Resent == 0 {
-		return o.ID
-	}
-	return fmt.Sprintf("%s#%d", o.ID, o.Resent+1)
-}
-
-// confirmed is what the order made and lost, by its SFCs.
-func (p *Plant) confirmed(who platform.Caller, o Order) Confirmation {
-	done := 0
-	var sfcs []string
-	for _, id := range o.SFCs {
-		sfcs = append(sfcs, string(id))
-		if s, _ := platform.Get[SFC](who, string(id)); s.State == "done" {
-			done++
-		}
-	}
-	yield := o.Quantity * done / len(o.SFCs)
-	return Confirmation{Order: o.ID, Planned: o.Planned, Product: o.Product, Quantity: o.Quantity, Yield: yield, Scrap: o.Quantity - yield, SFCs: sfcs}
-}
-
-// confirm emits the order's confirmation (#101) with its current key and
-// stores the order as changed by r.
-func (p *Plant) confirm(who platform.Caller, r *pb.ChangeRecord, o Order, now time.Time) {
-	c := p.confirmed(who, o)
-	if n, _ := who.Emit(EffectConfirmation, o.key(), OrderType+"/"+o.ID, c, now); n > 0 {
-		o.ERP = "sent"
-	}
-	who.Put(r, o)
-}
-
-type answer struct {
-	State        string `json:"state"` // confirmed, refused, failed
-	Confirmation string `json:"confirmation,omitempty"`
-	Detail       string `json:"detail,omitempty"`
-}
-
-// Answer records how the ERP answered as an observation on the order, with the
-// endpoint as provenance, and tells the line's supervisors when it was refused.
-// The answer to a confirmation since corrected is recorded, and changes nothing.
-func (p *Plant) Answer(c platform.Caller, e platform.Effect, o platform.Outcome, now time.Time) *kernel.Error {
-	if e.Event != "mes/"+EffectConfirmation { // a supplier's answer goes to the agent that asked
-		return nil
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	id, _, _ := strings.Cut(e.Key, "#")
-	order, known := platform.Get[Order](c, id)
-	if !known {
-		return notFound
-	}
-	a := answer{State: map[string]string{"delivered": "confirmed", "rejected": "refused"}[e.State], Detail: o.Detail}
-	if a.State == "" {
-		a.State = "failed"
-	}
-	var body struct {
-		Confirmation string `json:"confirmation"`
-		Error        string `json:"error"`
-	}
-	json.Unmarshal(o.Answer, &body)
-	a.Confirmation = body.Confirmation
-	if body.Error != "" {
-		a.Detail = body.Error
-	}
-	raw, _ := json.Marshal(a)
-	if _, err := p.facts.Record(&pb.Fact{TenantId: p.tenant, Kind: pb.FactKind_FACT_KIND_OBSERVATION,
-		Subject: &pb.EntityRef{Type: OrderType, Id: order.ID}, Attribute: "erp-confirmation",
-		Schema: &pb.SchemaRef{Name: schemaAnswer, Version: 1}, IdempotencyKey: e.ID + ":" + strconv.Itoa(e.Attempts), Payload: raw,
-		Provenance: &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: e.Endpoint}, SourceTime: timestamppb.New(now)}}, now); err != nil {
-		return err
-	}
-	if e.Key != order.key() {
-		return nil
-	}
-	order.ERP, order.Confirmation, order.ERPDetail = a.State, a.Confirmation, a.Detail
-	c.PutAt(now, "erp answer", order)
-	if a.State != "confirmed" {
-		c.Notify(platform.Notification{Title: fmt.Sprintf("ERP %s the confirmation of %s", a.State, order.ID), Body: a.Detail,
-			Ref: OrderType + "/" + order.ID, Key: "erp:" + e.ID + ":" + strconv.Itoa(e.Attempts)}, now, p.supervisorsOfOrder(order))
-	}
-	return nil
-}
-
-// fulfilled are the planned orders shop orders fulfil.
-func (p *Plant) fulfilled(c platform.Caller) []string {
-	orders, _, _ := platform.Find[Order](c, platform.Query{Sort: []string{"id"}})
-	var out []string
-	for _, o := range orders {
-		if o.Planned != "" {
-			out = append(out, o.Planned)
-		}
-	}
-	return out
-}
-
 // fixer is the plant's agent for refused confirmations (ADR-0021): it reads the
 // planned orders and proposes the one the order fulfils; it takes no action,
 // the flow asks a supervisor.
@@ -270,40 +167,6 @@ func (p *Plant) supervisorsOfOrder(o Order) platform.Recipient {
 func (p *Plant) orderLine(o Order) string {
 	if prod := p.product(o.Product); prod != nil && len(prod.Operations) > 0 {
 		return p.workCenter(prod.Operations[0].WorkCenter).Line
-	}
-	return ""
-}
-
-// fits says why an order cannot fulfil planned order id, or "" when it can: the
-// ERP sent it (its claim is on record, the latest one counts), for the same
-// product and at least the quantity, and no other order fulfils it.
-func (p *Plant) fits(c platform.Caller, o Order, id string) string {
-	var planned *PlannedOrder
-	if e, ok := erpOrder(c, id); ok { // the ERP app's (production.orders/1)
-		if e.State != "released" {
-			return id + " is " + e.State + ", not released"
-		}
-		planned = &PlannedOrder{ERPID: e.ID, Product: e.Product, Quantity: int(e.Quantity), Due: e.Due}
-	}
-	for _, r := range p.facts.Records(p.tenant) {
-		if f := r.GetFact(); f.GetSchema().GetName() == schemaPlanned && f.GetSubject().GetId() == id {
-			planned = &PlannedOrder{}
-			json.Unmarshal(f.GetPayload(), planned)
-		}
-	}
-	switch {
-	case planned == nil:
-		return "the ERP sent no planned order " + id
-	case planned.Product != o.Product:
-		return fmt.Sprintf("%s is for %s, not %s", id, planned.Product, o.Product)
-	case planned.Quantity < o.Quantity:
-		return fmt.Sprintf("%s is for %d, fewer than %d", id, planned.Quantity, o.Quantity)
-	}
-	others, _, _ := platform.Find[Order](c, platform.Query{Domain: json.RawMessage(`[["planned","=",` + strconv.Quote(id) + `]]`)})
-	for _, other := range others {
-		if other.ID != o.ID {
-			return other.ID + " already fulfils " + id
-		}
 	}
 	return ""
 }

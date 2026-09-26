@@ -170,7 +170,9 @@ func productionOrders(c platform.Caller) []production.Order {
 	out := []production.Order{}
 	for _, o := range platform.Records[Production](c) {
 		if o.State == "released" || o.State == "confirmed" {
-			out = append(out, production.Order{ID: o.ID, Number: o.Number, Product: string(o.Product), Quantity: o.Quantity, Due: o.Due, State: o.State})
+			entry, _ := platform.Get[Entry](c, o.ID+"-C") // the confirmation's posting: its number answers the plant
+			out = append(out, production.Order{ID: o.ID, Number: o.Number, Product: string(o.Product), Quantity: o.Quantity, Due: o.Due, State: o.State,
+				ShopOrder: o.ShopOrder, Confirmation: entry.Number})
 		}
 	}
 	return out

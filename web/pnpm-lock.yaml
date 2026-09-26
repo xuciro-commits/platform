@@ -260,6 +260,9 @@ importers:
       '@pkg/erp':
         specifier: workspace:*
         version: link:../../packages/erp
+      '@pkg/erplink':
+        specifier: workspace:*
+        version: link:../../packages/erplink
       '@pkg/helpdesk':
         specifier: workspace:*
         version: link:../../packages/helpdesk
@@ -379,6 +382,31 @@ importers:
         version: 7.0.2
 
   packages/erp:
+    dependencies:
+      '@platform/app':
+        specifier: workspace:*
+        version: link:../app
+      '@platform/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@platform/ui':
+        specifier: workspace:*
+        version: link:../ui
+      lucide-react:
+        specifier: ^1.47.0
+        version: 1.47.0(react@19.3.0)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+    devDependencies:
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/erplink:
     dependencies:
       '@platform/app':
         specifier: workspace:*

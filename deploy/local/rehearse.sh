@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Operations rehearsal for the manufacturing slice (docs/WorkQueue.md #87,
+# Operations rehearsal for the plant and sales solutions (docs/WorkQueue.md #87,
 # Platform.md §7): principals from Rauthy, state that survives a restart, and a
 # PostgreSQL backup restored into a new volume. Runs a disposable compose
 # project on its own ports and removes it afterwards. Needs docker, curl, jq.
 set -euo pipefail
 cd "$(dirname "$0")"
-export PG_PORT=55433 IDP_PORT=58480 MES_PORT=58490 SALES_PORT=58495 SINK_PORT=58497
+export PG_PORT=55433 IDP_PORT=58480 PLANT_PORT=58490 SALES_PORT=58495 SINK_PORT=58497
 compose() { docker compose -p platform-rehearsal -f compose.yaml "$@"; }
-IDP=http://localhost:$IDP_PORT/auth/v1 MES=http://localhost:$MES_PORT SALES=http://localhost:$SALES_PORT SINK=http://localhost:$SINK_PORT
+IDP=http://localhost:$IDP_PORT/auth/v1 PLANT=http://localhost:$PLANT_PORT SALES=http://localhost:$SALES_PORT SINK=http://localhost:$SINK_PORT
 backup=$(mktemp -d)
 trap 'compose down -v --remove-orphans >/dev/null 2>&1; rm -rf "$backup"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -15,7 +15,7 @@ wait_for() { for _ in $(seq 60); do curl -sf -o /dev/null "$1" && return; sleep 
 
 compose down -v --remove-orphans >/dev/null 2>&1 || true
 pnpm --dir ../../web/apps/workspace build >/dev/null # served by both hosts (ADR-0018)
-compose up -d --build --quiet-pull >/dev/null 2>&1
+compose up -d --build --quiet-pull >"$backup/up.log" 2>&1 || { tail -n 30 "$backup/up.log" >&2; fail "compose up"; }
 wait_for "$IDP/.well-known/openid-configuration"
 [[ $(curl -s "$IDP/.well-known/openid-configuration" | jq -r .issuer) == "http://localhost:$IDP_PORT/auth/v1/" ]] || fail "issuer"
 
@@ -25,14 +25,14 @@ token() { # user → access token (password grant on the operations client)
     -d username="$1" -d password=Plant-Local-1 | jq -r .access_token
 }
 SUP=$(token sup@plant.test) OP1=$(token op1@plant.test) OP2=$(token op2@plant.test)
-code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" "$MES/v1/me"; }
+code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" "$PLANT/v1/me"; }
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
-[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/me" | jq -r .principalId) == sup-1 ]] || fail "OIDC principal"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/me" | jq -r .principalId) == sup-1 ]] || fail "OIDC principal"
 [[ $(code supervisor) == 401 ]] || fail "demo token accepted in production mode"
 # One workspace per host (ADR-0018): the page, how to sign in, and the apps a member may open.
-curl -s "$MES/" | grep -q "<title>Workspace</title>" || fail "workspace page"
+curl -s "$PLANT/" | grep -q "<title>Workspace</title>" || fail "workspace page"
 [[ $(curl -s "$SALES/v1/sign-in" | jq -cS .) == "{\"client\":\"platform-web\",\"issuer\":\"$IDP/\"}" ]] || fail "sign-in: $(curl -s "$SALES/v1/sign-in")"
-[[ $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/me" | jq -c '[.apps[].id]') == '["ai","mes"]' ]] || fail "apps of op1: $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/me" | jq -c '[.apps[].id]')"
+[[ $(curl -s -H "Authorization: Bearer $OP1" "$PLANT/v1/me" | jq -c '[.apps[].id]') == '["ai","mes"]' ]] || fail "apps of op1: $(curl -s -H "Authorization: Bearer $OP1" "$PLANT/v1/me" | jq -c '[.apps[].id]')"
 echo "ok   workspace: served by the host; one client signs in for every app; a member sees the apps they hold a role in"
 IFS=. read -r head claims sig <<<"$OP2"
 while (( ${#claims} % 4 )); do claims+="="; done
@@ -43,7 +43,7 @@ echo "ok   principals come from Rauthy (demo tokens and forged claims refused)"
 
 submit() { # token key schema target-type target-id payload [expected-revision]
   local body who
-  local server=${SERVER:-$MES}
+  local server=${SERVER:-$PLANT}
   who=$(curl -s -H "Authorization: Bearer $1" "$server/v1/me" | jq -r .principalId)
   body=$(jq -n --arg w "$who" --arg k "$2" --arg s "$3" --arg tt "$4" --arg ti "$5" --arg p "$(printf %s "$6" | base64)" --arg r "${7:-}" \
     --arg e "${EVIDENCE:-}" --arg tenant "${TENANT:-plant-sz}" --arg authority "${AUTHORITY:-plant-server}" \
@@ -53,41 +53,50 @@ submit() { # token key schema target-type target-id payload [expected-revision]
      + (if $e == "" then {} else {evidenceFactIds:[$e]} end)')
   curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$server/v1/submissions" -d "$body"
 }
-state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500" downtime planned-orders notifications; do curl -s -H "Authorization: Bearer $SUP" "$MES/v1/$path"; done
-  curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -c '[.[] | {id, disabled}]'
-  curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage" | jq -c '.totals'
+state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500" downtime planned-orders notifications "records/erp.production?limit=500" trial-balance; do curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/$path"; done
+  curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/connectors" | jq -c '[.[] | {id, disabled}]'
+  curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/ai-usage" | jq -c '.totals'
   for path in customers records/hotel.reservation records/hotel.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1 records/hr.leave records/work.approval; do curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/$path"; done
   curl -s -H "Authorization: Bearer $MGR" "$SALES/v1/protocols" | jq -c '[.[] | {id, bound}]'; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
 
-# Inputs of every kind the journal keeps: a poll page, decisions, a push batch.
+# Inputs of every kind the journal keeps: decisions and a push batch.
 (cd ../../apps/manufacturing/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
-  MES_ERP_SECRET=erpLocalOnly0000000000000000000000000000000000000000000000000000 \
-  go run ./cmd/gateway-sim -server "$MES" -oidc-token "$IDP/oidc/token" -batches 4 -every 200ms >/dev/null)
+  go run ./cmd/gateway-sim -server "$PLANT" -oidc-token "$IDP/oidc/token" -batches 4 -every 200ms >/dev/null)
 submit "$SUP" r-1 mes.order.release mes.order WO-1 '{"product":"P-100","quantity":2,"sfcs":2}' | jq -e .record >/dev/null || fail release
 
 # Platform operations (ADR-0013): the gateway's downtime reached the supervisor
-# of the line, not its operators; Settings disables the ERP connector, and that
-# is a decision the restart below keeps.
-curl -s -H "Authorization: Bearer $SUP" "$MES/v1/notifications" | jq -e 'any(.[]; .title | startswith("Downtime on"))' >/dev/null || fail "supervisor not notified"
-[[ $(curl -s -H "Authorization: Bearer $OP1" "$MES/v1/notifications" | jq length) == 0 ]] || fail "operator notified"
-AUTHORITY=platform submit "$SUP" o-1 platform.connector.disable platform.connector erp '{}' | jq -e .record >/dev/null || fail "disable connector"
-[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/connectors" | jq -r '.[] | select(.id == "erp") | .health') == disabled ]] || fail "connector health"
-# ERP write-back (#101): the plant's order confirmation goes to the ERP endpoint
-# the administrator bound; the ERP's number comes back as an observation.
-AUTHORITY=platform submit "$SUP" o-2 platform.endpoint.add platform.endpoint erp-api \
-  '{"url":"http://webhook-sink:8080/erp","secret":"sink","effects":["mes/erp-confirmation"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "bind ERP endpoint"
-claim=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/planned-orders" | jq -r '.[] | select(.erpId == "PO-9003") | .factId')
-EVIDENCE=$claim submit "$SUP" r-2 mes.order.release mes.order WO-2 '{"product":"P-100","quantity":12,"sfcs":1,"planned":"PO-9003"}' | jq -e .record >/dev/null || fail "release WO-2"
+# of the line, not its operators; Settings disables the gateway's connector, and
+# that is a decision the restart below keeps.
+curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/notifications" | jq -e 'any(.[]; .title | startswith("Downtime on"))' >/dev/null || fail "supervisor not notified"
+[[ $(curl -s -H "Authorization: Bearer $OP1" "$PLANT/v1/notifications" | jq length) == 0 ]] || fail "operator notified"
+AUTHORITY=platform submit "$SUP" o-1 platform.connector.disable platform.connector gateway-l1 '{}' | jq -e .record >/dev/null || fail "disable connector"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/connectors" | jq -r '.[] | select(.id == "gateway-l1") | .health') == disabled ]] || fail "connector health"
+# The ERP (ADR-0024): the plant host seeded its books when its journal was
+# empty. The ERP releases production orders; the plant makes WO-2 against MO-1,
+# its confirmation flow confirms it through production.orders/1, and the ERP
+# posts the cost with a number from the production journal.
+erp() { AUTHORITY=erp submit "$SUP" "$@" | jq -e .record >/dev/null || fail "ERP: $*"; }
+erp e-1 erp.production.create erp.production MO-1 '{"product":"P-100","quantity":12}'
+erp e-2 erp.production.release erp.production MO-1 '{}'
+erp e-3 erp.production.create erp.production MO-2 '{"product":"P-200","quantity":8}'
+erp e-4 erp.production.release erp.production MO-2 '{}'
+erp e-5 erp.production.create erp.production MO-3 '{"product":"P-100","quantity":1}'
+erp e-6 erp.production.release erp.production MO-3 '{}'
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/planned-orders" | jq -r '[.[].number] | join(" ")') == MO/????/00001" "MO/????/00002" "MO/????/00003 ]] || fail "planned orders: $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/planned-orders")"
+submit "$SUP" r-2 mes.order.release mes.order WO-2 '{"product":"P-100","quantity":12,"sfcs":1,"planned":"MO-1"}' | jq -e .record >/dev/null || fail "release WO-2"
 rev=0
 for resource in FURNACE-1 CNC-11 CMM-1; do
   submit "$OP1" "w2-s$rev" mes.sfc.start mes.sfc WO-2-001 "{\"resource\":\"$resource\"}" $rev | jq -e .record >/dev/null || fail "start WO-2 at $resource"
   submit "$OP1" "w2-c$rev" mes.sfc.complete mes.sfc WO-2-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-2 at $resource"
   rev=$((rev + 2))
 done
-for _ in $(seq 20); do [[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -r '.records[] | select(.id == "WO-2") | .erp') == confirmed ]] && break; sleep 0.5; done
-[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -r '.records[] | select(.id == "WO-2") | .erp + " " + .confirmation') == "confirmed CONF-100001" ]] || fail "ERP write-back: $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -c '.records[] | select(.id == "WO-2")')"
-echo "ok   operations: downtime notified to the line's supervisor only; ERP connector disabled from Settings; a finished order confirmed to the ERP, its number back on the order"
+wo() { curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/records/mes.order/$1" | jq -r '.record | .erp + " " + (.confirmation // .erpDetail // "") + " " + (.planned // "")'; }
+for _ in $(seq 20); do [[ $(wo WO-2) == confirmed* ]] && break; sleep 0.5; done
+[[ $(wo WO-2) == "confirmed MJ/"????"/00001 MO-1" ]] || fail "WO-2 through the protocol: $(wo WO-2)"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/records/erp.production/MO-1" | jq -r '.record | .state + " " + .shopOrder + " " + (.yield | tostring)') == "confirmed WO-2 12" ]] || fail "the ERP's MO-1"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/trial-balance" | jq -r '[.[] | select(.account == "1405") | .balance][0]') == 14400 ]] || fail "finished goods in the books: $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/trial-balance")"
+echo "ok   operations: downtime notified to the line's supervisor only; the gateway's connector disabled from Settings; the ERP's production order made by the plant, confirmed through the protocol and posted"
 submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | jq -e .record >/dev/null || fail start
 [[ $(submit "$OP2" s-2 mes.sfc.start mes.sfc WO-1-002 '{"resource":"FURNACE-1"}' 0 | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "line policy"
 
@@ -95,9 +104,9 @@ submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | 
 # may call, and the server refuses the rest even when the adapter is bypassed.
 agent() { (cd ../../apps/manufacturing/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
-  go run ./cmd/mes-agent -server "$MES" -oidc-token "$IDP/oidc/token" "$@"); }
+  go run ./cmd/mes-agent -server "$PLANT" -oidc-token "$IDP/oidc/token" "$@"); }
 [[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") | not)]') == '["platform.member.language","platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
-event=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
+event=$(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"
 AGENT=$(curl -sf "$IDP/oidc/token" -d grant_type=client_credentials -d client_id=mes-assistant \
@@ -105,11 +114,12 @@ AGENT=$(curl -sf "$IDP/oidc/token" -d grant_type=client_credentials -d client_id
 [[ $(submit "$AGENT" a-1 mes.order.release mes.order WO-9 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "server let the assistant release"
 echo "ok   AI assistant: catalog of one plant action (and its own notifications), acted within line L1, refused outside it"
 
-# An order the ERP refuses (no planned order) is corrected by the assistant. The
-# posting cannot be recalled and an AI agent caused it, so it waits for a
-# person (ADR-0014 D6); the supervisor approves, and the ERP confirms it.
-# Email (ADR-0014 D7): the plant's and the platform's notifications are mailed
-# to members who sign in with an email address, through the sink's SMTP server.
+# An order released without a planned order is refused at once. The line's AI
+# assistant resends it against MO-3, but it holds no role in the ERP, so the ERP
+# refuses it too: an agent acts within its own grants in every app. The
+# supervisor resends it and the ERP confirms it. Email (ADR-0014 D7): the
+# plant's and the platform's notifications are mailed to members who sign in
+# with an email address, through the sink's SMTP server.
 AUTHORITY=platform submit "$SUP" o-3 platform.endpoint.add platform.endpoint mail \
   '{"kind":"email","url":"smtp://webhook-sink:2525","from":"plant@plant.test","notifications":["mes","platform"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "add email endpoint"
 submit "$SUP" r-3 mes.order.release mes.order WO-3 '{"product":"P-100","quantity":1,"sfcs":1}' | jq -e .record >/dev/null || fail "release WO-3"
@@ -119,39 +129,33 @@ for resource in FURNACE-1 CNC-11 CMM-1; do
   submit "$OP1" "w3-c$rev" mes.sfc.complete mes.sfc WO-3-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-3 at $resource"
   rev=$((rev + 2))
 done
-wo3() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -r '.records[] | select(.id == "WO-3") | .erp'; }
-for _ in $(seq 20); do [[ $(wo3) == refused ]] && break; sleep 0.5; done
-[[ $(wo3) == refused ]] || fail "ERP refusal of WO-3: $(wo3)"
-submit "$AGENT" a-2 mes.order.reconfirm mes.order WO-3 '{"planned":"PO-9001"}' | jq -e .record >/dev/null || fail "assistant resend"
-held=$(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/effects" | jq -r 'first(.[] | select(.key == "WO-3#2")) | .state + " " + .id')
-[[ ${held%% *} == held ]] || fail "the agent's ERP posting was not held: $held"
-sleep 1.5 && [[ $(wo3) == sent ]] || fail "a held effect was sent"
-[[ $(AUTHORITY=platform submit "$AGENT" a-3 platform.effect.approve platform.effect "${held#* }" '{}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "an agent approved"
-AUTHORITY=platform submit "$SUP" a-4 platform.effect.approve platform.effect "${held#* }" '{}' | jq -e .record >/dev/null || fail "approve"
-for _ in $(seq 20); do [[ $(wo3) == confirmed ]] && break; sleep 0.5; done
-[[ $(wo3) == confirmed ]] || fail "WO-3 after approval: $(wo3)"
+for _ in $(seq 20); do [[ $(wo WO-3) == refused* ]] && break; sleep 0.5; done
+[[ $(wo WO-3) == "refused no planned order to confirm against " ]] || fail "refusal of WO-3: $(wo WO-3)"
+submit "$AGENT" a-2 mes.order.reconfirm mes.order WO-3 '{"planned":"MO-3"}' | jq -e .record >/dev/null || fail "assistant resend"
+[[ $(wo WO-3) == "refused ERROR_CODE_POLICY_DENIED MO-3" ]] || fail "the ERP took the assistant's confirmation: $(wo WO-3)"
+submit "$SUP" a-3 mes.order.reconfirm mes.order WO-3 '{}' | jq -e .record >/dev/null || fail "supervisor resend"
+[[ $(wo WO-3) == "confirmed MJ/"????"/00002 MO-3" ]] || fail "WO-3 after the supervisor's resend: $(wo WO-3)"
 mailed() { curl -s "$SINK/mail" | jq -r '[.[] | select(.to == "sup@plant.test") | .subject] | join("|")'; }
-for _ in $(seq 20); do [[ $(mailed) == *"Approve Order confirmation"* ]] && break; sleep 0.5; done
-[[ $(mailed) == *"ERP refused the confirmation of WO-3"* && $(mailed) == *"Approve Order confirmation to the ERP for mes.order/WO-3"* ]] || fail "mail: $(curl -s "$SINK/mail")"
-echo "ok   ERP correction: a refused order resent by the AI assistant, held until the supervisor approved, then confirmed; the refusal and the approval request mailed to the supervisor"
-
+for _ in $(seq 20); do [[ $(mailed) == *"ERP refused the confirmation of WO-3"* ]] && break; sleep 0.5; done
+[[ $(mailed) == *"ERP refused the confirmation of WO-3"* ]] || fail "mail: $(curl -s "$SINK/mail")"
+echo "ok   ERP correction: a refused order resent by the AI assistant and refused by the ERP, where it holds no role, then resent by the supervisor and confirmed; the refusals mailed to the supervisor"
 
 # AI providers (ADR-0015): the plant's administrator adds a local model server
 # (the sink speaks the OpenAI wire) and opens a model to ai users; an operator
 # calls it through the host, the AI assistant (no ai role) is refused, and the
 # call's usage is journaled (compared again after the restart below).
 AUTHORITY=ai submit "$SUP" ai-1 ai.provider.add ai.provider local '{"kind":"local","baseUrl":"http://webhook-sink:8080/v1"}' | jq -e .record >/dev/null || fail "add AI provider"
-[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai/providers/local/models" | jq -c '[.[].id]') == '["echo","embed"]' ]] || fail "provider catalog"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/ai/providers/local/models" | jq -c '[.[].id]') == '["echo","embed"]' ]] || fail "provider catalog"
 AUTHORITY=ai submit "$SUP" ai-2 ai.model.enable ai.model local/echo '{"access":"users"}' | jq -e .record >/dev/null || fail "enable model"
-chat() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$MES/v1/ai/chat" -d '{"model":"local/echo","messages":[{"role":"user","content":"line one is down"}]}'; }
+chat() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$PLANT/v1/ai/chat" -d '{"model":"local/echo","messages":[{"role":"user","content":"line one is down"}]}'; }
 [[ $(chat "$OP1" | jq -r .content) == "echo: line one is down" ]] || fail "model call: $(chat "$OP1")"
 [[ $(chat "$AGENT" | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "the assistant called a model open to ai users only"
-[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage" | jq -c '[.totals[] | {member, model, calls, input, output}]') == '[{"member":"op-l1","model":"local/echo","calls":1,"input":4,"output":5}]' ]] || fail "AI usage: $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/ai-usage")"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/ai-usage" | jq -c '[.totals[] | {member, model, calls, input, output}]') == '[{"member":"op-l1","model":"local/echo","calls":1,"input":4,"output":5}]' ]] || fail "AI usage: $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/ai-usage")"
 echo "ok   AI providers: a local model server added and a model opened to ai users; an operator's call answered and metered, the assistant refused"
 
 # Agents (ADR-0021): the confirmation flow's agent corrects a refused order. For
-# WO-4 (P-200, released without a planned order) the ERP refuses; the plant's
-# agent, on the local model, reads the planned orders and proposes PO-9002; the
+# WO-4 (P-200, released without a planned order) the plant refuses; its agent,
+# on the local model, reads the planned orders and proposes MO-2; the
 # supervisor approves in the inbox; the flow resends it and the ERP confirms.
 AUTHORITY=platform submit "$SUP" ag-1 platform.setting.set platform.setting agent/model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "agents' model"
 submit "$SUP" r-4 mes.order.release mes.order WO-4 '{"product":"P-200","quantity":8,"sfcs":1}' | jq -e .record >/dev/null || fail "release WO-4"
@@ -161,14 +165,13 @@ for resource in CNC-21 ASM-1 TEST-1; do
   submit "$OP2" "w4-c$rev" mes.sfc.complete mes.sfc WO-4-001 '{}' $((rev + 1)) | jq -e .record >/dev/null || fail "complete WO-4 at $resource"
   rev=$((rev + 2))
 done
-proposal() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/inbox" | jq -r '.[] | select(.title | startswith("Resend WO-4")) | .title + "|" + .id'; }
+proposal() { curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/inbox" | jq -r '.[] | select(.title | startswith("Resend WO-4")) | .title + "|" + .id'; }
 for _ in $(seq 40); do [[ -n $(proposal) ]] && break; sleep 0.5; done
-[[ $(proposal) == "Resend WO-4 to the ERP against PO-9002?|"* ]] || fail "the agent's proposal: $(proposal) / $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/agent.run" | jq -c '[.records[] | {state, stopped, steps: [.steps[] | .tool + " " + .outcome[:60]]}]')"
+[[ $(proposal) == "Resend WO-4 to the ERP against MO-2?|"* ]] || fail "the agent's proposal: $(proposal) / $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/records/agent.run" | jq -c '[.records[] | {state, stopped, steps: [.steps[] | .tool + " " + .outcome[:60]]}]')"
 AUTHORITY=work submit "$SUP" ag-2 work.task.complete work.task "$(proposal | cut -d'|' -f2)" '{"answer":"resend"}' >/dev/null
-wo4() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/mes.order?limit=500" | jq -r '.records[] | select(.id == "WO-4") | .erp + " " + .planned'; }
-for _ in $(seq 30); do [[ $(wo4) == confirmed* ]] && break; sleep 0.5; done
-[[ $(wo4) == "confirmed PO-9002" ]] || fail "WO-4 after the agent's correction: $(wo4)"
-[[ $(curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/agent.run" | jq -r '.records[0] | .agent + " " + .state + " " + ([.steps[].tool] | join(","))') == "mes.erp-fixer done read_planned_orders,finish" ]] || fail "the agent's run"
+for _ in $(seq 30); do [[ $(wo WO-4) == confirmed* ]] && break; sleep 0.5; done
+[[ $(wo WO-4) == "confirmed MJ/"????"/00003 MO-2" ]] || fail "WO-4 after the agent's correction: $(wo WO-4)"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/records/agent.run" | jq -r '.records[0] | .agent + " " + .state + " " + ([.steps[].tool] | join(","))') == "mes.erp-fixer done read_planned_orders,finish" ]] || fail "the agent's run"
 echo "ok   agents: a refused order corrected by the plant's agent on the local model, approved by the supervisor in the inbox, resent by the flow and confirmed"
 # Agent-to-agent (ADR-0022 D7): the plant's planner asks the supplier's agent
 # (the sink, over A2A 1.0) for a lead time through an effect; the answer comes
@@ -176,7 +179,7 @@ echo "ok   agents: a refused order corrected by the plant's agent on the local m
 AUTHORITY=platform submit "$SUP" a2a-1 platform.endpoint.add platform.endpoint supplier \
   '{"kind":"a2a","url":"http://webhook-sink:8080/a2a","effects":["mes/lead-time"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "supplier's agent endpoint"
 AUTHORITY=agent submit "$SUP" a2a-2 agent.run.start agent.run PLAN-1 '{"agent":"mes.planner","goal":"What is the lead time of P-200?"}' | jq -e .record >/dev/null || fail "ask the planner"
-plan() { curl -s -H "Authorization: Bearer $SUP" "$MES/v1/records/agent.run/PLAN-1" | jq -r '.record.state + " " + (.record.result // "")'; }
+plan() { curl -s -H "Authorization: Bearer $SUP" "$PLANT/v1/records/agent.run/PLAN-1" | jq -r '.record.state + " " + (.record.result // "")'; }
 for _ in $(seq 40); do [[ $(plan) == done* ]] && break; sleep 0.5; done
 [[ $(plan) == *'"leadTimeDays":12'* ]] || fail "the planner's answer: $(plan)"
 echo "ok   agent-to-agent: the plant's planner asked the supplier's agent over A2A through an effect and answered with its lead time"
@@ -294,12 +297,12 @@ echo "ok   helpdesk: published over A2A and answered a client outside; the triag
 before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
-compose restart mes-server sales-server >/dev/null 2>&1
+compose restart plant-server sales-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done
 [[ $(state) == "$before" ]] || fail "state after restart differs"
 # Snapshots (ADR-0019 D6): each host saved its tenant at shutdown and started from it.
 logged() { for _ in $(seq 10); do compose logs "$1" | grep -q "$2" && return; sleep 1; done; return 1; }
-for host in mes-server sales-server; do
+for host in plant-server sales-server; do
   logged $host "saved a snapshot of" || fail "$host saved no snapshot at shutdown"
   logged $host "from the snapshot at" || fail "$host did not start from its snapshot"
 done
@@ -309,7 +312,7 @@ for _ in $(seq 20); do [[ $(flowstate) == done* ]] && break; sleep 0.5; done
 [[ $(flowstate) == done* ]] || fail "flow after the restart: $(flowstate)"
 echo "ok   flows: a won opportunity's rooms booked by the group-stay flow through the lodging protocol; its question to the owner survived the restart and its answer ended it"
 sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == "$calls" ]] || fail "a delivered webhook was sent again after the restart"
-echo "ok   restart: each host saved a snapshot at shutdown and started from it (mes $(compose logs mes-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
+echo "ok   restart: each host saved a snapshot at shutdown and started from it (plant $(compose logs plant-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
 
 # The journal is what to back up: the projections are copies rebuilt at start-up (ADR-0019).
 compose exec -T postgres pg_dump -U platform -d platform -Fc --exclude-schema='tenant_*' >"$backup/platform.dump"
@@ -318,12 +321,12 @@ after=$(state)
 [[ $after != "$before" ]] || fail "completion changed nothing"
 
 # Disaster: the database volume is lost. Restore the backup into a new one.
-compose stop mes-server sales-server >/dev/null 2>&1
+compose stop plant-server sales-server >/dev/null 2>&1
 compose rm -sf postgres >/dev/null 2>&1
 docker volume rm platform-rehearsal_pgdata >/dev/null
 compose up -d --wait postgres >/dev/null 2>&1
 compose exec -T postgres pg_restore -U platform -d platform --no-owner <"$backup/platform.dump"
-compose start mes-server sales-server >/dev/null 2>&1
+compose start plant-server sales-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$SALES/v1/me") == 200 ]] && break; sleep 1; done
 [[ $(state) == "$before" ]] || fail "restored state is not the backup's"
 echo "ok   restore: new volume, state as of the backup"

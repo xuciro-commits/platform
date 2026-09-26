@@ -29,7 +29,7 @@ var seats = []platformserver.Seat{
 func TestProductionThroughTheProtocol(t *testing.T) {
 	var journal []platformserver.Entry
 	build := func() *platformserver.Tenant {
-		tn, err := NewTenant(tenant, seats...)
+		tn, err := NewTenant(tenant, erp.New(tenant), seats...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -98,7 +98,7 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	make("SO-1", "MO-1", 4, 2)
 	work()
 	o := order("SO-1")
-	expect("confirmed through the protocol", o.ERP+" "+o.Confirmation, "confirmed MO/2026/00001")
+	expect("confirmed through the protocol", o.ERP+" "+o.Confirmation, "confirmed MJ/2026/00001")
 	mo := production("MO-1")
 	expect("the ERP's order", fmt.Sprint(mo.State, " ", mo.ShopOrder, " ", mo.Yield, " ", mo.Scrap), "confirmed SO-1 4 0")
 	stock, _ := tn.Read(sup, erp.OnHand)
@@ -114,7 +114,7 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	expect("reopen", do("sup-1", erp.ID, erp.PeriodType+".reopen", erp.PeriodType, "2026-10", map[string]any{}), "ok")
 	expect("resend", do("sup-1", mes.Authority, mes.SchemaResend, mes.OrderType, "SO-2", map[string]any{}), "ok")
 	work()
-	expect("accepted", order("SO-2").ERP+" "+order("SO-2").Confirmation+" "+production("MO-2").State, "confirmed MO/2026/00002 confirmed")
+	expect("accepted", order("SO-2").ERP+" "+order("SO-2").Confirmation+" "+production("MO-2").State, "confirmed MJ/2026/00002 confirmed")
 
 	balances, _ := tn.Read(sup, erp.TrialBalance)
 	got := ""

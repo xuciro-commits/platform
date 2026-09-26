@@ -6,6 +6,7 @@
     "id": "sup-1",
     "roles": {
       "mes": "supervisor",
+      "erp": "controller",
       "platform": "admin",
       "org": "admin",
       "ai": "admin",
@@ -80,15 +81,6 @@
     "id": "gateway-l1",
     "roles": {
       "mes": "gateway"
-    }
-  },
-  {
-    "subjects": [
-      "client:mes-erp"
-    ],
-    "id": "erp",
-    "roles": {
-      "mes": "erp"
     }
   },
   {

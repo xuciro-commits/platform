@@ -4,9 +4,7 @@
 // is also a mail server (SMTP on -smtp) that keeps one message per Message-ID.
 //
 //	POST /hook      a webhook; 204 when kept (or already kept), 401 on a bad signature
-//	POST /erp       an ERP's confirmation API (#101): answers {"confirmation": …}, the
-//	                same number for the same key, or 422 when no planned order is named
-//	GET  /received  {"calls": n, "kept": {"<webhook-id>": <body>}, "confirmations": {"<webhook-id>": "CONF-…"}}
+//	GET  /received  {"calls": n, "kept": {"<webhook-id>": <body>}}
 //	POST /fail?on=true|false   answer 503 to every webhook until switched off
 //	GET  /mail      [{"messageId", "to", "from", "subject", "text"}], oldest first
 //	GET  /v1/models, POST /v1/chat/completions   a local model server on the
@@ -61,7 +59,6 @@ func main() {
 	secret := []byte(os.Getenv("WEBHOOK_SECRET"))
 	var mu sync.Mutex
 	kept, calls, failing := map[string]json.RawMessage{}, 0, false
-	confirmations := map[string]string{}
 	mails := []message{}
 	go serveSMTP(*smtpAddr, func(m message) {
 		mu.Lock()
@@ -78,31 +75,6 @@ func main() {
 		mac.Write([]byte(r.Header.Get("webhook-id") + "." + r.Header.Get("webhook-timestamp") + "." + string(body)))
 		return hmac.Equal([]byte(r.Header.Get("webhook-signature")), []byte("v1,"+base64.StdEncoding.EncodeToString(mac.Sum(nil))))
 	}
-	http.HandleFunc("POST /erp", func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		mu.Lock()
-		defer mu.Unlock()
-		var c struct {
-			Data struct{ Order, Planned string }
-		}
-		json.Unmarshal(body, &c)
-		id := r.Header.Get("webhook-id")
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case !verified(r, body):
-			w.WriteHeader(http.StatusUnauthorized)
-		case failing:
-			w.WriteHeader(http.StatusServiceUnavailable)
-		case c.Data.Planned == "":
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			json.NewEncoder(w).Encode(map[string]string{"error": "no planned order to confirm against"})
-		default:
-			if confirmations[id] == "" {
-				confirmations[id] = fmt.Sprintf("CONF-%d", 100000+len(confirmations)+1)
-			}
-			json.NewEncoder(w).Encode(map[string]string{"confirmation": confirmations[id]})
-		}
-	})
 	http.HandleFunc("POST /hook", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		id := r.Header.Get("webhook-id")
@@ -124,7 +96,7 @@ func main() {
 	http.HandleFunc("GET /received", func(w http.ResponseWriter, _ *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
-		json.NewEncoder(w).Encode(map[string]any{"calls": calls, "kept": kept, "confirmations": confirmations})
+		json.NewEncoder(w).Encode(map[string]any{"calls": calls, "kept": kept})
 	})
 	http.HandleFunc("GET /v1/models", func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "echo", "name": "Echo", "context_length": 4096}, {"id": "embed", "name": "Hashed words", "context_length": 8192}}})

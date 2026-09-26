@@ -1,13 +1,12 @@
-module plant
+module erplink
 
 go 1.27.1
 
 require (
-	erp v0.0.0
-	erplink v0.0.0
-	mes v0.0.0
+	google.golang.org/protobuf v1.36.12
 	platformkernel v0.0.0
 	platformserver v0.0.0
+	production v0.0.0
 )
 
 require (
@@ -31,18 +30,10 @@ require (
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
-	production v0.0.0 // indirect
 )
 
-replace erp => ../../apps/erp/server
+replace platformkernel => ../../../contract/go
 
-replace mes => ../../apps/manufacturing/server
+replace platformserver => ../../../capabilities/server
 
-replace platformkernel => ../../contract/go
-
-replace platformserver => ../../capabilities/server
-
-replace production => ../../protocols/production
-
-replace erplink => ../../apps/erplink/server
+replace production => ../../../protocols/production

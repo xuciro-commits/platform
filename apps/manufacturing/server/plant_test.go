@@ -23,7 +23,6 @@ var (
 	qa1    = member("qa-1", Quality)
 	qa2    = member("qa-2", Quality)
 	gw     = member("gateway-l1", Gateway)
-	erp    = member("erp", ERP)
 	asst   = agent(member("agent-l1", Assistant, "L1"))
 	t0     = time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 	keys   = 0
@@ -78,12 +77,6 @@ func records[T any](p *testPlant, typ string) []T {
 	return out
 }
 
-func (p *testPlant) DeliverPlanned(who platform.Caller, page PlannedPage, now time.Time) *kernel.Error {
-	raw, _ := json.Marshal(page)
-	_, err := p.tenant.Input(who.Member, "planned-orders", raw, now)
-	return err
-}
-
 func plantTenant(t *testing.T, disable ...string) (*Plant, *platformserver.Tenant) {
 	return plantTenantOf(t, slices.Clone(units), disable...)
 }
@@ -127,7 +120,7 @@ func newPlant(t *testing.T) *testPlant {
 			t.Fatalf("replay: %v", err)
 		}
 		view := func(p *Plant) string {
-			raw, _ := json.Marshal([]any{p.Downtime(), p.Planned()}) // records are compared by CheckReplay; heartbeats are not journaled
+			raw, _ := json.Marshal(p.Downtime()) // records are compared by CheckReplay; heartbeats are not journaled
 			return string(raw)
 		}
 		if view(again) != view(plant) {
@@ -196,13 +189,14 @@ func sfc(p *testPlant, id string) SFC {
 	return SFC{}
 }
 
-func TestOrderFromERPClaimThroughRouting(t *testing.T) {
+// A shop order moves through its routing. Without a provider of
+// production.orders/1 the plant knows no planned order and confirms to no ERP
+// (the plant solution's tests have one, ADR-0024).
+func TestOrderThroughRouting(t *testing.T) {
 	p := newPlant(t)
-	expect(t, fmt.Sprint(p.DeliverPlanned(erp, PlannedPage{CursorTo: "page-1",
-		Orders: []PlannedOrder{{ERPID: "PO-9001", Product: "P-100", Quantity: 2, Due: "2026-10-01"}}}, t0)), "<nil>")
-	claim := p.Planned()[0].FactID
-	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 2, SFCs: 2, Planned: "PO-9001"}, claim), "ok")
-	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-2", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}, "no-such-claim"), "ERROR_CODE_INVALID_REFERENCE")
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-0", releasePayload{Product: "P-100", Quantity: 2, SFCs: 2, Planned: "PO-9001"}), "ERROR_CODE_INVALID_ARGUMENT")
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 2, SFCs: 2}), "ok")
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-2", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}, "no-such-fact"), "ERROR_CODE_INVALID_REFERENCE")
 	for _, resource := range []string{"FURNACE-1", "CNC-11", "CMM-1"} {
 		expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: resource}), "ok")
 		expect(t, submit(p, op1, SchemaComplete, SFCType, "SO-1-001", sfcPayload{}), "ok")
@@ -335,14 +329,15 @@ func TestDowntimeTellsSupervisors(t *testing.T) {
 	expect(t, fmt.Sprint(len(inbox(sup))), "3")
 }
 
-// F-9 confirmed and resolved by K8: push and poll connectors share one descriptor.
+// F-9 confirmed and resolved by K8: a push connector reports its health; the
+// adapter's poll connector shares the descriptor (apps/erplink).
 func TestConnectors(t *testing.T) {
 	p := newPlant(t)
-	page := PlannedPage{CursorTo: "page-1", Orders: []PlannedOrder{{ERPID: "PO-1", Product: "P-200", Quantity: 5}}}
-	expect(t, fmt.Sprint(p.DeliverPlanned(erp, page, t0)), "<nil>")
-	expect(t, fmt.Sprint(p.DeliverPlanned(erp, page, t0)), "ERROR_CODE_CONFLICT") // the same page again
-	expect(t, fmt.Sprint(len(p.Planned())), "1")
-	views := p.tenant.Connectors(t0.Add(time.Minute))
-	expect(t, views[0].ID+" "+views[0].Health+" "+views[0].Cursor, "erp ok page-1")
-	expect(t, views[1].ID+" "+views[1].Health, "gateway-l1 stale")
+	if _, err := p.DeliverStates(gw, StateBatch{BatchID: "b-1", Resource: "CNC-11", Samples: states(t0, "r")}, t0); err != nil {
+		t.Fatal(err)
+	}
+	views := p.tenant.Connectors(t0.Add(time.Second))
+	expect(t, views[0].ID+" "+views[0].Health, "gateway-l1 ok")
+	views = p.tenant.Connectors(t0.Add(time.Minute))
+	expect(t, views[0].ID+" "+views[0].Health, "gateway-l1 stale")
 }
