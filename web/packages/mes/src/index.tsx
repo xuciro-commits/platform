@@ -4,7 +4,7 @@
 import "./i18n";
 import { Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, PageHeader, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef,
+  Button, DataTable, Dialog, EntityCard, EntityForm, Graph, PageHeader, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type GraphEdge, type GraphNode,
  t } from "@platform/ui";
 import { Activity, ClipboardList, Cpu, Factory, ListOrdered, Plus, ShieldAlert } from "lucide-react";
 import { useState } from "react";
@@ -191,6 +191,25 @@ function SFCTable({ filter, title, description }: { filter: (s: SFC) => boolean;
   );
 }
 
+// The routing drawn as a graph (#122): the operations an SFC went through, the
+// one it is at and how it stands there, and the nonconformances logged on each.
+function RoutingGraph({ sfc, operations }: { sfc: SFC; operations: Operation[] }) {
+  const ended = sfc.state === "done" || sfc.state === "scrapped";
+  const nodes: GraphNode[] = operations.map((o, i) => {
+    const ncs = sfc.ncs.filter((n) => n.step === i).map((n) => n.code);
+    const here = i === sfc.step && !ended;
+    return {
+      id: String(i), label: `${o.step} ${o.name}`, current: here,
+      detail: [o.workCenter, ...(here ? [sfcStatus[sfc.state]?.label ?? sfc.state] : []), ...(ncs.length ? [`NC ${ncs.join(", ")}`] : [])].join(" · "),
+      tone: here ? (sfc.state === "hold" ? "warning" : "info") : i < sfc.step || sfc.state === "done" ? "success" : i === sfc.step && sfc.state === "scrapped" ? "danger" : ncs.length ? "warning" : undefined,
+    };
+  });
+  nodes.push({ id: "end", label: sfc.state === "scrapped" ? t("Scrapped") : t("Done"), tone: sfc.state === "done" ? "success" : sfc.state === "scrapped" ? "danger" : undefined });
+  const edges: GraphEdge[] = operations.map((_, i) => ({ from: String(i), to: i + 1 < operations.length ? String(i + 1) : "end" }));
+  if (sfc.state === "scrapped") edges.push({ from: String(sfc.step), to: "end", tone: "danger", dashed: true });
+  return <Graph nodes={nodes} edges={edges} height={200} label={t("Routing")} />;
+}
+
 function SFCDetail({ id }: { id: string }) {
   const sfc = useRead<{ record: SFC }>(`/v1/records/mes.sfc/${encodeURIComponent(id)}`)?.record;
   const { master, decide, can } = usePlant();
@@ -225,17 +244,6 @@ function SFCDetail({ id }: { id: string }) {
           {sfc.state === "hold" && can("mes.sfc.sign") && <Button variant="primary" onClick={() => setSigning(true)}>{t("Sign disposition…")}</Button>}
         </>} />
       <div className="grid content-start gap-4">
-        <section className="rounded-md border border-border bg-surface p-3">
-          <h2 className="mb-2 text-sm font-semibold">{t("Routing")} {product?.routing}</h2>
-          <ol className="grid gap-1 text-sm">
-            {product?.operations.map((o, i) => (
-              <li key={o.step} className="flex items-center gap-2">
-                <span className={`size-2 rounded-full ${i < sfc.step || sfc.state === "done" ? "bg-[var(--tone-success)]" : i === sfc.step ? "bg-[var(--tone-warning)]" : "bg-border"}`} />
-                <span className="w-8 tabular-nums text-muted">{o.step}</span>{o.name}<span className="ml-auto text-xs text-muted">{o.workCenter}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
         {sfc.state === "hold" && (
           <section className="rounded-md border border-border bg-surface p-3">
             <h2 className="mb-2 text-sm font-semibold">{t("Disposition signatures")}</h2>
@@ -244,6 +252,10 @@ function SFCDetail({ id }: { id: string }) {
           </section>
         )}
       </div>
+      <section className="rounded-md border border-border bg-surface p-3 lg:col-span-2">
+        <h2 className="mb-2 text-sm font-semibold">{t("Routing")} {product?.routing}</h2>
+        <RoutingGraph sfc={sfc} operations={product?.operations ?? []} />
+      </section>
       <Dialog open={signing} onOpenChange={setSigning} title={t("Disposition for {id}", { id: sfc.id })}>
         <EntityForm schema={z.object({ action: z.enum(["rework", "scrap", "use-as-is"]), meaning: z.enum(["reviewed", "approved"]), reworkStep: z.number().int().min(0).max(sfc.step) })}
           defaultValues={{ action: "rework", meaning: sfc.signatures.some((s) => s.meaning === "reviewed") ? "approved" : "reviewed", reworkStep: Math.max(0, sfc.step - 1) }}

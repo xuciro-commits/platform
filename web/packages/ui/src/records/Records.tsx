@@ -13,6 +13,7 @@ import { checkbox, date, datetime, longText, multiSelect, number, singleSelect, 
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
 import { Chart } from "../charts/Chart";
+import { Graph, type GraphEdge, type GraphNode } from "../graph/Graph";
 import { Pivot } from "../charts/Pivot";
 import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
 import { t } from "../i18n";
@@ -346,6 +347,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           [t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
           [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
       </section>
+      {info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
       {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} />}
       {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
       {(view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
@@ -449,6 +451,7 @@ function Approvals({ source, approvals }: { source: RecordSource; approvals: Api
   return (
     <section>
       <h2 className="mb-1 text-sm font-semibold">{t("Approvals")}</h2>
+      {approvals[0] && <div className="mb-1.5"><ApprovalGraph approval={approvals[0]} /></div>}
       <ul className="grid gap-1">
         {approvals.map((a) => {
           const level = a.levels[a.level];
@@ -467,6 +470,31 @@ function Approvals({ source, approvals }: { source: RecordSource; approvals: Api
       </ul>
     </section>
   );
+}
+
+/** An approval chain drawn as a graph (#122): the requester, each level with its approvers and who decided, and how it ended. */
+export function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }) {
+  const nodes: GraphNode[] = [{ id: "requester", label: a.requester, detail: t("asked"), tone: "success" }];
+  const edges: GraphEdge[] = [];
+  let previous = "requester";
+  a.levels.forEach((l, i) => {
+    const decided = l.approved.map((m) => l.decidedBy?.[m] ? t("{delegate} for {approver}", { delegate: l.decidedBy[m]!, approver: m }) : m);
+    const rejectedHere = a.state === "rejected" && i === a.level;
+    const here = a.state === "pending" && i === a.level;
+    nodes.push({
+      id: `level-${i}`, label: l.title, current: here,
+      detail: rejectedHere ? t("rejected by {member}", { member: a.rejectedBy ?? "" }) : decided.length ? t("approved by {members}", { members: decided.join(", ") }) : l.approvers.join(", "),
+      tone: rejectedHere ? "danger" : here ? "info" : i < a.level || a.state === "approved" || a.state === "refused" ? "success" : undefined,
+    });
+    edges.push({ from: previous, to: `level-${i}` });
+    previous = `level-${i}`;
+  });
+  const ended = a.state !== "pending";
+  const outcomes: Record<string, string> = { approved: t("Approved"), rejected: t("Rejected"), refused: t("Refused when run"), withdrawn: t("Withdrawn") };
+  nodes.push({ id: "outcome", label: ended ? outcomes[a.state] ?? a.state : t("Outcome"), detail: a.outcome || undefined,
+    tone: a.state === "approved" ? "success" : a.state === "rejected" || a.state === "refused" ? "danger" : a.state === "withdrawn" ? "neutral" : undefined });
+  edges.push({ from: previous, to: "outcome", dashed: !ended });
+  return <Graph nodes={nodes} edges={edges} height={150} label={t("Approvals")} />;
 }
 
 /** The processes about a record: each flow, its state, and the steps it stands at. */

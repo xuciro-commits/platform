@@ -1,6 +1,6 @@
 import {
-  Button, DataTable, EntityCard, EntityForm, PageHeader, StatusTag, Workspace, defineStatuses, notify, useWorkspace,
-  type ColumnDef, type View,
+  Button, DataTable, EntityCard, EntityForm, Graph, PageHeader, StatusTag, Workspace, defineStatuses, notify, useWorkspace,
+  type ColumnDef, type GraphEdge, type GraphNode, type View,
 } from "@platform/ui";
 import { Activity, BedDouble, Boxes, Factory, Moon, Plus, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -125,10 +125,30 @@ function WorkCenterForm() {
   );
 }
 
+// Graphs (#122): one canvas for a plant's routing with a rework loop and a hotel's group-booking approval.
+const routingNodes: GraphNode[] = [
+  { id: "10", label: "10 Cut", detail: "WC-SAW", tone: "success" }, { id: "20", label: "20 Mill", detail: "WC-CNC · NC SCRATCH", tone: "warning" },
+  { id: "30", label: "30 Deburr", detail: "WC-BENCH · in work", tone: "info", current: true }, { id: "40", label: "40 Inspect", detail: "WC-QA" },
+  { id: "done", label: "Done" },
+];
+const routingEdges: GraphEdge[] = [{ from: "10", to: "20" }, { from: "20", to: "30" }, { from: "30", to: "40" }, { from: "40", to: "done" },
+  { from: "40", to: "20", dashed: true, label: "rework", tone: "warning" }];
+const bookingNodes: GraphNode[] = [
+  { id: "ask", label: "Grace", detail: "asked", tone: "success" }, { id: "fo", label: "Front office manager", detail: "approved by kim for max", tone: "success" },
+  { id: "rev", label: "Revenue manager", detail: "lee, ana", tone: "info", current: true }, { id: "gm", label: "General manager", detail: "above 20 rooms" },
+  { id: "out", label: "Outcome" },
+];
+const bookingEdges: GraphEdge[] = [{ from: "ask", to: "fo" }, { from: "fo", to: "rev" }, { from: "rev", to: "gm" }, { from: "rev", to: "out", dashed: true, label: "20 rooms or fewer" }, { from: "gm", to: "out" }];
+
 const views: View[] = [
   { id: "workOrders", title: () => "Work orders", render: () => <WorkOrders /> },
   { id: "workOrder", title: (p) => p.id ?? "Work order", render: (p) => <WorkOrder id={p.id ?? ""} /> },
   { id: "materials", title: () => "Materials", render: () => <Materials /> },
+  { id: "graphs", title: () => "Graphs", render: () => <div className="grid max-w-4xl gap-4">
+    <PageHeader title="Graphs" description="Processes drawn on one read-only canvas: a routing with a rework loop, a group booking's approval chain" />
+    <Graph nodes={routingNodes} edges={routingEdges} height={220} label="Routing" />
+    <Graph nodes={bookingNodes} edges={bookingEdges} height={220} label="Approval chain" />
+  </div> },
   { id: "workCenterForm", title: () => "New work center", render: () => <WorkCenterForm /> },
   { id: "rooms", title: () => "Rooms", render: () => <>
     <PageHeader title="Rooms" description="Housekeeping status per room" />
@@ -156,6 +176,7 @@ export function Gallery() {
         { label: "Manufacturing", items: [
           { label: "Work orders", icon: <Factory />, route: { view: "workOrders" } },
           { label: "Materials", icon: <Boxes />, route: { view: "materials" } },
+          { label: "Graphs", icon: <Activity />, route: { view: "graphs" } },
           { label: "New work center", icon: <Plus />, route: { view: "workCenterForm" } },
         ] },
         { label: "Hotel", items: [{ label: "Rooms", icon: <BedDouble />, route: { view: "rooms" } }] },

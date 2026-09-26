@@ -3,7 +3,7 @@
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
 import "./i18n";
-import { Button, Card, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses, t, language } from "@platform/ui";
+import { Button, Card, Graph, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
 import { PayloadFields } from "./actions";
@@ -82,6 +82,7 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
       {run.state === "running" && <p className="text-sm text-muted">{t("The agent is working…")}</p>}
       {run.stopped && <p className="text-sm text-[var(--tone-danger)]">{t("Stopped:")} {run.stopped}</p>}
       {run.result && <Card className="p-3"><div className="mb-1 text-xs text-muted">{t("Result")}</div><p className="whitespace-pre-wrap text-sm">{run.result}</p></Card>}
+      {!compact && run.steps.length > 0 && <RunGraph run={run} onStep={setOpen} />}
       <ol className="grid gap-1">
         {run.steps.map((s, i) => (
           <li key={i} className="rounded-md border border-border bg-surface px-3 py-2 text-sm">
@@ -123,6 +124,27 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
       )}
     </div>
   );
+}
+
+/** A run drawn as a graph (#122): the goal, each tool it called in turn, the sources each step read, and how it ended. */
+function RunGraph({ run, onStep }: { run: AgentRun; onStep: (i: number) => void }) {
+  const refused = (s: RunStep) => /^(refused|error|stopped|ERROR_CODE_)/i.test(s.outcome);
+  const nodes: GraphNode[] = [{ id: "goal", label: run.title, detail: run.agent, tone: "success" }];
+  const edges: GraphEdge[] = [];
+  run.steps.forEach((s, i) => {
+    nodes.push({ id: `step-${i}`, label: `${i + 1}. ${s.tool || t("answer")}`, detail: s.rationale ?? s.outcome.split("\n")[0], tone: refused(s) ? "danger" : "success" });
+    edges.push({ from: i ? `step-${i - 1}` : "goal", to: `step-${i}` });
+  });
+  (run.citations ?? []).forEach((c, i) => {
+    nodes.push({ id: `source-${i}`, label: c.title, detail: t("source"), tone: "neutral" });
+    edges.push({ from: `step-${Math.min(c.step, run.steps.length - 1)}`, to: `source-${i}`, dashed: true });
+  });
+  const last = run.steps.length ? `step-${run.steps.length - 1}` : "goal";
+  const end = run.state === "waiting" ? { label: t("Draft waits"), tone: "warning" as const } : run.state === "running" ? { label: t("Working"), tone: "info" as const }
+    : run.stopped ? { label: t("Stopped"), tone: "danger" as const } : { label: t("Done"), tone: "success" as const };
+  nodes.push({ id: "end", ...end, current: run.state === "running" || run.state === "waiting", detail: run.stopped ?? run.draft?.[0]?.action });
+  edges.push({ from: last, to: "end" });
+  return <Graph nodes={nodes} edges={edges} height={200} label={t("Steps")} onOpen={(n) => n.id.startsWith("step-") && onStep(Number(n.id.slice(5)))} />;
 }
 
 /** Every model call of a run in full, for agent administrators (ADR-0022 D8). */

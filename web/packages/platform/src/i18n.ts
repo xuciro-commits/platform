@@ -102,6 +102,7 @@ register("zh-CN", {
   "Filter": "筛选",
   "Flow": "流程",
   "Flows": "流程",
+  "Click a flow to see its steps.": "点一个流程查看它的步骤。",
   "From": "从",
   "Health": "健康状态",
   "House rules, manuals, FAQs. Agents search them with their knowledge tool and cite what they used; members find them in Search. Set the embedding model in App settings → Knowledge to search by meaning as well as by words.": "店规、手册、常见问题。智能体用知识工具检索并引用所用内容；成员可在搜索中找到。在 应用设置 → Knowledge 设置向量模型后，除关键词外还能按语义检索。",

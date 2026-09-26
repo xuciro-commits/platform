@@ -2,6 +2,7 @@
    Apps import this file once; Tailwind scans the package through @source. */
 @import "tailwindcss";
 @import "dockview-react/dist/styles/dockview.css";
+@import "@xyflow/react/dist/style.css";
 @source "./";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));

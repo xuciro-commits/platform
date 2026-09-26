@@ -46,6 +46,9 @@ test("route 4: an approval reaches the requester's page", async ({ page, request
   await open(page, "sales", `/record?type=hcm.leave&id=${leave}`);
   await expect(value(page, "Pending approval")).toBeVisible();
   await expect(page.getByText(/^waiting for Manager:/)).toBeVisible();
+  const chain = page.getByRole("figure", { name: "Approvals" }); // the chain drawn (#122)
+  await expect(chain.getByText("Manager", { exact: true })).toBeVisible();
+  await expect(chain.getByText("sales-1", { exact: true })).toBeVisible();
   const approval = `hcm.${submitted.key}`;
   await decide(request, "manager", "work", "work.approval.approve", { type: "work.approval", id: approval }, {});
   await expect(value(page, "Approved")).toBeVisible();
@@ -62,6 +65,15 @@ test("route 4: an approval reaches the requester's page", async ({ page, request
   await expect(page.getByText("rejected by manager-1: busy week")).toBeVisible();
   await decide(request, "sales", "hcm", "hcm.leave.submit", { type: "hcm.leave", id: second }, {});
   await expect(value(page, "Pending approval")).toBeVisible();
+});
+
+// Route 24 (#122): a flow's definition opens as a graph in Settings.
+test("route 24: graphs", async ({ page }) => {
+  await open(page, "manager", "/flows");
+  await page.getByRole("cell", { name: "csm.service-level" }).click();
+  const graph = page.getByRole("figure", { name: "Steps" });
+  await expect(graph.getByText("Until it is due")).toBeVisible();
+  await expect(graph.getByText("as it decides").first()).toBeVisible();
 });
 
 // Route 18 (ADR-0027): the process answers /healthz; Settings → Automation shows the tenant's health.
