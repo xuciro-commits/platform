@@ -1,6 +1,6 @@
 # ADR-0028: The application half — files, field security and the classic features
 
-**Status:** Proposed (2026-09-26, stage 7 in Platform.md §10.5, #121). The owner decided D1: files live in an S3-compatible object store, MinIO locally ("加上minio"). D2 to D8 follow the recommendations unless the owner amends them.
+**Status:** Accepted (2026-09-26, stage 7 in Platform.md §10.5, #121). The owner decided D1 (files in an S3-compatible object store: first MinIO, "加上minio", then RustFS locally instead, as MinIO no longer publishes its community images: "用它吧") and accepted D2 to D8 as recommended, all batches at once ("按推荐来做，一波干完").
 
 ## Context
 
@@ -31,12 +31,12 @@ They agree:
 
 - Replay never calls outside; the journal stays small. File bytes never enter the journal; the journal holds each file's content hash, so a replay needs the store but reads nothing from it.
 - Rules and models stay typed code (ADR-0008): field security and personal data are declarations, not configuration.
-- No new dependency without the owner's approval: the owner approved MinIO; its Go client (`github.com/minio/minio-go/v7`, Apache-2.0) is the one dependency this ADR adds.
+- No new dependency without the owner's approval: the owner approved the object store (RustFS locally, S3 in production); the one Go dependency this ADR adds is an S3 client, `github.com/minio/minio-go/v7` (Apache-2.0, it speaks any S3 API, RustFS's included).
 - No domain vocabulary in `contract/`.
 
 ## Design
 
-1. **Files** are a platform app, `files` (`capabilities/server/apps/files`, ADR-0025 D4). Uploading streams the bytes to the object store under `<tenant>/<sha256>` and answers with the hash; nothing is decided yet. Attaching is a decision of the `files` app (`files.file.attach`: hash, name, content type, size, the record `<type>/<id>`), journaled like any other; detaching is another. An upload no decision attached is removed after a day. A file is readable, and downloadable through the host, exactly when its record is (scope, participants, field security of a file field). The store is S3-compatible — MinIO locally, any S3 in production; without one (development in memory) the host keeps bytes in memory. Size is limited per tenant (a setting, 25 MB by default). Backups cover the bucket with the journal; the rehearsal restores both.
+1. **Files** are a platform app, `files` (`capabilities/server/apps/files`, ADR-0025 D4). Uploading streams the bytes to the object store under `<tenant>/<sha256>` and answers with the hash; nothing is decided yet. Attaching is a decision of the `files` app (`files.file.attach`: hash, name, content type, size, the record `<type>/<id>`), journaled like any other; detaching is another. An upload no decision attached is removed after a day. A file is readable, and downloadable through the host, exactly when its record is (scope, participants, field security of a file field). The store is S3-compatible — RustFS locally (Apache-2.0, in Rust; MinIO stopped publishing its community images in 2025), any S3 in production; without one (development in memory) the host keeps bytes in memory. Size is limited per tenant (a setting, 25 MB by default). Backups cover the bucket with the journal; the rehearsal restores both.
 2. **File fields.** An entity may declare `platform.Files` fields (`[]FileRef`, each a hash and name) that its rules read; generated forms upload into them and record pages show and download them. A file attached to a record without a field shows under the record's files.
 3. **Files as knowledge.** A text, Markdown or HTML file attached to a knowledge document, or to a record whose type declares its files as knowledge, is cut into passages like a knowledge field, readable to whoever may read the record (ADR-0022). PDF text waits for a parser the owner approves.
 4. **Field security.** A field tag `read:"role,role"` names the roles of its app that read it; for everyone else the field is absent from reads, lists, search, sort and filter, aggregates, the timeline, history, exports, agents' context, knowledge and the projection to PostgreSQL, and generated forms do not offer it. `write:"role"` narrows who may set it through generated actions; an app's own rules decide their own actions as before. Participants read what the roles they hold allow, nothing more.
@@ -52,7 +52,7 @@ They agree:
 
 | # | Question | Options | Recommendation |
 |---|---|---|---|
-| D1 | Where file bytes live | (a) An S3-compatible object store, MinIO locally. (b) PostgreSQL `bytea`. (c) The host's disk | **(a), decided by the owner.** Content-addressed keys; the journal holds hashes |
+| D1 | Where file bytes live | (a) An S3-compatible object store, RustFS locally. (b) PostgreSQL `bytea`. (c) The host's disk | **(a), decided by the owner.** Content-addressed keys; the journal holds hashes |
 | D2 | Files as a platform app, attached by decision | (a) A `files` app; upload, then attach as a decision. (b) Bytes inside the record's own decision | **(a)**: decisions stay small, one upload serves any app, replay needs no bytes |
 | D3 | Where field security is declared | (a) Tags on the entity's fields in code, for the app's roles. (b) Administrators configure it per role in Settings (Salesforce permission sets). (c) Both | **(a)**: rules and models are code (ADR-0008) and a field's reach must be tested with its app; (b) would let configuration widen what the code allows |
 | D4 | Personal data | (a) A `personal` tag with audit of reads now, erasure later. (b) Nothing until a real tenant | **(a)**: the marking costs little and every later privacy duty builds on it |
@@ -67,7 +67,7 @@ Declined for now: malware scanning (no scanner to call locally; files are served
 
 | Batch | Item | Done when |
 |---|---|---|
-| 11a | MinIO in Docker Compose and the rehearsal; the `files` app; upload, attach, detach, download within the record's visibility; file fields in forms and record pages; text files as knowledge; per-tenant size limit; stale uploads removed | Tests: a file attached to a CSM ticket is downloadable by the ticket's readers only; a nonconformance photo on an MES SFC; replay (`CheckReplay`) never reads the store; the rehearsal backs up and restores journal and bucket; routes walked in the browser and written as Playwright tests |
+| 11a | RustFS in Docker Compose and the rehearsal; the `files` app; upload, attach, detach, download within the record's visibility; file fields in forms and record pages; text files as knowledge; per-tenant size limit; stale uploads removed | Tests: a file attached to a CSM ticket is downloadable by the ticket's readers only; a nonconformance photo on an MES SFC; replay (`CheckReplay`) never reads the store; the rehearsal backs up and restores journal and bucket; routes walked in the browser and written as Playwright tests |
 | 11b | Field security (`read`, `write`) everywhere a field goes; personal data tags and the audit of reads | Tests: an HCM leave's health note and a CRM contact's phone are absent for other roles in reads, search, aggregates, exports, projections, agents' context and knowledge; audited reads listed in Settings |
 | 11c | Choices and references in payload fields (F-36); comments with @mentions and followers | The CRM's close form offers won and lost; the opportunity's account is picked; a comment on an ERP purchase order notifies whom it mentions and its followers |
 | 11d | Business calendars; working-time due times and timeouts; record-state triggers | An approval due in two working days skips a weekend and a holiday; a flow starts when an MES order becomes completed without an event subscription |
@@ -79,3 +79,17 @@ Declined for now: malware scanning (no scanner to call locally; files are served
 - A field's reach becomes part of its declaration and holds on every path out of the host, including agents and projections.
 - The deployment gains a second stateful service (the object store); backups and restores cover both.
 - The classic features that every reference app still missed become platform capabilities, each proved in two industries.
+
+## As built
+
+### 11a: files in RustFS
+
+- **The store** (`filestore.go`): `FileStore` with an S3 implementation (`NewS3Files`, through the Apache-2.0 client `minio-go`, which speaks any S3 API) and one in memory for development and tests. `-files http(s)://host:port/bucket` with `PLATFORM_S3_ACCESS_KEY` and `PLATFORM_S3_SECRET_KEY` points a host at it; the bucket is made when missing. Keys are `<tenant>/<sha256>`.
+- **Locally, RustFS** (`deploy/local/compose.yaml`, image pinned by digest): MinIO no longer publishes community images (Docker Hub and quay.io refused the pulls), so the owner chose RustFS; its console is on port 9001.
+- **Uploading and downloading** (`files.go`, `server.go`): `POST /v1/files` keeps the body (within the tenant's `files/max-size-mb`, 25 by default) and answers `{hash, size, contentType, name}`; `GET /v1/files/{id}` serves a file its caller may read, as an attachment with `nosniff` and a sandboxing CSP. Bytes no file attaches are swept a day later (`SweepUploads`, the maintenance loop; the list of uploads is volatile, so bytes uploaded before a restart and never attached stay).
+- **The `files` app** (`apps/files`): `files.file` records (name, content type, size, hash, the record `<type>/<id>`, who attached it) made by `files.file.attach` and archived by `files.file.detach` (only by who attached it). Attaching checks, live only, that the member may read the record and that the bytes are stored; a replay reads no bytes. `platform.Scope.Through` makes a file readable exactly when its record is — a new scope every type may use.
+- **Record pages** list a record's files (`RecordView.Files`), download them, and add one (`EdgeClient.upload`, then the attach decision); the page follows the change.
+- **Knowledge**: text files attached to a knowledge document, or to records of a type declaring `Entity.KnowledgeFiles`, are cut into passages and found with citations to the file.
+- **Proven:** `TestFiles` (attach within visibility only, only uploaded bytes, readers download and others get 404, knowledge from a Markdown file, detach by the attacher only, the sweep, `CheckReplay` with an empty store), `TestFilesOnTickets` (hospitality: the desk and the lead download a ticket's screenshot, a salesperson does not), the manufacturing test (a shop order's photo for its line's operator, not the ERP's clerk), Playwright route 19 (a file added on a ticket's page), the rehearsal (upload to RustFS, attach, download, and again after the restore).
+- **Not yet:** file fields declared on entity types (D2's `platform.Files`) — files attach to any record through its page instead; PDF text.
+

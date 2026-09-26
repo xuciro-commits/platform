@@ -137,6 +137,18 @@ func (h *Host) Handler() http.Handler {
 		record, _ := out.(*pb.ChangeRecord)
 		Reply(w, record, err)
 	})
+	handle(Route{Pattern: "POST /v1/files", Summary: "Upload a file's bytes (the body; query name; Content-Type); answers its SHA-256 to attach with files.file.attach (ADR-0028)",
+		Query: []Param{{"name", "The file's name"}}, Body: []byte{}, Answer: Upload{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		up, status, err := t.Upload(m, r.URL.Query().Get("name"), r.Header.Get("Content-Type"), r.Body, h.Now())
+		if err != nil {
+			http.Error(w, err.Error(), status)
+			return
+		}
+		WriteJSON(w, http.StatusOK, up)
+	})
+	handle(Route{Pattern: "GET /v1/files/{id}", Summary: "Download a file attached to a record the caller may read (ADR-0028)"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		t.Download(w, m, r.PathValue("id"), h.Now())
+	})
 	handle(Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		lang := t.Language(m, r)
 		WriteJSON(w, http.StatusOK, t.Translate(MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),

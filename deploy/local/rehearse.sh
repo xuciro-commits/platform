@@ -5,7 +5,7 @@
 # project on its own ports and removes it afterwards. Needs docker, curl, jq.
 set -euo pipefail
 cd "$(dirname "$0")"
-export PG_PORT=55433 IDP_PORT=58480 MANUFACTURING_PORT=58490 HOSPITALITY_PORT=58495 SINK_PORT=58497
+export PG_PORT=55433 IDP_PORT=58480 MANUFACTURING_PORT=58490 HOSPITALITY_PORT=58495 SINK_PORT=58497 FILES_PORT=59000 FILES_CONSOLE_PORT=59001
 compose() { docker compose -p platform-rehearsal -f compose.yaml "$@"; }
 IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://localhost:$MANUFACTURING_PORT HOSPITALITY=http://localhost:$HOSPITALITY_PORT SINK=http://localhost:$SINK_PORT
 backup=$(mktemp -d)
@@ -101,6 +101,15 @@ for _ in $(seq 20); do [[ $(wo WO-2) == confirmed* ]] && break; sleep 0.5; done
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/erp.production/MO-1" | jq -r '.record | .state + " " + .shopOrder + " " + (.yield | tostring)') == "confirmed WO-2 12" ]] || fail "the ERP's MO-1"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/trial-balance" | jq -r '[.[] | select(.account == "1405") | .balance][0]') == 14400 ]] || fail "finished goods in the books: $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/trial-balance")"
 echo "ok   operations: downtime notified to the line's supervisor only; the gateway's connector disabled from Settings; the ERP's production order made by the plant, confirmed through the protocol and posted"
+# Files (ADR-0028): bytes into RustFS, answered with their hash; a decision attaches them to a shop order; its readers download them.
+up=$(curl -s -H "Authorization: Bearer $SUP" -H 'Content-Type: text/plain' --data-binary 'WO-1 inspection: all good' "$MANUFACTURING/v1/files?name=inspection.txt")
+hash=$(jq -r .hash <<<"$up")
+[[ ${#hash} == 64 ]] || fail "upload: $up"
+AUTHORITY=files submit "$SUP" file-1 files.file.attach files.file PH-1 "{\"hash\":\"$hash\",\"name\":\"inspection.txt\",\"contentType\":\"text/plain\",\"size\":25,\"target\":\"mes.order/WO-1\"}" | jq -e .record >/dev/null || fail "attach the file"
+download() { curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/files/PH-1"; }
+[[ $(download) == "WO-1 inspection: all good" ]] || fail "download: $(download)"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/mes.order/WO-1" | jq -r '.files[0].name') == inspection.txt ]] || fail "the order's files"
+echo "ok   files: uploaded to RustFS, attached to a shop order by a decision that names its hash, downloaded by the order's reader"
 submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | jq -e .record >/dev/null || fail start
 [[ $(submit "$OP2" s-2 mes.sfc.start mes.sfc WO-1-002 '{"resource":"FURNACE-1"}' 0 | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "line policy"
 
@@ -109,7 +118,7 @@ submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | 
 agent() { (cd ../../apps/mes/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MANUFACTURING" -oidc-token "$IDP/oidc/token" "$@"); }
-[[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") | not)]') == '["platform.member.language","platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
+[[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") or startswith("files.") | not)]') == '["platform.member.language","platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
 event=$(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"
@@ -329,7 +338,8 @@ compose exec -T postgres pg_restore -U platform -d platform --no-owner <"$backup
 compose start manufacturing-server hospitality-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done
 [[ $(state) == "$before" ]] || fail "restored state is not the backup's"
-echo "ok   restore: new volume, state as of the backup"
+[[ $(download) == "WO-1 inspection: all good" ]] || fail "the file after the restore: $(download)"
+echo "ok   restore: new volume, state as of the backup; files still in RustFS"
 
 # What happened after the backup is lost on the server, not at the edge: the
 # operator's outbox still holds the completion and resends it with its key.

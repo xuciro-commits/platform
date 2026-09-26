@@ -57,3 +57,18 @@ test("route 18: health", async ({ page, request }) => {
   await open(page, "manager", "/automation");
   await expect(page.getByText(/^(Healthy|Needs attention)$/).first()).toBeVisible();
 });
+
+// Route 19 (ADR-0028): a file added on a record's page is listed there and
+// downloads for whoever may read the record.
+test("route 19: a file on a ticket", async ({ page, request }) => {
+  const ticket = fresh("T");
+  await decide(request, "desk", "csm", "csm.ticket.open", { type: "csm.ticket", id: ticket }, { subject: "Broken lamp", customer: "anna@acme.test" });
+  await open(page, "desk", `/record?type=csm.ticket&id=${ticket}`);
+  await page.locator('input[type="file"]').setInputFiles({ name: "lamp.txt", mimeType: "text/plain", buffer: Buffer.from("the lamp flickers") });
+  await expect(page.getByRole("button", { name: "lamp.txt" })).toBeVisible();
+  const view = await (await request.get(`/v1/records/csm.ticket/${ticket}`, { headers: { Authorization: "Bearer desk" } })).json();
+  const file = view.files[0];
+  const bytes = await request.get(`/v1/files/${file.id}`, { headers: { Authorization: "Bearer desk" } });
+  expect(await bytes.text()).toBe("the lamp flickers");
+  expect((await request.get(`/v1/files/${file.id}`, { headers: { Authorization: "Bearer sales-only" } })).status()).toBe(404);
+});

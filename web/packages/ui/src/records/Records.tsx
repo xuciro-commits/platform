@@ -29,7 +29,11 @@ export type EntityRecord = { id: string; revision: number; created: Stamp; chang
 export type RecordQuery = { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean };
 export type RecordPageData = Omit<Api.RecordPage, "records"> & { records: EntityRecord[] };
 export type RecordChange = Api.RecordChange;
-export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes"> & {
+/** A file attached to a record (ADR-0028). */
+export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string };
+
+export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes" | "files"> & {
+  files: AttachedFile[];
   record: EntityRecord; related: (Omit<Api.Related, "records"> & { records: EntityRecord[] })[];
   /** The flow instances about the record (ADR-0026 D4). */
   processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];
@@ -303,8 +307,10 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition }: {
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files }: {
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
+  /** Uploading a file to the record and downloading one (ADR-0028); without it the files are listed only. */
+  files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void };
   onOpen?: (type: string, r: EntityRecord) => void; reload?: number;
   /** The caller's catalog, and how to take a lifecycle transition (a decision on this record). */
   can?: (schema: string) => boolean; onTransition?: (schema: string, r: EntityRecord) => void;
@@ -333,6 +339,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
       </section>
       {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
+      {(view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
       {view.related.map((rel) => {
         const relInfo = source.entity(rel.type);
         const relEntity = relInfo && entityFrom(relInfo);
@@ -361,6 +368,38 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         </ol>
       </section>
     </div>
+  );
+}
+
+const size = (n: number) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${Math.round(n / 1024)} KB` : `${(n / (1 << 20)).toFixed(1)} MB`);
+
+/** A record's files: download each, add one. */
+function Files({ attached, files }: { attached: AttachedFile[]; files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void } }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <section>
+      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">{t("Files")}
+        {files && <label className="cursor-pointer text-xs font-normal text-[var(--tone-info)] hover:underline">
+          {busy ? t("Uploading…") : t("Add file")}
+          <input type="file" className="hidden" disabled={busy} onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            setBusy(true);
+            try { await files.upload(file); } finally { setBusy(false); }
+          }} />
+        </label>}
+      </h2>
+      {attached.length === 0 ? <p className="text-xs text-muted">{t("No files")}</p> :
+        <ul className="grid gap-1">
+          {attached.map((f) => (
+            <li key={f.id} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm">
+              <button type="button" className="font-medium hover:underline" disabled={!files} onClick={() => files?.download(f)}>{f.name}</button>
+              <span className="text-xs text-muted">{f.contentType} · {size(f.size)} · {f.by}</span>
+            </li>
+          ))}
+        </ul>}
+    </section>
   );
 }
 

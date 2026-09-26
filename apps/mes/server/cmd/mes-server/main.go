@@ -13,6 +13,7 @@ import (
 	"mes"
 	"platformserver"
 	"platformserver/apps/ai"
+	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/org"
@@ -62,7 +63,7 @@ func main() {
 	}
 	seats := deployment.Seats(demo)
 	t, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seats...),
-		org.New(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), knowledge.New(tenant), plant)
+		org.New(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), knowledge.New(tenant), files.New(tenant), plant)
 	if err == nil {
 		err = t.Connect(mes.DemoConnectors(tenant)...)
 	}

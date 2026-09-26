@@ -295,6 +295,7 @@ export type EntityInfo = {
   plural: string;
   description?: string;
   synonyms?: string;
+  knowledgeFiles?: boolean;
   app: string;
   display: string;
   fields: FieldInfo[];
@@ -562,6 +563,7 @@ export type RecordView = {
   history: RecordChange[];
   related: Related[];
   processes: unknown[];
+  files: unknown[];
 };
 
 export type Related = {
@@ -735,6 +737,13 @@ export type Unit = {
   from?: string;
   until?: string;
   closed?: string;
+};
+
+export type Upload = {
+  hash: string;
+  size: number;
+  contentType: string;
+  name: string;
 };
 
 export type Usage = {

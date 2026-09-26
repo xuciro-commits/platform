@@ -20,6 +20,20 @@ services:
       interval: 2s
       retries: 30
 
+  # File bytes (ADR-0028): RustFS, an S3-compatible object store; the journal keeps
+  # only each file's hash. Its console is on FILES_CONSOLE_PORT (platform / platform-files-local-only).
+  rustfs:
+    image: rustfs/rustfs:latest@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff # pinned; RustFS publishes often
+    environment:
+      RUSTFS_ACCESS_KEY: platform
+      RUSTFS_SECRET_KEY: platform-files-local-only
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+    ports: ["127.0.0.1:${FILES_PORT:-9000}:9000", "127.0.0.1:${FILES_CONSOLE_PORT:-9001}:9001"]
+    volumes: [files:/data]
+
   rauthy:
     image: ghcr.io/sebadob/rauthy:0.36.2
     command: ["serve"]
@@ -42,12 +56,15 @@ services:
       - -directory=/etc/manufacturing/directory.json
       - -web=/web
       - -project
+      - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${MANUFACTURING_PORT:-8490}:8490"]
     volumes: [./manufacturing/directory.json:/etc/manufacturing/directory.json:ro]
-    environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}" }
+    environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
+      PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only }
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }
+      rustfs: { condition: service_started }
     restart: on-failure
 
   hospitality-server:
@@ -60,13 +77,16 @@ services:
       - -directory=/etc/hospitality/directory.json
       - -web=/web
       - -project
+      - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495"]
     volumes: [./hospitality/directory.json:/etc/hospitality/directory.json:ro]
     # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.
-    environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}" }
+    environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
+      PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only }
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }
+      rustfs: { condition: service_started }
     restart: on-failure
 
   # A webhook receiver, mail server, model server and supplier's agent for local endpoints and the rehearsal (ADR-0014).
@@ -78,3 +98,4 @@ services:
 volumes:
   pgdata:
   rauthy:
+  files:

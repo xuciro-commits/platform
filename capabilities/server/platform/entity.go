@@ -62,6 +62,9 @@ type Entity struct {
 	Model       any    // the struct's zero value, e.g. Opportunity{}
 	Display     string // the field naming a record; default: the first search field, else the ID
 	Scope       Scope
+	// KnowledgeFiles makes the text files attached to its records knowledge,
+	// searched and cited like a knowledge field (ADR-0028 D3).
+	KnowledgeFiles bool
 	// Standard asks for generated create, edit and archive actions (D5),
 	// named <type>.create, <type>.edit and <type>.archive.
 	Standard Standard
@@ -147,6 +150,10 @@ type Scope struct {
 	// and approvers, a task's candidates: they read it whatever their role in
 	// the app, so whoever is told about a record can open it (F-31).
 	Participants func(record any) []string
+	// Through makes a record readable exactly when the record it names
+	// ("<type>/<id>") is: a file attached to a ticket, a comment on an order
+	// (ADR-0028). It replaces roles and levels for the type.
+	Through func(record any) string
 }
 
 const (
@@ -195,18 +202,19 @@ type FieldInfo struct {
 
 // EntityInfo is an entity type as the host and the UI see it.
 type EntityInfo struct {
-	Type        string         `json:"type"`
-	Title       string         `json:"title"`
-	Plural      string         `json:"plural"`
-	Description string         `json:"description,omitempty"`
-	Synonyms    string         `json:"synonyms,omitempty"`
-	App         string         `json:"app"`
-	Display     string         `json:"display"`
-	Fields      []FieldInfo    `json:"fields"`
-	Standard    []string       `json:"standard"` // the generated actions' schemas
-	Lifecycle   *LifecycleInfo `json:"lifecycle,omitempty"`
-	Go          reflect.Type   `json:"-"`
-	Scope       Scope          `json:"-"`
+	Type           string         `json:"type"`
+	Title          string         `json:"title"`
+	Plural         string         `json:"plural"`
+	Description    string         `json:"description,omitempty"`
+	Synonyms       string         `json:"synonyms,omitempty"`
+	KnowledgeFiles bool           `json:"knowledgeFiles,omitempty"` // its attached text files are knowledge (ADR-0028)
+	App            string         `json:"app"`
+	Display        string         `json:"display"`
+	Fields         []FieldInfo    `json:"fields"`
+	Standard       []string       `json:"standard"` // the generated actions' schemas
+	Lifecycle      *LifecycleInfo `json:"lifecycle,omitempty"`
+	Go             reflect.Type   `json:"-"`
+	Scope          Scope          `json:"-"`
 }
 
 // Field is the named field's description.
@@ -234,7 +242,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}}
+	info := EntityInfo{Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}}
 	if info.Title == "" {
 		info.Title = e.Type
 	}

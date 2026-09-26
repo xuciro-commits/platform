@@ -105,8 +105,12 @@ type Tenant struct {
 	listeners []string        // platform apps given other apps' events as owned work (host.Listener)
 	agents    *Agents         // AI agents (ADR-0021)
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
-	probing   bool            // a submission for approval is being checked, not applied
-	requests  []request       // accepted decisions' requests of other apps, run with their events (ADR-0026)
+	// Files keeps file bytes (ADR-0028 D1); nil: memory, for development and tests.
+	Files    FileStore
+	memFiles memoryFiles
+	uploads  map[string]time.Time // hashes uploaded and when, until attached or swept (volatile)
+	probing  bool                 // a submission for approval is being checked, not applied
+	requests []request            // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"context"
 	"slices"
 	"time"
 
@@ -97,3 +98,11 @@ func (h hostView) Runs() host.Runs {
 }
 
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
+
+func (h hostView) Readable(m platform.Member, ref string, now time.Time) bool {
+	return h.t.Readable(m, ref, now)
+}
+
+func (h hostView) Stored(tenant, hash string) bool {
+	return h.t.files().Exists(context.Background(), tenant+"/"+hash)
+}

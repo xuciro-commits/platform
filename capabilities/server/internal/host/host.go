@@ -38,6 +38,10 @@ type Host interface {
 	Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string
 	// Directory is the organisation, or nil when the tenant runs none.
 	Directory() Directory
+	// Readable reports whether m may read the record ref ("<type>/<id>") now.
+	Readable(m platform.Member, ref string, now time.Time) bool
+	// Stored reports whether the tenant's file store holds the bytes with this sha256 (ADR-0028).
+	Stored(tenant, hash string) bool
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
 	Declares(name string) bool
 	// Seen marks an app's notifications with any of keys read for everyone.

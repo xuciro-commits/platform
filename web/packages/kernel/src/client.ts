@@ -69,6 +69,22 @@ export class EdgeClient {
   }
 
   /** Calls a host service that is not a submission, such as a model call (ADR-0015): the answer's JSON comes back whatever its status. */
+  /** Uploads a file's bytes (ADR-0028); answers the hash to attach. */
+  async upload(file: Blob, name: string): Promise<{ hash: string; size: number; contentType: string; name: string }> {
+    const response = await fetch(`${this.connection.server}/v1/files?name=${encodeURIComponent(name)}`, {
+      method: "POST", headers: { ...this.headers(), "Content-Type": file.type || "application/octet-stream" }, body: file,
+    });
+    if (!response.ok) throw new Error(await response.text() || `upload failed: ${response.status}`);
+    return response.json();
+  }
+
+  /** A file's bytes, as the member may read them (ADR-0028). */
+  async download(id: string): Promise<Blob> {
+    const response = await fetch(`${this.connection.server}/v1/files/${encodeURIComponent(id)}`, { headers: this.headers() });
+    if (!response.ok) throw new Error(`download failed: ${response.status}`);
+    return response.blob();
+  }
+
   async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ ok: boolean; status: number; body: T }> {
     const response = await fetch(this.connection.server + path, {
       method, headers: this.headers(body !== undefined),

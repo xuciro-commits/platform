@@ -22,6 +22,7 @@ import (
 // development tokens, or with a PostgreSQL journal and an OpenID provider.
 type Deployment struct {
 	Addr, Database, Issuer, Keys, Directory, Web string
+	Files                                        string // http(s)://host:port/bucket of an S3-compatible store (ADR-0028); empty: memory
 	Project                                      bool
 	SnapshotEvery                                int64
 	// Seed gives a tenant whose journal is empty its first data, through
@@ -36,6 +37,7 @@ func Flags(addr string) *Deployment {
 	flag.StringVar(&d.Database, "database", "", "PostgreSQL URL of the journal (empty: memory only)")
 	flag.StringVar(&d.Issuer, "oidc-issuer", "", "OpenID issuer whose access tokens are accepted (empty: development tokens, the token is the subject)")
 	flag.StringVar(&d.Keys, "oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
+	flag.StringVar(&d.Files, "files", "", "S3-compatible store of file bytes, http(s)://host:port/bucket, keys from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY (empty: memory)")
 	flag.StringVar(&d.Directory, "directory", "", "JSON file with the seats of every tenant (empty: the built-in development seats)")
 	flag.BoolVar(&d.Project, "project", false, "copy records into PostgreSQL tables per tenant for tools outside the host (ADR-0019; needs -database)")
 	flag.Int64Var(&d.SnapshotEvery, "snapshot-every", 10000, "save each tenant's state every this many journal entries and at shutdown, and start from the newest snapshot of this code (ADR-0019; 0: replay the whole journal)")
@@ -68,6 +70,16 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	ctx := context.Background()
 	flush := exportTelemetry(ctx, filepath.Base(os.Args[0])) // traces and metrics, when an OTLP endpoint is set (ADR-0027 D5)
 	defer flush(context.Background())
+	if d.Files != "" {
+		store, err := NewS3Files(ctx, d.Files)
+		if err != nil {
+			return err
+		}
+		for _, t := range tenants {
+			t.Files = store
+		}
+		log.Printf("files in %s", d.Files)
+	}
 	var journal *Journal
 	code := CodeOf(tenants...)
 	restored := map[string]int64{} // each tenant's snapshot position at start-up, 0 without one
@@ -281,6 +293,7 @@ func RunWork(tenants ...*Tenant) {
 				t.Evaluate(Now())
 				t.Embed(Now())
 				t.PurgeTranscripts(Now())
+				t.SweepUploads(Now())
 			}
 		}
 	}()

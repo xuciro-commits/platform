@@ -3,6 +3,9 @@ package manufacturing
 import (
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
+	"platformserver/apps/files"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +131,21 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	}
 	// 10 kg of steel (50.00) into work in progress, 5 housings out at 12.00; the standard's 10.00 more is a variance.
 	expect("books", got, "1403 -5000; 1405 6000; 5001 0; 6404 -1000; ")
+	// ADR-0028: a photo of the finished order, attached to the shop order;
+	// the operator of its line downloads it, a member of the ERP alone does not.
+	photo, _, uerr := tn.Upload(sup, "SO-1.jpg", "image/jpeg", strings.NewReader("jpeg bytes"), now)
+	if uerr != nil {
+		t.Fatal(uerr)
+	}
+	expect("attach", do("sup-1", files.ID, files.SchemaAttach, files.FileType, "PH-1",
+		map[string]any{"hash": photo.Hash, "name": photo.Name, "contentType": photo.ContentType, "size": photo.Size, "target": mes.OrderType + "/SO-1"}), "ok")
+	opL1, _ := tn.Member("op-l1")
+	w := httptest.NewRecorder()
+	tn.Download(w, opL1, "PH-1", now)
+	expect("the line's operator downloads it", fmt.Sprint(w.Code, " ", w.Body.String()), "200 jpeg bytes")
+	w = httptest.NewRecorder()
+	tn.Download(w, platform.Member{ID: "clerk", Tenant: tenant, Roles: map[string]string{erp.ID: erp.Controller}}, "PH-1", now)
+	expect("the ERP's clerk does not", fmt.Sprint(w.Code), "404")
 	platformserver.CheckReplay(t, tn, journal, build)
 	_ = platform.Money{}
 }

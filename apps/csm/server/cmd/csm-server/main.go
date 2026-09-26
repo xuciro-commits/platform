@@ -12,6 +12,7 @@ import (
 	"csm"
 	"platformserver"
 	"platformserver/apps/ai"
+	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/apps/knowledge"
 	"platformserver/apps/work"
@@ -31,7 +32,7 @@ func main() {
 		seat("desk", "desk-1", map[string]string{csm.ID: csm.Desk}),
 	})
 	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), ai.New("dev"), work.New("dev"),
-		flow.New("dev"), platformserver.NewAgents("dev"), knowledge.New("dev"), csm.New("dev"))
+		flow.New("dev"), platformserver.NewAgents("dev"), knowledge.New("dev"), files.New("dev"), csm.New("dev"))
 	if err == nil {
 		err = deployment.Serve(t)
 	}

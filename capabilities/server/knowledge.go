@@ -1,13 +1,16 @@
 package platformserver
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
+	"platformserver/apps/files"
 	"reflect"
 	"slices"
 	"strings"
@@ -70,6 +73,7 @@ type index struct {
 	mu     sync.Mutex
 	docs   map[string]string   // source key → the revision indexed
 	chunks map[string][]*chunk // by source key
+	texts  map[string]string   // attached text files by content hash
 }
 
 // source is one text to index: a document, or an app's knowledge field.
@@ -85,6 +89,7 @@ func (t *Tenant) sources() []source {
 	for _, d := range docs {
 		out = append(out, source{key: knowledge.DocumentType + "/" + d.ID, title: d.Title, text: d.Text, revision: fmt.Sprint(d.Revision), apps: d.Apps})
 	}
+	out = append(out, t.fileSources(docs)...)
 	t.records.mu.Lock()
 	types := slices.Collect(func(yield func(*entityType) bool) {
 		for _, et := range t.records.types {
@@ -503,6 +508,56 @@ func decodeVector(b []byte) []float32 {
 	out := make([]float32, len(b)/4)
 	for i := range out {
 		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[4*i:]))
+	}
+	return out
+}
+
+// fileSources are the text files attached to knowledge documents, and to
+// records of types whose files are knowledge (ADR-0028 D3), read from the
+// store once per content.
+func (t *Tenant) fileSources(docs []knowledge.Document) []source {
+	if t.app(files.ID) == nil {
+		return nil
+	}
+	attached, _, _ := platform.Find[files.File](t.automation(files.ID, false), platform.Query{Limit: 100000})
+	var out []source
+	for _, f := range attached {
+		if !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
+			continue
+		}
+		typ, id, _ := strings.Cut(f.Target, "/")
+		var apps []string
+		switch {
+		case typ == knowledge.DocumentType:
+			i := slices.IndexFunc(docs, func(d knowledge.Document) bool { return d.ID == id })
+			if i < 0 {
+				continue
+			}
+			apps = docs[i].Apps
+		default:
+			t.records.mu.Lock()
+			et := t.records.types[typ]
+			t.records.mu.Unlock()
+			if et == nil || !et.info.KnowledgeFiles {
+				continue
+			}
+			apps = []string{et.info.App}
+		}
+		text, ok := t.index.texts[f.Hash]
+		if !ok {
+			body, _, err := t.files().Get(context.Background(), t.ID+"/"+f.Hash)
+			if err != nil {
+				continue
+			}
+			raw, _ := io.ReadAll(io.LimitReader(body, 1<<20))
+			body.Close()
+			text = string(raw)
+			if t.index.texts == nil {
+				t.index.texts = map[string]string{}
+			}
+			t.index.texts[f.Hash] = text
+		}
+		out = append(out, source{key: files.FileType + "/" + f.ID, title: f.Name, text: text, revision: f.Hash, apps: apps})
 	}
 	return out
 }

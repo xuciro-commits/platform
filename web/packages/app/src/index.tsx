@@ -182,18 +182,31 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
 
 /** A record page with its lifecycle's transitions and the generated edit and archive where the catalog grants them. */
 export function RecordDetail({ type, id }: { type: string; id: string }) {
-  const { source, can, decide } = useHost();
+  const { source, can, decide, client } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
   const transition = useTransition(type);
+  // Files (ADR-0028): upload the bytes, then attach them to this record by a decision.
+  const files = {
+    upload: async (file: File) => {
+      const up = await client.upload(file, file.name);
+      await decide("files.file.attach", { type: "files.file", id: newId("FILE") }, { hash: up.hash, name: up.name, contentType: up.contentType, size: up.size, target: `${type}/${id}` }, { expectedRevision: 0 });
+    },
+    download: async (f: { id: string; name: string }) => {
+      const url = URL.createObjectURL(await client.download(f.id));
+      const a = Object.assign(document.createElement("a"), { href: url, download: f.name });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+  };
   const act = async (schema: string, r: EntityRecord, payload: object) => {
     if (await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision })) setEditing(undefined);
   };
   return (
     <>
       <RecordPage source={source} type={type} id={id} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
-        can={can} onTransition={transition.take}
+        can={can} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         actions={(r) => <>
           <RecordActions type={type} record={r} />
           {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}

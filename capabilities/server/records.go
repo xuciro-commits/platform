@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/files"
 	"platformserver/apps/flow"
 	"platformserver/platform"
 )
@@ -592,7 +593,7 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	defer t.records.mu.Unlock()
 	out := []platform.EntityInfo{}
 	for _, et := range t.records.types {
-		if m.Roles[et.info.App] != "" || et.info.Scope.Participants != nil { // a participant opens records of types it holds no role in
+		if m.Roles[et.info.App] != "" || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
 			out = append(out, et.info)
 		}
 	}
@@ -600,9 +601,44 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	return out
 }
 
+// readableLocked reports whether m may read the record ref ("<type>/<id>"),
+// with the store's lock held.
+func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bool {
+	typ, id, _ := strings.Cut(ref, "/")
+	et := t.records.types[typ]
+	if et == nil {
+		return false
+	}
+	r := et.rows[id]
+	if r == nil {
+		return false
+	}
+	visible, err := t.visible(m, et, now)
+	return err == nil && (visible == nil || visible(r.value))
+}
+
+// Readable reports whether m may read the record ref ("<type>/<id>").
+func (t *Tenant) Readable(m platform.Member, ref string, now time.Time) bool {
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	return t.readableLocked(m, ref, now)
+}
+
 // visible is m's scope over a type's records on now's day (D4).
 func (t *Tenant) visible(m platform.Member, et *entityType, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
 	role, scope := m.Roles[et.info.App], et.info.Scope
+	if scope.Through != nil { // readable when the record it belongs to is; the store's lock is held by whoever calls it
+		seen := map[string]bool{}
+		return func(v reflect.Value) bool {
+			ref := scope.Through(v.Interface())
+			ok, known := seen[ref]
+			if !known {
+				ok = t.readableLocked(m, ref, now)
+				seen[ref] = ok
+			}
+			return ok
+		}, nil
+	}
 	participant := func(v reflect.Value) bool {
 		return scope.Participants != nil && slices.Contains(scope.Participants(v.Interface()), m.ID)
 	}
@@ -688,6 +724,7 @@ type RecordView struct {
 	History   []RecordChange `json:"history"`
 	Related   []Related      `json:"related"`
 	Processes []any          `json:"processes"`
+	Files     []any          `json:"files"` // attached to it (ADR-0028)
 }
 
 type Related struct {
@@ -713,11 +750,18 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	s.mu.Lock()
 	r := et.rows[id]
+	readable := r != nil && (visible == nil || visible(r.value))
 	s.mu.Unlock()
-	if r == nil || visible != nil && !visible(r.value) {
+	if !readable {
 		return RecordView{}, notFound
 	}
-	view := RecordView{Record: r.value.Interface(), History: []RecordChange{}, Related: []Related{}, Processes: []any{}}
+	view := RecordView{Record: r.value.Interface(), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Files: []any{}}
+	if typ != files.FileType && t.app(files.ID) != nil {
+		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
+		if page, err := t.Records(m, files.FileType, platform.Query{Domain: domain, Sort: []string{"id"}, Limit: 100}, now); err == nil {
+			view.Files = page.Records
+		}
+	}
 	if t.procs != nil {
 		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
 		if page, err := t.Records(m, flow.InstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
