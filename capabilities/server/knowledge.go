@@ -422,9 +422,13 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if pv.Wire == "anthropic" {
 		return nil, fmt.Errorf("the provider %s does not embed", pv.ID)
 	}
+	if !t.breakers.allow("ai:"+pv.ID, now) {
+		return nil, fmt.Errorf("the provider %s failed repeatedly; embedding waits", pv.ID)
+	}
 	body, _ := json.Marshal(map[string]any{"model": model.Model, "input": input})
 	started := time.Now()
 	status, answer, failure := t.aiRequest(pv, http.MethodPost, "/embeddings", body, aiTimeout)
+	t.breakers.report("ai:"+pv.ID, failure == nil && status < 500 && status != http.StatusTooManyRequests, now)
 	var out struct {
 		Data []struct {
 			Embedding []float32 `json:"embedding"`

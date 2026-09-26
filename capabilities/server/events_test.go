@@ -119,7 +119,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 		t.Fatalf("deliveries %v", got)
 	}
 	failed := tn.Tasks()
-	if len(failed) != 1 || failed[0].State != "failed" || failed[0].Attempts != maxAttempts || failed[0].Error != "ERROR_CODE_CONFLICT" {
+	if len(failed) != 1 || failed[0].State != "failed" || failed[0].Attempts != deliveryRetry.Attempts || failed[0].Error != "ERROR_CODE_CONFLICT" {
 		t.Fatalf("work %+v", failed)
 	}
 	if r := w.ledger.Changes.Records("t-1")[0]; r.GetSubmission().GetPrincipalId() != "app:w" {
@@ -132,13 +132,13 @@ func TestEventsAreOwnedWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	tn.Work(at(50))
-	if got := tn.Tasks(); len(got) != 1 || got[0].Attempts != maxAttempts+1 || got[0].State != "retrying" {
+	if got := tn.Tasks(); len(got) != 1 || got[0].Attempts != deliveryRetry.Attempts+1 || got[0].State != "retrying" {
 		t.Fatalf("after retry %+v", got)
 	}
 	for s := 51; s <= 90; s++ {
 		tn.Work(at(s))
 	}
-	if got := tn.Tasks(); len(got) != 1 || got[0].Attempts != 2*maxAttempts || got[0].State != "failed" {
+	if got := tn.Tasks(); len(got) != 1 || got[0].Attempts != 2*deliveryRetry.Attempts || got[0].State != "failed" {
 		t.Fatalf("after the retried schedule %+v", got)
 	}
 	// The journal holds the inputs and every attempt; a replay rebuilds the
@@ -147,7 +147,7 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	if err := again.Replay(journal); err != nil {
 		t.Fatal(err)
 	}
-	if w2.texts["log"] != "saw why" || !slices.Equal(outcomes(again), outcomes(tn)) || len(again.Tasks()) != 1 || again.Tasks()[0].Attempts != 2*maxAttempts {
+	if w2.texts["log"] != "saw why" || !slices.Equal(outcomes(again), outcomes(tn)) || len(again.Tasks()) != 1 || again.Tasks()[0].Attempts != 2*deliveryRetry.Attempts {
 		t.Fatalf("replay: %v, %v, %+v", w2.texts, outcomes(again), again.Tasks())
 	}
 	CheckReplay(t, tn, journal, func() *Tenant { tn, _ := build(); return tn })

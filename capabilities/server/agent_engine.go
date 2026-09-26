@@ -46,14 +46,27 @@ type turn struct {
 // Think gives each running agent its next model turn (ADR-0021). The host
 // calls it every second, apart from other owned work: model calls are slow and
 // happen outside the tenant's lock; each answer is then journaled and applied.
-func (t *Tenant) Think(now time.Time) {
+func (t *Tenant) Think(now time.Time) { onLane(t.turns(now)) }
+
+// turns are the agents' due turns, to run on the I/O lane (ADR-0027 D2): each
+// calls its model outside the tenant's lock.
+func (t *Tenant) turns(now time.Time) []func() {
 	if t.agents == nil {
-		return
+		return nil
 	}
+	var out []func()
 	for _, x := range t.agents.due(now) {
+		out = append(out, func() { t.take(x, now) })
+	}
+	return out
+}
+
+// take takes one run's turn: its model's answer becomes the run's next step.
+func (t *Tenant) take(x turn, now time.Time) {
+	{
 		if x.stop != "" {
 			t.agentStep(stepBody{Run: x.run.ID, Stop: x.stop}, now)
-			continue
+			return
 		}
 		answer, failure := t.call(x.pv, x.model, t.agents.member(x.run.Agent), x.req, now)
 		body := stepBody{Run: x.run.ID, Content: answer.Content, Usage: answer.Usage}
@@ -112,6 +125,9 @@ func (a *Agents) due(now time.Time) []turn {
 			if err != nil {
 				x.stop = "the model " + name + " is not enabled"
 				break
+			}
+			if !t.breakers.allow("ai:"+pv.ID, now) {
+				continue // its provider's breaker is open: the run waits
 			}
 			x.model, x.pv, x.req = model, pv, a.prompt(c, d, run, name, now)
 			x.req.run = run.ID

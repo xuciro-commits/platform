@@ -76,6 +76,12 @@ type AIError struct {
 
 func (e *AIError) Error() string { return e.Detail }
 
+// unavailable is a failure that says the provider is down or overloaded, not
+// that the request was wrong: no answer, a rate limit or a server error.
+func unavailable(e *AIError) bool {
+	return e.Status == 0 || e.Status == http.StatusTooManyRequests || e.Status >= 500
+}
+
 // models is the AI app as the host calls models for members and agents: the
 // enabled models and their providers, and the usage of every call.
 type models interface {
@@ -100,6 +106,9 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time) (ChatAn
 	if err != nil {
 		return ChatAnswer{}, err, nil
 	}
+	if !t.breakers.allow("ai:"+pv.ID, now) {
+		return ChatAnswer{}, nil, &AIError{Status: http.StatusServiceUnavailable, Detail: "the provider " + pv.ID + " failed repeatedly; its calls wait until it answers again"}
+	}
 	answer, failure := t.call(pv, model, m, req, now)
 	t.meter(m, answer.Usage)
 	return answer, nil, failure
@@ -113,6 +122,7 @@ func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req Cha
 		complete = t.completeAnthropic
 	}
 	answer, u, failure := complete(pv, model.Model, req)
+	t.breakers.report("ai:"+pv.ID, failure == nil || !unavailable(failure), now)
 	u.At, u.Member, u.Agent, u.Model, u.Millis, u.Outcome = now, m.ID, m.Agent, model.Name(), time.Since(started).Milliseconds(), "ok"
 	if failure != nil {
 		u.Outcome = failure.Detail

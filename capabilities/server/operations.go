@@ -21,12 +21,21 @@ import (
 // and a replay runs it again through the same code (ADR-0007).
 
 const (
-	maxAttempts = 5   // a delivery then fails and its queue moves on
-	maxHops     = 100 // events caused by handlers of events …: a subscription cycle
-	workBurst   = 100 // attempts per app in one Work call
+	maxHops   = 100 // events caused by handlers of events …: a subscription cycle
+	workBurst = 100 // attempts per app in one Work call
 )
 
-func backoff(attempts int) time.Duration { return time.Second << attempts } // 2 s, 4 s, 8 s, 16 s
+// deliveryRetry is how an event delivery tries again unless its subscriber
+// declares otherwise: 2 s, 4 s, 8 s, 16 s, then it fails.
+var deliveryRetry = platform.Retry{Initial: 2 * time.Second, Max: time.Minute, Attempts: 5}
+
+// retryOf is the retry of deliveries to app.
+func (t *Tenant) retryOf(app string) platform.Retry {
+	if a := t.app(app); a != nil && a.Manifest().Retry != nil {
+		return *a.Manifest().Retry
+	}
+	return deliveryRetry
+}
 
 // Task is one piece of owned work: an event for a subscriber, or a job.
 type Task struct {
@@ -253,7 +262,8 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 		Outcome: outcome, Attempt: int(generation)})
 	t.opsMu.Lock()
 	task.Attempts, task.Last = int(generation), now
-	done := outcome == "ok" || task.Attempts-task.since >= maxAttempts
+	retry := t.retryOf(task.App)
+	done := outcome == "ok" || task.Attempts-task.since >= retry.Attempts
 	if done {
 		t.queues[task.App] = slices.DeleteFunc(t.queues[task.App], func(x *Task) bool { return x == task })
 	}
@@ -264,9 +274,12 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 		task.State, task.Error = "failed", outcome
 		t.failed = append(t.failed, task)
 	default:
-		task.State, task.Error, task.Due = "retrying", outcome, now.Add(backoff(task.Attempts-task.since))
+		task.State, task.Error, task.Due = "retrying", outcome, now.Add(retry.After(task.Attempts-task.since))
 	}
 	t.opsMu.Unlock()
+	if task.State == "failed" {
+		t.failedWork("Delivery to "+task.App+" failed: "+task.Title, outcome, task.ID, now, replaying)
+	}
 	if !replaying {
 		body, _ := json.Marshal(workBody{Work: task.ID, Outcome: outcome})
 		t.record(t.app(task.App), "delivery", t.automation(task.App, false).Member, body, now)
@@ -323,6 +336,16 @@ func (t *Tenant) replayWork(kind string, raw []byte, at time.Time) error {
 		return fmt.Errorf("%s %s ended %s, recorded %s", kind, b.Work, outcome, b.Outcome)
 	}
 	return nil
+}
+
+// failedWork tells the platform's administrators that owned work gave up, so
+// someone retries it (ADR-0027 D4); a replay tells them again, the same way.
+func (t *Tenant) failedWork(title, why, id string, now time.Time, replaying bool) {
+	if t.app(PlatformApp) == nil {
+		return
+	}
+	t.automation(PlatformApp, replaying).Notify(platform.Notification{Title: title, Body: why + ". Retry it in Settings → Automation once the cause is fixed.",
+		Key: "failed:" + id}, now, platform.Recipient{AppRole: Admin})
 }
 
 // Tasks lists the tenant's owned work: jobs, queued and retrying deliveries, and failed ones.

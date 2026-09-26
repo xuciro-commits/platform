@@ -18,6 +18,20 @@ type Job struct {
 	Every time.Duration `json:"every"`
 }
 
+// Retry is how owned work tries again (ADR-0027 D4): the first wait, doubling
+// up to Max, at most Attempts attempts; then it fails, is shown, and a person
+// retries it. The host declares one per kind of work; an app may declare its
+// own for the events delivered to it (Manifest.Retry).
+type Retry struct {
+	Initial, Max time.Duration
+	Attempts     int
+}
+
+// After is the wait after the given number of failed attempts.
+func (r Retry) After(attempts int) time.Duration {
+	return min(r.Initial<<max(attempts-1, 0), r.Max)
+}
+
 // Setting is a typed per-tenant value an app declares and administrators set in
 // Settings; a value within the app's rules, never a rule (ADR-0008 point 2).
 type Setting struct {

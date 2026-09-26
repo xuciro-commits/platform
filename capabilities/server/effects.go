@@ -64,17 +64,19 @@ type effect struct {
 	sending bool
 }
 
+// effectRetry is how an effect tries again: 5 s … 1 h apart, about seven hours, then failed.
+var effectRetry = platform.Retry{Initial: 5 * time.Second, Max: time.Hour, Attempts: 12}
+
 const (
-	effectAttempts = 12 // 5 s … 1 h apart: about seven hours, then failed
-	effectsKept    = 1000
-	bodyKept       = 30 * 24 * time.Hour
-	effectTimeout  = 10 * time.Second
+	effectsKept   = 1000
+	bodyKept      = 30 * 24 * time.Hour
+	effectTimeout = 10 * time.Second
 )
 
 // effectBackoff grows from 5 s to an hour, with jitter derived from the key so
 // a replay computes the same due time.
 func effectBackoff(id string, attempts int) time.Duration {
-	d := min(5*time.Second<<(attempts-1), time.Hour)
+	d := effectRetry.After(attempts)
 	h := fnv.New32a()
 	h.Write([]byte(id + strconv.Itoa(attempts)))
 	return d + time.Duration(h.Sum32()%1000)*d/5000 // up to +20 %
@@ -233,7 +235,12 @@ func (t *Tenant) secret(name string) ([]byte, bool) {
 // Dispatch makes the attempts that are due at now: the head of each endpoint's
 // effects (ordered per endpoint, D2). It sends outside every lock and journals
 // each outcome. The host calls it every second; it is never called in replay.
-func (t *Tenant) Dispatch(now time.Time) {
+func (t *Tenant) Dispatch(now time.Time) { onLane(t.dispatches(now)) }
+
+// dispatches are the attempts due at now, to run on the I/O lane: endpoints
+// side by side, each in its order; an endpoint whose breaker is open waits,
+// spending no attempts.
+func (t *Tenant) dispatches(now time.Time) []func() {
 	type job struct {
 		effect   platform.Effect
 		endpoint Endpoint
@@ -241,6 +248,9 @@ func (t *Tenant) Dispatch(now time.Time) {
 	var jobs []job
 	t.opsMu.Lock()
 	for _, ep := range t.endpoints {
+		if !t.breakers.allow("endpoint:"+ep.ID, now) {
+			continue
+		}
 		// A held effect waits for its approval outside the endpoint's order.
 		i := slices.IndexFunc(t.outbound, func(x *effect) bool { return x.Endpoint == ep.ID && !settled(x.State) && x.State != "held" })
 		if i < 0 || t.outbound[i].sending || t.outbound[i].Due.After(now) {
@@ -250,10 +260,15 @@ func (t *Tenant) Dispatch(now time.Time) {
 		jobs = append(jobs, job{t.outbound[i].Effect, *ep})
 	}
 	t.opsMu.Unlock()
+	var sends []func()
 	for _, j := range jobs {
-		outcome := t.send(j.endpoint, j.effect, now)
-		t.settle(j.effect.ID, outcome, now)
+		sends = append(sends, func() {
+			outcome := t.send(j.endpoint, j.effect, now)
+			t.breakers.report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
+			t.settle(j.effect.ID, outcome, now)
+		})
 	}
+	return sends
 }
 
 // send makes one attempt, signed as Standard Webhooks, with the effect's ID as
@@ -357,6 +372,9 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	if !ok {
 		return false
 	}
+	if x.State == "failed" {
+		t.failedWork("Effect to "+x.Endpoint+" failed: "+x.Event, x.Error, x.ID, at, replaying)
+	}
 	if x.App != "" && settled(x.State) && x.State != "discarded" {
 		if a, ok := t.app(x.App).(platform.Answerer); ok {
 			a.Answer(t.automation(x.App, replaying), x, o, at)
@@ -388,7 +406,7 @@ func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) 
 		x.State = "delivered"
 	case o.Result == "rejected":
 		x.State = "rejected"
-	case x.Attempts-x.since >= effectAttempts:
+	case x.Attempts-x.since >= effectRetry.Attempts:
 		x.State = "failed"
 	default:
 		x.State, x.Due = "retrying", at.Add(effectBackoff(x.ID, x.Attempts-x.since))

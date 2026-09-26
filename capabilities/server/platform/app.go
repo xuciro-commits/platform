@@ -94,6 +94,7 @@ type Manifest struct {
 	Consumes   []Consumption // protocols this app uses; the host binds a provider
 	Everyone   []string      // reads any member may use; the app filters by caller
 	Jobs       []Job         // scheduled work (Runner), ADR-0013
+	Retry      *Retry        // how events delivered to it are retried; nil: the host's (ADR-0027 D4)
 	Settings   []Setting     // typed values administrators set in Settings
 	Emits      []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0014)
 	Entities   []Entity      // entity types whose records the host keeps (ADR-0016)

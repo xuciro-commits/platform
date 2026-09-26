@@ -250,9 +250,9 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0012 | Successors of merged or split units; posts; delegation; federation | Deferred |
 | 0013 | Work kept in K9 `Works` | Partial: generations only; checkpoints unused |
 | 0013 | An app's work stops when it is disabled | Deferred (with per-tenant disable) |
-| 0014 | Per-endpoint limits; a breaker per destination | Partial: a fixed 10 s timeout and 64 KiB answer; the ordered queue holds the rest behind a failing head |
+| 0014 | Per-endpoint limits; a breaker per destination | Built (ADR-0027 10b): a breaker per endpoint, endpoints sent side by side; a fixed 10 s timeout and 64 KiB answer remain |
 | 0014 | Webhooks filtered by who may see an event | Amended (#104): an endpoint has the administrator's view |
-| 0015 | Quotas and rate limits, app calls as effects, streaming | Deferred (batch 2); agents have a daily token quota |
+| 0015 | Quotas and rate limits, app calls as effects, streaming | Partial: attempts per app per minute (ADR-0027 10a), a breaker per provider (10b), agents' daily tokens; rate limits per member and model, app calls as effects and streaming deferred |
 | 0016 | References to a protocol's entity type | Deferred; generated forms offer choices for references (ADR-0024 7a) |
 | 0017 | Delegation and substitutes; business calendars | Deferred |
 | 0018 | The backend-for-frontend token; UI bundles loaded at run time | Deferred (stage 9) |

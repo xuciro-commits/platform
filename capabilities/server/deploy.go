@@ -261,16 +261,14 @@ func RunWork(tenants ...*Tenant) {
 	go func() {
 		for range time.Tick(time.Second) {
 			Schedule(tenants, Now(), roundSize, 900*time.Millisecond)
+			// Work on the outside — effects (ADR-0014) and agents' model calls
+			// (ADR-0021) — goes to the I/O lane of every tenant at once, outside
+			// their locks; the next tick does not wait for it (ADR-0027 D2).
+			var outside []func()
 			for _, t := range tenants {
-				t.Dispatch(Now()) // outbound effects, outside the tenant's lock (ADR-0014)
+				outside = append(append(outside, t.dispatches(Now())...), t.turns(Now())...)
 			}
-		}
-	}()
-	go func() { // agents' model calls are slow: apart from the rest (ADR-0021)
-		for range time.Tick(time.Second) {
-			for _, t := range tenants {
-				t.Think(Now())
-			}
+			go onLane(outside)
 		}
 	}()
 	go func() { // evaluations, embeddings and old transcripts: many calls, apart from runs

@@ -76,6 +76,7 @@ type Tenant struct {
 	Quota       int
 	used        map[string]usedMinute // attempts per app in the current minute (volatile)
 	turn        int                   // the app the next round starts at
+	breakers    breakers              // per endpoint and AI provider (volatile)
 	connectors  *kernel.Connectors
 	descriptors map[string]*pb.ConnectorDescriptor
 	lastError   map[string]ConnectorError
