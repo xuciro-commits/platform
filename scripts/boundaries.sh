@@ -9,7 +9,9 @@
 #   3. every app has one shape (ADR-0025 D2): apps/<id>/server is the Go module
 #      <id> with <id>.go, <id>_test.go, i18n/zh-CN.json and a development host
 #      cmd/<id>-server; its UI, when it has one, is web/packages/<id> with
-#      src/index.tsx and src/i18n.ts.
+#      src/index.tsx and src/i18n.ts;
+#   4. the host's own apps (capabilities/server/apps/*) import the app API and
+#      internal/host, never the host runtime (ADR-0025 D4).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
@@ -39,4 +41,7 @@ for x in "${apps[@]}"; do
   ui=web/packages/$id
   [[ ! -d $ui ]] || [[ -f $ui/src/index.tsx && -f $ui/src/i18n.ts ]] || fail "$ui has no src/index.tsx and src/i18n.ts"
 done
-echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocols"
+hits=$(cd capabilities/server && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./apps/... 2>/dev/null | grep -E ' platformserver( |$)' || true)
+[[ -z $hits ]] || fail "a platform app imports the host runtime, not the app API and internal/host:"$'\n'"$hits"
+platformapps=$(cd capabilities/server && go list ./apps/... 2>/dev/null | wc -l | tr -d ' ')
+echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocols, $platformapps platform apps as packages"

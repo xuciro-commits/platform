@@ -11,6 +11,7 @@ import (
 
 	"hcm"
 	"platformserver"
+	"platformserver/apps/org"
 	"platformserver/platform"
 )
 
@@ -24,10 +25,10 @@ func main() {
 		seat("employee", "employee-1", map[string]string{hcm.ID: hcm.Employee}),
 		seat("manager", "manager-1", map[string]string{hcm.ID: hcm.Employee}),
 		seat("head", "head-1", map[string]string{hcm.ID: hcm.Employee}),
-		seat("hr", "hr-1", map[string]string{hcm.ID: hcm.HR, platformserver.PlatformApp: platformserver.Admin, platformserver.OrgApp: platformserver.OrgAdmin,
+		seat("hr", "hr-1", map[string]string{hcm.ID: hcm.HR, platformserver.PlatformApp: platformserver.Admin, org.ID: org.Admin,
 			platformserver.WorkApp: platformserver.WorkAdmin}),
 	})
-	org := platformserver.NewOrganization("dev", platform.OrgSeed{Structures: []platform.Structure{{ID: hcm.Structure, Name: "Management", Kind: "management"}},
+	org := org.New("dev", platform.OrgSeed{Structures: []platform.Structure{{ID: hcm.Structure, Name: "Management", Kind: "management"}},
 		Units: []platform.Unit{{ID: "company", Name: "Company", Kind: "company"}, {ID: "team", Name: "Team", Kind: "department"}},
 		Edges: []platform.Edge{{Structure: hcm.Structure, Unit: "team", Parent: "company"}},
 		Memberships: []platform.Membership{{Party: "member:employee-1", Unit: "team", Role: "employee"}, {Party: "member:manager-1", Unit: "team", Role: "manager"},

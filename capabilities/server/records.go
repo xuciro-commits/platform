@@ -616,14 +616,12 @@ func (t *Tenant) visible(m platform.Member, et *entityType, now time.Time) (func
 		return func(v reflect.Value) bool { return owner(v) == m.ID }, nil
 	case platform.ScopeUnit, platform.ScopeBelow:
 		var units []string
-		if t.org != nil {
-			t.org.mu.Lock()
+		if t.directory != nil {
 			structure := scope.Structure
 			if scope.Level(role) == platform.ScopeUnit {
 				structure = ""
 			}
-			units = t.org.units("member:"+m.ID, structure, now.UTC().Format(time.DateOnly))
-			t.org.mu.Unlock()
+			units = t.directory.Units("member:"+m.ID, structure, now.UTC().Format(time.DateOnly))
 		}
 		unit := field(scope.Unit)
 		return func(v reflect.Value) bool { return slices.Contains(units, unit(v)) }, nil

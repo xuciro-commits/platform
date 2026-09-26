@@ -14,6 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/relations"
 	"platformserver/platform"
 )
 
@@ -101,7 +102,7 @@ func (w *world) stays(who string) []lodging.Booking {
 
 func (w *world) timeline(who, entity string) []string {
 	var out []string
-	for _, n := range w.read(who, "timeline").([]platformserver.Note) {
+	for _, n := range w.read(who, "timeline").([]relations.Note) {
 		if n.Entity == entity {
 			out = append(out, n.By+": "+n.Text)
 		}
@@ -231,7 +232,7 @@ func TestCatalogFollowsTheProvidersGrants(t *testing.T) {
 		t.Fatal("booking is offered without the provider's grant")
 	}
 	// Without any provider the optional protocol is unbound and booking is not offered.
-	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), platformserver.NewRelations("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), crm.New("t"))
+	bare, err := platformserver.NewTenant("t", platformserver.NewConsole("t"), relations.New("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), crm.New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}

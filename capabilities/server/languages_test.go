@@ -10,6 +10,8 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
+	"platformserver/apps/org"
+	"platformserver/apps/relations"
 	"platformserver/platform"
 )
 
@@ -17,14 +19,14 @@ import (
 // records never; every platform app's text has a Chinese translation.
 func TestLanguages(t *testing.T) {
 	tn, err := NewTenant("t-1", NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana",
-		Roles: map[string]string{PlatformApp: Admin, WorkApp: "member", OrgApp: "admin"}}},
+		Roles: map[string]string{PlatformApp: Admin, WorkApp: "member", org.ID: "admin"}}},
 		Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{WorkApp: "member"}}},
 		Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{WorkApp: "member"}}}),
-		NewOrganization("t-1", platform.OrgSeed{}), NewRelations("t-1"), NewWork("t-1"), NewFlows("t-1"), NewAI("t-1"), NewAgents("t-1"), NewKnowledge("t-1"))
+		org.New("t-1", platform.OrgSeed{}), relations.New("t-1"), NewWork("t-1"), NewFlows("t-1"), NewAI("t-1"), NewAgents("t-1"), NewKnowledge("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, app := range []string{PlatformApp, OrgApp, RelationsApp, WorkApp, FlowApp, AIApp, AgentApp, KnowledgeApp} {
+	for _, app := range []string{PlatformApp, org.ID, relations.ID, WorkApp, FlowApp, AIApp, AgentApp, KnowledgeApp} {
 		if missing := tn.Untranslated(app, "zh-CN"); len(missing) > 0 {
 			t.Errorf("%s lacks Chinese for %q", app, missing)
 		}

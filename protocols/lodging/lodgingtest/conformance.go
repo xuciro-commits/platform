@@ -11,6 +11,7 @@ import (
 
 	"lodging"
 	"platformserver"
+	"platformserver/apps/relations"
 	"platformserver/platform"
 )
 
@@ -64,7 +65,7 @@ func Conformance(t *testing.T, tenant *platformserver.Tenant, member platform.Me
 	}
 	timeline, _ := tenant.Read(member, "timeline")
 	var told []string
-	for _, n := range timeline.([]platformserver.Note) {
+	for _, n := range timeline.([]relations.Note) {
 		if strings.HasSuffix(n.Entity, "/LB-1") {
 			told = append(told, strings.SplitN(n.Text, " (", 2)[0])
 		}

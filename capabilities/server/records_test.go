@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/org"
 	"platformserver/platform"
 )
 
@@ -86,7 +87,7 @@ func stockTenant(t testing.TB) *Tenant {
 	seat := func(id, role string) Seat {
 		return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{"stock": role}}}
 	}
-	org := NewOrganization("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Site", Kind: "site"}},
+	org := org.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Site", Kind: "site"}},
 		Units: []platform.Unit{{ID: "plant", Kind: "plant"}, {ID: "L1", Kind: "line"}, {ID: "L2", Kind: "line"}},
 		Edges: []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}, {Structure: "site", Unit: "L2", Parent: "plant"}},
 		Memberships: []platform.Membership{{Party: "member:lead", Unit: "plant", Role: "lead"}, {Party: "member:op", Unit: "L1", Role: "op"},

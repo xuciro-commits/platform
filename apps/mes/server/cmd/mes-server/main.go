@@ -12,6 +12,7 @@ import (
 
 	"mes"
 	"platformserver"
+	"platformserver/apps/org"
 	"platformserver/platform"
 )
 
@@ -35,7 +36,7 @@ func agent(s platformserver.Seat) platformserver.Seat { s.Agent = true; return s
 func seat(subject, id string, role mes.Role, units ...string) platformserver.Seat {
 	s := platformserver.Seat{Subjects: []string{subject}, Member: platform.Member{ID: id, Roles: map[string]string{"mes": string(role)}}}
 	if subject == "supervisor" {
-		s.Roles[platformserver.PlatformApp], s.Roles[platformserver.OrgApp], s.Roles[platformserver.AIApp] = platformserver.Admin, platformserver.OrgAdmin, platformserver.AIAdmin
+		s.Roles[platformserver.PlatformApp], s.Roles[org.ID], s.Roles[platformserver.AIApp] = platformserver.Admin, org.Admin, platformserver.AIAdmin
 		s.Roles[platformserver.FlowApp], s.Roles[platformserver.AgentApp] = platformserver.FlowAdmin, platformserver.AgentAdmin
 		s.Roles[platformserver.KnowledgeApp] = platformserver.KnowledgeEditor
 	}
@@ -57,7 +58,7 @@ func main() {
 	}
 	seats := deployment.Seats(demo)
 	t, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seats...),
-		platformserver.NewOrganization(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), platformserver.NewAI(tenant), platformserver.NewWork(tenant), platformserver.NewFlows(tenant), platformserver.NewAgents(tenant), platformserver.NewKnowledge(tenant), plant)
+		org.New(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), platformserver.NewAI(tenant), platformserver.NewWork(tenant), platformserver.NewFlows(tenant), platformserver.NewAgents(tenant), platformserver.NewKnowledge(tenant), plant)
 	if err == nil {
 		err = t.Connect(mes.DemoConnectors(tenant)...)
 	}

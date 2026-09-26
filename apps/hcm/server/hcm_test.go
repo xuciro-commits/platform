@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/org"
 	"platformserver/platform"
 )
 
@@ -21,7 +22,7 @@ func TestLeaveApprovals(t *testing.T) {
 		seat := func(id string, roles map[string]string, agent bool) platformserver.Seat {
 			return platformserver.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles, Agent: agent}}
 		}
-		org := platformserver.NewOrganization("t", platform.OrgSeed{Structures: []platform.Structure{{ID: Structure, Name: "Management", Kind: "management"}},
+		org := org.New("t", platform.OrgSeed{Structures: []platform.Structure{{ID: Structure, Name: "Management", Kind: "management"}},
 			Units: []platform.Unit{{ID: "acme", Name: "Acme", Kind: "company"}, {ID: "sales", Name: "Sales", Kind: "department"}},
 			Edges: []platform.Edge{{Structure: Structure, Unit: "sales", Parent: "acme"}},
 			Memberships: []platform.Membership{{Party: "member:alice", Unit: "sales", Role: "employee"}, {Party: "member:bob", Unit: "sales", Role: "manager"},

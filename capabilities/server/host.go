@@ -14,6 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -55,10 +56,11 @@ type Tenant struct {
 	deliveries []Delivery
 	events     []caused // published during the current input, queued after it
 	bindings   map[string]binding
-	relations  *Relations
-	org        *Organization
-	hops       int // of the event being handled, for the events it causes
-	acted      int // decisions published and notifications given, ever
+	observers  []host.Observer // the platform's views derived from events, inside the input
+	linker     host.Linker     // serves Caller.Link and Caller.Links
+	directory  host.Directory  // the organisation, when composed
+	hops       int             // of the event being handled, for the events it causes
+	acted      int             // decisions published and notifications given, ever
 	works      *kernel.Works
 	// opsMu guards what reads and the runner share: queues, connectors,
 	// notifications and settings (operations.go). It is never held while t.mu is taken.
@@ -136,11 +138,18 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if err := t.bind(i, a); err != nil {
 			return nil, err
 		}
-		if r, ok := a.(*Relations); ok {
-			t.relations, r.t = r, t
+		// Roles the host's own apps take (ADR-0025 D4), by the interfaces they implement.
+		if x, ok := a.(host.Attached); ok {
+			x.Attach(hostView{t})
 		}
-		if o, ok := a.(*Organization); ok {
-			t.org = o
+		if x, ok := a.(host.Observer); ok {
+			t.observers = append(t.observers, x)
+		}
+		if x, ok := a.(host.Linker); ok {
+			t.linker = x
+		}
+		if x, ok := a.(host.Directory); ok {
+			t.directory = x
 		}
 		if d, ok := a.(*Console); ok {
 			d.t = t

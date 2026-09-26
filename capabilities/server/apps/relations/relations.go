@@ -1,4 +1,6 @@
-package platformserver
+// Package relations is the platform's links and timeline (ADR-0011), a
+// platform app on the app API and internal/host (ADR-0025 D4).
+package relations
 
 import (
 	"encoding/json"
@@ -9,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -18,7 +21,7 @@ import (
 // apps it holds a role in, and sees only those. Protocol events are told on the
 // timeline of the entity they concern and of every entity linked to it.
 const (
-	RelationsApp = "relations"
+	ID           = "relations"
 	LinkType     = "platform.link"
 	NoteType     = "platform.note"
 	SchemaLink   = "platform.link"
@@ -41,19 +44,19 @@ type Note struct {
 }
 
 type Relations struct {
-	t      *Tenant // the tenant running it, once composed (NewTenant)
+	host   host.Host // the tenant running it, once composed
 	mu     sync.Mutex
 	links  []Link
 	notes  []Note
 	ledger *platform.Ledger
 }
 
-func NewRelations(tenant string) *Relations {
+func New(tenant string) *Relations {
 	any := []string{platform.AnyMember}
 	ref := func(name string) platform.Field {
 		return platform.Field{Name: name, Type: "entity", Required: true, Description: "<type>/<id> of an entity of an app you hold a role in"}
 	}
-	return &Relations{ledger: platform.NewLedger(tenant, RelationsApp, platform.NewCatalog(
+	return &Relations{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaLink, Target: LinkType, Capability: "links", Title: "Link entities",
 			Description: "Relate two entities, of the same or of different apps.", Payload: []platform.Field{ref("from"), ref("to")}, Roles: any},
 		platform.Action{Schema: SchemaUnlink, Target: LinkType, Capability: "links", Title: "Unlink entities",
@@ -88,7 +91,7 @@ func (r *Relations) Restore(raw json.RawMessage) error {
 }
 
 func (r *Relations) Manifest() platform.Manifest {
-	return platform.Manifest{ID: RelationsApp, Title: "Relations", Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"}}
+	return platform.Manifest{ID: ID, Title: "Relations", Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"}}
 }
 
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
@@ -100,16 +103,15 @@ func (r *Relations) Input(platform.Caller, string, []byte, time.Time) (any, *ker
 // sees reports whether c holds a role in the app owning entity "<type>/<id>".
 func (r *Relations) sees(c platform.Caller, entity string) bool {
 	class, _, ok := strings.Cut(entity, "/")
-	if !ok || r.t == nil {
+	if !ok || r.host == nil {
 		return false
 	}
-	for _, a := range r.t.apps {
-		if slices.ContainsFunc(a.Declarations(), func(d *pb.AuthorityDeclaration) bool { return d.GetDataClass() == class }) {
-			return c.Roles[a.Manifest().ID] != ""
-		}
-	}
-	return false
+	app, ok := r.host.OwnerOf(class)
+	return ok && c.Roles[app] != ""
 }
+
+// Attach is the host handing itself to the app (host.Attached).
+func (r *Relations) Attach(h host.Host) { r.host = h }
 
 func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	r.mu.Lock()
@@ -174,15 +176,16 @@ func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-// observe tells protocol events on the timeline of their entity and of the
-// entities linked to it. It runs during delivery, so replay tells them again.
-func (r *Relations) observe(t *Tenant, e platform.Event, events []string) {
+// Observe tells protocol events on the timeline of their entity and of the
+// entities linked to it (host.Observer). It runs inside the input, so replay
+// tells them again.
+func (r *Relations) Observe(e platform.Event, events []string) {
 	s := e.Record.GetSubmission()
 	entity := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, name := range events {
-		declared, _ := t.protocolEvent(name)
+		declared, _ := r.host.ProtocolEvent(name)
 		text := declared.Title + " (" + entity + ", by " + s.GetPrincipalId() + ")"
 		about := []string{entity}
 		for _, l := range r.links {
@@ -199,12 +202,8 @@ func (r *Relations) observe(t *Tenant, e platform.Event, events []string) {
 	}
 }
 
-// linksOf are the entities linked to entity that c sees (Caller.Links).
-func (t *Tenant) linksOf(c platform.Caller, entity string) []string {
-	r := t.relations
-	if r == nil {
-		return nil
-	}
+// Links are the entities linked to entity that c sees (Caller.Links, host.Linker).
+func (r *Relations) Links(c platform.Caller, entity string) []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []string
@@ -219,14 +218,11 @@ func (t *Tenant) linksOf(c platform.Caller, entity string) []string {
 	return out
 }
 
-// link relates two entities for c (Caller.Link).
-func (t *Tenant) link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
-	if t.relations == nil {
-		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
+// Link relates two entities for c (Caller.Link, host.Linker), as a decision of
+// this app taken for c.
+func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
 	payload, _ := json.Marshal(map[string]string{"from": from.GetType() + "/" + from.GetId(), "to": to.GetType() + "/" + to.GetId()})
-	called := platform.NewCaller(runtime{t}, c.Member, RelationsApp, c.Replaying, c.Automation)
-	_, err := t.relations.Submit(called, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: RelationsApp,
+	_, err := r.Submit(r.host.As(c, ID), &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID,
 		Target: &pb.EntityRef{Type: LinkType, Id: key}, Schema: &pb.SchemaRef{Name: SchemaLink, Version: 1}, IdempotencyKey: key, Payload: payload}, now)
 	return err
 }

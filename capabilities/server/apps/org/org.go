@@ -1,4 +1,7 @@
-package platformserver
+// Package org is the platform's organisation (ADR-0012): units in dated
+// structures and memberships, a platform app on the app API and internal/host
+// (ADR-0025 D4). It answers the host's questions as host.Directory.
+package org
 
 import (
 	"encoding/json"
@@ -18,7 +21,7 @@ import (
 // units, all with valid time. Apps ask for a member's units in a named structure
 // (Caller.Units); they never read the chart. Changes are the org app's decisions.
 const (
-	OrgApp          = "org"
+	ID              = "org"
 	UnitType        = "org.unit"
 	StructureType   = "org.structure"
 	SchemaUnitAdd   = "org.unit.add"
@@ -28,7 +31,7 @@ const (
 	SchemaUnplace   = "org.unit.unplace" // end that edge
 	SchemaJoin      = "org.membership.add"
 	SchemaLeave     = "org.membership.end"
-	OrgAdmin        = "admin"
+	Admin           = "admin"
 )
 
 func activeOn(from, until platform.Date, day platform.Date) bool {
@@ -41,8 +44,8 @@ type Organization struct {
 	ledger *platform.Ledger
 }
 
-func NewOrganization(tenant string, seed platform.OrgSeed) *Organization {
-	admin := []string{OrgAdmin}
+func New(tenant string, seed platform.OrgSeed) *Organization {
+	admin := []string{Admin}
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
@@ -76,7 +79,7 @@ func NewOrganization(tenant string, seed platform.OrgSeed) *Organization {
 	var chart platform.OrgSeed // a copy: decisions change it, the seed stays as given
 	raw, _ := json.Marshal(seed)
 	json.Unmarshal(raw, &chart)
-	return &Organization{chart: chart, ledger: platform.NewLedger(tenant, OrgApp, catalog, UnitType, StructureType)}
+	return &Organization{chart: chart, ledger: platform.NewLedger(tenant, ID, catalog, UnitType, StructureType)}
 }
 
 // Snapshot and Restore: the chart as decisions left it (ADR-0019 D6).
@@ -94,7 +97,7 @@ func (o *Organization) Restore(raw json.RawMessage) error {
 }
 
 func (o *Organization) Manifest() platform.Manifest {
-	return platform.Manifest{ID: OrgApp, Title: "Organisation", Version: "1", Actions: o.ledger.Catalog, Reads: []string{"organization"}}
+	return platform.Manifest{ID: ID, Title: "Organisation", Version: "1", Actions: o.ledger.Catalog, Reads: []string{"organization"}}
 }
 
 func (o *Organization) Declarations() []*pb.AuthorityDeclaration { return o.ledger.Declarations() }
@@ -240,9 +243,15 @@ func (o *Organization) below(structure, ancestor, unit string, day platform.Date
 	return false
 }
 
-// units are the units party belongs to on day, directly or as a member of a
+// Units are the units party belongs to on day, directly or as a member of a
 // member unit, and every unit below them in structure; closed units count for
-// nothing after they close.
+// nothing after they close (host.Directory).
+func (o *Organization) Units(party, structure string, day platform.Date) []string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.units(party, structure, day)
+}
+
 func (o *Organization) units(party, structure string, day platform.Date) []string {
 	var out []string
 	add := func(u string) bool {
@@ -275,9 +284,9 @@ func (o *Organization) units(party, structure string, day platform.Date) []strin
 	return out
 }
 
-// holders are the members holding a membership (with role, when given) in unit
-// or in a unit above it in structure on day: who answers for the unit.
-func (o *Organization) holders(structure, unit, role string, day platform.Date) []string {
+// Holders are the members holding a membership (with role, when given) in unit
+// or in a unit above it in structure on day: who answers for the unit (host.Directory).
+func (o *Organization) Holders(structure, unit, role string, day platform.Date) []string {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	var out []string
@@ -292,17 +301,6 @@ func (o *Organization) holders(structure, unit, role string, day platform.Date) 
 		}
 	}
 	return out
-}
-
-// unitsOf are c's member's units in structure on now's day (Caller.Units).
-func (t *Tenant) unitsOf(c platform.Caller, structure string, now time.Time) []string {
-	if t.org == nil {
-		return nil
-	}
-	o := t.org
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.units("member:"+c.ID, structure, now.UTC().Format(time.DateOnly))
 }
 
 // Read "organization": the whole chart, for members holding a role in the org app.

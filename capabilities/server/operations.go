@@ -51,8 +51,8 @@ func (t *Tenant) enqueue(now time.Time) {
 		t.events = t.events[1:]
 		s := e.Record.GetSubmission()
 		names := append([]string{s.GetSchema().GetName()}, t.protocolEvents(e.Event)...)
-		if t.relations != nil {
-			t.relations.observe(t, e.Event, names[1:])
+		for _, o := range t.observers {
+			o.Observe(e.Event, names[1:])
 		}
 		t.emit(e.Event, names)
 		for _, a := range t.apps {
@@ -364,8 +364,8 @@ func (t *Tenant) recipients(c platform.Caller, now time.Time, to []platform.Reci
 				}
 			}
 		}
-		if r.Unit != "" && t.org != nil {
-			for _, m := range t.org.holders(r.Structure, r.Unit, r.Role, now.UTC().Format(time.DateOnly)) {
+		if r.Unit != "" && t.directory != nil {
+			for _, m := range t.directory.Holders(r.Structure, r.Unit, r.Role, now.UTC().Format(time.DateOnly)) {
 				if !slices.Contains(members, m) {
 					members = append(members, m)
 				}

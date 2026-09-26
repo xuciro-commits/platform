@@ -83,8 +83,8 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 			}
 		}
 	}
-	if t.relations != nil {
-		out.Links = append(out.Links, t.linksOf(t.caller(m, t.relations, false), typ+"/"+id)...)
+	if t.linker != nil {
+		out.Links = append(out.Links, t.linker.Links(t.caller(m, t.linker.(platform.App), false), typ+"/"+id)...)
 	}
 	host := t.automation(FlowApp, false)
 	if t.flows != nil {

@@ -92,3 +92,10 @@ Declined: renaming the reference lodging provider; one binary for all solutions;
 - **Also:** `scripts/verify.sh format` checks new, untracked Go files too; 7d had left one unformatted because the check listed tracked files only.
 - **Proven:** `scripts/verify.sh` (every step, Docker included) on the owner's Mac; the local stack reset and reseeded under the new names.
 - **Not yet:** an outside key on records for reconciliation and inbound webhooks and mail as connector inputs (platform capabilities, Platform.md §10.4); the host's own apps as apps (8c).
+
+### 8c, first moves: `relations` and `org` (#113)
+
+- **`internal/host`** is what the host offers its own apps beyond the app API: `Host` (`OwnerOf` a data class, `ProtocolEvent`, `As` — a caller acting in another app, which the app API deliberately does not offer) and the roles the host detects by interface instead of fields it wires by type: `Attached` (handed the host), `Observer` (sees each input's events inside the input, before deliveries, and again in replay), `Linker` (serves `Caller.Link` and `Caller.Links`), `Directory` (a party's units and a unit's role holders, for `Caller.Units`, record scopes, approvals and notifications). D4 is amended in one point: the timeline is derived inside the input, so observation is its own role beside the one delivery path of subscribers.
+- **`apps/relations`** (`relations.New`, `relations.ID`, `relations.Link`, `relations.Note`) and **`apps/org`** (`org.New`, `org.ID`, `org.Admin`, `Units`, `Holders`) are packages; the host's `relations` and `org` fields are gone. `scripts/boundaries.sh` refuses a package under `capabilities/server/apps` that imports the host runtime.
+- **Proven:** `scripts/verify.sh ci` (every composition's tests, `CheckReplay` included), `TestOrganizationStructures` as an outside test of `org`.
+- **Next:** `ai`, `knowledge`, `work`, `flow`, `agent`, `platform`, each in turn; they share types with the host in both directions (`WorkTask`, `ApprovalRequest`, AI `Usage`), and `flow` and `agent` take part in replay.

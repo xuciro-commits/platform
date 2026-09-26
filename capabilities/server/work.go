@@ -248,13 +248,11 @@ func (t *Tenant) approvers(level platform.ApprovalLevel, requester platform.Memb
 			add(d.holding(app, level.AppRole)...)
 		}
 	}
-	if level.Role != "" && t.org != nil {
+	if level.Role != "" && t.directory != nil {
 		day := now.UTC().Format(time.DateOnly)
-		t.org.mu.Lock()
-		units := t.org.units("member:"+requester.ID, "", day) // the requester's own units
-		t.org.mu.Unlock()
+		units := t.directory.Units("member:"+requester.ID, "", day) // the requester's own units
 		for _, u := range units {
-			add(t.org.holders(level.Structure, u, level.Role, day)...)
+			add(t.directory.Holders(level.Structure, u, level.Role, day)...)
 		}
 	}
 	slices.Sort(out)

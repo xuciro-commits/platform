@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/org"
 	"platformserver/platform"
 )
 
@@ -101,7 +102,7 @@ func TestNotificationsByEmail(t *testing.T) {
 			Seat{Subjects: []string{"sup", "user:sup@example.com"}, Member: platform.Member{ID: "sup", Roles: map[string]string{}}},
 			Seat{Subjects: []string{"client:bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{}}},
 			Seat{Subjects: []string{"gw"}, Member: platform.Member{ID: "gw", Roles: map[string]string{}}})
-		org := NewOrganization("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Sites", Kind: "site"}},
+		org := org.New("t-1", platform.OrgSeed{Structures: []platform.Structure{{ID: "site", Name: "Sites", Kind: "site"}},
 			Units:       []platform.Unit{{ID: "L1", Kind: "line"}},
 			Memberships: []platform.Membership{{Party: "member:sup", Unit: "L1", Role: "supervisor"}, {Party: "member:bot", Unit: "L1", Role: "supervisor"}}})
 		tn, err := NewTenant("t-1", dir, org, probe{newNotes("t-1", "p")})

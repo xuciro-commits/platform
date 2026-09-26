@@ -1,7 +1,9 @@
-package platformserver
+package org_test
 
 import (
 	"encoding/json"
+	"platformserver"
+	"platformserver/apps/org"
 	"platformserver/platform"
 	"slices"
 	"testing"
@@ -33,29 +35,29 @@ func groupSeed() platform.OrgSeed {
 }
 
 func TestOrganizationStructures(t *testing.T) {
-	o := NewOrganization("t", groupSeed())
+	o := org.New("t", groupSeed())
 	day := "2026-09-24"
 	// Ana's scope differs by structure: the factory is hers by management, not by law.
-	if got := o.units("member:ana", "mgmt", day); !slices.Equal(got, []string{"bg-x", "safety", "sub-a", "factory", "line-1"}) {
+	if got := o.Units("member:ana", "mgmt", day); !slices.Equal(got, []string{"bg-x", "safety", "sub-a", "factory", "line-1"}) {
 		t.Fatalf("mgmt units %v", got)
 	}
-	if got := o.units("member:ana", "legal", day); !slices.Contains(got, "factory") || slices.Contains(got, "line-1") {
+	if got := o.Units("member:ana", "legal", day); !slices.Contains(got, "factory") || slices.Contains(got, "line-1") {
 		t.Fatalf("legal units %v", got)
 	}
 	// Bo belongs to the committee through his organisation's membership.
-	if got := o.units("member:bo", "gov", day); !slices.Equal(got, []string{"acme", "safety"}) {
+	if got := o.Units("member:bo", "gov", day); !slices.Equal(got, []string{"acme", "safety"}) {
 		t.Fatalf("bo's units %v", got)
 	}
 	// The temporary committee ends on its date, and with it the scope it gave.
-	if got := o.units("member:ana", "gov", "2027-02-01"); slices.Contains(got, "safety") {
+	if got := o.Units("member:ana", "gov", "2027-02-01"); slices.Contains(got, "safety") {
 		t.Fatalf("a closed committee still gives scope: %v", got)
 	}
 }
 
 func TestOrganizationDecisions(t *testing.T) {
-	dir := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{OrgApp: OrgAdmin}}})
-	o := NewOrganization("t-1", groupSeed())
-	tn, err := NewTenant("t-1", dir, o)
+	dir := platformserver.NewConsole("t-1", platformserver.Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{org.ID: org.Admin}}})
+	o := org.New("t-1", groupSeed())
+	tn, err := platformserver.NewTenant("t-1", dir, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,43 +65,42 @@ func TestOrganizationDecisions(t *testing.T) {
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	do := func(schema, target, key string, payload any) string {
 		raw, _ := json.Marshal(payload)
-		_, err := tn.Submit(ana, &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: OrgApp, IdempotencyKey: key,
-			Target: &pb.EntityRef{Type: UnitType, Id: target}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now)
+		_, err := tn.Submit(ana, &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: org.ID, IdempotencyKey: key,
+			Target: &pb.EntityRef{Type: org.UnitType, Id: target}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now)
 		if err != nil {
 			return err.Error()
 		}
 		return "ok"
 	}
 	for _, c := range []struct{ got, want string }{
-		{do(SchemaUnitAdd, "proj", "k1", map[string]any{"name": "Offsite 2026", "kind": "project", "until": "2026-12-31"}), "ok"},
-		{do(SchemaUnitAdd, "proj", "k2", map[string]any{"name": "Again", "kind": "project"}), "ERROR_CODE_CONFLICT"},
-		{do(SchemaPlace, "proj", "k3", map[string]any{"structure": "mgmt", "parent": "bg-x"}), "ok"},
-		{do(SchemaPlace, "bg-x", "k4", map[string]any{"structure": "mgmt", "parent": "line-1"}), "ERROR_CODE_INVALID_ARGUMENT"}, // a cycle
+		{do(org.SchemaUnitAdd, "proj", "k1", map[string]any{"name": "Offsite 2026", "kind": "project", "until": "2026-12-31"}), "ok"},
+		{do(org.SchemaUnitAdd, "proj", "k2", map[string]any{"name": "Again", "kind": "project"}), "ERROR_CODE_CONFLICT"},
+		{do(org.SchemaPlace, "proj", "k3", map[string]any{"structure": "mgmt", "parent": "bg-x"}), "ok"},
+		{do(org.SchemaPlace, "bg-x", "k4", map[string]any{"structure": "mgmt", "parent": "line-1"}), "ERROR_CODE_INVALID_ARGUMENT"}, // a cycle
 		// A reorganisation next month: the factory moves to the group directly.
-		{do(SchemaPlace, "factory", "k5", map[string]any{"structure": "mgmt", "parent": "group", "from": "2026-10-01"}), "ok"},
-		{do(SchemaJoin, "proj", "k6", map[string]any{"party": "member:bo", "role": "member"}), "ok"},
-		{do(SchemaJoin, "proj", "k7", map[string]any{"party": "someone", "role": "member"}), "ERROR_CODE_INVALID_ARGUMENT"},
-		{do(SchemaLeave, "proj", "k8", map[string]any{"party": "member:bo", "role": "member", "until": "2026-11-01"}), "ok"},
+		{do(org.SchemaPlace, "factory", "k5", map[string]any{"structure": "mgmt", "parent": "group", "from": "2026-10-01"}), "ok"},
+		{do(org.SchemaJoin, "proj", "k6", map[string]any{"party": "member:bo", "role": "member"}), "ok"},
+		{do(org.SchemaJoin, "proj", "k7", map[string]any{"party": "someone", "role": "member"}), "ERROR_CODE_INVALID_ARGUMENT"},
+		{do(org.SchemaLeave, "proj", "k8", map[string]any{"party": "member:bo", "role": "member", "until": "2026-11-01"}), "ok"},
 	} {
 		if c.got != c.want {
 			t.Fatalf("got %s, want %s", c.got, c.want)
 		}
 	}
-	if got := o.units("member:ana", "mgmt", "2026-09-30"); !slices.Contains(got, "factory") {
+	if got := o.Units("member:ana", "mgmt", "2026-09-30"); !slices.Contains(got, "factory") {
 		t.Fatalf("before the move ana manages the factory: %v", got)
 	}
-	if got := o.units("member:ana", "mgmt", "2026-10-02"); slices.Contains(got, "factory") {
+	if got := o.Units("member:ana", "mgmt", "2026-10-02"); slices.Contains(got, "factory") {
 		t.Fatalf("after the move the factory is no longer under ana's business group: %v", got)
 	}
-	if got := o.units("member:bo", "mgmt", "2026-10-15"); !slices.Contains(got, "proj") {
+	if got := o.Units("member:bo", "mgmt", "2026-10-15"); !slices.Contains(got, "proj") {
 		t.Fatalf("bo in the project: %v", got)
 	}
-	if got := o.units("member:bo", "mgmt", "2026-11-02"); slices.Contains(got, "proj") {
+	if got := o.Units("member:bo", "mgmt", "2026-11-02"); slices.Contains(got, "proj") {
 		t.Fatalf("bo left the project: %v", got)
 	}
 	// A rule scopes by the input's day, so a replay years later scopes alike.
-	c := tn.caller(ana, o, false)
-	if in, out := c.Units("mgmt", time.Date(2026, 9, 30, 23, 0, 0, 0, time.UTC)), c.Units("mgmt", time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)); !slices.Contains(in, "factory") || slices.Contains(out, "factory") {
+	if in, out := o.Units("member:ana", "mgmt", "2026-09-30"), o.Units("member:ana", "mgmt", "2026-10-01"); !slices.Contains(in, "factory") || slices.Contains(out, "factory") {
 		t.Fatalf("scope before the move %v, after %v", in, out)
 	}
 }

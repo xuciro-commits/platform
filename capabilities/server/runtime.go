@@ -37,13 +37,24 @@ func (r runtime) Emit(c platform.Caller, kind, key, entity string, data any, now
 }
 
 func (r runtime) Units(c platform.Caller, structure string, now time.Time) []string {
-	return r.t.unitsOf(c, structure, now)
+	if r.t.directory == nil {
+		return nil
+	}
+	return r.t.directory.Units("member:"+c.ID, structure, now.UTC().Format(time.DateOnly))
 }
 
-func (r runtime) Links(c platform.Caller, entity string) []string { return r.t.linksOf(c, entity) }
+func (r runtime) Links(c platform.Caller, entity string) []string {
+	if r.t.linker == nil {
+		return nil
+	}
+	return r.t.linker.Links(c, entity)
+}
 
 func (r runtime) Link(c platform.Caller, from, to *pb.EntityRef, key string, now time.Time) *kernel.Error {
-	return r.t.link(c, from, to, key, now)
+	if r.t.linker == nil {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	return r.t.linker.Link(c, from, to, key, now)
 }
 
 // Deliver accepts one batch from the calling connector (K8).

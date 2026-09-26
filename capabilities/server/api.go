@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/relations"
 	"platformserver/platform"
 )
 
@@ -61,8 +62,8 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: AIUsage{}},
 	{Pattern: "GET /v1/organization", Summary: "The organisation's structures, units, edges and memberships", Answer: platform.OrgSeed{}},
 	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []FlowDefinition{}},
-	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []Link{}},
-	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []Note{}},
+	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []relations.Link{}},
+	{Pattern: "GET /v1/timeline", Summary: "Notes on entities' timelines", Answer: []relations.Note{}},
 }
 
 // InboxTask is a task as the inbox serves it: with its answers in the
