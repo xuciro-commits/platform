@@ -21,23 +21,22 @@ step() {
 # The kernel is domain-neutral: no domain vocabulary in the contract (Platform.md §4).
 vocabulary() {
   ! grep -rniE '\b(music|track|album|artist|playlist|song|lyric|subsonic|openverse|hotel|room|reservation|guest)s?\b' \
-      contract --exclude-dir=.build --exclude-dir=gen --exclude-dir=.swiftpm
+      contract --exclude-dir=.build --exclude-dir=gen
 }
 
 contract() {
   step contract-vocabulary vocabulary
   step contract-schema bash -c 'cd contract/proto && export PATH="$(go env GOPATH)/bin:$PATH" && gen() { find ../go/gen -type f -exec shasum {} + | sort; } && before=$(gen) && buf lint && buf generate && { [ "$before" = "$(gen)" ] || { echo "generated code was stale; buf generate updated contract/go/gen"; exit 1; }; }'
   step contract-go bash -c 'cd contract/go && go vet ./... && go test -count=1 ./...'
-  [[ ${VERIFY_SWIFT:-1} == 1 ]] && step contract-swift swift test --package-path contract/swift
 }
 
 web() {
   step web bash -c 'cd web && pnpm install --frozen-lockfile && gen() { find packages/kernel/src/gen -type f -exec shasum {} + | sort; } && before=$(gen) && pnpm --dir packages/kernel generate && { [ "$before" = "$(gen)" ] || { echo "TypeScript contract types were stale; regenerated"; exit 1; }; } && pnpm check'
 }
 
-# Go code is gofmt-formatted (generated code aside).
+# Go code is gofmt-formatted (generated code aside), new files included.
 format() {
-  step go-format bash -c 'fmt=$(cd capabilities/server && go env GOROOT)/bin/gofmt; files=$("$fmt" -l $(git ls-files "*.go" | grep -v /gen/)); [ -z "$files" ] || { echo "not gofmt-formatted:"; echo "$files"; exit 1; }'
+  step go-format bash -c 'fmt=$(cd capabilities/server && go env GOROOT)/bin/gofmt; files=$("$fmt" -l $(git ls-files --cached --others --exclude-standard "*.go" | grep -v /gen/)); [ -z "$files" ] || { echo "not gofmt-formatted:"; echo "$files"; exit 1; }'
 }
 
 capabilities() {
@@ -100,8 +99,8 @@ case "${1:-all}" in
   composition) composition ;;
   deploy) deploy ;;
   all) contract; format; capabilities; web; hotel; manufacturing; composition; drills; deploy ;;
-  # What CI runs on Linux: Swift needs macOS and the rehearsal needs Docker, so both stay on the owner's Mac.
-  ci) VERIFY_SWIFT=0 contract; format; capabilities; manufacturing; composition; drills ;;
+  # What CI runs on Linux: the rehearsal needs Docker, so it stays on the owner's Mac.
+  ci) contract; format; capabilities; manufacturing; composition; drills ;;
   *) echo "usage: $0 [contract|capabilities|web|hotel|manufacturing|composition|drills|deploy|format|ci]"; exit 2 ;;
 esac
 

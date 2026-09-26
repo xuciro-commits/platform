@@ -10,7 +10,7 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 
 | Path | Contents |
 |---|---|
-| `contract/` | Kernel contract `v1alpha1`: Protobuf data contract (`proto/`), semantic rules with errors (`spec/`), conformance vectors (`vectors/`), Go reference (`go/`) and Swift implementation (`swift/`) running the same vectors |
+| `contract/` | Kernel contract `v1alpha1`: Protobuf data contract (`proto/`), semantic rules with errors (`spec/`), conformance vectors (`vectors/`), Go reference (`go/`); Rust (the PMS desk's outbox) and TypeScript (`@platform/kernel`) run the K5 vectors |
 | `capabilities/server/` | Go module `platformserver`. `platform/` is the app API, the only package apps and protocols import: `Caller`, `Manifest`, declarations, `Ledger`, and `Runtime`, which the host implements. The rest is the host runtime (ADR-0010) — apps per tenant from manifests, routing, the platform app (`Console`: members with roles per app, and administrators' decisions by area), the record store and generic reads (ADR-0016), the work app (approvals, tasks, inbox; ADR-0017), the flow app (declared long-running processes; ADR-0020), the agent app (declared agents as governed principals, the context graph and search, memory, evaluation; ADR-0021), knowledge and A2A (ADR-0022), the organisation (units, structures, memberships over time), owned work (event deliveries with retries, scheduled jobs), connectors, notifications and app settings (ADR-0013), AI providers and models with metered calls (ADR-0015), outbound effects (webhooks, email of notifications, approval of what AI agents cause; ADR-0014; `cmd/webhook-sink` is a local webhook and mail receiver, model server and supplier's agent), protocols, links and timeline, MCP, OIDC, the PostgreSQL journal with snapshots and projections, aggregates (ADR-0019), the action catalog, the package ledger, deployment flags |
 | `apps/hotel/` | Hotel reference app (#79): Go tenant server (`server/`, with a channel simulator), Tauri desk client with a Rust K5 outbox that runs the contract's K5 vectors (`client/`), `flows.sh` reproducing timeout, offline, conflict and rejection flows. May not change the kernel |
 | `apps/manufacturing/` | Manufacturing reference app (#83, Opcenter/SAP ME model): the plant with a gateway push connector (`server/`, `cmd/gateway-sim`), declared actions, the confirmation flow to an ERP through `production.orders/1`, and the agent adapter `cmd/mes-agent` (ADR-0008). May not change the kernel |
@@ -32,7 +32,7 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
 | `web/packages/kernel/src/gen/host.ts` | The host API's TypeScript types (exported as `Api` from `@platform/kernel`), generated from the host's Go types by `capabilities/server/cmd/api-types`; never edited (ADR-0023 D7) |
-| `.github/workflows/verify.yml` | CI: `scripts/verify.sh ci`, `web` and `hotel` on every push (Swift and the Docker rehearsal stay on the owner's Mac; timing bounds off with `PLATFORM_TIMING=0`) |
+| `.github/workflows/verify.yml` | CI: `scripts/verify.sh ci`, `web` and `hotel` on every push (the Docker rehearsal stays on the owner's Mac; timing bounds off with `PLATFORM_TIMING=0`) |
 | `scripts/verify.sh` | All checks (`scripts/boundaries.sh`: dependency boundaries between apps and the host) |
 | `.claude/skills/` | Procedures for coding agents in this repository: `architecture-gate` (open a stage with an ADR the owner decides), `close-out` (finish a batch: checks, documents, commit), `new-app` (build or extend an app along docs/Apps.md) |
 
@@ -40,7 +40,7 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 
 1. The kernel is a language-neutral contract (ADR-0002): schema, semantics, errors, compatibility, conformance and scope are separate parts; Protobuf never defines meaning.
 2. No domain vocabulary in `contract/` (checked). Reference apps may not change the kernel; they record friction in the work queue.
-3. Kernel contract changes: spec rule and vectors first, then Go and Swift; list breaking changes while the version is `v1alpha1`, and write an ADR once it is `v1`.
+3. Kernel contract changes: spec rule and vectors first, then Go, and Rust and TypeScript where the rule reaches the edge; list breaking changes while the version is `v1alpha1`, and write an ADR once it is `v1`.
 4. Least code: delete over add; no shims as an end state; generated code (`contract/go/gen`) is never edited by hand.
 5. Clients use `@platform/ui`; no per-slice HTML or second component library. Components are composed in typed code, never driven by configuration.
 6. Repository docs are durable knowledge; plans and summaries go to the work queue or chat, not new files.
@@ -53,7 +53,7 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 
 ```sh
 scripts/verify.sh           # everything
-scripts/verify.sh contract  # contract vocabulary, buf lint + generated code, Go vet/test, Swift test
+scripts/verify.sh contract  # contract vocabulary, buf lint + generated code, Go vet/test
 scripts/verify.sh web       # UI kit tests, typecheck and build of every web app (needs node, pnpm)
 scripts/verify.sh hotel     # web build, Hotel server tests, Rust K5 vectors, end-to-end flows (needs cargo)
 scripts/verify.sh manufacturing  # plant server tests (F-5 to F-9 verdicts)
@@ -62,5 +62,5 @@ scripts/verify.sh composition  # app boundaries (scripts/boundaries.sh), the lod
 scripts/verify.sh capabilities  # server capability tests
 scripts/verify.sh deploy    # production-path rehearsal (needs Docker via OrbStack: orb start)
 scripts/verify.sh format    # gofmt over every Go file
-scripts/verify.sh ci        # what CI runs on Linux: contract without Swift, format, capabilities, manufacturing, composition, drills
+scripts/verify.sh ci        # what CI runs on Linux: contract, format, capabilities, manufacturing, composition, drills
 ```

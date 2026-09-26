@@ -23,4 +23,4 @@ Schema: `proto/platform/kernel/v1alpha1/work.proto`. Vectors: `vectors/k9-work.j
 ## Notes
 
 - W2 is the platform-wide form of stale-result invalidation: a search whose query changed, a page loaded for a closed window, a recomputation superseded by newer data.
-- MSRU's `FeatureHost` implements the client side of these rules in Swift; server job runners follow the same vectors.
+- Server job runners follow these vectors (the host's `Tenant.Work`).

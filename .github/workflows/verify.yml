@@ -1,5 +1,5 @@
 # Runs scripts/verify.sh on every push and pull request (AGENTS.md "Verify").
-# Swift (macOS) and the Docker rehearsal stay on the owner's Mac; timing bounds
+# The Docker rehearsal stays on the owner's Mac; timing bounds
 # are off here (PLATFORM_TIMING=0) because shared runners are slower.
 name: verify
 

@@ -1,6 +1,6 @@
 # ADR-0002: The kernel is a language-neutral contract
 
-**Status:** Accepted (2026-09-24); format decided 2026-09-24
+**Status:** Accepted (2026-09-24); format decided 2026-09-24. Amended by ADR-0025 D5: the Swift implementation is deleted; Go, Rust and TypeScript implement the contract.
 
 **Context.** Go (server), Rust (systems components, Tauri desktop) and Swift (Apple edge) will coexist. A kernel defined as one language's library would make that language the platform and let semantics drift in the others.
 

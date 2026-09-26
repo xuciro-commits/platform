@@ -76,7 +76,9 @@ func newExternal(t *testing.T) *external {
 	x.tn.Record = func(e platformserver.Entry) { x.journal = append(x.journal, e) }
 	x.expect("endpoint", x.do("sup-1", platformserver.PlatformApp, platformserver.SchemaEndpointAdd, platformserver.EndpointType, "erp-api",
 		map[string]any{"url": fake.URL, "secret": "erp", "effects": []string{erplink.ID + "/" + erplink.EffectConfirmation}, "allowPrivate": true}), "ok")
-	t.Cleanup(func() { platformserver.CheckReplay(t, x.tn, x.journal, func() *platformserver.Tenant { return buildExternal(t) }) })
+	t.Cleanup(func() {
+		platformserver.CheckReplay(t, x.tn, x.journal, func() *platformserver.Tenant { return buildExternal(t) })
+	})
 	return x
 }
 

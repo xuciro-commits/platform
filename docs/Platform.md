@@ -20,7 +20,7 @@ The platform does not encode what an organisation or application looks like toda
 
 | Layer | Holds | Where | Changes when |
 |---|---|---|---|
-| **Kernel** | The language-neutral contract K1–K9: identity, facts, decisions, authority, tenancy, schema versions, connectors, work ownership (§4) | `contract/` (spec, vectors, Go, Swift) | A kernel hypothesis is revised (spec and vectors first) |
+| **Kernel** | The language-neutral contract K1–K9: identity, facts, decisions, authority, tenancy, schema versions, connectors, work ownership (§4) | `contract/` (spec, vectors, Go) | A kernel hypothesis is revised (spec and vectors first) |
 | **Host runtime** | Composition, routing, journal and replay, snapshots, the record store, owned work, dispatch of effects, model calls; it implements `platform.Runtime` | `platformserver` | The platform grows a mechanism |
 | **App API** | What an app sees: `Member`, `Caller`, `Manifest`, the declarations (entities, lifecycles, actions, reads, flows, agents, jobs, settings, effect kinds) and `Ledger`. Apps reach the host only through `Runtime` | `platformserver/platform`; for UIs `@platform/app` | An app needs something the host already does |
 | **Platform apps** | Cross-industry capabilities run as apps: `platform` (the console), `org`, `relations`, `work`, `flow`, `ai`, `agent`, `knowledge` | `platformserver` (§9 risk 6) | A cross-industry need appears in a second app |
@@ -88,7 +88,7 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 | Identity and redirects (K1) | Kernel | Opaque stable IDs, merge and split redirects | `kernel.Identity` | manufacturing (and Music, before 2026-09-26) |
 | Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | manufacturing, Hotel |
 | Decisions (K4) | Kernel | Change records: idempotency, revisions (C12), causation | `kernel.ChangeLog` | all |
-| Authority and outbox (K5) | Kernel | Authority per data class; edge outbox in Go, Swift, Rust and TypeScript | `kernel.Authorities` | all |
+| Authority and outbox (K5) | Kernel | Authority per data class; edge outbox in Go, Rust and TypeScript | `kernel.Authorities` | all |
 | Tenancy and policy (K6) | Kernel | Receiving order, one policy evaluation per decision | `kernel.Receiver` | all |
 | Schema versions (K7) | Kernel | Versioned payloads; webhook bodies carry the version | `kernel.SchemaRegistry` | all (declared) |
 | Connectors (K8) | Kernel | One descriptor for push and poll, cursors, health | `kernel.Connectors` | manufacturing, Hotel |
@@ -259,6 +259,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0019 | Capturing state without the tenant's lock; parallel restore; the plant's downtime as records | Deferred |
 | 0020 | Record-state triggers; business calendars for timeouts; a drawn graph | Deferred |
 | 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
+| 0025 | Industry names and one layout for every app (8b); the host's own apps as apps (8c) | Partial: 8a built (Swift deleted, the rules in Intent.md) |
 
 ## 3. Runtimes and languages
 
@@ -270,12 +271,11 @@ Server runtime (Go, reference implementation)
         ▲  kernel contracts: language-neutral schemas + semantics + conformance vectors
 Edge / client runtimes
   Web (TypeScript, React, @platform/ui): the workspace every host serves
-  Apple (Swift): the contract's second implementation; no platform app uses it since Music stopped being a target
   Desktop (Tauri/Rust): the Hotel Desk, offline with the Rust K5 outbox
   Edge gateways (candidate Rust/Go): devices, PLCs, sensors, offline sites
 ```
 
-**The kernel is a contract, not a library** ([ADR-0002](ADR/0002-kernel-as-contract.md)). It is defined by schemas, semantic rules and conformance test vectors; Go implements it first. A runtime either implements the contract and passes the same vectors, or maps to it at its boundary. Cross-language boundaries exist only where justified — no four parallel implementations of everything. Swift and Tauri clients do not share a Rust edge core yet ([ADR-0005](ADR/0005-no-shared-edge-core-yet.md)).
+**The kernel is a contract, not a library** ([ADR-0002](ADR/0002-kernel-as-contract.md)). It is defined by schemas, semantic rules and conformance test vectors; Go implements it first. A runtime either implements the contract and passes the same vectors, or maps to it at its boundary. Cross-language boundaries exist only where justified — no four parallel implementations of everything. Edge clients implement the contract natively rather than share a Rust edge core ([ADR-0005](ADR/0005-no-shared-edge-core-yet.md)); the Swift implementation was deleted with Music ([ADR-0025](ADR/0025-one-shape-for-every-app.md) D5).
 
 The kernel contract covers what edges and the server must agree on to exchange decisions. The host's HTTP API — actions, entities, records, inbox, context, search, knowledge — is what every web client, integrator and agent uses; its contract is generated from the host's Go types as OpenAPI 3.1 at `/v1/openapi.json`, and the web edge's TypeScript types are generated from it (ADR-0023 D7).
 
@@ -307,7 +307,7 @@ The kernel is defined by six parts, all in `contract/`. A part never substitutes
 | Semantics | What does it mean; what is valid? | Numbered rules (MUST/MUST NOT) with the error each violation returns, `contract/spec/K*.md` |
 | Errors | Do all runtimes reject the same way? | One error-code set, `contract/spec/errors.md`; only the code is contract |
 | Compatibility | How may it change without harming old clients or data? | Rules below |
-| Conformance | How is an implementation proven correct? | Language-neutral vectors in `contract/vectors`; Go (reference) and Swift run the same files |
+| Conformance | How is an implementation proven correct? | Language-neutral vectors in `contract/vectors`; Go (reference) runs every file; Rust and TypeScript run the K5 files |
 | Scope | What is not kernel; who changes it? | This section, §4 promotion rules, ADRs |
 
 **Version.** One identifier for schema package, specs and vectors: `v1alpha1` while concepts are hypotheses (breaking changes allowed, each listed in the change), `v1` once they are stable (breaking changes need a new major version and an ADR).
@@ -316,7 +316,7 @@ The kernel is defined by six parts, all in `contract/`. A part never substitutes
 
 **Conformance.** An implementation conforms to a version for the concepts whose vectors it passes in full. Vector format: `{contract, concept, vectors: [{id, rules, given, steps: [{<operation>, expect}], expectLog?}]}`. Schema objects use Protobuf JSON names and are parsed strictly. Values assigned by the implementation are referenced indirectly (`"$step:N"` for the change ID produced by step N; `sameAs: N` for a replay of step N). The authority clock is given per step (`at`), so results are deterministic.
 
-**Current coverage** (`v1alpha1`): K1 to K9 all have spec rules and vectors that Go and Swift pass. Open cases recorded in the specs: atomic groups of changes (K4), negotiated authority (K5), a refusal's reason beyond its code (F-23).
+**Current coverage** (`v1alpha1`): K1 to K9 all have spec rules and vectors that Go passes; the edge implementations pass K5. Open cases recorded in the specs: atomic groups of changes (K4), negotiated authority (K5), a refusal's reason beyond its code (F-23).
 
 ### Fact kinds across domains
 
@@ -411,7 +411,7 @@ Reference apps model their domain on leading systems, not on invention, so that 
 5. **The server is not the kernel;** treating it as such re-binds the platform to one deployment shape.
 6. **The host runtime is one package.** `platformserver` holds the runtime and all eight platform apps (about 10 000 lines without tests, 112 methods on `Tenant`). Platform apps reach host internals that business apps cannot, and the host wires `relations`, `flow` and `agent` into event delivery by name while `Manifest.Subscribes` has no app user. Lesson 6 applies to the host itself.
 7. **Documents drift.** Before this review, the same status was kept in five places and all of them were stale. One home per fact (the header of this document); every batch closes with its documents (AGENTS.md rule 8).
-8. **Verification on one machine** was the risk until CI (#112); Swift and the Docker rehearsal still run only on the owner's Mac, and timing bounds only where `PLATFORM_TIMING` is not `0`.
+8. **Verification on one machine** was the risk until CI (#112); the Docker rehearsal still runs only on the owner's Mac, and timing bounds only where `PLATFORM_TIMING` is not `0`.
 9. **Agents depend on models the platform does not control.** Signals and evaluation are the guard; per-tenant quotas and rate limits are still missing (ADR-0015 batch 2).
 
 ## 10. Where we are going

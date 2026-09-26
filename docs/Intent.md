@@ -31,6 +31,8 @@ The deepest goal is a platform that **supports change itself**. It must not enco
 
 ## What stays true
 
+- **Every app stands alone first, and takes what outside systems push second (2026-09-26).** An app works with no other app and no outside system (the MES releases its own shop orders); then it accepts the same things from outside through what it already declares — its actions called by a service account, connector inputs, and the protocols it provides or consumes (an ERP releasing production orders to the MES). No second path for outside data (ADR-0025 D3).
+- **Every app has one shape and an industry name (2026-09-26).** Apps differ only in their business: one layout for server and web, written by the scaffold; each named for the system it is — CRM, ERP, MES, PMS, HCM, CSM (ADR-0025 D1, D2).
 - **Typed code, not configuration** (AGENTS.md rule 5, Platform.md §6). Capabilities are declared in code and composed by code. Operators configure values, never rules. We borrow what metadata-driven platforms (Odoo, Frappe, Dataverse) achieve — declare once, get list, form, search, API and permissions — without making tenant configuration the programming language.
 - **One owner per state, task and resource,** each with a stop condition. Committed work is never reverted by closing what started it.
 - **One path per responsibility.** Migrations are closed; no two long-lived paths. Delete old code once it is confirmed unused, and protect existing valid work.
@@ -44,9 +46,9 @@ The deepest goal is a platform that **supports change itself**. It must not enco
 - **Rust** where it gives a real systems or performance advantage.
 - **TypeScript, React and `@platform/ui`** for web workspaces.
 - **Tauri with Rust** for the cross-platform desktop client.
-- **Swift** where Apple-native capabilities and deep local integration matter; with Music no longer a target, no platform app needs it today.
+- **Swift** only if an Apple-native client comes back; its contract implementation was deleted with Music (ADR-0025 D5).
 
-The server must not couple to Apple because the first app was Swift. The kernel is language-neutral contracts plus conformance tests, without four parallel implementations.
+The kernel is language-neutral contracts plus conformance tests, without four parallel implementations.
 
 ## Product quality bar
 
