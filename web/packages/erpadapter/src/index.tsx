@@ -8,9 +8,9 @@ import { Cable, ClipboardList } from "lucide-react";
 
 export default defineApp({
   id: "erpadapter",
-  title: "ERP link",
+  title: t("ERP adapter"),
   icon: <Cable />,
   home: { view: "orders" },
   views: [{ id: "orders", title: () => t("ERP orders"), render: () => <Records type="erpadapter.order" /> }],
-  nav: () => [{ label: t("ERP link"), items: [{ label: t("ERP orders"), icon: <ClipboardList />, route: { view: "orders" } }] }],
+  nav: () => [{ label: t("ERP adapter"), items: [{ label: t("ERP orders"), icon: <ClipboardList />, route: { view: "orders" } }] }],
 });

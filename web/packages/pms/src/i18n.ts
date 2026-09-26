@@ -16,6 +16,7 @@ register("zh-CN", {
   "No reservation": "没有预订",
   "No reservations": "没有预订",
   "Occupancy": "入住率",
+  "PMS": "酒店管理",
   "Pick a date": "请选择日期",
   "Pick a room type": "请选择房型",
   "Required": "必填",

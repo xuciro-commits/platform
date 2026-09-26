@@ -30,7 +30,7 @@ function LeaveRequests() {
 
 export default defineApp({
   id: "hcm",
-  title: "HR",
+  title: t("HCM"),
   icon: <Users />,
   home: { view: "leave" },
   views: [{ id: "leave", title: () => t("Leave requests"), render: () => <LeaveRequests /> }],

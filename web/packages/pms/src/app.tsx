@@ -28,7 +28,7 @@ const count = { aggregate: "count", type: "quantitative" } as const;
 
 export default defineApp({
   id: "pms",
-  title: t("Hotel"),
+  title: t("PMS"),
   icon: <Hotel />,
   home: { view: "reservations" },
   dashboards: [{ id: "occupancy", title: t("Occupancy"), description: t("Reservations by arrival month and room type; cancellations apart."), charts: [

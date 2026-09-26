@@ -2,6 +2,6 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
-  "ERP link": "ERP 连接",
+  "ERP adapter": "ERP 适配器",
   "ERP orders": "ERP 订单",
 });

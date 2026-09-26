@@ -4,27 +4,64 @@
     {
       "name": "workspace-hospitality",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["PLATFORM_HOST=http://127.0.0.1:8496", "pnpm", "--dir", "web/apps/workspace", "dev"],
+      "runtimeArgs": [
+        "PLATFORM_HOST=http://127.0.0.1:8496",
+        "pnpm",
+        "--dir",
+        "web/apps/workspace",
+        "dev"
+      ],
       "port": 5176
     },
     {
       "name": "workspace-manufacturing",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["PLATFORM_HOST=http://127.0.0.1:8491", "pnpm", "--dir", "web/apps/workspace", "dev", "--port", "5175"],
+      "runtimeArgs": [
+        "PLATFORM_HOST=http://127.0.0.1:8491",
+        "pnpm",
+        "--dir",
+        "web/apps/workspace",
+        "dev",
+        "--port",
+        "5175"
+      ],
       "port": 5175
     },
     {
       "name": "workspace-app",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["PLATFORM_HOST=http://127.0.0.1:8499", "pnpm", "--dir", "web/apps/workspace", "dev", "--port", "5177"],
+      "runtimeArgs": [
+        "PLATFORM_HOST=http://127.0.0.1:8499",
+        "pnpm",
+        "--dir",
+        "web/apps/workspace",
+        "dev",
+        "--port",
+        "5177"
+      ],
       "port": 5177
     },
     {
       "name": "workspace-oidc",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["PLATFORM_HOST=http://localhost:8495", "pnpm", "--dir", "web/apps/workspace", "dev"],
+      "runtimeArgs": [
+        "PLATFORM_HOST=http://localhost:8495",
+        "pnpm",
+        "--dir",
+        "web/apps/workspace",
+        "dev"
+      ],
       "port": 5176,
       "url": "http://localhost:5176"
+    },
+    {
+      "name": "manufacturing-server",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "pnpm --dir web/apps/workspace build >/dev/null && cd solutions/manufacturing && go run ./cmd/manufacturing-server -web ../../web/apps/workspace/dist"
+      ],
+      "port": 8491
     }
   ]
 }

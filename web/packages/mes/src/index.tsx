@@ -2,11 +2,11 @@
 // routing, quality holds and equipment downtime — manufacturing's reference app
 // (Opcenter / SAP ME model) as a contribution to the workspace.
 import "./i18n";
-import { defineApp, useHost, useRead } from "@platform/app";
+import { Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, PageHeader, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef,
  t } from "@platform/ui";
-import { Activity, ClipboardList, Cpu, Factory, ShieldAlert } from "lucide-react";
+import { Activity, ClipboardList, Cpu, Factory, ListOrdered, Plus, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -125,6 +125,44 @@ function PlannedOrders() {
               await decide("mes.order.release", { type: "mes.order", id: v.order },
                 { product: releasing.product, quantity: releasing.quantity, sfcs: v.sfcs, planned: releasing.erpId });
               setReleasing(undefined);
+            }} />
+        )}
+      </Dialog>
+    </>
+  );
+}
+
+// Shop orders the plant releases on its own (ADR-0025 D3): a product, a
+// quantity and its lots, fulfilling an ERP planned order only when one is
+// named. The host checks the rest: the product's line is the supervisor's, and
+// a named planned order is open, for the product and enough quantity.
+function ShopOrders() {
+  const { can, decide, master } = usePlant();
+  const orders = useRead<{ records: Order[] }>(ordersQuery)?.records ?? [];
+  const open = (useRead<Planned[]>("/v1/planned-orders") ?? [])
+    .filter((p) => p.state !== "sent" && p.state !== "confirmed" && !orders.some((o) => o.planned === p.erpId));
+  const [releasing, setReleasing] = useState(false);
+  const products = master?.products ?? [];
+  const schema = z.object({ order: z.string().min(1), product: z.string().min(1), quantity: z.number().int().min(1), sfcs: z.number().int().min(1), planned: z.string() })
+    .refine((v) => v.sfcs <= v.quantity, { path: ["sfcs"], message: t("At most the quantity") });
+  return (
+    <>
+      <Records type="mes.order" actions={can("mes.order.release") && <Button variant="primary" onClick={() => setReleasing(true)}><Plus />{t("Release shop order")}</Button>} />
+      <Dialog open={releasing} onOpenChange={setReleasing} title={t("Release shop order")}>
+        {releasing && (
+          <EntityForm schema={schema} defaultValues={{ order: newId("SO"), product: products[0]?.id ?? "", quantity: 1, sfcs: 1, planned: "" }}
+            fields={[
+              { name: "order", label: t("Shop order") },
+              { name: "product", label: t("Product"), kind: "select", options: products.map((p) => ({ value: p.id, label: `${p.id} · ${p.name}` })) },
+              { name: "quantity", label: t("Quantity"), kind: "number" },
+              { name: "sfcs", label: t("SFCs (lots)"), kind: "number" },
+              { name: "planned", label: t("Planned order"), kind: "select",
+                options: [{ value: "", label: t("None: the plant's own order") }, ...open.map((p) => ({ value: p.erpId, label: `${p.number} · ${p.product} × ${p.quantity}` }))] },
+            ]}
+            submitLabel={t("Release")} onCancel={() => setReleasing(false)}
+            onSubmit={async (v) => {
+              const { order, planned, ...rest } = v;
+              if (await decide("mes.order.release", { type: "mes.order", id: order }, planned ? { ...rest, planned } : rest)) setReleasing(false);
             }} />
         )}
       </Dialog>
@@ -256,7 +294,7 @@ const count = { aggregate: "count", type: "quantitative" } as const;
 
 export default defineApp({
   id: "mes",
-  title: t("Plant operations"),
+  title: t("MES"),
   icon: <Factory />,
   home: { view: "queue" },
   dashboards: [{ id: "shop-floor", title: t("Shop floor"), description: t("SFCs by state and product, lots finished per day, and orders confirmed to the ERP."), charts: [
@@ -271,6 +309,7 @@ export default defineApp({
   ] }],
   opens: { "mes.sfc": "sfc", "mes.downtime": "equipment" },
   views: [
+    { id: "orders", title: () => t("Shop orders"), render: () => <ShopOrders /> },
     { id: "planned", title: () => t("Planned orders"), render: () => <PlannedOrders /> },
     { id: "queue", title: () => t("Work queue"), render: () => <SFCTable title={t("Work queue")} description={t("SFCs waiting or in work")} filter={(s) => s.state === "queued" || s.state === "active"} /> },
     { id: "holds", title: () => t("Quality holds"), render: () => <SFCTable title={t("Quality holds")} description={t("SFCs held by a nonconformance")} filter={(s) => s.state === "hold"} /> },
@@ -279,7 +318,8 @@ export default defineApp({
     { id: "equipment", title: () => t("Downtime"), render: () => <Equipment /> },
   ],
   nav: () => [
-    { label: t("Planning"), items: [{ label: t("Planned orders"), icon: <ClipboardList />, route: { view: "planned" } }] },
+    { label: t("Planning"), items: [{ label: t("Shop orders"), icon: <ListOrdered />, route: { view: "orders" } },
+      { label: t("Planned orders"), icon: <ClipboardList />, route: { view: "planned" } }] },
     { label: t("Execution"), items: [{ label: t("Work queue"), icon: <Factory />, route: { view: "queue" } }, { label: t("All SFCs"), icon: <Cpu />, route: { view: "sfcs" } }] },
     { label: t("Quality"), items: [{ label: t("Holds"), icon: <ShieldAlert />, route: { view: "holds" } }] },
     { label: t("Equipment"), items: [{ label: t("Downtime"), icon: <Activity />, route: { view: "equipment" } }] },

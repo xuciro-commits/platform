@@ -30,9 +30,9 @@ function Tickets() {
 
 export default defineApp({
   id: "csm",
-  title: t("Helpdesk"),
+  title: t("CSM"),
   icon: <Headset />,
   home: { view: "tickets" },
   views: [{ id: "tickets", title: () => t("Tickets"), render: () => <Tickets /> }],
-  nav: () => [{ label: t("Helpdesk"), items: [{ label: t("Tickets"), icon: <Ticket />, route: { view: "tickets" } }] }],
+  nav: () => [{ label: t("CSM"), items: [{ label: t("Tickets"), icon: <Ticket />, route: { view: "tickets" } }] }],
 });

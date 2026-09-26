@@ -4,6 +4,7 @@ import { register } from "@platform/ui";
 register("zh-CN", {
   "Draft": "草稿",
   "First day": "第一天",
+  "HCM": "人力资本管理",
   "Kind": "类型",
   "Last day": "最后一天",
   "Last day before the first": "最后一天早于第一天",
