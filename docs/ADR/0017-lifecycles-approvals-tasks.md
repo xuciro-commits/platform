@@ -102,5 +102,5 @@ They agree on three separate things. We take them apart the same way:
   - The sales workspace has leave requests, the inbox and "my requests". The MES has the inbox.
   - The kit's record page shows a status bar with the transitions the member may take.
 - **Proven** by the HR test and the rehearsal: approval along the organisation, a stale request refused when run, rejection, withdrawal, a refused probe, an agent refused, escalation of an overdue task, and replay. Checked in the browser: submit, the manager's inbox, two levels approved, the requester told.
-- **Not yet:** the helpdesk reference app (tickets with SLA), stage 2's second proof; delegation and substitutes; business calendars.
+- **Not yet:** delegation and substitutes; business calendars. The helpdesk reference app, stage 2's second proof, was built as the CSM (ADR-0021 batch 2).
 

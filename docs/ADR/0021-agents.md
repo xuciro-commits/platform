@@ -154,7 +154,7 @@ Our platform starts from an advantage there: every decision is already journaled
   - `TestAgents`: runs for a clerk and for a viewer (refused, D2), a stranger refused, ask and resume, the guard, the budget and takeover, a flow's agent step answering and stopping to its fault path, metering, and replay with snapshots and no model call.
   - `TestERPCorrectionByAgent`, with a scripted model.
   - The rehearsal, on the local stand-in model: the sink's echo model now calls a read tool, then proposes the first item whose product the goal names.
-- **Not yet (then batch 2):** the run page and the assistant panel, global search in the workspace, corrections as signals, evaluation by dry re-runs, the helpdesk reference app.
+- **Not yet (then batch 2, all built below):** the run page and the assistant panel, global search in the workspace, corrections as signals, evaluation by dry re-runs, the helpdesk reference app.
 
 ### Batch 2 (#111)
 
@@ -192,7 +192,7 @@ Our platform starts from an advantage there: every decision is already journaled
   - `TestERPCorrectionByAgent`: the supervisor's acceptance kept as a signal.
   - `TestHelpdeskTriage`: grounding in the CRM, the held reply approved and mailed, the guard, the desk's fallback and escalation, and replay.
   - The rehearsal's helpdesk path on the local stand-in model.
-- **Not yet (batch 3):**
+- **Not yet (batch 3, built as ADR-0022; transcripts are kept in the derived store, not a separate observability store):**
   - documents with embeddings;
   - agent memory;
   - A2A;

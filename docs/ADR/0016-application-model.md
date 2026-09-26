@@ -111,5 +111,5 @@ Two things we keep that they mostly do not have:
   - Its capacity rules read reservations through `Find` with a domain. Its maps and its `reservations` read are gone.
   - The Hotel Desk (the Tauri client's snapshot) and the sales workspace read records. Room-type choices come from the records, not a hard-coded list.
   - The owner's local sales journal replays into 2 room types and 6 reservations.
-- **Not yet:** references to a protocol's entity type (D3 allows them, none needed yet); a reference picker in generated forms (references show read-only unless the app gives options).
+- **Not yet:** references to a protocol's entity type (D3 allows them, none needed yet). The reference picker in generated forms was built with the ERP (ADR-0024 7a).
 

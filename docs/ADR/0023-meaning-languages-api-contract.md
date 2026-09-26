@@ -91,7 +91,7 @@ Our constraints:
 - **Found on the way:** generated descriptions said "a account"; they now take their article from the title.
 - **Checked in the browser** (headless, the sales host on development tokens): the home page, a CRM opportunity's record page with its stage and history, and Settings → Members in Chinese.
 - **Checked on a real model** (OpenRouter, `inclusionai/ling-3.0-flash-fin:free`, 2026-09-26): the CRM's sales assistant, asked in Chinese about an opportunity, read its context and answered in Chinese (two steps, 5 203 tokens). Most free models were rate-limited upstream, and some do not call tools.
-- **Left for 6b:** a member's language and a tenant default; notifications and task titles in the reader's language.
+- **Left for 6b (built below):** a member's language and a tenant default; notifications and task titles in the reader's language.
 
 ### 6b: meaning, the glossary, and every text in the reader's language
 

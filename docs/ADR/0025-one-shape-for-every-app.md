@@ -91,7 +91,7 @@ Declined: renaming the reference lodging provider; one binary for all solutions;
 - **Standalone and outside intake proven:** CSM has its own tests (`TestTicketsStandalone`: the desk alone without a CRM or a model, a mail gateway's service account opening a ticket through the same action, escalation when late, `CheckReplay`); the CRM's test adds a web form's service account capturing an account, resent idempotently. The MES (gateway), the PMS (channel), the ERP (the plant's confirmations) and the ERP adapter (the ERP's pages) already proved their intake.
 - **Also:** `scripts/verify.sh format` checks new, untracked Go files too; 7d had left one unformatted because the check listed tracked files only.
 - **Proven:** `scripts/verify.sh` (every step, Docker included) on the owner's Mac; the local stack reset and reseeded under the new names.
-- **Not yet:** an outside key on records for reconciliation and inbound webhooks and mail as connector inputs (platform capabilities, Platform.md §10.4); the host's own apps as apps (8c).
+- **Not yet:** an outside key on records for reconciliation, and inbound webhooks and mail as connector inputs (platform capabilities, Platform.md §10.4). The host's own apps as apps were built in 8c below.
 
 ### 8c, first moves: `relations` and `org` (#113)
 

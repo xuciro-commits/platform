@@ -260,7 +260,11 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0020 | Record-state triggers; business calendars for timeouts; a drawn graph | Deferred |
 | 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
 | 0026 | A request retried when its provider is unavailable; an outside provider's later answer through the same reply action | Deferred: providers in the host answer at once (D2); the ERP adapter's later answer still reaches the MES through its flow; #120 |
+| 0023 | Dates in the chosen language; one English word with two meanings in a tenant; apps' reads typed and checked; a developer MCP; scaffolds for protocols and agents | Deferred |
+| 0024 | Financial statements beyond the trial balance; partial receipts, bills, returns and payments; stock that may not go below zero; partial confirmations and consumption per component; a real SAP binding | Deferred: the ERP stays thin (Intent.md) |
+| 0025 | An outside key on records for reconciliation; inbound webhooks and mail as connector inputs | Deferred (§10.4) |
 | 0025 | The host's own apps as apps | Built (8a to 8c); the agent runtime and the console stay in the host by the amended D4 |
+| 0027 | One runtime for durable work | Accepted; 10a to 10c to build (#120) |
 
 ## 3. Runtimes and languages
 

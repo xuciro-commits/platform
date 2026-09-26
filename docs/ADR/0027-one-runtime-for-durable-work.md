@@ -1,6 +1,6 @@
 # ADR-0027: One runtime for durable work
 
-**Status:** Proposed (2026-09-26, #120, the gate after decisions across apps; Platform.md §10.5). D1 to D4, D6 and D7 follow the recommendations unless the owner amends them; D5 adds a dependency, which only the owner approves.
+**Status:** Accepted (2026-09-26, #120). The owner accepted D1–D7 as recommended ("同意"), including D5: the OpenTelemetry Go SDK and its OTLP exporters may be added.
 
 ## Context
 

@@ -124,7 +124,7 @@ They agree on four things:
   - the host test `TestWorkspaceSurface`, and the rehearsal (the page, sign-in and a member's apps on both hosts);
   - in the browser, on one page and without signing in again: the launcher; a CRM account, opportunity and stay; the stay opened in the Hotel's view; a leave request submitted as `sales-1`, and approved twice from the manager's inbox.
 - **Not yet:**
-  - global search across records;
-  - the backend-for-frontend token (D3 (b), stage 7);
-  - UI bundles loaded at run time (D2 (b), stage 7).
+  - the backend-for-frontend token (D3 (b), now stage 9);
+  - UI bundles loaded at run time (D2 (b), now stage 9).
+  - Global search across records was built with agents (ADR-0021 batch 2).
 

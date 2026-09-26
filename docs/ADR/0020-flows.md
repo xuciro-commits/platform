@@ -149,6 +149,6 @@ They split on how a process is defined, and there are three ways:
 - **Not yet:**
   - record-state triggers (a flow starts on events only);
   - business calendars for timeouts;
-  - a drawn graph beyond the step list;
-  - agent steps run by agents (stage 5).
+  - a drawn graph beyond the step list.
+  - Agent steps run by agents were built in stage 5 (ADR-0021).
 
