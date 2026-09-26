@@ -23,7 +23,7 @@ import (
 const (
 	maxAttempts = 5   // a delivery then fails and its queue moves on
 	maxHops     = 100 // events caused by handlers of events …: a subscription cycle
-	workBurst   = 100 // attempts per subscriber per Work call
+	workBurst   = 100 // attempts per app in one Work call
 )
 
 func backoff(attempts int) time.Duration { return time.Second << attempts } // 2 s, 4 s, 8 s, 16 s
@@ -112,31 +112,123 @@ type workBody struct {
 	Outcome string `json:"outcome"`
 }
 
-// Work runs what is due at now: the head of each subscriber's queue, and jobs.
-// The host calls it every second; tests call it with their clock.
+// Work runs what is due at now, as many rounds as it takes. Tests call it with
+// their clock; the host runs rounds of every tenant in turn (Schedule).
 func (t *Tenant) Work(now time.Time) {
+	for range workBurst {
+		if !t.Round(now, len(t.apps)) {
+			return
+		}
+	}
+}
+
+// Round takes up to budget due items, one app after another from where the
+// last round stopped (ADR-0027 D3): each app's first ready delivery, then due
+// jobs. An app past its quota is deferred to the next minute. It reports
+// whether ready work remains.
+func (t *Tenant) Round(now time.Time, budget int) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for _, a := range t.apps {
-		for range workBurst {
-			t.opsMu.Lock()
-			q := t.queues[a.Manifest().ID]
-			var head *Task
-			if len(q) > 0 && !q[0].Due.After(now) {
-				head = q[0]
-			}
-			t.opsMu.Unlock()
-			if head == nil {
+	took, n := 0, len(t.apps)
+	for progressed := true; progressed && took < budget; {
+		progressed = false
+		for i := range n {
+			if took >= budget {
 				break
 			}
-			t.attempt(head, now, false)
+			a := t.apps[(t.turn+i)%n].Manifest().ID
+			if t.overQuota(a, now) {
+				continue
+			}
+			t.opsMu.Lock()
+			next := ready(t.queues[a], now)
+			t.opsMu.Unlock()
+			if next == nil {
+				continue
+			}
+			t.attempt(next, now, false)
+			t.spend(a, now)
+			took, progressed = took+1, true
 		}
 	}
+	t.turn = (t.turn + 1) % max(n, 1)
 	for _, j := range t.jobs {
-		if !j.Due.After(now) {
+		if !j.Due.After(now) && took < budget && !t.overQuota(j.App, now) {
 			t.run(j, now, false)
+			t.spend(j.App, now)
+			took++
 		}
 	}
+	return t.pending(now)
+}
+
+// ready is a subscriber's first due delivery that no earlier one holds back:
+// deliveries of one event target keep their order, others pass a failing one
+// (ADR-0027 D2).
+func ready(q []*Task, now time.Time) *Task {
+	held := map[string]bool{}
+	for _, x := range q {
+		k := target(x.event.Record.GetSubmission())
+		if !held[k] && !x.Due.After(now) {
+			return x
+		}
+		held[k] = true
+	}
+	return nil
+}
+
+// pending reports whether an app not past its quota has a ready delivery or a due job.
+func (t *Tenant) pending(now time.Time) bool {
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	for app, q := range t.queues {
+		if ready(q, now) != nil && !t.overQuota(app, now) {
+			return true
+		}
+	}
+	return slices.ContainsFunc(t.jobs, func(j *Task) bool { return !j.Due.After(now) && !t.overQuota(j.App, now) })
+}
+
+// overQuota reports whether app has used its attempts of the minute (Tenant.Quota).
+func (t *Tenant) overQuota(app string, now time.Time) bool {
+	if t.Quota <= 0 {
+		return false
+	}
+	u := t.used[app]
+	return u.minute.Equal(now.Truncate(time.Minute)) && u.n >= t.Quota
+}
+
+func (t *Tenant) spend(app string, now time.Time) {
+	if t.used == nil {
+		t.used = map[string]usedMinute{}
+	}
+	u, minute := t.used[app], now.Truncate(time.Minute)
+	if !u.minute.Equal(minute) {
+		u = usedMinute{minute: minute}
+	}
+	u.n++
+	t.used[app] = u
+}
+
+type usedMinute struct {
+	minute time.Time
+	n      int
+}
+
+// Deferred are the apps past their quota at now, with their ready work waiting.
+func (t *Tenant) Deferred(now time.Time) []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	var out []string
+	for _, a := range t.apps {
+		id := a.Manifest().ID
+		if t.overQuota(id, now) && (ready(t.queues[id], now) != nil || slices.ContainsFunc(t.jobs, func(j *Task) bool { return j.App == id && !j.Due.After(now) })) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // attempt hands a queued event to its subscriber once; the outcome is journaled.
@@ -217,8 +309,8 @@ func (t *Tenant) replayWork(kind string, raw []byte, at time.Time) error {
 		}
 	} else {
 		for _, q := range t.queues {
-			if len(q) > 0 && q[0].ID == b.Work {
-				task = q[0]
+			if i := slices.IndexFunc(q, func(x *Task) bool { return x.ID == b.Work }); i >= 0 {
+				task = q[i]
 			}
 		}
 	}

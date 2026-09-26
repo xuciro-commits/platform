@@ -186,6 +186,24 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	return nil
 }
 
+// roundSize is the items a tenant takes in one round before the next tenant's turn.
+const roundSize = 10
+
+// Schedule runs the tenants' due work in rounds, each tenant up to size items
+// in turn (ADR-0027 D3), until none has ready work or the time is up: a tenant
+// with a burst of work waits for the others' turns, and none starves.
+func Schedule(tenants []*Tenant, now time.Time, size int, within time.Duration) {
+	started := time.Now()
+	for more := true; more && time.Since(started) < within; {
+		more = false
+		for _, t := range tenants {
+			if t.Round(now, size) {
+				more = true
+			}
+		}
+	}
+}
+
 // snapshotter saves a tenant's snapshot once the journal has grown by every
 // entries and by a tenth since the last one (decisions wait while a snapshot
 // captures the state, about a second at a million records, so a large tenant
@@ -242,8 +260,8 @@ func CodeOf(tenants ...*Tenant) string {
 func RunWork(tenants ...*Tenant) {
 	go func() {
 		for range time.Tick(time.Second) {
+			Schedule(tenants, Now(), roundSize, 900*time.Millisecond)
 			for _, t := range tenants {
-				t.Work(Now())
 				t.Dispatch(Now()) // outbound effects, outside the tenant's lock (ADR-0014)
 			}
 		}

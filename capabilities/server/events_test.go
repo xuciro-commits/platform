@@ -95,8 +95,8 @@ func TestEventsAreOwnedWork(t *testing.T) {
 	tn.Work(at(0)) // one: ok; wait:y: refused, retried in 2 s
 	submit("k3", "x3", "fail", 1)
 	submit("k4", "x4", "two", 1)
-	tn.Work(at(1)) // nothing due: the queue keeps its order behind wait:y
-	if w.texts["log"] != "saw one" {
+	tn.Work(at(1)) // two passes: a failing delivery holds back only those about its own target (ADR-0027 D2)
+	if w.texts["log"] != "saw two" {
 		t.Fatalf("log %q", w.texts["log"])
 	}
 	submit("k5", "y", "why", 1)
@@ -113,8 +113,8 @@ func TestEventsAreOwnedWork(t *testing.T) {
 		}
 		return out
 	}
-	want := []string{"x1 ok", "x2 ERROR_CODE_NOT_FOUND", "x2 ok", "x3 ERROR_CODE_CONFLICT", "x3 ERROR_CODE_CONFLICT", "x3 ERROR_CODE_CONFLICT",
-		"x3 ERROR_CODE_CONFLICT", "x3 ERROR_CODE_CONFLICT", "x4 ok", "y ok"}
+	want := []string{"x1 ok", "x2 ERROR_CODE_NOT_FOUND", "x3 ERROR_CODE_CONFLICT", "x4 ok", "x2 ok", "y ok", "x3 ERROR_CODE_CONFLICT",
+		"x3 ERROR_CODE_CONFLICT", "x3 ERROR_CODE_CONFLICT", "x3 ERROR_CODE_CONFLICT"}
 	if got := outcomes(tn); !slices.Equal(got, want) {
 		t.Fatalf("deliveries %v", got)
 	}

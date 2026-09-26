@@ -35,9 +35,10 @@ type Entry struct {
 // append names the number it expects, so a second writer that has not replayed
 // the other's entries fails instead of interleaving (one authority per tenant, K5).
 type Journal struct {
-	mu   sync.Mutex
-	pool *pgxpool.Pool
-	next map[string]int64
+	mu    sync.Mutex
+	pool  *pgxpool.Pool
+	next  map[string]int64
+	locks map[string]*sync.Mutex // one per tenant: appends of a tenant are in order
 }
 
 // schema is forward-only: new statements are appended, never edited.
@@ -71,7 +72,7 @@ func OpenJournal(ctx context.Context, url string) (*Journal, error) {
 			return nil, err
 		}
 	}
-	return &Journal{pool: pool, next: map[string]int64{}}, nil
+	return &Journal{pool: pool, next: map[string]int64{}, locks: map[string]*sync.Mutex{}}, nil
 }
 
 // Entries reads a tenant's entries after position after (0: all) in order;
@@ -140,10 +141,21 @@ func (j *Journal) Snapshot(ctx context.Context, tenant, code string) (int64, []b
 	return seq, state, err == nil, err
 }
 
+// Append adds an entry to a tenant's journal. The order is per tenant, so
+// tenants append side by side, each under its own lock (F-34, ADR-0027 D7).
 func (j *Journal) Append(ctx context.Context, tenant string, e Entry) error {
 	j.mu.Lock()
-	defer j.mu.Unlock()
+	lock := j.locks[tenant]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		j.locks[tenant] = lock
+	}
+	j.mu.Unlock()
+	lock.Lock()
+	defer lock.Unlock()
+	j.mu.Lock()
 	seq, read := j.next[tenant]
+	j.mu.Unlock()
 	if !read {
 		return fmt.Errorf("journal: append to %s before reading its entries", tenant)
 	}
@@ -151,7 +163,9 @@ func (j *Journal) Append(ctx context.Context, tenant string, e Entry) error {
 		tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions); err != nil {
 		return err
 	}
+	j.mu.Lock()
 	j.next[tenant] = seq + 1
+	j.mu.Unlock()
 	return nil
 }
 

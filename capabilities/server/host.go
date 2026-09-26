@@ -68,10 +68,14 @@ type Tenant struct {
 	works      *kernel.Works
 	// opsMu guards what reads and the runner share: queues, connectors,
 	// notifications and settings (operations.go). It is never held while t.mu is taken.
-	opsMu       sync.Mutex
-	queues      map[string][]*Task // subscriber → its deliveries, head first
-	failed      []*Task
-	jobs        []*Task
+	opsMu  sync.Mutex
+	queues map[string][]*Task // subscriber → its deliveries, head first
+	failed []*Task
+	jobs   []*Task
+	// Quota is the attempts of owned work each app may make in a minute (ADR-0027 D3); 0: no limit.
+	Quota       int
+	used        map[string]usedMinute // attempts per app in the current minute (volatile)
+	turn        int                   // the app the next round starts at
 	connectors  *kernel.Connectors
 	descriptors map[string]*pb.ConnectorDescriptor
 	lastError   map[string]ConnectorError

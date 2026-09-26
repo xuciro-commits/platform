@@ -80,3 +80,15 @@ Declined: a message broker (Kafka, NATS) for work between apps in one host — t
 - A slow or failing destination costs its own items, not the process; one tenant cannot starve another.
 - Outcomes stay in the journal as today, so replay is unchanged; timing, breakers and quotas are volatile.
 - With D5, the platform speaks the observability standard; without it, 10c shrinks to health and counters.
+
+## As built
+
+### 10a: rounds, ordering by key, quotas, the journal per tenant
+
+- **Rounds** (`operations.go`): `Tenant.Round(now, budget)` takes up to `budget` due items under the tenant's lock, one app after another from where the last round stopped — each app's first ready delivery, then due jobs (flow timers among them) — and says whether ready work remains. `Schedule(tenants, now, size, within)` (`deploy.go`) runs rounds of every tenant in turn, ten items each, until none has ready work or 900 ms are spent; `RunWork` calls it each second. `Tenant.Work` is rounds of one tenant, for tests.
+- **Ordering by key** (D2): `ready` is a subscriber's first due delivery that no earlier delivery about the same event target holds back. A failing delivery now holds back only its own target; replay finds a journaled attempt anywhere in the queue.
+- **Quotas** (D3): `Tenant.Quota` is the attempts each app may make in a minute; past it, the app's ready work waits for the next minute and `Tenant.Deferred` names it. Quotas and turns are volatile: replay runs what was recorded.
+- **The journal** (D7, F-34): `Journal.Append` holds a lock per tenant, so tenants append side by side.
+- **Proven:** `TestScheduler` (a failing delivery holds back only its target; a quiet tenant's delivery runs within the first round beside a burst of fifty; a quota of three defers the rest to the next minute; `CheckReplay`), `TestEventsAreOwnedWork` updated to the keyed order, every composition's tests, the rehearsal.
+- **Not yet (10b):** effects, model calls, agent turns, embeddings and evaluations are still their own loops; the retry policy type, breakers, checkpoints and owners' tasks for failed items. Deferral shows in Settings with 10c.
+
