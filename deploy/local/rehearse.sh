@@ -118,7 +118,8 @@ submit "$OP1" s-1 mes.sfc.start mes.sfc WO-1-001 '{"resource":"FURNACE-1"}' 0 | 
 agent() { (cd ../../apps/mes/server && MES_AGENT_CLIENT=mes-assistant \
   MES_AGENT_SECRET=assistantLocalOnly0000000000000000000000000000000000000000000000 \
   go run ./cmd/mes-agent -server "$MANUFACTURING" -oidc-token "$IDP/oidc/token" "$@"); }
-[[ $(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") or startswith("files.") | not)]') == '["platform.member.language","platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog"
+catalog=$(agent actions | jq -c '[.[].schema | select(startswith("work.") or startswith("agent.") or startswith("files.") or IN("platform.link", "platform.unlink", "platform.note", "platform.comment.add", "platform.follow.add", "platform.follow.remove") | not)]')
+[[ $catalog == '["platform.member.language","platform.notification.read","mes.downtime.reason","mes.order.reconfirm"]' ]] || fail "assistant catalog: $catalog"
 event=$(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/downtime" | jq -r 'first(.[] | select(.resource == "CNC-11")).id')
 agent do mes.downtime.reason "$event" '{"reason":"Setup"}' | jq -e .record >/dev/null || fail "assistant reason"
 ! agent do mes.order.release WO-9 '{}' 2>/dev/null || fail "assistant acted outside its catalog"

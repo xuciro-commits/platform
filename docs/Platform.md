@@ -116,8 +116,9 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 | Links, timeline, comments and followers | Platform app `relations` | Relations between entities; protocol events told on linked timelines; comments with @mentions and followers on any record, readable when the record is (ADR-0028) | `apps/relations` (a package, ADR-0025 D4), `Caller.Link`, `Caller.Links` | CRM |
 | Field security and personal data (ADR-0028) | App API, host runtime | Tags `read`, `write` and `personal` on fields; every read, search, filter, aggregate, form, history, projection and knowledge index honours them; reads of personal data audited | `FieldInfo.Read`, `Write`, `Personal`, `viewOf`, `/v1/personal-reads` | HCM, CRM |
 | Files (ADR-0028) | Platform app `files`, host | Bytes uploaded to an S3-compatible store (RustFS locally) and attached to any record by a decision naming their SHA-256; readable exactly when the record is (`Scope.Through`); downloads served as attachments; text files as knowledge; unattached uploads swept | `apps/files`, `filestore.go`, `files.go`, `POST /v1/files`, `GET /v1/files/{id}` | MES, CSM, ERP (any record) |
+| Import and export (ADR-0028) | Host runtime, `@platform/app` | CSV of any entity type in and out of its list: each row a decision through the type's generated create or edit, previewed first, a file sent again deciding nothing new; exports read as the list does, field security included | `POST /v1/import/{type}`, `GET /v1/export/{type}` | ERP, CRM, HCM |
 | Notifications | Host, read state in `platform` | To members, a unit's role or an app role; deduplicated; mailed through an email endpoint; a task's notifications are read once it closes, and a notification opened is read (#118) | `Caller.Notify` | MES, PMS, CSM, `work` |
-| Lifecycles, approvals, tasks, inbox (ADR-0017) | App API, platform app `work` | States and transitions on an entity type; approval chains along the organisation; tasks with due times and escalation; one inbox; saved views | `platform.Lifecycle`, `platform.Approval`, `Caller.Assign`, `/v1/inbox` | MES, HCM, CSM |
+| Lifecycles, approvals, tasks, inbox (ADR-0017) | App API, platform app `work` | States and transitions on an entity type; approval chains along the organisation; tasks with due times and escalation; one inbox; saved views; delegation of a member's approvals for some days (ADR-0028) | `platform.Lifecycle`, `platform.Approval`, `Caller.Assign`, `/v1/inbox`, `work.delegation.add` | MES, HCM, CSM |
 | Flows (ADR-0020) | App API, platform app `flow` | Declared long-running processes: acts, waits, questions, parallel branches, sub-flows, agent steps, timeouts, compensation, versions, a trace of why each step went where it went; a step that fails with no fault path gives the flow's owners and its starter a task before it undoes (#118); a record's page lists the flows about it (`Flow.Subject`, ADR-0026 D4) | `platform.Flow`, `flow.go`, `flow_engine.go` | MES, CSM |
 | AI providers and models (ADR-0015) | Platform app `ai` | Vendor, OpenAI-compatible, Anthropic and local providers; enabled models with access; calls through the host with usage journaled; tools on both wires | `ai.go`, `aicall.go`, `anthropic.go`, `/v1/ai/chat` | every host |
 | Agents (ADR-0021, 0022) | App API, platform app `agent` | Declared agents as principals with the intersection of grants; runs journaled step by step; drafts people confirm; signals; evaluation by dry re-runs; memory; transcripts; the context graph and search as tools | `platform.Agent`, `agent*.go`, `context.go`, `/v1/context`, `/v1/search` | MES, CRM, CSM |
@@ -256,7 +257,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0014 | Webhooks filtered by who may see an event | Amended (#104): an endpoint has the administrator's view |
 | 0015 | Quotas and rate limits, app calls as effects, streaming | Partial: attempts per app per minute (ADR-0027 10a), a breaker per provider (10b), agents' daily tokens; rate limits per member and model, app calls as effects and streaming deferred |
 | 0016 | References to a protocol's entity type | Deferred; generated forms offer choices for references (ADR-0024 7a) |
-| 0017 | Delegation and substitutes | Deferred (business calendars built, ADR-0028 11d) |
+| 0017 | Delegation and substitutes | Delegation of approvals built (ADR-0028 11e); of other tasks deferred |
 | 0018 | The backend-for-frontend token; UI bundles loaded at run time | Deferred (stage 9) |
 | 0019 | Capturing state without the tenant's lock; parallel restore; the plant's downtime as records | Deferred |
 | 0020 | A drawn graph | Deferred (record-state triggers and working-day timeouts built, ADR-0028 11d) |
@@ -484,16 +485,13 @@ Built capabilities are in the capability map (§2.4). This is what remains, with
 
 | Area | Capability | What an app gets | Reference |
 |---|---|---|---|
-| Application model | Attachments and files | Files on records, object storage, preview, retention; files as knowledge | Odoo `ir.attachment`, ServiceNow attachments |
-| | Comments, mentions and followers | A conversation on any record, followers notified (timeline notes exist) | Odoo `mail.thread`, Salesforce Chatter |
-| | Import and export | CSV/Excel in and out through the same actions | Odoo import, Salesforce Data Loader |
-| | Money, units, calendars | Several currencies and rates (money fields and the tenant's currency exist), units of measure, business calendars, time zones | Odoo `res.currency`, `uom`, `resource.calendar` |
+| Application model | Attachments and files | Preview, retention, file fields on entity types, PDF text (files on any record exist) | Odoo `ir.attachment`, ServiceNow attachments |
+| | Import and export | Excel files and lines (CSV in and out exists) | Odoo import, Salesforce Data Loader |
+| | Money, units, time | Several currencies and rates (money fields and the tenant's currency exist), units of measure, working hours, time zones | Odoo `res.currency`, `uom`, `resource.calendar` |
 | | Customer analysis models | Customers' own models and dashboards beside packages (ADR-0008) | Foundry Contour, Power BI on Dataverse |
-| Process | Record-state triggers | Flows and automation that start when a record reaches a state, not only on events | ServiceNow business rules, Odoo automated actions |
-| | Scheduling and capacity | Resources, calendars and allocation over time | Odoo planning, SAP capacity planning |
-| People and access | Field-level access and masking | Sensitive fields hidden by role | Salesforce field-level security |
-| | Effective permissions | Who may do what and why, per member | Salesforce permission analysis |
-| | Delegation and substitutes | Acting for someone for a period | SAP substitution, ServiceNow delegates |
+| Process | Scheduling and capacity | Resources, calendars and allocation over time | Odoo planning, SAP capacity planning |
+| People and access | Effective permissions | Who may do what and why, per member | Salesforce permission analysis |
+| | Substitutes for tasks | Acting for someone on tasks outside approvals (delegation of approvals exists) | SAP substitution, ServiceNow delegates |
 | | Provisioning | Users and groups from the identity provider (SCIM) | Okta or Entra SCIM |
 | Integration | MCP authorization and resources | Standard clients sign in with the host's issuer; records and reads as resources | MCP specification, ServiceNow Action Fabric |
 | | Inbound email and webhooks as connector inputs | Mail and calls from outside as journaled inputs | ServiceNow inbound actions |

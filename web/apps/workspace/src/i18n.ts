@@ -53,6 +53,8 @@ register("zh-CN", {
   "The host is unreachable.": "无法连接宿主。",
   "This host does not accept this identity.": "此宿主不接受这个身份。",
   "Waiting for": "等待",
+  "Decided for": "代批",
+  "{delegate} for {approver}": "{delegate} 代 {approver}",
   "Welcome, {name}": "欢迎，{name}",
   "What you asked for that waits for approvers, and how it ended.": "你提交的、等待审批人处理的申请，以及结果。",
   "What your apps tell you.": "你的应用发给你的消息。",

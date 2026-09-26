@@ -78,6 +78,22 @@ export class EdgeClient {
     return response.json();
   }
 
+  /** Imports records of a type from CSV, or previews what each row would do (ADR-0028). */
+  async importCSV(type: string, file: Blob, preview: boolean): Promise<{ row: number; id: string; action: string; outcome: string }[]> {
+    const response = await fetch(`${this.connection.server}/v1/import/${encodeURIComponent(type)}?preview=${preview}`, {
+      method: "POST", headers: { ...this.headers(), "Content-Type": "text/csv" }, body: file,
+    });
+    if (!response.ok) throw new Error(`import failed: ${response.status}`);
+    return response.json();
+  }
+
+  /** The records a list shows the member, as CSV (ADR-0028). */
+  async exportCSV(type: string, query: string): Promise<Blob> {
+    const response = await fetch(`${this.connection.server}/v1/export/${encodeURIComponent(type)}${query}`, { headers: this.headers() });
+    if (!response.ok) throw new Error(`export failed: ${response.status}`);
+    return response.blob();
+  }
+
   /** A file's bytes, as the member may read them (ADR-0028). */
   async download(id: string): Promise<Blob> {
     const response = await fetch(`${this.connection.server}/v1/files/${encodeURIComponent(id)}`, { headers: this.headers() });

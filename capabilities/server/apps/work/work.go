@@ -29,6 +29,9 @@ const (
 	// SchemaRequest holds a submission for approval; the host submits it for the requester.
 	SchemaRequest = "work.approval.request"
 	// A member's saved views of a list (ADR-0019 D4): their data, not configuration.
+	DelegationType   = "work.delegation"
+	SchemaDelegate   = "work.delegation.add"
+	SchemaUndelegate = "work.delegation.end"
 	ViewType         = "work.view"
 	SchemaViewSave   = "work.view.save"
 	SchemaViewRemove = "work.view.remove"
@@ -56,6 +59,19 @@ type ApprovalStep struct {
 	All       bool      `json:"all,omitempty"`
 	Approved  []string  `json:"approved"`
 	Due       time.Time `json:"due,omitzero"`
+	// Delegates may decide for an approver away on the request's day
+	// (delegate → approver); DecidedBy says who did (approver → delegate) (ADR-0028 D11).
+	Delegates map[string]string `json:"delegates,omitempty"`
+	DecidedBy map[string]string `json:"decidedBy,omitempty"`
+}
+
+// Delegation hands a member's approvals and tasks to another for some days.
+type Delegation struct {
+	platform.Record
+	From  string        `json:"from" field:"readonly" title:"Delegated by"`
+	To    string        `json:"to" field:"required" title:"Delegate"`
+	Start platform.Date `json:"start" field:"required" type:"date" title:"First day"`
+	End   platform.Date `json:"end" field:"required" type:"date" title:"Last day"`
 }
 
 // WorkTask is work for people: who may take it, by when, and whether it is done.
@@ -109,7 +125,15 @@ func New(tenant string) *Work {
 				{Name: "state", Type: "string", Description: "The list's state: search, grouping, pivot or chart"}}, Roles: []string{platform.AnyMember}},
 		platform.Action{Schema: SchemaViewRemove, Target: ViewType, Capability: "views", Title: "Remove view", Description: "Remove one of your saved views.",
 			Payload: []platform.Field{}, Roles: []string{platform.AnyMember}})
-	w.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType)
+	actions = append(actions,
+		platform.Action{Schema: SchemaDelegate, Target: DelegationType, New: true, Capability: "delegation", Title: "Delegate approvals",
+			Description: "Hand your approvals and tasks to another member from a first to a last day: they decide for you, and the request says so.",
+			Payload: []platform.Field{{Name: "to", Type: "string", Required: true, Description: "The delegate's member ID"},
+				{Name: "start", Type: "date", Required: true, Description: "First day"}, {Name: "end", Type: "date", Required: true, Description: "Last day"}},
+			Roles: []string{platform.AnyMember}},
+		platform.Action{Schema: SchemaUndelegate, Target: DelegationType, Capability: "delegation", Title: "End delegation",
+			Description: "End one of your delegations.", Payload: []platform.Field{}, Roles: []string{platform.AnyMember}})
+	w.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, DelegationType)
 	return w
 }
 
@@ -121,7 +145,7 @@ func (w *Work) entities() []platform.Entity {
 				a := record.(ApprovalRequest)
 				out := []string{a.Requester}
 				for _, l := range a.Levels {
-					out = append(out, l.Approvers...)
+					out = append(out, l.candidates()...)
 				}
 				return out
 			}},
@@ -158,6 +182,8 @@ func (w *Work) entities() []platform.Entity {
 						}},
 				}}},
 		{Type: ViewType, Title: "Saved view", Model: SavedView{}},
+		{Type: DelegationType, Title: "Delegation", Model: Delegation{}, Description: "A member's approvals and tasks handed to another for some days; the delegate decides for them, and the request says so.",
+			Scope: platform.Scope{Participants: func(record any) []string { d := record.(Delegation); return []string{d.From, d.To} }}},
 	}
 }
 
@@ -186,6 +212,8 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 	}
 	return w.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		switch s.GetSchema().GetName() {
+		case SchemaDelegate, SchemaUndelegate:
+			return w.delegate(c, s)
 		case SchemaViewSave, SchemaViewRemove:
 			return w.view(c, s)
 		}
@@ -224,7 +252,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 		if len(approvers) == 0 {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED} // nobody could approve it
 		}
-		step := ApprovalStep{Title: level.Title, Approvers: approvers, All: level.All, Approved: []string{}}
+		step := ApprovalStep{Title: level.Title, Approvers: approvers, All: level.All, Approved: []string{}, Delegates: w.delegates(c, approvers, now)}
 		if level.Due > 0 {
 			step.Due = now.Add(level.Due)
 		}
@@ -285,10 +313,10 @@ func (w *Work) offer(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, n
 	step := a.Levels[a.Level]
 	task := WorkTask{Record: platform.Record{ID: fmt.Sprintf("%s#%d", a.ID, a.Level+1)}, Title: "Approve: " + a.Title + " " + a.Target,
 		Body: fmt.Sprintf("%s asks, level %d of %d: %s.", a.Requester, a.Level+1, len(a.Levels), step.Title), Ref: ApprovalType + "/" + a.ID,
-		App: a.App, Candidates: step.Approvers, Due: step.Due, State: "open"}
+		App: a.App, Candidates: step.candidates(), Due: step.Due, State: "open"}
 	c.Put(r, task)
 	var to []platform.Recipient
-	for _, m := range step.Approvers {
+	for _, m := range task.Candidates {
 		to = append(to, platform.Recipient{Member: m})
 	}
 	c.Notify(platform.Notification{Title: task.Title, Body: task.Body, Ref: task.Ref, Key: "task:" + task.ID}, now, to...)
@@ -308,7 +336,8 @@ func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, l
 func (w *Work) decider(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	a := record.(*ApprovalRequest)
 	step := a.Levels[a.Level]
-	if c.Agent || c.ID == a.Requester || !slices.Contains(step.Approvers, c.ID) || slices.Contains(step.Approved, c.ID) {
+	who := step.actingFor(c.ID)
+	if c.Agent || c.ID == a.Requester || who == "" || slices.Contains(step.Approved, who) {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	return nil
@@ -323,7 +352,14 @@ func (w *Work) approve(c platform.Caller, record any, payload json.RawMessage, n
 	}
 	a := record.(*ApprovalRequest)
 	step := &a.Levels[a.Level]
-	step.Approved = append(step.Approved, c.ID)
+	who := step.actingFor(c.ID)
+	step.Approved = append(step.Approved, who)
+	if who != c.ID {
+		if step.DecidedBy == nil {
+			step.DecidedBy = map[string]string{}
+		}
+		step.DecidedBy[who] = c.ID
+	}
 	if step.All && len(step.Approved) < len(step.Approvers) {
 		return nil // stays pending at this level
 	}
@@ -522,3 +558,67 @@ func (w *Work) Close(c platform.Caller, r *pb.ChangeRecord, id string) {
 // recipient once it closes: done, or ended another way (F-30). It runs inside
 // the closing decision, so replay marks them again.
 func (w *Work) closed(id string) { w.host.Seen(ID, "task:"+id, "overdue:"+id) }
+
+// candidates are the level's approvers and their delegates.
+func (s ApprovalStep) candidates() []string {
+	out := slices.Clone(s.Approvers)
+	for d := range s.Delegates {
+		if !slices.Contains(out, d) {
+			out = append(out, d)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// actingFor is the approver member decides as: themselves, or whom they stand in for; "" when neither.
+func (s ApprovalStep) actingFor(member string) string {
+	if slices.Contains(s.Approvers, member) {
+		return member
+	}
+	return s.Delegates[member]
+}
+
+// delegates are those standing in on now's day for any of approvers (ADR-0028 D11).
+func (w *Work) delegates(c platform.Caller, approvers []string, now time.Time) map[string]string {
+	day := now.UTC().Format(time.DateOnly)
+	all, _, _ := platform.Find[Delegation](w.host.Automation(ID, c.Replaying), platform.Query{Limit: 1000})
+	out := map[string]string{}
+	for _, d := range all {
+		if !d.Archived && slices.Contains(approvers, d.From) && d.Start <= day && day <= d.End && !slices.Contains(approvers, d.To) {
+			out[d.To] = d.From
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// delegate records a member's delegation, or ends one of theirs.
+func (w *Work) delegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+	id := s.GetTarget().GetId()
+	existing, known := platform.Get[Delegation](c, id)
+	if s.GetSchema().GetName() == SchemaUndelegate {
+		if !known || existing.Archived || existing.From != c.ID && !c.Replaying {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		existing.Archived = true
+		return func(r *pb.ChangeRecord) { c.Put(r, existing) }, nil
+	}
+	var p struct{ To, Start, End string }
+	if json.Unmarshal(s.GetPayload(), &p) != nil || p.To == "" || p.To == c.ID || p.End < p.Start {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	if known {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	if _, ok := w.host.Member(p.To); !ok && !c.Replaying {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	d := Delegation{Record: platform.Record{ID: id}, From: c.ID, To: p.To, Start: p.Start, End: p.End}
+	if err := c.Check(d); err != nil {
+		return nil, err
+	}
+	return func(r *pb.ChangeRecord) { c.Put(r, d) }, nil
+}

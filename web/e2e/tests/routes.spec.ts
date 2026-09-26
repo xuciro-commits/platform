@@ -1,4 +1,5 @@
 // docs/Testing.md's routes 4, 5, 17 and 18, walked in a browser.
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { decide, fresh, open } from "./host";
 
@@ -108,4 +109,22 @@ test("route 21: pickers, choices and comments", async ({ page, request }) => {
   await expect(page.getByRole("button", { name: "Unfollow" })).toBeVisible();
   const told = await (await request.get("/v1/notifications", { headers: { Authorization: "Bearer manager" } })).json();
   expect(told.some((n: { title: string }) => n.title.startsWith("sales-1 mentioned you"))).toBe(true);
+});
+
+// Route 22 (ADR-0028 11e): accounts imported from CSV after a preview, and exported.
+test("route 23: import and export", async ({ page }) => {
+  const a = fresh("IMP"), b = fresh("IMP");
+  await open(page, "sales", "/accounts");
+  await page.locator('input[type="file"]').setInputFiles({ name: "accounts.csv", mimeType: "text/csv",
+    buffer: Buffer.from(`id,name,kind\n${a},Imported one,company\n${b},Imported two,person\nBAD,Nobody,alien\n`) });
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("ERROR_CODE_INVALID_ARGUMENT")).toBeVisible();
+  await dialog.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Imported" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
+  await expect(page.getByText("Imported one")).toBeVisible();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export CSV" }).click();
+  const file = await (await download).path();
+  expect(readFileSync(file, "utf8")).toContain(`${a},Imported one,company`);
 });

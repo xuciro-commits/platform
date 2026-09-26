@@ -115,6 +115,8 @@ export type ApprovalStep = {
   all?: boolean;
   approved: string[];
   due?: string;
+  delegates?: Record<string, string>;
+  decidedBy?: Record<string, string>;
 };
 
 export type AuditEntry = {
@@ -386,6 +388,13 @@ export type Identity = {
   tenant: string;
   member: string;
   roles: Record<string, string>;
+};
+
+export type ImportRow = {
+  row: number;
+  id: string;
+  action: string;
+  outcome: string;
 };
 
 export type InboxTask = {

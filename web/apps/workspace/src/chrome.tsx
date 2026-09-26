@@ -66,6 +66,8 @@ function MyRequests() {
     { accessorKey: "title", header: t("Request") },
     { accessorKey: "target", header: t("About"), meta: { width: 180 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "level", header: t("Waiting for"), meta: { width: 220 }, accessorFn: (r) => r.state === "pending" ? `${r.levels[r.level]?.title}: ${r.levels[r.level]?.approvers.join(", ")}` : "" },
+    { id: "delegated", header: t("Decided for"), meta: { width: 200 }, accessorFn: (r) => r.levels.flatMap((l) => Object.entries(l.decidedBy ?? {}))
+      .map(([approver, delegate]) => t("{delegate} for {approver}", { delegate, approver })).join(", ") },
     { accessorKey: "state", header: t("State"), meta: { width: 140 }, cell: ({ row: { original: r } }) => <span title={r.outcome}><StatusTag status={r.state} registry={requestStates} /></span> },
     { id: "act", header: "", meta: { width: 100 }, cell: ({ row: { original: r } }) => r.state === "pending" &&
       <Button size="sm" onClick={(e) => { e.stopPropagation(); void decide("work.approval.withdraw", { type: "work.approval", id: r.id }, {}); }}>{t("Withdraw")}</Button> },

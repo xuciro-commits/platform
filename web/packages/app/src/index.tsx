@@ -133,7 +133,7 @@ export type SavedView = Api.SavedView;
  * the type (F-33); an app that offers one itself names it in `covers`.
  */
 export function Records({ type, description, actions, covers, saved }: { type: string; description?: string; actions?: ReactNode; covers?: string[]; saved?: SavedView }) {
-  const { source, decide } = useHost();
+  const { source, decide, client, can } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const info = source.entity(type);
@@ -149,7 +149,8 @@ export function Records({ type, description, actions, covers, saved }: { type: s
   };
   return (
     <>
-      <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} /></>}
+      <PageHeader title={saved?.title ?? info?.plural ?? type} actions={<>{actions}<NewActions type={type} covers={covers} />
+        <Transfer type={type} client={client} importable={can(`${type}.create`) || can(`${type}.edit`)} /></>}
         description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
       <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
       <Dialog open={!!saving} onOpenChange={(o) => !o && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
@@ -163,6 +164,42 @@ export function Records({ type, description, actions, covers, saved }: { type: s
       </Dialog>
     </>
   );
+}
+
+/** Export a type's records as CSV, and import them from CSV after a preview of what each row would do (ADR-0028). */
+function Transfer({ type, client, importable }: { type: string; client: EdgeClient; importable: boolean }) {
+  const [file, setFile] = useState<File>();
+  const [rows, setRows] = useState<{ row: number; id: string; action: string; outcome: string }[]>();
+  const [done, setDone] = useState(false);
+  const save = async () => {
+    const url = URL.createObjectURL(await client.exportCSV(type, ""));
+    Object.assign(document.createElement("a"), { href: url, download: `${type}.csv` }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const close = () => { setFile(undefined); setRows(undefined); setDone(false); };
+  return <>
+    <Button onClick={() => void save()}>{t("Export CSV")}</Button>
+    {importable && <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-border px-3 text-sm hover:bg-row-hover">{t("Import CSV")}
+      <input type="file" accept=".csv,text/csv" className="hidden" onChange={async (e) => {
+        const f = e.target.files?.[0];
+        e.target.value = "";
+        if (f) { setFile(f); setRows(await client.importCSV(type, f, true)); }
+      }} />
+    </label>}
+    <Dialog open={!!rows} onOpenChange={(o) => !o && close()} title={done ? t("Imported") : t("What the import would do")}>
+      <div className="grid gap-3">
+        <ul className="max-h-80 overflow-auto text-sm">
+          {rows?.map((r) => <li key={r.row} className="flex gap-2"><span className="w-10 text-muted">{r.row}</span><span className="font-mono">{r.id}</span>
+            <span>{r.action.endsWith(".edit") ? t("edit") : t("create")}</span><span className={r.outcome === "ok" ? "" : "text-[var(--tone-danger)]"}>{r.outcome}</span></li>)}
+        </ul>
+        <div className="flex justify-end gap-2">
+          <Button onClick={close}>{done ? t("Close") : t("Cancel")}</Button>
+          {!done && <Button variant="primary" disabled={!rows?.some((r) => r.outcome === "ok")}
+            onClick={async () => { if (file) { setRows(await client.importCSV(type, file, false)); setDone(true); } }}>{t("Import")}</Button>}
+        </div>
+      </div>
+    </Dialog>
+  </>;
 }
 
 /** An app's dashboard: its charts, each over the host's aggregates within the member's scope. */

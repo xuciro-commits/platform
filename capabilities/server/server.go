@@ -216,6 +216,31 @@ func (h *Host) Handler() http.Handler {
 	handle(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Entities(m), t.Language(m, r)))
 	})
+	handle(Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller (ADR-0028)",
+		Query: []Param{{"preview", "true: check each row and apply none"}}, Body: []byte{}, Answer: []ImportRow{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 16<<20))
+		rows, err := t.Import(m, r.PathValue("type"), body, r.URL.Query().Get("preview") == "true", h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, rows)
+	})
+	handle(Route{Pattern: "GET /v1/export/{type}", Summary: "The records a list shows the caller, as CSV (ADR-0028)",
+		Query: []Param{{"domain", "Filters in the prefix form"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search")}
+		if sort := r.URL.Query().Get("sort"); sort != "" {
+			q.Sort = strings.Split(sort, ",")
+		}
+		out, err := t.Export(m, r.PathValue("type"), q, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", "attachment; filename="+r.PathValue("type")+".csv")
+		w.Write(out)
+	})
 	handle(Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []Param{{"domain", "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated; -field for descending"}, {"offset", "Records to skip"}, {"limit", "Records in the page"}, {"archived", "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
 		if sort := r.URL.Query().Get("sort"); sort != "" {
