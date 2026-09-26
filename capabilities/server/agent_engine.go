@@ -11,9 +11,9 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/apps/work"
 	"platformserver/internal/host"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -23,7 +23,7 @@ type stepBody struct {
 	Tool      string          `json:"tool,omitempty"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 	Content   string          `json:"content,omitempty"` // text the model gave instead of, or beside, a tool call
-	Usage     ai.Usage           `json:"usage"`
+	Usage     ai.Usage        `json:"usage"`
 	Failure   string          `json:"failure,omitempty"` // the model did not answer
 	Stop      string          `json:"stop,omitempty"`    // the host stopped the run before calling a model
 	// Observation is what a knowledge search found, made outside the lock like

@@ -14,9 +14,9 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/apps/work"
 	"platformserver/internal/host"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -89,7 +89,7 @@ type Tenant struct {
 	// AIClient sends model calls (default: a client refusing private addresses
 	// unless the provider is local); tests replace it (ADR-0015).
 	AIClient  func(req *http.Request) (*http.Response, error)
-	ai        models // the AI app: the models the host calls (ADR-0015)
+	ai        models         // the AI app: the models the host calls (ADR-0015)
 	records   *recordStore   // the apps' entity records (ADR-0016)
 	tasks     host.Tasks     // serves Caller.Assign: the work app (ADR-0017)
 	procs     host.Processes // the flow app (ADR-0020)

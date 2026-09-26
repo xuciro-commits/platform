@@ -11,9 +11,9 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/ai"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 

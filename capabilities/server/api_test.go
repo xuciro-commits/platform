@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"platformserver/apps/ai"
 	"platformserver/apps/flow"
 	"platformserver/apps/org"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
-	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 

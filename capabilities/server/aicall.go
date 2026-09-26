@@ -65,7 +65,7 @@ type ChatRequest struct {
 type ChatAnswer struct {
 	Content   string     `json:"content"`
 	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
-	Usage     ai.Usage      `json:"usage"`
+	Usage     ai.Usage   `json:"usage"`
 }
 
 // AIError is a call the provider did not answer or refused.
