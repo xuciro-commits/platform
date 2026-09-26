@@ -15,6 +15,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -64,7 +65,7 @@ type ChatRequest struct {
 type ChatAnswer struct {
 	Content   string     `json:"content"`
 	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
-	Usage     Usage      `json:"usage"`
+	Usage     ai.Usage      `json:"usage"`
 }
 
 // AIError is a call the provider did not answer or refused.
@@ -75,6 +76,17 @@ type AIError struct {
 
 func (e *AIError) Error() string { return e.Detail }
 
+// models is the AI app as the host calls models for members and agents: the
+// enabled models and their providers, and the usage of every call.
+type models interface {
+	platform.App
+	Callable(m platform.Member, name string) (ai.Model, ai.Provider, *kernel.Error)
+	Model(name string) (ai.Model, ai.Provider, *kernel.Error)
+	Provider(id string) (ai.Provider, bool)
+	Meter(u ai.Usage)
+	Spent(member string, now time.Time) int
+}
+
 // Chat calls a model for m. A refusal of access is a kernel error; a provider
 // failure is an AIError, and its usage is journaled as failed.
 func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time) (ChatAnswer, *kernel.Error, *AIError) {
@@ -84,7 +96,7 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time) (ChatAn
 	if len(req.Messages) == 0 {
 		return ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}, nil
 	}
-	model, pv, err := t.ai.callable(m, req.Model)
+	model, pv, err := t.ai.Callable(m, req.Model)
 	if err != nil {
 		return ChatAnswer{}, err, nil
 	}
@@ -94,7 +106,7 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time) (ChatAn
 }
 
 // call calls a model once, outside the tenant's lock; the caller meters it.
-func (t *Tenant) call(pv Provider, model Model, m platform.Member, req ChatRequest, now time.Time) (ChatAnswer, *AIError) {
+func (t *Tenant) call(pv ai.Provider, model ai.Model, m platform.Member, req ChatRequest, now time.Time) (ChatAnswer, *AIError) {
 	started := time.Now()
 	complete := t.complete
 	if pv.Wire == "anthropic" {
@@ -116,12 +128,12 @@ func (t *Tenant) call(pv Provider, model Model, m platform.Member, req ChatReque
 }
 
 // meter journals a call's usage, then applies it.
-func (t *Tenant) meter(m platform.Member, u Usage) {
+func (t *Tenant) meter(m platform.Member, u ai.Usage) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	body, _ := json.Marshal(u)
 	t.record(t.ai, "usage", m, body, u.At)
-	t.ai.meter(u)
+	t.ai.Meter(u)
 }
 
 // openAIMessages puts a conversation on the OpenAI wire: tool calls as
@@ -146,7 +158,7 @@ func openAIMessages(ms []Message) []map[string]any {
 }
 
 // complete makes one call on the OpenAI Chat Completions wire.
-func (t *Tenant) complete(pv Provider, model string, req ChatRequest) (ChatAnswer, Usage, *AIError) {
+func (t *Tenant) complete(pv ai.Provider, model string, req ChatRequest) (ChatAnswer, ai.Usage, *AIError) {
 	body := map[string]any{"model": model, "messages": openAIMessages(req.Messages)}
 	if len(req.Tools) > 0 {
 		tools := []map[string]any{}
@@ -188,19 +200,19 @@ func (t *Tenant) complete(pv Provider, model string, req ChatRequest) (ChatAnswe
 	}
 	status, answer, failure := t.aiRequest(pv, http.MethodPost, "/chat/completions", raw, aiTimeout)
 	if failure != nil {
-		return ChatAnswer{}, Usage{}, failure
+		return ChatAnswer{}, ai.Usage{}, failure
 	}
 	if json.Unmarshal(answer, &out) != nil {
-		return ChatAnswer{}, Usage{}, &AIError{Status: status, Detail: "unreadable answer"}
+		return ChatAnswer{}, ai.Usage{}, &AIError{Status: status, Detail: "unreadable answer"}
 	}
 	if out.Error != nil || status >= 300 || len(out.Choices) == 0 {
 		detail := http.StatusText(status)
 		if out.Error != nil {
 			detail = out.Error.Message
 		}
-		return ChatAnswer{}, Usage{}, &AIError{Status: status, Detail: detail}
+		return ChatAnswer{}, ai.Usage{}, &AIError{Status: status, Detail: detail}
 	}
-	u := Usage{Input: out.Usage.Prompt, Output: out.Usage.Completion, Cost: out.Usage.Cost}
+	u := ai.Usage{Input: out.Usage.Prompt, Output: out.Usage.Completion, Cost: out.Usage.Cost}
 	if out.Model != "" && out.Model != model {
 		u.Served = out.Model
 	}
@@ -214,7 +226,7 @@ func (t *Tenant) complete(pv Provider, model string, req ChatRequest) (ChatAnswe
 
 // aiRequest sends one request to a provider with its key, through the dialer
 // that refuses private addresses unless the provider is local.
-func (t *Tenant) aiRequest(pv Provider, method, path string, body []byte, timeout time.Duration) (int, []byte, *AIError) {
+func (t *Tenant) aiRequest(pv ai.Provider, method, path string, body []byte, timeout time.Duration) (int, []byte, *AIError) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, method, pv.BaseURL+path, bytes.NewReader(body))
@@ -240,7 +252,7 @@ func (t *Tenant) aiRequest(pv Provider, method, path string, body []byte, timeou
 
 // aiHTTP is the client model calls go through: the test's, or one whose dialer
 // refuses private addresses unless the provider is local.
-func (t *Tenant) aiHTTP(pv Provider) interface {
+func (t *Tenant) aiHTTP(pv ai.Provider) interface {
 	Do(*http.Request) (*http.Response, error)
 } {
 	if t.AIClient != nil {
@@ -279,12 +291,10 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	if t.ai == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}
-	if m.Roles[AIApp] != AIAdmin {
+	if m.Roles[ai.ID] != ai.Admin {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}, nil
 	}
-	t.ai.mu.Lock()
-	pv, ok := t.ai.provider(provider)
-	t.ai.mu.Unlock()
+	pv, ok := t.ai.Provider(provider)
 	if !ok {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
 	}

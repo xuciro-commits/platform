@@ -18,6 +18,7 @@ import (
 	"platformserver/apps/flow"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -59,9 +60,9 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/agents", Summary: "The agents the apps declare", Answer: []AgentInfo{}},
 	{Pattern: "GET /v1/runs", Summary: "Agent runs on the caller's behalf", Answer: []AgentRunRecord{}},
 	{Pattern: "GET /v1/memories", Summary: "What agents remember about the caller", Answer: []Memory{}},
-	{Pattern: "GET /v1/ai-providers", Summary: "AI providers (AI administrators)", Answer: []Provider{}},
-	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []Model{}},
-	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: AIUsage{}},
+	{Pattern: "GET /v1/ai-providers", Summary: "AI providers (AI administrators)", Answer: []ai.Provider{}},
+	{Pattern: "GET /v1/ai-models", Summary: "Models the caller may call, or all for AI administrators", Answer: []ai.Model{}},
+	{Pattern: "GET /v1/ai-usage", Summary: "Model calls and their totals", Answer: ai.AIUsage{}},
 	{Pattern: "GET /v1/organization", Summary: "The organisation's structures, units, edges and memberships", Answer: platform.OrgSeed{}},
 	{Pattern: "GET /v1/flows", Summary: "The flows the apps declare, in the caller's language", Answer: []flow.FlowDefinition{}},
 	{Pattern: "GET /v1/links", Summary: "Links between entities", Answer: []relations.Link{}},

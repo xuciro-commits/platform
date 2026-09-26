@@ -9,6 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -124,7 +125,7 @@ func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
 	d := a.defs[ev.Agent]
 	domain, _ := json.Marshal([]any{[]any{"agent", "=", ev.Agent}, []any{"state", "=", "done"}})
 	past, _, _ := platform.Find[AgentRunRecord](c, platform.Query{Domain: domain, Sort: []string{"-created"}, Limit: 200})
-	model, pv, err := t.ai.model(ev.Model)
+	model, pv, err := t.ai.Model(ev.Model)
 	who, _ := t.member(ev.Created.By)
 	t.mu.Unlock()
 	ev.State = "done"
@@ -165,7 +166,7 @@ func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
 }
 
 // rerun runs one past run's goal dry with the candidate and judges it.
-func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model Model, pv Provider, who platform.Member, now time.Time) EvalCase {
+func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Provider, who platform.Member, now time.Time) EvalCase {
 	t := a.t
 	last := run.Signals[len(run.Signals)-1]
 	x := EvalCase{Run: run.ID, Signal: last.Kind}

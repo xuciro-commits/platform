@@ -10,6 +10,7 @@ import (
 
 	"crm"
 	"platformserver"
+	"platformserver/apps/ai"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -23,10 +24,10 @@ func main() {
 	}
 	seats := deployment.Seats([]platformserver.Seat{
 		seat("manager", "manager-1", map[string]string{crm.ID: string(crm.Manager), platformserver.PlatformApp: platformserver.Admin,
-			platformserver.AIApp: platformserver.AIAdmin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin}),
+			ai.ID: ai.Admin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin}),
 		seat("sales", "sales-1", map[string]string{crm.ID: string(crm.Sales)}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), platformserver.NewAI("dev"), work.New("dev"),
+	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), ai.New("dev"), work.New("dev"),
 		flow.New("dev"), platformserver.NewAgents("dev"), crm.New("dev"))
 	if err == nil {
 		err = deployment.Serve(t)

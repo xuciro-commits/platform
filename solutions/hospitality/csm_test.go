@@ -16,6 +16,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/ai"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -79,7 +80,7 @@ func TestCSMTriage(t *testing.T) {
 	w.setup()
 	w.tenant.Secrets = func(string) ([]byte, bool) { return []byte("s3cret"), true }
 	now := t0
-	ops := platform.Member{ID: "ops", Tenant: "hotel-a", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, platformserver.AIApp: platformserver.AIAdmin}}
+	ops := platform.Member{ID: "ops", Tenant: "hotel-a", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, ai.ID: ai.Admin}}
 	desk, lead := w.members["desk"], w.members["manager"]
 	keys := 0
 	do := func(m platform.Member, app, schema, typ, id string, payload any) string {
@@ -119,8 +120,8 @@ func TestCSMTriage(t *testing.T) {
 	}
 	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaEndpointAdd, platformserver.EndpointType, "mail-gateway",
 		map[string]any{"url": gateway.URL, "secret": "hook", "effects": []string{"csm/" + csm.EffectReply}, "allowPrivate": true}), "ok")
-	w.expect(do(ops, platformserver.AIApp, platformserver.SchemaProviderAdd, platformserver.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}), "ok")
-	w.expect(do(ops, platformserver.AIApp, platformserver.SchemaModelEnable, platformserver.ModelType, "lm/triage", map[string]string{"access": "users"}), "ok")
+	w.expect(do(ops, ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}), "ok")
+	w.expect(do(ops, ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/triage", map[string]string{"access": "users"}), "ok")
 	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaSettingSet, platformserver.SettingType, "agent/model", map[string]string{"value": "lm/triage"}), "ok")
 	open := func(id, subject string) {
 		w.t.Helper()

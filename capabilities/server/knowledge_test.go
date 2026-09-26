@@ -13,6 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -57,8 +58,8 @@ func TestKnowledge(t *testing.T) {
 		seat := func(id string, roles map[string]string) Seat {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", KnowledgeApp: KnowledgeEditor, PlatformApp: Admin, AIApp: AIAdmin, AgentApp: AgentAdmin}),
-			seat("cy", map[string]string{"other": "x"})), NewAI("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), NewKnowledge("t-1"), newDesk("t-1"))
+		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", KnowledgeApp: KnowledgeEditor, PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
+			seat("cy", map[string]string{"other": "x"})), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), NewKnowledge("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -108,14 +109,14 @@ func TestKnowledge(t *testing.T) {
 	expect("cy", found("cy", "wifi reset"), "knowledge.document/RULES#1")
 
 	// With an embedding model, passages are embedded as owned work, once.
-	do("ana", AIApp, SchemaProviderAdd, ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
-	do("ana", AIApp, SchemaModelEnable, ModelType, "lm/embed", map[string]string{"access": "users"})
-	do("ana", AIApp, SchemaModelEnable, ModelType, "lm/chat", map[string]string{"access": "users"})
+	do("ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
+	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/embed", map[string]string{"access": "users"})
+	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/chat", map[string]string{"access": "users"})
 	do("ana", PlatformApp, SchemaSettingSet, SettingType, "knowledge/embedding-model", map[string]string{"value": "lm/embed"})
 	tn.Embed(now)
 	tn.Embed(now)
 	expect("embedded once", fmt.Sprint(embeds), "1")
-	expect("by meaning too", found("cy", "password key card")+fmt.Sprint(" ", embeds, " ", tn.ai.spent("app:knowledge", now) > 0), "knowledge.document/RULES#1 2 true") // the query was embedded, and metered
+	expect("by meaning too", found("cy", "password key card")+fmt.Sprint(" ", embeds, " ", tn.ai.Spent("app:knowledge", now) > 0), "knowledge.document/RULES#1 2 true") // the query was embedded, and metered
 
 	// An agent's search: journaled with its step, cited on the run.
 	do("ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "lm/chat"})

@@ -13,6 +13,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -38,8 +39,8 @@ func TestA2A(t *testing.T) {
 		seat := func(id string, roles map[string]string) Seat {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, AIApp: AIAdmin, AgentApp: AgentAdmin}),
-			seat("bo", map[string]string{"desk": "viewer"})), NewAI("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
+		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
+			seat("bo", map[string]string{"desk": "viewer"})), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -115,8 +116,8 @@ func TestA2A(t *testing.T) {
 	for _, id := range []string{"T1", "T3"} {
 		do("ana", "desk", "desk.ticket.open", "desk.ticket", id, map[string]string{"subject": "Wifi down in " + id})
 	}
-	do("ana", AIApp, SchemaProviderAdd, ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
-	do("ana", AIApp, SchemaModelEnable, ModelType, "lm/scripted", map[string]string{"access": "users"})
+	do("ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
+	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/scripted", map[string]string{"access": "users"})
 	do("ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "lm/scripted"})
 
 	// Unpublished, there is no card; published, the card names the JSON-RPC binding.

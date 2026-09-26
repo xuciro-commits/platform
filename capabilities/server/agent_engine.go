@@ -13,6 +13,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/apps/work"
 	"platformserver/internal/host"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -22,7 +23,7 @@ type stepBody struct {
 	Tool      string          `json:"tool,omitempty"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 	Content   string          `json:"content,omitempty"` // text the model gave instead of, or beside, a tool call
-	Usage     Usage           `json:"usage"`
+	Usage     ai.Usage           `json:"usage"`
 	Failure   string          `json:"failure,omitempty"` // the model did not answer
 	Stop      string          `json:"stop,omitempty"`    // the host stopped the run before calling a model
 	// Observation is what a knowledge search found, made outside the lock like
@@ -36,8 +37,8 @@ const preamble = `You are an agent of a business platform. You act only through 
 
 type turn struct {
 	run   AgentRunRecord
-	model Model
-	pv    Provider
+	model ai.Model
+	pv    ai.Provider
 	req   ChatRequest
 	stop  string
 }
@@ -104,10 +105,10 @@ func (a *Agents) due(now time.Time) []turn {
 			x.stop = "the agent is no longer declared"
 		case name == "":
 			x.stop = "no model is set for agents"
-		case daily > 0 && t.ai != nil && t.ai.spent(a.member(run.Agent).ID, now) >= daily:
+		case daily > 0 && t.ai != nil && t.ai.Spent(a.member(run.Agent).ID, now) >= daily:
 			x.stop = fmt.Sprintf("the agent used its %d tokens for today", daily)
 		default:
-			model, pv, err := t.ai.model(name)
+			model, pv, err := t.ai.Model(name)
 			if err != nil {
 				x.stop = "the model " + name + " is not enabled"
 				break
@@ -221,7 +222,7 @@ func (a *Agents) apply(b stepBody, now time.Time, replaying bool) *kernel.Error 
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	if t.ai != nil && b.Usage.Model != "" {
-		t.ai.meter(b.Usage)
+		t.ai.Meter(b.Usage)
 	}
 	s := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 		Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}

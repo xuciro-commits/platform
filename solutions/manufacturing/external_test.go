@@ -15,6 +15,7 @@ import (
 	"mes"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/ai"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -34,7 +35,7 @@ type external struct {
 
 var externalSeats = []platformserver.Seat{
 	Seat("sup", "sup-1", map[string]string{"mes": string(mes.Supervisor), erpadapter.ID: erpadapter.Planner, platformserver.PlatformApp: platformserver.Admin,
-		platformserver.AIApp: platformserver.AIAdmin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin}, "plant-sz"),
+		ai.ID: ai.Admin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin}, "plant-sz"),
 	Seat("op", "op-l1", map[string]string{"mes": string(mes.Operator)}, "L1"),
 	Seat("qa1", "qa-1", map[string]string{"mes": string(mes.Quality)}),
 	Seat("qa2", "qa-2", map[string]string{"mes": string(mes.Quality)}),
@@ -281,8 +282,8 @@ func TestCorrectedByTheAgent(t *testing.T) {
 	}))
 	defer model.Close()
 	x := newExternal(t)
-	x.expect("provider", x.do("sup-1", platformserver.AIApp, platformserver.SchemaProviderAdd, platformserver.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}), "ok")
-	x.expect("model", x.do("sup-1", platformserver.AIApp, platformserver.SchemaModelEnable, platformserver.ModelType, "lm/agent", map[string]string{"access": "users"}), "ok")
+	x.expect("provider", x.do("sup-1", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}), "ok")
+	x.expect("model", x.do("sup-1", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/agent", map[string]string{"access": "users"}), "ok")
 	x.expect("agents' model", x.do("sup-1", platformserver.PlatformApp, platformserver.SchemaSettingSet, platformserver.SettingType, "agent/model", map[string]string{"value": "lm/agent"}), "ok")
 	x.poll("", "page-1", erpadapter.Planned{ID: "PO-9001", Product: "P-100", Quantity: 1}, erpadapter.Planned{ID: "PO-9002", Product: "P-100", Quantity: 1})
 	x.expect("SO-1", x.do("sup-1", mes.ID, mes.SchemaRelease, mes.OrderType, "SO-1", map[string]any{"product": "P-100", "quantity": 1, "sfcs": 1, "planned": "PO-9001"}), "ok")

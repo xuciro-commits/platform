@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -56,11 +57,11 @@ func TestAIProviders(t *testing.T) {
 	var journal []Entry
 	build := func() *Tenant {
 		console := NewConsole("t-1",
-			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{AIApp: AIAdmin}}},
-			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{AIApp: AIUser}}},
+			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin}}},
+			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{ai.ID: ai.User}}},
 			Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{}}},
 			Seat{Subjects: []string{"client:bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{}, Agent: true}})
-		tn, err := NewTenant("t-1", console, NewAI("t-1"))
+		tn, err := NewTenant("t-1", console, ai.New("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,7 +76,7 @@ func TestAIProviders(t *testing.T) {
 	decide := func(m platform.Member, schema, typ, id string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
-		if _, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: m.ID, Authority: AIApp, IdempotencyKey: fmt.Sprint("k", keys),
+		if _, err := tn.Submit(m, &pb.Submission{TenantId: "t-1", PrincipalId: m.ID, Authority: ai.ID, IdempotencyKey: fmt.Sprint("k", keys),
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
 			return err.Error()
 		}
@@ -94,7 +95,7 @@ func TestAIProviders(t *testing.T) {
 		{ana, "or", map[string]any{"kind": "vendor", "vendor": "openrouter", "secret": "openrouter"}, "ok"},
 		{ana, "lm", map[string]any{"kind": "local", "baseUrl": server.URL + "/v1/"}, "ok"},
 	} {
-		if got := decide(c.who, SchemaProviderAdd, ProviderType, c.id, c.payload); got != c.want {
+		if got := decide(c.who, ai.SchemaProviderAdd, ai.ProviderType, c.id, c.payload); got != c.want {
 			t.Fatalf("add %s %v: %s, want %s", c.id, c.payload, got, c.want)
 		}
 	}
@@ -109,7 +110,7 @@ func TestAIProviders(t *testing.T) {
 	for _, c := range []struct{ id, access, want string }{
 		{"lm/echo", "users", "ok"}, {"lm/busy", "everyone", "ok"}, {"nope/echo", "users", "ERROR_CODE_NOT_FOUND"}, {"lm/echo", "all", "ERROR_CODE_INVALID_ARGUMENT"},
 	} {
-		if got := decide(ana, SchemaModelEnable, ModelType, c.id, map[string]string{"access": c.access}); got != c.want {
+		if got := decide(ana, ai.SchemaModelEnable, ai.ModelType, c.id, map[string]string{"access": c.access}); got != c.want {
 			t.Fatalf("enable %s: %s", c.id, got)
 		}
 	}
@@ -165,7 +166,7 @@ func TestAIProviders(t *testing.T) {
 		t.Fatalf("cy's models %v", models)
 	}
 	CheckReplay(t, tn, journal, build)
-	if got := decide(ana, SchemaProviderRemove, ProviderType, "lm", struct{}{}); got != "ok" {
+	if got := decide(ana, ai.SchemaProviderRemove, ai.ProviderType, "lm", struct{}{}); got != "ok" {
 		t.Fatal(got)
 	}
 	if got := chat(ana, "lm/echo", "again"); got != "ERROR_CODE_NOT_FOUND" {
@@ -208,8 +209,8 @@ func TestAnthropicProvider(t *testing.T) {
 	}))
 	defer api.Close()
 	target, _ := url.Parse(api.URL)
-	console := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{AIApp: AIAdmin}}})
-	tn, err := NewTenant("t-1", console, NewAI("t-1"))
+	console := NewConsole("t-1", Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin}}})
+	tn, err := NewTenant("t-1", console, ai.New("t-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,14 +226,14 @@ func TestAnthropicProvider(t *testing.T) {
 	now := time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)
 	decide := func(schema, typ, id, payload, key string) {
 		t.Helper()
-		if _, err := tn.Submit(ana, &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: AIApp, IdempotencyKey: key,
+		if _, err := tn.Submit(ana, &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: ai.ID, IdempotencyKey: key,
 			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, now); err != nil {
 			t.Fatal(err)
 		}
 	}
-	decide(SchemaProviderAdd, ProviderType, "claude", `{"kind":"vendor","vendor":"anthropic","secret":"anthropic"}`, "k1")
-	decide(SchemaModelEnable, ModelType, "claude/claude-opus-5", `{"access":"everyone"}`, "k2")
-	decide(SchemaModelEnable, ModelType, "claude/claude-busy", `{"access":"everyone"}`, "k3")
+	decide(ai.SchemaProviderAdd, ai.ProviderType, "claude", `{"kind":"vendor","vendor":"anthropic","secret":"anthropic"}`, "k1")
+	decide(ai.SchemaModelEnable, ai.ModelType, "claude/claude-opus-5", `{"access":"everyone"}`, "k2")
+	decide(ai.SchemaModelEnable, ai.ModelType, "claude/claude-busy", `{"access":"everyone"}`, "k3")
 	catalog, kerr, failure := tn.ProviderModels(ana, "claude", true)
 	if kerr != nil || failure != nil || len(catalog) != 1 || catalog[0].Name != "Claude Opus 5" || catalog[0].Context != 1000000 {
 		t.Fatalf("catalog %+v %v %v", catalog, kerr, failure)

@@ -20,6 +20,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -197,8 +198,8 @@ func (h *Host) Handler() http.Handler {
 			WriteJSON(w, http.StatusOK, models)
 		}
 	})
-	handle(Route{Pattern: "GET /v1/ai/vendors", Summary: "The vendors a provider may be", Answer: []Vendor{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
-		WriteJSON(w, http.StatusOK, Vendors)
+	handle(Route{Pattern: "GET /v1/ai/vendors", Summary: "The vendors a provider may be", Answer: []ai.Vendor{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
+		WriteJSON(w, http.StatusOK, ai.Vendors)
 	})
 	handle(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Entities(m), t.Language(m, r)))
@@ -241,7 +242,7 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, t.Knowledge(&m, "", r.URL.Query().Get("q"), 8, h.Now()))
 	})
 	handle(Route{Pattern: "GET /v1/transcripts", Summary: "Model calls in full, for agent and AI administrators", Answer: []Transcript{}, Query: []Param{{"run", "An agent run"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if m.Roles[AgentApp] != AgentAdmin && m.Roles[AIApp] != AIAdmin {
+		if m.Roles[AgentApp] != AgentAdmin && m.Roles[ai.ID] != ai.Admin {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}

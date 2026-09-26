@@ -14,6 +14,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -170,8 +171,8 @@ func TestAgents(t *testing.T) {
 		seat := func(id string, roles map[string]string) Seat {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
-		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, AIApp: AIAdmin, AgentApp: AgentAdmin}),
-			seat("bo", map[string]string{"desk": "viewer"})), NewAI("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
+		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
+			seat("bo", map[string]string{"desk": "viewer"})), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -229,8 +230,8 @@ func TestAgents(t *testing.T) {
 	expect("start", start("ana", "R0", "Answer ticket T1: wifi", "desk.ticket/T1"), "ok")
 	think(1)
 	expect("no model", run("R0").State+" "+run("R0").Stopped, "stopped no model is set for agents")
-	do("ana", AIApp, SchemaProviderAdd, ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
-	do("ana", AIApp, SchemaModelEnable, ModelType, "lm/scripted", map[string]string{"access": "users"})
+	do("ana", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"})
+	do("ana", ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/scripted", map[string]string{"access": "users"})
 	do("ana", PlatformApp, SchemaSettingSet, SettingType, "agent/model", map[string]string{"value": "lm/scripted"})
 
 	// For ana, a clerk: it reads the ticket's context and drafts the answer; ana
@@ -336,6 +337,6 @@ func TestAgents(t *testing.T) {
 	expect("undone", runs[0].Signals[0].Kind+" "+runs[0].Signals[0].Detail, "undone the flow asked to undo")
 
 	// Usage is metered as the agent's.
-	expect("metered", fmt.Sprint(tn.ai.spent("agent:desk.triage", now) > 0), "true")
+	expect("metered", fmt.Sprint(tn.ai.Spent("agent:desk.triage", now) > 0), "true")
 	CheckReplay(t, tn, journal, build)
 }

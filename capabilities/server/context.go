@@ -3,11 +3,9 @@ package platformserver
 import (
 	"encoding/json"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
@@ -159,30 +157,4 @@ func (t *Tenant) protocolActions(protocol string) []platform.Action {
 		}
 	}
 	return nil
-}
-
-// model is an enabled model by name, whatever the caller's access: agents call
-// the model the tenant set for them (ADR-0021).
-func (a *AI) model(name string) (Model, Provider, *kernel.Error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	i := slices.IndexFunc(a.models, func(x Model) bool { return x.Name() == name })
-	if i < 0 {
-		return Model{}, Provider{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
-	}
-	pv, _ := a.provider(a.models[i].Provider)
-	return a.models[i], pv, nil
-}
-
-// spent is the tokens a member used on now's day (UTC).
-func (a *AI) spent(member string, now time.Time) int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	day, n := now.UTC().Format(time.DateOnly), 0
-	for _, u := range a.usage {
-		if u.Member == member && u.At.UTC().Format(time.DateOnly) == day {
-			n += u.Input + u.Output
-		}
-	}
-	return n
 }

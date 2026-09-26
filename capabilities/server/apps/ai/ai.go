@@ -1,4 +1,5 @@
-package platformserver
+// Package ai is the platform's AI app (ADR-0015), on the app API (ADR-0025 D4).
+package ai
 
 import (
 	"encoding/json"
@@ -18,15 +19,15 @@ import (
 // Providers and models are its decisions; calls are made by the host
 // (aicall.go) and each call's usage is journaled; prompts and answers are not.
 const (
-	AIApp                = "ai"
+	ID                   = "ai"
 	ProviderType         = "ai.provider"
 	ModelType            = "ai.model"
 	SchemaProviderAdd    = "ai.provider.add"
 	SchemaProviderRemove = "ai.provider.remove"
 	SchemaModelEnable    = "ai.model.enable"
 	SchemaModelDisable   = "ai.model.disable"
-	AIAdmin              = "admin"
-	AIUser               = "user" // may call models open to users
+	Admin                = "admin"
+	User                 = "user" // may call models open to users
 )
 
 // Vendor is a provider with a fixed base URL and wire.
@@ -94,12 +95,13 @@ type AI struct {
 	ledger    *platform.Ledger
 }
 
-func NewAI(tenant string) *AI {
-	admin := []string{AIAdmin}
+// New is a tenant's AI app.
+func New(tenant string) *AI {
+	admin := []string{Admin}
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
-	return &AI{ledger: platform.NewLedger(tenant, AIApp, platform.NewCatalog(
+	return &AI{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
@@ -140,14 +142,21 @@ func (a *AI) Restore(raw json.RawMessage) error {
 }
 
 func (a *AI) Manifest() platform.Manifest {
-	return platform.Manifest{ID: AIApp, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage"},
-		Everyone: []string{"ai-models", "ai-usage"}, Roles: []string{AIUser}} // the user role opens models with access "users"
+	return platform.Manifest{ID: ID, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage"},
+		Everyone: []string{"ai-models", "ai-usage"}, Roles: []string{User}} // the user role opens models with access "users"
 }
 
 func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 
 func (a *AI) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+}
+
+// Provider is a provider the tenant added, by ID.
+func (a *AI) Provider(id string) (Provider, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.provider(id)
 }
 
 func (a *AI) provider(id string) (Provider, bool) {
@@ -229,8 +238,8 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 	})
 }
 
-// callable is the enabled model name and its provider, when m may call it.
-func (a *AI) callable(m platform.Member, name string) (Model, Provider, *kernel.Error) {
+// Callable is the enabled model name and its provider, when m may call it.
+func (a *AI) Callable(m platform.Member, name string) (Model, Provider, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	i := slices.IndexFunc(a.models, func(x Model) bool { return x.Name() == name })
@@ -245,11 +254,11 @@ func (a *AI) callable(m platform.Member, name string) (Model, Provider, *kernel.
 }
 
 func (a *AI) allows(m platform.Member, x Model) bool {
-	return x.Access == "everyone" || m.Roles[AIApp] != ""
+	return x.Access == "everyone" || m.Roles[ID] != ""
 }
 
-// meter records a call's usage (a journal entry of kind usage, live or replayed).
-func (a *AI) meter(u Usage) {
+// Meter records a call's usage (a journal entry of kind usage, live or replayed).
+func (a *AI) Meter(u Usage) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.usage = append(a.usage, u)
@@ -276,7 +285,7 @@ type Total struct {
 func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	admin := c.Role() == AIAdmin
+	admin := c.Role() == Admin
 	switch name {
 	case "ai-providers":
 		if !admin {
@@ -319,4 +328,30 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 type AIUsage struct {
 	Calls  []Usage `json:"calls"`
 	Totals []Total `json:"totals"`
+}
+
+// Model is an enabled model by name, whatever the caller's access: agents call
+// the model the tenant set for them (ADR-0021).
+func (a *AI) Model(name string) (Model, Provider, *kernel.Error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	i := slices.IndexFunc(a.models, func(x Model) bool { return x.Name() == name })
+	if i < 0 {
+		return Model{}, Provider{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	pv, _ := a.provider(a.models[i].Provider)
+	return a.models[i], pv, nil
+}
+
+// Spent is the tokens a member used on now's day (UTC).
+func (a *AI) Spent(member string, now time.Time) int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	day, n := now.UTC().Format(time.DateOnly), 0
+	for _, u := range a.usage {
+		if u.Member == member && u.At.UTC().Format(time.DateOnly) == day {
+			n += u.Input + u.Output
+		}
+	}
+	return n
 }

@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/ai"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -20,7 +21,7 @@ func build(t *testing.T) *platformserver.Tenant {
 	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t",
 		seat("dee", map[string]string{ID: Desk}), seat("lee", map[string]string{ID: Lead}),
 		seat("mail", map[string]string{ID: Desk})), // an outside mail gateway's service account
-		platformserver.NewAI("t"), work.New("t"), flow.New("t"), platformserver.NewAgents("t"), New("t"))
+		ai.New("t"), work.New("t"), flow.New("t"), platformserver.NewAgents("t"), New("t"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,6 +16,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/apps/work"
 	"platformserver/internal/host"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -88,7 +89,7 @@ type Tenant struct {
 	// AIClient sends model calls (default: a client refusing private addresses
 	// unless the provider is local); tests replace it (ADR-0015).
 	AIClient  func(req *http.Request) (*http.Response, error)
-	ai        *AI
+	ai        models // the AI app: the models the host calls (ADR-0015)
 	records   *recordStore   // the apps' entity records (ADR-0016)
 	tasks     host.Tasks     // serves Caller.Assign: the work app (ADR-0017)
 	procs     host.Processes // the flow app (ADR-0020)
@@ -158,7 +159,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if d, ok := a.(*Console); ok {
 			d.t = t
 		}
-		if x, ok := a.(*AI); ok {
+		if x, ok := a.(models); ok {
 			t.ai = x
 		}
 		if x, ok := a.(host.Tasks); ok {
@@ -398,11 +399,11 @@ func (t *Tenant) Replay(entries []Entry) error {
 			continue
 		}
 		if e.Kind == "usage" && t.ai != nil { // a model call's usage: applied, the call never made again
-			var u Usage
+			var u ai.Usage
 			if json.Unmarshal(e.Body, &u) != nil {
 				return fmt.Errorf("entry %d: bad usage", i+1)
 			}
-			t.ai.meter(u)
+			t.ai.Meter(u)
 			continue
 		}
 		if e.Kind == "agent" && t.agents != nil { // a step an agent's model chose: applied, the model never called again

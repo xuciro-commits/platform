@@ -17,6 +17,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -479,7 +480,7 @@ func (t *Tenant) Embed(now time.Time) {
 // embed calls an embedding model on the OpenAI wire and meters the call to the knowledge app.
 func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32, error) {
 	t.mu.Lock()
-	model, pv, err := t.ai.model(name)
+	model, pv, err := t.ai.Model(name)
 	t.mu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("the model %s is not enabled", name)
@@ -499,7 +500,7 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 			Prompt int `json:"prompt_tokens"`
 		} `json:"usage"`
 	}
-	u := Usage{At: now, Member: "app:" + KnowledgeApp, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
+	u := ai.Usage{At: now, Member: "app:" + KnowledgeApp, Model: name, Millis: time.Since(started).Milliseconds(), Outcome: "ok"}
 	switch {
 	case failure != nil:
 		u.Outcome = failure.Detail
