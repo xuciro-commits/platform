@@ -1,0 +1,12 @@
+{
+  "name": "@platform/e2e",
+  "private": true,
+  "type": "module",
+  "description": "Smoke tests of docs/Testing.md's routes in a browser, against a development host (F-35)",
+  "scripts": {
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

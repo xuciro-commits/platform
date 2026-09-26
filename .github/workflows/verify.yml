@@ -43,9 +43,14 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
+      - uses: actions/setup-go@v5 # the route tests run a development host
+        with:
+          go-version-file: capabilities/server/go.mod
+          cache-dependency-path: "**/go.sum"
       - uses: bufbuild/buf-action@v1
         with:
           setup_only: true
+      - run: cd web && pnpm install --frozen-lockfile && pnpm --filter @platform/e2e exec playwright install --with-deps chromium
       - run: scripts/verify.sh web
 
   pms:

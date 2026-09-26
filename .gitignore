@@ -12,6 +12,9 @@ apps/*/server/cmd/*/*-agent
 solutions/*/cmd/*/*-server
 capabilities/server/cmd/webhook-sink/webhook-sink
 node_modules/
+# Playwright's results of the route tests
+web/e2e/test-results/
+web/e2e/playwright-report/
 dist/
 
 # Local secrets (never committed)

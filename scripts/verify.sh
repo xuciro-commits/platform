@@ -32,6 +32,8 @@ contract() {
 
 web() {
   step web bash -c 'cd web && pnpm install --frozen-lockfile && gen() { find packages/kernel/src/gen -type f -exec shasum {} + | sort; } && before=$(gen) && pnpm --dir packages/kernel generate && { [ "$before" = "$(gen)" ] || { echo "TypeScript contract types were stale; regenerated"; exit 1; }; } && pnpm check'
+  # docs/Testing.md's routes in a browser against a development host (web/e2e, F-35; needs Go and Chrome or Playwright's Chromium)
+  step web-routes bash -c 'cd web && pnpm --filter @platform/e2e e2e'
 }
 
 # Go code is gofmt-formatted (generated code aside), new files included.
