@@ -8,7 +8,7 @@ Each fact has one home here: what exists is the capability map (§2.4), what is 
 
 The main line: **building, composing, running and evolving business software**. Apps define their objects, relations, rules and actions and contribute UI and runtime work; software is composed from them; when products, processes, structure or the business itself change, capabilities are added, changed, replaced or retired while data, history, permissions and work in progress stay continuous. Kernel concepts and shared capabilities earn their place by what they contribute to this line.
 
-A multi-tenant **business platform with server and edge/client runtimes**. It supports multi-user organisational applications where a server is authoritative, and edge clients that keep working offline. The **target apps are CRM, MES and ERP** (Intent.md): the business software it must carry first, meeting through protocols. Hotel, HR and the helpdesk are reference apps. All of them exercise and demonstrate capabilities; none is the platform's source of truth.
+A multi-tenant **business platform with server and edge/client runtimes**. It supports multi-user organisational applications where a server is authoritative, and edge clients that keep working offline. The **target apps are CRM, MES and ERP** (Intent.md): the business software it must carry first, meeting through protocols. PMS, HCM and the CSM are reference apps. All of them exercise and demonstrate capabilities; none is the platform's source of truth.
 
 The platform does not encode what an organisation or application looks like today. It provides the capabilities an application needs to move to its *next* shape — new products, processes, structure, operating model, even a different primary business — without rewriting the foundation. Domains are expected to change substantially; the kernel should change only when a genuinely missing cross-domain capability is discovered.
 
@@ -85,53 +85,53 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 
 | Capability | Layer | What an app gets | Code | Used by |
 |---|---|---|---|---|
-| Identity and redirects (K1) | Kernel | Opaque stable IDs, merge and split redirects | `kernel.Identity` | manufacturing (and Music, before 2026-09-26) |
-| Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | manufacturing, Hotel |
+| Identity and redirects (K1) | Kernel | Opaque stable IDs, merge and split redirects | `kernel.Identity` | MES (and Music, before 2026-09-26) |
+| Facts, observations and claims (K2, K3) | Kernel | Facts with source and time; decisions cite them (C11) | `kernel.FactLog` | MES, PMS |
 | Decisions (K4) | Kernel | Change records: idempotency, revisions (C12), causation | `kernel.ChangeLog` | all |
 | Authority and outbox (K5) | Kernel | Authority per data class; edge outbox in Go, Rust and TypeScript | `kernel.Authorities` | all |
 | Tenancy and policy (K6) | Kernel | Receiving order, one policy evaluation per decision | `kernel.Receiver` | all |
 | Schema versions (K7) | Kernel | Versioned payloads; webhook bodies carry the version | `kernel.SchemaRegistry` | all (declared) |
-| Connectors (K8) | Kernel | One descriptor for push and poll, cursors, health | `kernel.Connectors` | manufacturing, Hotel |
+| Connectors (K8) | Kernel | One descriptor for push and poll, cursors, health | `kernel.Connectors` | MES, PMS |
 | Work ownership (K9) | Kernel | Generations, stale results, owner close (checkpoints unused) | `kernel.Works` | the host |
 | Composition and routing | Host runtime | Manifests checked at start; routing by action, read and input | `NewTenant`, `checkManifest`, `Tenant` | every host |
 | Journal, replay and snapshots | Host runtime | One ordered journal per tenant; fail-stop; replay through the same code; snapshots valid for their code | `Journal`, `Tenant.Replay`, `CheckReplay`, `snapshot.go` | every host |
-| Record store and generic reads (ADR-0016) | App API, host runtime | Entity types as Go structs; generic reads with domain, search, sort and pages; scope per role; history; related records; generated create, edit, archive and forms, with choices for references and child lines edited as rows (ADR-0024) | `platform.Entity`, `Caller.Put`, `Get`/`Find`, `/v1/entities`, `/v1/records` | CRM, Hotel, manufacturing, HR, helpdesk, ERP |
-| Number sequences (ADR-0024) | App API, host runtime | Document numbers per sequence and year from a pattern (`GJ/{year}/{n:5}`), taken only by accepted decisions, so without gaps; rebuilt by replay, kept in snapshots | `platform.Sequence`, `Caller.Next`, `sequence.go` | ERP (journal entries), helpdesk (tickets) |
-| Aggregates and projections (ADR-0019) | Host runtime | Group and measure within scope; typed PostgreSQL tables per entity type with a reader role per tenant | `/v1/aggregates`, `-project` | CRM, Hotel, manufacturing |
+| Record store and generic reads (ADR-0016) | App API, host runtime | Entity types as Go structs; generic reads with domain, search, sort and pages; scope per role; history; related records; generated create, edit, archive and forms, with choices for references and child lines edited as rows (ADR-0024) | `platform.Entity`, `Caller.Put`, `Get`/`Find`, `/v1/entities`, `/v1/records` | CRM, PMS, MES, HCM, CSM, ERP |
+| Number sequences (ADR-0024) | App API, host runtime | Document numbers per sequence and year from a pattern (`GJ/{year}/{n:5}`), taken only by accepted decisions, so without gaps; rebuilt by replay, kept in snapshots | `platform.Sequence`, `Caller.Next`, `sequence.go` | ERP (journal entries), CSM (tickets) |
+| Aggregates and projections (ADR-0019) | Host runtime | Group and measure within scope; typed PostgreSQL tables per entity type with a reader role per tenant | `/v1/aggregates`, `-project` | CRM, PMS, MES |
 | Action catalog | App API, host runtime | Declared actions; each caller receives only what its role permits; start-up deactivation | `platform.Action`, `/v1/actions` | all |
 | Reads and read authorization | Host runtime | Named reads; role in the app, or open to every member | `Tenant.Read`, `Manifest.Everyone` | all |
 | Package ledger | App API | The kernel wired for one app, catalog role check, publishing | `platform.Ledger` | every app |
-| Owned work: deliveries and jobs (ADR-0013) | Host runtime | Events delivered as owned work with retries; scheduled jobs run as the app | `Manifest.Jobs`, `Tenant.Work` | manufacturing, Hotel, `work`, `flow`, `agent`. `Manifest.Subscribes` has no app user: apps react to events through flows |
-| Connectors, managed | Host runtime | Deliveries through the caller; cursor, health, last refusal; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | manufacturing (push), ERP link (poll), Hotel |
-| Outbound effects (ADR-0014, 0022) | Host runtime | Webhooks for events; effect kinds apps emit; email of notifications; A2A messages to external agents; at least once with a stable key; answers back to the app; irreversible kinds an agent causes held for a person | `Tenant.Dispatch`, `Caller.Emit`, `Answerer`, `mail.go`, `a2a.go` | sales, manufacturing, helpdesk, ERP link |
-| Deployment | Host runtime | Development tokens, or journal plus OIDC, from one set of flags; the work runner; a seed for a tenant whose journal is empty (ADR-0024) | `Deployment`, `Deployment.Seed`, `RunWork` | plant-server, sales-server, hotel-server, erp-server |
+| Owned work: deliveries and jobs (ADR-0013) | Host runtime | Events delivered as owned work with retries; scheduled jobs run as the app | `Manifest.Jobs`, `Tenant.Work` | MES, PMS, `work`, `flow`, `agent`. `Manifest.Subscribes` has no app user: apps react to events through flows |
+| Connectors, managed | Host runtime | Deliveries through the caller; cursor, health, last refusal; enable and disable as decisions | `Tenant.Connect`, `Caller.Deliver` | MES (push), ERP adapter (poll), PMS |
+| Outbound effects (ADR-0014, 0022) | Host runtime | Webhooks for events; effect kinds apps emit; email of notifications; A2A messages to external agents; at least once with a stable key; answers back to the app; irreversible kinds an agent causes held for a person | `Tenant.Dispatch`, `Caller.Emit`, `Answerer`, `mail.go`, `a2a.go` | hospitality, MES, CSM, ERP adapter |
+| Deployment | Host runtime | Development tokens, or journal plus OIDC, from one set of flags; the work runner; a seed for a tenant whose journal is empty (ADR-0024) | `Deployment`, `Deployment.Seed`, `RunWork` | manufacturing-server, hospitality-server, pms-server, every app's development host |
 | Identity provider | Host runtime | OIDC subjects; the directory maps them to members | `OIDC`, Rauthy | every deployed host |
 | Languages (ADR-0023) | App API, host runtime, web | Dictionaries shipped with each app's manifest and UI package, keyed by the English text; declarations in the member's language (their choice, else the browser's, else the tenant's default), choice values with translated titles; notifications, tasks and mail said in the reader's language through patterns; `t()` and a language switch in the workspace; agents answer in the run's language | `platform.Languages`, `languages.go`, `@platform/ui` `i18n.ts` | every app (English, Simplified Chinese) |
-| Meaning and glossary (ADR-0023) | App API, platform app `knowledge` | Descriptions, help, examples and synonyms declared with entity types, fields and states; served to people, forms, tool schemas and agents' prompts; search by a type's names; the tenant's glossary layered on top, never changing a declaration | `Entity.Description`, tags `help`, `synonyms`, `example`, `knowledge.term` | CRM, MES, helpdesk (test app) |
+| Meaning and glossary (ADR-0023) | App API, platform app `knowledge` | Descriptions, help, examples and synonyms declared with entity types, fields and states; served to people, forms, tool schemas and agents' prompts; search by a type's names; the tenant's glossary layered on top, never changing a declaration | `Entity.Description`, tags `help`, `synonyms`, `example`, `knowledge.term` | CRM, MES, CSM (test app) |
 | Host API contract (ADR-0023) | Host runtime | OpenAPI 3.1 of every route and named read, generated from the Go types, with the caller's entity types and action payloads; TypeScript types generated from it | `api.go`, `/v1/openapi.json`, `cmd/api-types`, `@platform/kernel` `Api` | every web package |
 | Developer kit (ADR-0023) | App API, host runtime | The app guide, a scaffold that writes an app already on all six steps (entity, lifecycle, flow, translations, tests with `CheckReplay`, development host, UI package), and the `new-app` skill; CI scaffolds one and runs its tests, and checks every app under `apps/` without a list | `docs/Apps.md`, `cmd/new-app`, `.claude/skills/new-app` | CI |
-| Agent doors | Host runtime | A caller's catalog as MCP tools; published agents over A2A 1.0 (JSON-RPC, agent cards) | `POST /mcp`, `/a2a/<tenant>/<agent>`, `cmd/mes-agent` | every host; helpdesk published |
+| Agent doors | Host runtime | A caller's catalog as MCP tools; published agents over A2A 1.0 (JSON-RPC, agent cards) | `POST /mcp`, `/a2a/<tenant>/<agent>`, `cmd/mes-agent` | every host; CSM published |
 | Console | Platform app `platform` | Members, roles, service accounts and agents; audit and deliveries; app settings; the tenant's default language and currency (`platform/currency`, the books' currency and the default of amounts people enter); protocol binding; endpoints; approval and retry of effects | `console.go` | every host |
-| Organisation (ADR-0012) | Platform app `org` | Units in dated structures, memberships; rules ask for a member's units at the input's time | `org.go`, `Caller.Units` | manufacturing, HR, sales |
+| Organisation (ADR-0012) | Platform app `org` | Units in dated structures, memberships; rules ask for a member's units at the input's time | `org.go`, `Caller.Units` | MES, HCM, hospitality |
 | Links and timeline | Platform app `relations` | Relations between entities; protocol events told on linked timelines | `Caller.Link`, `Caller.Links` | CRM |
-| Notifications | Host, read state in `platform` | To members, a unit's role or an app role; deduplicated; mailed through an email endpoint | `Caller.Notify` | manufacturing, Hotel, helpdesk, `work` |
-| Lifecycles, approvals, tasks, inbox (ADR-0017) | App API, platform app `work` | States and transitions on an entity type; approval chains along the organisation; tasks with due times and escalation; one inbox; saved views | `platform.Lifecycle`, `platform.Approval`, `Caller.Assign`, `/v1/inbox` | manufacturing, HR, helpdesk |
-| Flows (ADR-0020) | App API, platform app `flow` | Declared long-running processes: acts, waits, questions, parallel branches, sub-flows, agent steps, timeouts, compensation, versions, a trace of why each step went where it went | `platform.Flow`, `flow.go`, `flow_engine.go` | manufacturing, CRM, helpdesk |
+| Notifications | Host, read state in `platform` | To members, a unit's role or an app role; deduplicated; mailed through an email endpoint | `Caller.Notify` | MES, PMS, CSM, `work` |
+| Lifecycles, approvals, tasks, inbox (ADR-0017) | App API, platform app `work` | States and transitions on an entity type; approval chains along the organisation; tasks with due times and escalation; one inbox; saved views | `platform.Lifecycle`, `platform.Approval`, `Caller.Assign`, `/v1/inbox` | MES, HCM, CSM |
+| Flows (ADR-0020) | App API, platform app `flow` | Declared long-running processes: acts, waits, questions, parallel branches, sub-flows, agent steps, timeouts, compensation, versions, a trace of why each step went where it went | `platform.Flow`, `flow.go`, `flow_engine.go` | MES, CRM, CSM |
 | AI providers and models (ADR-0015) | Platform app `ai` | Vendor, OpenAI-compatible, Anthropic and local providers; enabled models with access; calls through the host with usage journaled; tools on both wires | `ai.go`, `aicall.go`, `anthropic.go`, `/v1/ai/chat` | every host |
-| Agents (ADR-0021, 0022) | App API, platform app `agent` | Declared agents as principals with the intersection of grants; runs journaled step by step; drafts people confirm; signals; evaluation by dry re-runs; memory; transcripts; the context graph and search as tools | `platform.Agent`, `agent*.go`, `context.go`, `/v1/context`, `/v1/search` | manufacturing, CRM, helpdesk |
-| Knowledge (ADR-0022) | Platform app `knowledge` | Documents and `knowledge:"true"` fields; passages; hybrid search (BM25 and vectors) within what the reader may read; citations journaled with an agent's step | `knowledge.go`, `/v1/knowledge` | helpdesk |
-| Protocols (ADR-0011) | Protocols | Named, versioned actions, reads and events with conformance tests | `platform.Protocol`, `protocols/lodging`, `protocols/production` | Hotel and memstay provide lodging, CRM consumes it; the ERP app, or the ERP link to an ERP outside, provides production orders, the MES consumes them (ADR-0024) |
+| Agents (ADR-0021, 0022) | App API, platform app `agent` | Declared agents as principals with the intersection of grants; runs journaled step by step; drafts people confirm; signals; evaluation by dry re-runs; memory; transcripts; the context graph and search as tools | `platform.Agent`, `agent*.go`, `context.go`, `/v1/context`, `/v1/search` | MES, CRM, CSM |
+| Knowledge (ADR-0022) | Platform app `knowledge` | Documents and `knowledge:"true"` fields; passages; hybrid search (BM25 and vectors) within what the reader may read; citations journaled with an agent's step | `knowledge.go`, `/v1/knowledge` | CSM |
+| Protocols (ADR-0011) | Protocols | Named, versioned actions, reads and events with conformance tests | `platform.Protocol`, `protocols/lodging`, `protocols/production` | PMS and memstay provide lodging, CRM consumes it; the ERP app, or the ERP adapter to an ERP outside, provides production orders, the MES consumes them (ADR-0024) |
 | UI kit | Web | Components, docking workspace, entity routes, records (lists, pages, forms), pivot, charts from the platform's visualization spec (ECharts 6), flow view | `@platform/ui` | every web app |
 | Workspace and the UI app API (ADR-0018) | Web | One sign-in per host; apps contributed by UI packages; records opened across apps by reference; dashboards; the assistant, run pages and global search | `@platform/app`, `web/apps/workspace` | every app UI |
-| Edge client and sign-in | Web | Outbox, HTTP client, OIDC with PKCE, a host's reasons for refusing | `@platform/kernel` | workspace, Hotel Desk |
+| Edge client and sign-in | Web | Outbox, HTTP client, OIDC with PKCE, a host's reasons for refusing | `@platform/kernel` | workspace, PMS desk |
 | Settings | Web | Members, organisation, apps, settings, protocols, integrations, AI, processes (flows, agents, evaluations, memories), knowledge, audit | `@pkg/platform` | every host |
-| App UI packages | Web | An app's or a protocol's views for any workspace | `@pkg/crm`, `@pkg/helpdesk`, `@pkg/hotel`, `@pkg/hr`, `@pkg/mes`, `@pkg/lodging` | — |
+| App UI packages | Web | An app's or a protocol's views for any workspace | `@pkg/<id>` for every app (`crm`, `csm`, `erp`, `erpadapter`, `hcm`, `mes`, `pms`), `@pkg/lodging` for the protocol | — |
 
 ### 2.5 Terminology and ownership
 
 Words that are easy to confuse:
 - An **app** is a unit of capability: a Go manifest and, usually, a UI package. **Platform apps** are the eight listed in §2.1. **Reference apps** live under `apps/` (called `slices/` until 2026-09-26, from the kernel-validation phase). "Package" in ADR-0008 and ADR-0009 means app.
-- A **solution** is a composition of apps for one host: `solutions/sales`, `solutions/plant`, the Hotel's `hotel-server`.
+- A **solution** is a composition of apps for one host, named for its industry: `solutions/hospitality`, `solutions/manufacturing`; an app alone runs on its development host `cmd/<id>-server` (ADR-0025).
 - An **event** is an accepted decision as others see it. A domain's own word "event", such as a downtime event, is not this.
 
 | Term | Is | Owned by | Durable as |
@@ -223,7 +223,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 
 | Invariant | Check |
 |---|---|
-| Replay reproduces everything the host shows and calls nothing outside; so does a snapshot taken after any part of the journal, restored and given the rest | `platformserver.CheckReplay` in the tests of the host, manufacturing, Hotel, CRM, HR and the sales solution (four snapshot points each); the rehearsal's restart and restore |
+| Replay reproduces everything the host shows and calls nothing outside; so does a snapshot taken after any part of the journal, restored and given the rest | `platformserver.CheckReplay` in the tests of the host, MES, PMS, CRM, HCM and the hospitality solution (four snapshot points each); the rehearsal's restart and restore |
 | Replay never calls a model, embeds or searches | Host tests fail when a replay calls a model (`TestAgents`, knowledge tests) |
 | A manifest the host cannot honour is refused at composition: undescribed actions, settings of the wrong type, jobs without an interval, repeated effect kinds, undeclared open reads, flows and agents naming steps or tools that do not exist, protocols no earlier app provides | `checkManifest` and `NewTenant`, run by every composition's tests |
 | No app depends on another app; a protocol depends on no app; apps and protocols import the app API, never the host runtime | `scripts/boundaries.sh` (verify step `app-boundaries`) |
@@ -259,7 +259,7 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0019 | Capturing state without the tenant's lock; parallel restore; the plant's downtime as records | Deferred |
 | 0020 | Record-state triggers; business calendars for timeouts; a drawn graph | Deferred |
 | 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
-| 0025 | Industry names and one layout for every app (8b); the host's own apps as apps (8c) | Partial: 8a built (Swift deleted, the rules in Intent.md) |
+| 0025 | The host's own apps as apps (8c) | Partial: 8a (Swift deleted, the rules in Intent.md) and 8b (industry names, one layout checked, a development host for every app) built |
 
 ## 3. Runtimes and languages
 
@@ -271,7 +271,7 @@ Server runtime (Go, reference implementation)
         ▲  kernel contracts: language-neutral schemas + semantics + conformance vectors
 Edge / client runtimes
   Web (TypeScript, React, @platform/ui): the workspace every host serves
-  Desktop (Tauri/Rust): the Hotel Desk, offline with the Rust K5 outbox
+  Desktop (Tauri/Rust): the PMS desk, offline with the Rust K5 outbox
   Edge gateways (candidate Rust/Go): devices, PLCs, sensors, offline sites
 ```
 
@@ -320,7 +320,7 @@ The kernel is defined by six parts, all in `contract/`. A part never substitutes
 
 ### Fact kinds across domains
 
-| Kind | CRM | Manufacturing (MES) | ERP (to build) | Hotel |
+| Kind | CRM | MES | ERP | PMS |
 |---|---|---|---|---|
 | Observation | An email or call logged from outside | Sensor reading, machine state, counts, the ERP's answer | Bank statement line, quantity counted at goods receipt | Raw channel booking message |
 | Claim | A lead's company data from an enrichment source | Planned order from the ERP, supplier lot data | Supplier invoice, a supplier's price list or lead time | OTA guest profile, channel rate |
@@ -363,11 +363,11 @@ Applications are pressure environments for the platform, not its source of truth
 
 | Domain | Nature | Pressures | Cannot test |
 |---|---|---|---|
-| Hotel | Reference app modelled on OPERA Cloud and Mews | Server authority, several principals, capacity over time, a channel connector | Realism — it can confirm our own assumptions |
+| PMS | Reference app modelled on OPERA Cloud and Mews | Server authority, several principals, capacity over time, a channel connector | Realism — it can confirm our own assumptions |
 | Manufacturing | Reference app modelled on Opcenter and SAP ME (ISA-95 practice), desk-studied, no plant yet | Observation streams, device edge, hierarchy, quality, work orders, ERP integration | A real plant's volume and exceptions |
 | CRM | Target app | Parties, opportunities, activities, protocols to other apps, the sales assistant | — |
 | ERP | Target app, being built (ADR-0024; accounting, purchasing, inventory and production orders built), modelled on SAP S/4HANA and Odoo | Money and units, double-entry posting (several changes that stand or fall together: K4's open case), number sequences, periods, purchasing and inventory, production orders the MES executes | Depth: one company's full chart of accounts, tax, localisation |
-| HR, helpdesk | Thin reference apps | Lifecycles, approvals, flows, agents, knowledge | Depth in either function |
+| HCM, CSM | Thin reference apps | Lifecycles, approvals, flows, agents, knowledge | Depth in either function |
 
 Two tests for every abstraction: **cross-domain comparison** (does any app need exceptions, bypasses, duplicated infrastructure or awkward mappings? are we abstracting a capability or naming two unrelated things alike?) and **evolution drills**:
 
@@ -396,16 +396,16 @@ Reference apps model their domain on leading systems, not on invention, so that 
 
 | Domain | Reference systems | Concepts the apps follow |
 |---|---|---|
-| Hotel | Oracle OPERA Cloud, Mews; SiteMinder-style channel managers (OTA/HTNG) | Inventory per room type and night with an overbooking allowance; reservation lifecycle; rate plans; guest profiles; folios; channel delivery with the channel's confirmation number, including duplicates. Built: inventory with overbooking, create/modify/cancel, channel delivery |
+| PMS | Oracle OPERA Cloud, Mews; SiteMinder-style channel managers (OTA/HTNG) | Inventory per room type and night with an overbooking allowance; reservation lifecycle; rate plans; guest profiles; folios; channel delivery with the channel's confirmation number, including duplicates. Built: inventory with overbooking, create/modify/cancel, channel delivery |
 | Manufacturing | Siemens Opcenter Execution, SAP ME / Digital Manufacturing | Lot or unit through a route of operations on resources, start/complete per step, data collection, nonconformance with dispositions, hold/release, genealogy, resource status, electronic signatures (21 CFR Part 11), production order confirmation to the ERP |
-| Helpdesk | ServiceNow ITSM and CSM | Tickets with priority-driven service levels, triage, knowledge, escalation |
+| CSM | ServiceNow ITSM and CSM | Tickets with priority-driven service levels, triage, knowledge, escalation |
 
 **Friction** (exceptions, bypasses, duplication, awkward mappings, leaks, missing capabilities) is recorded briefly in the work queue while an app is active and resolved into an app change, a capability change, or a kernel change with an ADR. Resolved entries are deleted; lasting conclusions are folded into this document.
 
 ## 9. Standing risks
 
 1. **Four languages** are a real cost; every additional implementation language must beat the cost of re-implementing the contract.
-2. **No real organisation uses the platform yet.** Hotel is synthetic and manufacturing is desk-studied; real use would falsify more than any drill.
+2. **No real organisation uses the platform yet.** PMS is synthetic and MES is desk-studied; real use would falsify more than any drill.
 3. **ERP can swallow the plan.** It is the deepest of the target apps; keep it thin. Its value to the platform is the pressure of money, posting, periods and production orders, not breadth of features.
 4. **Inner-platform effect:** "supporting change" must not slide into configuring everything. Change is absorbed by quickly modifiable app code.
 5. **The server is not the kernel;** treating it as such re-binds the platform to one deployment shape.
@@ -516,8 +516,8 @@ Stages 1–5 are built: the application model (ADR-0016), lifecycles, approvals 
 | Stage | Contents | Why this order | Proven when |
 |---|---|---|---|
 | 6. The model speaks, the API is a contract | Built (ADR-0023): languages and meaning (6a, 6b), the host API contract with generated TypeScript types (6c), the developer kit: app guide, scaffold, skill (6d) | Every agent, integrator, coding agent and UI reads the model; it is cheap, and every later stage uses it | An agent answers better with descriptions than without in an evaluation; the workspace compiles against generated clients; a new app is scaffolded and passes `CheckReplay` |
-| 7. The application half, completed | Files and attachments (also as knowledge), number sequences, comments and followers, business calendars, record-state triggers, import and export, field-level security, delegation; the kit's remaining families (boards, time views, trees, mobile and field tasks), each once | The classic platform features every reference app still lacks; calendars unblock service levels and flows' timeouts | The ERP's purchasing and inventory built from declarations only (#115); the helpdesk's service level on a business calendar |
+| 7. The application half, completed | Files and attachments (also as knowledge), number sequences, comments and followers, business calendars, record-state triggers, import and export, field-level security, delegation; the kit's remaining families (boards, time views, trees, mobile and field tasks), each once | The classic platform features every reference app still lacks; calendars unblock service levels and flows' timeouts | The ERP's purchasing and inventory built from declarations only (#115); CSM's service level on a business calendar |
 | 8. AI control plane | Quotas, rate limits and streaming (ADR-0015 batch 2); the agents overview with value and an off switch; evaluation suites; traces across agents; MCP authorization and resources | Agents exist in three apps and outside ones call in; governing them at scale is the next gap the references closed in 2026 | An administrator sees every agent's use and value, switches one off, and a standard MCP client signs in and acts within its grants |
 | 9. Scale and delivery | Many tenants per process, provisioning, package upgrades, the backend-for-frontend token, run-time UI bundles, bulk data out | When a second real organisation or team comes | A new team ships an app without touching the host |
 
-The target apps are CRM, MES and ERP; all three exist; the ERP (ADR-0024, #115) has accounting, number sequences, purchasing, inventory and production orders with the MES, and the plant reaches the ERP app or any ERP outside through one protocol. Hotel, HR and the helpdesk stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.
+The target apps are CRM, MES and ERP; all three exist; the ERP (ADR-0024, #115) has accounting, number sequences, purchasing, inventory and production orders with the MES, and the MES reaches the ERP app or any ERP outside through one protocol. The PMS, HCM and CSM stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.

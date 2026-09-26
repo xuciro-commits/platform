@@ -46,13 +46,13 @@ func TestSavedViews(t *testing.T) {
 	state := `{"view":"pivot","group":"stage","measure":"sum:amount"}`
 	for _, c := range []struct{ got, want string }{
 		{do("ana", SchemaViewSave, "V1", map[string]string{"title": "Pipeline", "entity": "crm.opportunity", "state": state}), "ok"},
-		{do("bo", SchemaViewSave, "V2", map[string]string{"title": "Mine", "entity": "hr.leave"}), "ok"},
+		{do("bo", SchemaViewSave, "V2", map[string]string{"title": "Mine", "entity": "hcm.leave"}), "ok"},
 		{views("ana") + views("bo"), "[Pipeline][Mine]"},
 		{do("bo", SchemaViewSave, "V1", map[string]string{"title": "Taken", "entity": "crm.opportunity"}), "ERROR_CODE_POLICY_DENIED"},
 		{do("bo", SchemaViewRemove, "V1", struct{}{}), "ERROR_CODE_POLICY_DENIED"},
 		{do("ana", SchemaViewSave, "V1", map[string]string{"title": "Pipeline by stage", "entity": "crm.opportunity", "state": state}), "ok"},
-		{do("ana", SchemaViewSave, "V1", map[string]string{"title": "Other type", "entity": "hr.leave"}), "ERROR_CODE_INVALID_ARGUMENT"},
-		{do("ana", SchemaViewSave, "V3", map[string]string{"entity": "hr.leave"}), "ERROR_CODE_INVALID_ARGUMENT"}, // a view has a name
+		{do("ana", SchemaViewSave, "V1", map[string]string{"title": "Other type", "entity": "hcm.leave"}), "ERROR_CODE_INVALID_ARGUMENT"},
+		{do("ana", SchemaViewSave, "V3", map[string]string{"entity": "hcm.leave"}), "ERROR_CODE_INVALID_ARGUMENT"}, // a view has a name
 		{views("ana"), "[Pipeline by stage]"},
 		{do("ana", SchemaViewRemove, "V1", struct{}{}), "ok"},
 		{views("ana"), "[]"},

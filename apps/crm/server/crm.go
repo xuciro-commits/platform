@@ -27,7 +27,7 @@ var languageFiles embed.FS
 var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const (
-	Authority       = "crm-server"
+	ID              = "crm"
 	AccountType     = "crm.account"
 	OpportunityType = "crm.opportunity"
 
@@ -113,7 +113,7 @@ type CRM struct {
 }
 
 func New(tenant string) *CRM {
-	return &CRM{tenant: tenant, ledger: platform.NewLedger(tenant, Authority, Actions(), AccountType, OpportunityType)}
+	return &CRM{tenant: tenant, ledger: platform.NewLedger(tenant, ID, Actions(), AccountType, OpportunityType)}
 }
 
 func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
@@ -210,7 +210,7 @@ func (c *CRM) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
 func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) }
 
 func (c *CRM) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: "crm", Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
+	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
 		Flows: []platform.Flow{GroupStay()}, Agents: []platform.Agent{Assistant()},
 		Consumes: []platform.Consumption{{Protocol: lodging.ID, Optional: true}}}
 }

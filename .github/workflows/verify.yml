@@ -48,14 +48,14 @@ jobs:
           setup_only: true
       - run: scripts/verify.sh web
 
-  hotel:
-    name: hotel (server, Rust K5 vectors, flows)
+  pms:
+    name: pms (server, Rust K5 vectors, flows)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: apps/hotel/server/go.mod
+          go-version-file: apps/pms/server/go.mod
           cache-dependency-path: "**/go.sum"
       - uses: pnpm/action-setup@v4
         with:
@@ -72,5 +72,5 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/hotel/client/src-tauri
-      - run: scripts/verify.sh hotel
+          workspaces: apps/pms/client/src-tauri
+      - run: scripts/verify.sh pms

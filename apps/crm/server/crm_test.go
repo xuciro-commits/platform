@@ -16,7 +16,7 @@ func TestOpportunityOwnership(t *testing.T) {
 	}
 	var journal []platformserver.Entry
 	build := func() *platformserver.Tenant {
-		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ana", Sales), seat("bo", Sales), seat("lead", Manager), seat("desk", "front-desk")), platformserver.NewWork("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), New("t"))
+		tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ana", Sales), seat("bo", Sales), seat("lead", Manager), seat("desk", "front-desk"), seat("webform", Sales)), platformserver.NewWork("t"), platformserver.NewFlows("t"), platformserver.NewAgents("t"), New("t"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -26,7 +26,7 @@ func TestOpportunityOwnership(t *testing.T) {
 	tn.Record = func(e platformserver.Entry) { journal = append(journal, e) }
 	as := func(id string) platform.Member {
 		m := platform.Member{ID: id, Tenant: "t", Roles: map[string]string{}}
-		for _, r := range []struct{ id, role string }{{"ana", "sales"}, {"bo", "sales"}, {"lead", "sales-manager"}, {"desk", "front-desk"}} {
+		for _, r := range []struct{ id, role string }{{"ana", "sales"}, {"bo", "sales"}, {"lead", "sales-manager"}, {"desk", "front-desk"}, {"webform", "sales"}} {
 			if r.id == id {
 				m.Roles["crm"] = r.role
 			}
@@ -36,7 +36,7 @@ func TestOpportunityOwnership(t *testing.T) {
 	now := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	submit := func(who, schema, targetType, id, key string, payload map[string]string) string {
 		raw, _ := json.Marshal(payload)
-		_, err := tn.Submit(as(who), &pb.Submission{TenantId: "t", PrincipalId: who, Authority: Authority,
+		_, err := tn.Submit(as(who), &pb.Submission{TenantId: "t", PrincipalId: who, Authority: ID,
 			Target: &pb.EntityRef{Type: targetType, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1},
 			IdempotencyKey: key, Payload: raw}, now)
 		if err != nil {
@@ -61,6 +61,9 @@ func TestOpportunityOwnership(t *testing.T) {
 		{submit("ana", "crm.account.edit", AccountType, "ACME", "9", map[string]string{"name": "Acme Corp"}), "ok"},
 		{submit("ana", "crm.account.edit", AccountType, "ACME", "10", map[string]string{"id": "OTHER"}), "ERROR_CODE_INVALID_ARGUMENT"},
 		{submit("ana", "crm.account.archive", AccountType, "ACME", "11", map[string]string{}), "ok"},
+		// From outside (ADR-0025 D3): a web form's service account captures an account through the same action.
+		{submit("webform", SchemaAccount, AccountType, "WEB-1", "12", map[string]string{"name": "Harbour Travel", "kind": "company"}), "ok"},
+		{submit("webform", SchemaAccount, AccountType, "WEB-1", "12", map[string]string{"name": "Harbour Travel", "kind": "company"}), "ok"}, // resent: the same decision
 	} {
 		if step.got != step.want {
 			t.Fatalf("got %s, want %s", step.got, step.want)
@@ -92,8 +95,8 @@ func TestOpportunityOwnership(t *testing.T) {
 	if a := accounts.Records[0].(Account); a.Name != "Acme Corp" || !a.Archived {
 		t.Fatalf("account %+v", a)
 	}
-	if page, _ := tn.Records(as("lead"), AccountType, platform.Query{}, now); page.Total != 0 {
-		t.Fatal("an archived account is listed")
+	if page, _ := tn.Records(as("lead"), AccountType, platform.Query{}, now); page.Total != 1 || page.Records[0].(Account).ID != "WEB-1" {
+		t.Fatal("an archived account is listed, or the web form's is not")
 	}
 	platformserver.CheckReplay(t, tn, journal, build)
 }

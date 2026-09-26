@@ -180,7 +180,7 @@ func main() {
 			}
 			// The helpdesk's triage agent: triage as normal, reply, finish.
 			if slices.ContainsFunc(req.Tools, func(t struct{ Function struct{ Name string } }) bool {
-				return t.Function.Name == "helpdesk_ticket_triage"
+				return t.Function.Name == "csm_ticket_triage"
 			}) {
 				ticket := regexp.MustCompile(`ticket (\S+) from`).FindStringSubmatch(req.Messages[1].Content)
 				done := 0
@@ -196,7 +196,7 @@ func main() {
 					subject := regexp.MustCompile(`Subject: (.*)`).FindStringSubmatch(req.Messages[1].Content)
 					call("knowledge", map[string]string{"query": subject[len(subject)-1], "rationale": "See what the house says about it."})
 				case done == 1:
-					call("helpdesk_ticket_triage", map[string]string{"target": ticket[1], "category": "other", "priority": "normal", "rationale": "Nothing marks it urgent."})
+					call("csm_ticket_triage", map[string]string{"target": ticket[1], "category": "other", "priority": "normal", "rationale": "Nothing marks it urgent."})
 				default:
 					var passages []struct{ Title string }
 					for _, m := range req.Messages {
@@ -208,7 +208,7 @@ func main() {
 					if len(passages) > 0 {
 						reply = "Thank you for writing; see our " + passages[0].Title + ". A colleague will follow up today."
 					}
-					call("helpdesk_ticket_reply", map[string]string{"target": ticket[1], "reply": reply, "rationale": "Acknowledge, cite, and hand it on."})
+					call("csm_ticket_reply", map[string]string{"target": ticket[1], "reply": reply, "rationale": "Acknowledge, cite, and hand it on."})
 				}
 				return
 			}

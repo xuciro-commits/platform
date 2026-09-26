@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|capabilities|web|hotel|manufacturing|composition|drills|deploy|format|ci]   (default: everything)
+# Platform verification. Usage: scripts/verify.sh [contract|capabilities|web|pms|mes|composition|drills|deploy|format|ci]   (default: everything)
 # The web step needs node and pnpm (brew install node pnpm); deploy needs a running Docker (orb start), curl and jq.
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
@@ -53,8 +53,8 @@ scaffold() {
     (cd "$root/apps/scaffolded/server" && go vet ./... && go test -count=1 ./...)
 }
 
-manufacturing() {
-  step manufacturing-server bash -c 'cd apps/manufacturing/server && go vet ./... && go test -count=1 ./...'
+mes() {
+  step mes-server bash -c 'cd apps/mes/server && go vet ./... && go test -count=1 ./...'
 }
 
 drills() {
@@ -70,7 +70,7 @@ composition() {
   done
   # Every other app, including a new one, is checked as soon as it exists.
   for dir in apps/*/server; do
-    [[ -f $dir/go.mod && $dir != apps/hotel/* && $dir != apps/manufacturing/* ]] || continue
+    [[ -f $dir/go.mod && $dir != apps/pms/* && $dir != apps/mes/* ]] || continue
     step "$(basename "$(dirname "$dir")")-server" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
   done
   for dir in solutions/*; do
@@ -82,26 +82,26 @@ deploy() {
   step deploy-rehearsal deploy/local/rehearse.sh
 }
 
-hotel() {
-  step hotel-server bash -c 'cd apps/hotel/server && go vet ./... && go test -count=1 ./...'
-  step hotel-client-k5 cargo test --manifest-path apps/hotel/client/src-tauri/Cargo.toml
-  step hotel-flows apps/hotel/flows.sh
+pms() {
+  step pms-server bash -c 'cd apps/pms/server && go vet ./... && go test -count=1 ./...'
+  step pms-client-k5 cargo test --manifest-path apps/pms/client/src-tauri/Cargo.toml
+  step pms-flows apps/pms/flows.sh
 }
 
 case "${1:-all}" in
   contract) contract ;;
   web) web ;;
-  hotel) web; hotel ;;
+  pms) web; pms ;;
   capabilities) capabilities ;;
   format) format ;;
-  manufacturing) manufacturing ;;
+  mes) mes ;;
   drills) drills ;;
   composition) composition ;;
   deploy) deploy ;;
-  all) contract; format; capabilities; web; hotel; manufacturing; composition; drills; deploy ;;
+  all) contract; format; capabilities; web; pms; mes; composition; drills; deploy ;;
   # What CI runs on Linux: the rehearsal needs Docker, so it stays on the owner's Mac.
-  ci) contract; format; capabilities; manufacturing; composition; drills ;;
-  *) echo "usage: $0 [contract|capabilities|web|hotel|manufacturing|composition|drills|deploy|format|ci]"; exit 2 ;;
+  ci) contract; format; capabilities; mes; composition; drills ;;
+  *) echo "usage: $0 [contract|capabilities|web|pms|mes|composition|drills|deploy|format|ci]"; exit 2 ;;
 esac
 
 if ((${#failed[@]})); then echo "Failed: ${failed[*]}"; exit 1; fi

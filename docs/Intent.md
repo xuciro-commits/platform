@@ -17,7 +17,7 @@ Provenance: moved from the MSRU repository's `Docs/Intent.md` on 2026-09-25, wit
    - Oracle Fusion Cloud and APEX.
 
    The comparison is not with one vertical application. A team should be able to build a CRM, an MES, a PMS or a HIS on it mostly by writing business knowledge.
-3. **The target apps are CRM, MES and ERP (2026-09-26).** They are the business software the platform must carry first, together: sales and customers, the shop floor, and finance, purchasing, inventory and production orders, meeting through protocols. Hotel stays as a reference app; HR and the helpdesk stay as thin proofs. Music is no longer a target; it remains a product in the MSRU repository.
+3. **The target apps are CRM, MES and ERP (2026-09-26).** They are the business software the platform must carry first, together: sales and customers, the shop floor, and finance, purchasing, inventory and production orders, meeting through protocols. The PMS stays as a reference app; HCM and CSM stay as thin proofs. Music is no longer a target; it remains a product in the MSRU repository.
 
 The deepest goal is a platform that **supports change itself**. It must not encode an organisation's or application's current shape as its permanent identity. Domains may be rewritten; the deeper contracts must stay coherent.
 

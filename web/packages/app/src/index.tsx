@@ -57,7 +57,7 @@ export function useRead<T>(path: string, refetchInterval?: number): T | undefine
 }
 
 /**
- * Opens a record by reference — `"hotel.reservation/R-1"` or `{ type, id }` —
+ * Opens a record by reference — `"pms.reservation/R-1"` or `{ type, id }` —
  * in the view the owning app registers for its type, else the generic record
  * page. Apps link to each other's records without knowing each other (D5).
  */

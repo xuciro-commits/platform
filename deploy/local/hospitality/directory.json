@@ -1,0 +1,69 @@
+[
+  {
+    "subjects": [
+      "user:sales@hotel.test"
+    ],
+    "id": "sales-1",
+    "roles": {
+      "crm": "sales",
+      "pms": "front-desk",
+      "memstay": "keeper",
+      "ai": "user",
+      "hcm": "employee"
+    },
+    "units": [
+      {
+        "unit": "sales-team",
+        "role": "account executive",
+        "primary": true
+      },
+      {
+        "unit": "offsite-2026",
+        "role": "project lead"
+      }
+    ]
+  },
+  {
+    "subjects": [
+      "user:manager@hotel.test"
+    ],
+    "id": "manager-1",
+    "roles": {
+      "crm": "sales-manager",
+      "pms": "manager",
+      "platform": "admin",
+      "org": "admin",
+      "memstay": "keeper",
+      "ai": "admin",
+      "hcm": "hr",
+      "work": "admin",
+      "flow": "admin",
+      "agent": "admin",
+      "csm": "lead",
+      "knowledge": "editor"
+    },
+    "units": [
+      {
+        "unit": "hotel-a",
+        "role": "general manager",
+        "primary": true
+      },
+      {
+        "unit": "hotel-a-co",
+        "role": "director"
+      },
+      {
+        "unit": "guest-committee",
+        "role": "chair"
+      },
+      {
+        "unit": "hotel-a",
+        "role": "manager"
+      },
+      {
+        "unit": "hospitality",
+        "role": "head"
+      }
+    ]
+  }
+]

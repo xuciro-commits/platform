@@ -1,6 +1,6 @@
 # The platform host's two deployments on their production path, locally (#87, #92):
-# plant-server (the plant solution: the MES and the ERP, ADR-0024) and
-# sales-server (the sales solution: CRM, Hotel, HR, the helpdesk). PostgreSQL
+# manufacturing-server (the manufacturing solution: the MES and the ERP, ADR-0024)
+# and hospitality-server (the hospitality solution: CRM, PMS, HCM, CSM). PostgreSQL
 # keeps the journal, Rauthy issues identities, each host replays the journal on start. Each host serves the workspace (ADR-0018), built first:
 # `pnpm --dir web/apps/workspace build && docker compose -f deploy/local/compose.yaml up -d --build`
 # Ports are parameters so rehearse.sh can run a second, disposable project.
@@ -32,36 +32,36 @@ services:
       - ./rauthy/bootstrap:/app/bootstrap:ro
       - rauthy:/app/data
 
-  plant-server:
-    build: { context: ../.., dockerfile: solutions/plant/Dockerfile }
+  manufacturing-server:
+    build: { context: ../.., dockerfile: solutions/manufacturing/Dockerfile }
     command:
       - -addr=0.0.0.0:8490
       - -database=postgres://platform:platform-local-only@postgres:5432/platform
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
-      - -directory=/etc/plant/directory.json
+      - -directory=/etc/manufacturing/directory.json
       - -web=/web
       - -project
-    ports: ["127.0.0.1:${PLANT_PORT:-8490}:8490"]
-    volumes: [./plant/directory.json:/etc/plant/directory.json:ro]
+    ports: ["127.0.0.1:${MANUFACTURING_PORT:-8490}:8490"]
+    volumes: [./manufacturing/directory.json:/etc/manufacturing/directory.json:ro]
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}" }
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }
     restart: on-failure
 
-  sales-server:
-    build: { context: ../.., dockerfile: solutions/sales/Dockerfile }
+  hospitality-server:
+    build: { context: ../.., dockerfile: solutions/hospitality/Dockerfile }
     command:
       - -addr=0.0.0.0:8495
       - -database=postgres://platform:platform-local-only@postgres:5432/platform
       - -oidc-issuer=http://localhost:${IDP_PORT:-8480}/auth/v1/
       - -oidc-keys=http://rauthy:8080/auth/v1/oidc/certs
-      - -directory=/etc/sales/directory.json
+      - -directory=/etc/hospitality/directory.json
       - -web=/web
       - -project
-    ports: ["127.0.0.1:${SALES_PORT:-8495}:8495"]
-    volumes: [./sales/directory.json:/etc/sales/directory.json:ro]
+    ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495"]
+    volumes: [./hospitality/directory.json:/etc/hospitality/directory.json:ro]
     # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}" }
     depends_on:

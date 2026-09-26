@@ -20,12 +20,12 @@ type ProtocolInfo = Api.ProtocolInfo;
 // member holds a role in an app it serves. Settings serves the platform's apps.
 const packages: { serves: string[]; load: () => Promise<{ default: AppUI }> }[] = [
   { serves: ["crm"], load: () => import("@pkg/crm") },
-  { serves: ["hotel"], load: () => import("@pkg/hotel/app") },
-  { serves: ["hr"], load: () => import("@pkg/hr") },
-  { serves: ["helpdesk"], load: () => import("@pkg/helpdesk") },
+  { serves: ["pms"], load: () => import("@pkg/pms/app") },
+  { serves: ["hcm"], load: () => import("@pkg/hcm") },
+  { serves: ["csm"], load: () => import("@pkg/csm") },
   { serves: ["mes"], load: () => import("@pkg/mes") },
   { serves: ["erp"], load: () => import("@pkg/erp") },
-  { serves: ["erplink"], load: () => import("@pkg/erplink") },
+  { serves: ["erpadapter"], load: () => import("@pkg/erpadapter") },
   { serves: ["platform", "org", "ai", "flow", "agent", "knowledge"], load: () => import("@pkg/platform") },
 ];
 

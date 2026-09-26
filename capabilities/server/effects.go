@@ -39,7 +39,7 @@ import (
 
 // Endpoint is a destination the tenant's administrator configured. A webhook
 // receives the events it subscribes to (no app code) and the effects apps emit
-// of the kinds bound to it ("<app>/<kind>", e.g. "erplink/confirmation"). An
+// of the kinds bound to it ("<app>/<kind>", e.g. "erpadapter/confirmation"). An
 // email endpoint is an SMTP server that mails members the notifications of the
 // apps it names (mail.go).
 type Endpoint struct {

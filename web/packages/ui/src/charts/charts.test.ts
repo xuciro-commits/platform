@@ -7,7 +7,7 @@ const theme: Theme = { palette: ["#1", "#2", "#3"], foreground: "#f", muted: "#m
 
 test("a spec over records asks the host for groups and measures", () => {
   const spec: ChartSpec = {
-    data: { entity: "hotel.reservation", domain: [["canceled", "=", false]] }, mark: "bar",
+    data: { entity: "pms.reservation", domain: [["canceled", "=", false]] }, mark: "bar",
     encoding: { x: { field: "checkIn", timeUnit: "month", type: "temporal" }, y: { aggregate: "count", type: "quantitative" }, color: { field: "roomType", type: "nominal" } },
   };
   expect(aggregateQuery(spec)).toEqual({ domain: [["canceled", "=", false]], groups: ["checkIn:month", "roomType"], measures: ["count"], search: undefined, archived: undefined });

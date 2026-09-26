@@ -5,7 +5,11 @@
 #      (platformserver/platform) and never the host runtime (platformserver):
 #      the runtime is reachable only through platform.Runtime, which the host
 #      hands each caller. Their binaries (cmd/) compose tenants and may import
-#      it, and so may test harnesses (packages named *test, like httptest).
+#      it, and so may test harnesses (packages named *test, like httptest);
+#   3. every app has one shape (ADR-0025 D2): apps/<id>/server is the Go module
+#      <id> with <id>.go, <id>_test.go, i18n/zh-CN.json and a development host
+#      cmd/<id>-server; its UI, when it has one, is web/packages/<id> with
+#      src/index.tsx and src/i18n.ts.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 fail() { echo "boundary: $*" >&2; exit 1; }
@@ -25,5 +29,14 @@ for x in "${apps[@]}" "${protocols[@]}"; do
   done
   hits=$(cd "$dir" && go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./... | grep -vE '/cmd/|test:' | grep -E ' platformserver( |$)' || true)
   [[ -z $hits ]] || fail "app code imports the host runtime, not the app API:"$'\n'"$hits"
+done
+for x in "${apps[@]}"; do
+  dir=${x%%:*} id=${x#*:}
+  [[ $dir == apps/$id/server ]] || fail "$dir holds the module $id: an app's directory, module and ID share one name"
+  for f in "$id.go" "${id}_test.go" i18n/zh-CN.json "cmd/$id-server/main.go"; do
+    [[ -f $dir/$f ]] || fail "$dir has no $f (ADR-0025 D2)"
+  done
+  ui=web/packages/$id
+  [[ ! -d $ui ]] || [[ -f $ui/src/index.tsx && -f $ui/src/i18n.ts ]] || fail "$ui has no src/index.tsx and src/i18n.ts"
 done
 echo "boundaries ok: ${#apps[@]} apps, ${#protocols[@]} protocols"

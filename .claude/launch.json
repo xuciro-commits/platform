@@ -2,16 +2,22 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "workspace",
+      "name": "workspace-hospitality",
       "runtimeExecutable": "env",
       "runtimeArgs": ["PLATFORM_HOST=http://127.0.0.1:8496", "pnpm", "--dir", "web/apps/workspace", "dev"],
       "port": 5176
     },
     {
-      "name": "workspace-plant",
+      "name": "workspace-manufacturing",
       "runtimeExecutable": "env",
       "runtimeArgs": ["PLATFORM_HOST=http://127.0.0.1:8491", "pnpm", "--dir", "web/apps/workspace", "dev", "--port", "5175"],
       "port": 5175
+    },
+    {
+      "name": "workspace-app",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PLATFORM_HOST=http://127.0.0.1:8499", "pnpm", "--dir", "web/apps/workspace", "dev", "--port", "5177"],
+      "port": 5177
     },
     {
       "name": "workspace-oidc",

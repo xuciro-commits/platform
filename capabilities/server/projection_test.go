@@ -36,7 +36,7 @@ func TestProjectionColumns(t *testing.T) {
 	if got := strings.Join(values, "|"); got != "I1|2|2026-09-25 09:00:00 +0000 UTC|ana|<nil>||false|Bolt|5|150|EUR||||B1|[m6]|2026-10-01 00:00:00 +0000 UTC" {
 		t.Fatalf("values %s", got)
 	}
-	if ProjectionSchema("hotel-a") != "tenant_hotel_a" || ReaderRole("plant-sz") != "tenant_plant_sz_reader" || tableOf("hotel.room-type") != "hotel_room_type" {
+	if ProjectionSchema("hotel-a") != "tenant_hotel_a" || ReaderRole("plant-sz") != "tenant_plant_sz_reader" || tableOf("pms.room-type") != "pms_room_type" {
 		t.Fatal("identifiers")
 	}
 }

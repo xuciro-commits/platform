@@ -50,7 +50,7 @@ func ProtocolAction(protocol, action string) string { return protocol + "#" + ac
 // the entities it holds, so consumers match their links exactly.
 type ProviderResult struct {
 	Provider string
-	Type     string // e.g. "hotel.reservation"
+	Type     string // e.g. "pms.reservation"
 	Result   any
 }
 

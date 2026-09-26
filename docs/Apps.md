@@ -45,9 +45,9 @@ Every change is an action: a schema, the roles that may call it, a title, a desc
 
 - `Standard{Create, Edit, Archive, Roles}` generates `<type>.create`, `.edit` and `.archive`.
 - A `Lifecycle` generates one action per `Transition`, with its roles, the states it leaves and enters, and an optional `Do` for its own rule.
-- An action with rules of its own is a `platform.Action` in the catalog (`apps/hr/server/hr.go` `Actions`) decided in `Submit` after `ledger.Generated`, through `ledger.Receive`: validate the payload, refuse with a kernel error, return what to put.
+- An action with rules of its own is a `platform.Action` in the catalog (`apps/hcm/server/hcm.go` `Actions`) decided in `Submit` after `ledger.Generated`, through `ledger.Receive`: validate the payload, refuse with a kernel error, return what to put.
 
-Roles are checked by the catalog before the app's rules run; a refused action is recorded nowhere. A document that needs a number without gaps declares a `platform.Sequence` in its manifest and takes it with `Caller.Next` in the function the decision applies, never in its rules, so a refusal takes none (`apps/erp` numbers journal entries, `apps/helpdesk` tickets). Agents, MCP clients and forms call the same actions.
+Roles are checked by the catalog before the app's rules run; a refused action is recorded nowhere. A document that needs a number without gaps declares a `platform.Sequence` in its manifest and takes it with `Caller.Next` in the function the decision applies, never in its rules, so a refusal takes none (`apps/erp` numbers journal entries, `apps/csm` tickets). Agents, MCP clients and forms call the same actions.
 
 ## 4. Declare flows
 
@@ -66,4 +66,4 @@ pnpm --dir web/apps/workspace build && go run ./cmd/<id>-server -web ../../../we
 
 The workspace signs in with a development token, opens the app, lists its records and forms, and shows the flow's task in the manager's inbox; the profile menu switches to 简体中文. `/v1/openapi.json` describes every route, and every entity type and action the caller may use.
 
-To ship the app, compose it into a solution (`solutions/sales/cmd/sales-server`) or a deployment of its own, and add its route to `deploy/local/README.md`.
+To ship the app, compose it into a solution (`solutions/hospitality/cmd/hospitality-server`) or a deployment of its own, and add its route to `deploy/local/README.md`.

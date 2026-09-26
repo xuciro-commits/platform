@@ -9,7 +9,23 @@ import {
 import { Activity, ClipboardList, Cpu, Factory, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
-import { downtimeReasons, ncCodes, type Downtime, type Master, type Order, type Planned, type SFC } from "./model";
+
+// The shapes of the MES's reads these views show (apps/mes/server).
+type Operation = { step: number; name: string; workCenter: string };
+type Product = { id: string; name: string; routing: string; operations: Operation[] };
+type WorkCenter = { id: string; name: string; line: string; resources: string[] };
+type Master = { products: Product[]; workCenters: WorkCenter[] };
+type Order = { id: string; product: string; quantity: number; sfcs: string[]; planned?: string;
+  erp?: "sent" | "confirmed" | "refused" | "failed"; confirmation?: string; erpDetail?: string; resent?: number };
+type SFC = {
+  id: string; order: string; product: string; step: number; state: "queued" | "active" | "hold" | "done" | "scrapped";
+  resource?: string; revision: number; ncs: { step: number; code: string; by: string }[]; signatures: { action: string; meaning: string; by: string }[];
+};
+type Planned = { erpId: string; number: string; product: string; quantity: number; due: string; state: string };
+type Downtime = { id: string; resource: string; start: string; end?: string; reason?: string; needsCheck?: boolean };
+
+const ncCodes = ["POROSITY", "DIMENSION", "SURFACE", "LEAK"];
+const downtimeReasons = ["Tool change", "Setup", "Material shortage", "Breakdown", "Quality issue"];
 
 
 const sfcStatus = defineStatuses({

@@ -1,16 +1,16 @@
 .build/
 **/.build/
-**/.swiftpm/
 .DS_Store
 target/
-apps/hotel/client/src-tauri/gen/
+apps/pms/client/src-tauri/gen/
 # Build outputs of `go build` and `go test -c` in a module directory
 *.test
+# every app's and solution's development host, and the local tools
+apps/*/server/cmd/*/*-server
+apps/*/server/cmd/*/*-sim
+apps/*/server/cmd/*/*-agent
+solutions/*/cmd/*/*-server
 capabilities/server/cmd/webhook-sink/webhook-sink
-apps/hotel/server/cmd/hotel-server/hotel-server
-solutions/sales/cmd/sales-server/sales-server
-apps/erp/server/cmd/erp-server/erp-server
-solutions/plant/cmd/plant-server/plant-server
 node_modules/
 dist/
 
