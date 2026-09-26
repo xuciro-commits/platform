@@ -4,6 +4,7 @@ package relations
 
 import (
 	"encoding/json"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -27,7 +28,45 @@ const (
 	SchemaLink   = "platform.link"
 	SchemaUnlink = "platform.unlink"
 	SchemaNote   = "platform.note"
+	// Comments and followers on any record (ADR-0028 D6).
+	CommentType    = "platform.comment"
+	FollowType     = "platform.follow"
+	SchemaComment  = "platform.comment.add"
+	SchemaFollow   = "platform.follow.add"
+	SchemaUnfollow = "platform.follow.remove"
 )
+
+// Comment is a member's comment on a record; @member mentions notify them.
+type Comment struct {
+	platform.Record
+	Target   string   `json:"target" field:"readonly" title:"On"`
+	Text     string   `json:"text" field:"required,search" type:"longtext"`
+	By       string   `json:"by" field:"readonly"`
+	Mentions []string `json:"mentions,omitempty" field:"readonly"`
+}
+
+// Follow is a member following a record: they hear of its decisions and comments.
+type Follow struct {
+	platform.Record
+	Member string `json:"member" field:"readonly"`
+	Target string `json:"target" field:"readonly" title:"Follows"`
+}
+
+// FollowID is the one follow of member on target.
+func FollowID(member, target string) string {
+	return member + "@" + strings.ReplaceAll(target, "/", "~")
+}
+
+var mention = regexp.MustCompile(`@([A-Za-z0-9][A-Za-z0-9._-]*)`)
+
+func entities() []platform.Entity {
+	return []platform.Entity{
+		{Type: CommentType, Title: "Comment", Model: Comment{}, Display: "text", Description: "A member's comment on a record; readable exactly when the record is.",
+			Scope: platform.Scope{Through: func(record any) string { return record.(Comment).Target }}},
+		{Type: FollowType, Title: "Follow", Model: Follow{}, Description: "A member following a record, told of its changes and comments.",
+			Scope: platform.Scope{Through: func(record any) string { return record.(Follow).Target }}},
+	}
+}
 
 type Link struct {
 	From string    `json:"from"` // "<type>/<id>"
@@ -64,7 +103,14 @@ func New(tenant string) *Relations {
 		platform.Action{Schema: SchemaNote, Target: NoteType, Capability: "timeline", Title: "Add note",
 			Description: "Add a note to an entity's activity timeline.",
 			Payload:     []platform.Field{ref("entity"), {Name: "text", Type: "string", Required: true, Description: "What happened"}}, Roles: any},
-	), LinkType, NoteType)}
+		platform.Action{Schema: SchemaComment, Target: CommentType, New: true, Capability: "comments", Title: "Comment",
+			Description: "Comment on a record you may read; @member tells them. You then follow the record.",
+			Payload:     []platform.Field{ref("target"), {Name: "text", Type: "string", Required: true, Description: "The comment"}}, Roles: any},
+		platform.Action{Schema: SchemaFollow, Target: FollowType, Capability: "comments", Title: "Follow",
+			Description: "Be told of a record's changes and comments.", Payload: []platform.Field{ref("target")}, Roles: any},
+		platform.Action{Schema: SchemaUnfollow, Target: FollowType, Capability: "comments", Title: "Unfollow",
+			Description: "Stop being told of a record's changes and comments.", Payload: []platform.Field{}, Roles: any},
+	), LinkType, NoteType, CommentType, FollowType)}
 }
 
 // Snapshot and Restore: links and notes (ADR-0019 D6).
@@ -91,7 +137,8 @@ func (r *Relations) Restore(raw json.RawMessage) error {
 }
 
 func (r *Relations) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "Relations", Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"}}
+	return platform.Manifest{ID: ID, Title: "Relations", Version: "1", Actions: r.ledger.Catalog, Reads: []string{"links", "timeline"}, Everyone: []string{"links", "timeline"},
+		Entities: entities()}
 }
 
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
@@ -114,6 +161,10 @@ func (r *Relations) sees(c platform.Caller, entity string) bool {
 func (r *Relations) Attach(h host.Host) { r.host = h }
 
 func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	switch s.GetSchema().GetName() {
+	case SchemaComment, SchemaFollow, SchemaUnfollow:
+		return r.collaborate(c, s, now)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var p struct{ From, To, Entity, Text string }
@@ -176,12 +227,18 @@ func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-// Observe tells protocol events on the timeline of their entity and of the
-// entities linked to it (host.Observer). It runs inside the input, so replay
+// Observe tells a record's followers of each member's decision on it, and
+// protocol events on the timeline of their entity and of the entities linked
+// to it (host.Observer). It runs inside the input, so replay
 // tells them again.
 func (r *Relations) Observe(e platform.Event, events []string) {
 	s := e.Record.GetSubmission()
 	entity := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()
+	if t := s.GetTarget().GetType(); t != CommentType && t != FollowType && t != NoteType && t != LinkType && !strings.HasPrefix(s.GetPrincipalId(), "app:") {
+		// A member's decision on a record tells its followers (ADR-0028 D6).
+		r.tell(r.host.Automation(ID, false), entity, entity+" changed: "+s.GetSchema().GetName(), "by "+s.GetPrincipalId(),
+			"change:"+e.App+"/"+e.Record.GetChangeId(), []string{s.GetPrincipalId()}, e.Record.GetRecordedTime().AsTime())
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, name := range events {
@@ -225,4 +282,77 @@ func (r *Relations) Link(c platform.Caller, from, to *pb.EntityRef, key string, 
 	_, err := r.Submit(r.host.As(c, ID), &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: ID,
 		Target: &pb.EntityRef{Type: LinkType, Id: key}, Schema: &pb.SchemaRef{Name: SchemaLink, Version: 1}, IdempotencyKey: key, Payload: payload}, now)
 	return err
+}
+
+// collaborate decides comments and follows (ADR-0028 D6): on a record the
+// member may read, which a replay does not ask again.
+func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	var p struct{ Target, Text string }
+	json.Unmarshal(s.GetPayload(), &p)
+	return r.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		id := s.GetTarget().GetId()
+		if s.GetSchema().GetName() == SchemaUnfollow {
+			f, ok := platform.Get[Follow](c, id)
+			if !ok || f.Archived || f.Member != c.ID && !c.Replaying {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			}
+			f.Archived = true
+			return func(rec *pb.ChangeRecord) { c.Put(rec, f) }, nil
+		}
+		if !strings.Contains(p.Target, "/") || !c.Replaying && !r.host.Readable(c.Member, p.Target, now) {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		follow := Follow{Record: platform.Record{ID: FollowID(c.ID, p.Target)}, Member: c.ID, Target: p.Target}
+		existing, following := platform.Get[Follow](c, follow.ID)
+		following = following && !existing.Archived
+		if s.GetSchema().GetName() == SchemaFollow {
+			if s.GetTarget().GetId() != follow.ID {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+			}
+			if following {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+			}
+			return func(rec *pb.ChangeRecord) { c.Put(rec, follow) }, nil
+		}
+		text := strings.TrimSpace(p.Text)
+		if text == "" {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
+		if _, known := platform.Get[Comment](c, id); known {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		comment := Comment{Record: platform.Record{ID: id}, Target: p.Target, Text: text, By: c.ID}
+		for _, m := range mention.FindAllStringSubmatch(text, -1) {
+			if _, ok := r.host.Member(m[1]); ok && m[1] != c.ID && !slices.Contains(comment.Mentions, m[1]) {
+				comment.Mentions = append(comment.Mentions, m[1])
+			}
+		}
+		return func(rec *pb.ChangeRecord) {
+			c.Put(rec, comment)
+			if !following {
+				c.Put(rec, follow)
+			}
+			var to []platform.Recipient
+			for _, m := range comment.Mentions {
+				to = append(to, platform.Recipient{Member: m})
+			}
+			c.Notify(platform.Notification{Title: c.ID + " mentioned you on " + p.Target, Body: text, Ref: p.Target, Key: "mention:" + id}, now, to...)
+			r.tell(c, p.Target, "New comment on "+p.Target, text, "comment:"+id, append(comment.Mentions, c.ID), now)
+		}, nil
+	})
+}
+
+// tell notifies a record's followers, except those in skip.
+func (r *Relations) tell(c platform.Caller, target, title, body, key string, skip []string, now time.Time) {
+	domain, _ := json.Marshal([]any{[]any{"target", "=", target}})
+	follows, _, _ := platform.Find[Follow](r.host.Automation(ID, c.Replaying), platform.Query{Domain: domain, Limit: 1000})
+	var to []platform.Recipient
+	for _, f := range follows {
+		if !slices.Contains(skip, f.Member) {
+			to = append(to, platform.Recipient{Member: f.Member})
+		}
+	}
+	if len(to) > 0 {
+		r.host.Automation(ID, c.Replaying).Notify(platform.Notification{Title: title, Body: body, Ref: target, Key: key}, now, to...)
+	}
 }

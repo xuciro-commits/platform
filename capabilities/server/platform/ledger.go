@@ -58,6 +58,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	if !c.Replaying && !l.Catalog.Enabled(s.GetSchema().GetName()) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
+	rules = l.checked(c, s, rules)
 	if c.rt != nil && c.rt.Probing() { // a request for approval: policy and rules, nothing recorded or applied (ADR-0017 D3)
 		if !c.Automation && !(l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
@@ -89,6 +90,32 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		}
 	}
 	return record, err
+}
+
+// checked puts before rules the check of the payload's declared choices and
+// references (ADR-0028 D5): after the policy, as the kernel's order has it
+// (K6 T2); a replay does not check again.
+func (l *Ledger) checked(c Caller, s *pb.Submission, rules func() (func(*pb.ChangeRecord), *kernel.Error)) func() (func(*pb.ChangeRecord), *kernel.Error) {
+	declared, _ := l.Catalog.Action(s.GetSchema().GetName())
+	return func() (func(*pb.ChangeRecord), *kernel.Error) {
+		if !c.Replaying {
+			var payload map[string]any
+			json.Unmarshal(s.GetPayload(), &payload)
+			for _, f := range declared.Payload {
+				v, ok := payload[f.Name].(string)
+				if !ok || v == "" {
+					continue
+				}
+				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) || f.Ref != "" && c.rt != nil && !c.rt.Readable(c, f.Ref+"/"+v) {
+					return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+				}
+			}
+		}
+		if rules == nil {
+			return nil, nil
+		}
+		return rules()
+	}
 }
 
 // Generated decides the actions entity declarations generate: standard

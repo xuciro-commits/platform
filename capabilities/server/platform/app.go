@@ -73,6 +73,8 @@ type Runtime interface {
 	// Work (ADR-0017): tasks for people, and whether decisions are only probed.
 	Assign(c Caller, r *pb.ChangeRecord, a Assignment) *kernel.Error
 	Probing() bool
+	// Readable reports whether c's member may read the record ref ("<type>/<id>").
+	Readable(c Caller, ref string) bool
 	// Next numbers a document of an accepted decision (ADR-0024).
 	Next(c Caller, r *pb.ChangeRecord, sequence string, date time.Time) (string, *kernel.Error)
 }

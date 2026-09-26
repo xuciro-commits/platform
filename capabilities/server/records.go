@@ -13,6 +13,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/apps/files"
 	"platformserver/apps/flow"
+	"platformserver/apps/relations"
 	"platformserver/platform"
 )
 
@@ -774,7 +775,9 @@ type RecordView struct {
 	History   []RecordChange `json:"history"`
 	Related   []Related      `json:"related"`
 	Processes []any          `json:"processes"`
-	Files     []any          `json:"files"` // attached to it (ADR-0028)
+	Files     []any          `json:"files"`     // attached to it (ADR-0028)
+	Comments  []any          `json:"comments"`  // on it, oldest first (ADR-0028 D6)
+	Following bool           `json:"following"` // the member follows it
 }
 
 type Related struct {
@@ -806,7 +809,16 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		return RecordView{}, notFound
 	}
 	seen, hidden := viewOf(m, et)
-	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Files: []any{}}
+	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Files: []any{}, Comments: []any{}}
+	if c := t.app(relations.ID); c != nil && typ != relations.CommentType && typ != relations.FollowType {
+		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
+		if page, err := t.Records(m, relations.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
+			view.Comments = page.Records
+		}
+		if f, ok := platform.Get[relations.Follow](t.automation(relations.ID, false), relations.FollowID(m.ID, typ+"/"+id)); ok && !f.Archived {
+			view.Following = true
+		}
+	}
 	t.readPersonal(m, seen, []string{id}, now)
 	if typ != files.FileType && t.app(files.ID) != nil {
 		domain, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})

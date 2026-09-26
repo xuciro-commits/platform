@@ -92,3 +92,7 @@ func (t *Tenant) closeTask(c platform.Caller, r *pb.ChangeRecord, id string) {
 		t.tasks.Close(c, r, id)
 	}
 }
+
+func (r runtime) Readable(c platform.Caller, ref string) bool {
+	return r.t.Readable(c.Member, ref, time.Now())
+}

@@ -16,7 +16,7 @@ test("route 17: every action has an entry, pages follow changes", async ({ page,
     await expect(page.getByRole("button", { name: action })).toBeVisible();
   }
   await page.getByRole("button", { name: "Close opportunity" }).click();
-  await page.getByRole("dialog").getByRole("textbox").first().fill("won");
+  await page.getByRole("dialog").getByRole("combobox").first().selectOption("won");
   await page.getByRole("dialog").getByRole("button", { name: "Close opportunity" }).click();
   await expect(value(page, "won")).toBeVisible();
 });
@@ -87,4 +87,25 @@ test("route 20: field security", async ({ page, request }) => {
   await open(salesPage, "sales", `/record?type=crm.opportunity&id=${opp}`);
   await expect(salesPage.getByText("Retreat").first()).toBeVisible();
   await expect(salesPage.getByText("Expected margin")).toHaveCount(0);
+});
+
+// Route 21 (ADR-0028 D5, D6): a form offers a record picker and a list of
+// choices; a comment on a record tells whom it mentions.
+test("route 21: pickers, choices and comments", async ({ page, request }) => {
+  const account = fresh("ACC"), opp = fresh("OPP");
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Picker " + account, kind: "company" });
+  await open(page, "sales", "/opportunities");
+  await page.getByRole("button", { name: /Open opportunity/ }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox").first().fill(opp);
+  await dialog.getByRole("combobox").first().selectOption({ label: `${account} Picker ${account}` });
+  await dialog.getByRole("textbox").last().fill("Retreat");
+  await dialog.getByRole("button", { name: "Open opportunity" }).click();
+  await open(page, "sales", `/record?type=crm.opportunity&id=${opp}`);
+  await page.getByRole("textbox", { name: "Comment" }).fill("@manager-1 can you look at the price?");
+  await page.getByRole("button", { name: "Comment", exact: true }).click();
+  await expect(page.getByText("@manager-1 can you look at the price?")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Unfollow" })).toBeVisible();
+  const told = await (await request.get("/v1/notifications", { headers: { Authorization: "Bearer manager" } })).json();
+  expect(told.some((n: { title: string }) => n.title.startsWith("sales-1 mentioned you"))).toBe(true);
 });

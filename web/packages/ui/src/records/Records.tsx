@@ -32,8 +32,12 @@ export type RecordChange = Api.RecordChange;
 /** A file attached to a record (ADR-0028). */
 export type AttachedFile = EntityRecord & { name: string; size: number; contentType: string; by: string };
 
-export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes" | "files"> & {
+/** A comment on a record (ADR-0028 D6). */
+export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };
+
+export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes" | "files" | "comments"> & {
   files: AttachedFile[];
+  comments: RecordComment[];
   record: EntityRecord; related: (Omit<Api.Related, "records"> & { records: EntityRecord[] })[];
   /** The flow instances about the record (ADR-0026 D4). */
   processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];
@@ -307,10 +311,12 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files }: {
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments }: {
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
   /** Uploading a file to the record and downloading one (ADR-0028); without it the files are listed only. */
   files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void };
+  /** Commenting and following (ADR-0028 D6); without it comments are listed only. */
+  comments?: { add: (text: string) => Promise<boolean>; follow: (on: boolean) => Promise<void> };
   onOpen?: (type: string, r: EntityRecord) => void; reload?: number;
   /** The caller's catalog, and how to take a lifecycle transition (a decision on this record). */
   can?: (schema: string) => boolean; onTransition?: (schema: string, r: EntityRecord) => void;
@@ -340,6 +346,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       </section>
       {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
       {(view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
+      {(view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
       {view.related.map((rel) => {
         const relInfo = source.entity(rel.type);
         const relEntity = relInfo && entityFrom(relInfo);
@@ -399,6 +406,31 @@ function Files({ attached, files }: { attached: AttachedFile[]; files?: { upload
             </li>
           ))}
         </ul>}
+    </section>
+  );
+}
+
+/** A record's comments, oldest first, and a box to add one; following tells of its changes. */
+function Comments({ list, following, comments }: { list: RecordComment[]; following: boolean; comments?: { add: (text: string) => Promise<boolean>; follow: (on: boolean) => Promise<void> } }) {
+  const [text, setText] = useState("");
+  return (
+    <section>
+      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">{t("Comments")}
+        {comments && <Button size="sm" variant="ghost" onClick={() => void comments.follow(!following)}>{following ? t("Unfollow") : t("Follow")}</Button>}
+      </h2>
+      <ol className="grid gap-2">
+        {list.map((c) => (
+          <li key={c.id} className="rounded-md border border-border bg-surface p-2 text-sm">
+            <div className="text-xs text-muted">{c.by} · {c.created?.at ? new Date(c.created.at).toLocaleString() : ""}</div>
+            <p className="whitespace-pre-wrap">{c.text}</p>
+          </li>
+        ))}
+      </ol>
+      {comments && <form className="mt-2 grid gap-2" onSubmit={async (e) => { e.preventDefault(); if (text.trim() && await comments.add(text)) setText(""); }}>
+        <textarea aria-label={t("Comment")} className="min-h-16 rounded-md border border-border bg-surface p-2 text-sm" placeholder={t("Write a comment; @member tells them")}
+          value={text} onChange={(e) => setText(e.target.value)} />
+        <div><Button type="submit" size="sm" variant="primary" disabled={!text.trim()}>{t("Comment")}</Button></div>
+      </form>}
     </section>
   );
 }

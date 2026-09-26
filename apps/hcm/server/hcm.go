@@ -96,7 +96,7 @@ func ownOrHR(c platform.Caller, record any, payload json.RawMessage, now time.Ti
 func Actions() *platform.Catalog {
 	return platform.NewCatalog(append([]platform.Action{{Schema: SchemaCreate, Target: LeaveType, Capability: "leave", Title: "Draft leave request",
 		Description: "Draft a request for days off, from its first to its last day.", Roles: []string{Employee},
-		Payload: []platform.Field{{Name: "kind", Type: "string", Required: true, Description: "vacation, sick or unpaid"},
+		Payload: []platform.Field{{Name: "kind", Type: "string", Required: true, Description: "vacation, sick or unpaid", Choices: []string{"vacation", "sick", "unpaid"}},
 			{Name: "from", Type: "date", Required: true, Description: "First day"}, {Name: "until", Type: "date", Required: true, Description: "Last day"},
 			{Name: "note", Type: "string", Description: "For the approvers"},
 			{Name: "health", Type: "string", Description: "For a sick leave: the medical reason, which only HR reads"}}}},

@@ -182,12 +182,20 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
 
 /** A record page with its lifecycle's transitions and the generated edit and archive where the catalog grants them. */
 export function RecordDetail({ type, id }: { type: string; id: string }) {
-  const { source, can, decide, client } = useHost();
+  const { source, can, decide, client, me } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
   const transition = useTransition(type);
   // Files (ADR-0028): upload the bytes, then attach them to this record by a decision.
+  // Comments and following (ADR-0028 D6).
+  const comments = {
+    add: (text: string) => decide("platform.comment.add", { type: "platform.comment", id: newId("CMT") }, { target: `${type}/${id}`, text }, { expectedRevision: 0 }),
+    follow: async (on: boolean) => {
+      const follow = `${me.principalId}@${type}~${id}`;
+      await decide(on ? "platform.follow.add" : "platform.follow.remove", { type: "platform.follow", id: follow }, on ? { target: `${type}/${id}` } : {});
+    },
+  };
   const files = {
     upload: async (file: File) => {
       const up = await client.upload(file, file.name);
@@ -207,6 +215,7 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
     <>
       <RecordPage source={source} type={type} id={id} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={can} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
+        comments={can("platform.comment.add") ? comments : undefined}
         actions={(r) => <>
           <RecordActions type={type} record={r} />
           {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}

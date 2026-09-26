@@ -61,6 +61,11 @@ type Field struct {
 	Type        string `json:"type"`
 	Required    bool   `json:"required,omitempty"`
 	Description string `json:"description"`
+	// Choices are the values the field takes; Ref, the entity type whose
+	// record's ID it names. The host refuses others, and forms offer a list or
+	// a picker of the records the member may read (ADR-0028 D5, F-36).
+	Choices []string `json:"choices,omitempty"`
+	Ref     string   `json:"ref,omitempty"`
 }
 
 // Catalog holds a domain's actions and which capabilities are deactivated for a

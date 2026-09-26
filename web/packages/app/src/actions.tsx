@@ -4,7 +4,8 @@
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, Dialog, Input, Textarea, t, type EntityRecord } from "@platform/ui";
+import { Button, Dialog, Input, Select, Textarea, t, type EntityRecord } from "@platform/ui";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { GeneratedForm, newId, useHost } from "./index";
 
@@ -18,13 +19,29 @@ export function PayloadFields({ fields, values, onChange }: { fields: Field[]; v
     const label = `${f.description || f.name}${f.required ? " *" : ""}`;
     return (
       <label key={f.name} className="grid gap-1 text-xs text-muted">{label}
-        {f.type === "boolean" ? <input type="checkbox" checked={!!value} onChange={(e) => set(e.target.checked)} />
+        {f.choices?.length ? <Select value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
+            <option value="">—</option>{f.choices.map((c) => <option key={c} value={c}>{t(c)}</option>)}</Select>
+          : f.ref ? <RecordPicker type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
+          : f.type === "boolean" ? <input type="checkbox" checked={!!value} onChange={(e) => set(e.target.checked)} />
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
           : <Input type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} value={value === undefined ? "" : String(value)}
               onChange={(e) => set(f.type === "integer" || f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value)} />}
       </label>
     );
   })}</>;
+}
+
+/** A list of the records of a type the member may read, for a payload field that names one (ADR-0028 D5). */
+function RecordPicker({ type, value, onChange }: { type: string; value: string; onChange: (id: string) => void }) {
+  const { source } = useHost();
+  const info = source.entity(type);
+  const records = useQuery({ queryKey: ["picker", type], queryFn: () => source.list(type, { limit: 500 }) }).data?.records ?? [];
+  const label = (r: EntityRecord) => (info && info.display !== "id" && r[info.display] ? `${r.id} ${String(r[info.display])}` : r.id);
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">—</option>{records.map((r) => <option key={r.id} value={r.id}>{label(r)}</option>)}
+    </Select>
+  );
 }
 
 /** A short ID prefix from a type's name, never its translated title: "crm.account" → ACC, "hcm.leave" → LEA. */

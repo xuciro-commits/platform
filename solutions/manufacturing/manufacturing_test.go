@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"platformserver/apps/files"
+	"platformserver/apps/relations"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -146,6 +148,27 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	w = httptest.NewRecorder()
 	tn.Download(w, platform.Member{ID: "clerk", Tenant: tenant, Roles: map[string]string{erp.ID: erp.Controller}}, "PH-1", now)
 	expect("the ERP's clerk does not", fmt.Sprint(w.Code), "404")
+	// ADR-0028 D6: comments with mentions and followers on the shop order.
+	told := func(who, prefix string) bool {
+		m, _ := tn.Member(who)
+		out, _ := tn.Read(m, "notifications")
+		return slices.ContainsFunc(out.([]platform.Notification), func(n platform.Notification) bool { return strings.HasPrefix(n.Title, prefix) })
+	}
+	comment := func(who, id, text string) string {
+		return do(who, relations.ID, relations.SchemaComment, relations.CommentType, id, map[string]string{"target": mes.OrderType + "/SO-1", "text": text})
+	}
+	expect("comment", comment("sup-1", "C-1", "@op-l1 please check the photo"), "ok")
+	expect("the operator is mentioned", fmt.Sprint(told("op-l1", "sup-1 mentioned you")), "true")
+	expect("reply", comment("op-l1", "C-2", "Looks fine"), "ok")
+	expect("the supervisor follows what he commented on", fmt.Sprint(told("sup-1", "New comment on "+mes.OrderType+"/SO-1")), "true")
+	if v, _ := tn.RecordOf(sup, mes.OrderType, "SO-1", now); len(v.Comments) != 2 || !v.Following {
+		t.Fatalf("comments on SO-1: %d, following %v", len(v.Comments), v.Following)
+	}
+	clerk := platform.Member{ID: "clerk", Tenant: tenant, Roles: map[string]string{erp.ID: erp.Controller}}
+	if page, _ := tn.Records(clerk, relations.CommentType, platform.Query{}, now); page.Total != 0 {
+		t.Fatal("the ERP's clerk reads the plant's comments")
+	}
+	expect("the clerk cannot comment", do("clerk-x", relations.ID, relations.SchemaComment, relations.CommentType, "C-3", map[string]string{"target": mes.OrderType + "/SO-1", "text": "hi"}), "ERROR_CODE_POLICY_DENIED")
 	platformserver.CheckReplay(t, tn, journal, build)
 	_ = platform.Money{}
 }

@@ -314,6 +314,8 @@ export type Field = {
   type: string;
   required?: boolean;
   description: string;
+  choices?: string[];
+  ref?: string;
 };
 
 export type FieldChange = {
@@ -575,6 +577,8 @@ export type RecordView = {
   related: Related[];
   processes: unknown[];
   files: unknown[];
+  comments: unknown[];
+  following: boolean;
 };
 
 export type Related = {

@@ -91,7 +91,7 @@ type Answer struct {
 func AnswerFields() []Field {
 	return []Field{{Name: "call", Type: "string", Required: true, Description: "What was asked of the provider"},
 		{Name: "action", Type: "string", Description: "The protocol action"},
-		{Name: "outcome", Type: "string", Required: true, Description: "accepted or refused"},
+		{Name: "outcome", Type: "string", Required: true, Description: "accepted or refused", Choices: []string{"accepted", "refused", "released"}},
 		{Name: "code", Type: "string", Description: "Why it was refused"},
 		{Name: "ref", Type: "string", Description: "The provider's record"}}
 }
