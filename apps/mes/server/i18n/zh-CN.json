@@ -24,7 +24,7 @@
  "ERP correction": "ERP 纠正",
  "ERP detail": "ERP 详情",
  "ERP planned order ID": "ERP 计划订单 ID",
- "ERP planned order ID (a planned order the ERP sent)": "ERP 计划订单 ID（ERP 发来的计划订单）",
+ "ERP planned order (one the ERP sent)": "ERP 计划订单（ERP 下达的）",
  "ERP {state} the confirmation of {order}": "订单 {order} 的 ERP 确认：{state}",
  "Each downtime that starts notifies the supervisors of its line.": "每次开始停机都会通知所在产线的主管。",
  "In work": "加工中",

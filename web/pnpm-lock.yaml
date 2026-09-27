@@ -269,9 +269,6 @@ importers:
       '@pkg/hcm':
         specifier: workspace:*
         version: link:../../packages/hcm
-      '@pkg/lodging':
-        specifier: workspace:*
-        version: link:../../packages/lodging
       '@pkg/mes':
         specifier: workspace:*
         version: link:../../packages/mes
@@ -355,9 +352,6 @@ importers:
 
   packages/crm:
     dependencies:
-      '@pkg/lodging':
-        specifier: workspace:*
-        version: link:../lodging
       '@platform/app':
         specifier: workspace:*
         version: link:../app
@@ -517,25 +511,6 @@ importers:
       vitest:
         specifier: ^5.0.1
         version: 5.0.1(@types/node@26.6.2)(jsdom@30.1.1)(vite@8.3.0(@types/node@26.6.2))
-
-  packages/lodging:
-    dependencies:
-      '@platform/ui':
-        specifier: workspace:*
-        version: link:../ui
-      react:
-        specifier: ^19.3.0
-        version: 19.3.0
-      zod:
-        specifier: ^4.6.5
-        version: 4.6.5
-    devDependencies:
-      '@types/react':
-        specifier: ^19.3.0
-        version: 19.3.0
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
 
   packages/mes:
     dependencies:

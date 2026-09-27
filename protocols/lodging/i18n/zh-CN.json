@@ -22,5 +22,8 @@
  "Hold stay": "保留住宿",
  "Release hold": "释放保留",
  "Release holds past their date": "释放过期的保留",
- "The hold's last day; the provider releases it after": "保留的最后一天；之后提供方会释放它"
+ "The hold's last day; the provider releases it after": "保留的最后一天；之后提供方会释放它",
+ "Held until": "保留至",
+ "Memstay booking": "Memstay 预订",
+ "Memstay bookings": "Memstay 预订"
 }

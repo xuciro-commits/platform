@@ -84,8 +84,13 @@ func Provision() platform.Provision {
 func releasable(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	o := record.(*Production)
 	p, known := platform.Get[Product](c, string(o.Product))
-	if !known || p.Archived || p.Kind != "finished" || len(p.Components) == 0 || o.Quantity <= 0 {
-		return invalid()
+	switch {
+	case !known || p.Archived:
+		return why("The product {product} is missing or archived", string(o.Product))
+	case p.Kind != "finished" || len(p.Components) == 0:
+		return why("{product} is not a finished product with components", string(o.Product))
+	case o.Quantity <= 0:
+		return why("Produce a quantity above zero")
 	}
 	return nil
 }
@@ -101,16 +106,14 @@ func release(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
 func confirmable(c platform.Caller, record any, payload json.RawMessage, now time.Time) *kernel.Error {
 	o := record.(*Production)
 	var in production.Confirmation
-	if json.Unmarshal(payload, &in) != nil || in.ShopOrder == "" || in.Yield < 0 || in.Scrap < 0 || in.Yield+in.Scrap <= 0 || in.Yield+in.Scrap > o.Quantity {
-		return invalid()
+	switch {
+	case json.Unmarshal(payload, &in) != nil || in.ShopOrder == "":
+		return why("A confirmation names the shop order that made it")
+	case in.Yield < 0 || in.Scrap < 0 || in.Yield+in.Scrap <= 0 || in.Yield+in.Scrap > o.Quantity:
+		return why("Made {yield} and scrapped {scrap}: together above zero and at most the order's {quantity}", in.Yield, in.Scrap, o.Quantity)
 	}
-	if !open(c, now.Format(time.DateOnly)) {
-		return invalid()
-	}
-	for _, code := range []string{AccountMaterials, AccountFinished, AccountWIP, AccountScrap, AccountVariance} {
-		if a, known := platform.Get[Account](c, code); !known || a.Archived {
-			return invalid()
-		}
+	if err := posts(c, now.Format(time.DateOnly), AccountMaterials, AccountFinished, AccountWIP, AccountScrap, AccountVariance); err != nil {
+		return err
 	}
 	o.ShopOrder, o.Yield, o.Scrap = in.ShopOrder, in.Yield, in.Scrap
 	return nil

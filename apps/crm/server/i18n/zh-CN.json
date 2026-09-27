@@ -88,5 +88,12 @@
  "released": "已释放",
  "releasing": "释放中",
  "won": "赢单",
- "won or lost": "won（赢单）或 lost（输单）"
+ "won or lost": "won（赢单）或 lost（输单）",
+ "The opportunity is {stage}; only an open one plans a group stay": "商机已是{stage}；只有进行中的商机才能规划团队住宿",
+ "The opportunity's group rooms are {block}; one group block at a time": "商机的团队房块处于{block}状态；一次只能有一个团队房块",
+ "A group holds 1 to 20 rooms, not {rooms}": "团队房块为 1 到 20 间，不能是 {rooms} 间",
+ "Name the provider's room type": "请填写住宿提供方的房型",
+ "Departure {depart} must be after arrival {arrive}": "离店日期 {depart} 必须晚于到达日期 {arrive}",
+ "The rooms are held until a day before arrival {arrive}": "房间的保留截止日必须早于到达日期 {arrive}",
+ "An opportunity closes won or lost": "商机只能以赢单或输单关闭"
 }

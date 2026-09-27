@@ -4,7 +4,7 @@
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, Dialog, Input, Select, Textarea, t, type EntityRecord } from "@platform/ui";
+import { Button, Checkbox, Dialog, Input, Select, Textarea, t, type EntityRecord } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { GeneratedForm, newId, useHost } from "./index";
@@ -17,18 +17,33 @@ export function PayloadFields({ fields, values, onChange }: { fields: Field[]; v
     const value = values[f.name];
     const set = (v: unknown) => onChange({ ...values, [f.name]: v });
     const label = `${f.description || f.name}${f.required ? " *" : ""}`;
+    if (f.type === "boolean" && !f.choices?.length && !f.ref)
+      return <Checkbox key={f.name} className="text-xs text-muted" checked={!!value} onChange={set}>{label}</Checkbox>;
     return (
       <label key={f.name} className="grid gap-1 text-xs text-muted">{label}
         {f.choices?.length ? <Select value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
             <option value="">—</option>{f.choices.map((c) => <option key={c} value={c}>{t(c)}</option>)}</Select>
           : f.ref ? <RecordPicker type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
-          : f.type === "boolean" ? <input type="checkbox" checked={!!value} onChange={(e) => set(e.target.checked)} />
+          : f.from ? <ReadPicker field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
           : <Input type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} value={value === undefined ? "" : String(value)}
               onChange={(e) => set(f.type === "integer" || f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value)} />}
       </label>
     );
   })}</>;
+}
+
+/** A list of the items of an app's read, for a payload field whose values are not records here (#129). */
+function ReadPicker({ field, value, onChange }: { field: Field; value: string; onChange: (key: string) => void }) {
+  const { client } = useHost();
+  const items = useQuery({ queryKey: ["read", field.from], queryFn: () => client.get<Record<string, unknown>[]>(`/v1/${field.from}`) }).data ?? [];
+  const key = (x: Record<string, unknown>) => String(x[field.key ?? "id"] ?? "");
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">—</option>
+      {items.map((x) => <option key={key(x)} value={key(x)}>{field.label ? `${String(x[field.label] ?? "")} · ${key(x)}` : key(x)}</option>)}
+    </Select>
+  );
 }
 
 /** A list of the records of a type the member may read, for a payload field that names one (ADR-0028 D5). */

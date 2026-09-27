@@ -126,7 +126,7 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	expect("close", do("sup-1", erp.ID, erp.PeriodType+".close", erp.PeriodType, "2026-10", map[string]any{}), "ok")
 	make("SO-2", "MO-2", 1, 1)
 	work()
-	expect("refused at once", order("SO-2").ERP+" "+order("SO-2").ERPDetail, "refused ERROR_CODE_INVALID_ARGUMENT")
+	expect("refused at once, saying why", order("SO-2").ERP+" "+order("SO-2").ERPDetail, "refused The date 2026-10-05 is not in an open period")
 	expect("reopen", do("sup-1", erp.ID, erp.PeriodType+".reopen", erp.PeriodType, "2026-10", map[string]any{}), "ok")
 	expect("resend", do("sup-1", mes.ID, mes.SchemaResend, mes.OrderType, "SO-2", map[string]any{}), "ok")
 	work()

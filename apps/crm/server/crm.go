@@ -203,11 +203,22 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				ask("reserve", booking, json.RawMessage(s.GetPayload()))
 			}
 		case SchemaPlan:
-			if o.Stage != "open" || o.Block == "holding" || o.Block == "held" || o.Block == "confirming" || o.Block == "releasing" {
-				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT) // one block at a time; a failed or released one may be planned again
+			if o.Stage != "open" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The opportunity is {stage}; only an open one plans a group stay", o.Stage)
 			}
-			if p.Rooms < 1 || p.Rooms > 20 || strings.TrimSpace(p.RoomType) == "" || p.Depart <= p.Arrive || p.Cutoff == "" || p.Cutoff >= p.Arrive {
-				return nil, invalid
+			if o.Block == "holding" || o.Block == "held" || o.Block == "confirming" || o.Block == "releasing" {
+				// one block at a time; a failed or released one may be planned again
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The opportunity's group rooms are {block}; one group block at a time", o.Block)
+			}
+			switch {
+			case p.Rooms < 1 || p.Rooms > 20:
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A group holds 1 to 20 rooms, not {rooms}", p.Rooms)
+			case strings.TrimSpace(p.RoomType) == "":
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Name the provider's room type")
+			case p.Depart <= p.Arrive:
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Departure {depart} must be after arrival {arrive}", p.Depart, p.Arrive)
+			case p.Cutoff == "" || p.Cutoff >= p.Arrive:
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The rooms are held until a day before arrival {arrive}", p.Arrive)
 			}
 			o.Rooms, o.RoomType, o.Arrive, o.Depart, o.Cutoff, o.Block = p.Rooms, p.RoomType, p.Arrive, p.Depart, p.Cutoff, "holding"
 			o.Plans++
@@ -229,7 +240,7 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		case SchemaClose:
 			if p.Outcome != "won" && p.Outcome != "lost" {
-				return nil, invalid
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "An opportunity closes won or lost")
 			}
 			if o.Stage != "open" {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The opportunity is {stage} already; only an open one is closed", o.Stage)
@@ -401,62 +412,16 @@ func (c *CRM) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
 func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) }
 
 func (c *CRM) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Reads: []string{"customers"}, Entities: Entities(),
+	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(),
 		Agents:     []platform.Agent{Assistant()},
 		Consumes:   []platform.Consumption{{Protocol: lodging.ID, Optional: true}},
 		Subscribes: []string{platform.ProtocolAction(lodging.ID, "released")}}
 }
 
-// Read "customers": accounts with their opportunities and stays. Plain lists
-// of accounts and opportunities are the platform's (/v1/records/<type>).
-func (c *CRM) Read(who platform.Caller, name string) (any, *kernel.Error) {
-	return c.customers(who)
-}
-
-// Customer is an account with its opportunities and the stays linked to them
-// that the caller may see (a member without a role at the provider sees none).
-type Customer struct {
-	Account
-	Opportunities []OpportunityStays `json:"opportunities"`
-}
-
-type OpportunityStays struct {
-	Opportunity
-	Bookings []lodging.Booking `json:"bookings"` // as the providers hold them
-}
-
-// customers shows each opportunity with the stays linked to it, from whichever
-// provider holds them: a stay booked before the tenant switched providers stays.
-func (c *CRM) customers(who platform.Caller) (any, *kernel.Error) {
-	results, err := who.Query(lodging.ID, "bookings")
-	if err != nil {
-		return nil, err
-	}
-	bookings := map[string]lodging.Booking{} // "<type>/<id>" → booking
-	for _, a := range results {
-		for _, b := range a.Result.([]lodging.Booking) {
-			bookings[a.Type+"/"+b.ID] = b
-		}
-	}
-	out := []Customer{}
-	opportunities := platform.Records[Opportunity](who)
-	for _, a := range platform.Records[Account](who) {
-		customer := Customer{Account: a, Opportunities: []OpportunityStays{}}
-		for _, o := range opportunities {
-			if string(o.Account) != a.ID {
-				continue
-			}
-			stays := []lodging.Booking{}
-			for _, e := range who.Links(OpportunityType + "/" + o.ID) {
-				if b, ok := bookings[e]; ok {
-					stays = append(stays, b)
-				}
-			}
-			customer.Opportunities = append(customer.Opportunities, OpportunityStays{Opportunity: o, Bookings: stays})
-		}
-		out = append(out, customer)
-	}
-	return out, nil
+// Read: the CRM serves its accounts and opportunities as records; an
+// opportunity's stays are the records linked to it (the platform's record page).
+func (c *CRM) Read(platform.Caller, string) (any, *kernel.Error) {
+	return nil, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 }
 
 func (c *CRM) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
@@ -469,6 +434,6 @@ func (c *CRM) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Er
 func Assistant() platform.Agent {
 	return platform.Agent{Name: "assistant", Title: "Sales assistant",
 		Instructions: `You help a salesperson with their accounts and opportunities. Read the record's context, and search when you need another record. When the goal asks for a change, make it with the one action that fits — open an opportunity, plan a group stay (rooms, room type, arrival, departure and the cutoff date until which the rooms are held), or close an opportunity won or lost — and the salesperson confirms it. When the goal only asks a question, finish with the answer. Never guess an ID: search for it.`,
-		Tools:        []string{SchemaOpen, SchemaPlan, SchemaClose, "read:customers"},
+		Tools:        []string{SchemaOpen, SchemaPlan, SchemaClose},
 		Budget:       platform.Budget{Steps: 8, Actions: 2}}
 }

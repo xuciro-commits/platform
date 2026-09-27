@@ -360,6 +360,9 @@ export type Field = {
   description: string;
   choices?: string[];
   ref?: string;
+  from?: string;
+  key?: string;
+  label?: string;
 };
 
 export type FieldChange = {
@@ -641,6 +644,8 @@ export type RecordView = {
   files: unknown[];
   comments: unknown[];
   following: boolean;
+  linked: Related[];
+  activity: unknown[];
 };
 
 export type Related = {

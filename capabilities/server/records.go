@@ -853,6 +853,8 @@ type RecordView struct {
 	Files     []any          `json:"files"`     // attached to it (ADR-0028)
 	Comments  []any          `json:"comments"`  // on it, oldest first (ADR-0028 D6)
 	Following bool           `json:"following"` // the member follows it
+	Linked    []Related      `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
+	Activity  []any          `json:"activity"`  // what apps told about it through protocols (relations.Note), oldest first
 }
 
 type Related struct {
@@ -884,7 +886,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		return RecordView{}, notFound
 	}
 	seen, hidden := viewOf(m, et)
-	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}}
+	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
 	if c := t.app(relations.ID); c != nil && typ != relations.CommentType && typ != relations.FollowType {
 		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
 		if page, err := t.Records(m, relations.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
@@ -893,6 +895,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		if f, ok := platform.Get[relations.Follow](t.automation(relations.ID, false), relations.FollowID(m.ID, typ+"/"+id)); ok && !f.Archived {
 			view.Following = true
 		}
+		view.Linked, view.Activity = t.linked(m, c, typ+"/"+id, now)
 	}
 	t.readPersonal(m, seen, []string{id}, now)
 	if typ != files.FileType && t.app(files.ID) != nil {
@@ -946,6 +949,41 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		}
 	}
 	return view, nil
+}
+
+// linked are the records linked to entity that m may read, grouped by type in
+// the order they were linked, and the protocol events told about it: what a
+// record page shows of other apps without the app composing it (#129). A link
+// to what is not a record of this tenant is left out.
+func (t *Tenant) linked(m platform.Member, rel platform.App, entity string, now time.Time) ([]Related, []any) {
+	c := t.caller(m, rel, false)
+	out, activity := []Related{}, []any{}
+	for _, e := range c.Links(entity) {
+		typ, id, _ := strings.Cut(e, "/")
+		domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
+		page, err := t.Records(m, typ, platform.Query{Domain: domain, Limit: 1, Archived: true}, now)
+		if err != nil || len(page.Records) == 0 {
+			continue
+		}
+		i := slices.IndexFunc(out, func(r Related) bool { return r.Type == typ })
+		if i < 0 {
+			t.records.mu.Lock()
+			plural := t.records.types[typ].info.Plural
+			t.records.mu.Unlock()
+			out = append(out, Related{Type: typ, Field: "link", Title: plural, Records: []any{}})
+			i = len(out) - 1
+		}
+		out[i].Records = append(out[i].Records, page.Records[0])
+		out[i].Total++
+	}
+	if notes, err := rel.Read(c, "timeline"); err == nil {
+		for _, n := range notes.([]relations.Note) {
+			if n.Entity == entity {
+				activity = append(activity, n)
+			}
+		}
+	}
+	return out, activity
 }
 
 // PersonalRead is one read of personal data (ADR-0028 D4): who read which

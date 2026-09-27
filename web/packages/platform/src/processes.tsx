@@ -1,6 +1,6 @@
 // Settings: flows (ADR-0020), agents and their evaluations (ADR-0021).
 import { ChainGraph, Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { Button, DataTable, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
+import { Button, Checkbox, DataTable, Form, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { type AIModel } from "./shared";
@@ -95,7 +95,7 @@ export function Evaluations() {
     <>
       <PageHeader title={t("Evaluations")} description={t("A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected.")} />
       {can("agent.evaluation.start") && (
-        <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void decide("agent.evaluation.start", { type: "agent.evaluation", id: newId("EVAL") }, { agent: chosen, model, suite }); }}>
+        <Form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={() => { void decide("agent.evaluation.start", { type: "agent.evaluation", id: newId("EVAL") }, { agent: chosen, model, suite }); }}>
           <Select aria-label={t("Agent")} className="w-64" value={chosen} onChange={(e) => setAgent(e.target.value)}>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>
@@ -103,11 +103,11 @@ export function Evaluations() {
             <option value="">{t("Candidate model…")}</option>
             {models.map((m) => <option key={`${m.provider}/${m.model}`} value={`${m.provider}/${m.model}`}>{m.provider}/{m.model}</option>)}
           </Select>
-          <label className="flex items-center gap-1.5 text-sm" title={t("The agent's declared cases, three runs each, instead of its past runs")}>
-            <input type="checkbox" checked={suite} onChange={(e) => setSuite(e.target.checked)} />{t("Declared cases")}
-          </label>
+          <span title={t("The agent's declared cases, three runs each, instead of its past runs")}>
+            <Checkbox className="text-sm" checked={suite} onChange={setSuite}>{t("Declared cases")}</Checkbox>
+          </span>
           <Button type="submit" variant="primary" disabled={!chosen || !model}>{t("Evaluate")}</Button>
-        </form>
+        </Form>
       )}
       <Records type="agent.evaluation" description={t("Reports, newest first; open one for each case.")} />
     </>

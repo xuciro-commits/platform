@@ -1,6 +1,6 @@
 // Settings: members and the organisation (ADR-0012).
 import { useReadQuery as useRead } from "@platform/app";
-import { Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Select, Tag, useWorkspace, type ColumnDef, t } from "@platform/ui";
+import { Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, Panel, Select, Tag, Tree, useWorkspace, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
 import { z } from "zod";
 import { active, kind, today, useAdmin, type Chart, type Edge, type Member } from "./shared";
@@ -43,8 +43,7 @@ export function MemberDetail({ id }: { id: string }) {
     <div className="grid max-w-3xl gap-4">
       <EntityCard title={member.id} subtitle={member.subjects.join(", ")} status={<Tag label={kind(member)} />}
         properties={[[t("Apps with a role"), Object.keys(member.roles).join(", ") || t("none")]]} />
-      <section className="rounded-md border border-border bg-surface p-3">
-        <h2 className="mb-2 text-sm font-semibold">{t("Role in each app")}</h2>
+      <Panel title={t("Role in each app")}>
         <div className="grid grid-cols-[10rem_1fr_auto] items-center gap-2 text-sm">
           {apps.filter((a) => a.roles.length).map((a) => (
             <div key={a.id} className="contents">
@@ -60,7 +59,7 @@ export function MemberDetail({ id }: { id: string }) {
             </div>
           ))}
         </div>
-      </section>
+      </Panel>
       <MemberUnits member={member.id} />
     </div>
   );
@@ -75,8 +74,7 @@ function MemberUnits({ member }: { member: string }) {
   const name = (id: string) => chart.units.find((u) => u.id === id)?.name ?? id;
   const structuresOf = (unit: string) => chart.structures.filter((s) => chart.edges.some((e) => e.structure === s.id && (e.unit === unit || e.parent === unit) && active(e, day)));
   return (
-    <section className="rounded-md border border-border bg-surface p-3">
-      <h2 className="mb-2 text-sm font-semibold">{t("Organisation")}</h2>
+    <Panel title={t("Organisation")}>
       {mine.length === 0 && <p className="text-xs text-muted">{t("Belongs to no unit.")}</p>}
       <div className="grid gap-1.5 text-sm">
         {mine.map((m) => (
@@ -88,7 +86,7 @@ function MemberUnits({ member }: { member: string }) {
           </p>
         ))}
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -109,23 +107,19 @@ export function Organization() {
   const unit = (id: string) => c.units.find((u) => u.id === id);
   const children = (id: string) => edges.filter((e) => e.parent === id);
   const roots = [...new Set(edges.map((e) => e.parent))].filter((p) => !edges.some((e) => e.unit === p));
-  const Node = ({ id, edge, depth }: { id: string; edge?: Edge; depth: number }) => {
-    const u = unit(id);
-    if (!u || !active(u, day)) return null;
+  type Place = { id: string; edge?: Edge };
+  const shown = (p: Place) => { const u = unit(p.id); return !!u && active(u, day); };
+  const below = (p: Place): Place[] => children(p.id).map((e) => ({ id: e.unit, edge: e })).filter(shown);
+  const row = ({ id, edge }: Place) => {
+    const u = unit(id)!;
     const count = c.memberships.filter((m) => m.unit === id && active(m, day)).length;
-    return (
-      <>
-        <button type="button" onClick={() => setSelected(id)} style={{ paddingLeft: 8 + depth * 18 }}
-          className={`flex w-full items-center gap-2 rounded-sm py-1 pr-2 text-left text-sm hover:bg-row-hover ${selected === id ? "bg-row-selected" : ""}`}>
-          <span className="font-medium">{u.name}</span><Tag label={u.kind} />
-          {u.legal && <Tag label={t("legal entity")} tone="info" />}{u.external && <Tag label="external" tone="warning" />}
-          {u.until && <span className="text-xs text-muted">until {u.until}</span>}
-          {edge?.relation && <span className="text-xs text-muted">{edge.relation}{edge.share ? ` ${Math.round(edge.share * 100)}%` : ""}</span>}
-          <span className="ml-auto text-xs text-muted">{count || ""}</span>
-        </button>
-        {children(id).map((e) => <Node key={e.unit} id={e.unit} edge={e} depth={depth + 1} />)}
-      </>
-    );
+    return <>
+      <span className="font-medium">{u.name}</span><Tag label={u.kind} />
+      {u.legal && <Tag label={t("legal entity")} tone="info" />}{u.external && <Tag label="external" tone="warning" />}
+      {u.until && <span className="text-xs text-muted">until {u.until}</span>}
+      {edge?.relation && <span className="text-xs text-muted">{edge.relation}{edge.share ? ` ${Math.round(edge.share * 100)}%` : ""}</span>}
+      <span className="ml-auto text-xs text-muted">{count || ""}</span>
+    </>;
   };
   const sel = selected ? unit(selected) : undefined;
   const people = sel ? c.memberships.filter((m) => m.unit === sel.id && active(m, day)) : [];
@@ -139,19 +133,15 @@ export function Organization() {
           <Input aria-label={t("As of")} type="date" value={day} onChange={(e) => setDay(e.target.value || today())} className="w-40" />
         </span>} />
       <div className="grid grid-cols-[minmax(320px,1fr)_minmax(280px,1fr)] gap-4">
-        <section className="rounded-md border border-border bg-surface p-2">
+        <Panel className="p-2">
           {roots.length === 0 && <p className="p-2 text-sm text-muted">{t("No units in this structure on")} {day}.</p>}
-          {roots.map((r) => <Node key={r} id={r} depth={0} />)}
-        </section>
-        <section className="rounded-md border border-border bg-surface p-3">
+          <Tree roots={roots.map((id) => ({ id })).filter(shown)} children={below} row={row} id={(p) => p.id} selected={selected} onSelect={(p) => setSelected(p.id)} />
+        </Panel>
+        <Panel title={sel && <>{sel.name} <Tag label={sel.kind} /></>} actions={sel && <>
+          <Button size="sm" onClick={() => setAdding("unit")}>{t("Add unit below")}</Button>
+          <Button size="sm" onClick={() => setAdding("member")}>{t("Add member")}</Button>
+        </>}>
           {!sel ? <p className="text-sm text-muted">{t("Select a unit.")}</p> : <>
-            <div className="mb-2 flex items-center gap-2">
-              <h2 className="text-sm font-semibold">{sel.name}</h2><Tag label={sel.kind} />
-              <span className="ml-auto flex gap-2">
-                <Button size="sm" onClick={() => setAdding("unit")}>{t("Add unit below")}</Button>
-                <Button size="sm" onClick={() => setAdding("member")}>{t("Add member")}</Button>
-              </span>
-            </div>
             {people.length === 0 && <p className="text-xs text-muted">{t("No members on")} {day}.</p>}
             {people.map((m) => (
               <p key={m.party + m.role} className="flex items-center gap-2 text-sm">
@@ -162,7 +152,7 @@ export function Organization() {
               </p>
             ))}
           </>}
-        </section>
+        </Panel>
       </div>
       <Dialog open={adding === "unit"} onOpenChange={(o) => !o && setAdding(undefined)} title={t("New unit below {unit}", { unit: sel?.name ?? "" })}>
         <EntityForm schema={z.object({ id: z.string().regex(/^[a-z0-9-]+$/, t(t("Lower case, digits, dashes"))), name: z.string().min(1), kind: z.string().min(1), relation: z.string() })}

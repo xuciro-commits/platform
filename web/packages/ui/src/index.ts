@@ -2,7 +2,8 @@ export { t, language, languages, setLanguage, register, type Dictionary } from "
 export { cn } from "./lib/cn";
 export { Button, type ButtonProps } from "./primitives/button";
 export { Input, Select, Textarea } from "./primitives/input";
-export { Card } from "./primitives/card";
+export { Card, Panel } from "./primitives/card";
+export { Checkbox, Form, Disclosure, FilePicker, Tree } from "./primitives/controls";
 export { Dialog } from "./primitives/dialog";
 export { StatusTag, Tag, defineStatuses, submissionStatuses, type StatusRegistry, type Tone } from "./components/StatusTag";
 export { DataTable, type DataTableProps } from "./components/DataTable";

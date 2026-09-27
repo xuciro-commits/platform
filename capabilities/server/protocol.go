@@ -106,11 +106,11 @@ func (t *Tenant) consumes(c platform.Caller, protocol string) bool {
 // decision's request once it is accepted (ADR-0026).
 func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 	if !t.consumes(c, protocol) {
-		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{app} does not consume {protocol}", c.App, protocol)
 	}
 	b, ok := t.resolve(protocol)
 	if _, mapped := b.provision.Actions[action]; !ok || !mapped {
-		return nil, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND} // no provider bound
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No app provides {protocol} here", protocol)
 	}
 	call := func(b binding) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 		schema := b.provision.Actions[action]
@@ -119,7 +119,7 @@ func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload 
 		called := platform.NewCaller(runtime{t}, c.Member, b.provider.Manifest().ID, c.Replaying, c.Automation)
 		record, err := b.provider.Submit(called, &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(declared.Target),
 			Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}, now)
-		return target, record, err
+		return target, record, explained(err, b.provider, schema, target.GetType()+"/"+id)
 	}
 	return call(t.holder(b, protocol, action, call))
 }

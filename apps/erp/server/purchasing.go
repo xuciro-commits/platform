@@ -154,20 +154,26 @@ func overLimit(c platform.Caller, s *pb.Submission) bool {
 func order(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	p := record.(*Purchase)
 	supplier, known := platform.Get[Partner](c, string(p.Supplier))
-	if !known || supplier.Archived || supplier.Role == "customer" || len(p.Lines) == 0 {
-		return invalid()
+	switch {
+	case !known || supplier.Archived || supplier.Role == "customer":
+		return why("{supplier} is not a supplier", string(p.Supplier))
+	case len(p.Lines) == 0:
+		return why("An order has at least one line")
 	}
 	currency := c.Setting("platform/currency")
 	for i := range p.Lines {
 		l := &p.Lines[i]
-		if product, known := platform.Get[Product](c, string(l.Product)); !known || product.Archived || l.Quantity <= 0 || l.Price.Amount < 0 {
-			return invalid()
+		if product, known := platform.Get[Product](c, string(l.Product)); !known || product.Archived {
+			return why("Line {n}: the product {product} is missing or archived", i+1, string(l.Product))
+		}
+		if l.Quantity <= 0 || l.Price.Amount < 0 {
+			return why("Line {n}: a quantity above zero and a price not below zero", i+1)
 		}
 		if l.Price.Currency == "" {
 			l.Price.Currency = currency
 		}
 		if l.Price.Currency != currency {
-			return invalid()
+			return why("Line {n}: prices are in {currency}, not {other}", i+1, currency, l.Price.Currency)
 		}
 	}
 	p.Total, _ = totalOf(*p)
@@ -184,15 +190,7 @@ func ordered(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
 // receivable: the receipt is posted today, so today's period must be open, and
 // the accounts it posts to must exist.
 func receivable(c platform.Caller, _ any, _ json.RawMessage, now time.Time) *kernel.Error {
-	if !open(c, now.Format(time.DateOnly)) {
-		return invalid()
-	}
-	for _, code := range []string{AccountMaterials, AccountFinished, AccountReceivedNotIn, AccountPriceVariance} {
-		if a, known := platform.Get[Account](c, code); !known || a.Archived {
-			return invalid()
-		}
-	}
-	return nil
+	return posts(c, now.Format(time.DateOnly), AccountMaterials, AccountFinished, AccountReceivedNotIn, AccountPriceVariance)
 }
 
 // received moves the goods in and posts the receipt: stock at standard cost,
@@ -235,13 +233,7 @@ func bill(c platform.Caller, record any, payload json.RawMessage, now time.Time)
 	var in struct{ Invoice string }
 	json.Unmarshal(payload, &in)
 	record.(*Purchase).Invoice = strings.TrimSpace(in.Invoice)
-	if !open(c, now.Format(time.DateOnly)) {
-		return invalid()
-	}
-	if a, known := platform.Get[Account](c, AccountPayable); !known || a.Archived {
-		return invalid()
-	}
-	return nil
+	return posts(c, now.Format(time.DateOnly), AccountPayable)
 }
 
 // billed posts the supplier's bill: goods received not invoiced against payables.

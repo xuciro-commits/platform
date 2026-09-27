@@ -1,6 +1,6 @@
 // Settings: documents and the glossary (ADR-0022, ADR-0023).
 import { GeneratedForm, Records, newId, useHost, type Passage } from "@platform/app";
-import { Button, Card, Dialog, Input, t } from "@platform/ui";
+import { Button, Card, Dialog, Form, Input, t } from "@platform/ui";
 import { BookA, BookOpen } from "lucide-react";
 import { useState } from "react";
 
@@ -32,10 +32,10 @@ export function Knowledge() {
       <Records type="knowledge.document" description={t("House rules, manuals, FAQs. Agents search them with their knowledge tool and cite what they used; members find them in Search. Set the embedding model in App settings → Knowledge to search by meaning as well as by words.")}
         actions={can("knowledge.document.create") && <Button variant="primary" onClick={() => setWriting(true)}><BookOpen />{t("New document")}</Button>} />
       <h2 className="mb-2 mt-4 text-sm font-semibold">{t("Try a search")}</h2>
-      <form className="flex max-w-2xl gap-2" onSubmit={async (e) => { e.preventDefault(); setFound(await client.get<Passage[]>(`/v1/knowledge?q=${encodeURIComponent(q)}`)); }}>
+      <Form className="flex max-w-2xl gap-2" onSubmit={async () => { setFound(await client.get<Passage[]>(`/v1/knowledge?q=${encodeURIComponent(q)}`)); }}>
         <Input aria-label={t("Question")} placeholder={t("What an agent might ask")} value={q} onChange={(e) => setQ(e.target.value)} />
         <Button type="submit">{t("Search")}</Button>
-      </form>
+      </Form>
       {found && <div className="mt-2 grid max-w-2xl gap-2">
         {found.length === 0 && <p className="text-sm text-muted">{t("Nothing you may read answers it.")}</p>}
         {found.map((p) => <Card key={`${p.document}#${p.chunk}`} className="p-3">

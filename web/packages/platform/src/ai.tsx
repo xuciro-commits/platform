@@ -1,6 +1,6 @@
 // Settings: AI providers, the playground and usage (ADR-0015).
 import { useReadQuery as useRead } from "@platform/app";
-import { Button, DataTable, Dialog, Input, PageHeader, Select, Tag, type ColumnDef, t } from "@platform/ui";
+import { Button, Card, Checkbox, DataTable, Dialog, Form, Input, PageHeader, Select, Tag, Textarea, type ColumnDef, t } from "@platform/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAdmin, when, type AIModel, type CatalogModel, type Provider, type Total, type Usage, type Vendor } from "./shared";
@@ -57,7 +57,7 @@ export function AIProviders() {
         <div className="grid gap-2">
           {providers.data?.length === 0 && <p className="text-sm text-muted">{t("No providers.")}</p>}
           {providers.data?.map((p) => (
-            <section key={p.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2 text-sm">
+            <Card key={p.id} className="flex flex-wrap items-center gap-2 p-2 text-sm">
               <span className="font-semibold">{p.id}</span><Tag label={p.vendor ?? p.kind} tone="info" />
               <span className="font-mono text-xs">{p.baseUrl}</span>
               <span className="text-xs text-muted">{p.secret ? `key “${p.secret}”` : "no key"} · {enabled.filter((m) => m.provider === p.id).length} enabled</span>
@@ -65,7 +65,7 @@ export function AIProviders() {
                 <Button size="sm" onClick={() => void load(p.id)}>{t("Models")}</Button>
                 <Button size="sm" variant="danger" onClick={() => void decideOn("ai.provider.remove", { type: "ai.provider", id: p.id }, {})}>{t("Remove")}</Button>
               </span>
-            </section>
+            </Card>
           ))}
         </div>
       )}
@@ -74,7 +74,7 @@ export function AIProviders() {
           <div className="mb-2 flex items-center gap-2 text-sm">
             <h2 className="font-semibold">{t("Models of")} {open}</h2>
             <Input aria-label={t("Filter")} placeholder={t("Filter")} value={filter} onChange={(e) => setFilter(e.target.value)} className="w-56" />
-            <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} />{t("free only")}</label>
+            <Checkbox className="text-xs" checked={freeOnly} onChange={setFreeOnly}>{t("free only")}</Checkbox>
             <Button size="sm" onClick={() => void load(open, true)}>{t("Refresh")}</Button>
             <span className="text-xs text-muted">{catalog.models ? `${shown.length} of ${catalog.models.length}` : catalog.error ?? "loading…"}</span>
           </div>
@@ -155,15 +155,14 @@ export function AIPlayground() {
           </Select>
         )}
         <Input aria-label={t("System")} placeholder={t("System instructions (optional)")} value={system} onChange={(e) => setSystem(e.target.value)} />
-        <textarea aria-label={t("Prompt")} rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t("Ask something")}
-          className="rounded-md border border-border bg-surface p-2 text-sm outline-none focus:border-[var(--accent)]" />
+        <Textarea aria-label={t("Prompt")} rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={t("Ask something")} />
         <span className="flex justify-end"><Button variant="primary" disabled={!chosen || !prompt || busy} onClick={() => void send()}>{busy ? t("Waiting…") : t("Send")}</Button></span>
         {turns.map((turn, i) => (
-          <section key={i} className="rounded-md border border-border bg-surface p-3">
+          <Card key={i} className="p-3">
             <p className="mb-2 text-xs text-muted">{turn.prompt}</p>
             {turn.error ? <p className="text-[var(--tone-danger)]">{turn.error}</p> : <p className="whitespace-pre-wrap">{turn.answer}</p>}
             {turn.usage && <p className="mt-2 text-xs text-muted">{turn.usage.served ?? turn.usage.model} · {turn.usage.input} {t("in ·")} {turn.usage.output} {t("out ·")} {turn.usage.millis} ms{turn.usage.cost ? ` · $${turn.usage.cost.toFixed(6)}` : ""}</p>}
-          </section>
+          </Card>
         ))}
       </div>
     </>
@@ -222,15 +221,14 @@ function AILimits() {
     <>
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Limits")}</h2>
       <p className="mb-2 text-xs text-muted">{t("A member's, agent's or app's own limits, in place of the defaults in App settings → AI (people) and Agents (agents). A call past a limit is refused before it reaches the model.")}</p>
-      <form className="mb-2 flex flex-wrap items-center gap-2" onSubmit={(e) => {
-        e.preventDefault();
+      <Form className="mb-2 flex flex-wrap items-center gap-2" onSubmit={() => {
         void decideOn("ai.limit.set", { type: "ai.limit", id: who.trim() }, { dailyTokens: Number(daily) || 0, perMinute: Number(minute) || 0 }).then(() => { setWho(""); setDaily(""); setMinute(""); });
       }}>
         <Input aria-label={t("Member ID")} placeholder={t("Member ID, e.g. sales-1 or agent:csm.triage")} value={who} onChange={(e) => setWho(e.target.value)} className="w-72" />
         <Input aria-label={t("Tokens a day")} type="number" min={0} placeholder={t("Tokens a day")} value={daily} onChange={(e) => setDaily(e.target.value)} className="w-36" />
         <Input aria-label={t("Calls a minute")} type="number" min={0} placeholder={t("Calls a minute")} value={minute} onChange={(e) => setMinute(e.target.value)} className="w-36" />
         <Button type="submit" disabled={!who.trim()}>{t("Set limit")}</Button>
-      </form>
+      </Form>
       <DataTable data={limits.data ?? []} columns={columns} getRowId={(l) => l.member} height={160} searchable={false} empty={t("Everyone takes the defaults")} />
     </>
   );

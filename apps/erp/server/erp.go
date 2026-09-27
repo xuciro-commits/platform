@@ -201,7 +201,7 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		id := s.GetTarget().GetId()
 		if s.GetSchema().GetName() != SchemaPeriodOpen || !month.MatchString(id) {
-			return nil, invalid()
+			return nil, why("A period is a month, such as 2026-10, not {id}", id)
 		}
 		if _, known := platform.Get[Period](c, id); known {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -210,7 +210,23 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 	})
 }
 
-func invalid() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT} }
+// why says why the ERP refuses, as the people and apps it refuses read it.
+func why(text string, values ...any) *kernel.Error {
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, text, values...)
+}
+
+// posts checks that date is in an open period and the accounts a posting uses exist.
+func posts(c platform.Caller, date string, accounts ...string) *kernel.Error {
+	if !open(c, date) {
+		return why("The date {date} is not in an open period", date)
+	}
+	for _, code := range accounts {
+		if a, known := platform.Get[Account](c, code); !known || a.Archived {
+			return why("The account {account} is missing or archived", code)
+		}
+	}
+	return nil
+}
 
 // post checks an entry before it is posted: at least two lines, each on an
 // active account with one positive side in the tenant's currency (the books'),
@@ -291,8 +307,8 @@ func reversalDate(e *Entry, payload json.RawMessage) string {
 // reverse checks the reversing entry's date and names it.
 func reverse(c platform.Caller, record any, payload json.RawMessage, _ time.Time) *kernel.Error {
 	e := record.(*Entry)
-	if !open(c, reversalDate(e, payload)) {
-		return invalid()
+	if err := posts(c, reversalDate(e, payload)); err != nil {
+		return err
 	}
 	e.ReversedBy = e.ID + "-R"
 	if _, taken := platform.Get[Entry](c, e.ReversedBy); taken {

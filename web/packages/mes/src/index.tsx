@@ -4,7 +4,7 @@
 import "./i18n";
 import { Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Graph, PageHeader, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type GraphEdge, type GraphNode,
+  Button, DataTable, Dialog, EntityCard, EntityForm, Graph, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type GraphEdge, type GraphNode,
  t } from "@platform/ui";
 import { Activity, ClipboardList, Factory, ListOrdered, Plus, ShieldAlert } from "lucide-react";
 import { useState } from "react";
@@ -63,11 +63,6 @@ function PlannedOrders() {
     });
   const { can, decide, master } = usePlant();
   const [releasing, setReleasing] = useState<Planned>();
-  const [resending, setResending] = useState<Order>();
-  const [plannedFor, setPlannedFor] = useState("");
-  // Confirmations the ERP refused or that never arrived: corrected and sent again (mes.order.reconfirm).
-  const attention = orders.filter((o) => o.erp === "refused" || o.erp === "failed");
-  const unreleased = (useRead<Planned[]>("/v1/planned-orders") ?? []).filter((p) => !orders.some((o) => o.planned === p.erpId));
   const columns: ColumnDef<Planned & { released: string; erp: string; confirmation: string }, any>[] = [
     { accessorKey: "number", header: t("ERP order"), meta: { width: 140 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "product", header: t("Product"), cell: (c) => `${c.getValue()} · ${routing(master, c.getValue())?.name ?? ""}` },
@@ -84,37 +79,7 @@ function PlannedOrders() {
   return (
     <>
       <PageHeader title={t("Planned orders")} description={t("Production orders the ERP released to the plant (production.orders/1); release a shop order against one.")} />
-      {attention.length > 0 && (
-        <section className="mb-3 rounded-md border border-border bg-surface p-3 text-sm">
-          <h2 className="mb-2 font-semibold">{t("Confirmations the ERP did not accept")}</h2>
-          {attention.map((o) => (
-            <div key={o.id} className="flex items-center gap-3 py-1">
-              <span className="font-mono text-xs">{o.id}</span><StatusTag status={o.erp!} registry={erpStatus} />
-              <span className="flex-1 text-muted">{o.erpDetail}</span>
-              {can("mes.order.reconfirm") && <Button size="sm" onClick={() => { setResending(o); setPlannedFor(o.planned ?? ""); }}>{t("Correct and resend")}</Button>}
-            </div>
-          ))}
-        </section>
-      )}
-      <DataTable data={planned} columns={columns} getRowId={(p) => p.erpId} height={attention.length ? "calc(100dvh - 300px)" : "calc(100dvh - 190px)"} />
-      <Dialog open={!!resending} onOpenChange={(o) => !o && setResending(undefined)} title={t("Resend {id} to the ERP", { id: resending?.id ?? "" })}>
-        {resending && (
-          <div className="grid gap-3 text-sm">
-            <p className="text-muted">{t("The ERP answered:")} {resending.erpDetail || resending.erp}. Name the planned order this shop order fulfils, then confirm it again.</p>
-            <Select aria-label={t("Planned order")} value={plannedFor} onChange={(e) => setPlannedFor(e.target.value)}>
-              <option value="">{resending.planned ? t("Keep {id}", { id: resending.planned }) : t("No planned order")}</option>
-              {unreleased.map((p) => <option key={p.erpId} value={p.erpId}>{p.number} · {p.product} × {p.quantity}</option>)}
-            </Select>
-            <div className="flex justify-end gap-2">
-              <Button onClick={() => setResending(undefined)}>{t("Cancel")}</Button>
-              <Button variant="primary" onClick={async () => {
-                await decide("mes.order.reconfirm", { type: "mes.order", id: resending.id }, plannedFor && plannedFor !== resending.planned ? { planned: plannedFor } : {});
-                setResending(undefined);
-              }}>{t("Resend")}</Button>
-            </div>
-          </div>
-        )}
-      </Dialog>
+      <DataTable data={planned} columns={columns} getRowId={(p) => p.erpId} height="calc(100dvh - 190px)" />
       <Dialog open={!!releasing} onOpenChange={(o) => !o && setReleasing(undefined)} title={t("Release {id}", { id: releasing?.number ?? "" })}>
         {releasing && (
           <EntityForm schema={z.object({ order: z.string().regex(/^SO-\d+$/, t("Format SO-123")), sfcs: z.number().int().min(1).max(releasing.quantity) })}
@@ -258,17 +223,14 @@ function SFCDetail({ id }: { id: string }) {
         </>} />
       <div className="grid content-start gap-4">
         {sfc.state === "hold" && (
-          <section className="rounded-md border border-border bg-surface p-3">
-            <h2 className="mb-2 text-sm font-semibold">{t("Disposition signatures")}</h2>
-            <p className="mb-2 text-xs text-muted">{t("Two quality engineers must sign the same disposition: one “reviewed”, one “approved”.")}</p>
+          <Panel title={t("Disposition signatures")} description={t("Two quality engineers must sign the same disposition: one “reviewed”, one “approved”.")}>
             <PropertyList items={sfc.signatures.length ? sfc.signatures.map((s) => [s.by, `${s.action} · ${s.meaning}`]) : [["—", "No signatures yet"]]} />
-          </section>
+          </Panel>
         )}
       </div>
-      <section className="rounded-md border border-border bg-surface p-3 lg:col-span-2">
-        <h2 className="mb-2 text-sm font-semibold">{t("Routing")} {product?.routing}</h2>
+      <Panel className="lg:col-span-2" title={<>{t("Routing")} {product?.routing}</>}>
         <RoutingGraph sfc={sfc} operations={product?.operations ?? []} />
-      </section>
+      </Panel>
       <Dialog open={signing} onOpenChange={setSigning} title={t("Disposition for {id}", { id: sfc.id })}>
         <EntityForm schema={z.object({ action: z.enum(["rework", "scrap", "use-as-is"]), meaning: z.enum(["reviewed", "approved"]), reworkStep: z.number().int().min(0).max(sfc.step) })}
           defaultValues={{ action: "rework", meaning: sfc.signatures.some((s) => s.meaning === "reviewed") ? "approved" : "reviewed", reworkStep: Math.max(0, sfc.step - 1) }}

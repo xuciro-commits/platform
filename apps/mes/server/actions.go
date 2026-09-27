@@ -34,7 +34,7 @@ func Actions() *platform.Catalog {
 			Payload:     platform.AnswerFields(), Roles: roles(Supervisor)},
 		platform.Action{Schema: SchemaResend, Target: OrderType, Capability: "orders", Title: "Resend confirmation to the ERP",
 			Description: "Correct an order whose confirmation the ERP refused, or that never arrived, and confirm it again: name the ERP planned order it fulfils when that was missing or wrong.",
-			Payload:     []platform.Field{{Name: "planned", Type: "string", Description: "ERP planned order ID (a planned order the ERP sent)"}},
+			Payload:     []platform.Field{{Name: "planned", Type: "string", Description: "ERP planned order (one the ERP sent)", From: "planned-orders", Key: "erpId", Label: "number"}},
 			Roles:       roles(Supervisor, Assistant)},
 	)...)
 }

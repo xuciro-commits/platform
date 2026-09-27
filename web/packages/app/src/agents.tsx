@@ -3,7 +3,7 @@
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
 import "./i18n";
-import { Button, Card, Graph, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
+import { Button, Card, Disclosure, Form, Graph, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
 import { PayloadFields } from "./actions";
@@ -72,7 +72,7 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
           ? <Button size="sm" variant="danger" onClick={() => void decide("agent.run.cancel", { type: "agent.run", id: run.id }, {})}>{t("Stop")}</Button> : undefined} />}
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <StatusTag status={run.state} registry={runStates} />
-        {run.ref && <button type="button" className="font-mono underline" onClick={() => openRecord(run.ref!)}>{run.ref}</button>}
+        {run.ref && <Button variant="link" className="font-mono text-xs" onClick={() => openRecord(run.ref!)}>{run.ref}</Button>}
         <span>{run.stepsUsed} {t("turns ·")} {run.tokensUsed} {t("tokens ·")} {run.actionsUsed} actions{run.cost ? ` · $${run.cost.toFixed(4)}` : ""}</span>
         {run.model && <span className="font-mono">{run.model}</span>}
       </div>
@@ -84,30 +84,31 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
       {run.result && <Card className="p-3"><div className="mb-1 text-xs text-muted">{t("Result")}</div><p className="whitespace-pre-wrap text-sm">{run.result}</p></Card>}
       {!compact && run.steps.length > 0 && <RunGraph run={run} onStep={setOpen} />}
       {!compact && <ChainGraph of={`agent.run/${run.id}`} />}
-      <ol className="grid gap-1">
+      <div role="list" className="grid gap-1">
         {run.steps.map((s, i) => (
-          <li key={i} className="rounded-md border border-border bg-surface px-3 py-2 text-sm">
-            <button type="button" className="flex w-full items-baseline gap-2 text-left" onClick={() => setOpen(open === i ? undefined : i)}>
+          <Card key={i} className="px-2 py-1 text-sm">
+            <Disclosure open={open === i} onToggle={(o) => setOpen(o ? i : undefined)} summary={<>
               <span className="w-5 text-xs text-muted">{i + 1}</span>
               <span className="font-mono text-xs">{s.tool || "—"}</span>
               <span className="flex-1">{s.rationale ?? ""}</span>
               {s.tokens ? <span className="text-xs text-muted">{s.tokens}</span> : null}
-            </button>
-            <div className={open === i ? "mt-2 grid gap-1" : "hidden"}>
-              {s.arguments && <pre className="overflow-auto whitespace-pre-wrap font-mono text-xs text-muted">{s.arguments}</pre>}
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs">{s.outcome}</pre>
-            </div>
-            {open !== i && <div className="ml-7 truncate font-mono text-xs text-muted">{s.outcome.split("\n").slice(-1)[0]}</div>}
-          </li>
+            </>}>
+              <div className="mt-1 grid gap-1">
+                {s.arguments && <pre className="overflow-auto whitespace-pre-wrap font-mono text-xs text-muted">{s.arguments}</pre>}
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs">{s.outcome}</pre>
+              </div>
+            </Disclosure>
+            {open !== i && <div className="ml-9 truncate font-mono text-xs text-muted">{s.outcome.split("\n").slice(-1)[0]}</div>}
+          </Card>
         ))}
-      </ol>
+      </div>
       {!!run.citations?.length && (
         <div className="grid gap-1">
           <div className="text-xs text-muted">{t("Sources it read")}</div>
           {run.citations.map((c, i) => (
-            <button key={i} type="button" className="text-left text-sm underline" onClick={() => openRecord(c.document.split("#")[0]!)}>
+            <Button key={i} variant="link" className="justify-start text-left" onClick={() => openRecord(c.document.split("#")[0]!)}>
               {c.title} <span className="font-mono text-xs text-muted">{c.document} {t("· passage")} {c.chunk + 1} {t("· step")} {c.step + 1}</span>
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -166,10 +167,10 @@ export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: str
     tone: chainTone(n.state), current: n.ref === of }));
   const edges: GraphEdge[] = chain.edges.map((e) => ({ from: e.from, to: e.to }));
   return (
-    <section className="grid gap-1">
+    <div className="grid gap-1">
       <h3 className="text-xs uppercase text-muted">{title}</h3>
       <Graph nodes={nodes} edges={edges} height={200} label={title} onOpen={(n) => { if (!n.id.startsWith("platform.effect/")) openRecord(n.id); }} />
-    </section>
+    </div>
   );
 }
 
@@ -180,14 +181,15 @@ function Transcripts({ run }: { run: string }) {
   if (!calls?.length) return null;
   return (
     <div className="grid gap-1">
-      <button type="button" className="text-left text-xs text-muted underline" onClick={() => setShown(!shown)}>
+      <Button variant="link" className="justify-start text-xs text-muted" onClick={() => setShown(!shown)}>
         {shown ? t("Hide") : t("Show")} the {calls.length} {t("model calls in full")}
-      </button>
+      </Button>
       {shown && calls.map((c, i) => (
-        <details key={i} className="rounded-md border border-border bg-surface px-3 py-2 text-xs">
-          <summary>{c.at} · {c.model} · {c.outcome}</summary>
-          <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono">{JSON.stringify({ request: c.request, answer: c.answer }, null, 2)}</pre>
-        </details>
+        <Card key={i} className="px-2 py-1 text-xs">
+          <Disclosure summary={<>{c.at} · {c.model} · {c.outcome}</>}>
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono">{JSON.stringify({ request: c.request, answer: c.answer }, null, 2)}</pre>
+          </Disclosure>
+        </Card>
       ))}
     </div>
   );
@@ -217,22 +219,22 @@ export function Assistant({ about }: { about?: string }) {
     <div className="grid max-w-3xl gap-3">
       <PageHeader title={t("Assistant")} description={about ? `Ask an agent about ${about}. It drafts; you confirm.` : t("Ask one of your apps' agents. It works on your behalf, within what you may do; you confirm what it drafts.")} />
       {agents.length === 0 ? <p className="text-sm text-muted">{t("None of your apps declares an agent.")}</p> : (
-        <form className="grid gap-2" onSubmit={(e) => { e.preventDefault(); if (goal.trim()) void start(); }}>
+        <Form className="grid gap-2" onSubmit={() => { if (goal.trim()) void start(); }}>
           <Select aria-label={t("Agent")} value={chosen} onChange={(e) => setAgent(e.target.value)}>
             {suited.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>
           <Textarea aria-label={t("Goal")} rows={3} placeholder={t("What should it do?")} value={goal} onChange={(e) => setGoal(e.target.value)} />
           <div><Button type="submit" variant="primary" disabled={!goal.trim() || !can("agent.run.start")}>{t("Ask")}</Button></div>
-        </form>
+        </Form>
       )}
       {current && <RunView id={current} compact />}
       <Remembered />
       {earlier.length > 0 && <div className="grid gap-1">
         <div className="text-xs text-muted">{t("Earlier")}{about ? " about this record" : ""}</div>
         {earlier.slice(0, 10).map((r) => (
-          <button key={r.id} type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-row-hover" onClick={() => setCurrent(r.id)}>
+          <Button key={r.id} variant="row" onClick={() => setCurrent(r.id)}>
             <StatusTag status={r.state} registry={runStates} /><span className="truncate">{r.title}</span>
-          </button>
+          </Button>
         ))}
       </div>}
     </div>
@@ -249,12 +251,12 @@ function Remembered() {
     <div className="grid gap-1">
       <div className="text-xs text-muted">{t("What agents remember about you")}</div>
       {memories.map((m) => (
-        <div key={m.id} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
+        <Card key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm">
           <Tag label={m.state === "proposed" ? "proposed" : "remembered"} tone={m.state === "proposed" ? "warning" : "success"} />
           <span className="flex-1">{m.fact} <span className="text-xs text-muted">{m.agent}{m.expires ? ` · until ${m.expires.slice(0, 10)}` : " · kept"}</span></span>
           {(m.state === "proposed" || m.expires) && <Button size="sm" onClick={() => act(m, "keep")}>{t("Keep")}</Button>}
           <Button size="sm" variant="ghost" onClick={() => act(m, "forget")}>{t("Forget")}</Button>
-        </div>
+        </Card>
       ))}
     </div>
   );
@@ -276,15 +278,15 @@ export function Search({ initial = "" }: { initial?: string }) {
   return (
     <div className="grid max-w-3xl gap-3">
       <PageHeader title={t("Search")} description={t("Records of every app you work in, and the knowledge you may read, by text, within what you may see.")} />
-      <form onSubmit={(e) => { e.preventDefault(); void run(q); }}>
+      <Form onSubmit={() => void run(q)}>
         <Input aria-label={t("Search")} autoFocus placeholder={t("Search records")} value={q} onChange={(e) => setQ(e.target.value)} />
-      </form>
+      </Form>
       {passages.length > 0 && (
         <div className="grid gap-2">
           <div className="text-xs text-muted">{t("Knowledge")}</div>
           {passages.map((p) => (
             <Card key={`${p.document}#${p.chunk}`} className="p-3 text-sm">
-              <button type="button" className="font-medium underline" onClick={() => openRecord(p.document.split("#")[0]!)}>{p.title}</button>
+              <Button variant="link" className="font-medium" onClick={() => openRecord(p.document.split("#")[0]!)}>{p.title}</Button>
               <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-muted">{p.text}</p>
             </Card>
           ))}
@@ -294,10 +296,10 @@ export function Search({ initial = "" }: { initial?: string }) {
         <ul className="grid gap-1">
           {hits.map((h) => (
             <li key={`${h.type}/${h.id}`}>
-              <button type="button" className="flex w-full items-baseline gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-row-hover" onClick={() => openRecord(h)}>
+              <Button variant="row" onClick={() => openRecord(h)}>
                 <span className="w-40 shrink-0 truncate text-xs text-muted">{title(h.type)}</span>
                 <span className="truncate">{h.title}</span><span className="font-mono text-xs text-muted">{h.id}</span>
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

@@ -85,6 +85,13 @@ type Field struct {
 	// a picker of the records the member may read (ADR-0028 D5, F-36).
 	Choices []string `json:"choices,omitempty"`
 	Ref     string   `json:"ref,omitempty"`
+	// From names a read of the declaring app whose items the field chooses
+	// from, when the values are not records here (an ERP's planned orders a
+	// plant reads through a protocol): Key is the item's value, Label what
+	// people read. Forms offer the list; the app checks the value (#129).
+	From  string `json:"from,omitempty"`
+	Key   string `json:"key,omitempty"`
+	Label string `json:"label,omitempty"`
 }
 
 // Catalog holds a domain's actions and which capabilities are deactivated for a

@@ -292,7 +292,36 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	if err == nil {
 		t.journal(a, m, s, now)
 	}
-	return record, err
+	return record, explained(err, a, s.GetSchema().GetName(), target(s))
+}
+
+// explained gives a refusal an app returned without saying why the reason its
+// code implies, naming the action and its target, so that every refusal a
+// person, an agent or another app reads says something (docs/Testing.md C3).
+// An app's own reason, through platform.Refuse, is always better; the known
+// apps that still refuse bare are counted in scripts/escapes.sh (#129).
+func explained(err *kernel.Error, a platform.App, schema, target string) *kernel.Error {
+	if err == nil || err.Message != "" {
+		return err
+	}
+	action := schema
+	if declared, ok := a.Manifest().Actions.Action(schema); ok && declared.Title != "" {
+		action = declared.Title
+	}
+	text := map[pb.ErrorCode]string{
+		pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT:     "{action} was refused: a value is missing or out of range",
+		pb.ErrorCode_ERROR_CODE_CONFLICT:             "{action} was refused: {target} is not in a state that allows it, or changed since it was read",
+		pb.ErrorCode_ERROR_CODE_NOT_FOUND:            "{action} was refused: {target} does not exist, or you may not see it",
+		pb.ErrorCode_ERROR_CODE_POLICY_DENIED:        "{action} was refused: you may not do it to {target}",
+		pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA:       "{action} is not an action here",
+		pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT: "{action} was sent before with other values",
+		pb.ErrorCode_ERROR_CODE_INVALID_REFERENCE:    "{action} names a record that does not exist",
+		pb.ErrorCode_ERROR_CODE_NOT_AUTHORITY:        "{action} was refused: another authority decides {target}",
+	}[err.Code]
+	if text == "" {
+		return err
+	}
+	return platform.Refuse(err.Code, text, action, target)
 }
 
 func outcomeOf(err *kernel.Error) string {

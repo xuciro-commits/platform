@@ -1,6 +1,6 @@
 // Settings: the apps a tenant runs, their capability matrix and protocols (ADR-0010, ADR-0011).
 import { useReadQuery as useRead } from "@platform/app";
-import { DataTable, PageHeader, Select, Tag, type ColumnDef, t } from "@platform/ui";
+import { DataTable, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
 import { useAdmin, type AppInfo, type ProtocolInfo } from "./shared";
 
 // Tiers of the protocol graph: an app sits one column right of the providers of
@@ -26,14 +26,14 @@ export function Apps() {
           <div key={i} className="grid content-start gap-3">
             <h2 className="text-xs uppercase text-muted">{["Platform and business apps", "Consumers of their protocols"][i] ?? `Tier ${i + 1}`}</h2>
             {tier.map((a) => (
-              <section key={a.id} className="w-64 rounded-md border border-border bg-surface p-3 text-sm">
+              <Panel key={a.id} className="w-64">
                 <div className="flex items-center gap-2"><span className="font-semibold">{a.id}</span><span className="text-xs text-muted">v{a.version}</span></div>
                 {a.consumes.length > 0 && <p className="mt-1 text-xs text-muted">consumes {a.consumes.join(", ")}</p>}
                 <div className="mt-2 flex flex-wrap gap-1">
                   {a.capabilities.map((c) => <Tag key={c.name} label={c.name} tone={c.enabled ? "success" : "neutral"} />)}
                 </div>
                 {a.uses.map((u) => <p key={u} className="mt-1 font-mono text-[11px] text-muted">{u}</p>)}
-              </section>
+              </Panel>
             ))}
           </div>
         ))}
@@ -76,7 +76,7 @@ export function Protocols() {
       <div className="grid max-w-5xl gap-3">
         {protocols.length === 0 && <p className="text-sm text-muted">{t("No protocols in this tenant.")}</p>}
         {protocols.map((p) => (
-          <section key={p.id} className="rounded-md border border-border bg-surface p-3 text-sm">
+          <Panel key={p.id}>
             <div className="flex items-center gap-2">
               <span className="font-mono font-semibold">{p.id}</span>
               {p.bound ? <Tag label={`bound to ${p.bound}`} tone="success" /> : <Tag label={t("not bound")} tone="neutral" />}
@@ -94,7 +94,7 @@ export function Protocols() {
               <span className="text-muted">{t("Reads")}</span><span className="font-mono text-xs">{p.reads?.join(", ") || "—"}</span>
               <span className="text-muted">{t("Events")}</span><span>{p.events?.map((e) => e.title).join(", ") || "—"}</span>
             </div>
-          </section>
+          </Panel>
         ))}
       </div>
     </>

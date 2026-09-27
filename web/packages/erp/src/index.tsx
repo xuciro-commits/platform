@@ -6,7 +6,7 @@
 // host decides who sees and does what.
 import "./i18n";
 import { GeneratedForm, Records, defineApp, newId, useHost, useRead } from "@platform/app";
-import { Button, Dialog, Input, PageHeader, t } from "@platform/ui";
+import { Button, DataTable, Dialog, Input, PageHeader, t, type ColumnDef } from "@platform/ui";
 import { ArrowLeftRight, Factory, BookOpen, CalendarRange, Handshake, Landmark, ListTree, Package, Plus, Scale, ShoppingCart, Warehouse } from "lucide-react";
 import { useState } from "react";
 
@@ -46,21 +46,19 @@ function Drafted({ type, label, prefix, initial, wide }: { type: string; label: 
 
 type Stock = { product: string; name: string; unit: string; quantity: number; value: number };
 
+const amount = (minor: number) => (minor / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function OnHand() {
   const rows = useRead<Stock[]>("/v1/on-hand") ?? [];
-  const cell = "px-2 py-1 text-right tabular-nums";
+  const columns: ColumnDef<Stock, any>[] = [
+    { id: "product", header: t("Product"), accessorFn: (r) => `${r.product} ${r.name}` },
+    { id: "quantity", header: t("Quantity"), meta: { width: 140, align: "right" }, accessorFn: (r) => `${r.quantity.toLocaleString()} ${r.unit}` },
+    { id: "value", header: t("Value"), meta: { width: 140, align: "right" }, accessorFn: (r) => amount(r.value) },
+  ];
   return (
     <>
       <PageHeader title={t("On hand")} description={t("What is in stock: the sum of each product's moves, valued at standard cost.")} />
-      <table className="w-full max-w-3xl text-sm">
-        <thead className="text-xs text-muted"><tr>
-          <th className="px-2 py-1 text-left">{t("Product")}</th><th className={cell}>{t("Quantity")}</th><th className={cell}>{t("Value")}</th></tr></thead>
-        <tbody>{rows.map((r) => (
-          <tr key={r.product} className="border-t border-border">
-            <td className="px-2 py-1">{r.product} {r.name}</td><td className={cell}>{r.quantity.toLocaleString()} {r.unit}</td>
-            <td className={cell}>{(r.value / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-          </tr>))}</tbody>
-      </table>
+      <DataTable data={rows} columns={columns} getRowId={(r) => r.product} height="calc(100dvh - 190px)" searchable={false} empty={t("Nothing in stock")} />
     </>
   );
 }
@@ -81,28 +79,20 @@ type Balance = { account: string; name: string; kind: string; debit: number; cre
 
 function TrialBalance() {
   const rows = useRead<Balance[]>("/v1/trial-balance") ?? [];
-  const amount = (minor: number) => (minor / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const total = (k: "debit" | "credit") => rows.reduce((s, r) => s + r[k], 0);
-  const cell = "px-2 py-1 text-right tabular-nums";
+  // The totals as the last row: debits equal credits when the books balance.
+  const shown = rows.length ? [...rows, { account: "", name: t("Total"), kind: "", debit: total("debit"), credit: total("credit"), balance: NaN }] : [];
+  const columns: ColumnDef<Balance, any>[] = [
+    { enableSorting: false, id: "account", header: t("Account"), accessorFn: (r) => `${r.account} ${r.name}` },
+    { enableSorting: false, id: "kind", header: t("Kind"), meta: { width: 120 }, accessorFn: (r) => (r.kind ? t(r.kind) : "") },
+    { enableSorting: false, id: "debit", header: t("Debit"), meta: { width: 140, align: "right" }, accessorFn: (r) => amount(r.debit) },
+    { enableSorting: false, id: "credit", header: t("Credit"), meta: { width: 140, align: "right" }, accessorFn: (r) => amount(r.credit) },
+    { enableSorting: false, id: "balance", header: t("Balance"), meta: { width: 140, align: "right" }, accessorFn: (r) => (Number.isNaN(r.balance) ? "" : amount(r.balance)) },
+  ];
   return (
     <>
       <PageHeader title={t("Trial balance")} description={t("Every account with postings: the sums of its debits and credits, and its balance. Debits equal credits when the books balance.")} />
-      <table className="w-full max-w-3xl text-sm">
-        <thead className="text-xs text-muted"><tr>
-          <th className="px-2 py-1 text-left">{t("Account")}</th><th className="px-2 py-1 text-left">{t("Kind")}</th>
-          <th className={cell}>{t("Debit")}</th><th className={cell}>{t("Credit")}</th><th className={cell}>{t("Balance")}</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.account} className="border-t border-border">
-              <td className="px-2 py-1">{r.account} {r.name}</td><td className="px-2 py-1">{t(r.kind)}</td>
-              <td className={cell}>{amount(r.debit)}</td><td className={cell}>{amount(r.credit)}</td><td className={cell}>{amount(r.balance)}</td>
-            </tr>
-          ))}
-          <tr className="border-t-2 border-border font-medium">
-            <td className="px-2 py-1" colSpan={2}>{t("Total")}</td><td className={cell}>{amount(total("debit"))}</td><td className={cell}>{amount(total("credit"))}</td><td />
-          </tr>
-        </tbody>
-      </table>
+      <DataTable data={shown} columns={columns} getRowId={(r) => r.account || "total"} height="calc(100dvh - 190px)" searchable={false} empty={t("Nothing posted")} />
     </>
   );
 }

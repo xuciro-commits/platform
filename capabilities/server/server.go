@@ -346,6 +346,9 @@ func (h *Host) Handler() http.Handler {
 			Reply(w, nil, err)
 			return
 		}
+		if activity, ok := t.TranslateMessages(view.Activity, t.Language(m, r)).([]any); ok {
+			view.Activity = activity
+		}
 		WriteJSON(w, http.StatusOK, view)
 	})
 	handle(Route{Pattern: "POST /mcp", Summary: "MCP: the caller's catalog as tools (JSON-RPC)", Body: json.RawMessage{}}, h.mcp)

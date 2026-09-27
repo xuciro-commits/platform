@@ -97,19 +97,37 @@ func (w *world) read(who, name string) any {
 	return out
 }
 
+// stays are the bookings the opportunity's record page lists as linked to it,
+// from whichever provider holds them, as the member may read them (#129).
 func (w *world) stays(who string) []lodging.Booking {
-	return w.read(who, "customers").([]crm.Customer)[0].Opportunities[0].Bookings
+	view, err := w.tenant.RecordOf(w.members[who], crm.OpportunityType, "OPP-1", t0)
+	if err != nil {
+		return nil // the member may not read the opportunity
+	}
+	var out []lodging.Booking
+	for _, group := range view.Linked {
+		raw, _ := json.Marshal(group.Records)
+		var bookings []lodging.Booking
+		json.Unmarshal(raw, &bookings)
+		out = append(out, bookings...)
+	}
+	return out
 }
 
+// timeline is what apps told about entity through protocols, as its record page shows it.
 func (w *world) timeline(who, entity string) []string {
+	typ, id, _ := strings.Cut(entity, "/")
+	view, err := w.tenant.RecordOf(w.members[who], typ, id, t0)
+	if err != nil {
+		w.t.Fatalf("%s as %s: %v", entity, who, err)
+	}
 	var out []string
-	for _, n := range w.read(who, "timeline").([]relations.Note) {
-		if n.Entity == entity {
-			if n.Title != "" {
-				out = append(out, n.By+": "+n.Title+" ("+n.Text+")")
-			} else {
-				out = append(out, n.By+": "+n.Text)
-			}
+	for _, x := range view.Activity {
+		n := x.(relations.Note)
+		if n.Title != "" {
+			out = append(out, n.By+": "+n.Title+" ("+n.Text+")")
+		} else {
+			out = append(out, n.By+": "+n.Text)
 		}
 	}
 	return out
@@ -131,22 +149,27 @@ func TestStaysThroughTheLodgingProtocol(t *testing.T) {
 		t.Fatalf("a resend booked again: %d reservations", n)
 	}
 	if s := w.stays("sales"); len(s) != 1 || s[0].ID != "OPP-1-B1" || s[0].Guest != "Acme board" {
-		t.Fatalf("customer view: %+v", s)
+		t.Fatalf("the opportunity's linked stays: %+v", s)
 	}
 	// The provider decides: the only suite is taken, so nothing is linked.
 	w.expect(w.book("sales", "b-2", "suite", "2026-10-02"), "ERROR_CODE_CONFLICT")
 	// Each app checks its own role: no hotel role, or no CRM role, is refused.
 	w.expect(w.book("sales-only", "b-3", "suite", "2026-10-05"), "ERROR_CODE_POLICY_DENIED")
 	w.expect(w.book("desk", "b-4", "suite", "2026-10-05"), "ERROR_CODE_POLICY_DENIED")
-	// A member who may not see hotel data sees the opportunity without its stays.
+	// Another sales rep reads neither the opportunity nor its stays: the record
+	// page keeps each record's scope (the CRM's own customers read, gone with
+	// #129, showed every opportunity to every rep).
 	if s := w.stays("sales-only"); len(s) != 0 {
 		t.Fatalf("sales-only sees stays %+v", s)
+	}
+	if _, err := w.tenant.RecordOf(w.members["sales-only"], crm.OpportunityType, "OPP-1", t0); err == nil {
+		t.Fatal("sales-only reads another rep's opportunity")
 	}
 	// The hotel cancels on its own; the platform timeline tells the opportunity, as
 	// the protocol's event, through the link — no app in between.
 	w.expect(w.submit("manager", pms.ID, pms.SchemaCancel, pms.ReservationType, "OPP-1-B1", "c-1", struct{}{}), "ok")
 	if w.stays("sales")[0].Status != lodging.Canceled {
-		t.Fatal("the cancellation does not show on the customer")
+		t.Fatal("the cancellation does not show on the opportunity")
 	}
 	told := w.timeline("sales", "crm.opportunity/OPP-1")
 	if !slices.Equal(told, []string{"app:pms: Booking canceled (pms.reservation/OPP-1-B1, by manager-1)"}) {
@@ -162,7 +185,7 @@ func TestStaysThroughTheLodgingProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 	view := func(w *world) string {
-		return fmt.Sprint(w.read("manager", "customers"), w.reservations("manager"), w.read("manager", "links"), w.timeline("sales", "crm.opportunity/OPP-1"))
+		return fmt.Sprint(w.stays("manager"), w.reservations("manager"), w.read("manager", "links"), w.timeline("sales", "crm.opportunity/OPP-1"))
 	}
 	if view(again) != view(w) {
 		t.Fatalf("replayed tenant differs:\n%s\n%s", view(w), view(again))

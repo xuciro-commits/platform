@@ -34,6 +34,8 @@ register("zh-CN", {
   "Save draft": "保存草稿",
   "Stock moves": "库存移动",
   "Total": "合计",
+  "Nothing in stock": "没有库存",
+  "Nothing posted": "还没有过账",
   "Trial balance": "试算平衡表",
   "Value": "价值",
   "What is in stock: the sum of each product's moves, valued at standard cost.": "库存中有什么：每个物料所有移动之和，按标准成本计价。",

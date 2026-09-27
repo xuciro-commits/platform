@@ -32,6 +32,8 @@ test("route 5: a group block is held, then confirmed", async ({ page, request })
     { rooms: 1, roomType: "standard", arrive: day(200 + Math.floor(Math.random() * 100)), depart: day(310), cutoff: day(150) });
   await open(page, "sales", `/record?type=crm.opportunity&id=${opp}`);
   await expect(value(page, "held")).toBeVisible();
+  // The hotel's reservation is on the opportunity's page as a linked record, the platform's, not the CRM's (#129).
+  await expect(page.getByText(/\(1, linked\)/)).toBeVisible();
   await decide(request, "sales", "crm", "crm.opportunity.close", { type: "crm.opportunity", id: opp }, { outcome: "won" });
   await expect(value(page, "confirmed")).toBeVisible(); // the page follows without a reload
 });

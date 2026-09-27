@@ -5,6 +5,8 @@ export default {
   "{n} rows": "{n} 行",
   ", attempt {n}": "，第 {n} 次尝试",
   ", by": "，按",
+  ", linked": "，链接",
+  "Activity": "动态",
   ", until {when}": "，直到 {when}",
   "Act": "执行",
   "Add line": "添加一行",

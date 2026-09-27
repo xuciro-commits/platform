@@ -64,7 +64,7 @@ submit() { # token key schema target-type target-id payload [expected-revision]
 state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500" downtime planned-orders notifications "records/erp.production?limit=500" trial-balance; do curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/$path"; done
   curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/connectors" | jq -c '[.[] | {id, disabled}]'
   curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/ai-usage" | jq -c '.totals'
-  for path in customers records/pms.reservation records/pms.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1 records/hcm.leave records/work.approval; do curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/$path"; done
+  for path in records/pms.reservation records/pms.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1 records/hcm.leave records/work.approval; do curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/$path"; done
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -c '[.[] | {id, bound}]'; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
 
@@ -232,7 +232,7 @@ catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$HOSPITALITY/v1/actio
 SERVER=$HOSPITALITY TENANT=hotel-a AUTHORITY=platform submit "$MGR" w-1 platform.endpoint.add platform.endpoint sink \
   '{"url":"http://webhook-sink:8080/hook","secret":"sink","events":["lodging.booking/1#canceled"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "add endpoint"
 hosp pms "$MGR" s-c pms.reservation.cancel pms.reservation OPP-1-B1 '{}' | jq -e .record >/dev/null || fail "PMS cancel"
-note=$(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/timeline" | jq -r '.[] | select(.entity == "crm.opportunity/OPP-1") | "\(.by): \(.title) (\(.text))"')
+note=$(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/records/crm.opportunity/OPP-1" | jq -r '.activity[] | "\(.by): \(.title) (\(.text))"')
 [[ $note == "app:pms: Booking canceled (pms.reservation/OPP-1-B1, by manager-1)" ]] || fail "timeline: $note"
 for _ in $(seq 20); do [[ $(curl -s "$SINK/received" | jq '.kept | length') == 1 ]] && break; sleep 0.5; done
 [[ $(curl -s "$SINK/received" | jq -r '.kept[] | .type + " " + .data.entity') == "lodging.booking/1#canceled pms.reservation/OPP-1-B1" ]] || fail "webhook: $(curl -s "$SINK/received")"
@@ -277,7 +277,7 @@ echo "ok   approvals: a leave request held, found in the manager's inbox through
 # apartments; the hotel's stay stays on the opportunity, and the restart keeps the choice.
 SERVER=$HOSPITALITY TENANT=hotel-a AUTHORITY=platform submit "$MGR" p-1 platform.protocol.bind platform.protocol lodging.booking/1 '{"provider":"memstay"}' | jq -e .record >/dev/null || fail "choose provider"
 hosp crm "$MGR" s-b3 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"loft","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -e .record >/dev/null || fail "book at the chosen provider"
-[[ $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/customers" | jq -c '[.[].opportunities[] | select(.id == "OPP-1") | .bookings[].roomType]') == '["suite","loft"]' ]] || fail "stays across providers"
+[[ $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/records/crm.opportunity/OPP-1" | jq -c '[.linked[].records[].roomType]') == '["suite","loft"]' ]] || fail "stays across providers on the opportunity's page"
 echo "ok   hospitality solution: a stay through the lodging protocol; the administrator chooses the provider and stays at both remain; revocation on the next request; the cancellation on the opportunity's timeline; an MCP client acts with a member's grants; the cancellation reached a webhook endpoint signed, once"
 
 # Decisions across apps (ADR-0026): a group's rooms held at the provider until a

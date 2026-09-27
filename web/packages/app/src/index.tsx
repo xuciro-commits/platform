@@ -5,7 +5,7 @@
 import "./i18n";
 import type { ActionDeclaration, Api, EdgeClient, Entry } from "@platform/kernel";
 import {
-  Button, Chart, Dialog, Input, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
+  Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type Options, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
@@ -154,13 +154,13 @@ export function Records({ type, description, actions, covers, saved }: { type: s
         description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
       <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
       <Dialog open={!!saving} onOpenChange={(o) => !o && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
-        <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); if (title.trim()) void save(); }}>
+        <Form className="grid gap-3" onSubmit={() => { if (title.trim()) void save(); }}>
           <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
           <div className="flex justify-end gap-2">
             <Button type="button" onClick={() => setSaving(undefined)}>{t("Cancel")}</Button>
             <Button type="submit" variant="primary" disabled={!title.trim()}>{t("Save")}</Button>
           </div>
-        </form>
+        </Form>
       </Dialog>
     </>
   );
@@ -179,13 +179,7 @@ function Transfer({ type, client, importable }: { type: string; client: EdgeClie
   const close = () => { setFile(undefined); setRows(undefined); setDone(false); };
   return <>
     <Button onClick={() => void save()}>{t("Export CSV")}</Button>
-    {importable && <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-border px-3 text-sm hover:bg-row-hover">{t("Import CSV")}
-      <input type="file" accept=".csv,text/csv" className="hidden" onChange={async (e) => {
-        const f = e.target.files?.[0];
-        e.target.value = "";
-        if (f) { setFile(f); setRows(await client.importCSV(type, f, true)); }
-      }} />
-    </label>}
+    {importable && <FilePicker accept=".csv,text/csv" onFile={async (f) => { setFile(f); setRows(await client.importCSV(type, f, true)); }}>{t("Import CSV")}</FilePicker>}
     <Dialog open={!!rows} onOpenChange={(o) => !o && close()} title={done ? t("Imported") : t("What the import would do")}>
       <div className="grid gap-3">
         <ul className="max-h-80 overflow-auto text-sm">

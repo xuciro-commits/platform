@@ -1,7 +1,7 @@
 // Settings: owned work, integrations, app settings and the audit trail (ADR-0013, ADR-0014).
 import type { Api } from "@platform/kernel";
 import { useReadQuery as useRead } from "@platform/app";
-import { Button, DataTable, Dialog, Input, PageHeader, Select, Tag, type ColumnDef, t } from "@platform/ui";
+import { Button, Card, Checkbox, DataTable, Dialog, Input, PageHeader, Panel, Select, Tag, type ColumnDef, t } from "@platform/ui";
 import { useState } from "react";
 import { useAdmin, when, type AppSettings, type AuditEntry, type Connector, type Delivery, type Effect, type EndpointView, type ProtocolInfo, type SettingValue, type Task } from "./shared";
 
@@ -41,7 +41,7 @@ export function Automation() {
         {subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
           subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
       </div>
-      {health && <section className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
+      {health && <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
         {/* Every indicator, zero included: a healthy tenant reads as such, not as missing figures (the owner's testing). */}
         <div className="flex flex-wrap items-center gap-2">
           <Tag label={health.status === "ok" ? t("Healthy") : t("Needs attention")} tone={health.status === "ok" ? "success" : "warning"} />
@@ -58,7 +58,7 @@ export function Automation() {
           {health.breakers.map((b) => <Tag key={b.destination} label={t("{destination}: breaker {state} after {n} failures", { destination: b.destination, state: t(b.state), n: b.failures })}
             tone={b.state === "closed" ? "neutral" : "danger"} />)}
         </div>}
-      </section>}
+      </div>}
       <h2 className="mb-1 text-sm font-semibold">{t("Owned work")}</h2>
       <DataTable data={work.data ?? []} columns={taskColumns} getRowId={(t) => t.id} height={200} searchable={false} empty={t("Nothing queued, no jobs")} />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Delivery attempts")}</h2>
@@ -141,14 +141,14 @@ function Webhooks() {
       <div className="grid gap-2">
         {endpoints.data?.length === 0 && <p className="text-sm text-muted">{t("No endpoints.")}</p>}
         {endpoints.data?.map((ep) => (
-          <section key={ep.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2 text-sm">
+          <Card key={ep.id} className="flex flex-wrap items-center gap-2 p-2 text-sm">
             <span className="font-semibold">{ep.id}</span><Tag label={ep.kind} /><span className="font-mono text-xs">{ep.url}</span>
             <Tag label={ep.health} tone={ep.health === "ok" ? "success" : "danger"} />
             <span className="text-xs text-muted">{ep.kind === "email" ? `from ${ep.from}` : `secret “${ep.secret}”`} · {ep.delivered} {t("delivered ·")} {ep.pending} waiting</span>
             <span className="flex flex-wrap gap-1">{[...(ep.events ?? []), ...(ep.effects ?? []), ...(ep.notifications ?? []).map((a) => `${a} notifications`)]
               .map((e) => <Tag key={e} label={e} tone="info" />)}</span>
             <Button size="sm" variant="danger" className="ml-auto" onClick={() => void decideOn("platform.endpoint.remove", { type: "platform.endpoint", id: ep.id }, {})}>{t("Remove")}</Button>
-          </section>
+          </Card>
         ))}
       </div>
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Outbound effects")}</h2>
@@ -164,29 +164,29 @@ function Webhooks() {
           {email && <Input aria-label={t("From")} placeholder={t("Sender, e.g. plant@example.com")} value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />}
           <Input aria-label={t("Secret name")} placeholder={email ? t("Name of the SMTP password in the secret store (when the URL names a user)") : t("Name of the signing secret in the secret store")}
             value={draft.secret} onChange={(e) => setDraft({ ...draft, secret: e.target.value })} />
-          <label className="flex items-center gap-2"><input type="checkbox" checked={draft.allowPrivate} onChange={(e) => setDraft({ ...draft, allowPrivate: e.target.checked })} />
-            {email ? t("Mail server inside the deployment (private address allowed)") : t("Receiver inside the deployment (private address, http allowed)")}</label>
+          <Checkbox checked={draft.allowPrivate} onChange={(v) => setDraft({ ...draft, allowPrivate: v })}>
+            {email ? t("Mail server inside the deployment (private address allowed)") : t("Receiver inside the deployment (private address, http allowed)")}</Checkbox>
           {email && <>
             <p className="mt-1 text-xs text-muted">{t("Mail these apps' notifications to members who sign in with an email address")}</p>
             {apps.map((a) => (
-              <label key={a.id} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={draft.notifications.includes(a.id)}
-                onChange={(e) => toggle("notifications", a.id, e.target.checked)} /><span className="font-mono">{a.id}</span></label>
+              <Checkbox key={a.id} className="text-xs" checked={draft.notifications.includes(a.id)}
+                onChange={(v) => toggle("notifications", a.id, v)}><span className="font-mono">{a.id}</span></Checkbox>
             ))}
           </>}
           {!email && kinds.length > 0 && <>
             <p className="mt-1 text-xs text-muted">{t("Effects apps send (the receiver's answer goes back to the app)")}</p>
             {kinds.map((k) => (
-              <label key={k.id} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={draft.effects.includes(k.id)}
-                onChange={(e) => toggle("effects", k.id, e.target.checked)} />
-                <span className="font-mono">{k.id}</span> · {k.title}</label>
+              <Checkbox key={k.id} className="text-xs" checked={draft.effects.includes(k.id)}
+                onChange={(v) => toggle("effects", k.id, v)}>
+                <span className="font-mono">{k.id}</span> · {k.title}</Checkbox>
             ))}
           </>}
           {!email && <>
             <p className="mt-1 text-xs text-muted">{t("Events (as webhooks)")}</p>
             <div className="grid max-h-48 gap-1 overflow-auto">
               {events.map((ev) => (
-                <label key={ev} className="flex items-center gap-2 font-mono text-xs"><input type="checkbox" checked={draft.events.includes(ev)}
-                  onChange={(e) => toggle("events", ev, e.target.checked)} />{ev}</label>
+                <Checkbox key={ev} className="font-mono text-xs" checked={draft.events.includes(ev)}
+                  onChange={(v) => toggle("events", ev, v)}>{ev}</Checkbox>
               ))}
             </div>
           </>}
@@ -220,8 +220,7 @@ export function AppSettingsView() {
       {settings.data?.length === 0 && <p className="text-sm text-muted">{t("No app in this tenant declares settings.")}</p>}
       <div className="grid max-w-3xl gap-3">
         {settings.data?.map((a) => (
-          <section key={a.app} className="rounded-md border border-border bg-surface p-3">
-            <h2 className="mb-2 font-mono text-sm font-semibold">{a.app}</h2>
+          <Panel key={a.app} title={<span className="font-mono">{a.app}</span>}>
             <div className="grid gap-3">
               {a.settings.map((s) => {
                 const key = `${a.app}/${s.name}`;
@@ -247,7 +246,7 @@ export function AppSettingsView() {
                 );
               })}
             </div>
-          </section>
+          </Panel>
         ))}
       </div>
     </>

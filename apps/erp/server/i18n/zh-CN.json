@@ -191,5 +191,17 @@
  "scrap": "报废",
  "supplier": "供应商",
  "supplier, vendor, customer": "供应商，卖方，客户",
- "voucher, journal voucher": "记账凭证，传票"
+ "voucher, journal voucher": "记账凭证，传票",
+ "The account {account} is missing or archived": "科目 {account} 不存在或已归档",
+ "A period is a month, such as 2026-10, not {id}": "会计期间是一个月，例如 2026-10，而不是 {id}",
+ "The product {product} is missing or archived": "物料 {product} 不存在或已归档",
+ "{product} is not a finished product with components": "{product} 不是带组件的成品",
+ "Produce a quantity above zero": "生产数量必须大于零",
+ "A confirmation names the shop order that made it": "确认必须写明完成它的车间订单",
+ "Made {yield} and scrapped {scrap}: together above zero and at most the order's {quantity}": "完成 {yield}、报废 {scrap}：合计须大于零且不超过订单数量 {quantity}",
+ "{supplier} is not a supplier": "{supplier} 不是供应商",
+ "An order has at least one line": "订单至少要有一行",
+ "Line {n}: the product {product} is missing or archived": "第 {n} 行：物料 {product} 不存在或已归档",
+ "Line {n}: a quantity above zero and a price not below zero": "第 {n} 行：数量须大于零，单价不能小于零",
+ "Line {n}: prices are in {currency}, not {other}": "第 {n} 行：价格应为 {currency}，而不是 {other}"
 }

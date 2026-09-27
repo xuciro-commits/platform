@@ -36,17 +36,22 @@ export type AttachedFile = EntityRecord & { name: string; size: number; contentT
 /** A comment on a record (ADR-0028 D6). */
 export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };
 
-export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes" | "approvals" | "tasks" | "files" | "comments"> & {
+export type RecordView = Omit<Api.RecordView, "record" | "related" | "linked" | "activity" | "processes" | "approvals" | "tasks" | "files" | "comments"> & {
   /** Open tasks about the record the member may take (a flow's question, a correction to make). */
   tasks: Api.InboxTask[];
   /** The approval requests to move the record, newest first (F-38). */
   approvals: Api.ApprovalRequest[];
   files: AttachedFile[];
   comments: RecordComment[];
-  record: EntityRecord; related: (Omit<Api.Related, "records"> & { records: EntityRecord[] })[];
+  record: EntityRecord; related: RelatedRecords[];
+  /** Records of any app linked to it (the relations app), by type. */
+  linked: RelatedRecords[];
+  /** What apps told about it through protocols, oldest first. */
+  activity: Api.Note[];
   /** The flow instances about the record (ADR-0026 D4). */
   processes: (EntityRecord & { title: string; state: string; tokens?: { step: string }[] })[];
 };
+type RelatedRecords = Omit<Api.Related, "records"> & { records: EntityRecord[] };
 export type Money = { amount: number; currency: string };
 
 /** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart (ADR-0019). */
@@ -357,18 +362,33 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
       {(view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
       {(view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
-      {view.related.map((rel) => {
+      {[...view.related, ...(view.linked ?? [])].map((rel) => {
         const relInfo = source.entity(rel.type);
         const relEntity = relInfo && entityFrom(relInfo);
         return relEntity && (
           <section key={`${rel.type}.${rel.field}`}>
-            <h2 className="mb-1 text-sm font-semibold">{rel.title} <span className="font-normal text-muted">({rel.total}{t(", by")} {rel.field})</span></h2>
+            <h2 className="mb-1 text-sm font-semibold">{relInfo.plural} <span className="font-normal text-muted">({rel.total}{rel.field === "link" ? t(", linked") : <>{t(", by")} {rel.field}</>})</span></h2>
             <DataTable data={rel.records} columns={[{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 } }, ...columnsFor(relEntity, listed(relEntity))] as never}
               getRowId={(x: EntityRecord) => x.id} height={Math.min(40 + rel.records.length * 28, 260)} searchable={false}
               onRowClick={onOpen && ((x: EntityRecord) => onOpen(rel.type, x))} empty={t("None")} />
           </section>
         );
       })}
+      {(view.activity?.length ?? 0) > 0 && (
+        <section>
+          <h2 className="mb-1 text-sm font-semibold">{t("Activity")}</h2>
+          <ol className="grid gap-1 text-sm">
+            {view.activity.map((n, i) => (
+              <li key={i} className="flex flex-wrap items-baseline gap-2">
+                <span className="text-xs text-muted">{new Date(n.at).toLocaleString()}</span>
+                <Tag label={n.by} tone="info" />
+                {n.title && <span className="font-medium">{n.title}</span>}
+                <span className="text-xs text-muted">{n.text}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
       <section>
         <h2 className="mb-1 flex items-center gap-1 text-sm font-semibold"><HistoryIcon className="size-3.5" />{t("History")}</h2>
         <ol className="grid gap-2">

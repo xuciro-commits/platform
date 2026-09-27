@@ -18,16 +18,15 @@ import (
 
 // Relations is the platform's links and timeline (ADR-0011): relations between
 // any two entities of any apps, and the activity about an entity, so no app —
-// and no bridge — has to own them. A member may link or annotate entities of
-// apps it holds a role in, and sees only those. Protocol events are told on the
-// timeline of the entity they concern and of every entity linked to it.
+// and no bridge — has to own them. A member may link entities of apps it holds
+// a role in, and sees only those. Protocol events are told on the timeline of
+// the entity they concern and of every entity linked to it; what people write
+// about a record is a comment (one owner, #129). A record page shows both.
 const (
 	ID           = "relations"
 	LinkType     = "platform.link"
-	NoteType     = "platform.note"
 	SchemaLink   = "platform.link"
 	SchemaUnlink = "platform.unlink"
-	SchemaNote   = "platform.note"
 	// Comments and followers on any record (ADR-0028 D6).
 	CommentType    = "platform.comment"
 	FollowType     = "platform.follow"
@@ -75,6 +74,7 @@ type Link struct {
 	At   time.Time `json:"at"`
 }
 
+// Note is one protocol event on an entity's timeline, told by the app that decided it.
 type Note struct {
 	Entity string    `json:"entity"`
 	By     string    `json:"by"`
@@ -101,9 +101,6 @@ func New(tenant string) *Relations {
 			Description: "Relate two entities, of the same or of different apps.", Payload: []platform.Field{ref("from"), ref("to")}, Roles: any},
 		platform.Action{Schema: SchemaUnlink, Target: LinkType, Capability: "links", Title: "Unlink entities",
 			Description: "Remove the relation between two entities.", Payload: []platform.Field{ref("from"), ref("to")}, Roles: any},
-		platform.Action{Schema: SchemaNote, Target: NoteType, Capability: "timeline", Title: "Add note",
-			Description: "Add a note to an entity's activity timeline.",
-			Payload:     []platform.Field{ref("entity"), {Name: "text", Type: "string", Required: true, Description: "What happened"}}, Roles: any},
 		platform.Action{Schema: SchemaComment, Target: CommentType, New: true, Capability: "comments", Title: "Comment",
 			Description: "Comment on a record you may read; @member tells them. You then follow the record.",
 			Payload:     []platform.Field{ref("target"), {Name: "text", Type: "string", Required: true, Description: "The comment"}}, Roles: any},
@@ -111,7 +108,7 @@ func New(tenant string) *Relations {
 			Description: "Be told of a record's changes and comments.", Payload: []platform.Field{ref("target")}, Roles: any},
 		platform.Action{Schema: SchemaUnfollow, Target: FollowType, Capability: "comments", Title: "Unfollow",
 			Description: "Stop being told of a record's changes and comments.", Payload: []platform.Field{}, Roles: any},
-	), LinkType, NoteType, CommentType, FollowType)}
+	), LinkType, CommentType, FollowType)}
 }
 
 // Snapshot and Restore: links and notes (ADR-0019 D6).
@@ -168,12 +165,9 @@ func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var p struct{ From, To, Entity, Text string }
+	var p struct{ From, To string }
 	json.Unmarshal(s.GetPayload(), &p)
-	entities := []string{p.Entity}
-	if s.GetSchema().GetName() != SchemaNote {
-		entities = []string{p.From, p.To}
-	}
+	entities := []string{p.From, p.To}
 	allowed := func() bool {
 		return !slices.ContainsFunc(entities, func(e string) bool { return !r.sees(c, e) })
 	}
@@ -197,12 +191,7 @@ func (r *Relations) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 			}
 			return func(*pb.ChangeRecord) { r.links = slices.Delete(r.links, linked, linked+1) }, nil
 		}
-		if strings.TrimSpace(p.Text) == "" {
-			return nil, invalid
-		}
-		return func(rec *pb.ChangeRecord) {
-			r.notes = append(r.notes, Note{Entity: p.Entity, By: c.ID, At: rec.GetRecordedTime().AsTime(), Text: p.Text})
-		}, nil
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	})
 }
 
@@ -235,7 +224,7 @@ func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 func (r *Relations) Observe(e platform.Event, events []string) {
 	s := e.Record.GetSubmission()
 	entity := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()
-	if t := s.GetTarget().GetType(); t != CommentType && t != FollowType && t != NoteType && t != LinkType && !strings.HasPrefix(s.GetPrincipalId(), "app:") {
+	if t := s.GetTarget().GetType(); t != CommentType && t != FollowType && t != LinkType && !strings.HasPrefix(s.GetPrincipalId(), "app:") {
 		// A member's decision on a record tells its followers (ADR-0028 D6).
 		r.tell(r.host.Automation(ID, false), entity, entity+" changed: "+s.GetSchema().GetName(), "by "+s.GetPrincipalId(),
 			"change:"+e.App+"/"+e.Record.GetChangeId(), []string{s.GetPrincipalId()}, e.Record.GetRecordedTime().AsTime())

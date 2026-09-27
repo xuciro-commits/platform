@@ -6,7 +6,6 @@
     "@pkg/csm": "workspace:*",
     "@pkg/pms": "workspace:*",
     "@pkg/hcm": "workspace:*",
-    "@pkg/lodging": "workspace:*",
     "@pkg/mes": "workspace:*",
     "@pkg/platform": "workspace:*",
     "@platform/app": "workspace:*",

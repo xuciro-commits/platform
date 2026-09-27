@@ -64,7 +64,7 @@ They agree on four things:
    - Separate deployments stay separate sites, reached through the identity provider's single sign-on.
 8. **What becomes of today's clients.**
    - `apps/sales`, `apps/mes` and `apps/settings` become app UI packages in the workspace, and their sites are deleted:
-     - `@pkg/crm` (with the customer view that shows stays through `@pkg/lodging`);
+     - `@pkg/crm` (its declarations only since #129: accounts, opportunities and their stays are the platform's record pages);
      - `@pkg/hotel`, `@pkg/hr`, `@pkg/mes`;
      - `@pkg/platform` for Settings.
    - The work app's inbox and "my requests" are shell chrome.
