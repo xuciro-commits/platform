@@ -1,6 +1,6 @@
 # ADR-0037: Actions and access a tenant defines on its own objects
 
-**Status:** Proposed (2026-09-28, #132 15c). D1–D3 were built as recommended in 18a, under the owner's standing direction to build the builder loop ("做15，下一项吧"; the owner sets no priorities and asked to be shown the ADR). D4–D6 — where roles live, what "own" means, and approval — wait for the owner before 18b and 18c. ADR-0034 named 15c — bounded actions a tenant authors, per-object roles and scope, and the published revision — and said each would come in its own batch rather than extend that ADR. This one covers the first two. The published revision and its release binding stay with the #135/#136 gate.
+**Status:** Accepted (2026-09-28, #132 15c). The owner accepted D1–D6 as recommended ("按照你的建议走"). D1–D3 had been built in 18a under the owner's standing direction to build the builder loop; D4–D6 — an object's roles are roles of the `build` app, "own" is whoever created the record, approval comes in 18c — govern 18b and 18c. ADR-0034 named 15c — bounded actions a tenant authors, per-object roles and scope, and the published revision — and said each would come in its own batch rather than extend that ADR. This one covers the first two. The published revision and its release binding stay with the #135/#136 gate.
 
 ## Context
 

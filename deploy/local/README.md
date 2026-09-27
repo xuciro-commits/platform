@@ -81,9 +81,9 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 | `qa1@plant.test` | MES | `qa-1` | mes 质量；ai 用户 | — |
 | `qa2@plant.test` | MES | `qa-2` | mes 质量；ai 用户（报废需要两个质量签名） | — |
 | `sales@hotel.test` | 酒店业 `hotel-a` | `sales-1` | crm 销售、pms 前台、memstay 管家、hcm 员工；ai 用户 | 销售组、2026 年会项目 |
-| `manager@hotel.test` | 酒店业 | `manager-1` | crm 销售经理、pms 经理、memstay 管家、hcm 员工、csm lead；work、flow、agent 管理员；platform、org、ai 管理员 | 酒店总经理等；`hotel-a` 经理、`hospitality` 负责人（请假的两级审批人） |
+| `manager@hotel.test` | 酒店业 | `manager-1` | crm 销售经理、pms 经理、memstay 管家、hcm 员工、csm lead；work、flow、agent 管理员；platform、org、ai 管理员；build 构建者（builder） | 酒店总经理等；`hotel-a` 经理、`hospitality` 负责人（请假的两级审批人） |
 | `hr@hotel.test` | 酒店业 | `hr-1` | hcm 人事（hr）；ai 用户 | `hotel-a` 人事专员：看得到病假的"医疗原因"，经理和员工看不到 |
-| `desk@hotel.test` | 酒店业 | `desk-1` | csm 客服（desk）、pms 前台、hcm 员工；ai 用户 | 前台（`front-office`）：接工单、回复客户，模型不可用时工单进她的收件箱 |
+| `desk@hotel.test` | 酒店业 | `desk-1` | csm 客服（desk）、pms 前台、hcm 员工；ai 用户；build 使用者（user） | 前台（`front-office`）：接工单、回复客户，模型不可用时工单进她的收件箱 |
 | `deputy@hotel.test` | 酒店业 | `deputy-1` | crm 销售经理、csm lead、hcm 员工；ai 用户 | `hotel-a` 副总经理：经理不在时代批（委托审批的被委托人） |
 | `buyer@plant.test` | ERP `plant-sz` | `buyer-1` | erp 采购员（buyer）；ai 用户 | 下采购订单、收货；超过审批限额的订单由 `sup@plant.test`（主管会计）审批 |
 | `accountant@plant.test` | ERP | `acc-1` | erp 会计（accountant）；ai 用户 | 起草、过账、冲销凭证，登记供应商发票 |

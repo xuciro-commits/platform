@@ -40,7 +40,8 @@
       "flow": "admin",
       "agent": "admin",
       "csm": "lead",
-      "knowledge": "editor"
+      "knowledge": "editor",
+      "build": "builder"
     },
     "units": [
       {
@@ -92,7 +93,8 @@
       "csm": "desk",
       "pms": "front-desk",
       "hcm": "employee",
-      "ai": "user"
+      "ai": "user",
+      "build": "user"
     },
     "units": [
       {
