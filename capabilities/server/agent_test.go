@@ -172,7 +172,8 @@ func TestAgents(t *testing.T) {
 			return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 		}
 		tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", map[string]string{"desk": "clerk", PlatformApp: Admin, ai.ID: ai.Admin, AgentApp: AgentAdmin}),
-			seat("bo", map[string]string{"desk": "viewer"})), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
+			seat("bo", map[string]string{"desk": "viewer"}),
+			Seat{Subjects: []string{"bot"}, Member: platform.Member{ID: "bot", Roles: map[string]string{"desk": "clerk"}, Agent: true}}), ai.New("t-1"), work.New("t-1"), flow.New("t-1"), NewAgents("t-1"), newDesk("t-1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -338,5 +339,37 @@ func TestAgents(t *testing.T) {
 
 	// Usage is metered as the agent's.
 	expect("metered", fmt.Sprint(tn.ai.Spent("agent:desk.triage", now) > 0), "true")
+
+	// The overview (ADR-0029 D5): each agent, declared or outside, with what
+	// it did and what people made of it.
+	overview := func(member string) AgentOverview {
+		for _, o := range tn.AgentsOverview() {
+			if o.Member == member {
+				return o
+			}
+		}
+		return AgentOverview{}
+	}
+	triage := overview("agent:desk.triage")
+	expect("overview", fmt.Sprint(triage.Runs > 5, " ", triage.Calls > 0, " ", triage.Judged["changed"], " ", triage.Judged["rejected"], " ", triage.Actions > 0, " ", overview("bot").Outside), "true true 1 1 true true")
+	expect("outside agents act", do("bot", "desk", "desk.ticket.open", "desk.ticket", "T20", map[string]string{"subject": "from outside"}), "ok")
+	expect("counted", fmt.Sprint(overview("bot").Actions), "1")
+
+	// The off switch (D4): only an agent administrator turns it; a suspended
+	// agent's running run stops at its next step, a new one is refused, and an
+	// outside agent's decisions and model calls are refused; resumed, it works again.
+	expect("start before", start("ana", "R20", "Answer ticket T2: wifi", "desk.ticket/T2"), "ok")
+	expect("not bo", do("bo", AgentApp, SchemaSuspend, SwitchType, "agent:desk.triage", map[string]string{}), "ERROR_CODE_POLICY_DENIED")
+	expect("suspend", do("ana", AgentApp, SchemaSuspend, SwitchType, "agent:desk.triage", map[string]string{"reason": "misbehaves"}), "ok")
+	think(1)
+	expect("stopped", run("R20").State+" "+run("R20").Stopped, "stopped suspended by ana")
+	expect("no new run", start("ana", "R21", "Answer ticket T2", "desk.ticket/T2"), "ERROR_CODE_POLICY_DENIED")
+	expect("suspend bot", do("ana", AgentApp, SchemaSuspend, SwitchType, "bot", map[string]string{}), "ok")
+	expect("bot refused", do("bot", "desk", "desk.ticket.open", "desk.ticket", "T21", map[string]string{"subject": "again"}), "ERROR_CODE_POLICY_DENIED")
+	_, refused, _ := tn.Chat(member("bot"), ChatRequest{Model: "lm/scripted", Messages: []Message{{Role: "user", Content: "hi"}}}, now)
+	expect("bot's model call", refused.Message, "The agent bot is suspended")
+	expect("overview says so", fmt.Sprint(overview("agent:desk.triage").Suspended, overview("bot").Suspended), "true true")
+	expect("resume", do("ana", AgentApp, SchemaResume, SwitchType, "agent:desk.triage", map[string]string{}), "ok")
+	expect("works again", start("ana", "R22", "Answer ticket T2", "desk.ticket/T2"), "ok")
 	CheckReplay(t, tn, journal, build)
 }

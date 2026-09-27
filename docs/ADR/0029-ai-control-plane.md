@@ -95,3 +95,9 @@ They agree:
 - **The helpdesk** summarises a ticket when it is opened (`csm.ticket.summary`, `Ticket.Summary`); a person may write the line too.
 - **Proven:** `TestCSMTriage` (the summary through the model for apps; no setting, no request; `CheckReplay`), the rehearsal (a ticket summarised by the local model).
 - **Not yet:** the ERP's classified bill description, the second proof the build table names — app depth waits (Intent.md, platform faults first).
+
+### 12c: the agents overview and the off switch
+
+- **The switch** (`agent_control.go`): `agent.suspend` and `agent.resume` on `agent.switch/<member>` — a declared agent's member (`agent:<app>.<name>`) or an outside principal marked agent — by the agent app's administrators, with a reason; a record, so it replays. A suspended agent's running runs stop at their next step ("suspended by …"), new runs are refused, and its decisions and model calls are refused with why at the host's doors (`Tenant.Submit`, `Chat`) — which covers MCP and A2A, as both come through them.
+- **The overview** (`agent-overview`, Settings → Agents): every declared agent and every outside agent member with runs, live runs, actions (its runs' actions; an outside agent's decisions from the audit), model calls, tokens and cost from the usage kept, and people's signals by kind — measured, not estimated (D5).
+- **Proven:** `TestAgents` (the overview's counts, an outside agent's decisions counted; only an administrator suspends; a running run stopped, a new one refused, an outside agent's decision and model call refused, resumed; `CheckReplay`), Playwright route 25.

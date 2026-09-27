@@ -1,7 +1,8 @@
 // Settings: flows (ADR-0020), agents and their evaluations (ADR-0021).
 import { Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { Button, DataTable, FlowGraph, FlowView, Input, PageHeader, Select, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
+import { Button, DataTable, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, Input, PageHeader, Select, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
 import { useState } from "react";
+import type { Api } from "@platform/kernel";
 import { type AIModel } from "./shared";
 
 // Flows (ADR-0020): the flows the tenant's apps declare, their instances, and
@@ -72,6 +73,7 @@ export function Agents() {
     <>
       <PageHeader title={t("Agents")} description={t("Agents the apps declare. Each is a principal of its own: it does what its tools allow and, for a person, only what they may do; people confirm its drafts. The model is an app setting of Agents.")} />
       <DataTable data={agents} columns={columns} getRowId={(a) => a.id} height={180} empty={t("No app declares an agent")} />
+      <AgentsOverview />
       <h2 className="mb-2 mt-4 text-sm font-semibold">{t("Runs")}</h2>
       <Records type="agent.run" description={t("Every run: open one for its steps, the rationale of each, and what people made of it.")} />
       <h2 className="mb-2 mt-4 text-sm font-semibold">{t("Memories")}</h2>
@@ -101,6 +103,38 @@ export function Evaluations() {
         </form>
       )}
       <Records type="agent.evaluation" description={t("Reports, newest first; open one for each case.")} />
+    </>
+  );
+}
+
+const switches = defineStatuses({ working: { label: t("Working"), tone: "success" }, suspended: { label: t("Suspended"), tone: "danger" } });
+
+// Every agent, declared and outside (ADR-0029 D4, D5): what it did, what it
+// cost, what people made of its work, and the switch that stops it.
+function AgentsOverview() {
+  const { decide, can } = useHost();
+  const rows = useRead<Api.AgentOverview[]>("/v1/agent-overview");
+  if (rows.isError) return null; // an administrator's view
+  const judged = (o: Api.AgentOverview, kind: string) => o.judged[kind] ?? 0;
+  const columns: ColumnDef<Api.AgentOverview, any>[] = [
+    { accessorKey: "member", header: t("Agent"), cell: ({ row: { original: o } }) => <span className="flex items-center gap-1.5"><span className="font-mono text-xs">{o.member}</span>{o.outside && <Tag label={t("outside")} />}</span> },
+    { id: "state", header: t("State"), meta: { width: 110 }, accessorFn: (o) => o.suspended ? "suspended" : "working", cell: (c) => <StatusTag status={c.getValue()} registry={switches} /> },
+    { accessorKey: "runs", header: t("Runs"), meta: { width: 70, align: "right" } },
+    { accessorKey: "actions", header: t("Actions"), meta: { width: 80, align: "right" } },
+    { id: "accepted", header: t("Accepted"), meta: { width: 90, align: "right" }, accessorFn: (o) => judged(o, "confirmed") + judged(o, "approved") + judged(o, "accepted") },
+    { id: "changed", header: t("Changed"), meta: { width: 90, align: "right" }, accessorFn: (o) => judged(o, "changed") + judged(o, "corrected") },
+    { id: "refused", header: t("Refused"), meta: { width: 90, align: "right" }, accessorFn: (o) => judged(o, "rejected") + judged(o, "discarded") + judged(o, "undone") },
+    { accessorKey: "tokens", header: t("Tokens"), meta: { width: 100, align: "right" } },
+    { accessorKey: "cost", header: t("Cost (USD)"), meta: { width: 100, align: "right" }, cell: (c) => c.getValue().toFixed(4) },
+    { id: "switch", header: "", meta: { width: 110 }, cell: ({ row: { original: o } }) => o.suspended
+      ? can("agent.resume") && <Button size="sm" onClick={() => void decide("agent.resume", { type: "agent.switch", id: o.member }, {})}>{t("Resume")}</Button>
+      : can("agent.suspend") && <Button size="sm" variant="danger" onClick={() => void decide("agent.suspend", { type: "agent.switch", id: o.member }, {})}>{t("Suspend")}</Button> },
+  ];
+  return (
+    <>
+      <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Overview")}</h2>
+      <p className="mb-2 text-xs text-muted">{t("Every agent, the apps' and those outside that act as one: what it did, what it cost from the usage kept, and what people made of its work. Suspending one stops its runs at their next step and refuses its calls.")}</p>
+      <DataTable data={rows.data ?? []} columns={columns} getRowId={(o) => o.member} height={220} empty={t("No agent yet")} />
     </>
   );
 }

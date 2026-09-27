@@ -336,6 +336,13 @@ func (a *AI) Meter(u Usage) {
 	a.recent[u.Member] = append(slices.DeleteFunc(a.recent[u.Member], func(t time.Time) bool { return u.At.Sub(t) >= time.Minute }), u.At)
 }
 
+// Usage is the usage kept, oldest first.
+func (a *AI) Usage() []Usage {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return slices.Clone(a.usage)
+}
+
 // Defaults are the limits a member without its own takes (ADR-0029 D1):
 // tokens a day for people and for agents, and calls a minute; 0: none.
 type Defaults struct{ People, Agents, PerMinute int }

@@ -116,6 +116,9 @@ func (a *Agents) due(now time.Time) []turn {
 			x.stop = "the agent is no longer declared"
 		case name == "":
 			x.stop = "no model is set for agents"
+		case t.suspended("agent:" + run.Agent): // the off switch (ADR-0029 D4)
+			sw, _ := t.Held(SwitchType + "/agent:" + run.Agent)
+			x.stop = "suspended by " + sw.(Switch).By
 		default:
 			model, pv, err := t.ai.Model(name)
 			if err != nil {

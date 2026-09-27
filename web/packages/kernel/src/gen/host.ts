@@ -30,6 +30,20 @@ export type AgentInfo = {
   budget: Budget;
 };
 
+export type AgentOverview = {
+  member: string;
+  title: string;
+  outside?: boolean;
+  suspended: boolean;
+  runs: number;
+  live: number;
+  actions: number;
+  calls: number;
+  tokens: number;
+  cost: number;
+  judged: Record<string, number>;
+};
+
 export type AgentRunRecord = {
   id: string;
   revision: number;
@@ -425,6 +439,12 @@ export type LifecycleInfo = {
   initial: string;
   states: State[];
   transitions: TransitionInfo[];
+};
+
+export type Limit = {
+  member: string;
+  dailyTokens?: number;
+  perMinute?: number;
 };
 
 export type Link = {

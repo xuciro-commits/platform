@@ -282,6 +282,9 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
 	defer t.enqueue(now)
+	if m.Agent && t.suspended(m.ID) { // an agent an administrator switched off (ADR-0029 D4)
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
+	}
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil && t.owner["action:"+work.SchemaRequest] != nil {
 		return t.request(m, a, s, now)
 	}

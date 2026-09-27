@@ -76,6 +76,17 @@ test("route 24: graphs", async ({ page }) => {
   await expect(graph.getByText("as it decides").first()).toBeVisible();
 });
 
+// Route 25 (ADR-0029 D4): every agent in one overview; suspending one shows it and resuming undoes it.
+test("route 25: the agents overview and its switch", async ({ page }) => {
+  await open(page, "manager", "/agents");
+  const row = page.getByRole("row").filter({ hasText: "agent:csm.triage" });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "Suspend" }).click();
+  await expect(row.getByText("Suspended")).toBeVisible();
+  await row.getByRole("button", { name: "Resume" }).click();
+  await expect(row.getByText("Working")).toBeVisible();
+});
+
 // Route 18 (ADR-0027): the process answers /healthz; Settings → Automation shows the tenant's health.
 test("route 18: health", async ({ page, request }) => {
   expect((await (await request.get("/healthz")).json()).status).toBe("ok");

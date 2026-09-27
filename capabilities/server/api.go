@@ -60,6 +60,8 @@ var namedReads = []Route{
 	{Pattern: "GET /v1/requests", Summary: "The caller's approval requests", Answer: []work.ApprovalRequest{}},
 	{Pattern: "GET /v1/views", Summary: "The caller's saved views", Answer: []work.SavedView{}},
 	{Pattern: "GET /v1/agents", Summary: "The agents the apps declare", Answer: []AgentInfo{}},
+	{Pattern: "GET /v1/agent-overview", Summary: "Every agent, declared and outside, with what it did, what it cost, what people made of it and whether it is suspended (ADR-0029)", Answer: []AgentOverview{}},
+	{Pattern: "GET /v1/ai-limits", Summary: "Members', agents' and apps' own AI limits (ADR-0029)", Answer: []ai.Limit{}},
 	{Pattern: "GET /v1/runs", Summary: "Agent runs on the caller's behalf", Answer: []AgentRunRecord{}},
 	{Pattern: "GET /v1/memories", Summary: "What agents remember about the caller", Answer: []Memory{}},
 	{Pattern: "GET /v1/ai-providers", Summary: "AI providers (AI administrators)", Answer: []ai.Provider{}},

@@ -103,6 +103,7 @@ type models interface {
 	Meter(u ai.Usage)
 	Spent(member string, now time.Time) int
 	Allow(m platform.Member, model ai.Model, d ai.Defaults, now time.Time) string
+	Usage() []ai.Usage
 }
 
 // allowed says why m may not call model now (ADR-0029 D1), or "": the door
@@ -125,6 +126,9 @@ func (t *Tenant) Chat(m platform.Member, req ChatRequest, now time.Time, delta .
 	}
 	if len(req.Messages) == 0 {
 		return ChatAnswer{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}, nil
+	}
+	if m.Agent && t.suspended(m.ID) {
+		return ChatAnswer{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID), nil
 	}
 	model, pv, err := t.ai.Callable(m, req.Model)
 	if err != nil {

@@ -156,17 +156,19 @@ func NewAgents(tenant string) *Agents {
 			Description: "Re-run an agent's past runs that people confirmed or corrected, dry, with a candidate model, and compare.",
 			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
 				{Name: "model", Type: "string", Required: true, Description: "The candidate, an enabled model <provider>/<model>"}}})
-	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType, MemoryType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
+	actions = append(actions, switchActions()...)
+	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType, MemoryType, SwitchType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
 }
 
 func agentEntities() []platform.Entity {
 	return []platform.Entity{{Type: RunType, Title: "Agent run", Model: AgentRunRecord{}, Display: "title"},
-		{Type: EvaluationType, Title: "Agent evaluation", Model: Evaluation{}, Display: "model"}, memoryEntity()}
+		{Type: EvaluationType, Title: "Agent evaluation", Model: Evaluation{}, Display: "model"}, memoryEntity(),
+		{Type: SwitchType, Title: "Agent switch", Model: Switch{}, Description: "An agent's off switch: suspended by an administrator, or working."}}
 }
 
 func (a *Agents) Manifest() platform.Manifest {
 	return platform.Manifest{ID: AgentApp, Title: "Agents", Version: "1", Actions: a.ledger.Catalog, Entities: agentEntities(),
-		Reads: []string{"agents", "runs", "memories"}, Everyone: []string{"agents", "runs", "memories"},
+		Reads: []string{"agents", "runs", "memories", "agent-overview"}, Everyone: []string{"agents", "runs", "memories"},
 		Settings: []platform.Setting{
 			{Name: SettingAgentModel, Title: "Model for agents", Type: "text", Default: "",
 				Description: "The enabled model agents call, <provider>/<model>; it must call tools. Empty: agents stop and hand their goal to a person."},
@@ -340,7 +342,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			return d != nil && c.Roles[d.app] != "" // an agent of an app the member works in
 		case SchemaRunCancel:
 			return c.Roles[AgentApp] == AgentAdmin || known && run.OnBehalf == c.ID
-		case SchemaEvalStart:
+		case SchemaEvalStart, SchemaSuspend, SchemaResume:
 			return true // the catalog's role
 		}
 		return known && run.OnBehalf == c.ID // drafts are answered by whom the run is for
@@ -354,11 +356,16 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			if d == nil || strings.TrimSpace(p.Goal) == "" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
+			if a.t.suspended("agent:"+p.Agent) && !c.Replaying {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", p.Agent)
+			}
 			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now)
 			run.Acts, run.Language = p.Act, p.Language
 			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
 		case SchemaEvalStart:
 			return a.startEvaluation(c, id, struct{ Agent, Model string }{p.Agent, p.Model})
+		case SchemaSuspend, SchemaResume:
+			return a.switchDecision(c, s, struct{ Reason string }{p.Reason})
 		case SchemaRunCancel:
 			if !known || run.State == "done" || run.State == "stopped" {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -471,6 +478,12 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		about, _ := json.Marshal([]any{[]any{"for", "=", c.ID}, []any{"state", "!=", "forgotten"}})
 		out, _, _ := platform.Find[Memory](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
 		return out, nil
+	}
+	if name == "agent-overview" {
+		if c.Roles[AgentApp] != AgentAdmin {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		return a.t.AgentsOverview(), nil
 	}
 	if name == "runs" {
 		mine, _ := json.Marshal([]any{[]any{"onBehalf", "=", c.ID}})

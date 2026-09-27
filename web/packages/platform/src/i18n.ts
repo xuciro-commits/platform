@@ -2,6 +2,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Working": "工作中",
+  "Suspended": "已暂停",
+  "outside": "外部",
+  "Accepted": "被采纳",
+  "Changed": "被修改",
+  "Refused": "被拒绝",
+  "Tokens": "token",
+  "Resume": "恢复",
+  "Suspend": "暂停",
+  "Overview": "总览",
+  "Every agent, the apps' and those outside that act as one: what it did, what it cost from the usage kept, and what people made of its work. Suspending one stops its runs at their next step and refuses its calls.": "所有智能体，包括各应用声明的和以智能体身份接入的外部系统：它做了什么、按保留的用量算花了多少、人们怎么对待它的工作。暂停后它的运行在下一步停下，它的调用都会被拒绝。",
+  "No agent yet": "还没有智能体",
   "Tokens a day": "每天 token 数",
   "Calls a minute": "每分钟调用次数",
   "default": "默认",
