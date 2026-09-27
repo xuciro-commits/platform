@@ -108,6 +108,8 @@ export default {
   "Sub-flow": "子流程",
   "Switch tenant or identity": "切换租户或身份",
   "This view no longer exists.": "此视图已不存在。",
+  "This view failed to show.": "这个视图显示出错。",
+  "Try again": "重试",
   "Toggle navigation": "切换导航",
   "Total": "合计",
   "Undoing": "撤销中",

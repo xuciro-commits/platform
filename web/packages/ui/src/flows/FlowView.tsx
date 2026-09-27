@@ -30,7 +30,7 @@ export function FlowGraph({ definition, instance, height = 260 }: { definition: 
   const tokens = instance?.tokens ?? [];
   const visited = new Set(trace.map((x) => x.step).filter(Boolean));
   const undone = new Set(trace.filter((x) => x.what === "undone").map((x) => x.step));
-  const nodes: GraphNode[] = [{ id: "@start", label: t("Start"), detail: definition.start.join(", "), tone: instance ? "success" : undefined }];
+  const nodes: GraphNode[] = [{ id: "@start", label: t("Start"), detail: (definition.start ?? []).join(", "), tone: instance ? "success" : undefined }];
   const edges: GraphEdge[] = definition.steps[0] ? [{ from: "@start", to: definition.steps[0].name }] : [];
   for (const s of definition.steps) {
     const here = tokens.filter((k) => k.step === s.name);

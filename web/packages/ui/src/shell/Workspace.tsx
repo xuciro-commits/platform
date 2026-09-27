@@ -2,7 +2,7 @@ import { Command } from "cmdk";
 import { DockviewReact, themeLight, type DockviewApi, type IDockviewPanelProps } from "dockview-react";
 import { ChevronDown, LayoutGrid, PanelLeft, Search } from "lucide-react";
 import { DropdownMenu, Menubar } from "radix-ui";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
 import { cn } from "../lib/cn";
 import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
@@ -40,6 +40,26 @@ export function useWorkspace(): WorkspaceApi {
 }
 
 export const notify = toast;
+
+/** Keeps a view's failure inside its tab: the rest of the workspace goes on, and the tab can be closed or tried again. */
+class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void }, { error?: Error }> {
+  state: { error?: Error } = {};
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) { console.error(error); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div role="alert" className="grid max-w-xl gap-2 rounded-md border border-[var(--tone-danger)] p-3 text-sm">
+        <p className="font-medium">{t("This view failed to show.")}</p>
+        <p className="font-mono text-xs text-muted">{this.state.error.message}</p>
+        <div className="flex gap-2">
+          <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-row-hover" onClick={() => this.setState({ error: undefined })}>{t("Try again")}</button>
+          <button type="button" className="rounded-md border border-border px-2 py-1 hover:bg-row-hover" onClick={this.props.onClose}>{t("Close tab")}</button>
+        </div>
+      </div>
+    );
+  }
+}
 
 /**
  * The platform shell: menu bar, session, navigation, a docking workspace whose
@@ -87,10 +107,12 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   }), [open]);
 
   const components = useMemo(() => ({
-    view: ({ params }: IDockviewPanelProps<{ route: Route }>) => {
+    view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
       const view = byId.get(params.route.view);
       return <div className="h-full overflow-auto bg-background p-4">
-        {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}
+        <ViewBoundary onClose={() => api.close()}>
+          {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}
+        </ViewBoundary>
       </div>;
     },
   }), [byId]);

@@ -15,7 +15,7 @@ export function Flows() {
     { accessorKey: "title", header: t("Flow") },
     { accessorKey: "id", header: "ID", meta: { width: 220 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "version", header: t("Version"), meta: { width: 80, align: "right" } },
-    { id: "start", header: t("Starts on"), meta: { width: 260 }, accessorFn: (f) => f.start.join(", ") },
+    { id: "start", header: t("Starts on"), meta: { width: 260 }, accessorFn: (f) => (f.start ?? []).join(", ") },
     { id: "steps", header: t("Steps"), meta: { width: 70, align: "right" }, accessorFn: (f) => f.steps.length },
   ];
   return (

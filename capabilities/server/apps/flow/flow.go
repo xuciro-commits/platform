@@ -487,7 +487,10 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 	out := []FlowDefinition{}
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		for _, d := range f.defs[id] {
-			v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: d.Start.On}
+			v := FlowDefinition{ID: id, App: d.app, Title: d.Title, Version: d.Version, Start: append([]string{}, d.Start.On...), Steps: []FlowStep{}}
+			if d.Start.Type != "" { // started by a record's state, not an event (ADR-0028 D8)
+				v.Start = append(v.Start, "state of "+d.Start.Type)
+			}
 			for _, s := range d.Steps {
 				sv := FlowStep{Name: s.Name, Title: cmp.Or(s.Title, s.Name), Kind: kindOf(s), Next: []string{}, Chooses: s.Choose != nil}
 				for _, n := range append(append([]string{s.Next, s.OnTimeout, s.Fault}, s.All...), s.Any...) {

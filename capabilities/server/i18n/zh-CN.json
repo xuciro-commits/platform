@@ -107,6 +107,7 @@
  "Content type": "内容类型",
  "Cost": "费用",
  "Hold for approval": "等待审批",
+ "state of {type}": "{type} 的状态",
  "Rejected by": "驳回人",
  "Mark rejected": "标为已驳回",
  "Return from approval": "撤回审批",

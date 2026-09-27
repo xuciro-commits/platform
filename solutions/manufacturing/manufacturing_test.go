@@ -65,6 +65,12 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 		}
 	}
 	sup, _ := tn.Member("sup-1")
+	// A flow started by a record's state says so, and names no event (the owner's white page, 2026-09-27).
+	flows, _ := tn.Read(sup, "flows")
+	i := slices.IndexFunc(flows.([]flow.FlowDefinition), func(d flow.FlowDefinition) bool { return d.ID == "mes.erp-confirmation" })
+	if i < 0 || fmt.Sprint(flows.([]flow.FlowDefinition)[i].Start) != "[state of mes.order]" {
+		t.Fatalf("the confirmation flow's start: %+v", flows)
+	}
 	order := func(id string) mes.Order {
 		v, err := tn.RecordOf(sup, mes.OrderType, id, now)
 		if err != nil {
