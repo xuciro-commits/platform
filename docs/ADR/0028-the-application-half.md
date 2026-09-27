@@ -1,5 +1,7 @@
 # ADR-0028: The application half — files, field security and the classic features
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** Code-only model declarations are extended by governed customer object/field and rule definitions with explicit extension points. The current typed Go model and implemented capability record remain unchanged. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-26, stage 7 in Platform.md §10.5, #121). The owner decided D1 (files in an S3-compatible object store: first MinIO, "加上minio", then RustFS locally instead, as MinIO no longer publishes its community images: "用它吧") and accepted D2 to D8 as recommended, all batches at once ("按推荐来做，一波干完").
 
 ## Context

@@ -1,5 +1,7 @@
 # ADR-0008: First-party packages assembled at build time; customers customize around industry rules; every caller acts through declared, granted actions
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** D2 and D4 are amended to allow typed customer extensions and independently published definition assets over registered capabilities. The common authorized action boundary remains; arbitrary executable package installation is not implied. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-24, owner decisions on the external product review of that day, §8; the review is in git history)
 
 **Context.** The product intent review left four questions to the owner: who business packages are for, how deep customers may change them, how far AI may act, and whether packages are installed at runtime.

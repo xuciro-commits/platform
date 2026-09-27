@@ -492,11 +492,18 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name == "runs" {
 		mine, _ := json.Marshal([]any{[]any{"onBehalf", "=", c.ID}})
 		out, _, _ := platform.Find[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
+		out = slices.DeleteFunc(out, func(run AgentRunRecord) bool {
+			d := a.defs[run.Agent]
+			return d == nil || c.Roles[d.app] == ""
+		})
 		return out, nil
 	}
 	out := []AgentInfo{}
 	for _, id := range slices.Sorted(maps.Keys(a.defs)) {
 		d := a.defs[id]
+		if c.Roles[AgentApp] != AgentAdmin && c.Roles[d.app] == "" {
+			continue
+		}
 		out = append(out, AgentInfo{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil

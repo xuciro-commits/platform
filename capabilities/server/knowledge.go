@@ -40,6 +40,7 @@ type Passage struct {
 
 type chunk struct {
 	doc, title, text, hash string
+	scope                  string // owning record; empty for a knowledge document
 	n                      int
 	apps                   []string
 	terms                  map[string]int
@@ -79,6 +80,7 @@ type index struct {
 // source is one text to index: a document, or an app's knowledge field.
 type source struct {
 	key, title, text, revision string
+	scope                      string
 	apps                       []string
 }
 
@@ -100,22 +102,27 @@ func (t *Tenant) sources() []source {
 	})
 	t.records.mu.Unlock()
 	for _, et := range types {
-		page, err := t.Records(t.host(), et.info.Type, platform.Query{Limit: 100000}, time.Now())
-		if err != nil {
-			continue
-		}
-		for _, r := range page.Records {
-			v := reflect.ValueOf(r)
-			rec := v.FieldByName("Record").Interface().(platform.Record)
-			title := rec.ID
-			if f, ok := et.info.Field(et.info.Display); ok {
-				title = fmt.Sprint(v.FieldByIndex(f.Index).Interface())
+		for offset := 0; ; offset += 500 {
+			page, err := t.Records(t.host(), et.info.Type, platform.Query{Sort: []string{"id"}, Offset: offset, Limit: 500}, time.Now())
+			if err != nil {
+				break
 			}
-			for _, f := range et.info.Fields {
-				if text := fmt.Sprint(v.FieldByIndex(f.Index).Interface()); f.Knowledge && len(f.Read) == 0 && strings.TrimSpace(text) != "" {
-					out = append(out, source{key: et.info.Type + "/" + rec.ID + "#" + f.Name, title: et.info.Title + " " + title + ": " + f.Title,
-						text: text, revision: fmt.Sprint(rec.Revision), apps: []string{et.info.App}})
+			for _, r := range page.Records {
+				v := reflect.ValueOf(r)
+				rec := v.FieldByName("Record").Interface().(platform.Record)
+				title := rec.ID
+				if f, ok := et.info.Field(et.info.Display); ok && len(f.Read) == 0 {
+					title = fmt.Sprint(v.FieldByIndex(f.Index).Interface())
 				}
+				for _, f := range et.info.Fields {
+					if text := fmt.Sprint(v.FieldByIndex(f.Index).Interface()); f.Knowledge && len(f.Read) == 0 && strings.TrimSpace(text) != "" {
+						out = append(out, source{key: et.info.Type + "/" + rec.ID + "#" + f.Name, title: et.info.Title + " " + title + ": " + f.Title,
+							text: text, revision: fmt.Sprint(rec.Revision), scope: et.info.Type + "/" + rec.ID, apps: []string{et.info.App}})
+					}
+				}
+			}
+			if offset+len(page.Records) >= page.Total || len(page.Records) == 0 {
+				break
 			}
 		}
 	}
@@ -140,7 +147,7 @@ func (t *Tenant) sync() {
 		var cs []*chunk
 		for i, text := range passages(s.text) {
 			sum := sha256.Sum256([]byte(text))
-			c := &chunk{doc: s.key, title: s.title, text: text, hash: hex.EncodeToString(sum[:12]), n: i, apps: s.apps, terms: map[string]int{}}
+			c := &chunk{doc: s.key, title: s.title, text: text, hash: hex.EncodeToString(sum[:12]), scope: s.scope, n: i, apps: s.apps, terms: map[string]int{}}
 			for _, w := range words(s.title + " " + text) {
 				c.terms[w]++
 				c.length++
@@ -249,29 +256,45 @@ func readable(c *chunk, reader *platform.Member, app string) bool {
 func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, now time.Time) []Passage {
 	out := []Passage{}
 	k := &t.index
-	if t.knowledge == nil || strings.TrimSpace(q) == "" {
+	if t.knowledge == nil || strings.TrimSpace(q) == "" || reader != nil && reader.Tenant != t.ID {
 		return out
 	}
 	t.sync()
+	k.mu.Lock()
+	var candidates []*chunk
+	for _, cs := range k.chunks {
+		for _, c := range cs {
+			if readable(c, reader, app) {
+				candidates = append(candidates, c)
+			}
+		}
+	}
+	k.mu.Unlock()
+	var all []*chunk
+	m := t.host()
+	if reader != nil {
+		m = *reader
+	}
+	allowed := map[string]bool{}
+	for _, c := range candidates {
+		visible, known := allowed[c.scope]
+		if !known {
+			visible = c.scope == "" || t.Readable(m, c.scope, now)
+			allowed[c.scope] = visible
+		}
+		if visible {
+			all = append(all, c)
+		}
+	}
+	if len(all) == 0 {
+		return out
+	}
 	var query []float32
 	model := t.setting(t.automation(knowledge.ID, false), knowledge.SettingEmbeddingModel)
 	if model != "" {
 		if vs, err := t.embed(model, []string{q}, now); err == nil {
 			query = vs[0]
 		}
-	}
-	k.mu.Lock()
-	var all []*chunk
-	for _, cs := range k.chunks {
-		for _, c := range cs {
-			if readable(c, reader, app) {
-				all = append(all, c)
-			}
-		}
-	}
-	k.mu.Unlock()
-	if len(all) == 0 {
-		return out
 	}
 	slices.SortFunc(all, func(a, b *chunk) int { return strings.Compare(a.doc+fmt.Sprint(a.n), b.doc+fmt.Sprint(b.n)) })
 	ranks := map[*chunk]float64{}
@@ -560,7 +583,11 @@ func (t *Tenant) fileSources(docs []knowledge.Document) []source {
 			}
 			t.index.texts[f.Hash] = text
 		}
-		out = append(out, source{key: files.FileType + "/" + f.ID, title: f.Name, text: text, revision: f.Hash, apps: apps})
+		scope := f.Target
+		if typ == knowledge.DocumentType { // the document's Apps grant also covers its attached files
+			scope = ""
+		}
+		out = append(out, source{key: files.FileType + "/" + f.ID, title: f.Name, text: text, revision: f.Hash + "/" + f.Target, scope: scope, apps: apps})
 	}
 	return out
 }

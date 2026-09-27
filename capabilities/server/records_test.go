@@ -25,6 +25,7 @@ type Bin struct {
 type Item struct {
 	platform.Record
 	Name  string            `json:"name" field:"required,search"`
+	Note  string            `json:"note" knowledge:"true"`
 	Qty   int               `json:"qty"`
 	Price platform.Money    `json:"price"`
 	Line  string            `json:"line"`
@@ -41,7 +42,8 @@ func stockEntities() []platform.Entity {
 	return []platform.Entity{
 		{Type: "stock.bin", Title: "Bin", Model: Bin{}, Standard: platform.Standard{Create: true, Roles: []string{"clerk", "lead"}}},
 		{Type: "stock.item", Title: "Item", Model: Item{}, Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{"clerk", "lead"}},
-			Scope: platform.Scope{Structure: "site", Unit: "line", Owner: "owner", Levels: map[string]string{"clerk": platform.ScopeOwn, "lead": platform.ScopeBelow, "line": platform.ScopeUnit}}},
+			KnowledgeFiles: true,
+			Scope:          platform.Scope{Structure: "site", Unit: "line", Owner: "owner", Levels: map[string]string{"clerk": platform.ScopeOwn, "lead": platform.ScopeBelow, "line": platform.ScopeUnit}}},
 	}
 }
 
@@ -83,7 +85,7 @@ func (s *stock) Submit(c platform.Caller, sub *pb.Submission, now time.Time) (*p
 	})
 }
 
-func stockTenant(t testing.TB) *Tenant {
+func stockTenant(t testing.TB, extra ...platform.App) *Tenant {
 	seat := func(id, role string) Seat {
 		return Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{"stock": role}}}
 	}
@@ -92,7 +94,9 @@ func stockTenant(t testing.TB) *Tenant {
 		Edges: []platform.Edge{{Structure: "site", Unit: "L1", Parent: "plant"}, {Structure: "site", Unit: "L2", Parent: "plant"}},
 		Memberships: []platform.Membership{{Party: "member:lead", Unit: "plant", Role: "lead"}, {Party: "member:op", Unit: "L1", Role: "op"},
 			{Party: "member:boss", Unit: "plant", Role: "lead"}}})
-	tn, err := NewTenant("t-1", NewConsole("t-1", seat("ana", "clerk"), seat("bo", "clerk"), seat("lead", "lead"), seat("op", "line"), seat("boss", "line")), org, newStock("t-1"))
+	apps := []platform.App{NewConsole("t-1", seat("ana", "clerk"), seat("bo", "clerk"), seat("lead", "lead"), seat("op", "line"), seat("boss", "line")), org, newStock("t-1")}
+	apps = append(apps, extra...)
+	tn, err := NewTenant("t-1", apps...)
 	if err != nil {
 		t.Fatal(err)
 	}

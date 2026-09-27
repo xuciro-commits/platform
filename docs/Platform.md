@@ -2,7 +2,7 @@
 
 Canonical description of the business platform. Decisions with lasting cost are recorded in [ADR/](ADR/); current work is in [WorkQueue.md](WorkQueue.md); the owner's intent is in [Intent.md](Intent.md). When this document and code disagree, the code is the fact and this document states the target — record the gap in the work queue.
 
-Each fact has one home here: what exists is the capability map (§2.4), what is promised but open is §2.9, what is missing is the plan (§10.4). An ADR's "As built" section holds the detail of what a stage built. Last reviewed as a whole on 2026-09-26, after stage 5 (§10).
+Read this document with [Intent.md](Intent.md). **§10 is the highest-level design for the next year**, accepted through [ADR-0031](ADR/0031-ai-application-platform.md) on 2026-09-27. §2.4 owns the implemented capability map; §2.9 tracks open ADR promises; §10.2 interprets the audited gaps against the product goal; §10.3–10.6 define the target and its acceptance. WorkQueue.md alone owns task status. Earlier numbered stages in ADRs are historical; the new annual waves W1–W4 do not renumber them.
 
 ## 1. Purpose
 
@@ -12,9 +12,11 @@ A multi-tenant **business platform with server and edge/client runtimes**. It su
 
 The platform does not encode what an organisation or application looks like today. It provides the capabilities an application needs to move to its *next* shape — new products, processes, structure, operating model, even a different primary business — without rewriting the foundation. Domains are expected to change substantially; the kernel should change only when a genuinely missing cross-domain capability is discovered.
 
-**Not:** an Apple UI framework; the intersection of the target apps; a generic business-object or ERP schema; a configuration language that replaces domain code.
+The next stage makes this an **AI business application platform for FDE delivery and customer construction**: governed object, page, workflow and AI builders backed by a common typed model, with code extension for industry rules. The target is the complete application lifecycle (§10), while the kernel remains free of domain vocabulary.
 
 ## 2. The product model
+
+**Current implementation.** This section describes the code audited on 2026-09-27, including its limitations. In particular, code-composed apps and input replay remain the implementation; published application definitions and result-based recovery in §10 are accepted targets, not available APIs.
 
 ### 2.1 Layers
 
@@ -27,9 +29,9 @@ The platform does not encode what an organisation or application looks like toda
 | **Protocols** | Versioned interfaces apps provide and consume, with conformance tests | `protocols/` | A second provider or consumer appears |
 | **Apps** | An industry's or a function's rules, entities, flows, agents and UI | `apps/`, `web/packages/*` | Its business changes |
 
-Operators set values (settings, bindings, endpoints, enabled models), never rules (§6). Dependencies point downward only; the kernel knows no domain vocabulary; the host and platform apps know no specific app. The model is a tool, not a taxonomy every file must be forced into: when experience shows a boundary is wrong, change the model through an ADR. The property that must hold is that **lower layers do not change when a domain evolves**.
+Today operators set values (settings, bindings, endpoints, enabled models); structural definitions are code. ADR-0031 extends this to typed customer-authored models, pages and rules (§6). Dependencies point downward only; the kernel knows no domain vocabulary; the host and platform apps know no specific app. The model is a tool, not a taxonomy every file must be forced into: when experience shows a boundary is wrong, change the model through an ADR. The property that must hold is that **lower layers do not change when a domain evolves**.
 
-Placement questions: Would it still hold in a different industry? After a pivot within the same industry? Is it "must be so" or "one of several implementations"? Would operators change it at run time — and is that a parameter (configuration) or a change of rules (code)?
+Placement questions: Would it still hold in a different industry? After a pivot within the same industry? Is it "must be so" or "one of several implementations"? Who may author it, who may publish it, which invariant constrains it, and which existing capability executes it?
 
 ### 2.2 How it fits together
 
@@ -42,11 +44,12 @@ Placement questions: Would it still hold in a different industry? After a pivot 
              │ submission (an action on a target) or input (a connector page, an answer, a model's step)
              ▼
            receive: authenticate ─▶ catalog and role ─▶ policy (K6) ─▶ approval? (held by `work`)
-             ─▶ the app's rules ─▶ journal entry ─▶ decision (K4) and facts (K2, K3)
-             ▼
-           records with history ─▶ events ─▶ flows · agents' waits · subscribers
-                                        └─▶ effects out (webhook, email, A2A; held when an agent causes the irreversible)
-                                        └─▶ notifications · tasks · links on timelines
+             ─▶ app rules and decision (K4), facts (K2, K3), in-memory records/intents
+             ─▶ journal the accepted input ─▶ return the result
+
+ WORK      records/events/intents ─▶ flows · agents' waits · subscribers
+                                  └─▶ effect dispatch (webhook, email, A2A; declared irreversible agent effects held)
+                                  └─▶ notifications · tasks · links on timelines
 
  READ      records ─▶ generic reads · aggregates · context graph · search · dashboards
            derived, rebuildable: projections (PostgreSQL) · knowledge passages and vectors · snapshots
@@ -55,6 +58,8 @@ Placement questions: Would it still hold in a different industry? After a pivot 
  AGENTS    declared principals; each run's steps, drafts, citations and people's signals are kept;
            evaluation re-runs signalled runs dry; memory is records people keep or forget
 ```
+
+The write line shows the current direct submission order: `Tenant.Submit` calls the app, whose ledger applies in memory, then journals the accepted input. Production journal append failure currently terminates the process. This is not a staged database transaction over all Go state; §10.3 D defines the target commit boundary. Other journal entry kinds have the specific semantics in §2.7.
 
 The concepts group into five planes. Each has one owner.
 
@@ -74,7 +79,7 @@ The concepts group into five planes. Each has one owner.
 | **Derived state** | Records and their history, kernel logs, owned work and queues, effects' intents, notifications, flow instances, agent runs, memories | Memory; snapshots (ADR-0019) | Replay through the same code | Start-up time |
 | **Derived indexes** | Projections `tenant_<id>` (typed tables per entity type), knowledge vectors by passage hash | PostgreSQL beside the journal | Rebuilt at start; vectors re-embedded as owned work | Rebuild time; embedding cost |
 | **Outside, with retention** | Transcripts of model calls (30 days by default); secrets (by name, in the deployment) | PostgreSQL table; environment | Not rebuilt | The full text of old model calls |
-| **Volatile** | Heartbeats, a connector's last refusal, endpoint health, a job's run count and next due time | Memory | — | Nothing that decides |
+| **Volatile** | Heartbeats, a connector's last refusal, endpoint health, a job's run count and next due time; personal-read audit (last 5,000 entries) | Memory | — | Operational diagnostics and personal-read audit history; not accepted business state |
 | **Code** | Declarations: entity types, actions, lifecycles, flows, agents, protocols, instructions | Go and TypeScript, versioned with the binary | — | — |
 
 **Raw telemetry never enters the journal** (2026-09-26): samples at machine rates are windowed at the edge (a gateway) into observations that mean something — a state batch, a stop, a count — and only those are journaled, so replay stays small; a stream plane for raw signals is a later gate. Business state an app decides is **records** (ADR-0016). Observations and claims from outside are **facts** (K2) that decisions cite as evidence; the plant keeps its machine states, ERP claims and derived downtime as facts. A value computed from others is derived and never stored as truth.
@@ -114,16 +119,16 @@ Kernel status is in §4. "Used by" names the apps that prove a capability; a pla
 | Console | Platform app `platform` | Members, roles, service accounts and agents; audit and deliveries; app settings; the tenant's default language and currency (`platform/currency`, the books' currency and the default of amounts people enter); protocol binding; endpoints; approval and retry of effects | `console.go` | every host |
 | Organisation (ADR-0012) | Platform app `org` | Units in dated structures, memberships; rules ask for a member's units at the input's time; working calendars on units, used by approvals and flow timeouts in working days (ADR-0028) | `capabilities/server/apps/org` (a package, ADR-0025 D4), `Caller.Units` | MES, HCM, hospitality |
 | Links, timeline, comments and followers | Platform app `relations` | Relations between entities, listed on each record's page as its linked records; protocol events told on linked timelines, shown as the record's activity; comments with @mentions and followers on any record, readable when the record is — what people write about a record is a comment, the one owner (ADR-0028, #129) | `capabilities/server/apps/relations` (a package, ADR-0025 D4), `Caller.Link`, `Caller.Links` | CRM |
-| Field security and personal data (ADR-0028) | App API, host runtime | Tags `read`, `write` and `personal` on fields; every read, search, filter, aggregate, form, history, projection and knowledge index honours them; reads of personal data audited | `FieldInfo.Read`, `Write`, `Personal`, `viewOf`, `/v1/personal-reads` | HCM, CRM |
+| Field security and personal data (ADR-0028) | App API, host runtime | Tags `read`, `write` and `personal` on fields; record reads, search, filtering, aggregates, forms and history apply field restrictions; projections and knowledge indexes omit restricted fields. Knowledge fields and attached text now check the source record's scope at retrieval (#130 first slice); personal-read audit is currently volatile | `FieldInfo.Read`, `Write`, `Personal`, `viewOf`, `/v1/personal-reads` | HCM, CRM |
 | Files (ADR-0028) | Platform app `files`, host | Bytes uploaded to an S3-compatible store (RustFS locally) and attached to any record by a decision naming their SHA-256; readable exactly when the record is (`Scope.Through`); downloads served as attachments; text files as knowledge; unattached uploads swept | `capabilities/server/apps/files`, `capabilities/server/filestore.go`, `POST /v1/files`, `GET /v1/files/{id}` | MES, CSM, ERP (any record) |
 | Import and export (ADR-0028) | Host runtime, `@platform/app` | CSV of any entity type in and out of its list: each row a decision through the type's generated create or edit, previewed first, a file sent again deciding nothing new; exports read as the list does, field security included | `POST /v1/import/{type}`, `GET /v1/export/{type}` | ERP, CRM, HCM |
 | Graphs (#122) | `@platform/ui` | One read-only canvas (React Flow, laid out in layers by the kit): flow definitions in Settings and instances with where they wait, an SFC's routing with its operation and nonconformances, a record's approval chain, an agent run's steps and sources | `Graph`, `FlowGraph`, `ApprovalGraph` | CSM, MES, HCM |
 | Notifications | Host, read state in `platform` | To members, a unit's role or an app role; deduplicated; mailed through an email endpoint; a task's notifications are read once it closes, and a notification opened is read (#118) | `Caller.Notify` | MES, PMS, CSM, `work` |
 | Lifecycles, approvals, tasks, inbox (ADR-0017) | App API, platform app `work` | States and transitions on an entity type; approval chains along the organisation, the record pending while approvers decide and rejected with their note; tasks with due times and escalation; one inbox; saved views; delegation of a member's approvals for some days (ADR-0028) | `platform.Lifecycle`, `platform.Approval`, `Caller.Assign`, `/v1/inbox`, `work.delegation.add` | MES, HCM, CSM |
-| Flows (ADR-0020) | App API, platform app `flow` | Declared long-running processes: acts, waits, questions, parallel branches, sub-flows, agent steps, timeouts, compensation, versions, a trace of why each step went where it went; a step that fails with no fault path gives the flow's owners and its starter a task before it undoes (#118); a record's page lists the flows about it (`Flow.Subject`, ADR-0026 D4) | `platform.Flow`, `flow.go`, `flow_engine.go` | MES, CSM |
-| AI providers and models (ADR-0015, ADR-0029) | Platform app `ai` | Vendor, OpenAI-compatible, Anthropic and local providers; enabled models with access; calls through the host with usage journaled; tools on both wires; limits at the door every call passes (tokens a day per person, agent and model, calls a minute, a member's own); answers streamed as server-sent events; apps ask the tenant's model for apps through a request whose answer their reply action takes | `ai.go`, `aicall.go`, `anthropic.go`, `/v1/ai/chat` | every host |
-| Agents (ADR-0021, 0022) | App API, platform app `agent` | Declared agents as principals with the intersection of grants; runs journaled step by step; drafts people confirm; signals; evaluation by dry re-runs; memory; transcripts; the context graph and search as tools; an overview of every agent, declared and outside, with runs, actions, cost and what people made of its work, and an off switch that stops its runs and refuses its calls (ADR-0029) | `platform.Agent`, `agent*.go`, `context.go`, `/v1/context`, `/v1/search` | MES, CRM, CSM |
-| Knowledge (ADR-0022) | Platform app `knowledge` | Documents and `knowledge:"true"` fields; passages; hybrid search (BM25 and vectors) within what the reader may read; citations journaled with an agent's step | `knowledge.go`, `/v1/knowledge` | CSM |
+| Flows (ADR-0020) | App API, platform app `flow` | Declared long-running processes: acts, waits, questions, parallel branches, sub-flows, agent steps, timeouts, compensation, versions, a trace of why each step went where it went; a step that fails with no fault path gives the flow's owners and its starter a task before it undoes (#118); a record's page lists the flows about it (`Flow.Subject`, ADR-0026 D4) | `platform.Flow`, `flow.go`, `capabilities/server/apps/flow/engine.go` | MES, CSM |
+| AI providers and models (ADR-0015, ADR-0029) | Platform app `ai` | Vendor, OpenAI-compatible, Anthropic and local providers; enabled models with access; calls through the host with usage journaled; tools on both wires; limits at the door every call passes (tokens a day per person, agent and model, calls a minute, a member's own); answers streamed as server-sent events; apps ask the tenant's model for apps through a request whose answer their reply action takes | `capabilities/server/apps/ai/ai.go`, `aicall.go`, `anthropic.go`, `/v1/ai/chat` | every host |
+| Agents (ADR-0021, 0022) | App API, platform app `agent` | Declared agents as principals with the intersection of grants; runs journaled step by step; drafts people confirm; signals; evaluation by dry re-runs; memory; transcripts; the context graph and search as tools; an overview of every agent, declared and outside, with runs, actions, cost and what people made of its work, and an off switch that stops its runs and refuses its calls (ADR-0029). An on-behalf run now stops when its member or app role is removed; the member's runs and app agents read then hide those old traces/instructions (#130 first slice) | `platform.Agent`, `agent*.go`, `context.go`, `/v1/context`, `/v1/search` | MES, CRM, CSM |
+| Knowledge (ADR-0022) | Platform app `knowledge` | Documents and `knowledge:"true"` fields; passages; hybrid search (BM25 and vectors) filtered by app access and the source record's current scope; restricted fields and restricted display titles omitted; field indexing walks all 500-record host pages; citations journaled with an agent's step (#130 first slice) | `knowledge.go`, `/v1/knowledge` | CSM |
 | Protocols (ADR-0011) | Protocols | Named, versioned actions, reads and events with conformance tests. Across apps (ADR-0026): a decision's rules only probe another app; once accepted, its requests run at the provider and each answer comes back to the app's own reply action, which a person may take when no provider is bound; both are journaled as submissions. Holds with an expiry, then confirm or release | `platform.Protocol`, `Caller.Probe`, `Caller.Request`, `platform.Answer`, `protocols/lodging`, `protocols/production` | PMS and memstay provide lodging with holds, CRM consumes it (the group block); the ERP app, or the ERP adapter to an ERP outside, provides production orders, the MES consumes them (ADR-0024) |
 | UI kit | Web | Components, docking workspace, entity routes, records (lists, pages, forms), pivot, charts from the platform's visualization spec (ECharts 6), flow view | `@platform/ui` | every web app |
 | Workspace and the UI app API (ADR-0018) | Web | One sign-in per host; apps contributed by UI packages; records opened across apps by reference; dashboards; the assistant, run pages and global search | `@platform/app`, `web/apps/workspace` | every app UI |
@@ -225,9 +230,11 @@ Removing an action schema, input or effect kind that a journal already holds nee
 
 ### 2.8 Invariants and the checks that hold them
 
+These checks cover the current input-replay model. They do not prove correctness after arbitrary code/declaration changes, complete permission closure or process-level tenant isolation. Target invariants are in §10.3 and ADR-0031.
+
 | Invariant | Check |
 |---|---|
-| Replay reproduces everything the host shows and calls nothing outside; so does a snapshot taken after any part of the journal, restored and given the rest | `platformserver.CheckReplay` in the tests of the host, MES, PMS, CRM, HCM and the hospitality solution (four snapshot points each); the rehearsal's restart and restore |
+| Replay reproduces the durable state covered by the conformance snapshot and calls nothing outside; so does a snapshot taken after any part of the journal, restored and given the rest. Volatile diagnostics such as personal-read audit are excluded | `platformserver.CheckReplay` in the tests of the host, MES, PMS, CRM, HCM and the hospitality solution (four snapshot points each); the rehearsal's restart and restore |
 | Replay never calls a model, embeds or searches | Host tests fail when a replay calls a model (`TestAgents`, knowledge tests) |
 | A manifest the host cannot honour is refused at composition: undescribed actions, settings of the wrong type, jobs without an interval, repeated effect kinds, undeclared open reads, flows and agents naming steps or tools that do not exist, protocols no earlier app provides | `checkManifest` and `NewTenant`, run by every composition's tests |
 | No app depends on another app; a protocol depends on no app; apps and protocols import the app API, never the host runtime | `scripts/boundaries.sh` (verify step `app-boundaries`) |
@@ -242,13 +249,13 @@ Removing an action schema, input or effect kind that a journal already holds nee
 
 | ADR | Promise | State |
 |---|---|---|
-| 0008 | Analysis data models and dashboards customers add beside packages | Deferred: projections give a reader role per tenant; where customer models live is open (§10.4) |
+| 0008 | Customer models, dashboards and package assembly | Amended by ADR-0031: typed customer extensions and independently published definition assets are the target; current apps remain code-composed |
 | 0009 | Bridges between packages | Superseded by ADR-0011; the bridge path was removed in #104 |
 | 0010 | Requirement graph between apps; scoped grants by member attributes | Superseded by the protocol graph (ADR-0011) and the organisation (ADR-0012) |
-| 0010 | Enable and disable an app per tenant as a recorded decision | Amended (#104): apps are composed per tenant in code; capabilities are deactivated at start-up |
+| 0010 | Enable and disable an app per tenant as a recorded decision | Current: code composition and start-up deactivation. ADR-0031 adds governed application releases and activation; not built |
 | 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
 | 0010 | Logs and correlation; health | Partial: OpenTelemetry traces and metrics, `/healthz` and tenant health (ADR-0027 10c); logs are still unstructured |
-| 0010 | Files, analysis datasets, retention, preferences | Deferred (§10.4); number sequences are built (ADR-0024) |
+| 0010 | Analysis datasets, retention, preferences | Partial: files, sequences and saved list views exist; analytical authoring and retention policy remain open |
 | 0011 | Protocol versions side by side; routing an action on an existing entity to its provider | Deferred |
 | 0011 | Cross-industry protocols (party, documents, calendar) | Partial: notification, links and timeline are platform capabilities |
 | 0012 | Successors of merged or split units; posts; delegation; federation | Deferred |
@@ -259,9 +266,9 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0015 | Quotas and rate limits, app calls as effects, streaming | Built (ADR-0027 10a, ADR-0029 12a: attempts per minute, breakers, daily tokens per member/model/agent, SSE streaming); app calls as effects deferred |
 | 0016 | References to a protocol's entity type | Deferred; generated forms offer choices for references (ADR-0024 7a) |
 | 0017 | Delegation and substitutes | Delegation of approvals built (ADR-0028 11e); of other tasks deferred |
-| 0018 | The backend-for-frontend token; UI bundles loaded at run time | Deferred (stage 9) |
+| 0018 | The backend-for-frontend token; UI bundles loaded at run time | Open. ADR-0031 prioritizes publishing definitions over registered components; remote executable bundles require their own isolation design |
 | 0019 | Capturing state without the tenant's lock; parallel restore; the plant's downtime as records | Deferred |
-| 0020 | A drawn graph | Built as a read-only graph of definitions and instances (#122); editing a flow by drawing it stays declined, flows are typed code |
+| 0020 | A drawn graph | Read-only graph built (#122). ADR-0031 replaces the prohibition on flow authoring: a typed composer reuses the flow semantics; editor and publishing are not built |
 | 0022 | A2A streaming and the HTTP+JSON binding; pgvector when a tenant outgrows memory search; PDF text; documents from connectors | Deferred |
 | 0026 | A request retried when its provider is unavailable; an outside provider's later answer through the same reply action | Deferred: providers in the host answer at once (D2); the ERP adapter's later answer still reaches the MES through its flow; #120 |
 | 0023 | Dates in the chosen language; one English word with two meanings in a tenant; apps' reads typed and checked; a developer MCP; scaffolds for protocols and agents | Deferred |
@@ -270,8 +277,9 @@ Removing an action schema, input or effect kind that a journal already holds nee
 | 0025 | The host's own apps as apps | Built (8a to 8c); the agent runtime and the console stay in the host by the amended D4 |
 | 0027 | Checkpoints for evaluations; spans for acting jobs and whole HTTP requests | Deferred (10a to 10c built) |
 | 0028 | File fields declared on entity types; personal data erasure; working hours in a day; automatic creator following | Deferred (files attach to records generically, field security and calendars built; #121 in owner testing) |
-| 0029 | MCP sign-in and resources (12f); app depth proofs (ERP bill classification, MES cases) | Open (12a to 12e built; 12f after #129, app depth deferred behind platform faults) |
-| 0030 | Production progress: start reports, lot-by-lot confirmations, partial orders | Accepted, deferred (#125, waits for app completeness) |
+| 0029 | MCP sign-in and resources (12f); app depth proofs (ERP bill classification, MES cases) | Open (12a to 12e built); prioritized with the AI construction track, with task status in WorkQueue.md |
+| 0030 | Production progress: start reports, lot-by-lot confirmations, partial orders | Accepted, deferred (#125); may be pulled forward by an explicit delivery proof |
+| 0031 | Layered builders and application lifecycle; semantic definitions; frontend and AI construction; accepted-result journal, tenant supervision, release closure and Lean | Accepted direction, documentation only. All implementation remains open; §10 owns the target and WorkQueue.md its tasks |
 
 ## 3. Runtimes and languages
 
@@ -348,11 +356,13 @@ The kernel is defined by six parts, all in `contract/`. A part never substitutes
 
 Submission states for server-authoritative intents: `pending → sending → confirmed | conflict | rejected | unknown`. `unknown` (timeout, lost connection) retries with the **same operation ID and parameters**; conflicts and rejections keep the draft and never retry automatically; a user revision is a new operation. Transient errors and business conflicts never share an infinite retry queue. Switching tenant/account isolates queues and results; results from an old identity are never shown to a new one. Incremental sync must handle cursor expiry, pagination consistency, tombstones, permission revocation and duplicate events; push is a refresh hint, never the only source of data.
 
-## 6. Configuration vs code
+## 6. Typed code and governed definitions
 
-Configure: numbers and switches (rates, windows, thresholds, flags), choosing among existing options (which connector, which provider, which model), tenant-level text, numbering and notification targets. Implement in code: structure and invariants of domain objects, lifecycles and transitions, flows, agents' instructions and tools, conflict rules, allocation algorithms, cascade rules. When configuration needs conditions, loops, references to other configuration or migrations, it has become code and belongs in a tested app.
+Platform code implements mechanisms and extension interfaces. FDE code supplies complex industry algorithms and components. Customer definitions compose registered objects, relationships, actions, pages, conditions, workflows and AI functions. A condition, reference or bounded iteration is not by itself a reason to force the author into Go. It is a reason to specify types, evaluation semantics, limits, authorization and versioning.
 
-Where others offer a studio to edit models and rules at run time, our builder is a developer — increasingly a coding agent — writing typed code that the host checks at composition and `CheckReplay` checks in tests (§10.3).
+All construction paths use one validated definition model and the same runtime capabilities (§10.3). Code-backed functions expose typed inputs/outputs, required capabilities and effect boundaries; serialized definitions reference those functions, never serialize arbitrary Go closures. Declarative rules cannot bypass an action's invariant, permission check or effect boundary. Pure expressions are bounded and side-effect free; durable waits and retries belong to flow/owned work. No unrestricted JavaScript, SQL or tenant plugin execution is implied.
+
+The current developer path in [Apps.md](Apps.md) remains executable. The new editors, registries, publishing and definition storage are future implementation. A runtime transition must remove the old competing path once its declared exit criteria pass. Authoring permissions, publishing permissions and business execution permissions are separate and checked at their own boundaries.
 
 ## 7. Positions by concern
 
@@ -380,6 +390,8 @@ Applications are pressure environments for the platform, not its source of truth
 | CRM | Target app | Parties, opportunities, activities, protocols to other apps, the sales assistant | — |
 | ERP | Target app, being built (ADR-0024; accounting, purchasing, inventory and production orders built), modelled on SAP S/4HANA and Odoo | Money and units, double-entry posting (several changes that stand or fall together: K4's open case), number sequences, periods, purchasing and inventory, production orders the MES executes | Depth: one company's full chart of accounts, tax, localisation |
 | HCM, CSM | Thin reference apps | Lifecycles, approvals, flows, agents, knowledge | Depth in either function |
+
+The next stage also validates a whole builder-to-operator journey: an FDE creates and changes an application, a customer makes a permitted modification, and people complete the business task. These are new acceptance obligations, not claims that the existing routes have tested builders. See §10.6 and [Testing.md](Testing.md).
 
 Two tests for every abstraction: **cross-domain comparison** (does any app need exceptions, bypasses, duplicated infrastructure or awkward mappings? are we abstracting a capability or naming two unrelated things alike?) and **evolution drills**:
 
@@ -419,7 +431,7 @@ Reference apps model their domain on leading systems, not on invention, so that 
 1. **Four languages** are a real cost; every additional implementation language must beat the cost of re-implementing the contract.
 2. **No real organisation uses the platform yet.** PMS is synthetic and MES is desk-studied; real use would falsify more than any drill.
 3. **ERP can swallow the plan.** It is the deepest of the target apps; keep it thin. Its value to the platform is the pressure of money, posting, periods and production orders, not breadth of features.
-4. **Inner-platform effect:** "supporting change" must not slide into configuring everything. Change is absorbed by quickly modifiable app code.
+4. **Unbounded construction language.** Typed composition needs enough expressiveness for real work, with code extension for complex algorithms. Multiple expression engines, unchecked scripts and configuration paths with different permissions would make the platform harder to maintain.
 5. **The server is not the kernel;** treating it as such re-binds the platform to one deployment shape.
 6. **The host runtime holds its own apps** (#113, ADR-0025 D4, 8c built). `relations`, `org`, `work`, `flow`, `ai` and `knowledge` are packages under `capabilities/server/apps` on the app API and `internal/host`, reached through roles the host detects (`Attached`, `Observer`, `Linker`, `Directory`, `Tasks`, `Processes`, `Runs`, `Listener`) and checked by `scripts/boundaries.sh`. The agent runtime and the console stay in the host by decision (D4 amended): the first is the host's execution — model calls, tools over every app, search, journaled steps — and the second is the configuration the host reads on every request; moving them would put nearly the whole host behind `internal/host`. Lesson 6 applies to the host itself.
 7. **Documents drift.** Before this review, the same status was kept in five places and all of them were stale. One home per fact (the header of this document); every batch closes with its documents (AGENTS.md rule 8).
@@ -427,111 +439,209 @@ Reference apps model their domain on leading systems, not on invention, so that 
 9. **Agents depend on models the platform does not control.** Signals and evaluation are the guard; quotas and rate limits sit at the one door every call passes (ADR-0029 12a).
 10. **Capability escapes and application overfitting** (2026-09-27). Code written task by task, by people or AI, takes the nearest path: an app hand-makes a table the kit has, or keeps its own panel, timeline or signatures, and nothing fails until two behaviours exist for one thing; and testing through apps slides into testing the apps, pulling work into their business depth. The guards: one owner and one canonical path per capability (AGENTS.md rule 11, `scripts/escapes.sh`, whose known list only shrinks, #129), apps as probes (rule 12), and test steps that name the platform guarantee they check (docs/Testing.md).
 
+11. **A capability list can hide an unusable product.** Components and generated pages are mechanism evidence. Builder completion, frontend quality and customer delivery require observed tasks and explicit acceptance.
+12. **Scope exceeds evidence and staffing.** No real customer deployment or independent FDE delivery has yet established the time, volume or reuse claims. Wave dates are planning windows; protect complete product increments when capacity is limited.
+13. **Known authorization and recovery gaps.** The first #130 slice repaired knowledge source scope and context links/task/flow summary reads, and prevents a removed on-behalf principal from becoming app automation. Previously journaled agent observations still need source-scope revocation/redaction rules; authorization across every derived surface remains open. Input replay is coupled to changing declarations (F-44), and deployment failures can terminate the host. These block stronger claims of safety and robustness (§10.2).
+
 ## 10. Where we are going
 
-The owner's direction (Intent.md, "How we decide what the platform has"): build the capabilities every business platform needs, grounded in the platforms that already do it well, instead of deepening one product. The work queue takes items from this section in the order of §10.5.
+**Accepted design direction, 2026-09-27; planning horizon October 2026–September 2027.** This section guides refactoring and long-term work by people and AI. [ADR-0031](ADR/0031-ai-application-platform.md) records the decisions that amend earlier restrictions. Code facts remain in §2.4; individual task status remains in [WorkQueue.md](WorkQueue.md).
 
-### 10.1 Start, now, end
+### 10.1 Destination, builders and reference products
 
-| | Where | What it proved or offers |
+The destination is a platform on which an FDE can connect an industry's systems, express its meaning and rules, assemble a good operational UI, add governed AI, and deliver an application that its users can safely adapt. Three construction levels share one foundation: platform developers build capabilities; FDEs assemble and extend solutions; customer builders compose allowed models, pages, processes and AI logic. AI assists each level through the same APIs. Business operators get understandable software rather than the implementation concepts of the platform.
+
+“Comparable to AIP” means a continuous **connect → ground → construct → test → publish → operate → improve** experience. AIP Logic is the relevant official product name for the composable AI function capability discussed by the owner. Model connections, agent runs and visual traces are pieces of that experience; none alone establishes parity.
+
+The following is our adoption judgment, based on primary documentation consulted on 2026-09-27. Product names are references, not dependencies or feature-parity promises.
+
+| Product reference | Capability to learn from | Adoption boundary |
 |---|---|---|
-| **Start** (Aug–Sep 2026) | MSRU: an Apple app with a framework inside it; then the kernel contract (K1–K9), the Hotel and manufacturing slices and the drills | Ownership of state and tasks, identity apart from views; identity, facts, decisions, authority, tenancy and connectors hold across very different domains |
-| **Runtime half** (#92–#105) | A host running apps from manifests: journal and replay, OIDC, the console, organisation, relations, protocols, owned work, connectors, outbound effects, AI providers, MCP, Settings | The runtime and governance half of a business platform |
-| **Now** (stages 1–5, #106–#111) | The application model, lifecycles, approvals and tasks, one workspace, analytics and snapshots, flows, agents with knowledge, memory and A2A | A team declares entities, lifecycles, flows and agents and gets lists, record pages, forms, inbox, pivot, charts, dashboards, traced agent runs and evaluation. Missing: files, sequences, comments, calendars, boards and time views, import and export, a semantic model and an API contract, an AI control plane, scale |
-| **End** | A platform comparable to Odoo, ServiceNow, Salesforce Platform, Oracle Fusion Cloud and APEX, SAP BTP, Power Platform or Palantir Foundry, in typed code | A team builds a business app mostly by declaring its models, lifecycles, actions, flows, agents and views. Apps compose through protocols and evolve without losing data, history or work in progress. It is AI-native: one system of context — records, links, protocols and decisions with their reasons — that people and governed agents, inside and outside, reason over, with rules deciding, agents acting within grants and budgets, exceptions routed to people, and every run traced |
+| Palantir [AIP architecture](https://www.palantir.com/docs/foundry/architecture-center/aip-architecture), [Logic](https://www.palantir.com/docs/foundry/logic/overview), [Evals](https://www.palantir.com/docs/foundry/aip-evals/overview) | Business context grounded in an ontology; reusable AI functions; construction, testing, evaluation, publishing and operational feedback | One AI asset lifecycle on our actions, flows and agent harness; no duplicate engine or whole Foundry replica |
+| Palantir [Workshop](https://www.palantir.com/docs/foundry/workshop/overview), [Ontology SDK](https://www.palantir.com/docs/foundry/ontology-sdk/overview) | Object-bound operational components, layouts/events, and typed programmatic access to the same semantics | Page composer and code SDK over our canonical reads/actions; preserve code extensions |
+| ServiceNow [App Engine logic and automation](https://www.servicenow.com/docs/r/application-development/app-engine-studio/add-automation.html) | Customer-authored decisions and automation within an application builder | Bounded typed rules and reusable workflow capabilities; no ServiceNow-specific object taxonomy |
+| Salesforce [component targets](https://developer.salesforce.com/docs/platform/lwc/guide/use.html) | Code components expose metadata so builders can compose them in application and flow surfaces | A registered component contract with inputs, outputs, permissions and compatibility; no second UI library |
+| SAP CAP [domain models](https://cap.cloud.sap/docs/guides/domain/), [extensibility](https://cap.cloud.sap/docs/guides/extensibility/) | Shared semantic models, reusable aspects and controlled customer extensions | Model once for API, UI, rules and AI; explicit extension points and upgrade checks |
+| Microsoft [solutions and ALM](https://learn.microsoft.com/en-us/power-platform/alm/solution-concepts-alm), [Copilot Studio ALM](https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/alm) | Application and agent assets with dependencies, environments, deployment and reusable components | Definition releases separated from environment credentials; test and promote a closed asset set |
+| Odoo [Studio fields](https://www.odoo.com/documentation/19.0/applications/studio/fields.html), Frappe [DocTypes](https://docs.frappe.io/framework/user/en/basics/doctypes) and [Studio](https://docs.frappe.io/studio/introduction) | Fast object-to-form development plus layouts and interaction composition | Keep the speed of metadata reuse, extend beyond generic CRUD to complete workspaces |
+| Oracle [APEX App Builder](https://apex.oracle.com/en/learn/getting-started/app-builder/) | Page design, shared components and packaged supporting objects | Reusable page assets and delivery packages; no coupling of all business semantics to one database UI |
 
-### 10.2 How the reference platforms are built
+### 10.2 Audited capability matrix and robustness
 
-They share one skeleton, and it is the one to build toward:
+**Audit baseline: 2026-09-27 working tree at runtime commit `49fd4cf`, static inspection plus the focused host tests noted below.** “Present” means code exists for the stated scope; “partial” means the mechanism exists without the target product lifecycle; “absent” means no complete path was found in the inspected code. None is a production-readiness rating. The owner has reported frontend dissatisfaction; this audit did not conduct a fresh visual acceptance session.
 
-| Layer | Odoo / Frappe | ServiceNow | Salesforce | Palantir Foundry | Oracle (Fusion, APEX) | Ours |
-|---|---|---|---|---|---|---|
-| Package and composition | Modules with manifests and dependencies | Scoped apps, update sets | Packages, AppExchange | Marketplace products | Product families; APEX apps; Visual Builder extensions | Apps with manifests composed in code; protocols |
-| Data model | ORM models, typed fields (Frappe: DocType) | Tables, dictionary | Objects, fields, relationships | Ontology: object types, links | Application Composer objects | Entity types as Go structs; the record store |
-| Generic views | List, form, kanban, calendar, pivot, graph, Gantt | Lists, forms, workspaces | Record pages, list views, App Builder | Workshop, Object Explorer | Interactive reports and grids, Redwood pages | Lists, record pages, forms, pivot, charts, dashboards; no boards or time views |
-| Actions and rules | Methods, automated and server actions | Business rules, UI actions | Apex, validation rules | Actions, functions | Groovy triggers and validations | Declared actions and transitions, rules in Go |
-| Lifecycle and approval | Status bar, approvals | State flows, approvals, SLAs | Approval processes, Flow | Action validation | AME, BPM approvals | Lifecycles, approvals along the organisation |
-| Process orchestration | Automated and scheduled actions | Flow Designer, IntegrationHub | Flow, Platform Events | Pipelines, automations | Oracle Integration processes | Flows over owned work and effects |
-| Work for people | Activities, chatter, followers | Tasks, assignment, inbox, SLAs | Tasks, Chatter | Inbox, notifications | BPM worklist | Tasks, one inbox, notifications; no comments or followers |
-| Security | Groups, access rights, record rules, multi-company | Roles, ACLs, domain separation | Profiles, permission sets, sharing | Markings, organisations, roles | Roles, data security policies | Roles per app, record scope from the organisation; no field-level security |
-| Analytics | Pivot, graph, spreadsheet dashboards | Performance Analytics | Reports, dashboards | Contour, Quiver | OTBI, Oracle Analytics | Aggregates, pivot, charts, dashboards, PostgreSQL projections |
-| Integration | JSON-RPC, webhooks | IntegrationHub, REST | REST, events, MuleSoft | Data connection, OSDK | OIC adapters, REST for every object | Connectors, webhooks, email; no generated API contract |
-| AI | Ask AI, agents, AI fields, MCP (Odoo 19, 20) | Now Assist, AI agents, Action Fabric, AI Control Tower | Agentforce, AIforce, Trusted Enterprise AI Harness | AIP Logic, Chatbot Studio, Evals, Autopilot | AI Agent Studio, agent marketplace | Providers, declared agents, knowledge, memory, evaluation, MCP, A2A |
-| Admin | Settings, Studio | System administration | Setup | Control panel | Setup and Maintenance | Settings |
-
-Where we deliberately differ:
-- **Rules and models stay in typed code, not tenant metadata.** No studio editing of package rules at run time (ADR-0008).
-- **Every change is a journaled decision, replayed through the same code** (ADR-0007), where the others write tables directly. This is what makes history, audit, agent traces and replay-safe integration native rather than bolted on.
-- **Apps meet through protocols, not each other's tables** (ADR-0011).
-
-### 10.3 Where the reference platforms went in 2026, and what we take
-
-Reviewed on 2026-09-26 from public announcements: [ServiceNow Action Fabric](https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-opens-its-full-system-of-action-to-every-AI-Agent-in-the-enterprise/default.aspx), [Salesforce Trusted Enterprise AI Harness](https://www.salesforce.com/news/stories/enterprise-ai-harness/), [Dataverse semantic model](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/semantic-model-overview) and [July 2026 wave](https://www.microsoft.com/en-us/power-platform/blog/2026/07/06/dataverse-july2026/), [SAP Sapphire 2026](https://news.sap.com/2026/05/sap-sapphire-sap-unveils-autonomous-enterprise/), [Palantir Foundry announcements](https://www.palantir.com/docs/foundry/announcements/2026-04), [Oracle AI Agent Studio](https://www.oracle.com/news/announcement/oracle-introduces-ai-native-builder-experience-2026-07-14/), [Odoo 19 release notes](https://www.odoo.com/odoo-19-release-notes). What each direction means for us:
-
-| Direction | Who, 2026 | Where we stand | What we take |
+| Capability | Current evidence | Assessment against the destination | Required advance |
 |---|---|---|---|
-| **The platform as a governed system of action for any agent.** Outside agents (Claude, Copilot, a customer's own) discover and take the platform's actions headlessly, under the same rules, approvals, metering and audit as people | ServiceNow Action Fabric (MCP server, MCP client, A2A; Knowledge 2026); Salesforce AIforce, the platform's data, logic and permissions inside Claude and Slack (Dreamforce 2026); Odoo 20's native MCP server; the Dataverse MCP server | Ahead on governance: MCP serves each caller's catalog, A2A publishes and calls agents, and both go through the same receiver, D6 and journal. Behind on reach: MCP has tools only and no OAuth discovery, so standard clients cannot sign in on their own | MCP authorization with the host's issuer (protected-resource metadata), so any standard client connects as a member; reads and records as MCP resources; inbound agent calls metered per member (stage 8) |
-| **A semantic layer between the schema and the agents.** Business meaning — descriptions, synonyms, glossary, how records relate — derived from the model and curated, so agents and search read the business, not column names | Dataverse semantic model (preview June 2026) and Business Skills; the SAP Knowledge Graph at the centre of SAP's Business AI platform; Salesforce's Trusted Context | Entity types and fields have titles only; generated actions describe a field by its title; the context graph knows structure, not meaning | Descriptions, examples and synonyms declared in code with entity types, fields, states and actions; served by `/v1/entities`, used in agent prompts, MCP and A2A cards, search and generated forms (stage 6) |
-| **A control plane over every agent.** One inventory of agents, models, MCP servers and agent endpoints, inside and outside; observed, measured for value, and switched off in one place | ServiceNow AI Control Tower; Salesforce's AI Control Plane and AI Gateway in the Trusted Enterprise AI Harness; Oracle's ROI measurement in AI Agent Studio | Runs, signals, usage and evaluations exist per agent; nothing shows them together, no agent can be switched off without a release, external agents are endpoints without a view of their use | An agents overview in Settings: declared, published and external agents with runs, acceptance from signals, cost, and an off switch as a decision; OpenTelemetry spans for runs and steps (GenAI conventions) (stage 8) |
-| **Evaluation as a suite, not only as history.** Test cases written with the agent, run before each change, with variance across repeated runs and comparison across models | Palantir AIP Evals; SAP Joule Studio 2.0 generating evaluation suites with the agent; Salesforce's testing centre | Dry re-runs of signalled runs against a candidate model (ADR-0021 D8) | Evaluation cases declared in code beside the agent, run by the host tests with a scripted model and by Settings with a real one, repeated to show variance (stage 8) |
-| **Coding agents build on the platform.** The builder of 2026 is a person with a coding agent; platforms ship plugins, skills and MCP servers for developers | The Dataverse plugin for Claude, Cursor and GitHub Copilot (July 2026); Palantir MCP for building applications (June 2026); Joule Studio 2.0 pro-code; Oracle's AI-native builder | Typed code checked at composition and by `CheckReplay` is the right substrate; the app guide (`docs/Apps.md`), the scaffold (`cmd/new-app`) and the `new-app` skill exist (stage 6); no developer MCP yet | A developer kit: an app developer guide, a scaffold, skills for coding agents (`.claude/skills`), and later a developer MCP (stage 6) |
-| **Multi-agent work is traced end to end.** One view of a goal across chained agents and flows | Palantir AIP Autopilot (beta March 2026); A2A tasks correlated in ServiceNow and SAP | Each run is traced; a run started by A2A or a flow links by correlation, but no view follows the chain | Runs, flows and A2A tasks linked by correlation on the run page (stage 8) |
-| **Business data in open formats for analytics.** Zero-copy sharing and lakehouse formats instead of extracts | SAP Business Data Cloud (Dremio, Microsoft Fabric Connect) | PostgreSQL projections per tenant with a reader role | Later: change streams and exports in an open format, when a customer's analytics needs them (stage 9) |
+| Kernel contract | [spec and vectors](../contract/spec/README.md), K1–K9, Go reference and K5 edges | Present: domain-free identity, evidence, authority and version semantics. No Lean project; K7 evolution remains a hypothesis under wider change | Explicit model of commits, versions and publication; selected proofs tied to vectors |
+| App API and composition | [app.go](../capabilities/server/platform/app.go), [entity.go](../capabilities/server/platform/entity.go), code-built solutions | Present for developers: entities, actions, lifecycles, flows and agents. Struct values and Go callbacks are not persistent customer definitions | Typed serializable definitions plus versioned references to code extensions |
+| Semantic model | Field meaning/synonyms, references, links, [context.go](../capabilities/server/context.go), generated [API](../capabilities/server/api.go) | Partial: useful common metadata and context; no integrated semantic authoring, stable asset dependency graph or full historical query model | Object/link/action/function identities, query contracts, source lineage and compatibility checks |
+| Persistence and evolution | [journal.go](../capabilities/server/journal.go), [snapshot.go](../capabilities/server/snapshot.go), [conformance.go](../capabilities/server/conformance.go) | Present for recovery with compatible code; replay reruns business handlers. Submit applies in memory before append; append failure uses fail-stop. F-44 demonstrates declaration drift breaking recovery. PG durability does not make in-memory changes transactional | Committed-result journal with atomic state/work intents, deterministic application and explicit migrations |
+| Tenant operations | [deploy.go](../capabilities/server/deploy.go), work fairness/retry/quota | Partial: fair scheduling and tenant journal locks exist. Journal/start-up failures can terminate the process; no proven tenant supervision boundary | Tenant lifecycle and quarantine/recovery; explicit process isolation when required; fault tests |
+| Authorization | [records.go](../capabilities/server/records.go), scoped reads and field masking, agent grant intersection | Substantial mechanisms with a concrete gap: [knowledge.go](../capabilities/server/knowledge.go) indexes records through host access and filters passages by app role, without record scope. Context task/flow summaries use automation reads and need reproduction | Permission closure across knowledge, references, context, search, aggregates, citations, traces and builder previews |
+| Integration and data onboarding | Connectors, [protocol.go](../capabilities/server/platform/protocol.go), CSV, effects and ERP adapter | Present transport and action boundaries; mapping and delivery remain code-heavy; external answers require polling in F-28 | Mapping/identity reconciliation, sample validation, dry runs, lineage, cursor/error handling and reusable connection templates |
+| Frontend runtime | [AppUI/Host](../web/packages/app/src/index.tsx), [action forms](../web/packages/app/src/actions.tsx), [workspace](../web/packages/ui/src/shell/Workspace.tsx) | Present: shared shell, generated pages, catalog actions, subscriptions, saved views. Layouts/packages remain code-bound; saved views do not build apps | A cohesive workspace and component binding model, published pages and builder tools |
+| UI and business components | [UI kit](../web/packages/ui/src/index.ts), [Records](../web/packages/ui/src/records/Records.tsx), tokens, tables, forms, charts and graph views | Partial: reused primitives, limited complex input/layout patterns; reference selectors take the first 500 records. No complete registered page-component builder found | Searchable paginated pickers, complex forms, master/detail workspaces, conditional fields, cross-widget interaction; boards/time views driven by shared scenarios |
+| Visual and interaction quality | [Gallery](../web/apps/gallery/src/Gallery.tsx), [component tests](../web/packages/ui/src/components.test.tsx), [browser routes](../web/e2e/tests/routes.spec.ts) | Behavior coverage exists. jsdom virtual-window tests are not measured browser performance; no established visual/accessibility/narrow-screen acceptance baseline found | Owner-approved design patterns, screenshots, keyboard/accessibility checks and measured task completion/performance |
+| App construction | [new-app](../capabilities/server/cmd/new-app/main.go), static [workspace packages](../web/apps/workspace/src/App.tsx), [Apps.md](Apps.md) | Present code scaffold; absent customer object/page creation, draft/preview/publish and upgrade lifecycle | A builder control plane, initially over a bounded set of registered capabilities |
+| Workflow construction | [Flow](../capabilities/server/platform/flow.go), runtime, migration and compensation, read-only FlowGraph | Rich runtime; editor/simulator/published definitions absent | Typed flow composition reusing current semantics; explicit binding of instances to versions |
+| AI model access and agents | [aicall.go](../capabilities/server/aicall.go), [Agent](../capabilities/server/platform/agent.go), [agent_engine.go](../capabilities/server/agent_engine.go) | Present providers, streaming, quotas, tools, drafts, traces and handoff. Agent instructions are code; run definitions lack immutable version binding | Versioned agents and typed AI functions, composed with deterministic functions, retrieval and actions |
+| AI Logic and evaluation | [agent_eval.go](../capabilities/server/agent_eval.go), [agent controls](../capabilities/server/agent_control.go), frontend run/evaluation views | Cases, three runs per declared case, feedback, model comparisons and suspend exist. Current dry rerun/probe is not a fixed-data, stateful test environment. No reusable published AI function builder | Node-level debugging, isolated multistep testing, versioned datasets, evaluators and release gates |
+| External AI/developer access | [mcp.go](../capabilities/server/mcp.go), [a2a.go](../capabilities/server/a2a.go), OpenAPI/TS | Present granted action/read tools and A2A. MCP sign-in/resources and builder operations incomplete | One SDK and discovery/validation tools for code, editors and AI-assisted changes |
+| Delivery and industry reuse | Go/TS packages, solution composition, [CI](../.github/workflows/verify.yml), [local deployment](../deploy/local/README.md) | Present source build and local rehearsal; no customer solution artifact, extension upgrade or environment promotion product | Release manifests, dependency closure, environment bindings, migrations, diagnostics and repeatable FDE delivery |
 
-What we do not take:
-- **Run-time agent builders** (Agent Builder, Joule Studio's managed builder, Copilot Studio): agents are declared in code (ADR-0021 D1). A coding agent with our skills is the builder.
-- **Agents with computers, files or sandboxes** (Joule Work, NVIDIA OpenShell): tools stay the catalog, the knowledge and declared effects (ADR-0021 D6).
-- **Agent and app marketplaces** (Oracle, SAP AI Agent Hub): no run-time installation (ADR-0008); A2A reaches partners' agents.
-- **An own model and pre-built agents by the dozen** (Salesforce Koa and its named agents, ServiceNow's AI specialists): the platform is model-agnostic, and reference apps each show one agent.
+**Strength:** shared contracts, canonical action paths, generic UI, work/flow/agent runtimes and replay tests already provide substantial reusable machinery. **Limit:** flexibility largely belongs to source-code authors; UI composition, semantics, AI assets and releases are not yet one builder-facing product. Stronger guarantees must be checked at every read and write path, not inferred from the presence of kernel primitives.
 
-### 10.4 The capability catalog: what is missing
+Post-audit implementation: #130 has begun. Current knowledge results check source-record scope, attached text inherits its owner record, and Context filters linked records, flow summaries and task summaries through member reads. Knowledge-field indexing now walks beyond the host's first 500-record page, with large-tenant latency still unmeasured. On-behalf runs stop after member/app-role revocation; the member's runs and agent catalog then hide their prior traces/instructions. Focused regression tests cover owner, unit, Through, foreign tenant, 501 sources and agent-principal revocation; the complete permission-closure gate is still open in WorkQueue.md. The dated matrix above remains the baseline at `49fd4cf`.
 
-Built capabilities are in the capability map (§2.4). This is what remains, with where each is best seen.
+Audit verification: `go test . -run 'Test(Agents|Knowledge|A2A|Flows|MCP|AI)$' -count=1` passed in `capabilities/server`; matching tests were A2A, Agents, Flows, Knowledge and MCP (no `TestAI`). They use local test services/models. No production load, real-model quality, PostgreSQL failure rehearsal or new visual acceptance was performed by this audit. Existing knowledge tests cover app-role separation, not the newly identified same-app record scope case.
 
-| Area | Capability | What an app gets | Reference |
+### 10.3 Target architecture and invariants
+
+This is the architecture to implement, not a description of currently callable APIs. Establish names and boundaries before deciding serialization formats or adding packages.
+
+```mermaid
+flowchart TD
+  Code[Platform developers and FDE code] --> Definitions[Typed definitions and registered extensions]
+  Builder[Customer and FDE builders] --> Definitions
+  Assist[AI-assisted construction] --> Definitions
+  Definitions --> Validate[Type, dependency, policy and compatibility validation]
+  Validate --> Preview[Isolated preview and evaluation]
+  Preview --> Release[Immutable application release and environment binding]
+  Release --> UI[Workspace and registered business components]
+  Release --> Runtime[Actions, flows, agents and owned work]
+  UI --> API[Canonical typed reads and actions]
+  Runtime --> API
+  API --> Commit[Authorized commit and durable results]
+  Commit --> Effects[Recorded effects and external integrations]
+  Commit --> Read[Records, indexes, context and provenance]
+  Read --> API
+```
+
+#### A. One semantic definition model, several authoring surfaces
+
+The app API owns the public definition contracts; the host validates and executes them. A builder platform capability owns drafts, validation, preview and publication through that API. `@platform/app` owns frontend data/action bindings and authoring integration; `@platform/ui` owns components and their interaction standards. Industry assets declare and compose them. An implementation ADR chooses package placement when this capability is built; it must not put a second business runtime inside the builder.
+
+| Asset | Required contract |
+|---|---|
+| Object and link type | Stable qualified identity, version, field and relationship types/cardinality, meaning, source mapping, read/write scope, extension and evolution rules |
+| Action and deterministic function | Typed input/output, authority, validation and invariants, required capabilities, effects; pure computation distinguished from accepted state change |
+| Page and component | Registered component identity/version, typed properties/slots/events, permitted query/action bindings, local interaction state, responsive layout, localization and accessibility |
+| Flow and agent | Versioned definition, inputs, steps/tools, authority and budgets, wait/retry/timeout/handoff, instance version binding and migration policy |
+| AI function | Typed inputs/outputs; deterministic, retrieval, model and action-draft steps; explicit model policy, permissions, budgets, test cases and evaluation results |
+| Integration and query | Source/connector kind, mapping and identity rules, cursor/quality/lineage, parameter and result types, bounded reads and authorization; credentials are environment bindings |
+| Application/industry package | Stable identity and immutable releases; referenced assets and code/runtime versions; dependency closure, customer extension points, permissions, tests and migrations |
+
+Definitions are data with specified semantics, not arbitrary executable strings. Code exporters, visual editors and AI edits validate against one model. Code functions remain code and are referenced by typed, versioned contracts; lossless conversion of arbitrary Go or React into a visual editor is not a requirement. IDs identify assets; content digests identify immutable versions; business objects retain opaque identity even when their content changes.
+
+Customer extensions may add approved fields, objects, relationships, views and operating logic. Protected industry invariants remain enforced by the owning action. Base package, customer extension and environment binding are distinct assets with explicit precedence, conflict detection and upgrade validation; no copying an entire base application for each customer.
+
+#### B. Frontend and builder product
+
+Design three coherent surfaces: **operate** (role-specific workspace and business tasks), **build** (objects, pages, rules, flows and AI), and **administer** (access, integrations, releases and health). A person may access more than one according to grants. Preserve shared design tokens and components while revisiting navigation, app tabs, hierarchy, density, forms and contextual explanations. A generated record page is a useful default, not the only shape of an operational application.
+
+The first component contracts cover list/table, record/detail, sections and complex forms, actions, master/detail, tasks/approvals, files/comments, charts and relationship navigation. Each declares data and event bindings. Common selection, filters and navigation can link components. Add Kanban and time/scheduling views when the two industry journeys demonstrate their semantics; 3D and rich maps follow measured need. All must handle loading, empty, error, forbidden, stale/conflict, readonly and recovery states. Query-backed reference selection is paginated and searchable.
+
+The builder edits a draft, shows type/reference errors at their source, previews an isolated version, explains dependencies and impact, then publishes under a distinct grant. Runtime and preview render through the same component system. AI proposes reviewable definition changes and tests, shows a diff and preview, and uses the same publication boundary. It cannot silently broaden permissions.
+
+#### C. AI construction and operation
+
+Expose **AI functions** as reusable typed assets, alongside agents and durable flows. A function can combine deterministic transformation, authorized object/knowledge retrieval, a model request, structured output validation and an action draft. Long waits, retry ownership and human tasks use existing flow/owned work semantics. Pages, actions and flows can invoke the same published function through a declared API; irreversible execution still requires the governing action and approval policy.
+
+Provide step inputs/outputs, tools used, citations, errors, timing, cost and public explanations in the debugger. Evaluation binds candidate definition, model settings, cases, evaluators and data/dependency fixtures; repeated runs expose stochastic variance. Tests may simulate state changes in an isolated environment. They cannot be claimed reproducible simply because prompts match. Production failures and user feedback can become reviewed regression cases. Keep existing quotas, suspend, traces and test suites and extend them into this lifecycle.
+
+Every run records its definition version and relevant dependency versions. Running flows and agents retain the semantics they started with until an explicit supported migration. Context and retrieval obey record/field permissions, including references, source titles, citations and traces. Fix the identified knowledge gap before expanding exposure. Unify the irreversible-action policy across effects and protocols (F-29).
+
+#### D. Durability, time and failure boundaries
+
+The target journal records an **accepted commit result**: identity, actor/authority and definition version, validated state changes, evidence references, generated identifiers, and durable work/effect intents. The commit publishes nothing before durable acceptance. Applying a saved result must not re-run current business decision code, re-authorize history or call outside. Validation/append failures expose no partial accepted state. The implementation must specify ordering, serialization/versioning, idempotency storage, atomicity and crash points; a generic event payload or a PostgreSQL transaction alone does not establish this guarantee.
+
+Replay reconstructs state using versioned result application. Rebuilding a projection, migrating stored state, continuing live work and re-running a historical decision for comparison are separate operations. The new design retains causal evidence and supports explicit corrections. Valid time, recorded/transaction time, source time and definition version are distinct; an as-of transaction view is not automatically a bitemporal business model.
+
+PostgreSQL remains the durable transactional foundation. Decide the minimal commit boundary and use constraints/transactions for what resides in it. In-memory application after append must be recoverable from that durable commit, with no early success or outbound dispatch. Across authorities and external systems use explicit protocols, idempotency and compensation; do not imply a distributed transaction or universal exactly-once effects.
+
+A tenant has observable lifecycle states for starting, healthy operation, degraded/quarantined operation and recovery. Journal/recovery failure stops unsafe work for that tenant; another healthy tenant must continue within the promised boundary. Process panics, resource exhaustion and shared database outages need separate failure assumptions and, where required, process/resource isolation. Supervision restarts only work that has an idempotent and consistent recovery definition.
+
+The owner permits a fresh development journal baseline. No legacy development-data migration project is required. After real releases/customer data exist, version and migration commitments apply. This is permission to design a clean target, not a standing instruction to erase data.
+
+#### E. Engineering references: adopt their guarantees at the right boundary
+
+| Reference | Adopt | Scope and limit |
+|---|---|---|
+| [Palantir Ontology](https://www.palantir.com/docs/foundry/architecture-center/overview) | Object, link, action and authority as common business semantics | The app model and SDK; no whole Foundry product clone |
+| [Datomic](https://docs.datomic.com/reference/filters.html) | Immutable evidence and transaction-history views | State the time model explicitly; no database replacement or assumed full bitemporality |
+| [PostgreSQL transactions](https://www.postgresql.org/docs/18/tutorial-transactions.html), [MVCC](https://www.postgresql.org/docs/18/mvcc-intro.html) | Durable atomic commits, constraints and concurrent reads | Database boundaries only; no claim that all Go memory is transactionally rolled back |
+| [Kubernetes controllers](https://kubernetes.io/docs/concepts/architecture/controller/) | Desired state, observation and reconciliation | Environment bindings, releases, indexes and owned resources; business decisions remain actions |
+| [Temporal workflows](https://docs.temporal.io/workflow-definition) | Durable execution history and explicit version/retry semantics | Long-lived work; ordinary synchronous business rules stay ordinary actions |
+| [Erlang/OTP](https://www.erlang.org/docs/27/system/design_principles.html) | Supervision, isolation and bounded restart semantics | Tenant and worker failure handling; a restart never substitutes for data consistency |
+| [Rust ownership](https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html) | Explicit ownership and capability boundaries | Resource/API design; distributed authority is a separate protocol |
+| [Git](https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain) | Immutable artifact identity and provenance/dependency DAGs | Definitions and releases; business state is not a Git repository |
+| [Nix reproducibility](https://reproducible.nixos.org/) | Dependency closure, pinned environments and reproducibility checks | Build/release inputs; closure alone does not prove bit-identical builds or make live business state pure |
+| [Lean](https://lean-lang.org/doc/reference/latest/) | Explicit models and machine-checked invariants | Critical finite claims plus a traceable connection to executable tests; not a proof of every industry rule |
+
+The following are **target proof and test obligations**, not claims about the current implementation. Let `S` be tenant state, `c` a durable accepted result, `apply(S,c)` its versioned application, and `R` a published release.
+
+| Obligation | Precise boundary to specify and verify |
+|---|---|
+| Commit and recovery | `recover(log ++ [c]) = apply(recover(log), c)` under the declared format/version assumptions; recovery makes no external calls. A failed validation or failed durable append cannot become an acknowledged commit |
+| Idempotency | Within the scoped operation key and contract, retrying the same operation returns its prior result without another business change; applying an already-applied commit is rejected or a no-op by commit identity. Reusing a key with different parameters is an explicit error |
+| Release closure | Every reference reachable from `R` resolves to a compatible immutable version or a declared environment binding; publication rejects unresolved references. Executable dependencies are pinned and tested |
+| Authorization closure | A derived read cannot reveal a protected source field, title or reference that the effective principal is not allowed to observe; a published composition cannot enlarge execution grants |
+| Work ownership | A result from a cancelled or superseded generation cannot commit for the current owner. Accepted effects have durable intent and stable retry identity; no external exactly-once guarantee is inferred |
+| Tenant isolation | Under the documented shared-resource assumptions, an action/fault in tenant `a` cannot change tenant `b`'s accepted state; availability and process-fault isolation require their separate tests |
+| Version continuity | Existing instances continue under their bound definition or an explicitly accepted migration; a new definition does not silently reinterpret committed history |
+
+**Proof roadmap.** Start Lean in W1 with an exactly pinned toolchain, a documented trust boundary and small models of idempotency, revision/generation safety and definition references. W2 extends to commit/recovery and durable-work transitions; W3 to authority/capability composition and selected version migrations; W4 checks composition and upgrades against the proven assumptions. Every theorem names the spec rule, assumptions, executable vectors/property tests and what remains outside its proof. Track unproved obligations openly; never replace conformance, integration or fault injection with a theorem about an unconnected model.
+
+### 10.4 How applications grow
+
+The platform's product unit is a **versioned solution that people can build and operate**. Its lifecycle is the same in manufacturing and hospitality, even though the business semantics differ.
+
+| Step | Builder or operator does | Platform supplies | Reusable output |
 |---|---|---|---|
-| Application model | Attachments and files | Preview, retention, file fields on entity types, PDF text (files on any record exist) | Odoo `ir.attachment`, ServiceNow attachments |
-| | Import and export | Excel files and lines (CSV in and out exists) | Odoo import, Salesforce Data Loader |
-| | Money, units, time | Several currencies and rates (money fields and the tenant's currency exist), units of measure, working hours, time zones | Odoo `res.currency`, `uom`, `resource.calendar` |
-| | Customer analysis models | Customers' own models and dashboards beside packages (ADR-0008) | Foundry Contour, Power BI on Dataverse |
-| Process | Scheduling and capacity | Resources, calendars and allocation over time | Odoo planning, SAP capacity planning |
-| People and access | Effective permissions | Who may do what and why, per member | Salesforce permission analysis |
-| | Substitutes for tasks | Acting for someone on tasks outside approvals (delegation of approvals exists) | SAP substitution, ServiceNow delegates |
-| | Provisioning | Users and groups from the identity provider (SCIM) | Okta or Entra SCIM |
-| Integration | MCP authorization and resources | Standard clients sign in with the host's issuer; records and reads as resources | MCP specification, ServiceNow Action Fabric |
-| | Inbound email and webhooks as connector inputs | Mail and calls from outside as journaled inputs | ServiceNow inbound actions |
-| | Credentials | OAuth client credentials, rotating secrets, a secret store UI | ServiceNow credential store |
-| | Bulk data out | Change streams and open-format exports | SAP Business Data Cloud |
-| AI | App calls as effects | ADR-0015 batch 2 deferred (quotas, streaming, control plane, evaluation suites and traces built in ADR-0029) | — |
-| Workspace UI | Boards | Kanban by state or any field, drag to transition | Odoo kanban |
-| | Time views | Calendar, timeline, Gantt, resource rack | Odoo calendar and Gantt, OPERA room rack |
-| | Trees | Organisation charts, bills of materials, categories (coded in Settings today) | — |
-| | Files | Upload, preview, attachment list | — |
-| | Mobile and field | Scan, sign, photograph, short tasks, offline queue | ServiceNow mobile, SAP Digital Manufacturing |
-| Operations | Structured logs, metrics and traces | Correlated logs without business content; OpenTelemetry | — |
-| | Health of apps and the journal | — | — |
-| | Package versions and upgrades per tenant | — | Salesforce package versions |
-| | Many tenants per process, high availability, provisioning | — | — |
-| | Developer MCP | Coding agents read the model and scaffold through MCP, not only the repository (the guide, scaffold and skill exist) | Dataverse plugin for coding agents, Palantir MCP |
+| Discover | Define the work, actors, outcomes and exceptions | A project/template entry and a measurable task baseline | Industry task and acceptance cases |
+| Connect | Map outside records and events; reconcile identities | Connector contracts, mapping, preview, provenance and error handling | Connection and mapping templates, without credentials |
+| Model | Name objects, relationships, actions and rules | Typed semantic editor/SDK, authority and validation | Model and function assets |
+| Assemble | Compose role workspaces, pages and workflows | Registered business components, bounded rules and process tools | Pages, components and flow definitions |
+| Add AI | Ground a task, compose a function/agent and set handoff | Models, authorized context, tools, budgets and evaluation | Versioned AI assets and cases |
+| Validate | Exercise normal, forbidden, failure and recovery paths | Isolated preview, simulation, dependency/compatibility checks | Reviewable evidence bound to the candidate release |
+| Publish | Promote the tested version into an environment | Immutable release, grants, environment bindings and migration plan | A repeatable installation with a known dependency set |
+| Operate and evolve | Complete work, diagnose failures, revise the application | Monitoring, feedback, lineage, upgrade/rollback or forward repair | Improved shared assets plus retained customer extensions |
 
-### 10.5 Order
+First probes use the existing manufacturing (MES/ERP) and hospitality/customer-service applications. Platform developers build the shared construction and operation capabilities; these apps supply the smallest representative tasks needed to falsify or verify those capabilities. Broader FDE delivery work waits for the foundation gate in §10.6. Include a bounded customer-specific rule and page change, an external-system failure, a governed AI suggestion, and an upgrade while work is in progress. An unfamiliar industry may replace one probe when real FDE access offers stronger evidence; do not claim two synthetic configurations are two customer deployments.
 
-Each stage opens with an architecture gate (an ADR with the owner's decisions), then builds, then proves the capability on at least two reference apps from different industries.
+### 10.5 One-year main and supporting tracks
 
-Stages 1–5 are built: the application model (ADR-0016), lifecycles, approvals and tasks (ADR-0017, with the workspace in ADR-0018), read models and analytics (ADR-0019), flows (ADR-0020), and agents with knowledge, memory and A2A (ADR-0021, ADR-0022). What comes next is proposed by the stage review of 2026-09-26 and decided at each gate. The review renumbered the later stages: the former stage 6 (UI families and field clients) is part of stage 7, and the former stage 7 (scale and delivery) is stage 9; ADRs written earlier use the former numbers.
+The critical path is **shared typed definitions → object/page builder → workflow and AI composition → integration and industry reuse → dependable delivery and evolution**. Frontend design, permission repair and reliability start alongside the first definitions. A minimal publication/version mechanism belongs in W1; W4 hardens it, rather than postponing release design until the end. The owner prioritizes the platform foundation until its major gates are substantially met (roughly 80–90% as a direction, not a measured status). Application changes before that gate are limited to minimal, named validation probes; platform developers do not take on FDE industry delivery as the next work item.
 
-| Stage | Contents | Why this order | Proven when |
+These are planning windows, conditional on actual engineering capacity and access to users. The order and exit evidence govern delivery. At each exit, record measured results, reduce breadth if needed and keep the next complete user journey. WorkQueue.md owns executable batches and priorities; this table owns enduring outcomes.
+
+| Wave | Main product work and purpose | Supporting work | Exit evidence |
 |---|---|---|---|
-| 6. The model speaks, the API is a contract | Built (ADR-0023): languages and meaning (6a, 6b), the host API contract with generated TypeScript types (6c), the developer kit: app guide, scaffold, skill (6d) | Every agent, integrator, coding agent and UI reads the model; it is cheap, and every later stage uses it | An agent answers better with descriptions than without in an evaluation; the workspace compiles against generated clients; a new app is scaffolded and passes `CheckReplay` |
-| 7. The application half, completed | Built (ADR-0028, #121 in owner testing): files and attachments, comments and followers, business calendars, import and export, field-level security, delegation; kit primitives and UI families continue in #129 and #123 | The classic platform features every reference app still lacks; calendars unblock service levels and flows' timeouts | The ERP's purchasing and inventory built from declarations only (#115); CSM's service level on a business calendar |
-| 8. AI control plane | Accepted (ADR-0029, #124): quotas and streaming (12a), app model calls (12b), agents overview and off switch (12c), evaluation suites (12d), traces (12e) built; MCP sign-in and resources (12f) follows capability escapes (#129) | Agents exist in three apps and outside ones call in; governing them at scale is the next gap the references closed in 2026 | An administrator sees every agent's use and value, switches one off, and a standard MCP client signs in and acts within its grants |
-| 9. Scale and delivery | Many tenants per process, provisioning, package upgrades, the backend-for-frontend token, run-time UI bundles, bulk data out | When a second real organisation or team comes | A new team ships an app without touching the host |
+| **W1 · Oct–Dec 2026: first construction loop** | Establish an owner-reviewed workspace/form/detail design; typed object/action/link/component definitions and SDK; a bounded object/page builder with draft, validation, preview and publication | Repair authorization closure; baseline platform construction and operator tasks; result-journal contract and first vertical commit/recovery slice; tenant failure-state design; Lean toolchain and first invariant proofs | A builder defines a simple object and a list/detail/action page, previews and publishes it. Code and declarative paths use the same permissions/errors. Desktop and narrow-screen operational samples accepted. Crash tests demonstrate the first durable boundary; remaining migrations explicitly tracked |
+| **W2 · Jan–Mar 2027: processes and AI Logic** | Compose workflows, human tasks and reusable typed AI functions; debug intermediate results, maintain evaluation cases and publish a tested version; extend complex forms and master/detail tasks | Bind runs to definitions; isolate stateful preview and external fixtures; unify AI approval across protocol/effect calls; complete supported result/recovery paths and logical tenant supervision; commit/work proofs | A customer modifies a permitted workflow and AI function; the same function serves a page and a flow. A preview mutates only isolated state. Existing runs retain their version. A failed tenant is quarantined while a healthy tenant continues within the documented boundary |
+| **W3 · Apr–Jun 2027: cross-industry platform validation** | Reusable templates, mapping and onboarding tools; customer extensions; boards/time views where justified; AI-assisted definition changes with diff, impact and tests | Permission-safe lineage/context and query scaling; release dependency checks, source/outcome reconciliation, migration preflight; version/authority proofs | The platform composes a second industry's representative task without modifying host/kernel/UI primitives for ordinary variation; two independent customer configurations preserve their differences across a base-package upgrade. Controlled trials are labelled if customers are not available |
+| **W4 · Jul–Sep 2027: repeatable operation and upgrades** | Solution catalog and environment promotion; diagnostics connecting data, definition, AI run and effect; onboarding and upgrade experience usable by an FDE outside the implementing team | Pinned dependency closure, reproducible-build checks, backup/restore, failure/load/SLO exercises and bounded process isolation; remaining proof obligations and evolution drills | Independent FDE completes the lifecycle in §10.4; customer makes a delegated change; upgrade/recovery retains extensions and in-progress work. Measured year-end gates (§10.6) pass or their exact shortfall is recorded |
 
-**After the owner's testing and the external review of 2026-09-26.** The owner tested the target and reference apps through the UI with other models, and had the design reviewed from the outside against Palantir, SAP and Salesforce. Checked against the code (AGENTS.md rule 7):
-- **Adopted, first:** the return path. The decision spine is strong; what happens rarely comes back — notifications outlive their tasks, a notified member may not open what they are told about, pages do not follow changes, a failed flow ends silently, a hand-written view can hide a declared action. The review's "change feed" is the same need seen from the platform (work queue #118).
-- **Adopted, gates:** decisions across apps — probe, hold and confirm through protocols, a record's state following its process (#119, built: ADR-0026); one runtime for durable work with fairness, quotas, breakers and checkpoints, instrumented with OpenTelemetry (#120); field-level and purpose-bound security at stage 7's gate; files and attachments first in stage 7.
-- **Corrected:** the review's "a posting may half-complete" does not hold — every line and move of one decision is applied and replayed as one journal entry (ADR-0024). The open case was a protocol call inside another app's rules; ADR-0026 closed it (rules probe, requests run after acceptance). Its "the journal serialises every tenant" holds and is cheap to fix (F-34); partitioning the order is a gate before stage 9.
-- **Recorded as boundaries, not built:** raw telemetry never enters the journal — an edge aggregates windows into observations (§2.3); a stream plane, a planning and solver capability (not kernel), and Rust engines (edge, solver, matching) wait for a real plant or planning need (§9 risk 2).
-- **Declined for now:** rewriting this document around eight planes (the capability map and §10.4 already carry the gaps), and breadth of ERP features.
+**Main tracks:** semantic/app construction; frontend and business components; AI construction and operation; reusable integration and release tooling. **Supporting tracks:** persistence/tenant reliability; developer tooling and release engineering; security and formal assurance. Supporting tracks are release dependencies wherever their guarantee is needed, not optional backlog. Deep ERP features, broad connector catalogs, arbitrary third-party code hosting, public marketplaces, high-rate telemetry platforms and 3D are deferred unless a named main-track proof requires them.
 
-The target apps are CRM, MES and ERP; all three exist; the ERP (ADR-0024, #115) has accounting, number sequences, purchasing, inventory and production orders with the MES, and the MES reaches the ERP app or any ERP outside through one protocol. The PMS, HCM and CSM stay as reference apps. Each stays thin: apps are chosen to exercise capabilities, not for depth.
+No all-at-once rewrite is prescribed. Preserve tested kernels, actions, flows, agents and components. For each slice, state the old path, the shared owner, transition and removal condition. The fresh journal baseline avoids preserving disposable development logs; it does not justify throwing away working capabilities.
+
+### 10.6 Acceptance and evidence
+
+A wave closes on observed construction and business tasks, not asset counts or a new schema alone. [Testing.md](Testing.md) owns the testing procedure and actual UI routes. This table defines the annual success criteria; task status and actual measurements belong in WorkQueue.md until closed, then the relevant ADR's As built.
+
+**Foundation gate before broader application investment.** Require the shared semantic registry and code/builder contract; a usable object/page/workflow/AI construction and publication loop; accepted desktop and narrow-screen operator tasks; permission closure on derived reads and isolated preview; durable recovery and tenant failure behavior; and a second-industry composition probe without a parallel engine. Record each gate as pass, partial or open with evidence. The owner's “80–90%” expresses how far the platform should lead application work; it is not a count of features or a percentage we can honestly calculate from today's code. Failed gates keep industry feature delivery out of the platform team's queue except for their minimal validation probes.
+
+| Dimension | Year-end gate | Evidence and boundary |
+|---|---|---|
+| FDE delivery | A person outside the implementing team completes §10.4 in two industry settings using the shared platform | Record task scope, source readiness, time, custom code, platform changes and rework. Initial planning target: one prepared-data operational slice in **5 working days**, a routine supported variation in **1 day**. These are targets to calibrate in W1, not observed performance or a promise to build an entire ERP in five days |
+| Customer construction | A delegated customer builder changes a page, object extension, workflow and AI function and publishes a valid permitted release without editing Go/React | Observe completion, errors and assistance; forbidden capabilities and invalid dependencies are rejected server-side |
+| Frontend quality | Owner accepts complete desktop and narrow-screen journeys; every agreed critical task has clear progress, completion and recovery | Gallery states, browser visual/accessibility checks, keyboard traversal, realistic data and user task timing; establish numeric interaction/performance budgets in W1 on named devices/datasets |
+| Semantic consistency | Code, UI, AI, API and automation use the same asset identity, types and authorized actions | Cross-surface conformance; rename/change an asset and show impact before publication; no duplicate domain truth |
+| AI quality and control | A versioned AI function is reused by page and flow; candidate versions pass task-specific quality, cost and latency thresholds before promotion | Cases/data/evaluators recorded with versions; failures go to humans; thresholds set from each actual use case, not a universal model accuracy number |
+| Isolation and permission closure | Unauthorized source content is absent from all tested derived surfaces; previews cannot affect live state/effects; a failed tenant cannot corrupt another | Same-app owner/unit/Through and cross-tenant tests; fault injection, credential isolation and documented shared-process limits |
+| Recovery and evolution | Accepted state and durable work/effects survive crash and restore; code changes do not re-decide history; supported upgrades preserve running versions and customer extensions | Crash-point tests, fresh-baseline result replay, migration tests and restore rehearsal. Rollback is permitted only with compatible data; otherwise use an explicit forward repair |
+| Reuse and maintainability | The second delivery reuses the platform/industry assets and adds only justified extensions; no permanent duplicate runtime or capability escape | Compare changed code and definition sets; dependency/owner checks, upgrade diff, closed transition paths and focused tests |
+| Formal assurance | Selected critical invariants have checked Lean proofs and executable conformance links, with remaining trust assumptions explicit | Pinned proof build in CI, spec-to-theorem-to-test mapping; no whole-system proof claim |
+
+If customer access, staffing or operational data is missing, report it and use a clearly labelled controlled trial; do not promote a synthetic demonstration to production evidence. A wave review may adjust breadth or dates, but changing the platform purpose or weakening an accepted guarantee requires an explicit recorded decision.

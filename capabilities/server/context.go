@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/flow"
 	"platformserver/apps/relations"
@@ -54,6 +55,9 @@ func (t *Tenant) host() platform.Member {
 }
 
 func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time) (ContextView, *kernel.Error) {
+	if reader != nil && reader.Tenant != t.ID {
+		return ContextView{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
 	m := t.host()
 	if reader != nil {
 		m = *reader
@@ -85,25 +89,34 @@ func (t *Tenant) Context(reader *platform.Member, typ, id string, now time.Time)
 		}
 	}
 	if t.linker != nil {
-		out.Links = append(out.Links, t.linker.Links(t.caller(m, t.linker.(platform.App), false), typ+"/"+id)...)
+		for _, ref := range t.linker.Links(t.caller(m, t.linker.(platform.App), false), typ+"/"+id) {
+			if t.Readable(m, ref, now) {
+				out.Links = append(out.Links, ref)
+			}
+		}
 	}
-	host := t.automation(flow.ID, false)
 	if t.procs != nil {
 		key, _ := json.Marshal([]any{[]any{"key", "=", id}})
-		instances, _, _ := platform.Find[flow.FlowInstance](host, platform.Query{Domain: key, Sort: []string{"id"}})
-		for _, x := range instances {
-			trace := x.Trace
-			if len(trace) > 8 {
-				trace = trace[len(trace)-8:]
+		instances, err := t.Records(m, flow.InstanceType, platform.Query{Domain: key, Sort: []string{"id"}}, now)
+		if err == nil {
+			for _, record := range instances.Records {
+				x := record.(flow.FlowInstance)
+				trace := x.Trace
+				if len(trace) > 8 {
+					trace = trace[len(trace)-8:]
+				}
+				out.Flows = append(out.Flows, FlowSummary{ID: x.ID, Flow: x.Flow, State: x.State, Trace: trace})
 			}
-			out.Flows = append(out.Flows, FlowSummary{ID: x.ID, Flow: x.Flow, State: x.State, Trace: trace})
 		}
 	}
 	if t.tasks != nil {
 		about, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}})
-		tasks, _, _ := platform.Find[work.WorkTask](t.automation(work.ID, false), platform.Query{Domain: about, Sort: []string{"id"}})
-		for _, x := range tasks {
-			out.Tasks = append(out.Tasks, TaskSummary{ID: x.ID, Title: x.Title, State: x.State, Answer: x.Answer})
+		tasks, err := t.Records(m, work.TaskType, platform.Query{Domain: about, Sort: []string{"id"}}, now)
+		if err == nil {
+			for _, record := range tasks.Records {
+				x := record.(work.WorkTask)
+				out.Tasks = append(out.Tasks, TaskSummary{ID: x.ID, Title: x.Title, State: x.State, Answer: x.Answer})
+			}
 		}
 	}
 	return out, nil
@@ -119,6 +132,9 @@ type Hit struct {
 // Search finds records of every type the reader may read by text: the global
 // search of the workspace and an agent's search tool.
 func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit {
+	if reader != nil && reader.Tenant != t.ID {
+		return nil
+	}
 	m := t.host()
 	if reader != nil {
 		m = *reader

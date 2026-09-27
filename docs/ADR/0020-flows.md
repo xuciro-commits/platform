@@ -1,5 +1,7 @@
 # ADR-0020: Flows — long-running processes across apps
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The code-only authoring restriction is amended: a typed flow composer will reuse the flow runtime, with published definitions and explicit instance-version semantics. The existing graph remains read-only until implemented. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-25, #110, the architecture gate of stage 4 in Platform.md §10.5). The owner accepted D1–D9 as recommended. What is built is under "As built".
 
 ## Context

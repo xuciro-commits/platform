@@ -1,12 +1,25 @@
 # Building an app
 
-How a person, or a coding agent, builds an app on the platform (ADR-0023 D8). An app is typed Go code the host composes into a tenant (ADR-0010), and optionally a UI package the workspace loads (ADR-0018). The path has six steps; the scaffold writes an app that has already walked all six, so each step is a change to working code, checked by tests.
+How a person, or a coding agent, builds an app with the capabilities available today (ADR-0023 D8). Read [Intent.md](Intent.md), [Platform.md §10](Platform.md) and [WorkQueue.md](WorkQueue.md) before choosing work. ADR-0031 sets the next-stage direction; Platform §10.4 owns the target application-building journey. This guide documents the current executable path: typed Go code composed into a tenant (ADR-0010), and optionally a UI package compiled into the workspace (ADR-0018). The path has six steps; the scaffold writes a working starting point, so each step changes code that can be checked by tests.
 
 ```
 create app → declare entities → declare actions → declare flows → add translations → run
 ```
 
 The app API is `platformserver/platform` (`capabilities/server/platform`); an app never imports the host runtime `platformserver` except in its tests and its `cmd/` binaries, and never another app (`scripts/boundaries.sh`). Apps meet through protocols (ADR-0011). A decision changes only its own app: its rules may probe a provider (`Caller.Probe`), and once it is accepted it requests what it needs (`Caller.Request`); the provider's answer comes back to one of the app's own actions, which a person takes when no provider is bound (ADR-0026).
+
+## Builder paths and current limits
+
+| Builder | Next-stage responsibility | Available path today |
+|---|---|---|
+| Platform developer | Own shared semantics, runtime guarantees, UI components and extension contracts | Typed Go/TypeScript capabilities and the checks below |
+| FDE or customer developer | Model the industry, bind data and systems, compose business and AI logic and a usable workspace; test, deliver and upgrade it | Repository scaffold, typed declarations, app API, UI kit and deployment composition |
+| Customer business builder | Configure and compose permitted objects, pages, workflows and AI logic within the published capabilities and grants | Saved record views and workspace layouts; administrative values through existing settings. An application/page/workflow creation and publication studio is not yet available |
+| AI assisting any builder | Propose changes, show their impact, generate tests and previews, and follow the same publication controls | A coding agent can edit and test the repository. The in-product assistant operates declared business agents; it does not yet author and publish applications |
+
+Controlled, typed definitions and visual composition are approved directions (ADR-0031), replacing the old blanket ban on configuration-driven composition. They must reuse the same semantic contracts, permissions and component owners as code. Until their canonical runtime is built, do not create a private per-app interpreter or describe planned tools as usable commands. This direction does not promise arbitrary tenant code execution.
+
+Before scaffolding, name the builder, the operator's complete task, the shared capabilities being exercised and each capability's owner. Include the required data/AI integration and customer variation. A reference app is sufficient only when the intended task can be built, used and changed; frontend quality and FDE effort are part of the proof. Additional industry detail must justify the platform capability it proves.
 
 ## 1. Create app
 
@@ -25,7 +38,7 @@ It writes:
 | `apps/<id>/server/cmd/<id>-server` | A development host with the tokens `manager` and `member` |
 | `web/packages/<id>` | `@pkg/<id>`: the UI, registered in the workspace (`-web=false` skips it) |
 
-`cd apps/<id>/server && go test ./...` passes from the first minute. `scripts/verify.sh composition` checks every app under `apps/` and its boundaries without being told about it; `scripts/verify.sh capabilities` scaffolds an app in `.build/scaffold` and runs its tests, so this step cannot rot.
+The generated app is intended to pass `cd apps/<id>/server && go test ./...`; run it and report the result on the current tree. `scripts/verify.sh composition` checks every app under `apps/` and its boundaries without being told about it. `scripts/verify.sh capabilities` scaffolds a server-only app (`-web=false`) in `.build/scaffold` and runs its tests; this does not by itself verify the generated frontend or the full builder journey.
 
 An app is a `platform.App`: `Manifest` (what it declares), `Submit` (deciding its actions), `Read` and `Input` (its own reads and inbound data, if any), `Declarations`, `Snapshot` and `Restore`. The host keeps its records (ADR-0016); a `platform.Ledger` keeps its decisions.
 
@@ -67,3 +80,5 @@ pnpm --dir web/apps/workspace build && go run ./cmd/<id>-server -web ../../../we
 The workspace signs in with a development token, opens the app, lists its records and forms, and shows the flow's task in the manager's inbox; the profile menu switches to 简体中文. `/v1/openapi.json` describes every route, and every entity type and action the caller may use.
 
 To ship the app, compose it into a solution (`solutions/hospitality/cmd/hospitality-server`) or a deployment of its own, and add its route to `docs/Testing.md`, walked in the UI first.
+
+The current scaffold registers a UI package in the workspace source and dependencies; server and UI changes require a build and deployment. Run `scripts/verify.sh composition` and `scripts/verify.sh web` for the paths touched. Walk the full operator task with realistic data, including loading, empty, refusal, conflict and recovery states. Shared frontend changes also need gallery examples and visual/keyboard checks; functional tests alone do not establish visual quality. The future definition preview, publication and upgrade path is specified in Platform §10.4–10.6 and becomes part of this executable guide only as it is built and verified.

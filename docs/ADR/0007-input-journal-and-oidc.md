@@ -1,5 +1,7 @@
 # ADR-0007: Servers persist an input journal; principals come from an OpenID provider
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** Input replay and deployment-wide fail-stop remain the current implementation. The accepted target is committed-result recovery and tenant supervision, using a fresh development baseline; OIDC and recovery without external calls remain. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-24)
 
 **Context.** #87 had to put one slice (manufacturing) on a production path: state that survives a restart and a restore, and callers proven by an identity provider instead of a token table. Persistence could be (a) domain tables per aggregate, (b) the kernel logs stored as records with domain projections rebuilt from them, or (c) a journal of the accepted inputs, replayed through the code that accepted them. The kernel logs alone are not enough for (b): downtime events, their opaque IDs and redirects, connector cursors and SFC states are derived by domain code from inputs, not stored in change records. For identity, writing our own provider was rejected (security surface without platform value); Rauthy (Rust, single container, OIDC with passwords, MFA and passkeys) was chosen over Pocket ID (passkeys only, unusable on shared plant terminals), Kanidm (heavier) and Zitadel (kept for multi-organisation customers).

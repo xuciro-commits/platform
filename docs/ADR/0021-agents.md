@@ -1,5 +1,7 @@
 # ADR-0021: Agents — governed principals in a traced harness
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The target adds versioned customer-authored agent definitions, reusable typed AI functions and a shared preview/evaluation/publication lifecycle; existing code-declared agents remain the implementation. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.5). The owner accepted D1–D10 as recommended. What is built is under "As built" (batches 1 and 2); batch 3 is ADR-0022.
 
 ## Context
@@ -198,3 +200,7 @@ Our platform starts from an advantage there: every decision is already journaled
   - A2A;
   - transcripts in an observability store;
   - signals from discarded effects and undone decisions.
+
+### #130 principal revocation slice (2026-09-27)
+
+An on-behalf run no longer turns into app automation when its member disappears. Before sending the next model request and before applying a returned tool step, the host checks that the member still exists and holds the declaring app's role; a failed check records a stopped run. A missing member yields a denying reader for in-flight derived reads. The `runs` read hides old traces when the person has lost the declaring app's role, and the `agents` read hides instructions from apps the person cannot open. `TestAgentPrincipalRevocation` reproduced the former fallback and disclosure before the repair, then passed. This does not yet redact individual old step observations after a source record's scope changes; #130 retains that obligation.

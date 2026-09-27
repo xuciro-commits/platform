@@ -1,5 +1,7 @@
 # ADR-0004: One web UI kit for every domain's clients
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** Code-only UI composition is amended: registered typed components may also be composed through governed page definitions and builders; the shared UI stack and component ownership remain. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-24)
 
 **Context.** Hotel, manufacturing and later domains differ in business but not in how their data is organised: master data (products, materials, routings, work centers; rooms, room types), organisation (departments, positions, staff), devices and collected readings (access control, cameras, temperature/humidity, PLC states), and documents moving through states (work orders, reservations). Each slice writing its own screens would duplicate tables, forms and state display and drift apart. The owner asked for a shared component system for data-dense operational software, rejecting Ant Design in favour of shadcn/ui or something Palantir-like.

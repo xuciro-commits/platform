@@ -1,5 +1,7 @@
 # ADR-0022: Knowledge, memory and agent-to-agent
 
+> **Current audit qualification (2026-09-27):** knowledge retrieval originally enforced app access without record-level scope; #130 has repaired this first path and is still auditing the other derived reads. See Platform.md §2.4 and WorkQueue #130. [ADR-0031](0031-ai-application-platform.md) extends these capabilities into the governed AI construction lifecycle. The historical decision and implementation account below do not establish the missing permission guarantee.
+
 **Status:** Accepted (2026-09-25, #111, stage 5 batch 3; ADR-0021 D5, D7 and D9 left these for later). The owner accepted D1–D9 as recommended; pgvector waits until a tenant outgrows D2 (a). Built in batches 3a to 3c; see "As built".
 
 ## Context
@@ -134,3 +136,10 @@ Our constraints:
 - **Proof:** the plant's planner (`mes.planner`) asks a supplier's agent for a lead time through `mes/lead-time`; the helpdesk's triage agent answers a client outside once published. `TestA2A` and the rehearsal, which replay without calling the partner.
 - **Not yet:** streaming, the HTTP+JSON binding, `ListTasks`.
 
+
+### #130 first slice: source-scope closure (2026-09-27)
+
+- `knowledge.go` retains an app/public grant on each passage and adds its source-record reference. Retrieval calls the host's canonical `Readable` with the current reader and time before ranking or embedding a query. Text attached to an app record inherits that record's scope; files on a knowledge document retain that document's `Apps` grant. Restricted fields and restricted display titles are not put in the index. A foreign tenant's direct search is refused.
+- `context.go` now reads related flow and task records as the member, and checks each linked record; foreign-tenant Context/Search calls return no content. The host's app automation still reads its own app's knowledge when no person is the reader.
+- `TestKnowledgeAndContextScope` first failed on owner, unit, foreign-tenant and task/flow cases, then passed with these changes; existing knowledge, file and record tests also pass. This is a partial #130 close-out: review of every derived surface, revocation/cache behavior and realistic scale remains in WorkQueue.md. No journal kind, action schema or public API changed.
+- `TestKnowledgeIndexesPastFirstPage` reproduced the host read's 500-record page cap. Knowledge-field indexing now walks ID-sorted pages, so the 501st source can be found. The index still rescans sources on queries and needs a realistic scale/latency design before claiming large-tenant performance.

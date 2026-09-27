@@ -1,5 +1,7 @@
 # ADR-0018: One workspace — sign in once, open every app you may use
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The workspace now also supports the planned layered builder product. Published page definitions compose registered components; runtime loading of arbitrary executable UI bundles is not implied. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-25, #108). The owner raised it: a platform's apps should open like programs on an operating system, not as separate sites that each sign in. The owner accepted D1–D8 as recommended. What is built is under "As built".
 
 ## Context

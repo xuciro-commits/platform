@@ -67,6 +67,14 @@ func (t *Tenant) take(x turn, now time.Time) {
 			t.agentStep(stepBody{Run: x.run.ID, Stop: x.stop}, now)
 			return
 		}
+		if x.run.OnBehalf != "" {
+			reader := t.agents.reader(x.run)
+			definition := t.agents.defs[x.run.Agent]
+			if definition == nil || reader.Tenant != t.ID || reader.Roles[definition.app] == "" {
+				t.agentStep(stepBody{Run: x.run.ID, Stop: "the person no longer has access to this agent's app"}, now)
+				return
+			}
+		}
 		answer, failure := t.call(x.pv, x.model, t.agents.member(x.run.Agent), x.req, now)
 		body := stepBody{Run: x.run.ID, Content: answer.Content, Usage: answer.Usage}
 		if failure != nil {
@@ -110,10 +118,13 @@ func (a *Agents) due(now time.Time) []turn {
 		}
 		x := turn{run: run}
 		d := a.defs[run.Agent]
+		reader := a.reader(run)
 		name := t.setting(c, SettingAgentModel)
 		switch {
 		case d == nil:
 			x.stop = "the agent is no longer declared"
+		case run.OnBehalf != "" && (reader.Tenant != t.ID || reader.Roles[d.app] == ""):
+			x.stop = "the person no longer has access to this agent's app"
 		case name == "":
 			x.stop = "no model is set for agents"
 		case t.suspended("agent:" + run.Agent): // the off switch (ADR-0029 D4)
@@ -195,13 +206,14 @@ func clip(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// reader is who an agent reads as: the person it runs for, or the tenant's
-// records as the app's automation (a flow's agent reads what its app may).
+// reader is who an agent reads as: the person it runs for, or nil for an
+// app's automation. A removed person must not silently become automation.
 func (a *Agents) reader(run AgentRunRecord) *platform.Member {
 	if run.OnBehalf != "" {
 		if m, ok := a.t.member(run.OnBehalf); ok {
 			return &m
 		}
+		return &platform.Member{ID: run.OnBehalf} // no tenant or grants: derived reads refuse it
 	}
 	return nil
 }
@@ -214,6 +226,13 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 	run, _ := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
 	if b.Evaluation != nil {
 		run.Agent = b.Evaluation.Agent
+	}
+	if b.Stop == "" && run.OnBehalf != "" {
+		reader, definition := t.agents.reader(run), t.agents.defs[run.Agent]
+		if definition == nil || reader.Tenant != t.ID || reader.Roles[definition.app] == "" {
+			b.Stop = "the person no longer has access to this agent's app"
+			b.Tool, b.Arguments, b.Observation = "", nil, nil
+		}
 	}
 	body, _ := json.Marshal(b)
 	t.record(t.agents, "agent", t.agents.member(run.Agent), body, now)

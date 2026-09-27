@@ -1,5 +1,7 @@
 # ADR-0019: Read models, analytics and snapshots
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The target persistence foundation becomes committed results with explicit versioned application and migration. Current code-bound snapshots and input replay remain implementation facts until replaced. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-25, #109, the architecture gate of stage 3 in Platform.md §10.5). The owner accepted D1–D7 as recommended, with D5 amended: Apache ECharts 6 is the default renderer, and the platform's contract is a small visualization spec of its own, never ECharts options.
 
 ## Context

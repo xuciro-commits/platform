@@ -1,5 +1,7 @@
 # ADR-0010: The platform is a host that runs apps; its own administration is an app
 
+> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The target adds governed application definitions, publication and activation on the existing app API and host; current code composition remains until implemented. This note records the target; the historical decision and As built below remain evidence of their time.
+
 **Status:** Accepted (2026-09-24; direction approved by the owner, host capabilities detailed in this revision). Amended by ADR-0011 (protocols replace requirements) and by the owner in #104 (see "Amendments"). What of this is built, partial or deferred is reconciled in `docs/Platform.md` §2 "ADR reconciliation" (#103).
 
 **Context.** Composition #91 worked by hand:
