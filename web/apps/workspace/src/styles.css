@@ -1,8 +1,5 @@
 @import "@platform/ui/styles.css";
 @import "@pkg/pms/styles.css";
-/* The app UI packages composed here (ADR-0018). */
-@source "../../../packages/app/src";
-@source "../../../packages/crm/src";
-@source "../../../packages/hcm/src";
-@source "../../../packages/mes/src";
-@source "../../../packages/platform/src";
+/* Every app UI package composed here (ADR-0018), by one glob: a package added
+   later cannot be forgotten and lose its styles. */
+@source "../../../packages";

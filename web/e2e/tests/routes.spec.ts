@@ -350,9 +350,19 @@ test("route 30: compose a page of widgets and use it", async ({ page, request },
   await expect(page.getByText("Add at least one widget before publishing.")).toBeVisible();
   await page.getByRole("button", { name: "Table", exact: true }).click();
   await page.getByRole("group", { name: "Fields it shows" }).getByRole("button", { name: "Stage" }).click();
+  // Three panes, side by side: what there is to place, the page, the widget in
+  // hand. (They once collapsed into one column when the package's styles were
+  // not scanned; the owner saw it before any test did.)
+  const pane = async (name: string) => (await page.getByRole("region", { name }).boundingBox())!;
+  const [palette, canvas, inspector] = await Promise.all([pane("Widgets and layout"), pane("The page"), pane("The widget in hand")]);
+  expect(palette.x + palette.width).toBeLessThanOrEqual(canvas.x + 1);
+  expect(canvas.x + canvas.width).toBeLessThanOrEqual(inspector.x + 1);
   await page.getByRole("button", { name: "Detail", exact: true }).click();
   await page.getByRole("button", { name: "Actions", exact: true }).click();
   await page.getByRole("group", { name: "Actions it offers" }).getByRole("button", { name: "Close opportunity" }).click();
+  // Clicking a widget on the canvas takes it in hand.
+  await page.locator("div").filter({ hasText: /^Detail/ }).last().click();
+  await expect(page.getByRole("group", { name: "Fields it shows" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("composer.png"), fullPage: true });
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText("The page is in the workspace.")).toBeVisible(); // what the host answered

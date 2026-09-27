@@ -103,7 +103,7 @@ export function PageEditor({ id }: { id: string }) {
   // Nothing to publish: no widget laid out and no list/detail from the simple form.
   const nothing = sections.length === 0 && (page.list ?? []).length === 0;
   return (
-    <div className="grid gap-3">
+    <div className="flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3">
       <PageHeader title={page.title} description={t("Compose what people see. Save keeps your work; publish puts it in the workspace.")}
         actions={<div className="flex items-center gap-2">
           <StatusTag status={page.state} registry={pageStates} />
@@ -114,15 +114,22 @@ export function PageEditor({ id }: { id: string }) {
       {nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before publishing.")}</Panel>}
       {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {refused}</Panel>}
       {dirty && <Panel role="status" className="text-xs text-muted">{t("Not saved yet. Publishing saves first.")}</Panel>}
-      <div className="grid gap-3 lg:grid-cols-[16rem_1fr_18rem]">
-        <Layout sections={sections} chosen={chosen} onChoose={setChosen} onAdd={add} onMove={move}
-          onRemove={(i) => { setSections(sections.filter((_, at) => at !== i)); setChosen(0); setDirty(true); }} />
-        <div className="min-w-0">
-          <Panel role="status" className="mb-3 text-xs text-muted">{t("Your records, as they are. Actions do not run while you compose.")}</Panel>
-          <ComposedPage page={asPage(page, sections)} live={false} />
+      {/* Left: what there is to place, and where it sits. Middle: the page
+          itself, over real records. Right: the widget in hand. Each pane
+          scrolls on its own, so the canvas never pushes the rest off screen. */}
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_19rem]">
+        <div role="region" aria-label={t("Widgets and layout")} className="min-h-0 overflow-y-auto">
+          <Layout sections={sections} chosen={chosen} onChoose={setChosen} onAdd={add} onMove={move}
+            onRemove={(i) => { setSections(sections.filter((_, at) => at !== i)); setChosen(0); setDirty(true); }} />
         </div>
-        <Properties section={sections[chosen]} info={info} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-          object={page.object} onChange={(patch) => change(chosen, patch)} />
+        <div role="region" aria-label={t("The page")} className="min-h-0 min-w-0 overflow-y-auto rounded-md border border-dashed border-border p-3">
+          <ComposedPage page={asPage(page, sections)} live={false} chosen={chosen} onChoose={setChosen}
+            notice={<Panel role="status" className="text-xs text-muted">{t("Your records, as they are. Actions do not run while you compose.")}</Panel>} />
+        </div>
+        <div role="region" aria-label={t("The widget in hand")} className="min-h-0 overflow-y-auto">
+          <Properties section={sections[chosen]} info={info} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
+            object={page.object} onChange={(patch) => change(chosen, patch)} />
+        </div>
       </div>
     </div>
   );
@@ -134,31 +141,35 @@ function Layout({ sections, chosen, onChoose, onAdd, onMove, onRemove }: {
   onMove: (i: number, by: number) => void; onRemove: (i: number) => void;
 }) {
   return (
-    <Card className="grid content-start gap-2 p-3">
-      <div className="text-xs font-semibold text-muted">{t("Layout")}</div>
-      <ul className="grid gap-1">
-        {sections.map((section, i) => (
-          <li key={i}>
-            <div className={cn("flex items-center gap-1 rounded-md border px-2 py-1", i === chosen ? "border-primary bg-row-selected" : "border-border")}>
-              <Button variant="ghost" size="sm" className="flex-1 justify-start truncate" aria-pressed={i === chosen} onClick={() => onChoose(i)}>
-                {section.title || widgetTitles[section.widget]?.() || section.widget}
-                <span className="ml-1 font-mono text-xs text-muted">{section.widget}</span>
-              </Button>
-              <Button size="sm" variant="ghost" aria-label={t("Move up")} onClick={() => onMove(i, -1)}><ArrowUp className="size-3" /></Button>
-              <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => onMove(i, 1)}><ArrowDown className="size-3" /></Button>
-              <Button size="sm" variant="ghost" aria-label={t("Remove section")} onClick={() => onRemove(i)}><Trash2 className="size-3" /></Button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      {sections.length === 0 && <p className="text-xs text-muted">{t("Add what people should see.")}</p>}
-      <div className="grid gap-1 border-t border-border pt-2">
+    <Card className="grid content-start gap-3 p-3">
+      <div className="grid gap-1">
         <div className="text-xs font-semibold text-muted">{t("Add a widget")}</div>
-        <div className="flex flex-wrap gap-1">
+        <div className="grid grid-cols-2 gap-1">
           {widgets.map((widget) => (
-            <Button key={widget} size="sm" onClick={() => onAdd(widget)}><Plus className="size-3" />{widgetTitles[widget]!()}</Button>
+            <Button key={widget} size="sm" className="justify-start" onClick={() => onAdd(widget)}>
+              <Plus className="size-3" />{widgetTitles[widget]!()}
+            </Button>
           ))}
         </div>
+      </div>
+      <div className="grid gap-1 border-t border-border pt-3">
+        <div className="text-xs font-semibold text-muted">{t("Layout")}</div>
+        <ul className="grid gap-1">
+          {sections.map((section, i) => (
+            <li key={i}>
+              <div className={cn("flex items-center gap-0.5 rounded-md border px-1 py-0.5", i === chosen ? "border-primary bg-row-selected" : "border-border")}>
+                <Button variant="ghost" size="sm" className="min-w-0 flex-1 justify-start" aria-pressed={i === chosen} onClick={() => onChoose(i)}>
+                  <span className="truncate">{section.title || widgetTitles[section.widget]?.() || section.widget}</span>
+                  <span className="ml-auto pl-1 font-mono text-[10px] text-muted">{section.width === "half" ? "½" : "1"}</span>
+                </Button>
+                <Button size="sm" variant="ghost" aria-label={t("Move up")} onClick={() => onMove(i, -1)}><ArrowUp className="size-3" /></Button>
+                <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => onMove(i, 1)}><ArrowDown className="size-3" /></Button>
+                <Button size="sm" variant="ghost" aria-label={t("Remove section")} onClick={() => onRemove(i)}><Trash2 className="size-3" /></Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {sections.length === 0 && <p className="text-xs text-muted">{t("Add what people should see.")}</p>}
       </div>
     </Card>
   );

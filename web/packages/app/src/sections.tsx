@@ -15,6 +15,9 @@ type Section = NonNullable<Page["sections"]>[number];
 /** What a section is bound to, and what the page has selected. */
 type Bound = { page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean };
 
+/** Composing: the section in hand, and choosing another by clicking it. */
+type Composing = { chosen?: number; onChoose?: (at: number) => void; at?: number };
+
 const objectOf = (page: Page, section: Section) => section.object?.name || page.object.name;
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
@@ -70,9 +73,10 @@ function ChartWidget({ page, section, kpi }: Bound & { kpi: boolean }) {
     source={aggregate ? { aggregate, revision: source.revision } : undefined} />;
 }
 
-/** One section: its title, and the widget it holds. */
-export function SectionView(bound: Bound) {
-  const { section } = bound;
+/** One section: its title, and the widget it holds. While a page is being
+ *  composed, clicking it takes it in hand. */
+export function SectionView(bound: Bound & Composing) {
+  const { section, chosen, onChoose, at } = bound;
   const body: ReactNode = (() => {
     switch (section.widget) {
       case "table": return <TableWidget {...bound} />;
@@ -84,8 +88,11 @@ export function SectionView(bound: Bound) {
       default: return <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
     }
   })();
+  const inHand = onChoose !== undefined && chosen === at;
   return (
-    <Card className={cn("grid content-start gap-2 p-3", section.width === "half" ? "md:col-span-1" : "md:col-span-2")}>
+    <Card onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined}
+      className={cn("grid content-start gap-2 p-3", section.width === "half" ? "md:col-span-1" : "md:col-span-2",
+        onChoose && "cursor-pointer", inHand && "outline outline-2 outline-primary")}>
       {section.title && section.widget !== "metric" && <h3 className="text-sm font-semibold">{section.title}</h3>}
       {body}
     </Card>
@@ -97,14 +104,17 @@ export function SectionView(bound: Bound) {
  * selected. `live` false is the builder's canvas — the same widgets over the
  * same records, with nothing that writes.
  */
-export function ComposedPage({ page, live = true, notice }: { page: Page; live?: boolean; notice?: ReactNode }) {
+export function ComposedPage({ page, live = true, notice, chosen, onChoose }: {
+  page: Page; live?: boolean; notice?: ReactNode;
+} & Composing) {
   const [selected, setSelected] = useState<EntityRecord>();
   return (
     <div className="grid gap-3">
       {notice}
       <div className="grid gap-3 md:grid-cols-2">
         {(page.sections ?? []).map((section, i) => (
-          <SectionView key={i} page={page} section={section} selected={selected} onSelect={setSelected} live={live} />
+          <SectionView key={i} page={page} section={section} selected={selected} onSelect={setSelected} live={live}
+            chosen={chosen} onChoose={onChoose} at={i} />
         ))}
       </div>
       {(page.sections ?? []).length === 0 && <Panel role="status" className="text-sm text-muted">{t("Nothing is on this page yet.")}</Panel>}
