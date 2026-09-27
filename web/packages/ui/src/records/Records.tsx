@@ -9,7 +9,7 @@ import { DataTable } from "../components/DataTable";
 import { PropertyList } from "../components/EntityCard";
 import { Tag } from "../components/StatusTag";
 import { columnsFor, defineEntity, type Entity } from "../fields/entity";
-import { checkbox, date, datetime, longText, multiSelect, number, singleSelect, text, type FieldType } from "../fields/types";
+import { checkbox, date, datetime, longText, multiSelect, number, singleSelect, tags, text, type FieldType } from "../fields/types";
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
 import { RecordLookup } from "./RecordLookup";
@@ -110,7 +110,10 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
         case "reference": return source && f.ref
           ? { ...text(common), type: "reference", editor: ({ id, value, onChange }) => <RecordLookup id={id} source={source} type={f.ref!} value={value} onChange={onChange} /> }
           : options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
-        case "references": case "tags": return multiSelect({ ...common, readOnly: f.type === "references" || f.readOnly, options: options[f.name] ?? [] });
+        case "references": return multiSelect({ ...common, readOnly: true, options: options[f.name] ?? [] });
+        // Tags with a list to choose from are that list; tags without one are
+        // words a person types (labels, field names).
+        case "tags": return options[f.name]?.length ? multiSelect({ ...common, options: options[f.name]! }) : tags(common);
         case "lines": return f.fields?.length
           ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source))
           : { ...text(common), readOnly: true, display: (v: unknown) => <span className="text-muted">{Array.isArray(v) ? `${v.length} lines` : "—"}</span> } as FieldType<any>;

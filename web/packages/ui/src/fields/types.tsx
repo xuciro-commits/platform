@@ -167,6 +167,43 @@ export const multiSelect = (o: Common & { options: Option[] }): FieldType<string
   };
 };
 
+/** Words a person types, each kept as its own value: labels, field names, tags
+ *  with no list to choose from. Enter or a comma adds one; each chip removes. */
+export const tags = (o: Common & { placeholder?: string }): FieldType<string[]> => ({
+  type: "tags", width: 200, ...o, schema: z.array(z.string().min(1)),
+  compare: (a, b) => a.length - b.length, text: (v) => (v ?? []).join(" "),
+  operators: [{ id: "has", label: "has", needsArg: true, test: (v, a) => !!a?.every((x) => v?.includes(x)) }, isEmpty, notEmpty],
+  display: (v) => (empty(v) ? muted : <span className="flex gap-1 overflow-hidden">{v!.map((x) => <Tag key={x} label={x} />)}</span>),
+  editor: ({ id, value = [], onChange, invalid, autoFocus }) => {
+    const add = (word: string) => {
+      const next = word.trim();
+      if (next && !value.includes(next)) onChange([...value, next]);
+    };
+    return (
+      <span className="flex flex-wrap items-center gap-1">
+        {value.map((x) => (
+          <button key={x} type="button" onClick={() => onChange(value.filter((y) => y !== x))} aria-label={`${t("Remove")} ${x}`}
+            className="flex items-center gap-1 rounded-sm border border-border px-1.5 py-0.5 text-xs hover:bg-row-hover">
+            {x}<X className="size-3" aria-hidden />
+          </button>
+        ))}
+        <Input id={id} aria-invalid={invalid} autoFocus={autoFocus} placeholder={o.placeholder ?? t("Add…")} className="w-32"
+          onKeyDown={(e) => {
+            const field = e.currentTarget;
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              add(field.value);
+              field.value = "";
+            } else if (e.key === "Backspace" && field.value === "" && value.length > 0) {
+              onChange(value.slice(0, -1));
+            }
+          }}
+          onBlur={(e) => { add(e.currentTarget.value); e.currentTarget.value = ""; }} />
+      </span>
+    );
+  },
+});
+
 export const email = (o: Common): FieldType<string> => ({
   ...text(o), type: "email", schema: z.email("Email address"),
   display: (v) => (v ? <a href={`mailto:${v}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>{v}</a> : muted),

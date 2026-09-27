@@ -1,31 +1,31 @@
-// The builder's UI (ADR-0034): the objects this organisation defines, and the
-// objects it has published. Both are pages of the host's definition registry,
-// rendered by the same component a code page uses — the builder gets the shared
-// list/detail frame, generated forms and keyboard behaviour, and nothing here
-// interprets a definition of its own.
+// The builder's UI (ADR-0034): the objects this organisation defines, the pages
+// it composes over them, and every page it has published. All of them are pages
+// of the host's definition registry, rendered by the same component a code page
+// uses — the builder gets the shared list/detail frame, generated forms and
+// keyboard behaviour, and nothing here interprets a definition of its own.
 import "./i18n";
 import { defineApp } from "@platform/app";
 import { t, type NavSection } from "@platform/ui";
-import { Boxes, Hammer } from "lucide-react";
+import { Boxes, Hammer, LayoutList } from "lucide-react";
 
-/** The page the host installed for an object, by the object's own name. */
-const objectPage = (name: string) => ({ view: "page", params: { app: "build", kind: "page", name } });
+/** A page of the builder app, by its name in the registry. */
+const page = (name: string) => ({ view: "page", params: { app: "build", kind: "page", name } });
 
 export default defineApp({
   id: "build",
   title: t("Builder"),
   icon: <Hammer />,
-  home: objectPage("objects"),
+  home: page("objects"),
   views: [],
   nav: (host): NavSection[] => {
-    const published = host.entities.filter((info) => info.app === "build" && info.type !== "build.object");
+    const own = host.definitions.filter((d) => d.ref.kind === "page" && d.ref.app === "build" && d.source === "tenant");
     return [
-      { label: t("Builder"), items: [{ label: t("Objects"), icon: <Hammer />, route: objectPage("objects") }] },
-      ...(published.length > 0
-        ? [{
-          label: t("What this organisation defined"),
-          items: published.map((info) => ({ label: info.plural, icon: <Boxes />, route: objectPage(info.type.replace(/^build\./, "")) })),
-        }]
+      {
+        label: t("Builder"),
+        items: [{ label: t("Objects"), icon: <Hammer />, route: page("objects") }, { label: t("Pages"), icon: <LayoutList />, route: page("pages") }],
+      },
+      ...(own.length > 0
+        ? [{ label: t("Pages this organisation published"), items: own.map((d) => ({ label: d.page?.title ?? d.ref.name, icon: <Boxes />, route: page(d.ref.name) })) }]
         : []),
     ];
   },

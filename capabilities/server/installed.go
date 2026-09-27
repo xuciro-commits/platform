@@ -115,3 +115,51 @@ func (t *Tenant) reinstall() error {
 	}
 	return nil
 }
+
+// InstallPage offers a page an app composed at runtime: it must name an object
+// this tenant has, fields that object declares and actions about it, so the
+// workspace can always open what the registry offers (ADR-0034, #132). The
+// member's own reads and catalog still decide what they see on it.
+func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
+	id := app.Manifest().ID
+	if p.Name == "" || p.Layout != "list-detail" {
+		return fmt.Errorf("page %q: only a list-detail page", p.Name)
+	}
+	info, known := t.entity(p.Object.Name)
+	if !known {
+		return fmt.Errorf("page %s: no object %s", p.Name, p.Object.Name)
+	}
+	for _, fields := range [][]string{p.ListFields, p.DetailFields} {
+		if len(fields) == 0 {
+			return fmt.Errorf("page %s: no fields in its list or its detail", p.Name)
+		}
+		for _, name := range fields {
+			if _, ok := info.Field(name); !ok {
+				return fmt.Errorf("page %s: %s has no field %s", p.Name, p.Object.Name, name)
+			}
+		}
+	}
+	for _, ref := range p.Actions {
+		owner := t.owner["action:"+ref.Name]
+		action, ok := platform.Action{}, false
+		if owner != nil {
+			action, ok = owner.Manifest().Actions.Action(ref.Name)
+		}
+		if !ok || action.Target != p.Object.Name {
+			return fmt.Errorf("page %s: no action %s about %s", p.Name, ref.Name, p.Object.Name)
+		}
+	}
+	t.installDefinitions(id, info, nil, []platform.Page{p})
+	return nil
+}
+
+// entity is an entity type's declaration, as the app that composes over it sees it.
+func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	et := t.records.types[typ]
+	if et == nil {
+		return platform.EntityInfo{}, false
+	}
+	return et.info, true
+}

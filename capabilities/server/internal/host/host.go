@@ -50,6 +50,13 @@ type Host interface {
 	// fields and its records come with them. The app teaches its own ledger the
 	// data class and schemas first (Ledger.Extend).
 	Install(e platform.Entity, actions []platform.Action, pages ...platform.Page) error
+	// InstallPage offers a page someone composed in this tenant (ADR-0034): the
+	// same descriptor a manifest declares, checked against what is installed and
+	// served to the members who may read its object. Composed again, it replaces
+	// the one before it.
+	InstallPage(p platform.Page) error
+	// Entity is an entity type's declaration, for an app composing over it.
+	Entity(typ string) (platform.EntityInfo, bool)
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
 	Declares(name string) bool
 	// Seen marks an app's notifications with any of keys read for everyone.

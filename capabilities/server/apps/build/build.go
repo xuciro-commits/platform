@@ -40,6 +40,9 @@ type Object struct {
 	Fields      []Field `json:"fields" title:"Fields"`
 	State       string  `json:"state" field:"readonly" choices:"draft,published"`
 	Installed   string  `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	// Published is the definition as it was last published, which is what is
+	// installed and what a restore installs again — not the draft beside it.
+	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
 }
 
 // Field is one field of a defined object, as a person describes it.
@@ -68,7 +71,8 @@ func (b *Build) Attach(h host.Host) { b.host = h }
 // New is a tenant's builder app.
 func New(tenant string) *Build {
 	b := &Build{installed: map[string]platform.Entity{}}
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(platform.EntityActions(b.objectEntity())...), ObjectType)
+	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType)
 	return b
 }
 
@@ -91,12 +95,13 @@ func (b *Build) objectEntity() platform.Entity {
 						return err
 					}
 					object.Installed = TypeOf(object.Name) // what its records are kept as, for people to see
+					object.Published = published(*object)
 					return nil
 				}}}}}
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -106,7 +111,13 @@ func (b *Build) Manifest() platform.Manifest {
 			ListFields:   []string{"title", "name", "state", "installed"},
 			DetailFields: []string{"title", "name", "plural", "description", "fields", "state", "installed"},
 			Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".create"},
-				{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}}}}
+				{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}},
+			{Name: "pages", Title: "Pages", Description: "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",
+				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: PageType},
+				ListFields:   []string{"title", "name", "object", "state"},
+				DetailFields: []string{"title", "name", "description", "object", "list", "detail", "actions", "state"},
+				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: PageType + ".create"},
+					{App: ID, Kind: platform.AssetAction, Name: PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaRelease}}}}}
 }
 
 // sortedTypes are the installed types, in a fixed order: a manifest and a
@@ -153,7 +164,15 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity()}
+	if name := s.GetSchema().GetName(); (name == PageType+".create" || name == PageType+".edit") && !c.Replaying {
+		var p Page
+		if json.Unmarshal(s.GetPayload(), &p) == nil && p.Object != "" {
+			if _, known := b.host.Entity(p.Object); !known {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: fmt.Sprintf("this tenant has no object %q", p.Object)}
+			}
+		}
+	}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -266,17 +285,45 @@ func (b *Build) install(o Object) *kernel.Error {
 	return nil
 }
 
-// Reinstall installs every published object again: the host calls it when a
-// tenant is restored from a snapshot, before the records of defined types
-// (ADR-0034 D4).
+// published is a definition as it was published: what is installed, kept on the
+// record so a restore installs that and not a draft written since (ADR-0034 D3).
+func published[T any](definition T) string {
+	raw, _ := json.Marshal(definition)
+	return string(raw)
+}
+
+// wasPublished is the definition that was published, or false when none was.
+func wasPublished[T any](raw string) (T, bool) {
+	var out T
+	if raw == "" || json.Unmarshal([]byte(raw), &out) != nil {
+		return out, false
+	}
+	return out, true
+}
+
+// Reinstall installs every published object and page again, objects first: the
+// host calls it when a tenant is restored from a snapshot, before the records
+// of the types they define (ADR-0034 D4). It installs what was published, so a
+// draft written since stays a draft.
 func (b *Build) Reinstall() error {
 	objects, _, _ := platform.Find[Object](b.host.Automation(ID, false), platform.Query{Limit: 1000, Sort: []string{"id"}})
 	for _, o := range objects {
-		if o.State != "published" || o.Archived {
+		was, ok := wasPublished[Object](o.Published)
+		if !ok || o.Archived {
 			continue
 		}
-		if err := b.install(o); err != nil {
+		if err := b.install(was); err != nil {
 			return fmt.Errorf("object %s: %v", o.Name, err)
+		}
+	}
+	pages, _, _ := platform.Find[Page](b.host.Automation(ID, false), platform.Query{Limit: 1000, Sort: []string{"id"}})
+	for _, p := range pages { // after the objects they show
+		was, ok := wasPublished[Page](p.Published)
+		if !ok || p.Archived {
+			continue
+		}
+		if err := b.release(was); err != nil {
+			return fmt.Errorf("page %s: %v", p.Name, err)
 		}
 	}
 	return nil

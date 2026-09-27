@@ -39,6 +39,9 @@ export type Host = {
   /** Sends what waits in the outbox again. */
   resend: () => Promise<void>;
   entities: EntityInfo[];
+  /** The installed assets the member may discover, for navigation built from
+   *  pages — a code page or one composed in this tenant (ADR-0032, ADR-0034). */
+  definitions: Definition[];
   source: RecordSource;
   /** Entity type → the view that shows one record of it, from every app's `opens`. */
   opens: Map<string, string>;

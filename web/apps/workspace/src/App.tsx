@@ -3,7 +3,7 @@
 // and the member holds a role in (`/v1/me`), the actions of their catalog — and
 // each app's UI package contributes its views and navigation through defineApp.
 import "./i18n";
-import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
+import { HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
 import { Workspace, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -64,6 +64,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     useQuery({ queryKey: [token, tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled: ready });
   const actions = read<ActionDeclaration[]>("/v1/actions").data;
   const entities = read<EntityInfo[]>("/v1/entities").data ?? [];
+  // The installed assets, so an app's navigation can offer the pages it has —
+  // a code page, or one someone composed in this tenant (ADR-0032, ADR-0034).
+  const definitions = read<Definition[]>("/v1/definitions").data ?? [];
   const protocols = read<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const unread = (read<Notification[]>("/v1/notifications").data ?? []).filter((n) => !n.read).length;
   const saved = read<SavedView[]>("/v1/views").data ?? [];
@@ -126,14 +129,14 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       }
     }
     return {
-      client, me, entities, source, opens, outbox, decide,
+      client, me, entities, definitions, source, opens, outbox, decide,
       role: (app) => me.profile.roles[app] || undefined,
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),
       catalog: actions ?? [],
       resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); await queries.invalidateQueries(); },
     };
-  }, [actions, apps, client, decide, entities, me, outbox, protocols, queries, revision]);
+  }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, queries, revision]);
 
   const [current, setCurrent] = useState(remembered("workspace:app"));
   const app = apps?.find((a) => a.id === current);

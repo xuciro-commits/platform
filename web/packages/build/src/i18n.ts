@@ -4,5 +4,6 @@ import { register } from "@platform/ui";
 register("zh-CN", {
   "Builder": "构建器",
   "Objects": "对象",
-  "What this organisation defined": "本组织定义的对象",
+  "Pages": "页面",
+  "Pages this organisation published": "本组织发布的页面",
 });

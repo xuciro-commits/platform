@@ -107,6 +107,12 @@ func (h hostView) Runs() host.Runs {
 	return h.t.agents
 }
 
+// InstallPage offers a page composed in this tenant (ADR-0034).
+func (h hostView) InstallPage(p platform.Page) error { return h.t.InstallPage(h.app, p) }
+
+// Entity is an entity type's declaration.
+func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.entity(typ) }
+
 func (h hostView) Declares(name string) bool { return h.t.declares(name) }
 
 func (h hostView) Readable(m platform.Member, ref string, now time.Time) bool {

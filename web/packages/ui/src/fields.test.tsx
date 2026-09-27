@@ -86,3 +86,17 @@ test("a record form uses field editors and reports field errors", async () => {
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save" })); });
   expect(submit).toHaveBeenCalledWith({ name: "Bolt", kind: "raw", supplier: "buyer@example.com" }, expect.anything());
 });
+
+// Words a person types, with no list to choose from: the editor of a tags field
+// that carries labels, field names or keywords (ADR-0034's page composer).
+test("a tags field takes words a person types and gives them back", () => {
+  const free = field.tags({ label: "Fields in the list" });
+  const onChange = vi.fn();
+  render(<>{free.editor!({ id: "list", value: ["title"], onChange })}</>);
+  const input = screen.getByPlaceholderText("Add…");
+  fireEvent.keyDown(input, { key: "Enter", target: { value: "stage" } });
+  expect(onChange).toHaveBeenCalledWith(["title", "stage"]);
+  fireEvent.click(screen.getByRole("button", { name: "Remove title" }));
+  expect(onChange).toHaveBeenLastCalledWith([]);
+  expect(free.text(["title", "stage"])).toBe("title stage");
+});

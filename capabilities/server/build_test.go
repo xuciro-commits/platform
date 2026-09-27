@@ -135,5 +135,51 @@ func TestTenantDefinedObject(t *testing.T) {
 			t.Errorf("after the object grew, the record lost %s: %s", want, kept)
 		}
 	}
+	// A page someone composes over an object: the same descriptor a code page
+	// has, checked against what is installed, with the reason when it is wrong.
+	bad := func(payload map[string]any, want string) {
+		t.Helper()
+		if got := do("dana", build.PageType+".create", build.PageType, "P-1", payload); got != want {
+			t.Errorf("page refused as %q, want %q", got, want)
+		}
+	}
+	bad(map[string]any{"name": "visits", "title": "Visits", "object": "stock.item", "list": []string{"guest"}, "detail": []string{"guest"}},
+		"ERROR_CODE_INVALID_ARGUMENT: this tenant has no object \"stock.item\"")
+	if got := do("dana", build.PageType+".create", build.PageType, "P-1",
+		map[string]any{"name": "visits", "title": "Visits", "description": "Every visit.", "object": visit,
+			"list": []string{"guest", "kind"}, "detail": []string{"guest", "visited", "spend", "kind", "note"}, "actions": []string{visit + ".edit"}}); got != "ok" {
+		t.Fatalf("page draft: %s", got)
+	}
+	if slices.ContainsFunc(tn.Definitions(member("eli")), func(d platform.Definition) bool {
+		return d.Ref.Kind == platform.AssetPage && d.Ref.Name == "visits"
+	}) {
+		t.Error("a page was offered before it was published")
+	}
+	if got := do("dana", build.SchemaRelease, build.PageType, "P-1", map[string]any{}); got != "ok" {
+		t.Fatalf("publish the page: %s", got)
+	}
+	composedPage := func(who, name string) *platform.Page {
+		for _, d := range tn.Definitions(member(who)) {
+			if d.Ref.Kind == platform.AssetPage && d.Ref.Name == name {
+				return d.Page
+			}
+		}
+		return nil
+	}
+	composed := composedPage("eli", "visits")
+	if composed == nil || composed.Object.Name != visit || len(composed.ListFields) != 2 || len(composed.Actions) != 1 {
+		t.Fatalf("the composed page: %+v", composed)
+	}
+	// Composed again with a field that is not there: refused, and the page people
+	// open is still the one that worked.
+	if got := do("dana", build.PageType+".edit", build.PageType, "P-1", map[string]any{"list": []string{"guest", "nothing"}}); got != "ok" {
+		t.Fatalf("edit the page: %s", got)
+	}
+	if got := do("dana", build.SchemaRelease, build.PageType, "P-1", map[string]any{}); !strings.Contains(got, "has no field \"nothing\"") {
+		t.Errorf("a page over a field that is not there: %s", got)
+	}
+	if again := composedPage("eli", "visits"); again == nil || len(again.ListFields) != 2 {
+		t.Errorf("a refused composition changed the page people open: %+v", again)
+	}
 	CheckReplay(t, tn, journal, compose)
 }

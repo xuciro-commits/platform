@@ -17,6 +17,8 @@ export default {
   ", until {when}": "，直到 {when}",
   "Act": "执行",
   "Add line": "添加一行",
+  "Add…": "添加…",
+  "Remove": "移除",
   "Agent": "智能体",
   "All of": "全部",
   "Any of": "任一",
