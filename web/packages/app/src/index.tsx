@@ -19,7 +19,12 @@ export type Definition = Api.Definition;
 /** The signed-in member on this host, with their language (ADR-0023). */
 export type Me = Api.MeView;
 /** `quiet`: no word on success, as for a notification marked read by opening it; a refusal is still told. */
-export type Decision = { evidence?: string[]; expectedRevision?: number; quiet?: boolean };
+export type Decision = {
+  evidence?: string[]; expectedRevision?: number; quiet?: boolean;
+  /** Told why the host refused, for a screen that keeps the reason in front of
+   *  the person instead of letting a notice pass by. */
+  onRefused?: (reason: string) => void;
+};
 
 /** What an app's UI may use of the host, for the signed-in member. */
 export type Host = {

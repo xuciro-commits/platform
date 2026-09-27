@@ -345,6 +345,9 @@ test("route 30: compose a page of widgets and use it", async ({ page, request },
   // The composer: a layout panel, a canvas over real records, a widget panel.
   await page.getByRole("row").filter({ hasText: name }).click();
   await expect(page.getByText("Actions do not run while you compose.")).toBeVisible();
+  // Nothing laid out yet: publishing is not offered, and the composer says why.
+  await expect(page.getByRole("button", { name: "Publish" })).toBeDisabled();
+  await expect(page.getByText("Add at least one widget before publishing.")).toBeVisible();
   await page.getByRole("button", { name: "Table", exact: true }).click();
   await page.getByRole("group", { name: "Fields it shows" }).getByRole("button", { name: "Stage" }).click();
   await page.getByRole("button", { name: "Detail", exact: true }).click();
@@ -353,6 +356,7 @@ test("route 30: compose a page of widgets and use it", async ({ page, request },
   await page.screenshot({ path: testInfo.outputPath("composer.png"), fullPage: true });
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText("The page is in the workspace.")).toBeVisible(); // what the host answered
+  await expect(page.getByText("Published", { exact: true })).toBeVisible(); // and the composer shows where the page stands
 
   // What was composed is what people open: the table fills the detail beside it.
   await page.getByRole("button", { name: "Group offsites" }).click();

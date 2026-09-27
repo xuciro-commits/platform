@@ -5,7 +5,7 @@
 // checks every binding when the page is published.
 import { ComposedPage, NewActions, useHost, useReadQuery, type Definition } from "@platform/app";
 import {
-  Button, Card, Input, PageHeader, Panel, RecordList, Select, Textarea, Toggles, cn, notify, t, useWorkspace,
+  Button, Card, Input, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, cn, defineStatuses, notify, t, useWorkspace,
   type EntityInfo,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
@@ -20,6 +20,8 @@ type PageRecord = {
   sections?: { widget: string; title?: string; width?: string; object?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
+
+const pageStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 
 const widgets = ["table", "detail", "actions", "chart", "metric", "text"] as const;
 const widgetTitles: Record<string, () => string> = {
@@ -60,6 +62,8 @@ export function PageEditor({ id }: { id: string }) {
   const [sections, setSections] = useState<Draft[]>([]);
   const [chosen, setChosen] = useState(0);
   const [dirty, setDirty] = useState(false);
+  // Why the host refused, kept in front of the person until the next attempt.
+  const [refused, setRefused] = useState<string>();
   useEffect(() => { if (page && !dirty) setSections(page.sections ?? []); }, [page, dirty]);
   if (!page) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const info = source.entity(page.object);
@@ -84,19 +88,32 @@ export function PageEditor({ id }: { id: string }) {
     setDirty(true);
   };
   const save = async () => {
-    if (await decide("build.page.edit", { type: "build.page", id }, { sections }, { expectedRevision: page.revision })) setDirty(false);
+    setRefused(undefined);
+    const ok = await decide("build.page.edit", { type: "build.page", id }, { sections }, { expectedRevision: page.revision, onRefused: setRefused });
+    if (ok) setDirty(false);
+    return ok;
   };
   const publish = async () => {
-    if (dirty) await save();
-    if (await decide("build.page.publish", { type: "build.page", id }, {})) notify.success(t("The page is in the workspace."));
+    setRefused(undefined);
+    if (dirty && !(await save())) return; // what is published is what was saved
+    if (await decide("build.page.publish", { type: "build.page", id }, {}, { onRefused: setRefused })) {
+      notify.success(t("The page is in the workspace."));
+    }
   };
+  // Nothing to publish: no widget laid out and no list/detail from the simple form.
+  const nothing = sections.length === 0 && (page.list ?? []).length === 0;
   return (
     <div className="grid gap-3">
       <PageHeader title={page.title} description={t("Compose what people see. Save keeps your work; publish puts it in the workspace.")}
-        actions={<div className="flex gap-2">
+        actions={<div className="flex items-center gap-2">
+          <StatusTag status={page.state} registry={pageStates} />
           <Button onClick={() => void save()} disabled={!dirty}>{t("Save")}</Button>
-          <Button variant="primary" onClick={() => void publish()}>{t("Publish")}</Button>
+          <Button variant="primary" onClick={() => void publish()} disabled={nothing}
+            title={nothing ? t("Add at least one widget before publishing.") : undefined}>{t("Publish")}</Button>
         </div>} />
+      {nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before publishing.")}</Panel>}
+      {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {refused}</Panel>}
+      {dirty && <Panel role="status" className="text-xs text-muted">{t("Not saved yet. Publishing saves first.")}</Panel>}
       <div className="grid gap-3 lg:grid-cols-[16rem_1fr_18rem]">
         <Layout sections={sections} chosen={chosen} onChoose={setChosen} onAdd={add} onMove={move}
           onRemove={(i) => { setSections(sections.filter((_, at) => at !== i)); setChosen(0); setDirty(true); }} />

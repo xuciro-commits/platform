@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "refused": "被拒绝",
   "done": "已完成",
   "sent for approval": "已提交审批",
   "{action} {target}: {outcome}": "{action} {target}：{outcome}",
