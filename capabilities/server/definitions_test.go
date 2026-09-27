@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -32,6 +33,16 @@ func TestDefinitions(t *testing.T) {
 	count := platform.AssetRef{App: "stock", Kind: platform.AssetAction, Name: "stock.item.count"}
 	if got := find(tn.Definitions(clerk), object); got == nil || got.Entity == nil || got.Version != "1" || got.Source != "code" {
 		t.Fatalf("clerk's installed object: %+v", got)
+	}
+	for i := range tn.definitions {
+		if tn.definitions[i].Ref == object {
+			tn.definitions[i].Requires = nil // no dependency must still be a JSON array
+		}
+	}
+	if got := find(tn.Definitions(clerk), object); got == nil || got.Requires == nil {
+		t.Fatalf("empty dependencies should be an array: %+v", got)
+	} else if raw, err := json.Marshal(got); err != nil || !strings.Contains(string(raw), `"requires":[]`) {
+		t.Fatalf("empty dependencies JSON: %s, %v", raw, err)
 	}
 	if got := find(tn.Definitions(clerk), create); got == nil || len(got.Requires) != 1 || got.Requires[0] != object {
 		t.Fatalf("create does not bind the registered object: %+v", got)

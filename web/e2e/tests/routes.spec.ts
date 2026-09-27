@@ -97,6 +97,9 @@ test("route 24: graphs", async ({ page }) => {
   const graph = page.getByRole("figure", { name: "Steps" });
   await expect(graph.getByText("Until it is due")).toBeVisible();
   await expect(graph.getByText("as it decides").first()).toBeVisible();
+  await graph.getByRole("button", { name: "Expand canvas" }).click();
+  await expect.poll(async () => (await graph.boundingBox())?.width ?? 0).toBeGreaterThan(900);
+  await graph.getByRole("button", { name: "Restore canvas" }).click();
 });
 
 // Route 25 (ADR-0029 D4): every agent in one overview; suspending one shows it and resuming undoes it.
@@ -133,12 +136,16 @@ test("route 27: installed definitions", async ({ page, request }) => {
   expect(crm("object", "crm.opportunity")).toBeTruthy();
   expect(crm("action", "crm.opportunity.open")?.requires).toContainEqual({ app: "crm", kind: "object", name: "crm.opportunity" });
   expect(definitions.some((d) => d.ref.app === "erp")).toBe(false);
+  expect(definitions.every((d) => Array.isArray(d.requires))).toBe(true);
 
   await open(page, "sales", "/definitions");
   await expect(page.getByRole("heading", { name: "Definitions" })).toBeVisible();
   await page.getByRole("cell", { name: "crm/action/crm.opportunity.open", exact: true }).click();
   await expect(page.getByText("crm/action/crm.opportunity.open")).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Field" })).toBeVisible();
+  await open(page, "manager", "/definitions");
+  await expect(page.getByRole("heading", { name: "Definitions" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Depends on" })).toBeVisible();
 });
 
 // Route 28 (ADR-0032 13b): one installed page descriptor drives the live
@@ -527,6 +534,7 @@ test("route 34: states and actions a tenant defines", async ({ page, request }, 
       { name: "claimant", title: "Handed to", type: "text" }],
   });
   await open(page, "manager", `/process?id=${id}`);
+  await expect(page.getByRole("button", { name: "Process and access" })).toBeVisible();
   const outline = page.getByRole("region", { name: "States and actions" });
   const inHand = page.getByRole("region", { name: "The piece in hand" });
   // Two states: found, then returned.
@@ -558,6 +566,16 @@ test("route 34: states and actions a tenant defines", async ({ page, request }, 
   await inHand.getByRole("group", { name: "Taken from" }).getByRole("button", { name: "Found" }).click();
   await expect(inHand.getByRole("group", { name: "Taken from" }).getByRole("button", { name: "Found" })).toHaveAttribute("aria-pressed", "false");
   const graph = page.getByRole("region", { name: "Process map" });
+  await graph.getByRole("button", { name: "Expand canvas" }).click();
+  await page.waitForTimeout(250); // let the shared viewport fit after its container is measured
+  const hit = async (selector: string, handle: string) => {
+    const box = await graph.locator(selector).boundingBox();
+    if (!box) return false;
+    return page.evaluate(({ x, y, handle }) => document.elementFromPoint(x, y)?.closest(".react-flow__handle")?.getAttribute("data-handleid") === handle,
+      { x: box.x + box.width / 2, y: box.y + box.height / 2, handle });
+  };
+  await expect.poll(() => hit('.react-flow__handle[data-nodeid="state:found"][data-handleid="take"]', "take")).toBe(true);
+  await expect.poll(() => hit('.react-flow__handle[data-nodeid="action:handback"][data-handleid="from"]', "from")).toBe(true);
   const sourcePort = await graph.locator('.react-flow__handle[data-nodeid="state:found"][data-handleid="take"]').boundingBox();
   const targetPort = await graph.locator('.react-flow__handle[data-nodeid="action:handback"][data-handleid="from"]').boundingBox();
   if (!sourcePort || !targetPort) throw new Error("The lifecycle ports were not visible");
@@ -566,6 +584,25 @@ test("route 34: states and actions a tenant defines", async ({ page, request }, 
   await page.mouse.move(targetPort.x + targetPort.width / 2, targetPort.y + targetPort.height / 2, { steps: 8 });
   await page.mouse.up();
   await expect(inHand.getByRole("group", { name: "Taken from" }).getByRole("button", { name: "Found" })).toHaveAttribute("aria-pressed", "true");
+  const actionNode = graph.locator('.react-flow__node[data-id="action:handback"]');
+  const beforeDrag = await actionNode.boundingBox();
+  const line = graph.locator('.react-flow__edge[data-id="from:handback:found"] .react-flow__edge-path');
+  const beforeLine = await line.getAttribute("d");
+  if (!beforeDrag || !beforeLine) throw new Error("The connected action was not laid out");
+  await page.mouse.move(beforeDrag.x + beforeDrag.width / 2, beforeDrag.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(beforeDrag.x + beforeDrag.width / 2 + 42, beforeDrag.y + 85, { steps: 12 });
+  await page.mouse.up();
+  await expect.poll(async () => (await actionNode.boundingBox())?.y ?? 0).toBeGreaterThan(beforeDrag.y + 35);
+  await expect.poll(() => line.getAttribute("d")).not.toBe(beforeLine);
+  await graph.getByRole("button", { name: "Restore canvas" }).click();
+  const beforeResize = await graph.boundingBox();
+  if (!beforeResize) throw new Error("The graph could not be resized");
+  await page.mouse.move(beforeResize.x + beforeResize.width - 3, beforeResize.y + beforeResize.height - 3);
+  await page.mouse.down();
+  await page.mouse.move(beforeResize.x + beforeResize.width - 3, beforeResize.y + beforeResize.height + 72, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await graph.boundingBox())?.height ?? 0).toBeGreaterThan(beforeResize.height + 35);
   // What people will see, while it is composed: the status bar and the action's form.
   const preview = page.getByRole("region", { name: "What people see" });
   await expect(graph.getByText("Found", { exact: true })).toBeVisible();

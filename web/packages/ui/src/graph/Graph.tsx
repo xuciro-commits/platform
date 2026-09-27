@@ -2,10 +2,11 @@
 // drawn on one canvas for every app — flows and their instances, routings,
 // approval chains, agent runs. Apps give nodes and edges; the canvas lays them
 // out in layers along the direction of flow, so nobody places boxes by hand.
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, useNodesInitialized, useReactFlow, useStore, type Edge, type Node, type NodeProps } from "@xyflow/react";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { Handle, MarkerType, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
+import { useMemo, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import type { Tone } from "../components/StatusTag";
+import { CanvasFrame, CanvasFurniture, CanvasRefit, fitting } from "./CanvasFrame";
 
 export type GraphNode = {
   id: string;
@@ -20,13 +21,14 @@ export type GraphNode = {
 export type GraphEdge = { from: string; to: string; label?: string; dashed?: boolean; tone?: Tone };
 
 const width = 160, height = 54, gapX = 40, gapY = 24;
+export type GraphSize = { width: number; height: number; gapX: number; gapY: number };
 
 /**
  * Positions nodes in layers: each node one layer past the furthest node
  * leading to it, edges that lead back (a retry, a rework) ignored for
  * layering; within a layer, in the order given, centred on the widest layer.
  */
-export function layout(nodes: GraphNode[], edges: GraphEdge[], direction: "right" | "down" = "right"): Map<string, { x: number; y: number }> {
+export function layout(nodes: GraphNode[], edges: GraphEdge[], direction: "right" | "down" = "right", size: GraphSize = { width, height, gapX, gapY }): Map<string, { x: number; y: number }> {
   const ids = new Set(nodes.map((n) => n.id));
   const out = new Map<string, string[]>(nodes.map((n) => [n.id, []]));
   for (const e of edges) if (ids.has(e.from) && ids.has(e.to)) out.get(e.from)!.push(e.to);
@@ -51,8 +53,8 @@ export function layout(nodes: GraphNode[], edges: GraphEdge[], direction: "right
   const widest = Math.max(1, ...layers.map((l) => l?.length ?? 0));
   const positions = new Map<string, { x: number; y: number }>();
   layers.forEach((l, i) => l?.forEach((id, j) => {
-    const along = i * ((direction === "right" ? width : height) + (direction === "right" ? gapX : gapY * 2));
-    const across = (j + (widest - l.length) / 2) * (direction === "right" ? height + gapY : width + gapX / 2);
+    const along = i * ((direction === "right" ? size.width : size.height) + (direction === "right" ? size.gapX : size.gapY * 2));
+    const across = (j + (widest - l.length) / 2) * (direction === "right" ? size.height + size.gapY : size.width + size.gapX / 2);
     positions.set(id, direction === "right" ? { x: along, y: across } : { x: across, y: along });
   }));
   return positions;
@@ -76,22 +78,6 @@ function Box({ data }: NodeProps<Node<Data>>) {
 }
 
 const nodeTypes = { box: Box };
-const fitting = { padding: 0.08, maxZoom: 1 };
-
-/**
- * Fits the graph once its nodes are measured, and again when its canvas changes
- * size (a window resized, a panel docked) or its nodes change. Fitting before
- * the nodes are measured, or in a canvas of no size (a float still opening),
- * scales the graph to nothing: it showed and vanished (the owner's testing).
- */
-function Refit({ count }: { count: number }) {
-  const { fitView } = useReactFlow();
-  const measured = useNodesInitialized();
-  const width = useStore((s) => s.width), height = useStore((s) => s.height);
-  useEffect(() => { if (measured && width > 0 && height > 0) void fitView(fitting); }, [fitView, measured, width, height, count]);
-  return null;
-}
-
 /** A graph of steps, laid out along its direction; read-only. The wheel scrolls the page it sits in; the controls, a pinch or a drag zoom and pan it. A node opens what it stands for through `onOpen`. */
 export function Graph({ nodes, edges, direction = "right", height: tall = 280, onOpen, label, children }: {
   nodes: GraphNode[]; edges: GraphEdge[]; direction?: "right" | "down"; height?: number;
@@ -115,15 +101,14 @@ export function Graph({ nodes, edges, direction = "right", height: tall = 280, o
     };
   }, [nodes, edges, direction]);
   return (
-    <div className="relative overflow-hidden rounded-md border border-border bg-background" style={{ height: tall }} role="figure" aria-label={label}>
+    <CanvasFrame height={tall} label={label}>
       <ReactFlow nodes={flow.nodes} edges={flow.edges} nodeTypes={nodeTypes} fitView fitViewOptions={fitting}
         minZoom={0.2} maxZoom={1.6} zoomOnScroll={false} preventScrolling={false} nodesDraggable={false} nodesConnectable={false} edgesFocusable={false} colorMode="system"
         onNodeClick={onOpen && ((_, n) => onOpen(n.data as GraphNode))}>
-        <Refit count={flow.nodes.length} />
-        <Background gap={16} size={1} color="var(--border)" />
-        <Controls showInteractive={false} position="bottom-right" />
+        <CanvasRefit signature={flow.nodes.map((n) => `${n.id}:${n.position.x}:${n.position.y}`).join("|")} />
+        <CanvasFurniture />
       </ReactFlow>
       {children}
-    </div>
+    </CanvasFrame>
   );
 }

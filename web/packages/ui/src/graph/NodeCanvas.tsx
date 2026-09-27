@@ -1,9 +1,10 @@
-// Editable presentation of registered semantic assets. The owner supplies the
-// catalog and applies edits to its own typed definition; this canvas executes
-// no business logic and stores no second copy of that definition (ADR-0040 D4).
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Connection, type Edge, type Node, type NodeProps } from "@xyflow/react";
-import { useEffect, useMemo, useState } from "react";
+// Editable presentation of registered semantic assets. Graph and NodeCanvas
+// share the UI kit's frame, viewport and edge language; the owning capability
+// applies edits to its definition. This canvas executes no business logic.
+import { ConnectionLineType, Handle, MarkerType, Position, ReactFlow, useEdgesState, useNodesState, useUpdateNodeInternals, type Connection, type Edge, type Node, type NodeProps } from "@xyflow/react";
+import { useEffect, useRef } from "react";
 import { cn } from "../lib/cn";
+import { CanvasFrame, CanvasFurniture, CanvasRefit, fitting } from "./CanvasFrame";
 
 export type NodePort = { id: string; label: string; type: string; limit?: number };
 export type NodeKind = { id: string; title: string; description?: string; category: string; inputs: NodePort[]; outputs: NodePort[] };
@@ -11,7 +12,7 @@ export type CanvasNode = { id: string; kind: string; label: string; detail?: str
 export type CanvasEdge = { id: string; source: string; sourcePort: string; target: string; targetPort: string };
 export type NodeCatalog = readonly NodeKind[];
 
-/** A semantic adapter may add stricter rules; the kit always checks endpoint, port type and capacity. */
+/** A semantic adapter may add stricter rules; the kit checks endpoints, port types and capacity. */
 export function validateCanvasConnection(connection: Connection, nodes: readonly CanvasNode[], edges: readonly CanvasEdge[], catalog: NodeCatalog): string | undefined {
   const source = nodes.find((n) => n.id === connection.source);
   const target = nodes.find((n) => n.id === connection.target);
@@ -25,78 +26,101 @@ export function validateCanvasConnection(connection: Connection, nodes: readonly
   return undefined;
 }
 
+const nodeWidth = 160, headerHeight = 54, portHeight = 24;
+export const canvasNodeHeight = (kind: NodeKind) => headerHeight + Math.max(kind.inputs.length, kind.outputs.length) * portHeight + 12;
 type Data = Record<string, unknown> & { label: string; detail?: string; kind: NodeKind };
+type FlowNode = Node<Data>;
 
-function SemanticNode({ data, selected }: NodeProps<Node<Data>>) {
-  const height = 76 + Math.max(data.kind.inputs.length, data.kind.outputs.length) * 25;
-  return <div className={cn("relative w-48 rounded-lg border bg-surface px-3 py-2 text-left shadow-sm", selected ? "border-primary ring-2 ring-primary/20" : "border-border")} style={{ minHeight: height }}>
-    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{data.kind.title}</div>
-    <div className="truncate text-sm font-medium text-foreground" title={data.label}>{data.label}</div>
-    {data.detail && <div className="truncate text-[11px] text-muted" title={data.detail}>{data.detail}</div>}
-    {data.kind.inputs.map((port, i) => <div key={port.id} className="relative mt-1 text-[10px] text-muted">
-      <Handle type="target" id={port.id} position={Position.Left} style={{ top: 73 + i * 25, left: -17 }} title={`${port.label}: ${port.type}`} />{port.label}
+function SemanticNode({ id, data, selected }: NodeProps<FlowNode>) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  const ports = [...data.kind.inputs.map((p) => `i:${p.id}`), ...data.kind.outputs.map((p) => `o:${p.id}`)].join("|");
+  useEffect(() => { updateNodeInternals(id); }, [id, ports, updateNodeInternals]);
+  return <div className={cn("relative rounded-lg border-2 bg-surface text-left shadow-sm", selected ? "border-primary ring-2 ring-primary/20" : "border-border")}
+    style={{ width: nodeWidth, height: canvasNodeHeight(data.kind) }}>
+    <div className="px-3 pt-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{data.kind.title}</div>
+      <div className="truncate text-sm font-medium text-foreground" title={data.label}>{data.label}</div>
+      {data.detail && <div className="truncate text-[11px] text-muted" title={data.detail}>{data.detail}</div>}
+    </div>
+    {data.kind.inputs.map((port, i) => <div key={port.id} className="absolute left-3 right-1/2 flex items-center text-[10px] text-muted"
+      style={{ top: headerHeight + i * portHeight, height: portHeight }} title={`${port.label}: ${port.type}`}>
+      <span className="truncate">{port.label}</span>
+      <Handle type="target" id={port.id} position={Position.Left} className="!size-2 !border-0 !bg-muted"
+        style={{ top: portHeight / 2, left: -16 }} />
     </div>)}
-    {data.kind.outputs.map((port, i) => <div key={port.id} className="absolute right-3 text-right text-[10px] text-muted" style={{ top: 68 + i * 25 }}>
-      {port.label}<Handle type="source" id={port.id} position={Position.Right} style={{ top: 7, right: -17 }} title={`${port.label}: ${port.type}`} />
+    {data.kind.outputs.map((port, i) => <div key={port.id} className="absolute left-1/2 right-3 flex items-center justify-end text-[10px] text-muted"
+      style={{ top: headerHeight + i * portHeight, height: portHeight }} title={`${port.label}: ${port.type}`}>
+      <span className="truncate">{port.label}</span>
+      <Handle type="source" id={port.id} position={Position.Right} className="!size-2 !border-0 !bg-muted"
+        style={{ top: portHeight / 2, right: -16 }} />
     </div>)}
   </div>;
 }
 
 const nodeTypes = { semantic: SemanticNode };
-const fitting = { padding: 0.16, maxZoom: 1 };
-
-// Initial fit uses the catalog's declared node dimensions, so an editor that
-// updates a label does not briefly zoom to one measured node. It responds to
-// docking and narrow screens, while dragging a node remains local view state.
-function Refit({ nodes }: { nodes: CanvasNode[] }) {
-  const { setViewport } = useReactFlow();
-  const width = useStore((s) => s.width), height = useStore((s) => s.height);
-  const geometry = nodes.map((n) => `${n.id}:${n.position.x}:${n.position.y}`).join("|");
-  useEffect(() => {
-    if (!nodes.length || width <= 0 || height <= 0) return;
-    const left = Math.min(...nodes.map((n) => n.position.x));
-    const top = Math.min(...nodes.map((n) => n.position.y));
-    const right = Math.max(...nodes.map((n) => n.position.x + 192));
-    const bottom = Math.max(...nodes.map((n) => n.position.y + 126));
-    const zoom = Math.max(0.3, Math.min(1, (width - 48) / (right - left), (height - 48) / (bottom - top)));
-    void setViewport({ x: (width - (right - left) * zoom) / 2 - left * zoom,
-      y: (height - (bottom - top) * zoom) / 2 - top * zoom, zoom });
-  // geometry is the stable identity/layout signal; labels and selection must not reset a person's zoom.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setViewport, width, height, geometry]);
-  return null;
+const missingKind = (id: string): NodeKind => ({ id, title: id, category: "unknown", inputs: [], outputs: [] });
+function toFlowNode(n: CanvasNode, catalog: NodeCatalog): FlowNode {
+  const kind = catalog.find((k) => k.id === n.kind) ?? missingKind(n.kind);
+  return { id: n.id, type: "semantic", position: n.position, deletable: false, data: { label: n.label, detail: n.detail, kind } };
+}
+function toFlowEdge(e: CanvasEdge): Edge {
+  return { id: e.id, source: e.source, sourceHandle: e.sourcePort, target: e.target, targetHandle: e.targetPort,
+    type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, color: "var(--muted)", width: 16, height: 16 },
+    style: { stroke: "var(--muted)", strokeWidth: 1.5 } };
 }
 
-/** Controlled graph editor. Node positions are view state; connections are sent to the semantic owner. */
-export function NodeCanvas({ catalog, nodes, edges, selected, onSelect, onConnect, onDisconnect, onAdd, canConnect, label, height = 340 }: {
+/** Controlled graph editor. React Flow owns local drag/selection; the adapter owns semantic connections. */
+export function NodeCanvas({ catalog, nodes, edges, selected, onSelect, onConnect, onDisconnect, onAdd, canConnect, label, height = 320 }: {
   catalog: NodeCatalog; nodes: CanvasNode[]; edges: CanvasEdge[]; selected?: string;
   onSelect?: (id: string) => void; onConnect?: (connection: Connection) => void; onDisconnect?: (edges: CanvasEdge[]) => void;
   onAdd?: (kind: string) => void; canConnect?: (connection: Connection) => boolean; label: string; height?: number;
 }) {
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
-  const flow = useMemo(() => ({
-    nodes: nodes.map((n): Node<Data> => {
-      const kind = catalog.find((k) => k.id === n.kind)!;
-      return { id: n.id, type: "semantic", position: positions[n.id] ?? n.position,
-        data: { label: n.label, detail: n.detail, kind }, selected: n.id === selected,
-        width: 192, height: 76 + Math.max(kind.inputs.length, kind.outputs.length) * 25 };
-    }),
-    edges: edges.map((e): Edge => ({ id: e.id, source: e.source, sourceHandle: e.sourcePort, target: e.target, targetHandle: e.targetPort,
-      type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 }, style: { strokeWidth: 1.5 } })),
-  }), [catalog, edges, nodes, positions, selected]);
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<FlowNode>(nodes.map((n) => toFlowNode(n, catalog)));
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(edges.map(toFlowEdge));
+  const moved = useRef<Record<string, { x: number; y: number }>>({});
+  const lastIds = useRef(nodes.map((n) => n.id).join("|"));
+  // A parent edit changes the semantic graph. Keep dragged positions for nodes
+  // that still exist, but never re-send local positions as business meaning.
+  useEffect(() => {
+    const ids = nodes.map((n) => n.id).join("|");
+    const relayout = ids !== lastIds.current;
+    lastIds.current = ids;
+    setFlowNodes((previous) => {
+      const old = new Map(previous.map((n) => [n.id, n]));
+      const current = new Set(nodes.map((n) => n.id));
+      for (const id of Object.keys(moved.current)) if (!current.has(id)) delete moved.current[id];
+      const next = nodes.map((n) => {
+        const next = toFlowNode(n, catalog);
+        const before = old.get(n.id);
+        return { ...next, position: moved.current[n.id] ?? (relayout ? next.position : before?.position ?? next.position), selected: n.id === selected };
+      });
+      return !relayout && next.length === previous.length && next.every((n, i) => {
+        const before = previous[i];
+        return before && n.id === before.id && n.position.x === before.position.x && n.position.y === before.position.y
+          && n.selected === before.selected && n.data.label === before.data.label && n.data.detail === before.data.detail
+          && n.data.kind.id === before.data.kind.id && n.data.kind.title === before.data.kind.title
+          && JSON.stringify(n.data.kind.inputs) === JSON.stringify(before.data.kind.inputs)
+          && JSON.stringify(n.data.kind.outputs) === JSON.stringify(before.data.kind.outputs);
+      }) ? previous : next;
+    });
+  }, [catalog, nodes, selected, setFlowNodes]);
+  useEffect(() => { setFlowEdges((before) => edges.length === before.length && edges.every((e, i) => {
+    const old = before[i];
+    return old?.id === e.id && old.source === e.source && old.sourceHandle === e.sourcePort && old.target === e.target && old.targetHandle === e.targetPort;
+  }) ? before : edges.map(toFlowEdge)); }, [edges, setFlowEdges]);
   const valid = (c: Connection | Edge) => !validateCanvasConnection(c as Connection, nodes, edges, catalog) && (!canConnect || canConnect(c as Connection));
-  return <div className="relative overflow-hidden rounded-md border border-border bg-background" style={{ height }} role="region" aria-label={label}>
-    <ReactFlow nodes={flow.nodes} edges={flow.edges} nodeTypes={nodeTypes} fitView fitViewOptions={fitting}
-      colorMode="system" minZoom={0.3} maxZoom={1.5} zoomOnScroll={false} preventScrolling={false}
+  return <CanvasFrame label={label} height={height} role="region">
+    <ReactFlow nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+      fitView fitViewOptions={fitting} colorMode="system" minZoom={0.2} maxZoom={1.6} zoomOnScroll={false} preventScrolling={false}
       nodesConnectable={!!onConnect} edgesFocusable={!!onDisconnect} deleteKeyCode={onDisconnect ? ["Backspace", "Delete"] : null}
-      isValidConnection={valid} onConnect={onConnect} onEdgesDelete={(gone) => onDisconnect?.(edges.filter((e) => gone.some((x) => x.id === e.id)))}
-      onNodeClick={(_, n) => onSelect?.(n.id)} onNodeDragStop={(_, n) => setPositions((at) => ({ ...at, [n.id]: n.position }))}>
-      <Refit nodes={nodes} />
-      <Background gap={16} size={1} color="var(--border)" />
-      <Controls showInteractive={false} position="bottom-right" />
+      connectionLineType={ConnectionLineType.SmoothStep} isValidConnection={valid} onConnect={onConnect}
+      onEdgesDelete={(gone) => onDisconnect?.(edges.filter((e) => gone.some((x) => x.id === e.id)))}
+      onNodeClick={(_, n) => onSelect?.(n.id)} onNodeDragStop={(_, n) => { moved.current[n.id] = n.position; }}>
+      <CanvasRefit signature={nodes.map((n) => n.id).join("|")} />
+      <CanvasFurniture />
     </ReactFlow>
     {onAdd && <div className="absolute left-2 top-2 z-10 flex max-w-[70%] flex-wrap gap-1 rounded-md bg-surface/95 p-1 shadow-sm" aria-label={label}>
       {catalog.map((kind) => <button key={kind.id} type="button" className="rounded border border-border px-2 py-1 text-xs hover:bg-row-hover" title={kind.description} onClick={() => onAdd(kind.id)}>{kind.title}</button>)}
     </div>}
-  </div>;
+  </CanvasFrame>;
 }

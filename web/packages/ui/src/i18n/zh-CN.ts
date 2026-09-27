@@ -44,6 +44,8 @@ export default {
   "Currency": "币种",
   "Done": "已完成",
   "Field": "字段",
+  "Expand canvas": "展开画布",
+  "Restore canvas": "还原画布",
   "Filter": "筛选",
   "Filter rows": "筛选行",
   "Float tab": "浮动标签页",

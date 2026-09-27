@@ -138,7 +138,7 @@ function DefinitionsCatalog() {
     { id: "title", header: t("Asset"), accessorFn: (d) => d.entity?.title ?? d.action?.title ?? d.page?.title ?? d.ref.name },
     { id: "ref", header: t("Reference"), accessorFn: (d) => assetKey(d.ref), meta: { width: 320 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "version", header: t("App version"), accessorKey: "version", meta: { width: 110 } },
-    { id: "dependencies", header: t("Depends on"), accessorFn: (d) => d.requires.map(assetKey).join(", "), meta: { width: 320 },
+    { id: "dependencies", header: t("Depends on"), accessorFn: (d) => (d.requires ?? []).map(assetKey).join(", "), meta: { width: 320 },
       cell: (c) => <span className="font-mono text-xs text-muted">{c.getValue()}</span> },
   ];
   return <>

@@ -257,5 +257,10 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 		out = append(out, def)
 	}
 	slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	for i := range out {
+		if out[i].Requires == nil {
+			out[i].Requires = []platform.AssetRef{}
+		}
+	}
 	return out
 }

@@ -5,7 +5,7 @@
 // everything again when the object is published.
 import { PayloadFields, useHost, useReadQuery } from "@platform/app";
 import {
-  Button, Card, Checkbox, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, StatusBar, StatusTag, Textarea, Toggles, cn, defineStatuses, notify, t, useWorkspace,
+  Button, Card, Checkbox, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, cn, defineStatuses, layout, notify, t, useWorkspace,
   type CanvasEdge, type CanvasNode, type NodeCatalog,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
@@ -163,7 +163,7 @@ export function ProcessEditor({ id }: { id: string }) {
             <Button role="tab" aria-selected={center === "map"} size="sm" variant={center === "map" ? "primary" : "ghost"} onClick={() => setCenter("map")}>{t("Process map")}</Button>
             <Button role="tab" aria-selected={center === "preview"} size="sm" variant={center === "preview" ? "primary" : "ghost"} onClick={() => setCenter("preview")}>{t("Record preview")}</Button>
           </div>
-          {center === "map" ? <ProcessGraph process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
+          {center === "map" ? <ProcessGraph key={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
             : <Preview object={object} process={process} action={action} />}
         </div>
         <div role="region" aria-label={t("The piece in hand")} className="min-h-0 overflow-y-auto">
@@ -194,9 +194,17 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
       inputs: [{ id: "from", label: t("Taken from"), type: "action-start" }],
       outputs: [{ id: "to", label: t("Leaves it in"), type: "action-result", limit: 1 }] },
   ];
+  const links = process.actions.flatMap((a) => [
+    ...a.from.map((s) => ({ from: `state:${s}`, to: `action:${a.name}` })),
+    ...(a.to ? [{ from: `action:${a.name}`, to: `state:${a.to}` }] : []),
+  ]);
+  const places = layout([
+    ...process.states.map((s) => ({ id: `state:${s.name}`, label: s.title })),
+    ...process.actions.map((a) => ({ id: `action:${a.name}`, label: a.title })),
+  ], links, "right", { width: 160, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 40, gapY: 30 });
   const nodes: CanvasNode[] = [
-    ...process.states.map((s, i) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: { x: 20, y: i * 145 + 55 } })),
-    ...process.actions.map((a, i) => ({ id: `action:${a.name}`, kind: "action", label: a.title || a.name, detail: a.name, position: { x: 235, y: i * 145 + 55 } })),
+    ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: places.get(`state:${s.name}`) ?? { x: 0, y: 0 } })),
+    ...process.actions.map((a) => ({ id: `action:${a.name}`, kind: "action", label: a.title || a.name, detail: a.name, position: places.get(`action:${a.name}`) ?? { x: 0, y: 0 } })),
   ];
   const edges: CanvasEdge[] = process.actions.flatMap((a) => [
     ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),

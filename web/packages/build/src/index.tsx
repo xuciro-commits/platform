@@ -8,7 +8,7 @@ import { defineApp } from "@platform/app";
 import { PageEditor, PagesList } from "./editor";
 import { ProcessEditor, ProcessPicker } from "./process";
 import { t, type NavSection } from "@platform/ui";
-import { AppWindow, Boxes, Hammer, LayoutList } from "lucide-react";
+import { AppWindow, Boxes, GitBranch, Hammer, LayoutList } from "lucide-react";
 
 /** A page of the builder app, by its name in the registry. */
 const page = (name: string) => ({ view: "page", params: { app: "build", kind: "page", name } });
@@ -31,6 +31,7 @@ export default defineApp({
         label: t("Application Studio"),
         items: [
           { label: t("Objects"), icon: <Hammer />, route: page("objects") },
+          { label: t("Process and access"), icon: <GitBranch />, route: { view: "process" } },
           { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },
           { label: t("Applications"), icon: <AppWindow />, route: page("applications") },
         ],
