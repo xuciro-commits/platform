@@ -30,12 +30,12 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 | `docs/Platform.md` | The platform design. §2 the product model: layers, how it fits together, where data lives, the capability map (what exists), terminology, effects and replay, invariants, open ADR promises. §4 kernel hypotheses K1–K9 and contract rules. §8 validation and what the stages taught. §9 risks. §10 where it is going: the reference platforms, their 2026 direction and what we take, what is missing, the order of stages |
 | `docs/Apps.md` | Building an app (ADR-0023 D8): create app → declare entities → declare actions → declare flows → add translations → run; `capabilities/server/cmd/new-app` scaffolds one that already runs |
 | `docs/Intent.md` | The owner's intent and direction: what the platform is, how capabilities are chosen (from reference platforms, not one product's pull), what stays true, working with AI |
-| `docs/Testing.md` | How the owner tests (through an app, the platform's design) and the test routes, in Chinese; each route is walked in the UI before it is written down |
+| `docs/Testing.md` | How the owner tests the platform through the apps, in Chinese: the platform capabilities, each with the guarantee it must give and the one scenario step that checks it (the main table), then the scenarios that carry them by priority (P0 each round, P1, P2 deferred); each scenario is walked in the UI before it is written down |
 | `docs/WorkQueue.md` | The only active plan and the open friction list |
 | `docs/ADR/` | Decisions with lasting cost |
 | `web/packages/kernel/src/gen/host.ts` | The host API's TypeScript types (exported as `Api` from `@platform/kernel`), generated from the host's Go types by `capabilities/server/cmd/api-types`; never edited (ADR-0023 D7) |
 | `.github/workflows/verify.yml` | CI: `scripts/verify.sh ci`, `web` and `pms` on every push (the Docker rehearsal stays on the owner's Mac; timing bounds off with `PLATFORM_TIMING=0`) |
-| `scripts/verify.sh` | All checks (`scripts/boundaries.sh`: dependency boundaries between apps and the host) |
+| `scripts/verify.sh` | All checks (`scripts/boundaries.sh`: dependency boundaries between apps and the host; `scripts/escapes.sh`: capability escapes, rule 11) |
 | `.claude/skills/` | Procedures for coding agents in this repository: `architecture-gate` (open a stage with an ADR the owner decides), `close-out` (finish a batch: checks, documents, commit), `new-app` (build or extend an app along docs/Apps.md) |
 
 ## Rules
@@ -50,6 +50,8 @@ The **business platform**: the kernel contract, the Go host, the web workspaces,
 8. A batch is done when its documents are: in the same commit, its ADR's "As built", the capability map and open promises (`docs/Platform.md` §2.4, §2.9), the work queue and the test routes (`docs/Testing.md`) say what now exists, and `scripts/verify.sh` passed for what it touched (skill `close-out`). Each fact has one home; do not copy status into a second place.
 9. Commit messages are one imperative sentence of what changed, with the ADR and work item in parentheses: "Agent memory people see, keep and forget (ADR-0022 3b, #111)".
 10. Every text people read is English source with its Simplified Chinese in the same change: declarations through the app's `i18n/zh-CN.json`, UI words through `t()` and the package's `i18n.ts` (ADR-0023). Record data is never translated.
+11. **Reuse before build: one owner, one canonical path** (Intent.md). Before writing an implementation, name the capability it belongs to, its owner (the UI kit, `@platform/app`, the app API, a platform app, the host) and the canonical path to it; if the path falls short, extend the owner. Business code composes capabilities and never builds a second one: no hand-made tables, dialogs, timelines or panels in an app's UI, no approvals, signatures, reports, files or calls outside kept by an app. `scripts/escapes.sh` fails on a new escape; the known ones are listed there with the work item that removes them, and the list only shrinks.
+12. **Apps are probes, not products** (Intent.md). A finding is first asked whether it would happen in another app; if so it is fixed in the platform, not in the app. App depth is added only where a platform guarantee cannot be shown without it; everything else is recorded in the work queue and waits.
 
 ## Verify
 

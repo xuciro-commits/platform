@@ -5,7 +5,7 @@ description: Build a new app on the platform, or add entities, actions, flows or
 
 # Build an app
 
-The path is docs/Apps.md (ADR-0023 D8): create app → declare entities → declare actions → declare flows → add translations → run. Read it first; the reference apps show each step at larger size (`apps/hr` a lifecycle with approvals, `apps/helpdesk` a flow and an agent, `apps/crm` a protocol consumer, `apps/manufacturing` connectors and reads of its own).
+The path is docs/Apps.md (ADR-0023 D8): create app → declare entities → declare actions → declare flows → add translations → run. Read it first; the reference apps show each step at larger size (`apps/hcm` a lifecycle with approvals, `apps/csm` a flow and an agent, `apps/crm` a protocol consumer, `apps/mes` connectors and a protocol consumed from an ERP).
 
 ## 1. Scaffold, then change working code
 
@@ -17,6 +17,9 @@ cd ../../apps/<id>/server && go test ./...
 Keep the tests green after every step; extend `TestApp` with each rule you add, and keep `platformserver.CheckReplay` at its end.
 
 ## 2. Rules that keep an app an app
+
+- Before each piece of code, name the capability it is, its owner and its canonical path (AGENTS.md rule 11). If the platform has it, use it; if the platform lacks it and a second app would need it too, it belongs to the platform: record it in `docs/WorkQueue.md` and build it there, not in the app. `scripts/escapes.sh` fails on a new escape.
+- An app is a probe (AGENTS.md rule 12): model the business only as deep as the platform capability it proves needs.
 
 - Import `platformserver/platform` only; `platformserver` only in `_test.go` and `cmd/` (`scripts/boundaries.sh`). Never another app: meet it through a protocol (`protocols/`, ADR-0011).
 - Declare, don't hand-write: entity types, fields' meaning (`help`, `synonyms`, `example`), lifecycles, standard actions, flows and agents; the host generates lists, forms, tool schemas, OpenAPI and the catalog from them.

@@ -67,6 +67,7 @@ composition() {
   # Apps know no other app; they meet through protocols (ADR-0011).
   local dir
   step app-boundaries scripts/boundaries.sh
+  step escapes scripts/escapes.sh
   for dir in protocols/*; do
     [[ -f $dir/go.mod ]] && step "$(basename "$dir")-protocol" bash -c "cd $dir && go vet ./... && go test -count=1 ./..."
   done
