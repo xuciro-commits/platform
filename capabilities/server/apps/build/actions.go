@@ -37,6 +37,8 @@ type Action struct {
 	Inputs      []Input     `json:"inputs,omitempty" title:"What people give"`
 	Sets        []Set       `json:"sets,omitempty" title:"What it sets"`
 	Conditions  []Condition `json:"conditions,omitempty" title:"What it needs"`
+	// Roles are who may take it (ADR-0037 18b); empty: every role of the object.
+	Roles []string `json:"roles,omitempty" title:"Taken by"`
 }
 
 // Input is one value a person gives when taking an action.
@@ -201,8 +203,12 @@ func lifecycle(o Object, roles []string) *platform.Lifecycle {
 			payload = append(payload, platform.Field{Name: in.Name, Type: inputTypes[in.Type], Required: in.Required, Description: in.Title, Choices: choices(in.Choices)})
 		}
 		action := a
+		takers := slices.Clone(roles)
+		if len(a.Roles) > 0 { // the builder always tries what it builds
+			takers = append([]string{Builder}, a.Roles...)
+		}
 		l.Transitions = append(l.Transitions, platform.Transition{Name: a.Name, Title: a.Title, Description: a.Description,
-			From: slices.Clone(a.From), To: reach, Roles: slices.Clone(roles), Capability: o.Name, Payload: payload,
+			From: slices.Clone(a.From), To: reach, Roles: takers, Capability: o.Name, Payload: payload,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now)
 			}})
@@ -371,4 +377,90 @@ func assign(f reflect.Value, x any) error {
 	}
 	f.Set(target.Elem())
 	return nil
+}
+
+// Access is what one role of the builder app may do with a defined object
+// (ADR-0037 D4): which records it reads, and which of create, edit and
+// archive it takes. The roles an object names become roles of `build`, which
+// the Console assigns. Actions and fields name their own roles.
+type Access struct {
+	Role    string `json:"role" field:"required" help:"A role of the builder app, lower-case letters and digits" example:"desk"`
+	Read    string `json:"read" field:"required" choices:"all,own,none" help:"all: every record; own: those they created; none: not the object at all"`
+	Create  bool   `json:"create,omitempty"`
+	Edit    bool   `json:"edit,omitempty"`
+	Archive bool   `json:"archive,omitempty"`
+}
+
+// checkAccess refuses access people could not be given: a role that is not a
+// name, one listed twice, one that writes what it may not read, and actions or
+// fields naming roles the object does not declare.
+func checkAccess(o Object) error {
+	roles := map[string]bool{Builder: true}
+	for _, a := range o.Access {
+		switch {
+		case !named(a.Role):
+			return fmt.Errorf("the role %q is not lower-case letters and digits", a.Role)
+		case a.Role == Builder:
+			return fmt.Errorf("the role %q always does everything with what it builds", Builder)
+		case roles[a.Role]:
+			return fmt.Errorf("the role %q is given access twice", a.Role)
+		case !slices.Contains([]string{"all", "own", "none"}, a.Read):
+			return fmt.Errorf("the role %q reads %q; it reads all, own or none", a.Role, a.Read)
+		case a.Read == "none" && (a.Create || a.Edit || a.Archive):
+			return fmt.Errorf("the role %q may not read the object, so it may not create, edit or archive it either", a.Role)
+		}
+		roles[a.Role] = true
+	}
+	known := func(role string) bool { return roles[role] || len(o.Access) == 0 && role == User }
+	for _, act := range o.Actions {
+		for _, r := range act.Roles {
+			if !known(r) {
+				return fmt.Errorf("the action %q is for %q, which is not a role of this object", act.Name, r)
+			}
+		}
+	}
+	for _, f := range o.Fields {
+		for _, r := range append(slices.Clone(f.Read), f.Write...) {
+			if !known(r) {
+				return fmt.Errorf("the field %q names %q, which is not a role of this object", f.Name, r)
+			}
+		}
+		if len(f.Read) > 0 {
+			for _, r := range f.Write {
+				if !slices.Contains(f.Read, r) {
+					return fmt.Errorf("the field %q is set by %q, which may not read it", f.Name, r)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// access is the object's access as the platform's own declarations: its
+// generated actions' roles per verb, and its scope (ADR-0037 D4, D5). With no
+// access declared an object keeps the rule of 15a: builder and user do everything.
+func access(o Object) (platform.Standard, platform.Scope, []string) {
+	std := platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, User}, Capability: o.Name}
+	if len(o.Access) == 0 {
+		return std, platform.Scope{}, []string{Builder, User}
+	}
+	std.Roles = []string{Builder}
+	std.CreateRoles, std.EditRoles, std.ArchiveRoles = []string{Builder}, []string{Builder}, []string{Builder}
+	scope := platform.Scope{Owner: platform.OwnerCreated, Levels: map[string]string{}, Default: platform.ScopeNone}
+	scope.Levels[Builder] = platform.ScopeTenant
+	roles := []string{Builder}
+	for _, a := range o.Access {
+		roles = append(roles, a.Role)
+		scope.Levels[a.Role] = map[string]string{"all": platform.ScopeTenant, "own": platform.ScopeOwn, "none": platform.ScopeNone}[a.Read]
+		if a.Create {
+			std.CreateRoles = append(std.CreateRoles, a.Role)
+		}
+		if a.Edit {
+			std.EditRoles = append(std.EditRoles, a.Role)
+		}
+		if a.Archive {
+			std.ArchiveRoles = append(std.ArchiveRoles, a.Role)
+		}
+	}
+	return std, scope, roles
 }

@@ -319,7 +319,9 @@ func TestAgents(t *testing.T) {
 	// both go into the prompt of her next run, not into bo's.
 	memory := func(id string) Memory { m, _ := platform.Get[Memory](tn.automation(AgentApp, false), id); return m }
 	expect("proposed", memory("R1:p1").State+" "+memory("R1:p1").For+" "+memory("R1:p1").Fact, `proposed ana ana changed a draft for "Answer ticket T1: wifi" to {"reply":"Hello, it works again"}.`)
-	expect("bo forgets", do("bo", AgentApp, MemoryType+".forget", MemoryType, "R1:p1", map[string]any{}), "ERROR_CODE_POLICY_DENIED")
+	// A memory bo may not read is not there for him to act on (ADR-0037 18b):
+	// the same answer a read gives, which does not say whose memories exist.
+	expect("bo forgets", do("bo", AgentApp, MemoryType+".forget", MemoryType, "R1:p1", map[string]any{}), "ERROR_CODE_NOT_FOUND")
 	expect("ana keeps", do("ana", AgentApp, MemoryType+".keep", MemoryType, "R1:p1", map[string]any{}), "ok")
 	start("ana", "R7", "remember this", "")
 	think(3)

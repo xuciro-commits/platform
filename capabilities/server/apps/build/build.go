@@ -40,8 +40,11 @@ type Object struct {
 	Fields      []Field `json:"fields" title:"Fields"`
 	// States and Actions make its records a small process (ADR-0037): the
 	// object editor owns them, so generated forms do not ask for them.
-	States    []State  `json:"states,omitempty" field:"aside" title:"States"`
-	Actions   []Action `json:"actions,omitempty" field:"aside" title:"Actions"`
+	States  []State  `json:"states,omitempty" field:"aside" title:"States"`
+	Actions []Action `json:"actions,omitempty" field:"aside" title:"Actions"`
+	// Access is who may do what with it (ADR-0037 18b); empty: builder and
+	// user do everything, as before.
+	Access    []Access `json:"access,omitempty" field:"aside" title:"Access"`
 	State     string   `json:"state" field:"readonly" choices:"draft,published"`
 	Installed string   `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
 	// Published is the definition as it was last published, which is what is
@@ -58,6 +61,9 @@ type Field struct {
 	Ref      string `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
 	Required bool   `json:"required,omitempty"`
 	Search   bool   `json:"search,omitempty" title:"Searchable"`
+	// Read and Write, when set, are the roles that read and set it (ADR-0028 D3).
+	Read  []string `json:"read,omitempty" title:"Read by" help:"Roles that read it; empty: every role that reads the object"`
+	Write []string `json:"write,omitempty" title:"Set by" help:"Roles that set it; empty: every role that edits the object"`
 }
 
 // Build is the builder app of one tenant.
@@ -110,7 +116,18 @@ func (b *Build) Manifest() platform.Manifest {
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
-	return platform.Manifest{ID: ID, Title: "Builder", Version: "1", Actions: b.ledger.Catalog, Entities: entities,
+	// Every role an object names is a role of this app, which the Console
+	// grants — one that only reads grants no action (ADR-0037 D4).
+	roles := []string{User}
+	for _, typ := range sortedTypes(b.installed) {
+		for role := range b.installed[typ].Scope.Levels {
+			if !slices.Contains(roles, role) {
+				roles = append(roles, role)
+			}
+		}
+	}
+	slices.Sort(roles)
+	return platform.Manifest{ID: ID, Title: "Builder", Version: "1", Actions: b.ledger.Catalog, Entities: entities, Roles: roles,
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -206,7 +223,10 @@ func (b *Build) check(o Object, id string) error {
 	if err := checkFields(o.Fields, b.host); err != nil {
 		return err
 	}
-	return checkProcess(o)
+	if err := checkProcess(o); err != nil {
+		return err
+	}
+	return checkAccess(o)
 }
 
 // checkName refuses a name that is not a name, or one already taken.
@@ -377,6 +397,12 @@ func Entity(o Object) platform.Entity {
 		if len(marks) > 0 {
 			tag += fmt.Sprintf(` field:"%s"`, strings.Join(marks, ","))
 		}
+		if len(f.Read) > 0 { // the builder always reads and sets what it builds
+			tag += fmt.Sprintf(` read:"%s"`, strings.Join(append([]string{Builder}, f.Read...), ","))
+		}
+		if len(f.Write) > 0 {
+			tag += fmt.Sprintf(` write:"%s"`, strings.Join(append([]string{Builder}, f.Write...), ","))
+		}
 		fields = append(fields, reflect.StructField{Name: goName(f.Name), Type: goType(f.Type), Tag: reflect.StructTag(tag)})
 	}
 	if len(o.States) > 0 { // where a record stands, which only its actions move (ADR-0037 D2)
@@ -394,10 +420,9 @@ func Entity(o Object) platform.Entity {
 			display = f.Name
 		}
 	}
-	roles := []string{Builder, User}
+	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard:  platform.Standard{Create: true, Edit: true, Archive: true, Roles: roles, Capability: o.Name},
-		Lifecycle: lifecycle(o, roles)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles)}
 }
 
 // page is the list and detail page a defined object comes with: the same

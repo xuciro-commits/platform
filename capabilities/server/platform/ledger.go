@@ -240,7 +240,7 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	}
 	typ := reflect.TypeOf(e.Model)
 	existing, known := c.rt.Get(c, typ, s.GetTarget().GetId())
-	if !known {
+	if !known || !inScope(c, e.Type, s.GetTarget().GetId()) {
 		return nil, notFound()
 	}
 	info, _ := Describe("", e, func(reflect.Type) string { return "?" })
@@ -289,6 +289,9 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.Chang
 	t := reflect.TypeOf(e.Model)
 	id := s.GetTarget().GetId()
 	existing, known := c.rt.Get(c, t, id)
+	if known && verb != "create" && !inScope(c, e.Type, id) {
+		return nil, notFound()
+	}
 	v := reflect.New(t)
 	switch {
 	case verb == "create" && known:
@@ -321,4 +324,12 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.Chang
 		return nil, err
 	}
 	return func(r *pb.ChangeRecord) { c.rt.Put(c, r, value) }, nil
+}
+
+// inScope says whether the caller may act on a record: only one they may read
+// (ADR-0037 18b). A generated action on a record outside the member's scope is
+// refused as if it were not there, as a read is. Replay, the app's own
+// automation and an approval taking a held step act for the app, not a reader.
+func inScope(c Caller, typ, id string) bool {
+	return c.Replaying || c.Automation || c.rt.Probing() || c.rt.Readable(c, typ+"/"+id)
 }

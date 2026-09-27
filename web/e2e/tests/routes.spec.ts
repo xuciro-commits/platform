@@ -580,3 +580,63 @@ test("route 34: states and actions a tenant defines", async ({ page, request }, 
   await dialog.getByRole("button", { name: "Hand it back" }).click();
   await expect(page.getByText("Valuables go back through the manager.").first()).toBeVisible();
 });
+
+// Route 35 (ADR-0037 18b): a builder says who may do what with an object in
+// the editor; two members with different roles in the builder app then see
+// and do different things on the same object.
+test("route 35: who may do what with an object a tenant defines", async ({ page, request }) => {
+  const stamp = Date.now().toString(36).slice(-5), name = `claims${stamp}`, id = fresh("O");
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id }, {
+    name, title: "Claim", plural: "Claims " + stamp,
+    fields: [{ name: "item", title: "Item", type: "text", required: true, search: true }, { name: "value", title: "Value", type: "integer" }],
+  });
+  await open(page, "manager", `/process?id=${id}`);
+  const outline = page.getByRole("region", { name: "States and actions" });
+  const inHand = page.getByRole("region", { name: "The piece in hand" });
+  // Desk ("user" in the builder app) sees only what it created and may not set the value.
+  await outline.getByRole("button", { name: "Add a role" }).click();
+  await inHand.getByRole("textbox", { name: "Role in the builder app" }).fill("user");
+  await expect(inHand.getByRole("combobox", { name: "Which records it reads" })).toHaveValue("own");
+  await inHand.getByRole("checkbox", { name: "Edit records" }).uncheck();
+  // A second role that reads everything and alone reads and sets the value.
+  await outline.getByRole("button", { name: "Add a role" }).click();
+  await inHand.getByRole("textbox", { name: "Role in the builder app" }).fill("auditor" + stamp);
+  await inHand.getByRole("combobox", { name: "Which records it reads" }).selectOption("all");
+  await inHand.getByRole("checkbox", { name: "Create records" }).uncheck();
+  const valueRow = inHand.locator("div").filter({ hasText: /^Value/ }).last();
+  await valueRow.getByRole("checkbox", { name: "only its readers" }).check();
+  await valueRow.getByRole("checkbox", { name: "only its setters" }).check();
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The object is installed with its states and actions.")).toBeVisible();
+
+  // The new role is the builder app's: the Console grants it.
+  await decide(request, "manager", "platform", "platform.member.grant", { type: "platform.member", id: "sales-1" }, { app: "build", role: "auditor" + stamp });
+  const type = `build.${name}`;
+  await decide(request, "desk", "build", `${type}.create`, { type, id: "C-D" + stamp }, { item: "Desk's scarf " + stamp });
+  await decide(request, "manager", "build", `${type}.create`, { type, id: "C-M" + stamp }, { item: "Manager's pen " + stamp, value: 40 });
+
+  // desk sees its own claim only, without the value; it may not edit.
+  const desk = await page.context().newPage();
+  await open(desk, "desk", `/page?app=build&kind=page&name=${name}`);
+  await expect(desk.getByRole("row").filter({ hasText: "Desk's scarf " + stamp })).toBeVisible();
+  await expect(desk.getByRole("row").filter({ hasText: "Manager's pen " + stamp })).toHaveCount(0);
+  await desk.getByRole("row").filter({ hasText: "Desk's scarf " + stamp }).click();
+  await expect(desk.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  await expect(desk.getByRole("term").filter({ hasText: /^Value$/ })).toHaveCount(0);
+  // A link to the other's claim answers as if it were not there.
+  const other = await (await request.get(`/v1/records/${type}/C-M${stamp}`, { headers: { Authorization: "Bearer desk" } })).status();
+  expect(other).toBe(404);
+  await desk.close();
+
+  // The auditor reads both, with the value; it may not create.
+  const auditor = await page.context().newPage();
+  await open(auditor, "sales", `/page?app=build&kind=page&name=${name}`);
+  await expect(auditor.getByRole("row").filter({ hasText: "Desk's scarf " + stamp })).toBeVisible();
+  await expect(auditor.getByRole("row").filter({ hasText: "Manager's pen " + stamp })).toBeVisible();
+  await expect(auditor.getByRole("button", { name: "Create Claim" })).toHaveCount(0);
+  await auditor.getByRole("row").filter({ hasText: "Manager's pen " + stamp }).click();
+  await expect(auditor.getByRole("definition").filter({ hasText: /^40$/ })).toBeVisible();
+  await auditor.close();
+  // Leave sales as the shared host had it.
+  await decide(request, "manager", "platform", "platform.member.revoke", { type: "platform.member", id: "sales-1" }, { app: "build" });
+});

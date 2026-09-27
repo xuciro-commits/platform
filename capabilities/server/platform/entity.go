@@ -168,6 +168,18 @@ type Standard struct {
 	Create, Edit, Archive bool
 	Roles                 []string
 	Capability            string // default: the entity type
+	// CreateRoles, EditRoles and ArchiveRoles, when set, say who may take that
+	// verb instead of Roles (ADR-0037 18b): a role that reads may not create.
+	CreateRoles, EditRoles, ArchiveRoles []string
+}
+
+// roles are the roles that may take verb: its own list, or Roles.
+func (s Standard) roles(verb string) []string {
+	own := map[string][]string{"create": s.CreateRoles, "edit": s.EditRoles, "archive": s.ArchiveRoles}[verb]
+	if own != nil {
+		return own
+	}
+	return s.Roles
 }
 
 // Scope is who sees which records in the platform's reads (D4): per role, all
@@ -179,7 +191,9 @@ type Scope struct {
 	Default   string
 	Structure string // organisation structure for unit and below
 	Unit      string // field holding the record's unit
-	Owner     string // field holding the member who owns the record
+	// Owner is the field holding the member who owns the record, or
+	// OwnerCreated: whoever's decision created it (ADR-0037 D5).
+	Owner string
 	// Participants are the members a record concerns — a request's requester
 	// and approvers, a task's candidates: they read it whatever their role in
 	// the app, so whoever is told about a record can open it (F-31).
@@ -195,6 +209,10 @@ const (
 	ScopeBelow  = "below"
 	ScopeUnit   = "unit"
 	ScopeOwn    = "own"
+	// ScopeNone hides the type and its records from the role (ADR-0037 18b).
+	ScopeNone = "none"
+	// OwnerCreated as Scope.Owner makes a record its creator's.
+	OwnerCreated = "created"
 )
 
 // Level is the scope a role gives.
@@ -319,7 +337,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		}
 	}
 	for _, x := range [][2]string{{"owner", e.Scope.Owner}, {"unit", e.Scope.Unit}} {
-		if x[1] != "" {
+		if x[1] != "" && !(x[0] == "owner" && x[1] == OwnerCreated) {
 			if f, ok := info.Field(x[1]); !ok || f.Type != "text" {
 				return EntityInfo{}, fmt.Errorf("entity %s: the scope's %s field %q is not a text field", e.Type, x[0], x[1])
 			}
@@ -332,7 +350,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		}
 		return out
 	}(), e.Scope.Default) {
-		if l != "" && l != ScopeTenant && l != ScopeBelow && l != ScopeUnit && l != ScopeOwn ||
+		if l != "" && l != ScopeTenant && l != ScopeBelow && l != ScopeUnit && l != ScopeOwn && l != ScopeNone ||
 			(l == ScopeOwn && e.Scope.Owner == "") || ((l == ScopeUnit || l == ScopeBelow) && (e.Scope.Unit == "" || e.Scope.Structure == "")) {
 			return EntityInfo{}, fmt.Errorf("entity %s: scope level %q without the field it needs", e.Type, l)
 		}
@@ -408,15 +426,15 @@ func EntityActions(e Entity) []Action {
 	}
 	if e.Standard.Create {
 		out = append(out, Action{Schema: e.Type + ".create", Target: e.Type, New: true, Capability: capability, Title: "Create " + strings.ToLower(info.Title),
-			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: e.Standard.Roles})
+			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: e.Standard.roles("create")})
 	}
 	if e.Standard.Edit {
 		out = append(out, Action{Schema: e.Type + ".edit", Target: e.Type, Capability: capability, Title: "Edit " + strings.ToLower(info.Title),
-			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: e.Standard.Roles})
+			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: e.Standard.roles("edit")})
 	}
 	if e.Standard.Archive {
 		out = append(out, Action{Schema: e.Type + ".archive", Target: e.Type, Capability: capability, Title: "Archive " + strings.ToLower(info.Title),
-			Description: "Archive " + article(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []Field{}, Roles: e.Standard.Roles})
+			Description: "Archive " + article(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []Field{}, Roles: e.Standard.roles("archive")})
 	}
 	if e.Lifecycle != nil {
 		for i, t := range e.Lifecycle.Transitions {

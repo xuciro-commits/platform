@@ -10,16 +10,18 @@ import {
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-type Field = { name: string; title: string; type: string; choices?: string };
+type Field = { name: string; title: string; type: string; choices?: string; required?: boolean; search?: boolean; ref?: string; read?: string[]; write?: string[] };
 type State = { name: string; title: string; tone?: string; description?: string };
 type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean };
 type Set_ = { field: string; from: string };
 type Condition = { field: string; operator: string; value?: string; message: string };
-type Action = { name: string; title: string; description?: string; from: string[]; to?: string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[] };
-type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[] };
-type Process = { states: State[]; actions: Action[] };
-/** What is in hand: a state or an action, by its place. */
-type Chosen = { kind: "state" | "action"; at: number } | undefined;
+type Action = { name: string; title: string; description?: string; from: string[]; to?: string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[] };
+/** What one role of the builder app may do with the object (ADR-0037 18b). */
+type Access = { role: string; read: "all" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
+type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[] };
+type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[] };
+/** What is in hand: a state, an action, or who may do what, by its place. */
+type Chosen = { kind: "state" | "action" | "access"; at: number } | undefined;
 
 const objectStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 const tones = ["info", "success", "warning", "danger", "neutral"];
@@ -39,7 +41,7 @@ export function ProcessPicker() {
   const { open } = useWorkspace();
   return (
     <div className="grid gap-3">
-      <PageHeader title={t("States and actions")} description={t("Choose an object to give its records states and the steps people take on them.")} />
+      <PageHeader title={t("Process and access")} description={t("Choose an object to give its records states, the steps people take on them, and who may do what.")} />
       <RecordList source={source} type="build.object" fields={["title", "name", "state"]} onOpen={(record) => open({ view: "process", params: { id: record.id } })} />
     </div>
   );
@@ -50,12 +52,12 @@ export function ProcessEditor({ id }: { id: string }) {
   const { open } = useWorkspace();
   const read = useReadQuery<{ record?: ObjectRecord }>(`/v1/records/${encodeURIComponent("build.object")}/${encodeURIComponent(id)}`).data;
   const object = read?.record;
-  const [process, setProcess] = useState<Process>({ states: [], actions: [] });
+  const [process, setProcess] = useState<Process>({ states: [], actions: [], access: [], fields: [] });
   const [chosen, setChosen] = useState<Chosen>();
   const [dirty, setDirty] = useState(false);
   const [refused, setRefused] = useState<string>(); // why the host refused, kept on screen
   useEffect(() => {
-    if (object && !dirty) setProcess({ states: object.states ?? [], actions: object.actions ?? [] });
+    if (object && !dirty) setProcess({ states: object.states ?? [], actions: object.actions ?? [], access: object.access ?? [], fields: object.fields ?? [] });
   }, [object, dirty]);
   if (!object) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const change = (next: Process) => { setProcess(next); setDirty(true); };
@@ -85,7 +87,7 @@ export function ProcessEditor({ id }: { id: string }) {
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;
   return (
     <div className="flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3">
-      <PageHeader title={t("{object}: states and actions", { object: object.title })}
+      <PageHeader title={t("{object}: process and access", { object: object.title })}
         description={t("What its records go through, and the steps people take on them. Save keeps your work; publish installs it.")}
         actions={<div className="flex items-center gap-2">
           <StatusTag status={object.state} registry={objectStates} />
@@ -98,13 +100,19 @@ export function ProcessEditor({ id }: { id: string }) {
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_21rem]">
         <div role="region" aria-label={t("States and actions")} className="min-h-0 overflow-y-auto">
           <Outline process={process} chosen={chosen} onChoose={setChosen} onAddState={addState} onAddAction={addAction} onChange={change} />
+          <AccessOutline access={process.access} chosen={chosen} onChoose={setChosen}
+            onAdd={() => { change({ ...process, access: [...process.access, { role: nameOf(t("Role"), process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); setChosen({ kind: "access", at: process.access.length }); }}
+            onRemove={(i) => { change({ ...process, access: process.access.filter((_, at) => at !== i) }); setChosen(undefined); }} />
         </div>
         <div role="region" aria-label={t("What people see")} className="min-h-0 min-w-0 overflow-y-auto rounded-md border border-dashed border-border p-3">
           <Preview object={object} process={process} action={action} />
         </div>
         <div role="region" aria-label={t("The piece in hand")} className="min-h-0 overflow-y-auto">
           {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
-          {action && chosen && <ActionProperties action={action} states={process.states} fields={object.fields}
+          {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
+            onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
+            onFields={(fields) => change({ ...process, fields })} />}
+          {action && chosen && <ActionProperties action={action} states={process.states} fields={object.fields} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")}
             onChange={(patch) => change({ ...process, actions: process.actions.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })} />}
           {!chosen && <Card className="p-3 text-xs text-muted">{t("Choose a state or an action to configure it.")}</Card>}
         </div>
@@ -208,8 +216,8 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
   );
 }
 
-function ActionProperties({ action, states, fields, onChange }: {
-  action: Action; states: State[]; fields: Field[]; onChange: (patch: Partial<Action>) => void;
+function ActionProperties({ action, states, fields, roles, onChange }: {
+  action: Action; states: State[]; fields: Field[]; roles: string[]; onChange: (patch: Partial<Action>) => void;
 }) {
   const inputs = action.inputs ?? [], sets = action.sets ?? [], conditions = action.conditions ?? [];
   const sources = [...inputs.map((i) => ({ value: i.name, label: t("Input: {name}", { name: i.title }) })),
@@ -225,6 +233,10 @@ function ActionProperties({ action, states, fields, onChange }: {
       <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken from")}</legend>
         <Toggles options={states.map((s) => ({ value: s.name, label: s.title }))} value={action.from} onChange={(from) => onChange({ from })} />
       </fieldset>
+      {roles.length > 0 && <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("Taken by")}</legend>
+        <Toggles options={roles.map((r) => ({ value: r, label: r }))} value={action.roles ?? []} onChange={(r) => onChange({ roles: r.length ? r : undefined })} />
+        <p className="text-muted">{t("None chosen: every role that may read the object. The builder always may.")}</p>
+      </fieldset>}
       <Label text={t("Leaves it in")}>
         <Select value={action.to ?? ""} onChange={(e) => onChange({ to: e.target.value || undefined })}>
           <option value="">{t("Where it was")}</option>
@@ -279,5 +291,82 @@ function Rows<T>({ title, add, items, make, onChange, row }: {
       ))}
       <Button size="sm" className="justify-self-start" onClick={() => onChange([...items, make()])}><Plus className="size-3" />{add}</Button>
     </fieldset>
+  );
+}
+
+const reads = { all: () => t("Every record"), own: () => t("Only those they created"), none: () => t("Not at all") };
+
+/** The left pane's third part: the roles of the builder app this object names, and what each may do. */
+function AccessOutline({ access, chosen, onChoose, onAdd, onRemove }: {
+  access: Access[]; chosen: Chosen; onChoose: (c: Chosen) => void; onAdd: () => void; onRemove: (i: number) => void;
+}) {
+  return (
+    <Card className="mt-3 grid content-start gap-1 p-3">
+      <div className="flex items-center justify-between text-xs font-semibold text-muted">{t("Who may do what")}
+        <Button size="sm" variant="ghost" onClick={onAdd}><Plus className="size-3" />{t("Add a role")}</Button></div>
+      <ul className="grid gap-1">
+        {access.map((a, i) => {
+          const inHand = chosen?.kind === "access" && chosen.at === i;
+          return (
+            <li key={i} className={cn("flex items-center gap-0.5 rounded-md border px-1 py-0.5", inHand ? "border-primary bg-row-selected" : "border-border")}>
+              <Button variant="ghost" size="sm" className="min-w-0 flex-1 justify-start" aria-pressed={inHand} onClick={() => onChoose({ kind: "access", at: i })}>
+                <span className="truncate font-mono">{a.role}</span><span className="ml-auto truncate pl-1 text-[10px] text-muted">{reads[a.read]()}</span>
+              </Button>
+              <Button size="sm" variant="ghost" aria-label={t("Remove {name}", { name: a.role })} onClick={() => onRemove(i)}><Trash2 className="size-3" /></Button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-xs text-muted">{access.length === 0
+        ? t("None named: everyone with a role in the builder app reads and changes every record.")
+        : t("A role not named here does not see the object. The builder always sees and does everything. Roles are granted in Settings → Members.")}</p>
+    </Card>
+  );
+}
+
+/** The right pane for a role: which records it reads, what it may do, and the fields only it reads or sets. */
+function AccessProperties({ access, fields, onChange, onFields }: {
+  access: Access; fields: Field[]; onChange: (patch: Partial<Access>) => void; onFields: (fields: Field[]) => void;
+}) {
+  const none = access.read === "none";
+  const toggle = (list: string[] | undefined, on: boolean) => {
+    const next = (list ?? []).filter((r) => r !== access.role);
+    return on ? [...next, access.role] : next;
+  };
+  const restricted = fields.filter((f) => (f.read ?? []).length > 0 || (f.write ?? []).length > 0);
+  return (
+    <Card className="grid content-start gap-3 p-3">
+      <div className="text-xs font-semibold text-muted">{t("Role")}</div>
+      <Label text={t("Role in the builder app")}><Input className="font-mono" value={access.role} onChange={(e) => onChange({ role: e.target.value })} /></Label>
+      <Label text={t("Which records it reads")}>
+        <Select value={access.read} onChange={(e) => {
+          const read = e.target.value as Access["read"];
+          onChange(read === "none" ? { read, create: false, edit: false, archive: false } : { read });
+        }}>
+          {(["all", "own", "none"] as const).map((r) => <option key={r} value={r}>{reads[r]()}</option>)}
+        </Select>
+      </Label>
+      <fieldset className="grid gap-1 text-xs"><legend className="mb-1">{t("What it may do")}</legend>
+        <Checkbox disabled={none} checked={!!access.create} onChange={(create) => onChange({ create })}>{t("Create records")}</Checkbox>
+        <Checkbox disabled={none} checked={!!access.edit} onChange={(edit) => onChange({ edit })}>{t("Edit records")}</Checkbox>
+        <Checkbox disabled={none} checked={!!access.archive} onChange={(archive) => onChange({ archive })}>{t("Archive records")}</Checkbox>
+      </fieldset>
+      {!none && <fieldset className="grid gap-1 border-t border-border pt-2 text-xs"><legend className="mb-1 font-semibold text-muted">{t("Fields only some roles read or set")}</legend>
+        {fields.map((f, i) => {
+          const set = (patch: Partial<Field>) => onFields(fields.map((x, at) => at === i ? { ...x, ...patch } : x));
+          const readsIt = (f.read ?? []).includes(access.role), setsIt = (f.write ?? []).includes(access.role);
+          return (
+            <div key={f.name} className="flex flex-wrap items-center gap-2">
+              <span className="min-w-24 font-medium">{f.title}</span>
+              <Checkbox checked={readsIt} onChange={(on) => set({ read: toggle(f.read, on), write: on ? f.write : toggle(f.write, false) })}>{t("only its readers")}</Checkbox>
+              <Checkbox checked={setsIt} onChange={(on) => set({ write: toggle(f.write, on), read: on && (f.read ?? []).length ? toggle(f.read, true) : f.read })}>{t("only its setters")}</Checkbox>
+            </div>
+          );
+        })}
+        <p className="text-muted">{restricted.length === 0
+          ? t("Every field is read by every role that reads the object.")
+          : t("A restricted field is read (or set) only by the roles ticked for it, and the builder.")}</p>
+      </fieldset>}
+    </Card>
   );
 }

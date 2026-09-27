@@ -295,7 +295,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 			v.FieldByIndex(f.Index).SetString(l.Initial)
 		}
 	}
-	if owner := et.info.Scope.Owner; prev == nil && owner != "" { // a new record belongs to its creator unless the rules say who
+	if owner := et.info.Scope.Owner; prev == nil && owner != "" && owner != platform.OwnerCreated { // a new record belongs to its creator unless the rules say who
 		if f, _ := et.info.Field(owner); v.FieldByIndex(f.Index).String() == "" {
 			v.FieldByIndex(f.Index).SetString(stamp.By)
 		}
@@ -735,7 +735,11 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 	defer t.records.mu.Unlock()
 	out := []platform.EntityInfo{}
 	for _, et := range t.records.types {
-		if m.Roles[et.info.App] != "" || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
+		role := m.Roles[et.info.App]
+		if role != "" && et.info.Scope.Level(role) == platform.ScopeNone && et.info.Scope.Participants == nil {
+			continue // a type this role does not see at all (ADR-0037 18b)
+		}
+		if role != "" || et.info.Scope.Participants != nil || et.info.Scope.Through != nil { // participants, and what belongs to a record, are read without a role
 			view, _ := viewOf(m, et)
 			out = append(out, view.info)
 		}
@@ -806,7 +810,12 @@ func (t *Tenant) scoped(m platform.Member, et *entityType, role string, now time
 		return func(v reflect.Value) string { return v.FieldByIndex(f.Index).String() }
 	}
 	switch scope.Level(role) {
+	case platform.ScopeNone:
+		return func(reflect.Value) bool { return false }, nil
 	case platform.ScopeOwn:
+		if scope.Owner == platform.OwnerCreated { // whoever's decision created it (ADR-0037 D5)
+			return func(v reflect.Value) bool { return recordOf(v).Created.By == m.ID }, nil
+		}
 		owner := field(scope.Owner)
 		return func(v reflect.Value) bool { return owner(v) == m.ID }, nil
 	case platform.ScopeUnit, platform.ScopeBelow:

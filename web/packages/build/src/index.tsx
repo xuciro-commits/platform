@@ -21,7 +21,7 @@ export default defineApp({
   views: [
     { id: "pages", title: () => t("Pages"), render: () => <PagesList /> },
     { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
-    { id: "process", title: () => t("States and actions"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
+    { id: "process", title: () => t("Process and access"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
   ],
   opens: { "build.page": "compose" }, // a page record opens where it is composed
   nav: (host): NavSection[] => {
@@ -31,7 +31,7 @@ export default defineApp({
         label: t("Builder"),
         items: [
           { label: t("Objects"), icon: <Hammer />, route: page("objects") },
-          { label: t("States and actions"), icon: <Workflow />, route: { view: "process" } },
+          { label: t("Process and access"), icon: <Workflow />, route: { view: "process" } },
           { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },
           { label: t("Applications"), icon: <AppWindow />, route: page("applications") },
         ],
