@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Tokens a day": "每天 token 数",
+  "Calls a minute": "每分钟调用次数",
+  "default": "默认",
+  "Limits": "限额",
+  "A member's, agent's or app's own limits, in place of the defaults in App settings → AI (people) and Agents (agents). A call past a limit is refused before it reaches the model.": "某个成员、智能体或应用单独的限额，替代应用设置 → AI（人）和智能体（智能体）里的默认值。超过限额的调用在到达模型之前就被拒绝。",
+  "Member ID, e.g. sales-1 or agent:csm.triage": "成员 ID，例如 sales-1 或 agent:csm.triage",
+  "Set limit": "设定限额",
+  "Everyone takes the defaults": "所有人都使用默认值",
   "Nobody read personal data yet": "还没有人读取个人数据",
   "Reads of personal data": "个人数据的读取",
   "Personal fields": "个人数据字段",

@@ -189,10 +189,41 @@ func (h *Host) Handler() http.Handler {
 			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
+		if req.Stream { // server-sent events: delta, then done or error (ADR-0029 D2)
+			flusher, _ := w.(http.Flusher)
+			started := false
+			event := func(name string, v any) {
+				if !started {
+					w.Header().Set("Content-Type", "text/event-stream")
+					w.Header().Set("Cache-Control", "no-cache")
+					w.WriteHeader(http.StatusOK)
+					started = true
+				}
+				raw, _ := json.Marshal(v)
+				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, raw)
+				if flusher != nil {
+					flusher.Flush()
+				}
+			}
+			answer, err, failure := t.Chat(m, req, h.Now(), func(piece string) { event("delta", map[string]string{"content": piece}) })
+			switch {
+			case err != nil && !started:
+				Reply(w, nil, err)
+			case failure != nil && failure.Quota && !started:
+				WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.Say(t.Language(m, r), failure.Detail)}})
+			case failure != nil:
+				event("error", map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail, "usage": answer.Usage})
+			default:
+				event("done", map[string]any{"usage": answer.Usage})
+			}
+			return
+		}
 		answer, err, failure := t.Chat(m, req, h.Now())
 		switch {
 		case err != nil:
 			Reply(w, nil, err)
+		case failure != nil && failure.Quota:
+			WriteJSON(w, http.StatusTooManyRequests, map[string]any{"error": map[string]any{"code": "QUOTA", "detail": t.Say(t.Language(m, r), failure.Detail)}})
 		case failure != nil:
 			WriteJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"code": "PROVIDER_ERROR", "status": failure.Status, "detail": failure.Detail}, "usage": answer.Usage})
 		default:

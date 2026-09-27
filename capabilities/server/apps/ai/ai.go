@@ -3,6 +3,8 @@ package ai
 
 import (
 	"encoding/json"
+	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -26,8 +28,14 @@ const (
 	SchemaProviderRemove = "ai.provider.remove"
 	SchemaModelEnable    = "ai.model.enable"
 	SchemaModelDisable   = "ai.model.disable"
-	Admin                = "admin"
-	User                 = "user" // may call models open to users
+	LimitType            = "ai.limit"
+	SchemaLimitSet       = "ai.limit.set"
+	SchemaLimitRemove    = "ai.limit.remove"
+	// Settings of the defaults a limit overrides (ADR-0029 D1).
+	SettingDailyTokens = "daily-tokens"     // tokens per person per day; 0: none
+	SettingPerMinute   = "calls-per-minute" // calls per person or agent per minute; 0: none
+	Admin              = "admin"
+	User               = "user" // may call models open to users
 )
 
 // Vendor is a provider with a fixed base URL and wire.
@@ -66,6 +74,15 @@ type Model struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`  // the provider's model ID
 	Access   string `json:"access"` // everyone, users
+	// DailyTokens caps the tokens the whole tenant spends on the model a day; 0: none.
+	DailyTokens int `json:"dailyTokens,omitempty"`
+}
+
+// Limit overrides the defaults for one member, agent or app (ADR-0029 D1); 0 keeps the default.
+type Limit struct {
+	Member      string `json:"member"`
+	DailyTokens int    `json:"dailyTokens,omitempty"`
+	PerMinute   int    `json:"perMinute,omitempty"`
 }
 
 // Name is how callers name the model: "<provider>/<model>".
@@ -91,8 +108,13 @@ type AI struct {
 	mu        sync.Mutex
 	providers []Provider
 	models    []Model
+	limits    map[string]Limit
 	usage     []Usage
-	ledger    *platform.Ledger
+	// Tokens per day ("<day>|<member>", "<day>|model:<name>") and each
+	// caller's calls of the last minute, derived from usage as it is metered.
+	daily  map[string]int
+	recent map[string][]time.Time
+	ledger *platform.Ledger
 }
 
 // New is a tenant's AI app.
@@ -101,7 +123,7 @@ func New(tenant string) *AI {
 	f := func(name, typ, description string, required bool) platform.Field {
 		return platform.Field{Name: name, Type: typ, Required: required, Description: description}
 	}
-	return &AI{ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
+	return &AI{limits: map[string]Limit{}, daily: map[string]int{}, recent: map[string][]time.Time{}, ledger: platform.NewLedger(tenant, ID, platform.NewCatalog(
 		platform.Action{Schema: SchemaProviderAdd, Target: ProviderType, Capability: "providers", Title: "Add AI provider", Roles: admin,
 			Description: "Add a source of models: a vendor (Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter), a third-party OpenAI-compatible API, or a local model server (LM Studio, Ollama, llama.cpp).",
 			Payload: []platform.Field{f("kind", "string", "vendor, compatible or local", true), f("vendor", "string", "For a vendor: its ID", false),
@@ -111,23 +133,30 @@ func New(tenant string) *AI {
 			Description: "Remove a provider; its models are disabled. Recorded usage stays.", Payload: []platform.Field{}},
 		platform.Action{Schema: SchemaModelEnable, Target: ModelType, Capability: "models", Title: "Enable model", Roles: admin,
 			Description: "Let members call a provider's model (target <provider>/<model>): everyone in the tenant, or members holding a role in the ai app.",
-			Payload:     []platform.Field{f("access", "string", "everyone or users", true)}},
+			Payload:     []platform.Field{f("access", "string", "everyone or users", true), f("dailyTokens", "integer", "Tokens the whole tenant may spend on it a day; 0: no cap", false)}},
 		platform.Action{Schema: SchemaModelDisable, Target: ModelType, Capability: "models", Title: "Disable model", Roles: admin,
 			Description: "Stop calls to a model.", Payload: []platform.Field{}},
-	), ProviderType, ModelType)}
+		platform.Action{Schema: SchemaLimitSet, Target: LimitType, New: true, Capability: "limits", Title: "Set AI limit", Roles: admin,
+			Description: "Limit what one member, agent or app (target its member ID) may call: tokens a day and calls a minute, in place of the defaults in the AI settings.",
+			Payload:     []platform.Field{f("dailyTokens", "integer", "Tokens a day; 0: the default", false), f("perMinute", "integer", "Calls a minute; 0: the default", false)}},
+		platform.Action{Schema: SchemaLimitRemove, Target: LimitType, Capability: "limits", Title: "Remove AI limit", Roles: admin,
+			Description: "Return a member, agent or app to the default limits.", Payload: []platform.Field{}},
+	), ProviderType, ModelType, LimitType)}
 }
 
 // Snapshot and Restore: providers, models and usage (ADR-0019 D6).
 type aiState struct {
-	Providers []Provider `json:"providers"`
-	Models    []Model    `json:"models"`
-	Usage     []Usage    `json:"usage"`
+	Providers []Provider       `json:"providers"`
+	Models    []Model          `json:"models"`
+	Limits    map[string]Limit `json:"limits,omitempty"`
+	Usage     []Usage          `json:"usage"`
+	Daily     map[string]int   `json:"daily,omitempty"`
 }
 
 func (a *AI) Snapshot() (json.RawMessage, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.ledger.SnapshotWith(aiState{a.providers, a.models, a.usage})
+	return a.ledger.SnapshotWith(aiState{a.providers, a.models, a.limits, a.usage, a.daily})
 }
 
 func (a *AI) Restore(raw json.RawMessage) error {
@@ -137,13 +166,25 @@ func (a *AI) Restore(raw json.RawMessage) error {
 	if err := a.ledger.RestoreWith(raw, &s); err != nil {
 		return err
 	}
-	a.providers, a.models, a.usage = s.Providers, s.Models, s.Usage
+	a.providers, a.models, a.limits, a.usage, a.daily = s.Providers, s.Models, s.Limits, s.Usage, s.Daily
+	if a.limits == nil {
+		a.limits = map[string]Limit{}
+	}
+	if a.daily == nil {
+		a.daily = map[string]int{}
+	}
+	a.recent = map[string][]time.Time{}
 	return nil
 }
 
 func (a *AI) Manifest() platform.Manifest {
-	return platform.Manifest{ID: ID, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage"},
-		Everyone: []string{"ai-models", "ai-usage"}, Roles: []string{User}} // the user role opens models with access "users"
+	return platform.Manifest{ID: ID, Title: "AI", Version: "1", Actions: a.ledger.Catalog, Reads: []string{"ai-providers", "ai-models", "ai-usage", "ai-limits"},
+		Everyone: []string{"ai-models", "ai-usage"}, Roles: []string{User}, // the user role opens models with access "users"
+		Settings: []platform.Setting{
+			{Name: SettingDailyTokens, Title: "Tokens per person per day", Type: "integer", Default: "0",
+				Description: "What each person may spend on models a day, unless an AI limit says otherwise; 0: no limit. Agents have their own, in the Agents settings."},
+			{Name: SettingPerMinute, Title: "Calls per minute", Type: "integer", Default: "60",
+				Description: "How many model calls each person or agent may make a minute, unless an AI limit says otherwise; 0: no limit."}}}
 }
 
 func (a *AI) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
@@ -176,6 +217,7 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 		id := s.GetTarget().GetId()
 		var p struct {
 			Kind, Vendor, BaseURL, Secret, Access string
+			DailyTokens, PerMinute                int
 		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, invalid
@@ -224,7 +266,7 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 			}
 			return func(*pb.ChangeRecord) {
 				a.models = slices.DeleteFunc(a.models, func(m Model) bool { return m.Name() == id })
-				a.models = append(a.models, Model{Provider: provider, Model: model, Access: p.Access})
+				a.models = append(a.models, Model{Provider: provider, Model: model, Access: p.Access, DailyTokens: max(p.DailyTokens, 0)})
 			}, nil
 		case SchemaModelDisable:
 			if !slices.ContainsFunc(a.models, func(m Model) bool { return m.Name() == id }) {
@@ -233,6 +275,18 @@ func (a *AI) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Cha
 			return func(*pb.ChangeRecord) {
 				a.models = slices.DeleteFunc(a.models, func(m Model) bool { return m.Name() == id })
 			}, nil
+		case SchemaLimitSet:
+			if id == "" || p.DailyTokens < 0 || p.PerMinute < 0 {
+				return nil, invalid
+			}
+			return func(*pb.ChangeRecord) {
+				a.limits[id] = Limit{Member: id, DailyTokens: p.DailyTokens, PerMinute: p.PerMinute}
+			}, nil
+		case SchemaLimitRemove:
+			if _, known := a.limits[id]; !known {
+				return nil, notFound
+			}
+			return func(*pb.ChangeRecord) { delete(a.limits, id) }, nil
 		}
 		return nil, invalid
 	})
@@ -265,6 +319,52 @@ func (a *AI) Meter(u Usage) {
 	if len(a.usage) > usageKept {
 		a.usage = a.usage[len(a.usage)-usageKept:]
 	}
+	day := u.At.UTC().Format(time.DateOnly)
+	if _, today := a.daily[day+"|"+u.Member]; !today { // a new day: keep only it and the one before
+		yesterday := u.At.UTC().AddDate(0, 0, -1).Format(time.DateOnly)
+		for k := range a.daily {
+			if !strings.HasPrefix(k, day) && !strings.HasPrefix(k, yesterday) {
+				delete(a.daily, k)
+			}
+		}
+	}
+	a.daily[day+"|"+u.Member] += u.Input + u.Output
+	a.daily[day+"|model:"+u.Model] += u.Input + u.Output
+	a.recent[u.Member] = append(slices.DeleteFunc(a.recent[u.Member], func(t time.Time) bool { return u.At.Sub(t) >= time.Minute }), u.At)
+}
+
+// Defaults are the limits a member without its own takes (ADR-0029 D1):
+// tokens a day for people and for agents, and calls a minute; 0: none.
+type Defaults struct{ People, Agents, PerMinute int }
+
+// Allow says why m may not call model now, or "" when it may: the model's
+// daily cap for the tenant, then m's tokens today and calls this minute,
+// against m's own limit or the defaults. Apps (app:<id>) take only their own.
+func (a *AI) Allow(m platform.Member, model Model, d Defaults, now time.Time) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	day := now.UTC().Format(time.DateOnly)
+	if model.DailyTokens > 0 && a.daily[day+"|model:"+model.Name()] >= model.DailyTokens {
+		return fmt.Sprintf("The tenant used the %d tokens a day of %s", model.DailyTokens, model.Name())
+	}
+	own, app := a.limits[m.ID], strings.HasPrefix(m.ID, "app:")
+	daily, perMinute := own.DailyTokens, own.PerMinute
+	switch {
+	case daily == 0 && m.Agent:
+		daily = d.Agents
+	case daily == 0 && !app:
+		daily = d.People
+	}
+	if perMinute == 0 && !app {
+		perMinute = d.PerMinute
+	}
+	if daily > 0 && a.daily[day+"|"+m.ID] >= daily {
+		return fmt.Sprintf("%s used its %d tokens for today", m.ID, daily)
+	}
+	if perMinute > 0 && len(slices.DeleteFunc(slices.Clone(a.recent[m.ID]), func(t time.Time) bool { return now.Sub(t) >= time.Minute })) >= perMinute {
+		return fmt.Sprintf("%s made its %d calls this minute", m.ID, perMinute)
+	}
+	return ""
 }
 
 // Total is usage summed per day, member and model.
@@ -292,6 +392,13 @@ func (a *AI) Read(c platform.Caller, name string) (any, *kernel.Error) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 		}
 		return append([]Provider{}, a.providers...), nil
+	case "ai-limits":
+		if !admin {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+		}
+		out := slices.Collect(maps.Values(a.limits))
+		slices.SortFunc(out, func(x, y Limit) int { return strings.Compare(x.Member, y.Member) })
+		return out, nil
 	case "ai-models":
 		out := []Model{}
 		for _, m := range a.models {
@@ -347,11 +454,5 @@ func (a *AI) Model(name string) (Model, Provider, *kernel.Error) {
 func (a *AI) Spent(member string, now time.Time) int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	day, n := now.UTC().Format(time.DateOnly), 0
-	for _, u := range a.usage {
-		if u.Member == member && u.At.UTC().Format(time.DateOnly) == day {
-			n += u.Input + u.Output
-		}
-	}
-	return n
+	return a.daily[now.UTC().Format(time.DateOnly)+"|"+member]
 }

@@ -165,7 +165,14 @@ chat() { curl -s -H "Authorization: Bearer $1" -H 'Content-Type: application/jso
 [[ $(chat "$OP1" | jq -r .content) == "echo: line one is down" ]] || fail "model call: $(chat "$OP1")"
 [[ $(chat "$AGENT" | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "the assistant called a model open to ai users only"
 [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/ai-usage" | jq -c '[.totals[] | {member, model, calls, input, output}]') == '[{"member":"op-l1","model":"local/echo","calls":1,"input":4,"output":5}]' ]] || fail "AI usage: $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/ai-usage")"
-echo "ok   AI providers: a local model server added and a model opened to ai users; an operator's call answered and metered, the assistant refused"
+# Limits (ADR-0029 D1): the operator's own limit of 5 tokens a day is spent,
+# so the next call is refused before it reaches the model. A streamed call
+# answers as server-sent events (D2), from a server that does not stream too.
+AUTHORITY=ai submit "$SUP" ai-3 ai.limit.set ai.limit op-l1 '{"dailyTokens":5}' | jq -e .record >/dev/null || fail "set AI limit"
+[[ $(chat "$OP1" | jq -r .error.code) == QUOTA ]] || fail "a limit: $(chat "$OP1")"
+streamed=$(curl -s -N -H "Authorization: Bearer $SUP" -H 'Content-Type: application/json' "$MANUFACTURING/v1/ai/chat" -d '{"model":"local/echo","stream":true,"messages":[{"role":"user","content":"hi"}]}')
+[[ $streamed == *"event: delta"*"echo: hi"*"event: done"* ]] || fail "streamed call: $streamed"
+echo "ok   AI providers: a local model server added and a model opened to ai users; an operator's call answered and metered, the assistant refused; past the operator's limit the call is refused; a call streams"
 
 # Agents (ADR-0021): the confirmation flow's agent corrects a refused order. For
 # WO-4 (P-200, released without a planned order) the plant refuses; its agent,

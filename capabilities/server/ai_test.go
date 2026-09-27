@@ -29,6 +29,7 @@ func fakeModels(t *testing.T, calls *atomic.Int32) *httptest.Server {
 		var req struct {
 			Model    string
 			Messages []Message
+			Stream   bool
 		}
 		json.NewDecoder(r.Body).Decode(&req)
 		if r.Header.Get("Authorization") != "" {
@@ -41,6 +42,14 @@ func fakeModels(t *testing.T, calls *atomic.Int32) *httptest.Server {
 			return
 		}
 		last := req.Messages[len(req.Messages)-1].Content
+		if req.Stream && req.Model != "flat" { // server-sent events: the answer in two pieces, then the usage; "flat" never streams
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, piece := range []string{"echo: ", last} {
+				fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":%q}}]}\n\n", piece)
+			}
+			fmt.Fprintf(w, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":%d,\"completion_tokens\":%d}}\n\ndata: [DONE]\n\n", len(last), len(last)+6)
+			return
+		}
 		fmt.Fprintf(w, `{"model":"echo-v2","choices":[{"message":{"role":"assistant","content":%q}}],"usage":{"prompt_tokens":%d,"completion_tokens":%d,"cost":0.0001}}`,
 			"echo: "+last, len(last), len(last)+6)
 	}))
@@ -162,7 +171,7 @@ func TestAIProviders(t *testing.T) {
 	}
 	// Models a member may call; removing a provider disables its models.
 	models, _ := tn.Read(cy, "ai-models")
-	if fmt.Sprint(models) != "[{lm busy everyone}]" {
+	if fmt.Sprint(models) != "[{lm busy everyone 0}]" {
 		t.Fatalf("cy's models %v", models)
 	}
 	CheckReplay(t, tn, journal, build)
@@ -247,4 +256,104 @@ func TestAnthropicProvider(t *testing.T) {
 		failure.Status != 429 || failure.Detail != "rate limited" {
 		t.Fatalf("a rate limit: %+v", failure)
 	}
+}
+
+// ADR-0029 D1, D2: limits at the door every call passes — a person's tokens a
+// day, anyone's calls a minute, a model's cap for the tenant, and one
+// member's own limit — and an answer streamed as it comes, metered once.
+func TestAILimits(t *testing.T) {
+	var calls atomic.Int32
+	server := fakeModels(t, &calls)
+	var journal []Entry
+	build := func() *Tenant {
+		console := NewConsole("t-1",
+			Seat{Subjects: []string{"ana"}, Member: platform.Member{ID: "ana", Roles: map[string]string{ai.ID: ai.Admin, PlatformApp: Admin}}},
+			Seat{Subjects: []string{"bo"}, Member: platform.Member{ID: "bo", Roles: map[string]string{}}},
+			Seat{Subjects: []string{"cy"}, Member: platform.Member{ID: "cy", Roles: map[string]string{}}})
+		tn, err := NewTenant("t-1", console, ai.New("t-1"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := build()
+	tn.Record = func(e Entry) { journal = append(journal, e) }
+	member := func(id string) platform.Member { m, _ := tn.Member(id); return m }
+	now := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+	keys := 0
+	decide := func(authority, schema, typ, id string, payload any) {
+		t.Helper()
+		keys++
+		raw, _ := json.Marshal(payload)
+		if _, err := tn.Submit(member("ana"), &pb.Submission{TenantId: "t-1", PrincipalId: "ana", Authority: authority, IdempotencyKey: fmt.Sprint("k", keys),
+			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
+			t.Fatalf("%s %s: %v", schema, id, err)
+		}
+	}
+	chat := func(who string) string {
+		_, err, failure := tn.Chat(member(who), ChatRequest{Model: "local/echo", Messages: []Message{{Role: "user", Content: "hello"}}}, now)
+		switch {
+		case err != nil:
+			return err.Error()
+		case failure != nil && failure.Quota:
+			return "quota: " + failure.Detail
+		case failure != nil:
+			return failure.Detail
+		}
+		return "ok"
+	}
+	expect := func(what, got, want string) {
+		t.Helper()
+		if got != want {
+			t.Fatalf("%s: %s, want %s", what, got, want)
+		}
+	}
+	decide(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": server.URL + "/v1"})
+	decide(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]string{"access": "everyone"})
+	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "40"})
+
+	// Each call of bo's costs 16 tokens: two leave him under 40, the third
+	// takes him past it, and the fourth is refused without reaching the model.
+	for i := 0; i < 3; i++ {
+		expect("bo's call", chat("bo"), "ok")
+	}
+	before := calls.Load()
+	expect("past the day", chat("bo"), "quota: bo used its 40 tokens for today")
+	expect("the model was not called", fmt.Sprint(calls.Load()-before), "0")
+	decide(ai.ID, ai.SchemaLimitSet, ai.LimitType, "bo", map[string]int{"dailyTokens": 1000})
+	expect("his own limit", chat("bo"), "ok")
+	expect("said in Chinese", tn.Say("zh-CN", "bo used its 40 tokens for today"), "bo 今天的 40 个 token 已用完")
+
+	// Calls a minute, whatever the tokens.
+	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingPerMinute, map[string]string{"value": "2"})
+	decide(PlatformApp, SchemaSettingSet, SettingType, ai.ID+"/"+ai.SettingDailyTokens, map[string]string{"value": "0"})
+	expect("cy 1", chat("cy"), "ok")
+	expect("cy 2", chat("cy"), "ok")
+	expect("cy 3", chat("cy"), "quota: cy made its 2 calls this minute")
+	now = now.Add(time.Minute)
+	expect("a minute later", chat("cy"), "ok")
+
+	// A model's cap for the whole tenant.
+	decide(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone", "dailyTokens": 100})
+	expect("the model's day", chat("cy"), "quota: The tenant used the 100 tokens a day of local/echo")
+	decide(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/echo", map[string]any{"access": "everyone"})
+
+	// Streamed: the pieces as they come, the whole answer, one usage entry.
+	var pieces []string
+	usage := len(journal)
+	answer, err, failure := tn.Chat(member("cy"), ChatRequest{Model: "local/echo", Messages: []Message{{Role: "user", Content: "stream"}}}, now.Add(time.Minute),
+		func(piece string) { pieces = append(pieces, piece) })
+	if err != nil || failure != nil {
+		t.Fatalf("stream: %v %v", err, failure)
+	}
+	expect("streamed", fmt.Sprint(pieces, " ", answer.Content, " ", answer.Usage.Input+answer.Usage.Output, " ", len(journal)-usage), "[echo:  stream] echo: stream 18 1")
+
+	// A server that does not stream answers at once, and the answer comes as one piece.
+	decide(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/flat", map[string]string{"access": "everyone"})
+	pieces = nil
+	answer, _, failure = tn.Chat(member("bo"), ChatRequest{Model: "local/flat", Messages: []Message{{Role: "user", Content: "hi"}}}, now.Add(2*time.Minute),
+		func(piece string) { pieces = append(pieces, piece) })
+	expect("flat", fmt.Sprint(pieces, " ", failure == nil), "[echo: hi] true")
+
+	CheckReplay(t, tn, journal, build)
 }

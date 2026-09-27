@@ -430,6 +430,9 @@ func (t *Tenant) embed(name string, input []string, now time.Time) ([][]float32,
 	if !t.breakers.allow("ai:"+pv.ID, now) {
 		return nil, fmt.Errorf("the provider %s failed repeatedly; embedding waits", pv.ID)
 	}
+	if why := t.allowed(platform.Member{ID: "app:" + knowledge.ID, Tenant: t.ID}, model, now); why != "" {
+		return nil, fmt.Errorf("%s", why)
+	}
 	body, _ := json.Marshal(map[string]any{"model": model.Model, "input": input})
 	started := time.Now()
 	status, answer, failure := t.aiRequest(pv, http.MethodPost, "/embeddings", body, aiTimeout)

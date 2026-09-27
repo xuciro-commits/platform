@@ -31,7 +31,8 @@
    1. 用 CRM 订房（走 lodging 协议）；
    2. 在 Protocols 把供应商从 pms 切到 memstay 后再订一次；
    3. 两个供应商的入住记录都挂在同一个商机上。
-3. **AI**（任一主机的管理员）：添加 OpenRouter → 启用一个免费模型 → Playground 提问 → Usage 看用量；再换 `op1` 或 `sales` 登录，看不同访问范围的效果。
+3. **AI**（任一主机的管理员）：添加 OpenRouter → 启用一个免费模型 → Playground 提问（回答会一个字一个字地出来）→ Usage 看用量；再换 `op1` 或 `sales` 登录，看不同访问范围的效果。
+   限额（ADR-0029）：在应用设置 → AI 里填"每人每天的 token 数"和"每分钟调用次数"，智能体的每日额度在应用设置 → 智能体；在 Usage 页下面的"限额"里给某个成员或智能体（比如 `agent:csm.triage`）单独设额度；启用模型时也可以填整个租户每天在这个模型上的上限。超过额度的调用不会发给模型：Playground 里提示谁的额度用完了，智能体的运行会停下并写明原因，工单转给客服。
 4. **请假审批**（酒店业主机，HCM）：
    1. `sales@hotel.test` 在 Leave requests 新建一条请假，打开后点 Submit，提示"已提交审批"，请假变成"待审批"，My requests 里能看到；请假页的"审批"一栏写着在等谁；
    2. `manager@hotel.test` 在 Inbox 里批准；超过 5 天的请假还要第二级（部门负责人，也是 `manager-1`），再批一次；

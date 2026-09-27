@@ -197,5 +197,13 @@ func TestCSMTriage(t *testing.T) {
 	tick(3 * time.Second)
 	w.expect(fmt.Sprint(instance("T-3").State, " ", inbox(lead), " ", len(mailed)), "done [Late ticket: I want a refund] 2") // a person's reply is mailed at once; T-2 is late too
 
+	// An agent past its own limit stops before calling the model, and the desk takes the ticket (ADR-0029 D1).
+	agent := runOf("T-1").Agent
+	w.expect(do(ops, ai.ID, ai.SchemaLimitSet, ai.LimitType, "agent:"+agent, map[string]int{"dailyTokens": 1}), "ok")
+	open("T-6", "Late breakfast")
+	tick(8 * time.Second)
+	w.expect(runOf("T-6").State+" "+runOf("T-6").Stopped, "stopped agent:"+agent+" used its 1 tokens for today")
+	w.expect(fmt.Sprint(slices.Contains(inbox(desk), "Triage and answer: Late breakfast")), "true")
+
 	platformserver.CheckReplay(t, w.tenant, w.journal, func() *platformserver.Tenant { return newWorld(t, hotelProvider).tenant })
 }

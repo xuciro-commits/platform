@@ -109,6 +109,33 @@ export class EdgeClient {
     return { ok: response.ok, status: response.status, body: (await response.json().catch(() => ({}))) as T };
   }
 
+  /**
+   * A POST answered as server-sent events (ADR-0029 D2): each event's name and
+   * data as it comes; an answer that is not a stream (a refusal) is returned whole.
+   */
+  async stream<T>(path: string, body: unknown, onEvent: (event: string, data: unknown) => void): Promise<{ ok: boolean; status: number; body?: T }> {
+    const response = await fetch(this.connection.server + path, { method: "POST", headers: this.headers(true), body: JSON.stringify(body) });
+    if (!response.headers.get("Content-Type")?.startsWith("text/event-stream") || !response.body) {
+      return { ok: response.ok, status: response.status, body: (await response.json().catch(() => ({}))) as T };
+    }
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let end: number;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        const name = /^event: (.*)$/m.exec(block)?.[1] ?? "message";
+        const data = /^data: (.*)$/m.exec(block)?.[1];
+        onEvent(name, data === undefined ? undefined : JSON.parse(data));
+      }
+    }
+    return { ok: true, status: response.status };
+  }
+
   /** Records of an entity type (ADR-0016): a domain, a search, sort fields and a page. */
   records<T = unknown>(type: string, q: { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean } = {}): Promise<T> {
     const p = new URLSearchParams();

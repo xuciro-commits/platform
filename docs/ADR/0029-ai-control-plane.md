@@ -78,3 +78,12 @@ They agree:
 - Agents are tested before they change, by cases that live with them.
 - Standard MCP clients connect without a hand-made token.
 - ADR-0015 D7 is replaced by D3: apps ask models the way they ask other apps.
+
+## As built
+
+### 12a: limits and streaming
+
+- **The door** (`aicall.go` `allowed`): every model call — a member's chat, an agent's turn, an evaluation's dry run, an embedding — is checked before it leaves: the model's tokens a day for the tenant (`ai.Model.DailyTokens`, set when the model is enabled), then the caller's tokens today and calls this minute, against the caller's own limit (`ai.limit.set`, `ai.limit.remove`) or the defaults (`ai` settings `daily-tokens` for people and `calls-per-minute`; the agents' `daily-tokens` for agents). Apps (`app:<id>`) take only their own limit. A refused call never reaches the model and is not metered; `POST /v1/ai/chat` answers 429 `QUOTA` with why, in the reader's language; an agent's run stops with why and its goal goes to whom it runs for.
+- **Counts** (`apps/ai`): tokens per day per member and per model and each caller's calls of the last minute are kept as usage is metered, live or replayed, and saved in snapshots; nothing new is journaled but the limits.
+- **Streaming**: `stream: true` answers as server-sent events (`delta`, then `done` or `error`), on the OpenAI wire with `stream_options.include_usage`; a server that does not stream, and the Anthropic wire, answer at once as one piece. Usage is journaled once. The playground streams (`EdgeClient.stream`); agents' turns do not.
+- **Proven:** `TestAILimits` (a person past the day, their own limit, calls a minute, a model's cap, a stream and a server that does not stream, `CheckReplay`), `TestCSM` (the triage agent past its own limit stops and the desk takes the ticket), the rehearsal (past the operator's limit refused; a call streams from the local model server).

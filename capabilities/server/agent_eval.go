@@ -197,6 +197,10 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Pr
 		req := a.prompt(t.automation(AgentApp, false), d, dry, model.Name(), now)
 		t.mu.Unlock()
 		req.run = run.ID + ":evaluation"
+		if why := t.allowed(who, model, now); why != "" {
+			x.Verdict, x.Candidate = "fails", why
+			break
+		}
 		answer, failure := t.call(pv, model, who, req, now)
 		t.meter(who, answer.Usage)
 		dry.StepsUsed++

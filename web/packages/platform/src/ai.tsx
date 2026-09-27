@@ -130,8 +130,18 @@ export function AIPlayground() {
   const send = async () => {
     setBusy(true);
     const messages = [...(system ? [{ role: "system", content: system }] : []), { role: "user", content: prompt }];
-    const r = await client.call<{ content?: string; usage?: Usage; error?: { detail?: string; code?: string } }>("POST", "/v1/ai/chat", { model: chosen, messages, maxTokens: 1024 });
-    setTurns([{ prompt, answer: r.body.content, error: r.ok ? undefined : r.body.error?.detail ?? r.body.error?.code ?? `HTTP ${r.status}`, usage: r.body.usage }, ...turns]);
+    // The answer streams in as it comes (ADR-0029 D2); a refusal (access, a limit) comes whole.
+    const turn: { prompt: string; answer?: string; error?: string; usage?: Usage } = { prompt, answer: "" };
+    const show = () => setTurns([{ ...turn }, ...turns]);
+    show();
+    const r = await client.stream<{ error?: { detail?: string; code?: string } }>("/v1/ai/chat", { model: chosen, messages, maxTokens: 1024, stream: true }, (event, data) => {
+      const d = data as { content?: string; usage?: Usage; detail?: string; code?: string };
+      if (event === "delta") turn.answer += d.content ?? "";
+      if (event === "done" || event === "error") turn.usage = d.usage;
+      if (event === "error") turn.error = d.detail ?? d.code;
+      show();
+    });
+    if (!r.ok || r.body?.error) { turn.error = r.body?.error?.detail ?? r.body?.error?.code ?? `HTTP ${r.status}`; show(); }
     setBusy(false);
     await queries.invalidateQueries();
   };
@@ -185,8 +195,43 @@ export function AIUsage() {
     <>
       <PageHeader title={t("AI usage")} description={t("Every model call, metered from the journal: per day, member and model. Administrators of the ai app see everyone's; others see their own.")} />
       <DataTable data={usage?.totals ?? []} columns={totals} getRowId={(t) => `${t.day}${t.member}${t.model}`} height={220} searchable={false} empty={t("No calls yet")} />
+      <AILimits />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Recent calls")}</h2>
       <DataTable data={usage?.calls ?? []} columns={calls} getRowId={(u) => `${u.at}${u.member}${u.model}${u.millis}`} height="calc(100dvh - 470px)" empty={t("No calls yet")} />
+    </>
+  );
+}
+
+type Limit = { member: string; dailyTokens?: number; perMinute?: number };
+
+// A member's, agent's or app's own limits (ADR-0029 D1), for the ai app's
+// administrators: in place of the defaults in App settings → AI.
+function AILimits() {
+  const { decideOn } = useAdmin();
+  const limits = useRead<Limit[]>("/v1/ai-limits");
+  const [who, setWho] = useState(""), [daily, setDaily] = useState(""), [minute, setMinute] = useState("");
+  if (limits.isError) return null; // not an administrator of the ai app
+  const columns: ColumnDef<Limit, any>[] = [
+    { accessorKey: "member", header: t("Member"), cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "dailyTokens", header: t("Tokens a day"), meta: { width: 120, align: "right" }, cell: (c) => c.getValue() || t("default") },
+    { accessorKey: "perMinute", header: t("Calls a minute"), meta: { width: 120, align: "right" }, cell: (c) => c.getValue() || t("default") },
+    { id: "remove", header: "", meta: { width: 90 }, cell: ({ row: { original: l } }) =>
+      <Button size="sm" variant="ghost" onClick={() => void decideOn("ai.limit.remove", { type: "ai.limit", id: l.member }, {})}>{t("Remove")}</Button> },
+  ];
+  return (
+    <>
+      <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Limits")}</h2>
+      <p className="mb-2 text-xs text-muted">{t("A member's, agent's or app's own limits, in place of the defaults in App settings → AI (people) and Agents (agents). A call past a limit is refused before it reaches the model.")}</p>
+      <form className="mb-2 flex flex-wrap items-center gap-2" onSubmit={(e) => {
+        e.preventDefault();
+        void decideOn("ai.limit.set", { type: "ai.limit", id: who.trim() }, { dailyTokens: Number(daily) || 0, perMinute: Number(minute) || 0 }).then(() => { setWho(""); setDaily(""); setMinute(""); });
+      }}>
+        <Input aria-label={t("Member ID")} placeholder={t("Member ID, e.g. sales-1 or agent:csm.triage")} value={who} onChange={(e) => setWho(e.target.value)} className="w-72" />
+        <Input aria-label={t("Tokens a day")} type="number" min={0} placeholder={t("Tokens a day")} value={daily} onChange={(e) => setDaily(e.target.value)} className="w-36" />
+        <Input aria-label={t("Calls a minute")} type="number" min={0} placeholder={t("Calls a minute")} value={minute} onChange={(e) => setMinute(e.target.value)} className="w-36" />
+        <Button type="submit" disabled={!who.trim()}>{t("Set limit")}</Button>
+      </form>
+      <DataTable data={limits.data ?? []} columns={columns} getRowId={(l) => l.member} height={160} searchable={false} empty={t("Everyone takes the defaults")} />
     </>
   );
 }

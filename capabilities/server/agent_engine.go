@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -112,18 +111,19 @@ func (a *Agents) due(now time.Time) []turn {
 		x := turn{run: run}
 		d := a.defs[run.Agent]
 		name := t.setting(c, SettingAgentModel)
-		daily, _ := strconv.Atoi(t.setting(c, SettingAgentDaily))
 		switch {
 		case d == nil:
 			x.stop = "the agent is no longer declared"
 		case name == "":
 			x.stop = "no model is set for agents"
-		case daily > 0 && t.ai != nil && t.ai.Spent(a.member(run.Agent).ID, now) >= daily:
-			x.stop = fmt.Sprintf("the agent used its %d tokens for today", daily)
 		default:
 			model, pv, err := t.ai.Model(name)
 			if err != nil {
 				x.stop = "the model " + name + " is not enabled"
+				break
+			}
+			if why := t.allowed(a.member(run.Agent), model, now); why != "" { // the door every call passes (ADR-0029 D1)
+				x.stop = why
 				break
 			}
 			if !t.breakers.allow("ai:"+pv.ID, now) {

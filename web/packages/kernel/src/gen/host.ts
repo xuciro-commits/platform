@@ -180,6 +180,7 @@ export type ChatRequest = {
   tools?: Tool[];
   maxTokens?: number;
   temperature?: number;
+  stream?: boolean;
 };
 
 export type Citation = {
@@ -496,6 +497,7 @@ export type Model = {
   provider: string;
   model: string;
   access: string;
+  dailyTokens?: number;
 };
 
 export type Note = {
