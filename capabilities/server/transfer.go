@@ -36,6 +36,9 @@ type ImportRow struct {
 // with an id column, then one record per row.
 func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool, now time.Time) ([]ImportRow, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	if err := t.admits(m); err != nil {
+		return nil, err
+	}
 	t.records.mu.Lock()
 	et := t.records.types[typ]
 	t.records.mu.Unlock()
@@ -161,6 +164,9 @@ func sign(x float64) float64 {
 // Export writes the records of typ m's query finds as CSV: the ID and every
 // field m may read, lines aside.
 func (t *Tenant) Export(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return nil, err
+	}
 	t.records.mu.Lock()
 	et := t.records.types[typ]
 	t.records.mu.Unlock()

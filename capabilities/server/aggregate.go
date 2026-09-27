@@ -266,6 +266,9 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 // Aggregate serves a member's aggregate over a type, within the member's
 // scope: it never counts a record the member could not list.
 func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now time.Time) (Aggregate, *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return Aggregate{}, err
+	}
 	s := t.records
 	s.mu.Lock()
 	et := s.types[typ]
@@ -278,6 +281,13 @@ func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now 
 		return Aggregate{}, err
 	}
 	view, _ := viewOf(m, et) // what m may not read is neither grouped nor measured (ADR-0028 D3)
+	if narrowable := t.narrowable(et); len(narrowable) > 0 {
+		// Content derived from other records is withheld per reader, so it is
+		// grouped and measured through neither an aggregate (#130).
+		info := view.info
+		info.Fields = slices.DeleteFunc(slices.Clone(info.Fields), func(f platform.FieldInfo) bool { return slices.Contains(narrowable, f.Name) })
+		view = &entityType{info: info, rows: view.rows}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.aggregate(view, q, visible)

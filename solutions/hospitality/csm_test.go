@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -146,9 +147,25 @@ func TestCSMTriage(t *testing.T) {
 	w.expect(fmt.Sprint(x.Status, " ", x.Category, " ", x.Priority, " ", x.Due.Sub(x.Created.At), " ", x.Replied, " | ", x.Reply),
 		"answered booking high 4h0m0s agent:csm.triage | About your Board offsite: the front desk resets the wifi password (House rules). A colleague is on it.")
 	w.expect(x.Summary, "Wifi drops in the rooms") // the app asked the tenant's model for apps, and its reply action took the answer (ADR-0029 D3)
-	agents := platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}
+	// An administrator of the agent app reads a run's trace only where they may
+	// also read what the run read (#130): the lead holds those roles; an
+	// administrator of agents alone sees that the run happened, not its content,
+	// and no model call of it.
+	agents := lead
+	agents.Roles = maps.Clone(lead.Roles)
+	agents.Roles[platformserver.AgentApp] = platformserver.AgentAdmin
 	cited, _ := w.tenant.Records(agents, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","T-1"]]`)}, now)
 	w.expect(fmt.Sprint(cited.Records[0].(platformserver.AgentRunRecord).Citations), "[{knowledge.document/RULES House rules 0 2}]")
+	bare := platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}
+	withheld, _ := w.tenant.Records(bare, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","T-1"]]`)}, now)
+	narrow := withheld.Records[0].(platformserver.AgentRunRecord)
+	w.expect(fmt.Sprint(narrow.Withheld, " ", len(narrow.Citations), " ", narrow.Result, " ", narrow.Steps[0].Outcome), "true 0  ")
+	if out, err := w.tenant.TranscriptsFor(bare, narrow.ID, 20, now); err == nil || len(out) != 0 {
+		t.Errorf("an administrator of agents alone read the model calls: %+v, %v", out, err)
+	}
+	if out, err := w.tenant.TranscriptsFor(agents, narrow.ID, 20, now); err != nil || len(out) == 0 {
+		t.Errorf("the lead lost the model calls of a run it may read: %+v, %v", out, err)
+	}
 	effects, _ := w.tenant.Read(ops, "effects")
 	held := slices.DeleteFunc(effects.([]platform.Effect), func(e platform.Effect) bool { return e.Endpoint != "mail-gateway" }) // the summary's request aside
 	w.expect(fmt.Sprint(len(held), " ", held[0].State, " ", len(mailed)), "1 held 0")

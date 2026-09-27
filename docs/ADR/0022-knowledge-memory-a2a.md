@@ -118,12 +118,13 @@ Our constraints:
 - **Passages** are cut at headings and about 800 tokens. Search ranks them by words (BM25) and, when the setting `knowledge/embedding-model` names an enabled model, by meaning; the two are fused by rank, only among what the reader may read. `GET /v1/knowledge?q=` serves people.
 - **Vectors are derived:** embedded as owned work outside the lock, kept by passage hash and model in PostgreSQL (in memory without it), and metered to the knowledge app.
 - **An agent's `knowledge` tool** runs outside the lock like the model call. What it found is journaled with the step and kept on the run as citations, so replay neither searches nor embeds.
-- **Transcripts** (`transcripts.go`): every model call's full request and answer, kept outside the journal for the agent app's `transcript-days` (30), shown to agent administrators on the run page (`GET /v1/transcripts`).
+- **Transcripts** (`transcripts.go`): every model call's full request and answer, kept outside the journal for the agent app's `transcript-days` (30), shown on the run page (`GET /v1/transcripts`) to an administrator of the agent or AI app who may also read the records the run read (`Tenant.TranscriptsFor`, #130, 2026-09-27; the role alone was enough before).
+- **Citations and kept facts are narrowed per reader** (#130, 2026-09-27): a citation names its record and field, a step keeps the records it read, and a fact keeps the sources it came from, so the host withholds any of them from a reader who may no longer read the source (`host.Narrowing`, `Tenant.narrowed`). D4's journaled observation is unchanged; what is read from it now depends on present authority.
 - **Proof:** the helpdesk's triage agent reads the house rules and cites them; Settings gains Knowledge; Search shows passages. The sink embeds hashed words. `TestKnowledge` checks scope, citations and a replay that calls no model.
 
 ### 3b: memory and the remaining signals
 
-- **Memory** (`agent_memory.go`): the `remember` tool keeps a fact for 90 days, about the person the run is for or for every run. Keep and forget are the memory's lifecycle: agent administrators any, a person those about them. The most relevant active memories go into the prompt; `GET /v1/memories` serves them.
+- **Memory** (`agent_memory.go`): the `remember` tool keeps a fact for 90 days, with the records the run had read (`Memory.Sources`, #130), about the person the run is for or for every run. Keep and forget are the memory's lifecycle: agent administrators any, a person those about them. The most relevant active memories go into the prompt; `GET /v1/memories` serves them.
 - **Proposed memories:** a changed or rejected draft, a corrected proposal and a discarded effect propose one, which counts once a person keeps it (14 days otherwise).
 - **Signals:** effects an agent caused name its run, so approving one is an `approved` signal and discarding it a `discarded` one; a flow that compensates marks its agents' finished runs `undone`. A run is stored before its flow goes on, so the flow's signal is kept.
 - **UI:** the assistant shows what agents remember about you; Settings lists every memory.

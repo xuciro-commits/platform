@@ -27,10 +27,13 @@ const (
 // Memory is one fact an agent keeps.
 type Memory struct {
 	platform.Record
-	Agent   string    `json:"agent" field:"readonly,search"`
-	Fact    string    `json:"fact" field:"readonly,search" type:"longtext"`
-	For     string    `json:"for,omitempty" field:"readonly" title:"About"` // the person it is about; none: every run of the agent
-	Run     string    `json:"run,omitempty" field:"readonly" title:"From run"`
+	Agent string `json:"agent" field:"readonly,search"`
+	Fact  string `json:"fact" field:"readonly,search" type:"longtext"`
+	For   string `json:"for,omitempty" field:"readonly" title:"About"` // the person it is about; none: every run of the agent
+	Run   string `json:"run,omitempty" field:"readonly" title:"From run"`
+	// Sources are the records the run had read when it kept the fact: a person
+	// reads a remembered fact only while they may read what it came from (#130).
+	Sources []string  `json:"sources,omitempty" field:"readonly" title:"Records behind it"`
 	State   string    `json:"state" field:"readonly" choices:"proposed,active,forgotten"`
 	Expires time.Time `json:"expires,omitzero" field:"readonly"` // none: kept
 }
@@ -72,7 +75,7 @@ func (a *Agents) remember(c platform.Caller, run *AgentRunRecord, fact string, a
 		return "refused: nothing to remember", nil
 	}
 	m := Memory{Record: platform.Record{ID: fmt.Sprintf("%s:m%d", run.ID, len(run.Steps)+1)}, Agent: run.Agent, Fact: clip(fact, 500), Run: run.ID,
-		State: "active", Expires: now.AddDate(0, 0, memoryDays)}
+		Sources: sourcesOf(*run), State: "active", Expires: now.AddDate(0, 0, memoryDays)}
 	if aboutPerson {
 		m.For = run.OnBehalf
 	}
@@ -96,7 +99,7 @@ func (a *Agents) propose(c platform.Caller, r *pb.ChangeRecord, run AgentRunReco
 	default:
 		return
 	}
-	m := Memory{Record: platform.Record{ID: fmt.Sprintf("%s:p%d", run.ID, len(run.Signals))}, Agent: run.Agent, Fact: fact, For: about, Run: run.ID,
+	m := Memory{Record: platform.Record{ID: fmt.Sprintf("%s:p%d", run.ID, len(run.Signals))}, Agent: run.Agent, Fact: fact, For: about, Run: run.ID, Sources: sourcesOf(run),
 		State: "proposed", Expires: now.AddDate(0, 0, proposalDays)}
 	a.t.automation(AgentApp, c.Replaying).Put(r, m)
 }

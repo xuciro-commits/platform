@@ -320,12 +320,13 @@ func (h *Host) Handler() http.Handler {
 	handle(Route{Pattern: "GET /v1/knowledge", Summary: "Passages of the knowledge the caller may read, best first (ADR-0022)", Answer: []Passage{}, Query: []Param{{"q", "What to find"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Knowledge(&m, "", r.URL.Query().Get("q"), 8, h.Now()))
 	})
-	handle(Route{Pattern: "GET /v1/transcripts", Summary: "Model calls in full, for agent and AI administrators", Answer: []Transcript{}, Query: []Param{{"run", "An agent run"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
-		if m.Roles[AgentApp] != AgentAdmin && m.Roles[ai.ID] != ai.Admin {
-			w.WriteHeader(http.StatusForbidden)
+	handle(Route{Pattern: "GET /v1/transcripts", Summary: "Model calls in full, for administrators of the agent or AI app who may also read what the run read (#130)", Answer: []Transcript{}, Query: []Param{{"run", "An agent run"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		out, err := t.TranscriptsFor(m, r.URL.Query().Get("run"), 50, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
 			return
 		}
-		WriteJSON(w, http.StatusOK, t.Transcripts(r.URL.Query().Get("run"), 50))
+		WriteJSON(w, http.StatusOK, out)
 	})
 	handle(Route{Pattern: "GET /v1/aggregates/{type}", Summary: "Groups and measures of an entity type's records within the caller's scope (ADR-0019)", Answer: Aggregate{}, Query: []Param{{"group", "Fields or field:month, comma-separated"}, {"measure", "count, sum:field, avg:field, min:field, max:field"}, {"domain", "Filters, JSON"}, {"search", "Words to find"}, {"archived", "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		p := r.URL.Query()

@@ -809,6 +809,9 @@ type RecordPage struct {
 
 // Records serves a member's query over a type, within the member's scope.
 func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return RecordPage{}, err
+	}
 	s := t.records
 	s.mu.Lock()
 	et := s.types[typ]
@@ -832,8 +835,13 @@ func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now ti
 	}
 	out := RecordPage{Records: make([]any, len(page)), Total: total}
 	var ids []string
+	narrow := t.narrowing(et)
+	may := t.mayRead(m, now, true)
 	for i, v := range page {
 		out.Records[i] = masked(et, v, hidden)
+		if narrow != nil { // derived content is checked against its sources again (#130)
+			out.Records[i] = narrow.Narrow(out.Records[i], may)
+		}
 		ids = append(ids, recordOf(v).ID)
 	}
 	t.readPersonal(m, view, ids, now)
@@ -867,6 +875,9 @@ type Related struct {
 
 func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
 	notFound := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	if err := t.admits(m); err != nil {
+		return RecordView{}, err
+	}
 	s := t.records
 	s.mu.Lock()
 	et := s.types[typ]
@@ -886,7 +897,11 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		return RecordView{}, notFound
 	}
 	seen, hidden := viewOf(m, et)
-	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
+	record := masked(et, r.value, hidden)
+	if narrow := t.narrowing(et); narrow != nil {
+		record = narrow.Narrow(record, t.mayRead(m, now, false))
+	}
+	view := RecordView{Record: record, History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
 	if c := t.app(relations.ID); c != nil && typ != relations.CommentType && typ != relations.FollowType {
 		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
 		if page, err := t.Records(m, relations.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {

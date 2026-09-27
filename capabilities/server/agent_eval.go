@@ -361,7 +361,7 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 	defer t.mu.Unlock()
 	c := t.automation(AgentApp, true) // replaying: no decision is made
 	if tool.kind == "read" || tool.kind == "context" || tool.kind == "search" {
-		out, _ := a.use(c, d, &dry, tool, args, raw, now)
+		out, _ := a.use(c, d, &dry, tool, args, raw, &RunStep{}, now)
 		return out
 	}
 	target, _ := args["target"].(string)

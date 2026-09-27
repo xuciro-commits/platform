@@ -394,6 +394,9 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 // Read serves a named read of the app that declares it, to members holding a
 // role in that app or to everyone when the manifest says so; the app may refuse further.
 func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return nil, err
+	}
 	a := t.owner["read:"+name]
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -401,7 +404,14 @@ func (t *Tenant) Read(m platform.Member, name string) (any, *kernel.Error) {
 	if m.Roles[a.Manifest().ID] == "" && !slices.Contains(a.Manifest().Everyone, name) {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	return a.Read(t.caller(m, a, false), name)
+	out, err := a.Read(t.caller(m, a, false), name)
+	if err != nil {
+		return nil, err
+	}
+	// An app chooses which records its read answers with; the host keeps what
+	// leaves no wider than the member's authority over the fields and sources
+	// behind them (#130), however the app collected them.
+	return t.narrowed(m, out, Now(), false), nil
 }
 
 // caused is an accepted decision with how many deliveries caused it.

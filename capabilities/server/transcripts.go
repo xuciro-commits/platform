@@ -5,6 +5,11 @@ import (
 	"slices"
 	"strconv"
 	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+	"platformserver/apps/ai"
+	"platformserver/platform"
 )
 
 // Transcript is one model call in full: what was sent and what came back
@@ -74,4 +79,43 @@ func (t *Tenant) PurgeTranscripts(now time.Time) {
 	t.derivedMu.Lock()
 	defer t.derivedMu.Unlock()
 	t.transcripts = slices.DeleteFunc(t.transcripts, func(x Transcript) bool { return x.At.Before(before) })
+}
+
+// TranscriptsFor are the model calls of run (every run's, for no run) as m may
+// read them: an administrator of the agent or AI app reads a call only where
+// they may also read the records that run read, because a prompt carries them
+// (#130). It is how the host serves the transcripts; Transcripts itself is the
+// store's own read, for the platform.
+func (t *Tenant) TranscriptsFor(m platform.Member, run string, limit int, now time.Time) ([]Transcript, *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return nil, err
+	}
+	if m.Roles[AgentApp] != AgentAdmin && m.Roles[ai.ID] != ai.Admin {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: "only an administrator of the agent or AI app reads transcripts"}
+	}
+	found := t.Transcripts(run, limit)
+	out := []Transcript{}
+	for _, x := range found {
+		if !t.withheld(m, x.Run, now) {
+			out = append(out, x)
+		}
+	}
+	if run != "" && len(out) == 0 && len(found) > 0 {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED, Message: "this run read records you may not read"}
+	}
+	return out, nil
+}
+
+// withheld reports whether a run's trace narrows for m: something the run read,
+// cited or acted on is no longer theirs to read (#130).
+func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {
+	if t.agents == nil || run == "" {
+		return true
+	}
+	r, known := platform.Get[AgentRunRecord](t.automation(AgentApp, false), run)
+	if !known {
+		return true
+	}
+	narrowed, _ := t.agents.Narrow(r, t.mayRead(m, now, false)).(AgentRunRecord)
+	return narrowed.Withheld
 }

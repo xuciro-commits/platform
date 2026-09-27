@@ -64,6 +64,9 @@ type AgentRunRecord struct {
 	Draft       []Draft    `json:"draft,omitempty" field:"readonly" title:"Draft to confirm"` // at most one
 	Citations   []Citation `json:"citations,omitempty" field:"readonly" title:"Sources it read"`
 	Signals     []Signal   `json:"signals,omitempty" field:"readonly" title:"What people made of it"`
+	// Withheld is set for a reader who may no longer read something the run
+	// derived its trace from; it is never journaled (#130).
+	Withheld bool `json:"withheld,omitempty" field:"readonly" title:"Part of this trace is no longer readable to you"`
 }
 
 // Draft is an action an agent running for a person proposes; the person
@@ -105,6 +108,10 @@ type RunStep struct {
 	Rationale string    `json:"rationale,omitempty"`
 	Outcome   string    `json:"outcome"`
 	Tokens    int       `json:"tokens,omitempty"`
+	// Sources are the records this step read, cited or acted on
+	// ("<type>/<id>", or "<type>/<id>#<field>" for one field): what the step
+	// says is read again only by a reader who may still read them (#130).
+	Sources []string `json:"sources,omitempty" title:"Records it read"`
 }
 
 type agentTool struct {
@@ -507,6 +514,77 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 		out = append(out, AgentInfo{ID: id, App: d.app, Title: d.Title, Instructions: d.Instructions, Tools: append(slices.Clone(d.Tools), "context", "search", "knowledge", "remember", "ask", "finish"), Budget: d.Budget})
 	}
 	return out, nil
+}
+
+// Narrowable are the fields narrowing leaves out (host.Narrowing).
+func (a *Agents) Narrowable() []string {
+	return []string{RunType + ".seen", RunType + ".steps", RunType + ".citations", RunType + ".draft", RunType + ".result", MemoryType + ".fact"}
+}
+
+// sourcesOf are the records a run has read, cited or acted on so far: what
+// anything derived from it is checked against when it is read again (#130).
+func sourcesOf(run AgentRunRecord) []string {
+	out := []string{}
+	if run.Ref != "" {
+		out = append(out, run.Ref)
+	}
+	for _, step := range run.Steps {
+		out = append(out, step.Sources...)
+	}
+	for _, c := range run.Citations {
+		out = append(out, c.Document)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// Narrow is a run as the reader may read it now (#130): what the agent saw of
+// a record, read or cited at a step, drafted, and concluded is left out when
+// its source is no longer theirs to read — a record whose owner or unit
+// changed, a field restricted since, an app grant revoked. The run itself, its
+// goal, cost and state stay: a person still sees that the agent ran.
+func (a *Agents) Narrow(record any, may func(ref string) bool) any {
+	if fact, ok := record.(Memory); ok { // a fact an agent kept from what it read
+		for _, ref := range fact.Sources {
+			if !may(ref) {
+				fact.Fact, fact.Sources = "", nil
+				return fact
+			}
+		}
+		return fact
+	}
+	run, ok := record.(AgentRunRecord)
+	if !ok {
+		return record
+	}
+	withheld := false
+	readable := func(refs ...string) bool {
+		out := true
+		for _, ref := range refs {
+			if ref != "" && !may(ref) {
+				out, withheld = false, true
+			}
+		}
+		return out
+	}
+	if !readable(run.Ref) {
+		run.Seen = ""
+	}
+	steps := slices.Clone(run.Steps)
+	for i, step := range steps {
+		if !readable(step.Sources...) {
+			steps[i].Arguments, steps[i].Outcome = "", ""
+		}
+	}
+	run.Steps = steps
+	run.Citations = slices.DeleteFunc(slices.Clone(run.Citations), func(c Citation) bool { return !readable(c.Document) })
+	run.Draft = slices.DeleteFunc(slices.Clone(run.Draft), func(d Draft) bool {
+		return d.Type != "" && d.Target != "" && !readable(d.Type+"/"+d.Target)
+	})
+	if withheld { // the answer restates what it read, so it goes with the sources
+		run.Result, run.Withheld = "", true
+	}
+	return run
 }
 
 // AgentInfo is a declared agent as people see it.

@@ -74,6 +74,7 @@ export type AgentRunRecord = {
   draft?: Draft[];
   citations?: Citation[];
   signals?: Signal[];
+  withheld?: boolean;
 };
 
 export type Aggregate = {
@@ -540,6 +541,7 @@ export type Memory = {
   fact: string;
   for?: string;
   run?: string;
+  sources?: string[];
   state: "proposed" | "active" | "forgotten";
   expires?: string;
 };
@@ -691,6 +693,7 @@ export type RunStep = {
   rationale?: string;
   outcome: string;
   tokens?: number;
+  sources?: string[];
 };
 
 export type SavedView = {

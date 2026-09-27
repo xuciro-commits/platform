@@ -320,10 +320,13 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 			for _, p := range found {
 				run.Citations = append(run.Citations, Citation{Document: p.Document, Title: p.Title, Chunk: p.Chunk, Step: len(run.Steps)})
 			}
+			for _, p := range found {
+				step.Sources = append(step.Sources, p.Document)
+			}
 			step.Outcome = cmp.Or(string(b.Observation), "[]")
 			break
 		}
-		step.Outcome, then = a.use(c, d, &run, tool, args, b.Arguments, now)
+		step.Outcome, then = a.use(c, d, &run, tool, args, b.Arguments, &step, now)
 	}
 	step.Outcome = clip(step.Outcome, outcomeLimit)
 	run.Steps = append(run.Steps, step)
@@ -339,7 +342,7 @@ func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now tim
 }
 
 // use runs one tool; it may return what the decision does besides storing the run.
-func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool agentTool, args map[string]any, raw json.RawMessage, now time.Time) (string, func(*pb.ChangeRecord)) {
+func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool agentTool, args map[string]any, raw json.RawMessage, step *RunStep, now time.Time) (string, func(*pb.ChangeRecord)) {
 	t := a.t
 	str := func(k string) string { s, _ := args[k].(string); return s }
 	switch tool.kind {
@@ -367,10 +370,15 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
+		step.Sources = append([]string{str("type") + "/" + str("id")}, t.refsIn(view)...)
 		out, _ := json.Marshal(view)
 		return string(out), nil
 	case "search":
-		out, _ := json.Marshal(t.Search(a.reader(*run), str("query"), now))
+		found := t.Search(a.reader(*run), str("query"), now)
+		for _, hit := range found {
+			step.Sources = append(step.Sources, hit.Type+"/"+hit.ID)
+		}
+		out, _ := json.Marshal(found)
 		return string(out), nil
 	case "remember":
 		about, _ := args["about_person"].(bool)
@@ -386,6 +394,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
+		step.Sources = t.refsIn(out)
 		raw, _ := json.Marshal(out)
 		return string(raw), nil
 	}
@@ -410,6 +419,9 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		return fmt.Sprintf("sent %s/%s to %d receivers; waiting for the answer", d.app, tool.schema, n), nil
 	}
 	target := str("target")
+	if tool.target != "" && target != "" {
+		step.Sources = append(step.Sources, tool.target+"/"+target)
+	}
 	var payload map[string]any
 	json.Unmarshal(raw, &payload)
 	delete(payload, "target")

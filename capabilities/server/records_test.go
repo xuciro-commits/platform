@@ -24,16 +24,17 @@ type Bin struct {
 
 type Item struct {
 	platform.Record
-	Name  string            `json:"name" field:"required,search"`
-	Note  string            `json:"note" knowledge:"true"`
-	Qty   int               `json:"qty"`
-	Price platform.Money    `json:"price"`
-	Line  string            `json:"line"`
-	Owner string            `json:"owner" field:"readonly"`
-	Kind  string            `json:"kind" choices:"part,tool"`
-	Bin   platform.Ref[Bin] `json:"bin"`
-	Tags  []string          `json:"tags"`
-	Due   string            `json:"due" type:"date"`
+	Name   string            `json:"name" field:"required,search"`
+	Note   string            `json:"note" knowledge:"true"`
+	Secret string            `json:"secret,omitempty" read:"lead" title:"Tolerance" help:"Only a lead reads it"`
+	Qty    int               `json:"qty"`
+	Price  platform.Money    `json:"price"`
+	Line   string            `json:"line"`
+	Owner  string            `json:"owner" field:"readonly"`
+	Kind   string            `json:"kind" choices:"part,tool"`
+	Bin    platform.Ref[Bin] `json:"bin"`
+	Tags   []string          `json:"tags"`
+	Due    string            `json:"due" type:"date"`
 }
 
 type stock struct{ ledger *platform.Ledger }

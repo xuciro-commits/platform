@@ -3,7 +3,7 @@
 // for the person it runs for — the assistant, which gives an agent a goal
 // about a record, and the global search over every type the member may read.
 import "./i18n";
-import { Button, Card, Disclosure, Form, Graph, Input, PageHeader, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
+import { Button, Card, Disclosure, Form, Graph, Input, PageHeader, Panel, Select, StatusTag, Tag, Textarea, defineStatuses, t, language, type GraphEdge, type GraphNode } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useState } from "react";
 import { PayloadFields } from "./actions";
@@ -76,6 +76,7 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
         <span>{run.stepsUsed} {t("turns ·")} {run.tokensUsed} {t("tokens ·")} {run.actionsUsed} actions{run.cost ? ` · $${run.cost.toFixed(4)}` : ""}</span>
         {run.model && <span className="font-mono">{run.model}</span>}
       </div>
+      {run.withheld && <Panel role="status" className="text-xs text-muted">{t("Part of this trace came from records you may no longer read, and is left out.")}</Panel>}
       {!compact && <p className="whitespace-pre-wrap text-sm">{run.goal}</p>}
       {run.draft?.[0] && run.state === "waiting" && (mine ? <DraftCard key={run.draft[0].step} run={run} draft={run.draft[0]} />
         : <p className="text-sm text-muted">{t("A draft waits for")} {run.onBehalf} {t("to confirm.")}</p>)}

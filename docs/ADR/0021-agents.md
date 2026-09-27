@@ -127,7 +127,8 @@ Our platform starts from an advantage there: every decision is already journaled
   - Every agent also has `context`, `search`, `ask` and `finish`, and every tool asks the model for a one-sentence rationale.
   - `NewTenant` checks each tool against the app's catalog, reads and consumed protocols, and requires the agent app.
 - **The agent app** (`agent.go`, `agent_engine.go`):
-  - `agent.run` records hold the goal, who it runs for (or the flow step), the state, every step (tool, arguments, rationale, outcome, tokens), the budgets used and the result.
+  - `agent.run` records hold the goal, who it runs for (or the flow step), the state, every step (tool, arguments, rationale, outcome, tokens, and since #130 the records it read), the budgets used and the result.
+  - **A trace is read against its sources, not only its journal** (#130, 2026-09-27): the host asks the agent app to leave out what the reader may no longer read — the record the run saw, a step's arguments and outcome, a citation of a restricted field, a draft's target, the result — and tells the reader that part is withheld (`host.Narrowing`, `Tenant.narrowed`, `TestAgentTraceScope`). An administrator of the agent app sees that a run happened without its content unless they hold the business app's role too.
   - A member starts a run with `agent.run.start` for an agent of an app they hold a role in; flows start runs from agent steps.
   - `Tenant.Think` runs every second, apart from other owned work. It calls the model outside the tenant's lock through the `ai` app's providers, choosing the model with the setting `agent/model`. It then journals the chosen step as an `agent` entry and applies it as one `agent.run.step` decision.
   - Replay applies the entries, and a host test fails if a replay calls a model.
