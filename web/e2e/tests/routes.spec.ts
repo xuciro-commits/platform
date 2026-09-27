@@ -87,6 +87,16 @@ test("route 25: the agents overview and its switch", async ({ page }) => {
   await expect(row.getByText("Working")).toBeVisible();
 });
 
+// Route 26 (ADR-0029 D6): an evaluation of the agent's declared cases starts from Settings and reports.
+test("route 26: an evaluation suite", async ({ page }) => {
+  await open(page, "manager", "/evaluations");
+  await page.getByLabel("Agent", { exact: true }).selectOption("csm.triage");
+  await page.getByLabel("Candidate model").fill("none/none");
+  await page.getByRole("checkbox", { name: "Declared cases" }).check();
+  await page.getByRole("button", { name: "Evaluate" }).click();
+  await expect(page.getByRole("cell", { name: "none/none" }).first()).toBeVisible();
+});
+
 // Route 18 (ADR-0027): the process answers /healthz; Settings → Automation shows the tenant's health.
 test("route 18: health", async ({ page, request }) => {
   expect((await (await request.get("/healthz")).json()).status).toBe("ok");

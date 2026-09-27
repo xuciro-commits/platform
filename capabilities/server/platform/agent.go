@@ -32,6 +32,24 @@ type Agent struct {
 	// To is who takes the goal over when a run stops, and who its questions go to
 	// when it runs for no one.
 	To func(c Caller, r AgentRun) []Recipient
+	// Cases are its evaluation suite (ADR-0029 D6): run dry against a model,
+	// each three times, before it meets people and when its model changes.
+	Cases []Case
+}
+
+// Case is one test of an agent: a goal about a record, and what a run of it
+// should come to. Check says why the run fails the case, or "" when it passes.
+type Case struct {
+	Name, Goal, Ref string
+	Check           func(CaseRun) string
+}
+
+// CaseRun is what a dry run of a case came to: the actions it would take, as
+// "<action> <target> <payload JSON>", its result, and whether it asked a person.
+type CaseRun struct {
+	Actions []string
+	Result  string
+	Asked   bool
 }
 
 // Budget bounds one run: model turns, tokens in and out, and actions taken.

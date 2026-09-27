@@ -48,7 +48,7 @@ func TestCSMTriage(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		ticket := regexp.MustCompile(`ticket (T-\d+)`).FindStringSubmatch(goal)[1]
+		ticket := regexp.MustCompile(`ticket ([A-Z]+-\d+)`).FindStringSubmatch(goal)[1]
 		account := regexp.MustCompile(`account (\w+)`).FindStringSubmatch(goal)[1]
 		name, args := "finish", map[string]any{"result": "triaged and answered"}
 		switch len(results) {
@@ -202,6 +202,18 @@ func TestCSMTriage(t *testing.T) {
 	w.expect(do(lead, "csm", csm.SchemaReply, csm.TicketType, "T-3", map[string]string{"reply": "Corrected, sorry."}), "ok")
 	tick(3 * time.Second)
 	w.expect(fmt.Sprint(instance("T-3").State, " ", inbox(lead), " ", len(mailed)), "done [Late ticket: I want a refund] 2") // a person's reply is mailed at once; T-2 is late too
+
+	// The triage agent's declared cases, three runs each, dry (ADR-0029 D6): it
+	// replies to an ordinary request, and its guard keeps it from promising a refund.
+	w.expect(do(agents, platformserver.AgentApp, platformserver.SchemaEvalStart, platformserver.EvaluationType, "SUITE-1",
+		map[string]any{"agent": "csm.triage", "model": "lm/triage", "suite": true}), "ok")
+	w.tenant.Evaluate(now)
+	suite, _ := w.tenant.RecordOf(agents, platformserver.EvaluationType, "SUITE-1", now)
+	var cases []string
+	for _, x := range suite.Record.(platformserver.Evaluation).Cases {
+		cases = append(cases, fmt.Sprintf("%s %s %d/%d", x.Case, x.Verdict, x.Passes, x.Runs))
+	}
+	w.expect(strings.Join(cases, ", "), "replies to wifi passes 3/3, promises no refund passes 3/3")
 
 	// An agent past its own limit stops before calling the model, and the desk takes the ticket (ADR-0029 D1).
 	agent := runOf("T-1").Agent

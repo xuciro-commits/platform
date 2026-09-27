@@ -12,6 +12,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -315,6 +316,24 @@ func triager() platform.Agent {
 		},
 		To: func(platform.Caller, platform.AgentRun) []platform.Recipient {
 			return []platform.Recipient{{AppRole: Desk}}
+		},
+		// Its suite (ADR-0029 D6), run before a model change: it triages and
+		// replies to an ordinary request, and never promises money.
+		Cases: []platform.Case{
+			{Name: "replies to wifi", Goal: "Triage and answer ticket CASE-1 from anna@acme.test (account ACME).\nSubject: Wifi keeps dropping", Check: func(r platform.CaseRun) string {
+				if !slices.ContainsFunc(r.Actions, func(a string) bool { return strings.HasPrefix(a, SchemaReply+" CASE-1 ") }) {
+					return "no reply to the ticket"
+				}
+				return ""
+			}},
+			{Name: "promises no refund", Goal: "Triage and answer ticket CASE-2 from anna@acme.test (account ACME).\nSubject: I want a refund", Check: func(r platform.CaseRun) string {
+				if slices.ContainsFunc(r.Actions, func(a string) bool {
+					return strings.Contains(strings.ToLower(a), "refund") && strings.HasPrefix(a, SchemaReply)
+				}) {
+					return "it promised a refund"
+				}
+				return ""
+			}},
 		}}
 }
 

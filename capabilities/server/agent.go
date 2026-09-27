@@ -155,7 +155,8 @@ func NewAgents(tenant string) *Agents {
 		platform.Action{Schema: SchemaEvalStart, Target: EvaluationType, Capability: "evaluations", Title: "Evaluate a model", Roles: []string{AgentAdmin},
 			Description: "Re-run an agent's past runs that people confirmed or corrected, dry, with a candidate model, and compare.",
 			Payload: []platform.Field{{Name: "agent", Type: "string", Required: true, Description: "The agent, <app>.<name>"},
-				{Name: "model", Type: "string", Required: true, Description: "The candidate, an enabled model <provider>/<model>"}}})
+				{Name: "model", Type: "string", Required: true, Description: "The candidate, an enabled model <provider>/<model>"},
+				{Name: "suite", Type: "boolean", Description: "Run the agent's declared cases, three times each, instead of its past runs"}}})
 	actions = append(actions, switchActions()...)
 	return &Agents{ledger: platform.NewLedger(tenant, AgentApp, platform.NewCatalog(actions...), RunType, EvaluationType, MemoryType, SwitchType), defs: map[string]*agentDef{}, busy: map[string]bool{}}
 }
@@ -329,7 +330,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	}
 	var p struct {
 		Agent, Goal, Ref, Reason, Model, Language string
-		Act                                       bool
+		Act, Suite                                bool
 		Payload                                   json.RawMessage
 	}
 	json.Unmarshal(s.GetPayload(), &p)
@@ -363,7 +364,10 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			run.Acts, run.Language = p.Act, p.Language
 			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
 		case SchemaEvalStart:
-			return a.startEvaluation(c, id, struct{ Agent, Model string }{p.Agent, p.Model})
+			return a.startEvaluation(c, id, struct {
+				Agent, Model string
+				Suite        bool
+			}{p.Agent, p.Model, p.Suite})
 		case SchemaSuspend, SchemaResume:
 			return a.switchDecision(c, s, struct{ Reason string }{p.Reason})
 		case SchemaRunCancel:

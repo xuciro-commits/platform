@@ -40,6 +40,21 @@ func newDesk(tenant string) *desk {
 
 var triage = platform.Agent{Name: "triage", Title: "Triage", Instructions: "Answer tickets.", Tools: []string{"desk.ticket.answer", "read:queue"},
 	Budget: platform.Budget{Steps: 4},
+	// Its suite (ADR-0029 D6): one case it answers, one it never does.
+	Cases: []platform.Case{
+		{Name: "answers wifi", Goal: "Answer ticket T1: wifi", Ref: "desk.ticket/T1", Check: func(r platform.CaseRun) string {
+			if !slices.ContainsFunc(r.Actions, func(a string) bool { return strings.HasPrefix(a, "desk.ticket.answer T1 ") }) {
+				return "no answer to T1"
+			}
+			return ""
+		}},
+		{Name: "says goodbye", Goal: "Answer ticket T1: wifi", Ref: "desk.ticket/T1", Check: func(r platform.CaseRun) string {
+			if !slices.ContainsFunc(r.Actions, func(a string) bool { return strings.Contains(a, "Goodbye") }) {
+				return "it did not say goodbye"
+			}
+			return ""
+		}},
+	},
 	Guard: func(_ platform.Caller, _ platform.AgentRun, action, _ string, payload json.RawMessage) *kernel.Error {
 		if action == "desk.ticket.answer" && strings.Contains(string(payload), "refund") {
 			return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED} // refunds are for people
@@ -330,6 +345,18 @@ func TestAgents(t *testing.T) {
 	}
 	expect("report", ev.State+" "+strings.Join(verdicts, ", ")+fmt.Sprint(" ", ev.Score, " ", ticket("T4").Revision == before), "done R6 rejected repeats, R1 changed differs 0 true")
 	expect("reference", ev.Cases[1].Reference+" / "+ev.Cases[1].Candidate, `desk.ticket.answer T1 {"reply":"Hello, it works again"};  / desk.ticket.answer T1 {"reply":"Hello"}; `)
+
+	// The declared cases, three runs each, dry: one passes every time, one never (ADR-0029 D6).
+	expect("suite", do("ana", AgentApp, SchemaEvalStart, EvaluationType, "E3", map[string]any{"agent": "desk.triage", "model": "lm/scripted", "suite": true}), "ok")
+	t1 := ticket("T1").Revision
+	tn.Evaluate(now)
+	suite, _ := platform.Get[Evaluation](tn.automation(AgentApp, false), "E3")
+	var cases []string
+	for _, x := range suite.Cases {
+		cases = append(cases, fmt.Sprintf("%s %s %d/%d", x.Case, x.Verdict, x.Passes, x.Runs))
+	}
+	expect("suite report", suite.State+" "+strings.Join(cases, ", ")+fmt.Sprint(" ", suite.Score, " ", ticket("T1").Revision == t1), "done answers wifi passes 3/3, says goodbye fails 0/3 0.5 true")
+	expect("why it fails", suite.Cases[1].Reference, "run 1: it did not say goodbye; run 2: it did not say goodbye; run 3: it did not say goodbye")
 
 	// A flow that compensates undoes what its agent did: a signal on the run.
 	do("ana", "desk", "desk.ticket.open", "desk.ticket", "T8", map[string]string{"subject": "auto undo"})

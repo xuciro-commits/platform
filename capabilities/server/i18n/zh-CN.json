@@ -1,4 +1,10 @@
 {
+ "Case": "用例",
+ "Passes": "通过次数",
+ "Runs": "运行次数",
+ "Declared cases": "声明的测试用例",
+ "Run the agent's declared cases, three times each, instead of its past runs": "用智能体声明的测试用例，每个跑三次，而不是它过去的运行",
+ "The agent {agent} declares no cases": "智能体 {agent} 没有声明测试用例",
  "Suspend agent": "暂停智能体",
  "Stop an agent (target its member ID, such as agent:csm.triage): its runs stop at their next step, new ones are refused, and an outside agent's decisions and model calls are refused.": "停用一个智能体（目标填它的成员 ID，比如 agent:csm.triage）：它的运行在下一步停下，新的运行被拒绝，外部智能体的决定和模型调用也被拒绝。",
  "Why, for the audit and whom its runs were for": "原因，写进审计，也告诉它为谁运行的那些人",

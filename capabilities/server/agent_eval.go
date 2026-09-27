@@ -41,10 +41,18 @@ type Evaluation struct {
 	Score   float64    `json:"score" field:"readonly"` // agrees and avoids, of the cases
 	Tokens  int        `json:"tokens" field:"readonly"`
 	Cases   []EvalCase `json:"cases" field:"readonly"`
+	// Suite runs the agent's declared cases instead of its past runs (ADR-0029 D6).
+	Suite bool `json:"suite,omitempty" field:"readonly" title:"Declared cases"`
 }
 
-// EvalCase is one past run and what the candidate made of it.
+const suiteRuns = 3 // each declared case, as models vary
+
+// EvalCase is one past run and what the candidate made of it, or one of the
+// agent's declared cases run three times (ADR-0029 D6).
 type EvalCase struct {
+	Case      string `json:"case,omitempty"`   // the declared case's name
+	Passes    int    `json:"passes,omitempty"` // of Runs
+	Runs      int    `json:"runs,omitempty"`
 	Run       string `json:"run"`
 	Signal    string `json:"signal"` // what people made of the run
 	Verdict   string `json:"verdict"`
@@ -129,6 +137,9 @@ func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
 	who, _ := t.member(ev.Created.By)
 	t.mu.Unlock()
 	ev.State = "done"
+	if d != nil && err == nil && ev.Suite {
+		return a.suite(ev, d, model, pv, who, now)
+	}
 	if d == nil || err != nil {
 		ev.Cases = []EvalCase{{Verdict: "fails", Candidate: "the agent is not declared, or the model " + ev.Model + " is not enabled"}}
 		ev.Fails = 1
@@ -167,7 +178,6 @@ func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
 
 // rerun runs one past run's goal dry with the candidate and judges it.
 func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Provider, who platform.Member, now time.Time) EvalCase {
-	t := a.t
 	last := run.Signals[len(run.Signals)-1]
 	x := EvalCase{Run: run.ID, Signal: last.Kind}
 	changed := func(i int) string {
@@ -191,50 +201,13 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Pr
 		}
 		x.Reference = "not: " + strings.Join(bad, "; ")
 	}
-	dry := AgentRunRecord{Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []RunStep{}}
-	for dry.StepsUsed < d.Budget.Steps && dry.TokensUsed < d.Budget.Tokens {
-		t.mu.Lock()
-		req := a.prompt(t.automation(AgentApp, false), d, dry, model.Name(), now)
-		t.mu.Unlock()
-		req.run = run.ID + ":evaluation"
-		if why := t.allowed(who, model, now); why != "" {
-			x.Verdict, x.Candidate = "fails", why
-			break
-		}
-		answer, failure := t.call(pv, model, who, req, now)
-		t.meter(who, answer.Usage)
-		dry.StepsUsed++
-		dry.TokensUsed += answer.Usage.Input + answer.Usage.Output
-		if failure != nil {
-			x.Verdict, x.Candidate = "fails", "the model failed: "+failure.Detail
-			break
-		}
-		if len(answer.ToolCalls) == 0 {
-			dry.Result, dry.State = answer.Content, "done"
-			break
-		}
-		call := answer.ToolCalls[0]
-		var args map[string]any
-		json.Unmarshal(call.Arguments, &args)
-		step := RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments)}
-		step.Rationale, _ = args["rationale"].(string)
-		tool, ok := d.tools[call.Name]
-		switch {
-		case !ok:
-			step.Outcome = "no tool " + call.Name
-		case tool.kind == "finish":
-			dry.Result, dry.State = fmt.Sprint(args["result"]), "done"
-		case tool.kind == "ask":
-			dry.State, x.Candidate = "asked", "asks: "+fmt.Sprint(args["question"])
-		default:
-			step.Outcome = a.dryUse(d, run, dry, tool, args, call.Arguments, now)
-		}
-		dry.Steps = append(dry.Steps, step)
-		if dry.State != "" {
-			break
-		}
-	}
+	dry, failed := a.dryRun(d, run, model, pv, who, now)
 	x.Steps, x.Tokens = dry.StepsUsed, dry.TokensUsed
+	if failed != "" {
+		x.Verdict, x.Candidate = "fails", failed
+	} else if dry.State == "asked" {
+		x.Candidate = dry.Result
+	}
 	switch {
 	case x.Verdict != "":
 	case dry.State == "asked":
@@ -257,6 +230,108 @@ func (a *Agents) rerun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Pr
 		}
 	}
 	return x
+}
+
+// suite runs each of the agent's declared cases three times, dry, and counts
+// the runs that pass (ADR-0029 D6): a case passes when every run does, varies
+// when some do, and fails when none does. The score is the runs that pass.
+func (a *Agents) suite(ev Evaluation, d *agentDef, model ai.Model, pv ai.Provider, who platform.Member, now time.Time) Evaluation {
+	total, passed := 0, 0
+	for _, c := range d.Cases {
+		x := EvalCase{Case: c.Name, Runs: suiteRuns}
+		var why []string
+		for i := range suiteRuns {
+			run := AgentRunRecord{Record: platform.Record{ID: fmt.Sprintf("%s:%s:%d", ev.ID, c.Name, i+1)}, Agent: ev.Agent, Goal: c.Goal, Ref: c.Ref, OnBehalf: who.ID}
+			dry, failed := a.dryRun(d, run, model, pv, who, now)
+			x.Steps, x.Tokens = x.Steps+dry.StepsUsed, x.Tokens+dry.TokensUsed
+			got, _, result := decision(d, dry.Steps, dry.Result, func(int) string { return "" })
+			miss := failed
+			switch {
+			case miss != "":
+			case dry.State != "done" && dry.State != "asked":
+				miss = "over its budget"
+			case c.Check != nil:
+				miss = c.Check(platform.CaseRun{Actions: got, Result: result, Asked: dry.State == "asked"})
+			}
+			if miss == "" {
+				x.Passes++
+			} else {
+				why = append(why, fmt.Sprintf("run %d: %s", i+1, miss))
+			}
+			if i == 0 {
+				x.Candidate = strings.Join(append(got, result), "; ")
+			}
+		}
+		x.Verdict = map[bool]string{true: "passes", false: "varies"}[x.Passes == suiteRuns]
+		if x.Passes == 0 {
+			x.Verdict = "fails"
+		}
+		x.Reference = strings.Join(why, "; ")
+		total, passed = total+suiteRuns, passed+x.Passes
+		ev.Tokens += x.Tokens
+		ev.Cases = append(ev.Cases, x)
+		switch x.Verdict {
+		case "passes":
+			ev.Agrees++
+		case "varies":
+			ev.Differs++
+		default:
+			ev.Fails++
+		}
+	}
+	if total > 0 {
+		ev.Score = float64(passed) / float64(total)
+	}
+	return ev
+}
+
+// dryRun runs a goal with the candidate, dry: reads the run made answer as
+// then, other reads read now, actions are probed and never taken. failed says
+// why the model could not go on; an asked run's question is its Result.
+func (a *Agents) dryRun(d *agentDef, run AgentRunRecord, model ai.Model, pv ai.Provider, who platform.Member, now time.Time) (AgentRunRecord, string) {
+	t := a.t
+	dry := AgentRunRecord{Record: run.Record, Agent: run.Agent, Goal: run.Goal, Ref: run.Ref, Seen: run.Seen, OnBehalf: run.OnBehalf, Steps: []RunStep{}}
+	for dry.StepsUsed < d.Budget.Steps && dry.TokensUsed < d.Budget.Tokens {
+		t.mu.Lock()
+		req := a.prompt(t.automation(AgentApp, false), d, dry, model.Name(), now)
+		t.mu.Unlock()
+		req.run = run.ID + ":evaluation"
+		if why := t.allowed(who, model, now); why != "" {
+			return dry, why
+		}
+		answer, failure := t.call(pv, model, who, req, now)
+		t.meter(who, answer.Usage)
+		dry.StepsUsed++
+		dry.TokensUsed += answer.Usage.Input + answer.Usage.Output
+		if failure != nil {
+			return dry, "the model failed: " + failure.Detail
+		}
+		if len(answer.ToolCalls) == 0 {
+			dry.Result, dry.State = answer.Content, "done"
+			break
+		}
+		call := answer.ToolCalls[0]
+		var args map[string]any
+		json.Unmarshal(call.Arguments, &args)
+		step := RunStep{At: now, Tool: call.Name, Arguments: string(call.Arguments)}
+		step.Rationale, _ = args["rationale"].(string)
+		tool, ok := d.tools[call.Name]
+		switch {
+		case !ok:
+			step.Outcome = "no tool " + call.Name
+		case tool.kind == "finish":
+			dry.Result, dry.State = fmt.Sprint(args["result"]), "done"
+		case tool.kind == "ask":
+			dry.State, dry.Result = "asked", "asks: "+fmt.Sprint(args["question"])
+		default:
+			step.Outcome = a.dryUse(d, run, dry, tool, args, call.Arguments, now)
+		}
+		dry.Steps = append(dry.Steps, step)
+		if dry.State != "" {
+			break
+		}
+	}
+	return dry, ""
 }
 
 // dryUse answers a tool the candidate called: a read the run made gets the
@@ -320,13 +395,19 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 }
 
 // startEvaluation queues a candidate's evaluation (an administrator's decision).
-func (a *Agents) startEvaluation(c platform.Caller, id string, p struct{ Agent, Model string }) (func(*pb.ChangeRecord), *kernel.Error) {
+func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
+	Agent, Model string
+	Suite        bool
+}) (func(*pb.ChangeRecord), *kernel.Error) {
 	if _, known := platform.Get[Evaluation](c, id); known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if a.defs[p.Agent] == nil || p.Model == "" {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	ev := Evaluation{Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}}
+	if p.Suite && len(a.defs[p.Agent].Cases) == 0 {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
+	}
+	ev := Evaluation{Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}, Suite: p.Suite}
 	return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, ev) }, nil
 }

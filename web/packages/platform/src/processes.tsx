@@ -88,17 +88,21 @@ export function Evaluations() {
   const models = useRead<AIModel[]>("/v1/ai-models").data ?? [];
   const [agent, setAgent] = useState("");
   const [model, setModel] = useState("");
+  const [suite, setSuite] = useState(false);
   const chosen = agent || agents[0]?.id || "";
   return (
     <>
       <PageHeader title={t("Evaluations")} description={t("A candidate model re-runs an agent's latest runs that people confirmed, changed, rejected, accepted or corrected — dry: it sees what the run saw, its actions are checked, never taken. Each case agrees or differs with what people accepted, or repeats or avoids what they corrected.")} />
       {can("agent.evaluation.start") && (
-        <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void decide("agent.evaluation.start", { type: "agent.evaluation", id: newId("EVAL") }, { agent: chosen, model }); }}>
+        <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void decide("agent.evaluation.start", { type: "agent.evaluation", id: newId("EVAL") }, { agent: chosen, model, suite }); }}>
           <Select aria-label={t("Agent")} className="w-64" value={chosen} onChange={(e) => setAgent(e.target.value)}>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>
           <Input aria-label={t("Candidate model")} className="w-80" list="enabled-models" placeholder={t("Candidate model, provider/model")} value={model} onChange={(e) => setModel(e.target.value)} />
           <datalist id="enabled-models">{models.map((m) => <option key={`${m.provider}/${m.model}`} value={`${m.provider}/${m.model}`} />)}</datalist>
+          <label className="flex items-center gap-1.5 text-sm" title={t("The agent's declared cases, three runs each, instead of its past runs")}>
+            <input type="checkbox" checked={suite} onChange={(e) => setSuite(e.target.checked)} />{t("Declared cases")}
+          </label>
           <Button type="submit" variant="primary" disabled={!chosen || !model}>{t("Evaluate")}</Button>
         </form>
       )}

@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Declared cases": "声明的测试用例",
+  "The agent's declared cases, three runs each, instead of its past runs": "用智能体声明的测试用例，每个跑三次，而不是它过去的运行",
   "Working": "工作中",
   "Suspended": "已暂停",
   "outside": "外部",
