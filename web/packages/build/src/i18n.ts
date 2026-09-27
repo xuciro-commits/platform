@@ -46,4 +46,8 @@ register("zh-CN", {
   "Text": "文字",
   "Save": "保存",
   "Publish": "发布",
+  "Page settings": "页面设置",
+  "What people call it": "人们怎么称呼它",
+  "What people do on this page": "人们在这个页面上做什么",
+  "It shows {object}. Its name and object stay as they are: applications and links name them.": "它显示{object}。它的名称和对象保持不变：应用和链接都通过它们找到它。",
 });

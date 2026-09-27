@@ -274,6 +274,9 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 			return fmt.Errorf("application %s: no page %s", a.Name, page)
 		}
 	}
+	if err := a.CheckGroups(); err != nil {
+		return fmt.Errorf("application %s: %v", a.Name, err)
+	}
 	installed := a
 	def := platform.Definition{Ref: platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, Source: "tenant", Version: "1",
 		ContractVersion: 1, Application: &installed}

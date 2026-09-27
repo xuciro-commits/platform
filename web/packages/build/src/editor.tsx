@@ -8,7 +8,7 @@ import {
   Button, Card, Input, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, cn, defineStatuses, notify, t, useWorkspace,
   type EntityInfo,
 } from "@platform/ui";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Settings2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type Api = NonNullable<Definition["page"]>;
@@ -62,9 +62,17 @@ export function PageEditor({ id }: { id: string }) {
   const [sections, setSections] = useState<Draft[]>([]);
   const [chosen, setChosen] = useState(0);
   const [dirty, setDirty] = useState(false);
+  // The page's own settings — what people call it and what it is for — beside
+  // its widgets: chosen from the layout panel like a section, -1 in `chosen`.
+  const [settings, setSettings] = useState<{ title: string; description: string }>();
   // Why the host refused, kept in front of the person until the next attempt.
   const [refused, setRefused] = useState<string>();
-  useEffect(() => { if (page && !dirty) setSections(page.sections ?? []); }, [page, dirty]);
+  useEffect(() => {
+    if (page && !dirty) {
+      setSections(page.sections ?? []);
+      setSettings({ title: page.title, description: page.description ?? "" });
+    }
+  }, [page, dirty]);
   if (!page) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const info = source.entity(page.object);
   const change = (i: number, patch: Partial<Draft>) => {
@@ -89,7 +97,7 @@ export function PageEditor({ id }: { id: string }) {
   };
   const save = async () => {
     setRefused(undefined);
-    const ok = await decide("build.page.edit", { type: "build.page", id }, { sections }, { expectedRevision: page.revision, onRefused: setRefused });
+    const ok = await decide("build.page.edit", { type: "build.page", id }, { sections, ...settings }, { expectedRevision: page.revision, onRefused: setRefused });
     if (ok) setDirty(false);
     return ok;
   };
@@ -104,7 +112,7 @@ export function PageEditor({ id }: { id: string }) {
   const nothing = sections.length === 0 && (page.list ?? []).length === 0;
   return (
     <div className="flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3">
-      <PageHeader title={page.title} description={t("Compose what people see. Save keeps your work; publish puts it in the workspace.")}
+      <PageHeader title={settings?.title || page.title} description={t("Compose what people see. Save keeps your work; publish puts it in the workspace.")}
         actions={<div className="flex items-center gap-2">
           <StatusTag status={page.state} registry={pageStates} />
           <Button onClick={() => void save()} disabled={!dirty}>{t("Save")}</Button>
@@ -119,16 +127,18 @@ export function PageEditor({ id }: { id: string }) {
           scrolls on its own, so the canvas never pushes the rest off screen. */}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_19rem]">
         <div role="region" aria-label={t("Widgets and layout")} className="min-h-0 overflow-y-auto">
-          <Layout sections={sections} chosen={chosen} onChoose={setChosen} onAdd={add} onMove={move}
+          <Layout sections={sections} chosen={chosen} onChoose={setChosen} title={settings?.title || page.title} onAdd={add} onMove={move}
             onRemove={(i) => { setSections(sections.filter((_, at) => at !== i)); setChosen(0); setDirty(true); }} />
         </div>
         <div role="region" aria-label={t("The page")} className="min-h-0 min-w-0 overflow-y-auto rounded-md border border-dashed border-border p-3">
-          <ComposedPage page={asPage(page, sections)} live={false} chosen={chosen} onChoose={setChosen}
+          <ComposedPage page={asPage({ ...page, ...settings }, sections)} live={false} chosen={chosen} onChoose={setChosen}
             notice={<Panel role="status" className="text-xs text-muted">{t("Your records, as they are. Actions do not run while you compose.")}</Panel>} />
         </div>
         <div role="region" aria-label={t("The widget in hand")} className="min-h-0 overflow-y-auto">
+          {chosen < 0 && settings ? <Settings value={settings} object={info?.title ?? page.object}
+            onChange={(patch) => { setSettings({ ...settings, ...patch }); setDirty(true); }} /> :
           <Properties section={sections[chosen]} info={info} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            object={page.object} onChange={(patch) => change(chosen, patch)} />
+            object={page.object} onChange={(patch) => change(chosen, patch)} />}
         </div>
       </div>
     </div>
@@ -136,12 +146,17 @@ export function PageEditor({ id }: { id: string }) {
 }
 
 /** The layout panel: every section of the page, in the order people see them. */
-function Layout({ sections, chosen, onChoose, onAdd, onMove, onRemove }: {
-  sections: Draft[]; chosen: number; onChoose: (i: number) => void; onAdd: (widget: string) => void;
+function Layout({ sections, chosen, title, onChoose, onAdd, onMove, onRemove }: {
+  sections: Draft[]; chosen: number; title: string; onChoose: (i: number) => void; onAdd: (widget: string) => void;
   onMove: (i: number, by: number) => void; onRemove: (i: number) => void;
 }) {
   return (
     <Card className="grid content-start gap-3 p-3">
+      <Button variant="ghost" size="sm" aria-pressed={chosen < 0} aria-label={t("Page settings")} onClick={() => onChoose(-1)}
+        className={cn("justify-start border", chosen < 0 ? "border-primary bg-row-selected" : "border-border")}>
+        <Settings2 className="size-3" /><span className="truncate">{t("Page settings")}</span>
+        <span aria-hidden className="ml-auto truncate pl-1 text-[10px] text-muted">{title}</span>
+      </Button>
       <div className="grid gap-1">
         <div className="text-xs font-semibold text-muted">{t("Add a widget")}</div>
         <div className="grid grid-cols-2 gap-1">
@@ -231,6 +246,26 @@ function Properties({ section, info, catalog, object, onChange }: {
           <Textarea rows={5} value={section.text ?? ""} onChange={(e) => onChange({ text: e.target.value })} />
         </label>
       )}
+    </Card>
+  );
+}
+
+/** The page's own settings: what people call it and what it is for. Its name
+ *  and its object are its identity — pages, applications and links name them. */
+function Settings({ value, object, onChange }: {
+  value: { title: string; description: string }; object: string;
+  onChange: (patch: Partial<{ title: string; description: string }>) => void;
+}) {
+  return (
+    <Card className="grid content-start gap-3 p-3">
+      <div className="text-xs font-semibold text-muted">{t("Page settings")}</div>
+      <label className="grid gap-1 text-xs">{t("What people call it")}
+        <Input value={value.title} onChange={(e) => onChange({ title: e.target.value })} />
+      </label>
+      <label className="grid gap-1 text-xs">{t("What people do on this page")}
+        <Textarea rows={4} value={value.description} onChange={(e) => onChange({ description: e.target.value })} />
+      </label>
+      <p className="text-xs text-muted">{t("It shows {object}. Its name and object stay as they are: applications and links name them.", { object })}</p>
     </Card>
   );
 }

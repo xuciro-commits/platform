@@ -86,4 +86,7 @@ register("zh-CN", {
   "Installed objects and actions from your apps. Open one to inspect the same contract used by code and the workspace.": "你有权限查看的应用对象和动作。打开一项，可查看代码与工作台共用的契约。",
   "Installed objects, actions and pages from your apps. Open one to inspect its contract or preview a page.": "你有权限查看的应用对象、动作和页面。打开一项可检查契约或预览页面。",
   "{email} is not a member of this host.": "{email} 不是此宿主的成员。",
+  "This page is not open to you.": "这个页面没有对你开放。",
+  "It may have been withdrawn, or it shows records you may not read. Whoever builds your organisation's applications can tell you which.": "它可能已被收回，或者它显示的记录你无权查看。负责搭建本组织应用的人可以告诉你是哪一种。",
+  "Back to your apps": "回到你的应用",
 });

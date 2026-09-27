@@ -116,7 +116,7 @@ func (b *Build) Manifest() platform.Manifest {
 			{Name: "applications", Title: "Applications", Description: "The applications this organisation hands to its people. Each holds pages and appears in their launcher.",
 				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: AppType},
 				ListFields:   []string{"title", "name", "icon", "state"},
-				DetailFields: []string{"title", "name", "description", "icon", "pages", "state"},
+				DetailFields: []string{"title", "name", "description", "icon", "pages", "groups", "state"},
 				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: AppType + ".create"},
 					{App: ID, Kind: platform.AssetAction, Name: AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaHandOver}}},
 			{Name: "pages", Title: "Pages", Description: "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",

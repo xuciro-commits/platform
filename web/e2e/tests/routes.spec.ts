@@ -431,3 +431,55 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await expect(page.getByRole("heading", { name: "Handed offsites" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("handed-application.png"), fullPage: true });
 });
+
+// Route 32 (ADR-0036 17b): a page renamed in the editor's page settings, an
+// application whose navigation has a heading, and what a member sees of it —
+// only the pages theirs to open, and a plain answer at a page that is not.
+test("route 32: an application's headings, a page's settings, a page not yours", async ({ page, request }) => {
+  const stamp = Date.now().toString(36).slice(-5);
+  const tickets = `tickets${stamp}`, offsites = `offsites${stamp}`, app = `service${stamp}`;
+  const make = async (id: string, name: string, title: string, object: string, field: string) => {
+    await decide(request, "manager", "build", "build.page.create", { type: "build.page", id }, { name, title, object, list: [field], detail: [field] });
+    await decide(request, "manager", "build", "build.page.publish", { type: "build.page", id }, {});
+  };
+  await make(fresh("P"), tickets, "Tickets " + stamp, "csm.ticket", "subject");
+  const offsitesID = fresh("P");
+  await make(offsitesID, offsites, "Offsites " + stamp, "crm.opportunity", "title");
+
+  // The page's own settings, beside its widgets: what people call it.
+  await open(page, "manager", `/compose?id=${offsitesID}`);
+  await page.getByRole("button", { name: "Page settings", exact: true }).click();
+  await page.getByRole("textbox", { name: "What people call it" }).fill("Renamed deals " + stamp);
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The page is in the workspace.")).toBeVisible();
+
+  const id = fresh("A");
+  await decide(request, "manager", "build", "build.app.create", { type: "build.app", id },
+    { name: app, title: "Service " + stamp, icon: "people", pages: [tickets, offsites], groups: [{ title: "Sales", pages: [offsites] }] });
+  await decide(request, "manager", "build", "build.app.publish", { type: "build.app", id }, {});
+
+  // The builder sees both pages: the ungrouped one under the application's
+  // name, the other under its heading, with the title set in the editor.
+  await open(page, "manager", "/home");
+  await page.getByRole("button", { name: "Service " + stamp }).first().click();
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await expect(nav.getByText("Sales", { exact: true })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Renamed deals " + stamp })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Tickets " + stamp })).toBeVisible();
+
+  // The front desk reads tickets, not the CRM: the heading over only offsites is not theirs.
+  const desk = await page.context().newPage();
+  await open(desk, "desk", "/home");
+  await desk.getByRole("button", { name: "Service " + stamp }).first().click();
+  const deskNav = desk.getByRole("navigation", { name: "Main" });
+  await expect(deskNav.getByRole("button", { name: "Tickets " + stamp })).toBeVisible();
+  await expect(deskNav.getByRole("button", { name: "Renamed deals " + stamp })).toHaveCount(0);
+  await expect(deskNav.getByText("Sales", { exact: true })).toHaveCount(0);
+  // A link to the page that is not theirs answers plainly, without saying what it holds.
+  await desk.goto(`/#/page?app=build&kind=page&name=${offsites}`);
+  await expect(desk.getByText("This page is not open to you.")).toBeVisible();
+  await desk.getByRole("button", { name: "Back to your apps" }).click();
+  await expect(desk.getByRole("heading", { name: /Welcome/ })).toBeVisible();
+  await desk.close();
+});

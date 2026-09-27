@@ -2,6 +2,7 @@ package platform
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -84,6 +85,39 @@ type Application struct {
 	// Icon is one of Icons: the workspace draws it in the launcher and the navigation.
 	Icon  string   `json:"icon,omitempty"`
 	Pages []string `json:"pages"` // page names, in the order people see them
+	// Groups are headings in its navigation (ADR-0036 17b), each over some of
+	// Pages in its own order; a page in no group sits under the application's name.
+	Groups []AppGroup `json:"groups,omitempty"`
+}
+
+// AppGroup is one heading in an application's navigation and the pages under it.
+type AppGroup struct {
+	Title string   `json:"title"`
+	Pages []string `json:"pages"`
+}
+
+// CheckGroups refuses groups people could not read: a heading with no title or
+// no page, a page the application does not hold, a page under two headings.
+func (a Application) CheckGroups() error {
+	grouped := map[string]string{}
+	for _, g := range a.Groups {
+		if strings.TrimSpace(g.Title) == "" {
+			return fmt.Errorf("a group needs a title")
+		}
+		if len(g.Pages) == 0 {
+			return fmt.Errorf("the group %q holds no page", g.Title)
+		}
+		for _, page := range g.Pages {
+			if !slices.Contains(a.Pages, page) {
+				return fmt.Errorf("the group %q names the page %q, which the application does not hold", g.Title, page)
+			}
+			if other, ok := grouped[page]; ok {
+				return fmt.Errorf("the page %q is under %q and %q", page, other, g.Title)
+			}
+			grouped[page] = g.Title
+		}
+	}
+	return nil
 }
 
 // Icons are the icons a tenant's application may take (ADR-0036 D3).

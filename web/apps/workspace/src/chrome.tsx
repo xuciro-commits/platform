@@ -6,7 +6,7 @@ import "./i18n";
 import { Assistant, DashboardView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
-  Button, DataTable, Inbox, NotificationList, PageHeader, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
+  Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
   useWorkspace, type ColumnDef, type InboxTask, type View,
  t } from "@platform/ui";
 import { useState } from "react";
@@ -187,8 +187,22 @@ function PageDefinitionView({ ref, preview }: { ref: AssetRef; preview: boolean 
   if (error) return <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>;
   if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const definition = findDefinition(data ?? [], ref);
-  if (!isPageDefinition(definition)) return <p role="alert" className="text-sm text-danger">{t("This definition is unavailable.")}</p>;
+  if (!isPageDefinition(definition)) return <ClosedPage />;
   return preview ? <PagePreview definition={definition} definitions={data ?? []} /> : <PageWorkspace definition={definition} />;
+}
+
+// A page this member may not open, reached by a link, a remembered place or an
+// application that was withdrawn (ADR-0036 17b). The registry never says which
+// page it was or why: whether it exists is not theirs to learn either.
+function ClosedPage() {
+  const { open } = useWorkspace();
+  return (
+    <Panel role="status" className="grid max-w-xl gap-2 text-sm">
+      <p className="font-medium">{t("This page is not open to you.")}</p>
+      <p className="text-muted">{t("It may have been withdrawn, or it shows records you may not read. Whoever builds your organisation's applications can tell you which.")}</p>
+      <div><Button onClick={() => open({ view: "home" })}>{t("Back to your apps")}</Button></div>
+    </Panel>
+  );
 }
 
 // A member's saved view (ADR-0019 D4), opened from the navigation.

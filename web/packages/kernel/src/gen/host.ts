@@ -88,6 +88,11 @@ export type AppEntry = {
   role: string;
 };
 
+export type AppGroup = {
+  title: string;
+  pages: string[];
+};
+
 export type AppInfo = {
   id: string;
   version: string;
@@ -113,6 +118,7 @@ export type Application = {
   description?: string;
   icon?: string;
   pages: string[];
+  groups?: AppGroup[];
 };
 
 export type ApprovalRequest = {

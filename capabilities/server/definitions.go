@@ -235,12 +235,21 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			continue
 		}
 		def, application := registered, *registered.Application
-		application.Pages = slices.DeleteFunc(slices.Clone(application.Pages), func(name string) bool {
+		closed := func(name string) bool {
 			return !opens[platform.AssetRef{App: def.Ref.App, Kind: platform.AssetPage, Name: name}]
-		})
+		}
+		application.Pages = slices.DeleteFunc(slices.Clone(application.Pages), closed)
 		if len(application.Pages) == 0 {
 			continue
 		}
+		// A heading over none of this member's pages is not in their navigation.
+		groups := make([]platform.AppGroup, 0, len(application.Groups))
+		for _, g := range application.Groups {
+			if g.Pages = slices.DeleteFunc(slices.Clone(g.Pages), closed); len(g.Pages) > 0 {
+				groups = append(groups, g)
+			}
+		}
+		application.Groups = groups
 		def.Application = &application
 		out = append(out, def)
 	}

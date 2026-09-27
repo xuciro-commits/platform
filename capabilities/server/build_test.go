@@ -248,12 +248,26 @@ func TestTenantDefinedObject(t *testing.T) {
 	if app := handed("boss"); app != nil {
 		t.Errorf("an application was handed to someone who may open none of its pages: %+v", app)
 	}
+	// Its navigation has headings (17b): a page under one, as the builder chose.
+	daily := []map[string]any{{"title": "Daily", "pages": []string{"visits"}}}
+	if got := do("dana", build.AppType+".edit", build.AppType, "A-1", map[string]any{"groups": daily}); got != "ok" {
+		t.Fatalf("groups: %s", got)
+	}
+	if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); got != "ok" {
+		t.Fatalf("hand it over with groups: %s", got)
+	}
+	if app := handed("eli"); app == nil || len(app.Groups) != 1 || app.Groups[0].Title != "Daily" || !slices.Equal(app.Groups[0].Pages, []string{"visits"}) {
+		t.Fatalf("the groups eli was handed: %+v", app)
+	}
 	for _, x := range []struct {
 		why    string
 		fields map[string]any
 		want   string
 	}{
-		{"a page that is not there", map[string]any{"pages": []string{"nothing"}}, "no page nothing"},
+		{"a group over a page it does not hold", map[string]any{"groups": []map[string]any{{"title": "Other", "pages": []string{"elsewhere"}}}}, "does not hold"},
+		{"a page under two headings", map[string]any{"groups": []map[string]any{{"title": "A", "pages": []string{"visits"}}, {"title": "B", "pages": []string{"visits"}}}}, "under \"A\" and \"B\""},
+		{"a heading over nothing", map[string]any{"groups": []map[string]any{{"title": "Empty", "pages": []string{}}}}, "holds no page"},
+		{"a page that is not there", map[string]any{"groups": []map[string]any{}, "pages": []string{"nothing"}}, "no page nothing"},
 		{"no page at all", map[string]any{"pages": []string{}}, "holds at least one page"},
 	} {
 		if got := do("dana", build.AppType+".edit", build.AppType, "A-1", x.fields); got != "ok" {

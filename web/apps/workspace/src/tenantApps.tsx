@@ -31,15 +31,20 @@ export function tenantApps(definitions: Definition[]): AppUI[] {
     if (definition.ref.kind !== "app" || !application) return [];
     const held = application.pages.filter((name) => pages.has(name));
     if (held.length === 0) return [];
-    const nav = (): NavSection[] => [{
-      label: application.title,
-      items: held.map((name) => ({ label: pages.get(name)?.title ?? name, icon: icons[application.icon ?? ""] ?? <Boxes />, route: route(name) })),
-    }];
+    const icon = icons[application.icon ?? ""] ?? <Boxes />;
+    const item = (name: string) => ({ label: pages.get(name)?.title ?? name, icon, route: route(name) });
+    // Its pages under their headings (17b): those in no group first, under the
+    // application's own name, then each group in the order the builder chose.
+    const groups = (application.groups ?? []).map((g) => ({ label: g.title, pages: g.pages.filter((name) => held.includes(name)) }))
+      .filter((g) => g.pages.length > 0);
+    const grouped = new Set(groups.flatMap((g) => g.pages));
+    const sections = [{ label: application.title, pages: held.filter((name) => !grouped.has(name)) }, ...groups].filter((g) => g.pages.length > 0);
+    const nav = (): NavSection[] => sections.map((g) => ({ label: g.label, items: g.pages.map(item) }));
     return [{
       id: `${definition.ref.app}:${application.name}`,
       title: application.title,
-      icon: icons[application.icon ?? ""] ?? <Boxes />,
-      home: route(held[0]!),
+      icon,
+      home: route(sections[0]!.pages[0]!), // the first page people see in its navigation
       views: [], // its pages are the workspace's own page view (ADR-0032)
       nav,
     }];

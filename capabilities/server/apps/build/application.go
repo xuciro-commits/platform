@@ -32,10 +32,19 @@ type Application struct {
 	Description string   `json:"description,omitempty" type:"longtext" help:"What people do in it"`
 	Icon        string   `json:"icon,omitempty" choices:"boxes,clipboard,people,calendar,wrench,map,chart,sparkles" help:"How it is drawn in the launcher"`
 	Pages       []string `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
-	State       string   `json:"state" field:"readonly" choices:"draft,published"`
+	// Groups are the headings of its navigation (17b); a page in none of them
+	// sits under the application's own name.
+	Groups []Group `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
+	State  string  `json:"state" field:"readonly" choices:"draft,published"`
 	// Published is the application as it was last handed over: what people open,
 	// and what a restore puts back.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+}
+
+// Group is one heading in an application's navigation.
+type Group struct {
+	Title string   `json:"title" field:"required" title:"Heading"`
+	Pages []string `json:"pages" title:"Pages" help:"Pages of the application, by their name, in their order"`
 }
 
 func (b *Build) applicationEntity() platform.Entity {
@@ -75,7 +84,11 @@ func (b *Build) hand(a Application) *kernel.Error {
 
 // application is the descriptor the registry holds.
 func application(a Application) platform.Application {
-	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages)}
+	groups := make([]platform.AppGroup, 0, len(a.Groups))
+	for _, g := range a.Groups {
+		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
+	}
+	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups}
 }
 
 // checkApplication refuses an application people could not open: a name that is
@@ -97,5 +110,5 @@ func (b *Build) checkApplication(a Application) error {
 		}
 		seen[name] = true
 	}
-	return nil
+	return application(a).CheckGroups()
 }
