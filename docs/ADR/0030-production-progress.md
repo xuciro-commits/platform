@@ -1,6 +1,6 @@
 # ADR-0030: Production progress — the plant's status reaches the ERP, confirmed lot by lot
 
-**Status:** Proposed (2026-09-27, the owner's testing of route 1, #125)
+**Status:** Accepted, deferred (2026-09-27, the owner's testing of route 1, #125). The owner accepted D1 to D5 as recommended and set platform faults before app completeness (Intent.md): this is the ERP's and the MES's business process, built when app work resumes.
 
 ## Context
 

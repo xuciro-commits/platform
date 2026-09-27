@@ -1,6 +1,6 @@
 # ADR-0029: The AI control plane — quotas, the agents overview, evaluation suites, traces and MCP sign-in
 
-**Status:** Proposed (2026-09-27, stage 8 in Platform.md §10.5, #124)
+**Status:** Accepted (2026-09-27, stage 8 in Platform.md §10.5, #124). The owner accepted D1 to D8 as recommended.
 
 ## Context
 
