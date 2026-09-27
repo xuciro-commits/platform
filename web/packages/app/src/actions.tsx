@@ -101,14 +101,24 @@ export function NewActions({ type, covers = [], allowed }: { type: string; cover
 }
 
 /** The actions on one record the member may take, besides its lifecycle's transitions and the generated edit and archive. */
-export function RecordActions({ type, record, allowed }: { type: string; record: EntityRecord; allowed?: string[] }) {
+export function RecordActions({ type, record, allowed, steps: withSteps = false }: {
+  type: string; record: EntityRecord; allowed?: string[];
+  /** Also the lifecycle's steps from where the record stands — where no status bar shows them (a composed page's actions, ADR-0037). */
+  steps?: boolean;
+}) {
   const { catalog, source } = useHost();
   const [taking, setTaking] = useState<ActionDeclaration>();
-  const transitions = new Set(source.entity(type)?.lifecycle?.transitions.map((x) => x.schema) ?? []);
+  const transition = useTransition(type);
+  const lifecycle = source.entity(type)?.lifecycle;
+  const transitions = new Set(lifecycle?.transitions.map((x) => x.schema) ?? []);
   const offered = catalog.filter((a) => a.target === type && !a.new && !transitions.has(a.schema) && a.schema !== `${type}.edit` && a.schema !== `${type}.archive` && (!allowed || allowed.includes(a.schema)));
+  const state = lifecycle ? String(record[lifecycle.field] ?? "") : "";
+  const steps = withSteps ? (lifecycle?.transitions ?? []).filter((x) => (!allowed || allowed.includes(x.schema)) && x.from.includes(state) && catalog.some((a) => a.schema === x.schema)) : [];
   return <>
+    {steps.map((x) => <Button key={x.schema} size="sm" onClick={() => transition.take(x.schema, record)}>{x.title}</Button>)}
     {offered.map((a) => <Button key={a.schema} size="sm" onClick={() => setTaking(a)}>{a.title}</Button>)}
     {taking && <ActionDialog declared={taking} type={type} record={record} onClose={() => setTaking(undefined)} />}
+    {transition.dialog}
   </>;
 }
 

@@ -38,8 +38,12 @@ type Object struct {
 	Plural      string  `json:"plural,omitempty" title:"What people call several" example:"Visits"`
 	Description string  `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
 	Fields      []Field `json:"fields" title:"Fields"`
-	State       string  `json:"state" field:"readonly" choices:"draft,published"`
-	Installed   string  `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	// States and Actions make its records a small process (ADR-0037): the
+	// object editor owns them, so generated forms do not ask for them.
+	States    []State  `json:"states,omitempty" field:"aside" title:"States"`
+	Actions   []Action `json:"actions,omitempty" field:"aside" title:"Actions"`
+	State     string   `json:"state" field:"readonly" choices:"draft,published"`
+	Installed string   `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
 	// Published is the definition as it was last published, which is what is
 	// installed and what a restore installs again — not the draft beside it.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -199,7 +203,10 @@ func (b *Build) check(o Object, id string) error {
 	if err := b.checkName(o.Name, id); err != nil {
 		return err
 	}
-	return checkFields(o.Fields, b.host)
+	if err := checkFields(o.Fields, b.host); err != nil {
+		return err
+	}
+	return checkProcess(o)
 }
 
 // checkName refuses a name that is not a name, or one already taken.
@@ -372,6 +379,14 @@ func Entity(o Object) platform.Entity {
 		}
 		fields = append(fields, reflect.StructField{Name: goName(f.Name), Type: goType(f.Type), Tag: reflect.StructTag(tag)})
 	}
+	if len(o.States) > 0 { // where a record stands, which only its actions move (ADR-0037 D2)
+		names := make([]string, 0, len(o.States))
+		for _, st := range o.States {
+			names = append(names, st.Name)
+		}
+		fields = append(fields, reflect.StructField{Name: "State", Type: reflect.TypeFor[string](),
+			Tag: reflect.StructTag(fmt.Sprintf(`json:"state,omitempty" title:"State" field:"readonly" choices:"%s"`, strings.Join(names, ",")))})
+	}
 	model := reflect.New(reflect.StructOf(fields)).Elem().Interface()
 	display := ""
 	for _, f := range o.Fields {
@@ -379,8 +394,10 @@ func Entity(o Object) platform.Entity {
 			display = f.Name
 		}
 	}
+	roles := []string{Builder, User}
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder, User}, Capability: o.Name}}
+		Standard:  platform.Standard{Create: true, Edit: true, Archive: true, Roles: roles, Capability: o.Name},
+		Lifecycle: lifecycle(o, roles)}
 }
 
 // page is the list and detail page a defined object comes with: the same
@@ -390,14 +407,20 @@ func page(o Object) platform.Page {
 	for _, f := range o.Fields {
 		names = append(names, f.Name)
 	}
-	list := names
+	list := slices.Clone(names)
 	if len(list) > 4 {
 		list = list[:4]
 	}
+	if len(o.States) > 0 { // where each record stands, in the list and on its page
+		list, names = append(list, "state"), append(names, "state")
+	}
 	typ := TypeOf(o.Name)
+	actions := []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: typ + ".create"}, {App: ID, Kind: platform.AssetAction, Name: typ + ".edit"}}
+	for _, a := range o.Actions {
+		actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: typ + "." + a.Name})
+	}
 	return platform.Page{Name: o.Name, Title: o.Plural, Description: o.Description, Layout: "list-detail",
-		Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: typ}, ListFields: list, DetailFields: names,
-		Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: typ + ".create"}, {App: ID, Kind: platform.AssetAction, Name: typ + ".edit"}}}
+		Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: typ}, ListFields: list, DetailFields: names, Actions: actions}
 }
 
 func choices(s string) []string {

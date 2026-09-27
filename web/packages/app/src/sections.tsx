@@ -44,10 +44,11 @@ function TableWidget({ page, section, onSelect, selected, narrowed }: Bound) {
 }
 
 /** The record the page has selected, with the fields the builder chose. */
-function DetailWidget({ page, section, selected, live }: Bound) {
+function DetailWidget({ page, section, selected }: Bound) {
   const type = objectOf(page, section);
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
-  return <RecordDetail type={type} id={selected.id} fields={section.fields} allowed={live ? undefined : []} />;
+  // The fields alone: what people do with it is the actions widget's (ADR-0035 D2).
+  return <RecordDetail type={type} id={selected.id} fields={section.fields} allowed={[]} />;
 }
 
 /** The actions the builder chose, on what is selected (Workshop's button group). */
@@ -59,7 +60,7 @@ function ActionsWidget({ page, section, selected, live }: Bound) {
     <div className="flex flex-wrap gap-2">
       <NewActions type={type} allowed={allowed} />
       {selected
-        ? <RecordActions type={type} record={selected} allowed={allowed} />
+        ? <RecordActions type={type} record={selected} allowed={allowed} steps />
         : <span className="self-center text-sm text-muted">{t("Select a record to act on it.")}</span>}
     </div>
   );

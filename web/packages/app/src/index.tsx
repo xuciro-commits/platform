@@ -127,8 +127,9 @@ export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submit
   const { source } = useHost();
   const info = source.entity(type);
   if (!info) return null;
-  const editable = info.fields.filter((f) => !f.readOnly && (!fields || fields.includes(f.name))).map((f) => f.name);
-  return <RecordForm entity={entityFrom(info, {}, source)} keys={fields?.filter((name) => editable.includes(name))} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
+  // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0035).
+  const editable = info.fields.filter((f) => !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
+  return <RecordForm entity={entityFrom(info, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 

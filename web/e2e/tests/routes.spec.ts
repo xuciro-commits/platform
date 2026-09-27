@@ -515,3 +515,68 @@ test("route 33: filter, form, timeline and tasks on a composed page", async ({ p
   await expect(page.getByText("Nothing waits on it.")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("page-16b.png"), fullPage: true });
 });
+
+// Route 34 (ADR-0037 18a): a builder gives an object states and an action with
+// an input, a condition and a field it sets, in the object editor; a person
+// takes the action on a record and reads the builder's words when it may not.
+test("route 34: states and actions a tenant defines", async ({ page, request }, testInfo) => {
+  const stamp = Date.now().toString(36).slice(-5), name = `lost${stamp}`, id = fresh("O");
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id }, {
+    name, title: "Lost item", plural: "Lost items " + stamp,
+    fields: [{ name: "item", title: "Item", type: "text", required: true, search: true }, { name: "value", title: "Value", type: "integer" },
+      { name: "claimant", title: "Handed to", type: "text" }],
+  });
+  await open(page, "manager", `/process?id=${id}`);
+  const outline = page.getByRole("region", { name: "States and actions" });
+  const inHand = page.getByRole("region", { name: "The piece in hand" });
+  // Two states: found, then returned.
+  await outline.getByRole("button", { name: "Add a state" }).click();
+  await inHand.getByRole("textbox", { name: "What people call it" }).fill("Found");
+  await inHand.getByRole("textbox", { name: "Name" }).fill("found");
+  await outline.getByRole("button", { name: "Add a state" }).click();
+  await inHand.getByRole("textbox", { name: "What people call it" }).fill("Returned");
+  await inHand.getByRole("textbox", { name: "Name" }).fill("returned");
+  // An action from found to returned, asking who took it, refused for valuables.
+  await outline.getByRole("button", { name: "Add an action" }).click();
+  await inHand.getByRole("textbox", { name: "What people call it" }).fill("Hand it back");
+  await inHand.getByRole("textbox", { name: "Name" }).fill("handback");
+  await expect(inHand.getByRole("combobox", { name: "Leaves it in" })).toHaveValue("returned");
+  await inHand.getByRole("button", { name: "Add an input" }).click();
+  await inHand.getByRole("textbox", { name: "Label" }).fill("Handed to");
+  await inHand.getByRole("textbox", { name: "Name" }).last().fill("to");
+  await inHand.getByRole("checkbox", { name: "Required" }).check();
+  await inHand.getByRole("button", { name: "Set a field" }).click();
+  await inHand.getByRole("combobox", { name: "Field" }).first().selectOption("claimant");
+  await inHand.getByRole("combobox", { name: "From" }).selectOption("to");
+  await inHand.getByRole("button", { name: "Add a condition" }).click();
+  await inHand.getByRole("combobox", { name: "Field" }).last().selectOption("value");
+  await inHand.getByRole("combobox", { name: "Operator" }).selectOption("<");
+  await inHand.getByRole("textbox", { name: "Value" }).fill("500");
+  await inHand.getByRole("textbox", { name: "Message when it does not hold" }).fill("Valuables go back through the manager.");
+  // What people will see, while it is composed: the status bar and the action's form.
+  const preview = page.getByRole("region", { name: "What people see" });
+  await expect(preview.getByText("Found", { exact: true })).toBeVisible();
+  await expect(preview.getByText("Handed to *")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("object-process.png"), fullPage: true });
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The object is installed with its states and actions.")).toBeVisible();
+
+  // A person takes it on a record, from the object's own page.
+  await decide(request, "manager", "build", `build.${name}.create`, { type: `build.${name}`, id: "L-UMB" + stamp }, { item: "Umbrella " + stamp, value: 20 });
+  await decide(request, "manager", "build", `build.${name}.create`, { type: `build.${name}`, id: "L-WAT" + stamp }, { item: "Watch " + stamp, value: 900 });
+  await open(page, "manager", `/page?app=build&kind=page&name=${name}`);
+  await page.getByRole("row").filter({ hasText: "Umbrella " + stamp }).click();
+  await page.getByRole("button", { name: "Hand it back" }).click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Handed to *" }).fill("Ada");
+  await dialog.getByRole("button", { name: "Hand it back" }).click();
+  await expect(page.getByRole("definition").filter({ hasText: /^Ada$/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hand it back" })).toHaveCount(0); // it is returned: the step is behind it
+  // Refused with the builder's own words.
+  await page.getByRole("row").filter({ hasText: "Watch " + stamp }).click();
+  await page.getByRole("button", { name: "Hand it back" }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Handed to *" }).fill("Bob");
+  await dialog.getByRole("button", { name: "Hand it back" }).click();
+  await expect(page.getByText("Valuables go back through the manager.").first()).toBeVisible();
+});

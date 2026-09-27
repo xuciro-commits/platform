@@ -6,8 +6,9 @@
 import "./i18n";
 import { defineApp } from "@platform/app";
 import { PageEditor, PagesList } from "./editor";
+import { ProcessEditor, ProcessPicker } from "./process";
 import { t, type NavSection } from "@platform/ui";
-import { AppWindow, Boxes, Hammer, LayoutList } from "lucide-react";
+import { AppWindow, Boxes, Hammer, LayoutList, Workflow } from "lucide-react";
 
 /** A page of the builder app, by its name in the registry. */
 const page = (name: string) => ({ view: "page", params: { app: "build", kind: "page", name } });
@@ -20,6 +21,7 @@ export default defineApp({
   views: [
     { id: "pages", title: () => t("Pages"), render: () => <PagesList /> },
     { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
+    { id: "process", title: () => t("States and actions"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
   ],
   opens: { "build.page": "compose" }, // a page record opens where it is composed
   nav: (host): NavSection[] => {
@@ -29,6 +31,7 @@ export default defineApp({
         label: t("Builder"),
         items: [
           { label: t("Objects"), icon: <Hammer />, route: page("objects") },
+          { label: t("States and actions"), icon: <Workflow />, route: { view: "process" } },
           { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },
           { label: t("Applications"), icon: <AppWindow />, route: page("applications") },
         ],
