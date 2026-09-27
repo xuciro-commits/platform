@@ -805,6 +805,8 @@ export type TaskSummary = {
 
 export type TenantHealth = {
   status: string;
+  started: string;
+  built?: string;
   apps: number;
   queues: QueueHealth[];
   failed: number;

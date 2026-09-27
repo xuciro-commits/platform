@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"runtime/debug"
 	"slices"
 	"time"
 )
@@ -9,7 +10,12 @@ import (
 // administrators and for metrics: its queues, what gave up, what waits past a
 // quota, its breakers, and its connectors and endpoints.
 type TenantHealth struct {
-	Status       string        `json:"status"` // ok, or degraded when something waits for a person or a destination fails
+	Status string `json:"status"` // ok, or degraded when something waits for a person or a destination fails
+	// Started is when this process began, and Built the code it was built from:
+	// what answers "is this host running the code I just changed?" — the
+	// question that cost three walks before it was on screen.
+	Started      time.Time     `json:"started"`
+	Built        string        `json:"built,omitempty"`
 	Apps         int           `json:"apps"`
 	Queues       []QueueHealth `json:"queues"`
 	Failed       int           `json:"failed"`   // owned work that gave up
@@ -30,7 +36,7 @@ type QueueHealth struct {
 
 // Health is the tenant's health at now.
 func (t *Tenant) Health(now time.Time) TenantHealth {
-	h := TenantHealth{Status: "ok", Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.Deferred(now), Breakers: t.Breakers(now)}
+	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.Deferred(now), Breakers: t.Breakers(now)}
 	if h.Deferred == nil {
 		h.Deferred = []string{}
 	}
@@ -70,4 +76,36 @@ func (t *Tenant) Health(now time.Time) TenantHealth {
 		h.Status = "degraded"
 	}
 	return h
+}
+
+// Started is when this process began: every tenant reports it, so a person can
+// tell a host running yesterday's code from one they just built.
+var Started = time.Now().UTC().Truncate(time.Second)
+
+// Built is the code this process was built from, when the build stamped it:
+// the version control revision from Go's build info.
+func Built() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	revision, modified := "", false
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		}
+	}
+	if revision == "" {
+		return ""
+	}
+	if len(revision) > 12 {
+		revision = revision[:12]
+	}
+	if modified { // git describe's marker: built from uncommitted changes
+		return revision + "-dirty"
+	}
+	return revision
 }

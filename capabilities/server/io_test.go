@@ -102,7 +102,7 @@ func TestIOLane(t *testing.T) {
 	if bs := tn.Breakers(at); len(bs) != 1 || bs[0].Destination != "endpoint:slow" || bs[0].Failures < breakerAfter {
 		t.Fatalf("breakers %+v", bs)
 	}
-	if h := tn.Health(at); h.Status != "degraded" || h.OpenBreakers != 1 || len(h.Breakers) != 1 {
+	if h := tn.Health(at); h.Status != "degraded" || h.OpenBreakers != 1 || len(h.Breakers) != 1 || !h.Started.Equal(Started) || h.Started.IsZero() {
 		t.Fatalf("health %+v", h)
 	}
 	told := tn.notificationsFor("ana")

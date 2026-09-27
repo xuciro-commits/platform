@@ -8,6 +8,8 @@ register("zh-CN", {
   "Open breakers: {n} of {m}": "熔断中：{m} 个中的 {n} 个",
   "Failing connectors: {n}": "异常的连接器：{n}",
   "Failing endpoints: {n}": "异常的接收地址：{n}",
+  "Host started {at}": "主机启动于 {at}",
+  "built from {revision}": "构建自 {revision}",
   "Candidate model…": "选择候选模型…",
   "Declared cases": "声明的测试用例",
   "The agent's declared cases, three runs each, instead of its past runs": "用智能体声明的测试用例，每个跑三次，而不是它过去的运行",

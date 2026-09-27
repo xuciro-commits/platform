@@ -213,6 +213,7 @@ test("route 18: health", async ({ page, request }) => {
   expect((await (await request.get("/healthz")).json()).status).toBe("ok");
   await open(page, "manager", "/automation");
   await expect(page.getByText(/^(Healthy|Needs attention)$/).first()).toBeVisible();
+  await expect(page.getByText(/^Host started /)).toBeVisible();
 });
 
 // Route 19 (ADR-0028): a file added on a record's page is listed there and

@@ -260,7 +260,7 @@ These checks cover the current input-replay model. They do not prove correctness
 | 0010 | Requirement graph between apps; scoped grants by member attributes | Superseded by the protocol graph (ADR-0011) and the organisation (ADR-0012) |
 | 0010 | Enable and disable an app per tenant as a recorded decision | Current: code composition and start-up deactivation. ADR-0031 adds governed application releases and activation; not built |
 | 0010 | Effective permissions in Settings | Partial: roles per app are shown, the resulting catalog per member is not |
-| 0010 | Logs and correlation; health | Partial: OpenTelemetry traces and metrics, `/healthz` and tenant health (ADR-0027 10c); logs are still unstructured |
+| 0010 | Logs and correlation; health | Partial: OpenTelemetry traces and metrics, `/healthz` and tenant health with the host's start time and build revision (ADR-0027 10c); logs are still unstructured |
 | 0010 | Analysis datasets, retention, preferences | Partial: files, sequences and saved list views exist; analytical authoring and retention policy remain open |
 | 0011 | Protocol versions side by side; routing an action on an existing entity to its provider | Deferred |
 | 0011 | Cross-industry protocols (party, documents, calendar) | Partial: notification, links and timeline are platform capabilities |

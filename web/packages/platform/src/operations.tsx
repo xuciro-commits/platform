@@ -51,6 +51,9 @@ export function Automation() {
           <Tag label={t("Open breakers: {n} of {m}", { n: health.openBreakers, m: health.breakers.length })} tone={health.openBreakers > 0 ? "danger" : "neutral"} />
           <Tag label={t("Failing connectors: {n}", { n: health.connectorsFailing })} tone={health.connectorsFailing > 0 ? "danger" : "neutral"} />
           <Tag label={t("Failing endpoints: {n}", { n: health.endpointsFailing })} tone={health.endpointsFailing > 0 ? "danger" : "neutral"} />
+          {/* Which code answers: a host still running yesterday's build reads as such. */}
+          <span className="text-muted">{t("Host started {at}", { at: new Date(health.started).toLocaleString() })}
+            {health.built ? ` · ${t("built from {revision}", { revision: health.built })}` : ""}</span>
         </div>
         {(health.queues.length > 0 || health.deferred.length > 0 || health.breakers.length > 0) && <div className="flex flex-wrap items-center gap-2">
           {health.queues.map((q) => <Tag key={q.app} label={t("{app}: {n} waiting, oldest {s} s", { app: q.app, n: q.depth, s: Math.round(q.oldestSeconds) })} tone="info" />)}
