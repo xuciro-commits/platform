@@ -336,6 +336,7 @@ func TestSchemaEvolutionVectors(t *testing.T) {
 			for i, rawStep := range v.Steps {
 				var step struct {
 					Accepts    json.RawMessage `json:"accepts"`
+					Learn      json.RawMessage `json:"learn"`
 					AddUpgrade json.RawMessage `json:"addUpgrade"`
 					Retire     json.RawMessage `json:"retire"`
 					Upgrade    *struct {
@@ -369,6 +370,10 @@ func TestSchemaEvolutionVectors(t *testing.T) {
 						err = errorf(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 					}
 					got = result(ok, err)
+				case step.Learn != nil:
+					s := &pb.SchemaRef{}
+					decode(t, step.Learn, s)
+					got = result(ok, registry.Learn(s))
 				case step.AddUpgrade != nil:
 					u := &pb.UpgradeStep{}
 					decode(t, step.AddUpgrade, u)

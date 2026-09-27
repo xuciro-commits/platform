@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@pkg/build": "workspace:*",
     "@pkg/crm": "workspace:*",
     "@pkg/erp": "workspace:*",
     "@pkg/erpadapter": "workspace:*",

@@ -20,8 +20,10 @@ Schema: `proto/platform/kernel/v1alpha1/schema.proto`. Vectors: `vectors/k7-sche
 | S4 | A writer that can produce several versions sends the highest one the receiver accepts. If the receiver accepts none, nothing is sent. | `UNKNOWN_SCHEMA` |
 | S5 | Retiring a known version is rejected if any stored payload would no longer be accepted afterwards. Retiring an unknown version fails. | `CONFLICT`, `NOT_FOUND` |
 | S6 | A rejected operation leaves the registry unchanged. | — |
+| S7 | A receiver may learn (name, v) at any time, not only when its registry is made: it becomes known. Learning a version already known changes nothing, and learning never drops a known version or an upgrade step. A name or a version below 1 is refused. | `INVALID_ARGUMENT` |
 
 ## Notes
 
 - A retired version stays acceptable while an upgrade step leads from it to a known version (S1); retiring therefore means "no longer written or read natively", not "unreadable".
+- Learning (S7) is how a receiver takes a schema that did not exist when it started: a new package installed while it runs, or a definition someone authored in a tenant. It states nothing about where the version came from or who may teach it; that is the receiver's own policy.
 - Negotiation (S4) is how old clients and new servers coexist: the server keeps writing the old version to a client that has not learned the new one.

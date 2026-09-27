@@ -12,7 +12,17 @@ import (
 )
 
 // hostView is the tenant as its own apps see it (internal/host.Host, ADR-0025 D4).
-type hostView struct{ t *Tenant }
+// hostView is the tenant as one of its own apps sees it; app is that app, for
+// what it declares at runtime (ADR-0034).
+type hostView struct {
+	t   *Tenant
+	app platform.App
+}
+
+// Install declares an entity this app composed at runtime (ADR-0034).
+func (h hostView) Install(e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
+	return h.t.Install(h.app, e, actions, pages...)
+}
 
 func (h hostView) OwnerOf(dataClass string) (string, bool) {
 	for _, a := range h.t.apps {

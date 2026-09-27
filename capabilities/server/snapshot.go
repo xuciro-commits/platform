@@ -163,6 +163,32 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	return s, rows, position(), nil
 }
 
+// restoreRecords restores the records of every type declared now, and hands
+// back those of types nobody has declared yet: a tenant's own objects, which
+// their definitions install (ADR-0034 D4).
+func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]recordState, error) {
+	held := map[string][]recordState{}
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	for typ, rows := range saved {
+		et := t.records.types[typ]
+		if et == nil {
+			held[typ] = rows
+			continue
+		}
+		et.rows = map[string]*row{}
+		for _, r := range rows {
+			v := reflect.New(et.info.Go).Elem()
+			if err := json.Unmarshal(r.Value, v.Addr().Interface()); err != nil {
+				return nil, err
+			}
+			emptyLists(v) // a snapshot of older code may hold null lists
+			et.rows[recordOf(v).ID] = &row{value: v, history: r.History}
+		}
+	}
+	return held, nil
+}
+
 // Restore loads a snapshot into a tenant composed as at start-up, before any
 // entry: its apps and connectors are the same ones the snapshot was taken of.
 func (t *Tenant) Restore(raw json.RawMessage) error {
@@ -185,25 +211,25 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return fmt.Errorf("tenant %s: app %s: %v", t.ID, a.Manifest().ID, err)
 		}
 	}
-	t.records.mu.Lock()
-	for typ, rows := range s.Records {
-		et := t.records.types[typ]
-		if et == nil {
-			t.records.mu.Unlock()
-			return fmt.Errorf("tenant %s: no entity type %s", t.ID, typ)
+	// First the records of the types code declares, then the definitions a
+	// tenant authored — which install their own types — then the records of
+	// those (ADR-0034 D4).
+	held, err := t.restoreRecords(s.Records)
+	if err != nil {
+		return err
+	}
+	if len(held) > 0 {
+		if err := t.reinstall(); err != nil {
+			return err
 		}
-		et.rows = map[string]*row{}
-		for _, r := range rows {
-			v := reflect.New(et.info.Go).Elem()
-			if err := json.Unmarshal(r.Value, v.Addr().Interface()); err != nil {
-				t.records.mu.Unlock()
-				return err
-			}
-			emptyLists(v) // a snapshot of older code may hold null lists
-			et.rows[recordOf(v).ID] = &row{value: v, history: r.History}
+		left, err := t.restoreRecords(held)
+		if err != nil {
+			return err
+		}
+		if len(left) > 0 {
+			return fmt.Errorf("tenant %s: no entity type %s", t.ID, slices.Sorted(maps.Keys(left))[0])
 		}
 	}
-	t.records.mu.Unlock()
 	t.auditMu.Lock()
 	t.audit = s.Audit
 	t.auditMu.Unlock()

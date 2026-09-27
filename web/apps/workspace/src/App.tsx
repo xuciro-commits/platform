@@ -19,6 +19,7 @@ type ProtocolInfo = Api.ProtocolInfo;
 // The UI packages this workspace is built with (D2): each loads only when the
 // member holds a role in an app it serves. Settings serves the platform's apps.
 const packages: { serves: string[]; load: () => Promise<{ default: AppUI }> }[] = [
+  { serves: ["build"], load: () => import("@pkg/build") },
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["pms"], load: () => import("@pkg/pms/app") },
   { serves: ["hcm"], load: () => import("@pkg/hcm") },
@@ -87,6 +88,11 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [client, queries, ready]);
 
   const decide = useCallback<Host["decide"]>(async (schema, target, payload, options = {}) => {
+    // A type this client has no authority for is one the tenant declared while
+    // it was open — an object someone published (ADR-0034). Learn it, then decide.
+    if (!client.authorities.authorityOf(client.connection.tenant, target.type)) {
+      await client.refreshDeclarations().catch(() => undefined);
+    }
     client.draft(schema, target, payload, options.evidence, options.expectedRevision);
     let ok = false;
     for (const entry of await client.send()) {
@@ -134,7 +140,11 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   const select = useCallback((id: string) => { setCurrent(id); remember("workspace:app", id); }, []);
   const views = useMemo(() => {
-    const all = [...chromeViews(apps ?? [], (id) => { select(id); location.hash = `#/${apps?.find((a) => a.id === id)?.home.view ?? "home"}`; }),
+    const all = [...chromeViews(apps ?? [], (id) => {
+      select(id);
+      const home = apps?.find((a) => a.id === id)?.home; // with its params: an app's home may be one of its pages
+      location.hash = home ? routeToHash(home) : "#/home";
+    }),
       ...(apps ?? []).flatMap((a) => a.views)];
     const seen = new Set<string>();
     for (const v of all) {
@@ -171,7 +181,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         views={views} home={{ view: "home" }}
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
         launcher={{ apps: apps.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
-          onSelect: (id) => { select(id); const home = apps.find((a) => a.id === id)?.home; if (home) location.hash = `#/${home.view}`; } }}
+          onSelect: (id) => { select(id); const home = apps.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } }}
         onActiveRoute={(route: Route) => { const id = owner.get(route.view); if (id && id !== current) select(id); }}
         nav={[
           { label: t("You"), items: [

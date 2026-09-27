@@ -14,6 +14,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver"
+	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/relations"
 	"platformserver/platform"
@@ -24,8 +25,8 @@ var (
 	seats = []platformserver.Seat{
 		{Subjects: []string{"sales"}, Member: platform.Member{ID: "sales-1", Roles: map[string]string{"crm": "sales", "pms": "front-desk", "memstay": lodging.Keeper}}},
 		{Subjects: []string{"sales-only"}, Member: platform.Member{ID: "sales-2", Roles: map[string]string{"crm": "sales"}}},
-		{Subjects: []string{"desk"}, Member: platform.Member{ID: "desk-1", Roles: map[string]string{"pms": "front-desk", "csm": "desk"}}},
-		{Subjects: []string{"manager"}, Member: platform.Member{ID: "manager-1", Roles: map[string]string{"crm": "sales-manager", "pms": "manager", "memstay": lodging.Keeper, "csm": "lead", "knowledge": "editor"}}},
+		{Subjects: []string{"desk"}, Member: platform.Member{ID: "desk-1", Roles: map[string]string{"pms": "front-desk", "csm": "desk", build.ID: build.User}}},
+		{Subjects: []string{"manager"}, Member: platform.Member{ID: "manager-1", Roles: map[string]string{"crm": "sales-manager", "pms": "manager", "memstay": lodging.Keeper, "csm": "lead", "knowledge": "editor", build.ID: build.Builder}}},
 	}
 )
 

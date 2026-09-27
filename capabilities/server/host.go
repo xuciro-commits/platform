@@ -161,7 +161,7 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		}
 		// Roles the host's own apps take (ADR-0025 D4), by the interfaces they implement.
 		if x, ok := a.(host.Attached); ok {
-			x.Attach(hostView{t})
+			x.Attach(hostView{t: t, app: a})
 		}
 		if x, ok := a.(host.Observer); ok {
 			t.observers = append(t.observers, x)

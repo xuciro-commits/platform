@@ -2,6 +2,7 @@ package platform
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -19,10 +20,14 @@ import (
 type Ledger struct {
 	mu           sync.Mutex
 	tenant       string
+	authority    string
 	declarations []*pb.AuthorityDeclaration
 	Changes      *kernel.ChangeLog
 	authorities  *kernel.Authorities
-	Catalog      *Catalog
+	// schemas is the change log's registry, kept so the package can teach it a
+	// schema that did not exist when it started (K7 S7, ADR-0034).
+	schemas *kernel.SchemaRegistry
+	Catalog *Catalog
 }
 
 // NewLedger declares authority as the tenant server for classes and accepts the
@@ -32,7 +37,8 @@ func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *L
 	for _, a := range catalog.actions {
 		schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: 1})
 	}
-	l := &Ledger{tenant: tenant, Changes: kernel.NewChangeLog(kernel.NewSchemaRegistry(schemas, nil)),
+	registry := kernel.NewSchemaRegistry(schemas, nil)
+	l := &Ledger{tenant: tenant, authority: authority, Changes: kernel.NewChangeLog(registry), schemas: registry,
 		authorities: kernel.NewAuthorities(authority), Catalog: catalog}
 	for _, class := range classes {
 		d := &pb.AuthorityDeclaration{TenantId: tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: authority, Epoch: 1}
@@ -40,6 +46,36 @@ func NewLedger(tenant, authority string, catalog *Catalog, classes ...string) *L
 		l.declarations = append(l.declarations, d)
 	}
 	return l
+}
+
+// Extend declares data classes and actions after composition: what an object a
+// tenant defined and published needs of its app's ledger (ADR-0034 D2). The
+// kernel takes the new schemas and the authority over the new classes.
+// It is called from inside a decision of this ledger — the transition that
+// publishes the definition — so the ledger's own lock is already held and is
+// not taken again; the catalog it extends carries its own lock for the readers
+// outside.
+func (l *Ledger) Extend(classes []string, actions []Action) error {
+	var schemas []*pb.SchemaRef
+	for _, a := range actions {
+		if a.Schema == "" || a.Target == "" || a.Title == "" || len(a.Roles) == 0 && !a.Automation {
+			return fmt.Errorf("action %q lacks a schema, target, title or roles", a.Schema)
+		}
+		schemas = append(schemas, &pb.SchemaRef{Name: a.Schema, Version: 1})
+	}
+	if err := l.schemas.Learn(schemas...); err != nil { // K7 S7
+		return err
+	}
+	l.Catalog.Add(actions...)
+	for _, class := range classes {
+		if slices.ContainsFunc(l.declarations, func(d *pb.AuthorityDeclaration) bool { return d.GetDataClass() == class }) {
+			continue
+		}
+		d := &pb.AuthorityDeclaration{TenantId: l.tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: l.authority, Epoch: 1}
+		l.authorities.Declare(d)
+		l.declarations = append(l.declarations, d)
+	}
+	return nil
 }
 
 // Declarations are the package's authority declarations, for edges (K5 A9).

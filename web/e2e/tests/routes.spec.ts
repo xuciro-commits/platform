@@ -285,3 +285,41 @@ test("route 23: import and export", async ({ page }) => {
   const file = await (await download).path();
   expect(readFileSync(file, "utf8")).toContain(`${a},Imported one,company`);
 });
+
+// Route 29 (ADR-0034): the hotel's manager defines an object the platform never
+// heard of, publishes it, and it is at once an ordinary one — its page, its
+// generated form, its records — with no restart and no code.
+test("route 29: define an object, publish it, use it", async ({ page }, testInfo) => {
+  const name = `visit${Date.now().toString(36).slice(-5)}`;
+  await open(page, "manager", "/home");
+  await page.getByRole("button", { name: "Builder" }).first().click(); // the app, from the launcher
+  await expect(page.getByRole("heading", { name: "Objects" })).toBeVisible();
+  await page.getByRole("button", { name: "Create object" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name" }).first().fill(name);
+  await dialog.getByRole("textbox", { name: "What people call it" }).fill("Visit");
+  await dialog.getByRole("textbox", { name: "What people call several" }).fill("Visits");
+  await dialog.getByRole("button", { name: "Add line" }).click();
+  const row = dialog.getByRole("row").last();
+  await row.getByRole("textbox").first().fill("guest");
+  await row.getByRole("textbox").nth(1).fill("Guest");
+  await row.getByRole("combobox").selectOption("text");
+  await row.getByRole("checkbox").last().check(); // searchable, so it names a record
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("row").filter({ hasText: name })).toBeVisible();
+
+  await page.getByRole("row").filter({ hasText: name }).click();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(page.getByRole("definition").filter({ hasText: `build.${name}` })).toBeVisible();
+
+  // The object someone just defined is now in the navigation and has its own page.
+  await page.getByRole("button", { name: "Toggle navigation" }).click({ trial: true }).catch(() => undefined);
+  await page.getByRole("button", { name: "Visits" }).click();
+  await expect(page.getByRole("heading", { name: "Visits" })).toBeVisible();
+  await page.getByRole("button", { name: "Create Visit" }).click();
+  const create = page.getByRole("dialog");
+  await create.getByRole("textbox", { name: "Guest" }).fill("Ada Lovelace");
+  await create.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("row").filter({ hasText: "Ada Lovelace" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("defined-object.png"), fullPage: true });
+});

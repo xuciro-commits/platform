@@ -573,6 +573,10 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			f.Type = "datetime"
 		case ft == moneyType:
 			f.Type = "money"
+		case ft.Kind() == reflect.String && sf.Tag.Get("ref") != "":
+			// A reference named by the type it points at, rather than Ref[T]: how
+			// a definition a tenant authored says it (ADR-0034 D1).
+			f.Type, f.Ref = "reference", sf.Tag.Get("ref")
 		case ft.Kind() == reflect.String && refined == "date", ft.Kind() == reflect.String && refined == "longtext":
 			f.Type = refined
 		case ft.Kind() == reflect.String && sf.Tag.Get("choices") != "":

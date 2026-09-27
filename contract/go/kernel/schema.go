@@ -33,6 +33,21 @@ func (r *SchemaRegistry) Accepts(s *pb.SchemaRef) bool {
 	}
 }
 
+// Learn makes (name, version) known (S7): a schema this receiver did not have
+// when it started — a package installed while it runs, or a definition someone
+// authored in a tenant. Learning a known version changes nothing.
+func (r *SchemaRegistry) Learn(refs ...*pb.SchemaRef) *Error {
+	for _, s := range refs {
+		if s.GetName() == "" || s.GetVersion() < 1 {
+			return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT) // S7, and S6: nothing is added
+		}
+	}
+	for _, s := range refs {
+		r.known[schemaKey(s)] = true
+	}
+	return nil
+}
+
 func (r *SchemaRegistry) AddUpgrade(u *pb.UpgradeStep) *Error {
 	switch {
 	case u.GetName() == "" || u.GetFromVersion() < 1:

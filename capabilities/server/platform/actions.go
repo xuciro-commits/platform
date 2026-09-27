@@ -2,6 +2,7 @@ package platform
 
 import (
 	"slices"
+	"sync"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -97,6 +98,10 @@ type Field struct {
 // Catalog holds a domain's actions and which capabilities are deactivated for a
 // deployment (start-up configuration, not runtime installation).
 type Catalog struct {
+	// mu guards both: an app may declare an action after composition (the
+	// generated actions of an object a tenant published, ADR-0034) while
+	// members read their catalog.
+	mu       sync.RWMutex
 	actions  []Action
 	disabled map[string]bool
 }
@@ -110,6 +115,8 @@ func NewCatalog(actions ...Action) *Catalog {
 
 // Disable deactivates a capability; false if no action belongs to it.
 func (c *Catalog) Disable(capability string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if !slices.ContainsFunc(c.actions, func(a Action) bool { return a.Capability == capability }) {
 		return false
 	}
@@ -117,11 +124,33 @@ func (c *Catalog) Disable(capability string) bool {
 	return true
 }
 
+// Add declares actions after composition: the generated actions of an object a
+// tenant defined and published (ADR-0034 D2). An action already declared is
+// replaced, so publishing an object again keeps one declaration of each.
+func (c *Catalog) Add(actions ...Action) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, a := range actions {
+		a.NeedsApproval = a.Approval != nil
+		if i := slices.IndexFunc(c.actions, func(x Action) bool { return x.Schema == a.Schema }); i >= 0 {
+			c.actions[i] = a
+			continue
+		}
+		c.actions = append(c.actions, a)
+	}
+}
+
 // All are the declared actions, active or not.
-func (c *Catalog) All() []Action { return slices.Clone(c.actions) }
+func (c *Catalog) All() []Action {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return slices.Clone(c.actions)
+}
 
 // Action is the declaration of schema, active or not.
 func (c *Catalog) Action(schema string) (Action, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	i := slices.IndexFunc(c.actions, func(a Action) bool { return a.Schema == schema })
 	if i < 0 {
 		return Action{}, false
@@ -131,6 +160,8 @@ func (c *Catalog) Action(schema string) (Action, bool) {
 
 // Enabled reports whether schema is a declared action of an active capability.
 func (c *Catalog) Enabled(schema string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	i := slices.IndexFunc(c.actions, func(a Action) bool { return a.Schema == schema })
 	return i >= 0 && !c.disabled[c.actions[i].Capability]
 }
@@ -146,6 +177,8 @@ func (c *Catalog) Permits(role, schema string) bool {
 
 // For is the catalog a caller with role receives: enabled actions it may call.
 func (c *Catalog) For(role string) []Action {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	out := []Action{}
 	for _, a := range c.actions {
 		if !c.disabled[a.Capability] && (slices.Contains(a.Roles, role) || slices.Contains(a.Roles, AnyMember)) {
@@ -157,6 +190,8 @@ func (c *Catalog) For(role string) []Action {
 
 // Roles are the roles an app defines: every role some action grants.
 func (c *Catalog) Roles() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	var out []string
 	for _, a := range c.actions {
 		for _, r := range a.Roles {

@@ -44,6 +44,12 @@ type Host interface {
 	Stored(tenant, hash string) bool
 	// Record is a record by "<type>/<id>" as its app holds it (an event's Changed ones, ADR-0028 D8).
 	Record(ref string) (any, bool)
+	// Install declares an entity the app composed at runtime — an object someone
+	// defined in this tenant (ADR-0034) — with the actions generated for it and
+	// the pages people open it through. Installed again, the type takes its new
+	// fields and its records come with them. The app teaches its own ledger the
+	// data class and schemas first (Ledger.Extend).
+	Install(e platform.Entity, actions []platform.Action, pages ...platform.Page) error
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
 	Declares(name string) bool
 	// Seen marks an app's notifications with any of keys read for everyone.
