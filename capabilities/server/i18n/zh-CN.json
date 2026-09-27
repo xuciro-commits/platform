@@ -1,4 +1,12 @@
 {
+ "No run of this agent was confirmed, changed or rejected by a person yet, so there is nothing to compare the candidate with. Let people judge its runs first, or run its declared cases.": "这个智能体还没有被人确认、修改或驳回过的运行，所以没有可以拿来比较的。先让人评判它的运行，或者运行它声明的测试用例。",
+ "The refusal's code": "拒绝的错误码",
+ "Why it was refused, as the provider said": "提供方给出的拒绝原因",
+ "{member} holds no role in {app}, so may not {action}": "{member} 在 {app} 里没有角色，不能{action}",
+ "{member} may not {action} on this record": "{member} 不能对这条记录{action}",
+ "The role {role} in {app} may not {action}": "{app} 里的角色 {role} 不能{action}",
+ "{record} is archived": "{record} 已归档",
+ "{record} is {state}; {transition} takes it only from {states}": "{record} 当前是 {state}；{transition} 只能从 {states} 开始",
  "Case": "用例",
  "Passes": "通过次数",
  "Runs": "运行次数",

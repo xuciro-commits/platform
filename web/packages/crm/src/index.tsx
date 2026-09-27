@@ -2,12 +2,12 @@
 // whichever app provides the lodging protocol (@pkg/lodging, ADR-0011). It
 // knows no other app: a stay opens in its provider's view by reference.
 import "./i18n";
-import { GeneratedForm, Records, defineApp, newId, useHost, useOpenRecord, useRead } from "@platform/app";
+import { RecordDetail, Records, defineApp, newId, useHost, useOpenRecord, useRead } from "@platform/app";
 import { BookingTable, type Booking } from "@pkg/lodging";
 import {
-  Button, DataTable, Dialog, EntityCard, EntityForm, Input, PageHeader, StatusTag, Tag, defineStatuses, useWorkspace, type ColumnDef,
+  Button, Dialog, EntityForm, Input, StatusTag, Tag, defineStatuses,
  t } from "@platform/ui";
-import { BedDouble, Building2, Handshake, Users } from "lucide-react";
+import { BedDouble, Building2, Handshake } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -26,31 +26,6 @@ const group = z.object({ rooms: z.number().int().min(1).max(20), roomType: z.str
 const stay = z.object({ guest: z.string().trim().min(1, t("Required")), roomType: z.string().trim().min(1, t("Required")), checkIn: z.iso.date(), checkOut: z.iso.date() })
   .refine((s) => s.checkOut > s.checkIn, { message: t("Check-out after check-in"), path: ["checkOut"] });
 
-function Customers() {
-  const customers = useRead<Customer[]>("/v1/customers") ?? [];
-  const { can, decide } = useHost();
-  const { open } = useWorkspace();
-  const [creating, setCreating] = useState(false);
-  const columns: ColumnDef<Customer, any>[] = [
-    { accessorKey: "name", header: t("Account") },
-    { accessorKey: "kind", header: t("Kind"), meta: { width: 110 }, cell: (c) => <Tag label={c.getValue()} /> },
-    { id: "open", header: t("Open opportunities"), meta: { width: 150, align: "right" }, accessorFn: (c) => c.opportunities.filter((o) => o.stage === "open").length },
-    { id: "stays", header: t("Stays"), meta: { width: 90, align: "right" }, accessorFn: (c) => c.opportunities.reduce((n, o) => n + o.bookings.length, 0) },
-  ];
-  return (
-    <>
-      <PageHeader title={t("Customers")} description={t("Accounts with their opportunities, and the stays booked for them through the lodging protocol.")}
-        actions={can("crm.account.create") && <Button variant="primary" onClick={() => setCreating(true)}>{t("New account")}</Button>} />
-      <DataTable data={customers} columns={columns} getRowId={(c) => c.id} height="calc(100dvh - 190px)"
-        onRowClick={(c) => open({ view: "customer", params: { id: c.id } }, { window: "float" })} empty={t("No accounts yet")} />
-      <Dialog open={creating} onOpenChange={setCreating} title={t("New account")}>
-        <GeneratedForm type="crm.account" submitLabel={t("Create")} onCancel={() => setCreating(false)}
-          onSubmit={async (v) => { if (await decide("crm.account.create", { type: "crm.account", id: newId("ACC") }, v, { expectedRevision: 0 })) setCreating(false); }} />
-      </Dialog>
-    </>
-  );
-}
-
 function CustomerDetail({ id }: { id: string }) {
   const customer = useRead<Customer[]>("/v1/customers")?.find((c) => c.id === id);
   const { can, decide } = useHost();
@@ -61,11 +36,16 @@ function CustomerDetail({ id }: { id: string }) {
   if (!customer) return <p className="text-sm text-muted">{t("No account")} {id}.</p>;
   const close = (o: Opportunity, outcome: "won" | "lost") =>
     decide("crm.opportunity.close", { type: "crm.opportunity", id: o.id }, { outcome }, { expectedRevision: o.revision });
+  // The account's record page — its fields, files, comments and history — and
+  // below it what the CRM adds: its opportunities, their stays and group blocks
+  // (one list and one page per type; hand-written views only add, F-33).
   return (
     <div className="grid max-w-5xl gap-4">
-      <EntityCard title={customer.name} subtitle={customer.id} status={<Tag label={customer.kind} />}
-        properties={[[t("Opportunities"), customer.opportunities.length], [t("Stays"), customer.opportunities.reduce((n, o) => n + o.bookings.length, 0)]]}
-        actions={can("crm.opportunity.open") && <Button onClick={() => setOpening(true)}>{t("Open opportunity")}</Button>} />
+      <RecordDetail type="crm.account" id={id} />
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold">{t("Opportunities")} · {customer.opportunities.length} · {t("Stays")} {customer.opportunities.reduce((n, o) => n + o.bookings.length, 0)}</h2>
+        {can("crm.opportunity.open") && <Button size="sm" onClick={() => setOpening(true)}>{t("Open opportunity")}</Button>}
+      </div>
       {customer.opportunities.map((o) => (
         <section key={o.id} className="rounded-md border border-border bg-surface p-3">
           <div className="mb-2 flex items-center gap-2">
@@ -158,7 +138,8 @@ export default defineApp({
   id: "crm",
   title: "CRM",
   icon: <Handshake />,
-  home: { view: "customers" },
+  home: { view: "accounts" },
+  opens: { "crm.account": "customer" }, // an account opens with its opportunities
   // The pipeline within what the member may see: a sales rep's own opportunities, a manager's all (ADR-0019).
   dashboards: [{ id: "pipeline", title: t("Pipeline"), description: t("Opportunities you may see, by stage, owner and month."), charts: [
     { title: t("Open opportunities"), data: { ...opportunities, domain: [["stage", "=", "open"]] }, mark: "kpi", encoding: { y: count } },
@@ -169,14 +150,12 @@ export default defineApp({
     { title: t("Opened per month"), data: opportunities, mark: "line", encoding: { x: { field: "created", timeUnit: "month", type: "temporal" }, y: count } },
   ] }],
   views: [
-    { id: "customers", title: () => t("Customers"), render: () => <Customers /> },
     { id: "customer", title: (p) => p.id ?? t("Customer"), render: (p) => <CustomerDetail id={p.id ?? ""} /> },
-    { id: "accounts", title: () => t("Accounts"), render: () => <Records type="crm.account" /> },
+    { id: "accounts", title: () => t("Accounts"), render: () => <Records type="crm.account" description={t("Customers, companies or people, each with their opportunities and the stays booked for them.")} /> },
     { id: "opportunities", title: () => t("Opportunities"), render: () => <Records type="crm.opportunity" /> },
   ],
   nav: () => [{ label: "CRM", items: [
-    { label: t("Customers"), icon: <Building2 />, route: { view: "customers" } },
-    { label: t("Accounts"), icon: <Users />, route: { view: "accounts" } },
+    { label: t("Accounts"), icon: <Building2 />, route: { view: "accounts" } },
     { label: t("Opportunities"), icon: <Handshake />, route: { view: "opportunities" } },
   ] }],
 });

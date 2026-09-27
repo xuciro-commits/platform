@@ -66,10 +66,12 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
  * tabs are routes (one per entity), a command palette (⌘K) and notifications.
  * The layout survives restarts (per `storageKey`); the active tab is in the URL.
  */
-export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, onActiveRoute, onLanguage }: {
+export function Workspace({ product, storageKey, views, nav, home, menus = [], commands = [], session, status, launcher, onActiveRoute, onLanguage, search }: {
   product: string; storageKey: string; views: View[]; nav: NavSection[]; home: Route;
   menus?: Menu[]; commands?: ShellCommand[]; session?: Session; status?: ReactNode;
   launcher?: Launcher; onActiveRoute?: (route: Route) => void;
+  /** Records matching what is typed in the palette (⌘K), opened on choice: the palette searches data, not only commands. */
+  search?: (text: string) => Promise<{ id: string; label: string; detail?: string; open: () => void }[]>;
   /** Keeps a chosen language beyond this browser, e.g. as the member's preference; the page reloads in it after. */
   onLanguage?: (id: string) => unknown;
 }) {
@@ -77,6 +79,14 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   const [active, setActive] = useState<string>();
   const [openTabs, setOpenTabs] = useState<{ key: string; title: string }[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [found, setFound] = useState<{ id: string; label: string; detail?: string; open: () => void }[]>([]);
+  useEffect(() => { // records for what is typed, a moment after typing stops
+    if (!search || typed.trim().length < 2) { setFound([]); return; }
+    let live = true;
+    const wait = setTimeout(() => { void search(typed).then((hits) => { if (live) setFound(hits); }).catch(() => undefined); }, 200);
+    return () => { live = false; clearTimeout(wait); };
+  }, [search, typed]);
   const [navOpen, setNavOpen] = useState(true);
   const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
   const followed = useRef(onActiveRoute);
@@ -231,9 +241,17 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
       <Command.Dialog open={paletteOpen} onOpenChange={setPaletteOpen} label={t("Command palette")}
         overlayClassName="fixed inset-0 z-40 bg-black/30"
         contentClassName="fixed left-1/2 top-[15%] z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-md border border-border bg-surface shadow-2xl">
-        <Command.Input placeholder={t("Go to, open, run…")} className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
+        <Command.Input value={typed} onValueChange={setTyped} placeholder={t("Search records, go to, open, run…")} className="h-10 w-full border-b border-border bg-transparent px-3 text-base outline-none" />
         <Command.List className="max-h-80 overflow-auto p-1">
           <Command.Empty className="p-3 text-sm text-muted">{t("No results")}</Command.Empty>
+          {found.length > 0 && (
+            <Command.Group heading={t("Records")} className={paletteGroup}>
+              {found.map((hit) => (
+                <Command.Item key={hit.id} value={`record ${typed} ${hit.label} ${hit.id}`} className={paletteItem}
+                  onSelect={() => { hit.open(); setPaletteOpen(false); }}>{hit.label}{hit.detail && <span className="ml-auto font-mono text-xs text-muted">{hit.detail}</span>}</Command.Item>
+              ))}
+            </Command.Group>
+          )}
           {launcher && (
             <Command.Group heading={t("Apps")} className={paletteGroup}>
               {launcher.apps.map((a) => (

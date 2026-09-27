@@ -297,7 +297,11 @@ func (p *Plant) confirm(who platform.Caller, s *pb.Submission, o Order, now time
 // host at once, or still sent until an ERP outside answers its adapter.
 func (p *Plant) answer(who platform.Caller, o Order, a platform.Answer) (production.Order, bool) {
 	if a.Outcome == "refused" {
-		return production.Order{State: "refused", Detail: a.Code}, o.ERP == "sent"
+		detail := a.Code
+		if a.Reason != "" {
+			detail = a.Reason
+		}
+		return production.Order{State: "refused", Detail: detail}, o.ERP == "sent"
 	}
 	return awaited(who, o)
 }

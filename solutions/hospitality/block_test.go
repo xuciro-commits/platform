@@ -73,6 +73,8 @@ func TestGroupBlock(t *testing.T) {
 	// and the first is given back.
 	w.expect(plan(w, "OPP-2", 2, "2026-11-20", "2026-11-10"), "ok")
 	w.expect(block(w, "OPP-2")+" "+reservation("OPP-2-H1"), "failed OPP-2-H1:released OPP-2-H2:refused released")
+	// The CRM reads why the hotel refused, not only its code (F-23).
+	w.expect(opportunity(w, "OPP-2").Stays[1].Detail, "No suite is free from 2026-11-20 to 2026-11-28")
 
 	// Lost: released.
 	open(w, "OPP-3")

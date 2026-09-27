@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Waiting: {n}": "排队：{n}",
+  "Gave up: {n}": "已放弃：{n}",
+  "Past their quota: {n}": "超出配额的应用：{n}",
+  "Open breakers: {n} of {m}": "熔断中：{m} 个中的 {n} 个",
+  "Failing connectors: {n}": "异常的连接器：{n}",
+  "Failing endpoints: {n}": "异常的接收地址：{n}",
+  "Candidate model…": "选择候选模型…",
   "Declared cases": "声明的测试用例",
   "The agent's declared cases, three runs each, instead of its past runs": "用智能体声明的测试用例，每个跑三次，而不是它过去的运行",
   "Working": "工作中",

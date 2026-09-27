@@ -175,6 +175,19 @@ func TestLeaveApprovals(t *testing.T) {
 	do("bob", "work.approval.approve", work.ApprovalType, request("L4").ID, struct{}{})
 	expect("approved at last", leave("L4").State, "approved")
 
+	// Submitted from a page, with the revision it showed: the approval moves the
+	// leave to pending meanwhile, yet the last approval still runs it (the owner's testing).
+	draft("L9", "2027-03-01", "2027-03-01")
+	rev := leave("L9").Revision
+	keys++
+	raw, _ := json.Marshal(struct{}{})
+	if _, err := tn.Submit(member("alice"), &pb.Submission{TenantId: "t", PrincipalId: "alice", Authority: "hcm", IdempotencyKey: fmt.Sprint("k", keys),
+		Target: &pb.EntityRef{Type: LeaveType, Id: "L9"}, Schema: &pb.SchemaRef{Name: SchemaSubmit, Version: 1}, Payload: raw, ExpectedRevision: &rev}, now); err != nil {
+		t.Fatal(err)
+	}
+	do("bob", "work.approval.approve", work.ApprovalType, request("L9").ID, struct{}{})
+	expect("approved from a page", leave("L9").State+" "+request("L9").State, "approved approved")
+
 	// The department head rejects what the manager approved: the manager is told too.
 	draft("L5", "2027-02-01", "2027-02-07")
 	do("alice", SchemaSubmit, LeaveType, "L5", struct{}{})

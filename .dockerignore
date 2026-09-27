@@ -1,0 +1,8 @@
+# The images take Go sources and the built workspace (web/apps/workspace/dist) only.
+**/node_modules
+**/target
+.git
+.build
+**/*.test
+web/**/dist
+!web/apps/workspace/dist

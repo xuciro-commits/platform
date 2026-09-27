@@ -1,5 +1,8 @@
 # Built from the repository root: docker build -f solutions/hospitality/Dockerfile .
 FROM golang:1.27-alpine AS build
+# Modules through the mirror, and the module and build caches kept by BuildKit across
+# builds and images: a build downloads nothing it has before and compiles only what changed.
+ENV GOPROXY=https://goproxy.cn,direct CGO_ENABLED=0
 WORKDIR /src
 COPY contract/go contract/go
 COPY capabilities/server capabilities/server
@@ -10,7 +13,8 @@ COPY apps/csm/server apps/csm/server
 COPY protocols/lodging protocols/lodging
 COPY solutions/hospitality solutions/hospitality
 WORKDIR /src/solutions/hospitality
-RUN CGO_ENABLED=0 go build -trimpath -o /hospitality-server ./cmd/hospitality-server
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath -o /hospitality-server ./cmd/hospitality-server
 
 FROM alpine:3.22
 COPY --from=build /hospitality-server /usr/local/bin/hospitality-server

@@ -6,6 +6,7 @@
 package crm
 
 import (
+	"cmp"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -230,8 +231,11 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if p.Outcome != "won" && p.Outcome != "lost" {
 				return nil, invalid
 			}
-			if o.Stage != "open" || o.Block == "confirming" {
-				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+			if o.Stage != "open" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The opportunity is {stage} already; only an open one is closed", o.Stage)
+			}
+			if o.Block == "confirming" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The provider is still confirming the group's rooms; close it once it answers")
 			}
 			// Won with rooms held, it stays open until the provider confirms them
 			// all, and is won then; a failed confirmation leaves it open (F-40).
@@ -268,7 +272,7 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			if !ok {
 				return nil, invalid
 			}
-			o.Stays[i].Status, o.Stays[i].Detail = status, a.Code
+			o.Stays[i].Status, o.Stays[i].Detail = status, cmp.Or(a.Reason, a.Code) // the provider's why, when it said one
 			asks = append(asks, o.settle(o.Stays[i])...)
 			return func(r *pb.ChangeRecord) {
 				who.Put(r, o)

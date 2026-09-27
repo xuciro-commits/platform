@@ -90,6 +90,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Floating windows stay below every dialog, sheet, menu and palette (z-40/50),
+   so a dialog opened from a float shows above it. Set on the floating elements
+   themselves: dockview declares the variable there in terms of itself, which
+   CSS treats as invalid, so a value set above them never arrives (999 wins). */
+.platform-dock .dv-resize-container,
+.platform-dock .dv-render-overlay,
+.platform-dock .dockview-theme-light {
+  --dv-overlay-z-index: 10;
+}
+
 /* Docking workspace (dockview) on the platform tokens. */
 .platform-dock .dockview-theme-light {
   --dv-group-view-background-color: var(--background);

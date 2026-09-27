@@ -124,5 +124,7 @@ Our constraints:
 - **Not yet:** a developer MCP (coding agents read the repository, not the host); a scaffold for a protocol or an agent.
 - **Every split of a pattern** (F-25, 2026-09-27): a text is said through the most specific pattern with a split whose every value the language can say — a field's help holding ": " reads whole — and only then through the first pattern that matches at all.
 - **Refusals say why** (F-23, 2026-09-27): `platform.Refuse(code, text, values…)` gives a refusal a message for people — English with `{placeholders}`, said through the app's dictionary in the reader's language — in the kernel error's `Message`, which is never contract (`contract/spec/errors.md`: vectors compare codes only). `POST /v1/submissions` answers `{code, message}`; the workspace shows the message. The ERP's posting says which line and why.
+- **Refusals of the platform's own checks say why** (2026-09-27): a role that does not reach an action ("The role … in … may not …", or no role at all), a record not in a state a generated transition leaves, an archived record — in the reader's language like apps' messages.
+
 
 

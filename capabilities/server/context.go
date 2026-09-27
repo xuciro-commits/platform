@@ -8,6 +8,7 @@ import (
 
 	"platformkernel/kernel"
 	"platformserver/apps/flow"
+	"platformserver/apps/relations"
 	"platformserver/apps/work"
 	"platformserver/platform"
 )
@@ -127,6 +128,9 @@ func (t *Tenant) Search(reader *platform.Member, q string, now time.Time) []Hit 
 		return out
 	}
 	for _, info := range t.Entities(m) {
+		if info.Type == relations.FollowType { // who follows what is no answer to a search
+			continue
+		}
 		query := platform.Query{Search: q, Limit: 5}
 		if rest, named := t.names(info, q); named { // "open opportunities" searches opportunities for "open" (ADR-0023 D1)
 			query.Search = rest

@@ -88,13 +88,16 @@ test("route 25: the agents overview and its switch", async ({ page }) => {
 });
 
 // Route 26 (ADR-0029 D6): an evaluation of the agent's declared cases starts from Settings and reports.
-test("route 26: an evaluation suite", async ({ page }) => {
+test("route 26: an evaluation suite", async ({ page, request }) => {
+  const provider = fresh("lm").toLowerCase();
+  await decide(request, "manager", "ai", "ai.provider.add", { type: "ai.provider", id: provider }, { kind: "local", baseUrl: "http://127.0.0.1:9/v1" });
+  await decide(request, "manager", "ai", "ai.model.enable", { type: "ai.model", id: `${provider}/candidate` }, { access: "everyone" });
   await open(page, "manager", "/evaluations");
   await page.getByLabel("Agent", { exact: true }).selectOption("csm.triage");
-  await page.getByLabel("Candidate model").fill("none/none");
+  await page.getByLabel("Candidate model").selectOption(`${provider}/candidate`); // picked from the enabled models, never typed
   await page.getByRole("checkbox", { name: "Declared cases" }).check();
   await page.getByRole("button", { name: "Evaluate" }).click();
-  await expect(page.getByRole("cell", { name: "none/none" }).first()).toBeVisible();
+  await expect(page.getByRole("cell", { name: `${provider}/candidate` }).first()).toBeVisible();
 });
 
 // Route 18 (ADR-0027): the process answers /healthz; Settings → Automation shows the tenant's health.

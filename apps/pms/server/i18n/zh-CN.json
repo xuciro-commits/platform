@@ -1,4 +1,7 @@
 {
+ "The hotel sells no room type {type}, or {from} to {to} is no stay": "酒店没有房型 {type}，或者 {from} 到 {to} 不是有效的住宿日期",
+ "Reservation {id} exists already": "预订 {id} 已存在",
+ "No {type} is free from {from} to {to}": "{from} 到 {to} 没有空的 {type}",
  "A hold's last day": "保留的最后一天",
  "Archive a room type: it leaves lists but stays referenced and in history.": "归档房型：它不再出现在列表中，但引用和历史仍保留。",
  "Archive room type": "归档房型",

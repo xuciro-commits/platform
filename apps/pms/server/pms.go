@@ -362,14 +362,17 @@ func (h *Hotel) validate(c platform.Caller, s *pb.Submission, overbooking bool) 
 	case SchemaCreate, SchemaHold:
 		var p createPayload
 		held := s.GetSchema().GetName() == SchemaHold
-		if json.Unmarshal(s.GetPayload(), &p) != nil || p.Guest == "" || !h.validStay(c, p.Stay) || held && !validDay(p.Until) {
+		if json.Unmarshal(s.GetPayload(), &p) != nil || p.Guest == "" || held && !validDay(p.Until) {
 			return Reservation{}, invalid
 		}
+		if !h.validStay(c, p.Stay) {
+			return Reservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The hotel sells no room type {type}, or {from} to {to} is no stay", p.RoomType, p.CheckIn, p.CheckOut)
+		}
 		if known {
-			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+			return Reservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Reservation {id} exists already", id)
 		}
 		if !h.fits(c, p.Stay, "", overbooking) {
-			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+			return Reservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "No {type} is free from {from} to {to}", p.RoomType, p.CheckIn, p.CheckOut)
 		}
 		r := Reservation{Record: platform.Record{ID: id}, RoomType: platform.Ref[RoomType](p.RoomType), CheckIn: p.CheckIn, CheckOut: p.CheckOut, Guest: p.Guest, Status: lodging.Booked}
 		if held {
@@ -385,7 +388,7 @@ func (h *Hotel) validate(c platform.Caller, s *pb.Submission, overbooking bool) 
 			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_NOT_FOUND)
 		}
 		if !h.fits(c, m, id, overbooking) {
-			return Reservation{}, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
+			return Reservation{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "No {type} is free from {from} to {to}", m.RoomType, m.CheckIn, m.CheckOut)
 		}
 		existing.RoomType, existing.CheckIn, existing.CheckOut = platform.Ref[RoomType](m.RoomType), m.CheckIn, m.CheckOut
 		return existing, nil

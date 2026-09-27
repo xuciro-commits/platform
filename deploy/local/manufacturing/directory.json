@@ -98,5 +98,39 @@
         "role": "assistant"
       }
     ]
+  },
+  {
+    "subjects": [
+      "user:buyer@plant.test"
+    ],
+    "id": "buyer-1",
+    "roles": {
+      "erp": "buyer",
+      "ai": "user"
+    },
+    "units": [
+      {
+        "unit": "plant-sz",
+        "role": "buyer",
+        "primary": true
+      }
+    ]
+  },
+  {
+    "subjects": [
+      "user:accountant@plant.test"
+    ],
+    "id": "acc-1",
+    "roles": {
+      "erp": "accountant",
+      "ai": "user"
+    },
+    "units": [
+      {
+        "unit": "plant-sz",
+        "role": "accountant",
+        "primary": true
+      }
+    ]
   }
 ]

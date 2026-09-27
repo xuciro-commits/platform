@@ -17,6 +17,8 @@ compose down -v --remove-orphans >/dev/null 2>&1 || true
 pnpm --dir ../../web/apps/workspace build >/dev/null # served by both hosts (ADR-0018)
 # Built apart, with plain progress: an image build whose output goes to a file can stall otherwise.
 compose build --progress plain >"$backup/build.log" 2>&1 || { tail -n 30 "$backup/build.log" >&2; fail "compose build"; }
+# Build cache unused for three days goes; the Go module and build caches in use stay (Dockerfiles).
+docker buildx prune -f --filter until=72h >/dev/null 2>&1 || true
 compose up -d --quiet-pull >"$backup/up.log" 2>&1 || { tail -n 30 "$backup/up.log" >&2; fail "compose up"; }
 wait_for "$IDP/.well-known/openid-configuration"
 [[ $(curl -s "$IDP/.well-known/openid-configuration" | jq -r .issuer) == "http://localhost:$IDP_PORT/auth/v1/" ]] || fail "issuer"
@@ -148,7 +150,7 @@ done
 for _ in $(seq 20); do [[ $(wo WO-3) == refused* ]] && break; sleep 0.5; done
 [[ $(wo WO-3) == "refused no planned order to confirm against " ]] || fail "refusal of WO-3: $(wo WO-3)"
 submit "$AGENT" a-2 mes.order.reconfirm mes.order WO-3 '{"planned":"MO-3"}' | jq -e .record >/dev/null || fail "assistant resend"
-[[ $(wo WO-3) == "refused ERROR_CODE_POLICY_DENIED MO-3" ]] || fail "the ERP took the assistant's confirmation: $(wo WO-3)"
+[[ $(wo WO-3) == "refused agent-l1 holds no role in erp, so may not "*" MO-3" ]] || fail "the ERP took the assistant's confirmation, or refused it without saying why: $(wo WO-3)"
 submit "$SUP" a-3 mes.order.reconfirm mes.order WO-3 '{}' | jq -e .record >/dev/null || fail "supervisor resend"
 [[ $(wo WO-3) == "confirmed MJ/"????"/00002 MO-3" ]] || fail "WO-3 after the supervisor's resend: $(wo WO-3)"
 mailed() { curl -s "$SINK/mail" | jq -r '[.[] | select(.to == "sup@plant.test") | .subject] | join("|")'; }

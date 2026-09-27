@@ -1,4 +1,8 @@
 {
+ "The provider is still confirming the group's rooms; close it once it answers": "提供方还在确认团队房间，等它答复后再关闭",
+ "The opportunity is {stage} already; only an open one is closed": "商机已经是 {stage}，只有进行中的商机才能关闭",
+ "The refusal's code": "拒绝的错误码",
+ "Why it was refused, as the provider said": "提供方给出的拒绝原因",
  "A chance to sell something to an account, followed until it is won or lost; stays for a group can be booked through the lodging protocol.": "向某客户销售的一次机会，一直跟进到赢单或输单；可以通过住宿协议为团队预订住宿。",
  "A customer the company sells to: an organisation or a person.": "公司销售的对象：一个组织或一个人。",
  "Account": "客户",

@@ -113,5 +113,7 @@ Two things we keep that they mostly do not have:
   - The owner's local sales journal replays into 2 room types and 6 reservations.
 - **Not yet:** references to a protocol's entity type (D3 allows them, none needed yet). The reference picker in generated forms was built with the ERP (ADR-0024 7a).
 - **Lines in history** (F-26, F-37, 2026-09-27): a record's history shows a changed lines field row by row — lines added, removed, and the cells changed — matched by the first column unique on both sides (`LinesChange`); a timeline note keeps a protocol event's title apart (`Note.Title`), said in the reader's language.
+- **No null lists** (the owner's testing, 2026-09-27): every record is stored with its nil lists made empty (`emptyLists`, in the one store every record passes and on restoring a snapshot), so a page never reads null where the type says a list — an approval request with no levels had crashed its page.
+
 
 

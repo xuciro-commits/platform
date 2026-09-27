@@ -39,7 +39,7 @@ OPENROUTER_API_KEY=sk-or-...
 
 - 文件（ADR-0028）：存在 RustFS（S3 兼容），S3 接口 `http://127.0.0.1:9000`，管理界面 `http://127.0.0.1:9001`，账号 `platform`，密码 `platform-files-local-only`。日志里只记文件的哈希，备份时 RustFS 的卷要和 PostgreSQL 一起备份。
 - 健康检查：`http://127.0.0.1:8490/healthz`、`http://127.0.0.1:8495/healthz`（进程是否活着）；租户的健康（队列、放弃的工作、超配额、熔断器）是管理员的 `/v1/health`，也显示在 设置 → 自动化。
-- 链路和指标（ADR-0027）：给主机设环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`（如 `http://otel-collector:4318`）就会按 OTLP 导出；不设则不导出。
+- 链路和指标（ADR-0027）：给主机设环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`（如 `http://otel-collector:4318`）就会按 OTLP 导出；不设则不导出。本地环境**没有**装采集器（Jaeger、Grafana 这类），所以现在没有地址可填、也没有界面可看；不装也不影响任何功能，平台里能看的是 设置 → 自动化 的健康状态和运行、流程页上的调用链。要看完整链路时再加一个采集器（需要新的镜像，先确认）。
 
 | 服务 | 地址 | 说明 |
 |---|---|---|
@@ -81,10 +81,17 @@ cd deploy/local && docker compose exec postgres psql -U platform -d platform -c 
 | `qa1@plant.test` | MES | `qa-1` | mes 质量；ai 用户 | — |
 | `qa2@plant.test` | MES | `qa-2` | mes 质量；ai 用户（报废需要两个质量签名） | — |
 | `sales@hotel.test` | 酒店业 `hotel-a` | `sales-1` | crm 销售、pms 前台、memstay 管家、hcm 员工；ai 用户 | 销售组、2026 年会项目 |
-| `manager@hotel.test` | 酒店业 | `manager-1` | crm 销售经理、pms 经理、memstay 管家、hcm 人事（hr）、csm lead、work 管理员；platform、org、ai 管理员 | 酒店总经理等；`hotel-a` 经理、`hospitality` 负责人（两级审批人） |
+| `manager@hotel.test` | 酒店业 | `manager-1` | crm 销售经理、pms 经理、memstay 管家、hcm 员工、csm lead；work、flow、agent 管理员；platform、org、ai 管理员 | 酒店总经理等；`hotel-a` 经理、`hospitality` 负责人（请假的两级审批人） |
+| `hr@hotel.test` | 酒店业 | `hr-1` | hcm 人事（hr）；ai 用户 | `hotel-a` 人事专员：看得到病假的"医疗原因"，经理和员工看不到 |
+| `desk@hotel.test` | 酒店业 | `desk-1` | csm 客服（desk）、pms 前台、hcm 员工；ai 用户 | 前台（`front-office`）：接工单、回复客户，模型不可用时工单进她的收件箱 |
+| `deputy@hotel.test` | 酒店业 | `deputy-1` | crm 销售经理、csm lead、hcm 员工；ai 用户 | `hotel-a` 副总经理：经理不在时代批（委托审批的被委托人） |
+| `buyer@plant.test` | ERP `plant-sz` | `buyer-1` | erp 采购员（buyer）；ai 用户 | 下采购订单、收货；超过审批限额的订单由 `sup@plant.test`（主管会计）审批 |
+| `accountant@plant.test` | ERP | `acc-1` | erp 会计（accountant）；ai 用户 | 起草、过账、冲销凭证，登记供应商发票 |
 
 - 本地 Rauthy 走 HTTP，所以 `rauthy/config.toml` 里设了 `[access] cookie_mode = 'danger-insecure'`：不设的话，Safari 会丢掉 Rauthy 的安全 cookie，浏览器登录会显示密码错误（密码其实是对的）。只用于本地。
 - Rauthy 管理员：`admin@platform.test`，密码 `Admin-Local-Only-1`。
+- 每个人只担一份职责，测试时换人登录就能看到权限的差别；要同时看两个人，用一个普通窗口加一个无痕窗口分别登录。
+- 新加的账号要 Rauthy 重新初始化才有（本地数据可丢）：`cd deploy/local && docker compose rm -sf rauthy && docker volume rm platform_rauthy && docker compose up -d rauthy`，再重建两个主机。
 - 成员名单来自 `manufacturing/directory.json` 和 `hospitality/directory.json`。`sup@plant.test` 同时是 ERP 的主管会计（controller）。改了要重建对应主机才生效；在 Settings 里授予的角色是决策，会保存在日志里。
 
 ## 服务账号与 AI 代理（client credentials）

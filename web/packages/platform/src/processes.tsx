@@ -1,6 +1,6 @@
 // Settings: flows (ADR-0020), agents and their evaluations (ADR-0021).
 import { ChainGraph, Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { Button, DataTable, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, Input, PageHeader, Select, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
+import { Button, DataTable, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { type AIModel } from "./shared";
@@ -99,8 +99,10 @@ export function Evaluations() {
           <Select aria-label={t("Agent")} className="w-64" value={chosen} onChange={(e) => setAgent(e.target.value)}>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.title} · {a.id}</option>)}
           </Select>
-          <Input aria-label={t("Candidate model")} className="w-80" list="enabled-models" placeholder={t("Candidate model, provider/model")} value={model} onChange={(e) => setModel(e.target.value)} />
-          <datalist id="enabled-models">{models.map((m) => <option key={`${m.provider}/${m.model}`} value={`${m.provider}/${m.model}`} />)}</datalist>
+          <Select aria-label={t("Candidate model")} className="w-80" value={model} onChange={(e) => setModel(e.target.value)}>
+            <option value="">{t("Candidate model…")}</option>
+            {models.map((m) => <option key={`${m.provider}/${m.model}`} value={`${m.provider}/${m.model}`}>{m.provider}/{m.model}</option>)}
+          </Select>
           <label className="flex items-center gap-1.5 text-sm" title={t("The agent's declared cases, three runs each, instead of its past runs")}>
             <input type="checkbox" checked={suite} onChange={(e) => setSuite(e.target.checked)} />{t("Declared cases")}
           </label>

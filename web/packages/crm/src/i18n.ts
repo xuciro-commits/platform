@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Customers, companies or people, each with their opportunities and the stays booked for them.": "客户，公司或个人，每个客户都有自己的商机和为它预订的住宿。",
   "Failed": "失败",
   "Released": "已释放",
   "Releasing": "释放中",

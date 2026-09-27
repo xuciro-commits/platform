@@ -1,4 +1,6 @@
 {
+ "The refusal's code": "拒绝的错误码",
+ "Why it was refused, as the provider said": "提供方给出的拒绝原因",
  "released": "已释放",
  "Summarise ticket": "总结工单",
  "Record what the customer wants in a line: the model's answer when the ticket was opened, or a person's.": "用一句话记下客户想要什么：工单打开时由模型回答，也可以由人来写。",

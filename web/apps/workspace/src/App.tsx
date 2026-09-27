@@ -5,7 +5,7 @@
 import "./i18n";
 import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
-import { Workspace, notify, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
+import { Workspace, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -190,6 +190,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           ...(app?.nav(host) ?? []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() }, ...(app?.commands?.(host) ?? [])]}
+        search={async (text) => (await client.get<{ type: string; id: string; title?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
+          .map((h) => ({ id: `${h.type}/${h.id}`, label: h.title || h.id, detail: `${h.type} · ${h.id}`,
+            open: () => { const view = host?.opens.get(h.type); location.hash = routeToHash(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
         status={<span className="text-xs text-muted">{app ? `${app.title}: ${host.role(app.id) ?? "—"}` : t("{n} apps", { n: apps.length })}</span>}
         session={{ tenant: me!.tenantId, principal: me!.principalId, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch }} />

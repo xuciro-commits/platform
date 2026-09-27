@@ -199,6 +199,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 				t.records.mu.Unlock()
 				return err
 			}
+			emptyLists(v) // a snapshot of older code may hold null lists
 			et.rows[recordOf(v).ID] = &row{value: v, history: r.History}
 		}
 	}

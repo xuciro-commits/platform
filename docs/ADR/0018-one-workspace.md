@@ -128,4 +128,6 @@ They agree on four things:
   - the backend-for-frontend token (D3 (b), now stage 9);
   - UI bundles loaded at run time (D2 (b), now stage 9).
   - Global search across records was built with agents (ADR-0021 batch 2).
+- **After the owner's testing** (2026-09-27): dialogs, sheets, menus and the palette show above floating windows (dockview's floating layer set below them); ⌘K searches records the member may read, files by name included, besides pages, apps and commands; a record's page says whether the member follows it; a type has one list and one page — the CRM's accounts open on the record page with its opportunities and stays below (`opens`, `RecordDetail`).
+
 

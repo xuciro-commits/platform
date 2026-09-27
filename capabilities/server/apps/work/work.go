@@ -393,6 +393,10 @@ func (w *Work) opened(c platform.Caller, r *pb.ChangeRecord, record any, now tim
 func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now time.Time) {
 	held := &pb.Submission{}
 	protojson.Unmarshal([]byte(a.Submission), held)
+	// The revision the requester saw was checked when they asked; since then
+	// the approval itself moved the record (its pending state), so the held
+	// submission runs by the rules of now, not that revision (D3).
+	held.ExpectedRevision = nil
 	requester, _ := w.host.Member(a.Requester)
 	_, err := w.host.Submit(w.host.Caller(requester, a.App, c.Replaying), held, now)
 	if err != nil {

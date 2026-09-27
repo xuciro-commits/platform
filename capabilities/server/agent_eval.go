@@ -172,6 +172,8 @@ func (a *Agents) evaluate(ev Evaluation, now time.Time) Evaluation {
 	}
 	if n := len(ev.Cases); n > 0 {
 		ev.Score = float64(ev.Agrees+ev.Avoids) / float64(n)
+	} else { // nothing to compare: say so, rather than a report of nothing (the owner's testing)
+		ev.Cases = []EvalCase{{Verdict: "nothing", Candidate: "No run of this agent was confirmed, changed or rejected by a person yet, so there is nothing to compare the candidate with. Let people judge its runs first, or run its declared cases."}}
 	}
 	return ev
 }

@@ -2,7 +2,7 @@
 // drawn on one canvas for every app — flows and their instances, routings,
 // approval chains, agent runs. Apps give nodes and edges; the canvas lays them
 // out in layers along the direction of flow, so nobody places boxes by hand.
-import { Background, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps } from "@xyflow/react";
+import { Background, Controls, Handle, MarkerType, Position, ReactFlow, useNodesInitialized, useReactFlow, useStore, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import type { Tone } from "../components/StatusTag";
@@ -78,11 +78,17 @@ function Box({ data }: NodeProps<Node<Data>>) {
 const nodeTypes = { box: Box };
 const fitting = { padding: 0.08, maxZoom: 1 };
 
-/** Fits the graph again when its canvas changes size (a window resized, a panel docked) or its nodes change. */
+/**
+ * Fits the graph once its nodes are measured, and again when its canvas changes
+ * size (a window resized, a panel docked) or its nodes change. Fitting before
+ * the nodes are measured, or in a canvas of no size (a float still opening),
+ * scales the graph to nothing: it showed and vanished (the owner's testing).
+ */
 function Refit({ count }: { count: number }) {
   const { fitView } = useReactFlow();
+  const measured = useNodesInitialized();
   const width = useStore((s) => s.width), height = useStore((s) => s.height);
-  useEffect(() => { void fitView(fitting); }, [fitView, width, height, count]);
+  useEffect(() => { if (measured && width > 0 && height > 0) void fitView(fitting); }, [fitView, measured, width, height, count]);
   return null;
 }
 

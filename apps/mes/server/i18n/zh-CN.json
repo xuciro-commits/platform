@@ -1,4 +1,6 @@
 {
+ "The refusal's code": "拒绝的错误码",
+ "Why it was refused, as the provider said": "提供方给出的拒绝原因",
  "A question to a supplier's agent about how soon it can deliver a product; bind it to the supplier's A2A endpoint.": "向供应商的智能体询问某产品最快多久能交货；绑定到供应商的 A2A 接收地址。",
  "A shop floor control: one lot of a shop order moving through the product's routing, operation by operation.": "车间控制单元：车间订单的一个批次，按产品工艺路线逐道工序流转。",
  "An order released to the shop floor to make a quantity of a product; it is split into SFCs and confirmed to the ERP when its last SFC ends.": "下达到车间、生产一定数量某产品的订单；拆分为多个 SFC，最后一个 SFC 结束时向 ERP 确认。",

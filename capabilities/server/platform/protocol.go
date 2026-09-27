@@ -98,6 +98,7 @@ type Answer struct {
 	Action  string `json:"action,omitempty"` // the protocol action
 	Outcome string `json:"outcome"`          // accepted or refused; a protocol's events may add their own, e.g. released
 	Code    string `json:"code,omitempty"`   // the refusal's code
+	Reason  string `json:"reason,omitempty"` // why, as the provider said it (F-23): a person reads it at the consumer
 	Ref     string `json:"ref,omitempty"`    // "<type>/<id>" of the provider's record
 	Text    string `json:"text,omitempty"`   // a model's answer (ADR-0029 D3)
 }
@@ -107,7 +108,8 @@ func AnswerFields() []Field {
 	return []Field{{Name: "call", Type: "string", Required: true, Description: "What was asked of the provider"},
 		{Name: "action", Type: "string", Description: "The protocol action"},
 		{Name: "outcome", Type: "string", Required: true, Description: "accepted or refused", Choices: []string{"accepted", "refused", "released"}},
-		{Name: "code", Type: "string", Description: "Why it was refused"},
+		{Name: "code", Type: "string", Description: "The refusal's code"},
+		{Name: "reason", Type: "string", Description: "Why it was refused, as the provider said"},
 		{Name: "ref", Type: "string", Description: "The provider's record"},
 		{Name: "text", Type: "string", Description: "A model's answer"}}
 }

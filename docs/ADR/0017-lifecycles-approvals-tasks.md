@@ -109,5 +109,7 @@ They agree on three separate things. We take them apart the same way:
   - HCM's leave is pending while approvers decide, rejected with the note, and may be submitted again (`TestLeaveApprovals`, Playwright route 4).
 - **Not yet:** delegation of tasks outside approvals (delegation of approvals and business calendars are built, ADR-0028). The helpdesk reference app, stage 2's second proof, was built as the CSM (ADR-0021 batch 2).
 - **Tasks on their record's page** (2026-09-27): a record's page lists the open tasks about it that the member may take (`RecordView.Tasks`) with their answers as buttons, so a flow's question — the MES correction's "resend" or "correct myself" — is answered where its notification leads, not only in the inbox.
+- **A held submission runs by the rules of the moment** (2026-09-27): the revision the requester saw was checked when they asked; the approval then moves the record to its pending state, so the last approval runs the held submission without that revision (a page's submission had always ended "refused when run"). Tested with a revision in `TestLeaveApprovals`.
+
 
 

@@ -35,7 +35,7 @@
       "org": "admin",
       "memstay": "keeper",
       "ai": "admin",
-      "hcm": "hr",
+      "hcm": "employee",
       "work": "admin",
       "flow": "admin",
       "agent": "admin",
@@ -63,6 +63,61 @@
       {
         "unit": "hospitality",
         "role": "head"
+      }
+    ]
+  },
+  {
+    "subjects": [
+      "user:hr@hotel.test"
+    ],
+    "id": "hr-1",
+    "roles": {
+      "hcm": "hr",
+      "ai": "user"
+    },
+    "units": [
+      {
+        "unit": "hotel-a",
+        "role": "hr officer",
+        "primary": true
+      }
+    ]
+  },
+  {
+    "subjects": [
+      "user:desk@hotel.test"
+    ],
+    "id": "desk-1",
+    "roles": {
+      "csm": "desk",
+      "pms": "front-desk",
+      "hcm": "employee",
+      "ai": "user"
+    },
+    "units": [
+      {
+        "unit": "front-office",
+        "role": "receptionist",
+        "primary": true
+      }
+    ]
+  },
+  {
+    "subjects": [
+      "user:deputy@hotel.test"
+    ],
+    "id": "deputy-1",
+    "roles": {
+      "crm": "sales-manager",
+      "hcm": "employee",
+      "csm": "lead",
+      "ai": "user"
+    },
+    "units": [
+      {
+        "unit": "hotel-a",
+        "role": "deputy manager",
+        "primary": true
       }
     ]
   }

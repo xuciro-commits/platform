@@ -41,14 +41,24 @@ export function Automation() {
         {subscriptions.length === 0 ? <span className="text-muted">{t("No subscriptions.")}</span> :
           subscriptions.map((s) => <Tag key={s.app + s.action} label={`${s.app} ← ${s.action}`} tone="info" />)}
       </div>
-      {health && <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-        <Tag label={health.status === "ok" ? t("Healthy") : t("Needs attention")} tone={health.status === "ok" ? "success" : "warning"} />
-        {health.queues.map((q) => <Tag key={q.app} label={t("{app}: {n} waiting, oldest {s} s", { app: q.app, n: q.depth, s: Math.round(q.oldestSeconds) })} tone="info" />)}
-        {health.failed > 0 && <Tag label={t("{n} gave up", { n: health.failed })} tone="danger" />}
-        {health.deferred.map((a) => <Tag key={a} label={t("{app} past its quota", { app: a })} tone="warning" />)}
-        {health.breakers.map((b) => <Tag key={b.destination} label={t("{destination}: breaker {state} after {n} failures", { destination: b.destination, state: t(b.state), n: b.failures })}
-          tone={b.state === "closed" ? "neutral" : "danger"} />)}
-      </div>}
+      {health && <section className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
+        {/* Every indicator, zero included: a healthy tenant reads as such, not as missing figures (the owner's testing). */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Tag label={health.status === "ok" ? t("Healthy") : t("Needs attention")} tone={health.status === "ok" ? "success" : "warning"} />
+          <Tag label={t("Waiting: {n}", { n: health.queues.reduce((n, q) => n + q.depth, 0) })} tone="info" />
+          <Tag label={t("Gave up: {n}", { n: health.failed })} tone={health.failed > 0 ? "danger" : "neutral"} />
+          <Tag label={t("Past their quota: {n}", { n: health.deferred.length })} tone={health.deferred.length > 0 ? "warning" : "neutral"} />
+          <Tag label={t("Open breakers: {n} of {m}", { n: health.openBreakers, m: health.breakers.length })} tone={health.openBreakers > 0 ? "danger" : "neutral"} />
+          <Tag label={t("Failing connectors: {n}", { n: health.connectorsFailing })} tone={health.connectorsFailing > 0 ? "danger" : "neutral"} />
+          <Tag label={t("Failing endpoints: {n}", { n: health.endpointsFailing })} tone={health.endpointsFailing > 0 ? "danger" : "neutral"} />
+        </div>
+        {(health.queues.length > 0 || health.deferred.length > 0 || health.breakers.length > 0) && <div className="flex flex-wrap items-center gap-2">
+          {health.queues.map((q) => <Tag key={q.app} label={t("{app}: {n} waiting, oldest {s} s", { app: q.app, n: q.depth, s: Math.round(q.oldestSeconds) })} tone="info" />)}
+          {health.deferred.map((a) => <Tag key={a} label={t("{app} past its quota", { app: a })} tone="warning" />)}
+          {health.breakers.map((b) => <Tag key={b.destination} label={t("{destination}: breaker {state} after {n} failures", { destination: b.destination, state: t(b.state), n: b.failures })}
+            tone={b.state === "closed" ? "neutral" : "danger"} />)}
+        </div>}
+      </section>}
       <h2 className="mb-1 text-sm font-semibold">{t("Owned work")}</h2>
       <DataTable data={work.data ?? []} columns={taskColumns} getRowId={(t) => t.id} height={200} searchable={false} empty={t("Nothing queued, no jobs")} />
       <h2 className="mb-1 mt-4 text-sm font-semibold">{t("Delivery attempts")}</h2>

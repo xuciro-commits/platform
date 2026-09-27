@@ -219,6 +219,35 @@ func copyOf(t reflect.Type, v any) reflect.Value {
 	return out
 }
 
+// emptyLists makes every nil list of a record an empty one, nested ones too,
+// so a record never reads null where its type says a list: a page reading
+// levels[level] or start.join got null from a Go nil slice (the owner's
+// testing, 2026-09-27). Lists marked omitempty are left out, as their tag says.
+func emptyLists(v reflect.Value) {
+	switch v.Kind() {
+	case reflect.Struct:
+		if _, ok := v.Interface().(time.Time); ok {
+			return
+		}
+		for i := range v.NumField() {
+			f := v.Type().Field(i)
+			if !f.IsExported() {
+				continue
+			}
+			x := v.Field(i)
+			if x.Kind() == reflect.Slice && x.IsNil() && !strings.Contains(f.Tag.Get("json"), "omitempty") && x.CanSet() {
+				x.Set(reflect.MakeSlice(x.Type(), 0, 0))
+				continue
+			}
+			emptyLists(x)
+		}
+	case reflect.Slice:
+		for i := range v.Len() {
+			emptyLists(v.Index(i))
+		}
+	}
+}
+
 func recordOf(v reflect.Value) *platform.Record {
 	return v.Field(0).Addr().Interface().(*platform.Record)
 }
@@ -231,6 +260,7 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	v := copyOf(et.info.Go, entity)
+	emptyLists(v)
 	rec := recordOf(v)
 	if rec.ID == "" {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}

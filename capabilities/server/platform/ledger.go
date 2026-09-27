@@ -61,7 +61,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	rules = l.checked(c, s, rules)
 	if c.rt != nil && c.rt.Probing() { // a request for approval: policy and rules, nothing recorded or applied (ADR-0017 D3)
 		if !c.Automation && !(l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())) {
-			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+			return nil, l.denied(c, s)
 		}
 		if rules != nil {
 			if _, err := rules(); err != nil {
@@ -70,9 +70,12 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		}
 		return nil, nil
 	}
+	refused := false // the kernel's policy step said no
 	receiver := kernel.Receiver{Changes: l.Changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
-			return c.Replaying || c.Automation || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
+			ok := c.Replaying || c.Automation || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
+			refused = !ok
+			return ok
 		}}
 	var apply func(*pb.ChangeRecord)
 	record, err := receiver.Receive(kernel.Caller{Tenant: l.tenant, Principal: c.ID}, s, now, func() *kernel.Error {
@@ -83,6 +86,9 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		apply, err = rules()
 		return err
 	})
+	if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED && err.Message == "" && refused {
+		err = l.denied(c, s) // the kernel's policy step refused: say whose role does not reach
+	}
 	if err == nil && apply != nil {
 		apply(record)
 		if c.rt != nil {
@@ -90,6 +96,22 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		}
 	}
 	return record, err
+}
+
+// denied is a refusal of the catalog's role check, with why (F-23): the
+// member's role in the app, or that they hold none, does not include the action.
+func (l *Ledger) denied(c Caller, s *pb.Submission) *kernel.Error {
+	action := s.GetSchema().GetName()
+	if declared, ok := l.Catalog.Action(action); ok && declared.Title != "" {
+		action = declared.Title
+	}
+	if c.Role() == "" {
+		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} holds no role in {app}, so may not {action}", c.ID, c.App, action)
+	}
+	if l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) {
+		return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} may not {action} on this record", c.ID, action)
+	}
+	return Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The role {role} in {app} may not {action}", c.Role(), c.App, action)
 }
 
 // checked puts before rules the check of the payload's declared choices and
@@ -192,8 +214,12 @@ func transition(c Caller, e Entity, t Transition, s *pb.Submission, now time.Tim
 	status := v.Elem().FieldByIndex(f.Index)
 	from := status.String()
 	pending := t.Approval != nil && t.Approval.Pending != "" && from == t.Approval.Pending && !c.Automation && !c.rt.Probing() // run by its approval, not asked again
-	if v.Elem().Field(0).Interface().(Record).Archived || !slices.Contains(t.From, from) && !pending {
-		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} // not in a state the transition leaves
+	id := s.GetTarget().GetId()
+	if v.Elem().Field(0).Interface().(Record).Archived {
+		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
+	}
+	if !slices.Contains(t.From, from) && !pending { // not in a state the transition leaves
+		return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is {state}; {transition} takes it only from {states}", id, from, t.Name, strings.Join(t.From, ", "))
 	}
 	if t.Do != nil {
 		if err := t.Do(c, v.Interface(), s.GetPayload(), now); err != nil {

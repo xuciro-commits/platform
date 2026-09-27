@@ -462,8 +462,12 @@ function Comments({ list, following, comments }: { list: RecordComment[]; follow
   const [text, setText] = useState("");
   return (
     <section>
-      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">{t("Comments")}
-        {comments && <Button size="sm" variant="ghost" onClick={() => void comments.follow(!following)}>{following ? t("Unfollow") : t("Follow")}</Button>}
+      <h2 className="mb-1 flex flex-wrap items-center gap-2 text-sm font-semibold">{t("Comments")}
+        {/* The follow state said, and the button that changes it: a bare "Follow" read as a heading (the owner's testing). */}
+        {comments && <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 text-xs font-normal text-muted">
+          {following ? t("You follow this record: you hear of its changes and comments") : t("You do not follow this record")}
+          <Button size="sm" variant={following ? "ghost" : undefined} onClick={() => void comments.follow(!following)}>{following ? t("Unfollow") : t("Follow")}</Button>
+        </span>}
       </h2>
       <ol className="grid gap-2">
         {list.map((c) => (

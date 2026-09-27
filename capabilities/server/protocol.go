@@ -185,7 +185,7 @@ func (t *Tenant) answer(q request, now time.Time) {
 	answer := platform.Answer{Call: q.Target, Action: q.Action, Outcome: "accepted"}
 	ref, done, err := t.invoke(q.caller, q.Protocol, q.Action, q.Target, platform.Raw(q.Payload), key, s.GetIdempotencyKey(), now)
 	if err != nil {
-		answer.Outcome, answer.Code = "refused", err.Code.String()
+		answer.Outcome, answer.Code, answer.Reason = "refused", err.Code.String(), err.Message
 		outcome = answer.Code
 	} else {
 		answer.Ref = ref.GetType() + "/" + ref.GetId()

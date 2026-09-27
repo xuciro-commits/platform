@@ -81,4 +81,6 @@ They agree:
 - **After the owner's testing** (2026-09-27):
   - Winning an opportunity with rooms held keeps it open while the provider confirms them: won once every room is booked; a refused confirmation fails the block and leaves it open, to be planned again or lost, and lost gives back what is still held (F-40, `TestGroupBlock`). The close probes each confirmation first.
   - A call about an existing target goes to the provider that knows it: when the bound provider answers NOT_FOUND, the host asks the others, applying nothing (`Tenant.holder`), so a hold made before a rebind is confirmed or released where it was made (F-39, `TestHoldsStayWithTheirProvider`).
+- **The provider's reason crosses** (2026-09-27): an Answer carries the refusal's message (`Answer.Reason`), so the consumer shows why the provider refused ("No suite is free from … to …"), not only its code; the PMS's refusals say why (`TestGroupBlock`).
+
 
