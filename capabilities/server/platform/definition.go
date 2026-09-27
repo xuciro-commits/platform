@@ -45,7 +45,31 @@ type Page struct {
 	ListFields   []string   `json:"listFields"`
 	DetailFields []string   `json:"detailFields"`
 	Actions      []AssetRef `json:"actions"`
+	// Sections are the widgets a composed page is laid out from (ADR-0035);
+	// with sections, Layout is "composed" and the fields above are unused.
+	Sections []Section `json:"sections,omitempty"`
 }
+
+// Section is one place on a composed page: a widget, what it is bound to, and
+// how wide it sits (ADR-0035). A table outputs the record someone selects; a
+// detail and the actions read it.
+type Section struct {
+	// Widget is table, detail, actions, chart, metric or text.
+	Widget string `json:"widget"`
+	Title  string `json:"title,omitempty"`
+	// Width is full or half, in the order the sections are laid out.
+	Width string `json:"width,omitempty"`
+	// Object is what it shows; empty: the page's own object.
+	Object  AssetRef   `json:"object,omitempty"`
+	Fields  []string   `json:"fields,omitempty"`  // table, detail
+	Actions []AssetRef `json:"actions,omitempty"` // actions
+	Group   string     `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
+	Measure string     `json:"measure,omitempty"` // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
+	Text    string     `json:"text,omitempty"`    // text
+}
+
+// Widgets are the widget kinds a composed page may hold (ADR-0035 D2).
+var Widgets = []string{"table", "detail", "actions", "chart", "metric", "text"}
 
 // Definition is one installed code asset as the reader may discover it.
 // Entity and Action reuse the same descriptions as the existing record/action

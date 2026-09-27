@@ -396,6 +396,7 @@ export type FieldInfo = {
   required?: boolean;
   search?: boolean;
   readOnly?: boolean;
+  aside?: boolean;
   choices?: string[];
   choiceTitles?: string[];
   ref?: string;
@@ -598,6 +599,7 @@ export type Page = {
   listFields: string[];
   detailFields: string[];
   actions: AssetRef[];
+  sections?: Section[];
 };
 
 export type Passage = {
@@ -707,6 +709,18 @@ export type SavedView = {
   entity: string;
   state: string;
   owner: string;
+};
+
+export type Section = {
+  widget: string;
+  title?: string;
+  width?: string;
+  object?: AssetRef;
+  fields?: string[];
+  actions?: AssetRef[];
+  group?: string;
+  measure?: string;
+  text?: string;
 };
 
 export type SettingValue = {

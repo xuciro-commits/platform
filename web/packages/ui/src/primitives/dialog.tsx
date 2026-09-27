@@ -12,13 +12,15 @@ export function Dialog({ open, onOpenChange, title, children, wide }: {
     <D.Root open={open} onOpenChange={onOpenChange}>
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-50 bg-black/40" />
-        <D.Content className={`fixed z-50 left-1/2 top-1/2 ${wide ? "w-[min(880px,calc(100vw-32px))]" : "w-[min(480px,calc(100vw-32px))]"} -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-surface p-4 shadow-xl`}>
+        {/* A dialog never grows past the screen: its title stays, its content
+            scrolls, and what it asks for is always reachable. */}
+        <D.Content className={`fixed z-50 left-1/2 top-1/2 flex max-h-[calc(100dvh-32px)] flex-col ${wide ? "w-[min(880px,calc(100vw-32px))]" : "w-[min(480px,calc(100vw-32px))]"} -translate-x-1/2 -translate-y-1/2 rounded-md border border-border bg-surface p-4 shadow-xl`}>
           <div className="mb-3 flex items-center justify-between">
             <D.Title className="text-base font-semibold">{title}</D.Title>
             <D.Close className="rounded-sm p-1 hover:bg-row-hover" aria-label="Close"><X className="size-3.5" /></D.Close>
           </div>
           <D.Description className="sr-only">{title}</D.Description>
-          {children}
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         </D.Content>
       </D.Portal>
     </D.Root>

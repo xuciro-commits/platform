@@ -2,18 +2,19 @@
 // host's installed definition registry. Live operation and the local preview
 // use the same list/detail layout and the UI kit's record components.
 import {
-  Button, Dialog, Panel, RecordPage, RecordWorkspace, type EntityInfo, type EntityRecord, type FieldInfo,
+  Button, Dialog, PageHeader, Panel, RecordPage, RecordWorkspace, type EntityInfo, type EntityRecord, type FieldInfo,
   type RecordPageData, type RecordSource, type RecordView, t,
 } from "@platform/ui";
 import { useMemo, useState } from "react";
 import { NewActions, PayloadFields } from "./actions";
+import { ComposedPage, isComposed } from "./sections";
 import { RecordDetail, assetKey, useHost, type Definition } from "./index";
 
 type PageDefinition = Definition & { page: NonNullable<Definition["page"]> };
 
 /** One read-only, permission-filtered descriptor returned by the host. */
 export function isPageDefinition(definition: Definition | undefined): definition is PageDefinition {
-  return !!definition?.page && definition.ref.kind === "page" && definition.page.layout === "list-detail";
+  return !!definition?.page && definition.ref.kind === "page" && (definition.page.layout === "list-detail" || definition.page.layout === "composed");
 }
 
 /** A code page operates through the current member's record/action contracts. */
@@ -22,6 +23,12 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
   const [selected, setSelected] = useState<string>();
   const page = definition.page;
   const allowed = page.actions.map((ref) => ref.name);
+  if (isComposed(page)) { // laid out from sections someone composed (ADR-0035)
+    return <>
+      <PageHeader title={page.title} description={page.description} />
+      <ComposedPage page={page} />
+    </>;
+  }
   return <RecordWorkspace title={page.title} description={page.description} source={source} type={page.object.name} listFields={page.listFields}
     selected={selected} onSelect={setSelected} actions={<NewActions type={page.object.name} allowed={allowed} />}
     detail={(id) => <RecordDetail type={page.object.name} id={id} fields={page.detailFields} allowed={allowed} />} />;
@@ -65,6 +72,13 @@ function previewSource(info: EntityInfo): RecordSource {
 /** Local, read-only builder preview of the exact installed page descriptor. */
 export function PagePreview({ definition, definitions }: { definition: PageDefinition; definitions: Definition[] }) {
   const page = definition.page;
+  if (isComposed(page)) { // a composed page is previewed as it is composed: real records, nothing that writes
+    return <>
+      <PageHeader title={page.title} description={page.description} />
+      <ComposedPage page={page} live={false}
+        notice={<Panel role="status" className="text-xs text-muted">{t("Actions do not run while you compose.")}</Panel>} />
+    </>;
+  }
   const object = definitions.find((d) => assetKey(d.ref) === assetKey(page.object));
   const info = object?.entity;
   const source = useMemo(() => info && previewSource(info), [info]);

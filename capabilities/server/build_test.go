@@ -181,5 +181,48 @@ func TestTenantDefinedObject(t *testing.T) {
 	if again := composedPage("eli", "visits"); again == nil || len(again.ListFields) != 2 {
 		t.Errorf("a refused composition changed the page people open: %+v", again)
 	}
+	// A page laid out from widgets (ADR-0035): what the host takes, and what it
+	// refuses, with the reason.
+	sections := []map[string]any{
+		{"widget": "table", "width": "full", "title": "Visits", "fields": []string{"guest", "kind"}},
+		{"widget": "detail", "width": "half", "fields": []string{"guest", "visited", "note"}},
+		{"widget": "actions", "width": "half", "actions": []string{visit + ".edit"}},
+		{"widget": "metric", "width": "half", "title": "How many", "measure": "count"},
+		{"widget": "chart", "width": "half", "title": "By kind", "group": "kind", "measure": "count"},
+		{"widget": "text", "width": "full", "text": "Ask the guest before you keep anything."},
+	}
+	if got := do("dana", build.PageType+".edit", build.PageType, "P-1", map[string]any{"sections": sections}); got != "ok" {
+		t.Fatalf("lay out the page: %s", got)
+	}
+	if got := do("dana", build.SchemaRelease, build.PageType, "P-1", map[string]any{}); got != "ok" {
+		t.Fatalf("publish the composed page: %s", got)
+	}
+	laid := composedPage("eli", "visits")
+	if laid == nil || laid.Layout != "composed" || len(laid.Sections) != 6 || laid.Sections[0].Widget != "table" ||
+		len(laid.Sections[2].Actions) != 1 || laid.Sections[2].Actions[0].Name != visit+".edit" {
+		t.Fatalf("the composed page: %+v", laid)
+	}
+	for _, x := range []struct {
+		why     string
+		section map[string]any
+		want    string
+	}{
+		{"a widget the platform has not", map[string]any{"widget": "map"}, `no widget "map"`},
+		{"a field the object has not", map[string]any{"widget": "table", "fields": []string{"nothing"}}, `has no field nothing`},
+		{"an action about something else", map[string]any{"widget": "actions", "actions": []string{"stock.item.edit"}}, "no action stock.item.edit"},
+		{"a measure that is not one", map[string]any{"widget": "metric", "measure": "median:qty"}, "is not count"},
+		{"a chart with nothing to group by", map[string]any{"widget": "chart", "measure": "count"}, "nothing to group by"},
+		{"text with no words", map[string]any{"widget": "text"}, "no words to show"},
+	} {
+		if got := do("dana", build.PageType+".edit", build.PageType, "P-1", map[string]any{"sections": []map[string]any{x.section}}); got != "ok" {
+			t.Fatalf("%s: edit: %s", x.why, got)
+		}
+		if got := do("dana", build.SchemaRelease, build.PageType, "P-1", map[string]any{}); !strings.Contains(got, x.want) {
+			t.Errorf("%s: %s, want %q", x.why, got, x.want)
+		}
+	}
+	if still := composedPage("eli", "visits"); still == nil || len(still.Sections) != 6 {
+		t.Errorf("a refused layout changed the page people open: %+v", still)
+	}
 	CheckReplay(t, tn, journal, compose)
 }

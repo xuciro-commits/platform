@@ -122,34 +122,123 @@ func (t *Tenant) reinstall() error {
 // member's own reads and catalog still decide what they see on it.
 func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	id := app.Manifest().ID
-	if p.Name == "" || p.Layout != "list-detail" {
-		return fmt.Errorf("page %q: only a list-detail page", p.Name)
+	if p.Name == "" || (p.Layout != "list-detail" && p.Layout != "composed") {
+		return fmt.Errorf("page %q: a page is list-detail, or composed of sections (ADR-0035)", p.Name)
 	}
 	info, known := t.entity(p.Object.Name)
 	if !known {
 		return fmt.Errorf("page %s: no object %s", p.Name, p.Object.Name)
 	}
-	for _, fields := range [][]string{p.ListFields, p.DetailFields} {
-		if len(fields) == 0 {
-			return fmt.Errorf("page %s: no fields in its list or its detail", p.Name)
+	if len(p.Sections) > 0 {
+		if err := t.checkSections(p, info); err != nil {
+			return err
 		}
-		for _, name := range fields {
-			if _, ok := info.Field(name); !ok {
-				return fmt.Errorf("page %s: %s has no field %s", p.Name, p.Object.Name, name)
+	} else {
+		for _, fields := range [][]string{p.ListFields, p.DetailFields} {
+			if len(fields) == 0 {
+				return fmt.Errorf("page %s: no fields in its list or its detail", p.Name)
+			}
+			for _, name := range fields {
+				if _, ok := info.Field(name); !ok {
+					return fmt.Errorf("page %s: %s has no field %s", p.Name, p.Object.Name, name)
+				}
 			}
 		}
 	}
 	for _, ref := range p.Actions {
-		owner := t.owner["action:"+ref.Name]
-		action, ok := platform.Action{}, false
-		if owner != nil {
-			action, ok = owner.Manifest().Actions.Action(ref.Name)
-		}
-		if !ok || action.Target != p.Object.Name {
-			return fmt.Errorf("page %s: no action %s about %s", p.Name, ref.Name, p.Object.Name)
+		if err := t.checkAction(p.Name, ref.Name, p.Object.Name); err != nil {
+			return err
 		}
 	}
 	t.installDefinitions(id, info, nil, []platform.Page{p})
+	return nil
+}
+
+// checkSections holds a composed page to what this tenant has: a widget it
+// knows, an object, the fields, actions and measures that object declares
+// (ADR-0035). What the registry offers must open.
+func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
+	for i, s := range p.Sections {
+		where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
+		if !slices.Contains(platform.Widgets, s.Widget) {
+			return fmt.Errorf("%s: no widget %q; there are %s", where, s.Widget, strings.Join(platform.Widgets, ", "))
+		}
+		if s.Width != "" && s.Width != "full" && s.Width != "half" {
+			return fmt.Errorf("%s: width %q is neither full nor half", where, s.Width)
+		}
+		info := page
+		if s.Object.Name != "" && s.Object.Name != p.Object.Name {
+			shown, known := t.entity(s.Object.Name)
+			if !known {
+				return fmt.Errorf("%s: no object %s", where, s.Object.Name)
+			}
+			info = shown
+		}
+		field := func(name string) error {
+			if _, ok := info.Field(strings.Split(name, ":")[0]); !ok {
+				return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)
+			}
+			return nil
+		}
+		switch s.Widget {
+		case "table", "detail":
+			if len(s.Fields) == 0 {
+				return fmt.Errorf("%s: no fields to show", where)
+			}
+			for _, name := range s.Fields {
+				if err := field(name); err != nil {
+					return err
+				}
+			}
+		case "actions":
+			if len(s.Actions) == 0 {
+				return fmt.Errorf("%s: no actions to offer", where)
+			}
+			for _, ref := range s.Actions {
+				if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
+					return err
+				}
+			}
+		case "chart", "metric":
+			if s.Measure == "" {
+				return fmt.Errorf("%s: nothing measured; count, sum:<field>, avg:<field>, min:<field> or max:<field>", where)
+			}
+			kind, name, some := strings.Cut(s.Measure, ":")
+			if !slices.Contains([]string{"count", "sum", "avg", "min", "max"}, kind) || (kind != "count") != some {
+				return fmt.Errorf("%s: %q is not count, sum:<field>, avg:<field>, min:<field> or max:<field>", where, s.Measure)
+			}
+			if some {
+				if err := field(name); err != nil {
+					return err
+				}
+			}
+			if s.Widget == "chart" {
+				if s.Group == "" {
+					return fmt.Errorf("%s: nothing to group by", where)
+				}
+				if err := field(s.Group); err != nil {
+					return err
+				}
+			}
+		case "text":
+			if strings.TrimSpace(s.Text) == "" {
+				return fmt.Errorf("%s: no words to show", where)
+			}
+		}
+	}
+	return nil
+}
+
+// checkAction holds a page's action to one about the object it shows.
+func (t *Tenant) checkAction(page, schema, object string) error {
+	owner := t.owner["action:"+schema]
+	action, ok := platform.Action{}, false
+	if owner != nil {
+		action, ok = owner.Manifest().Actions.Action(schema)
+	}
+	if !ok || action.Target != object {
+		return fmt.Errorf("page %s: no action %s about %s", page, schema, object)
+	}
 	return nil
 }
 

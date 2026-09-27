@@ -324,10 +324,11 @@ test("route 29: define an object, publish it, use it", async ({ page }, testInfo
   await page.screenshot({ path: testInfo.outputPath("defined-object.png"), fullPage: true });
 });
 
-// Route 30 (ADR-0034, #132): a page someone composes over an object the platform
-// already has — the CRM's opportunity — with the fields and the action they
-// choose. It opens real records and acts through the app that owns them.
-test("route 30: compose a page over an app's object", async ({ page, request }, testInfo) => {
+// Route 30 (ADR-0034, ADR-0035): someone composes a page over an object the
+// platform already has — the CRM's opportunity — laying out a table, a detail
+// and the CRM's own action, and publishes it. It then opens real records, and
+// selecting one fills the widgets that read the selection.
+test("route 30: compose a page of widgets and use it", async ({ page, request }, testInfo) => {
   const account = fresh("ACC"), opp = fresh("OPP"), name = `offsites${Date.now().toString(36).slice(-5)}`;
   await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Composed " + account, kind: "company" });
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Composed offsite " + opp });
@@ -339,26 +340,26 @@ test("route 30: compose a page over an app's object", async ({ page, request }, 
   await dialog.getByRole("textbox", { name: "Name" }).first().fill(name);
   await dialog.getByRole("textbox", { name: "What people call it" }).fill("Group offsites");
   await dialog.getByRole("textbox", { name: "Object it shows" }).fill("crm.opportunity");
-  const words = async (label: string, values: string[]) => {
-    const box = dialog.getByLabel(label, { exact: true });
-    for (const value of values) {
-      await box.fill(value);
-      await box.press("Enter");
-    }
-  };
-  await words("Fields in the list", ["title", "stage"]);
-  await words("Fields in the detail", ["title", "account", "stage"]);
-  await words("Actions it offers", ["crm.opportunity.close"]);
   await dialog.getByRole("button", { name: "Create" }).click();
-  await page.getByRole("row").filter({ hasText: name }).click();
-  await page.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByRole("definition").filter({ hasText: "Published" }).first()).toBeVisible();
 
+  // The composer: a layout panel, a canvas over real records, a widget panel.
+  await page.getByRole("row").filter({ hasText: name }).click();
+  await expect(page.getByText("Actions do not run while you compose.")).toBeVisible();
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await page.getByRole("group", { name: "Fields it shows" }).getByRole("button", { name: "Stage" }).click();
+  await page.getByRole("button", { name: "Detail", exact: true }).click();
+  await page.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("group", { name: "Actions it offers" }).getByRole("button", { name: "Close opportunity" }).click();
+  await page.screenshot({ path: testInfo.outputPath("composer.png"), fullPage: true });
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The page is in the workspace.")).toBeVisible(); // what the host answered
+
+  // What was composed is what people open: the table fills the detail beside it.
   await page.getByRole("button", { name: "Group offsites" }).click();
   await expect(page.getByRole("heading", { name: "Group offsites" })).toBeVisible();
-  await page.getByRole("textbox", { name: "Search" }).fill(opp);
+  await page.getByRole("textbox", { name: "Search" }).first().fill(opp);
   await page.getByRole("row").filter({ hasText: opp }).click();
-  await expect(page.getByRole("region", { name: "Selected record" }).getByText("Composed offsite " + opp).first()).toBeVisible();
+  await expect(page.getByText("Composed offsite " + opp).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Close opportunity" })).toBeVisible(); // the CRM's own action, on a page someone composed
   await page.screenshot({ path: testInfo.outputPath("composed-page.png"), fullPage: true });
 });

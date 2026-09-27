@@ -5,6 +5,7 @@
 // keyboard behaviour, and nothing here interprets a definition of its own.
 import "./i18n";
 import { defineApp } from "@platform/app";
+import { PageEditor, PagesList } from "./editor";
 import { t, type NavSection } from "@platform/ui";
 import { Boxes, Hammer, LayoutList } from "lucide-react";
 
@@ -16,13 +17,17 @@ export default defineApp({
   title: t("Builder"),
   icon: <Hammer />,
   home: page("objects"),
-  views: [],
+  views: [
+    { id: "pages", title: () => t("Pages"), render: () => <PagesList /> },
+    { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
+  ],
+  opens: { "build.page": "compose" }, // a page record opens where it is composed
   nav: (host): NavSection[] => {
     const own = host.definitions.filter((d) => d.ref.kind === "page" && d.ref.app === "build" && d.source === "tenant");
     return [
       {
         label: t("Builder"),
-        items: [{ label: t("Objects"), icon: <Hammer />, route: page("objects") }, { label: t("Pages"), icon: <LayoutList />, route: page("pages") }],
+        items: [{ label: t("Objects"), icon: <Hammer />, route: page("objects") }, { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } }],
       },
       ...(own.length > 0
         ? [{ label: t("Pages this organisation published"), items: own.map((d) => ({ label: d.page?.title ?? d.ref.name, icon: <Boxes />, route: page(d.ref.name) })) }]

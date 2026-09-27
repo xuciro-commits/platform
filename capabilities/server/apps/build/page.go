@@ -32,10 +32,26 @@ type Page struct {
 	List        []string `json:"list" title:"Fields in the list" help:"The object's field names, in the order the list shows them"`
 	Detail      []string `json:"detail" title:"Fields in the detail" help:"The object's field names, in the order one record shows them"`
 	Actions     []string `json:"actions,omitempty" title:"Actions it offers" help:"Actions of that object, by their schema" example:"crm.opportunity.close"`
-	State       string   `json:"state" field:"readonly" choices:"draft,published"`
+	// Sections are what the page is laid out from when someone composes it in
+	// the editor (ADR-0035); with none, the page is the list and detail above.
+	Sections []Section `json:"sections,omitempty" field:"aside" title:"What is on the page"`
+	State    string    `json:"state" field:"readonly" choices:"draft,published"`
 	// Published is the page as it was last published: what people open, and
 	// what a restore puts back — not the draft beside it.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
+}
+
+// Section is one widget on a composed page, as someone lays it out.
+type Section struct {
+	Widget  string   `json:"widget" field:"required" choices:"table,detail,actions,chart,metric,text" help:"What it shows"`
+	Title   string   `json:"title,omitempty"`
+	Width   string   `json:"width,omitempty" choices:"full,half"`
+	Object  string   `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
+	Fields  []string `json:"fields,omitempty" help:"For a table or a detail: the fields it shows"`
+	Actions []string `json:"actions,omitempty" help:"For actions: the schemas it offers"`
+	Group   string   `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
+	Measure string   `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
+	Text    string   `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
 }
 
 func (b *Build) pageEntity() platform.Entity {
@@ -82,9 +98,27 @@ func descriptor(p Page) platform.Page {
 		owner, _, _ := strings.Cut(schema, ".")
 		actions = append(actions, platform.AssetRef{App: owner, Kind: platform.AssetAction, Name: schema})
 	}
-	return platform.Page{Name: p.Name, Title: p.Title, Description: p.Description, Layout: "list-detail",
+	out := platform.Page{Name: p.Name, Title: p.Title, Description: p.Description, Layout: "list-detail",
 		Object:     platform.AssetRef{App: app, Kind: platform.AssetObject, Name: p.Object},
 		ListFields: slices.Clone(p.List), DetailFields: slices.Clone(p.Detail), Actions: actions}
+	if len(p.Sections) == 0 {
+		return out
+	}
+	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
+	for _, s := range p.Sections {
+		section := platform.Section{Widget: s.Widget, Title: s.Title, Width: s.Width, Fields: slices.Clone(s.Fields),
+			Group: s.Group, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}}
+		if s.Object != "" {
+			owner, _, _ := strings.Cut(s.Object, ".")
+			section.Object = platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: s.Object}
+		}
+		for _, schema := range s.Actions {
+			owner, _, _ := strings.Cut(schema, ".")
+			section.Actions = append(section.Actions, platform.AssetRef{App: owner, Kind: platform.AssetAction, Name: schema})
+		}
+		out.Sections = append(out.Sections, section)
+	}
+	return out
 }
 
 // checkPage refuses a page the workspace could not open, with the reason: an
@@ -100,8 +134,11 @@ func (b *Build) checkPage(p Page) error {
 	if !known {
 		return fmt.Errorf("this tenant has no object %q", p.Object)
 	}
+	if len(p.Sections) > 0 {
+		return nil // the host checks every section when the page is published (ADR-0035)
+	}
 	if len(p.List) == 0 || len(p.Detail) == 0 {
-		return fmt.Errorf("a page needs fields in its list and in its detail; %s has %s", p.Object, names(info))
+		return fmt.Errorf("a page needs fields in its list and in its detail, or sections to lay out; %s has %s", p.Object, names(info))
 	}
 	for _, fields := range [][]string{p.List, p.Detail} {
 		seen := map[string]bool{}

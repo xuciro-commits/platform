@@ -210,13 +210,17 @@ func (s Scope) Level(role string) string {
 
 // FieldInfo describes one field, for the host's reads and the UI kit's pages.
 type FieldInfo struct {
-	Name     string   `json:"name"`
-	Title    string   `json:"title"`
-	Type     string   `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines"`
-	Required bool     `json:"required,omitempty"`
-	Search   bool     `json:"search,omitempty"`
-	ReadOnly bool     `json:"readOnly,omitempty"`
-	Choices  []string `json:"choices,omitempty"`
+	Name     string `json:"name"`
+	Title    string `json:"title"`
+	Type     string `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines"`
+	Required bool   `json:"required,omitempty"`
+	Search   bool   `json:"search,omitempty"`
+	ReadOnly bool   `json:"readOnly,omitempty"`
+	// Aside marks a field a purpose-built surface writes — a page's sections in
+	// the composer (ADR-0035) — so generated forms do not ask for it. Its
+	// actions still take it, and it is read and shown like any other field.
+	Aside   bool     `json:"aside,omitempty"`
+	Choices []string `json:"choices,omitempty"`
 	// ChoiceTitles are the choices in the reader's language, beside the values
 	// records hold; the host fills them when it translates (ADR-0023).
 	ChoiceTitles []string `json:"choiceTitles,omitempty"`
@@ -376,7 +380,7 @@ func EntityActions(e Entity) []Action {
 	}
 	var fields, editable []Field
 	for _, f := range info.Fields {
-		if f.ReadOnly {
+		if f.ReadOnly || f.Aside { // a field a purpose-built editor writes is not asked for in a generated form
 			continue
 		}
 		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
@@ -556,6 +560,8 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 				f.Search = true
 			case "readonly":
 				f.ReadOnly = true
+			case "aside":
+				f.Aside = true
 			case "":
 			default:
 				return nil, fmt.Errorf("entity %s: field %s has an unknown flag %q", e.Type, name, flag)

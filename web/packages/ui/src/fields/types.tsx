@@ -6,6 +6,7 @@ import { useContext, type ReactNode } from "react";
 import { z } from "zod";
 import { cn } from "../lib/cn";
 import { Input, Select } from "../primitives/input";
+import { Toggles } from "../primitives/controls";
 import { Tag, type Tone } from "../components/StatusTag";
 import { WorkspaceContext } from "../shell/Workspace";
 import type { Route } from "../shell/route";
@@ -151,19 +152,7 @@ export const multiSelect = (o: Common & { options: Option[] }): FieldType<string
     compare: (a, b) => a.length - b.length, text: (v) => (v ?? []).map((x) => find(x)?.label ?? x).join(" "),
     operators: [{ id: "has", label: "has", needsArg: true, test: (v, a) => !!a?.every((x) => v?.includes(x)) }, isEmpty, notEmpty],
     display: (v) => (empty(v) ? muted : <span className="flex gap-1 overflow-hidden">{v!.map((x) => <Tag key={x} label={find(x)?.label ?? x} tone={find(x)?.tone} />)}</span>),
-    editor: ({ value = [], onChange }) => (
-      <span className="flex flex-wrap gap-1">
-        {o.options.map((x) => {
-          const on = value.includes(x.value);
-          return (
-            <button key={x.value} type="button" aria-pressed={on} onClick={() => onChange(on ? value.filter((y) => y !== x.value) : [...value, x.value])}
-              className={cn("rounded-sm border px-1.5 py-0.5 text-xs", on ? "border-primary bg-row-selected" : "border-border text-muted hover:bg-row-hover")}>
-              {x.label}
-            </button>
-          );
-        })}
-      </span>
-    ),
+    editor: ({ value = [], onChange }) => <Toggles options={o.options} value={value} onChange={onChange} />,
   };
 };
 

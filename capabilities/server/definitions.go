@@ -96,7 +96,7 @@ func (t *Tenant) registerDefinitions() error {
 		manifest := app.Manifest()
 		for _, page := range manifest.Pages {
 			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetPage, Name: page.Name}
-			if page.Layout != "list-detail" {
+			if page.Layout != "list-detail" && page.Layout != "composed" {
 				return fmt.Errorf("asset %s has unsupported layout %q", ref, page.Layout)
 			}
 			if page.Object.Kind != platform.AssetObject || objects[page.Object.Name] != page.Object {

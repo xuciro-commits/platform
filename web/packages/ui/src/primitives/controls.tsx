@@ -3,6 +3,33 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "../lib/cn";
 import { Button, type ButtonProps } from "./button";
 
+/** A row of values a person switches on and off: the fields a widget shows, the
+ *  actions it offers, the tags of a record. One owner for the pattern (rule 11). */
+export function Toggles({ options, value = [], onChange, empty, className }: {
+  options: { value: string; label: string }[];
+  value?: string[];
+  onChange: (value: string[]) => void;
+  /** What to say when there is nothing to choose from. */
+  empty?: string;
+  className?: string;
+}) {
+  if (options.length === 0 && empty) return <span className={cn("text-xs text-muted", className)}>{empty}</span>;
+  return (
+    <span className={cn("flex flex-wrap gap-1", className)}>
+      {options.map((option) => {
+        const on = value.includes(option.value);
+        return (
+          <button key={option.value} type="button" aria-pressed={on}
+            onClick={() => onChange(on ? value.filter((x) => x !== option.value) : [...value, option.value])}
+            className={cn("rounded-sm border px-1.5 py-0.5 text-xs", on ? "border-primary bg-row-selected" : "border-border text-muted hover:bg-row-hover")}>
+            {option.label}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
 /** A checkbox with its label; the label is the click target. */
 export function Checkbox({ checked, onChange, children, className, disabled }:
   { checked: boolean; onChange: (checked: boolean) => void; children?: ReactNode; className?: string; disabled?: boolean }) {

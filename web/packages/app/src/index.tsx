@@ -274,3 +274,4 @@ export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type
 
 export { NewActions, PayloadFields, RecordActions } from "./actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";
+export { ComposedPage, SectionView, isComposed } from "./sections";
