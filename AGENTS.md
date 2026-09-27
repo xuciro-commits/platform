@@ -39,6 +39,7 @@ Before choosing work, read `docs/Intent.md` → `docs/Platform.md` §10 → `doc
 | `.github/workflows/verify.yml` | CI: `scripts/verify.sh ci`, `web` and `pms` on every push (the Docker rehearsal stays on the owner's Mac; timing bounds off with `PLATFORM_TIMING=0`) |
 | `scripts/verify.sh` | All checks (`scripts/boundaries.sh`: dependency boundaries between apps and the host; `scripts/escapes.sh`: capability escapes, rule 11) |
 | `.claude/skills/` | Procedures for coding agents in this repository: `architecture-gate` (open a stage with an ADR the owner decides), `close-out` (finish a batch: checks, documents, commit), `new-app` (build or extend an app along docs/Apps.md) |
+| `.agents/skills` | Symlink to `.claude/skills/` for agents that discover skills there; the procedures have one owner |
 
 ## Rules
 

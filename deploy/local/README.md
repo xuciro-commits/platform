@@ -147,7 +147,7 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 |---|---|---|---|
 | 通用 webhook | `http://webhook-sink:8080/hook` | `sink` | 勾"内部地址"；事件任选，如 `lodging.booking/1#canceled` |
 
-sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。工厂的 ERP 是同一主机里的 ERP 应用，不需要接收地址；接外部 ERP 见路线 16。
+sink 收到的 webhook 在 http://localhost:8497/received 查看。`POST http://localhost:8497/fail?on=true` 让它开始返回 503，用来测试重试；`?on=false` 恢复。工厂的 ERP 是同一主机里的 ERP 应用，不需要接收地址；接外部 ERP 见 [docs/Testing.md](../../docs/Testing.md) 场景 P2-1。
 
 **邮件接收地址**（Integrations → Add endpoint → Email）
 
