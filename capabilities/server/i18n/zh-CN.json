@@ -1,4 +1,7 @@
 {
+ "Model apps ask": "应用使用的模型",
+ "The enabled model (<provider>/<model>) an app's request asks when it names none, such as a ticket's summary; empty: such requests are refused.": "应用发出请求而没有指定模型时使用的已启用模型（<提供方>/<模型>），比如工单摘要；留空：这类请求会被拒绝。",
+ "A model's answer": "模型的回答",
  "Calls a minute; 0: the default": "每分钟调用次数；0：使用默认值",
  "Calls per minute": "每分钟调用次数",
  "How many model calls each person or agent may make a minute, unless an AI limit says otherwise; 0: no limit.": "每个人或智能体每分钟最多调用模型的次数，AI 限额另有设定的除外；0：不限。",

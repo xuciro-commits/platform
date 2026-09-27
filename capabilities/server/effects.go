@@ -251,8 +251,10 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	}
 	var jobs []job
 	t.opsMu.Lock()
-	for _, ep := range t.endpoints {
-		if !t.breakers.allow("endpoint:"+ep.ID, now) {
+	// Apps' model requests go to the built-in model destination (ADR-0029 D3);
+	// the model door keeps each provider's own breaker.
+	for _, ep := range append(slices.Clone(t.endpoints), &Endpoint{ID: modelEndpoint, Kind: modelEndpoint}) {
+		if ep.Kind != modelEndpoint && !t.breakers.allow("endpoint:"+ep.ID, now) {
 			continue
 		}
 		// A held effect waits for its approval outside the endpoint's order.
@@ -272,7 +274,9 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 			outcome := t.send(j.endpoint, j.effect, now)
 			end(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
 			counted(t, "effect", j.effect.App, outcome.Result)
-			t.breakers.report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
+			if j.endpoint.Kind != modelEndpoint {
+				t.breakers.report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
+			}
 			t.settle(j.effect.ID, outcome, now)
 		})
 	}
@@ -282,6 +286,9 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 // send makes one attempt, signed as Standard Webhooks, with the effect's ID as
 // both webhook-id and Idempotency-Key.
 func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
+	if ep.Kind == modelEndpoint {
+		return t.sendModel(x, now)
+	}
 	if ep.Kind == "email" {
 		return t.sendMail(ep, x, now)
 	}
@@ -383,6 +390,13 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	if x.State == "failed" {
 		t.failedWork("Effect to "+x.Endpoint+" failed: "+x.Event, x.Error, x.ID, at, replaying)
 	}
+	if x.Endpoint == modelEndpoint { // an app's model request: its answer goes to the app's reply action, once
+		if settled(x.State) && !replaying {
+			t.answerModel(x, o, at)
+			t.enqueue(at)
+		}
+		return true
+	}
 	if x.App != "" && settled(x.State) && x.State != "discarded" {
 		if a, ok := t.app(x.App).(platform.Answerer); ok {
 			a.Answer(t.automation(x.App, replaying), x, o, at)
@@ -399,6 +413,12 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 // told tells the app that emitted an effect that it was discarded, inside the
 // decision that discarded it, so a replay tells it again (F-24).
 func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, replaying bool) {
+	if x.Endpoint == modelEndpoint { // a model request answers its app's reply action, refused
+		if !replaying {
+			t.answerModel(x, o, now)
+		}
+		return
+	}
 	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
 		a.Answer(t.automation(x.App, replaying), x, o, now)
 	}

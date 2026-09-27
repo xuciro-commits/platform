@@ -87,3 +87,11 @@ They agree:
 - **Counts** (`apps/ai`): tokens per day per member and per model and each caller's calls of the last minute are kept as usage is metered, live or replayed, and saved in snapshots; nothing new is journaled but the limits.
 - **Streaming**: `stream: true` answers as server-sent events (`delta`, then `done` or `error`), on the OpenAI wire with `stream_options.include_usage`; a server that does not stream, and the Anthropic wire, answer at once as one piece. Usage is journaled once. The playground streams (`EdgeClient.stream`); agents' turns do not.
 - **Proven:** `TestAILimits` (a person past the day, their own limit, calls a minute, a model's cap, a stream and a server that does not stream, `CheckReplay`), `TestCSM` (the triage agent past its own limit stops and the desk takes the ticket), the rehearsal (past the operator's limit refused; a call streams from the local model server).
+
+### 12b: apps ask models
+
+- **A request without a protocol** (`platform.Request.Model`, `platform.Prompt`, `platform.Answer.Text`): an accepted decision asks a model — named, or the `ai` setting `app-model` (Model apps ask) — and its reply action takes the answer.
+- **Owned work, not a call in the decision** (`aicall.go` `askModel`, `sendModel`, `answerModel`): protocol requests are answered inside the input, under the tenant's lock; a model's answer takes seconds, so the request joins the outbound queue at the built-in `model` destination — kept in snapshots, rebuilt by a replay from the decision — and is sent on the I/O lane through the door (as `app:<id>`, within the app's limits, retried while the provider or a limit keeps it). The administrators chose the model for apps, so no member's access applies. Its answer is submitted to the reply action as the app and journaled; a replay takes it from the journal and asks nothing. Discarding the request answers refused.
+- **The helpdesk** summarises a ticket when it is opened (`csm.ticket.summary`, `Ticket.Summary`); a person may write the line too.
+- **Proven:** `TestCSMTriage` (the summary through the model for apps; no setting, no request; `CheckReplay`), the rehearsal (a ticket summarised by the local model).
+- **Not yet:** the ERP's classified bill description, the second proof the build table names — app depth waits (Intent.md, platform faults first).

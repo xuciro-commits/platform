@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"io"
+	"log"
 	"net/http"
 	"slices"
 	"strconv"
@@ -474,4 +475,114 @@ func (t *Tenant) ProviderModels(m platform.Member, provider string, refresh bool
 	catalogs.byKey[key] = cachedCatalog{at: time.Now(), models: models}
 	catalogs.Unlock()
 	return models, nil, nil
+}
+
+// Apps' model requests (ADR-0029 D3). An accepted decision's Request of a
+// model becomes owned work of the built-in model destination: kept in the
+// outbound queue with the effects, sent on the I/O lane through the door every
+// call passes (as the app, within its limits), retried when the provider is
+// unavailable, and answered to the app's Reply action as a journaled decision.
+// A replay rebuilds the request from the decision and takes the answer from
+// the journal: it asks no model.
+
+const modelEndpoint = "model"
+
+// modelAsk is a model request as the outbound queue keeps it.
+type modelAsk struct {
+	Model  string          `json:"model"`
+	Prompt platform.Prompt `json:"prompt"`
+	Reply  string          `json:"reply"`
+	Record string          `json:"record"` // the decision's target, "<type>/<id>", which the reply is on
+	Call   string          `json:"call"`
+}
+
+func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
+	prompt, _ := q.Payload.(platform.Prompt)
+	s := rec.GetSubmission()
+	body, _ := json.Marshal(modelAsk{Model: q.Model, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target})
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	n := 0
+	for _, x := range t.outbound {
+		if x.Endpoint == modelEndpoint && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
+			n++
+		}
+	}
+	key := fmt.Sprintf("%s#%d", rec.GetChangeId(), n)
+	t.outbound = append(t.outbound, &effect{span: t.current(), Effect: platform.Effect{ID: fmt.Sprintf("%s:%s:model:%s", t.ID, c.App, key), Endpoint: modelEndpoint,
+		Event: c.App + "/model", App: c.App, Key: key, Target: q.Target, At: rec.GetRecordedTime().AsTime(), State: "pending", Due: rec.GetRecordedTime().AsTime(), Body: string(body)}})
+	t.trimEffects()
+}
+
+// sendModel makes one attempt of a model request: delivered with the answer,
+// retried while the provider or a limit keeps it, rejected when it cannot be asked.
+func (t *Tenant) sendModel(x platform.Effect, now time.Time) platform.Outcome {
+	out := platform.Outcome{Effect: x.ID}
+	var ask modelAsk
+	json.Unmarshal([]byte(x.Body), &ask)
+	model := cmp.Or(ask.Model, t.setting(t.automation(ai.ID, false), ai.SettingAppModel))
+	if model == "" {
+		out.Result, out.Detail = "rejected", "no model is set for apps"
+		return out
+	}
+	messages := []Message{{Role: "user", Content: ask.Prompt.User}}
+	if ask.Prompt.System != "" {
+		messages = append([]Message{{Role: "system", Content: ask.Prompt.System}}, messages...)
+	}
+	// The administrators chose the model for apps, as they choose the agents':
+	// no member's access applies, the limits do.
+	m := platform.Member{ID: "app:" + x.App, Tenant: t.ID}
+	t.mu.Lock()
+	enabled, pv, err := t.ai.Model(model)
+	t.mu.Unlock()
+	if err != nil {
+		out.Result, out.Detail = "rejected", "the model "+model+" is not enabled"
+		return out
+	}
+	if !t.breakers.allow("ai:"+pv.ID, now) {
+		out.Result, out.Detail = "retry", "the provider "+pv.ID+" failed repeatedly"
+		return out
+	}
+	if why := t.allowed(m, enabled, now); why != "" {
+		out.Result, out.Detail = "retry", why
+		return out
+	}
+	answer, failure := t.call(pv, enabled, m, ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, run: x.ID}, now)
+	t.meter(m, answer.Usage)
+	switch {
+	case failure != nil && unavailable(failure):
+		out.Result, out.Detail = "retry", failure.Detail
+	case failure != nil:
+		out.Result, out.Detail = "rejected", failure.Detail
+	default:
+		out.Result, out.Answer = "delivered", json.RawMessage(strconv.Quote(answer.Content))
+	}
+	return out
+}
+
+// answerModel submits a settled model request's answer to the app's Reply
+// action, as the app, and journals it; a replay has it in the journal.
+func (t *Tenant) answerModel(x platform.Effect, o platform.Outcome, now time.Time) {
+	var ask modelAsk
+	json.Unmarshal([]byte(x.Body), &ask)
+	app := t.app(x.App)
+	if app == nil || ask.Reply == "" {
+		return
+	}
+	answer := platform.Answer{Call: ask.Call, Action: "ask", Outcome: "accepted"}
+	if x.State == "delivered" {
+		json.Unmarshal(o.Answer, &answer.Text)
+	} else {
+		answer.Outcome, answer.Code = "refused", o.Detail
+	}
+	typ, id, _ := strings.Cut(ask.Record, "/")
+	c := t.automation(x.App, false)
+	payload, _ := json.Marshal(answer)
+	reply := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(typ), Target: &pb.EntityRef{Type: typ, Id: id},
+		Schema: &pb.SchemaRef{Name: ask.Reply, Version: 1}, IdempotencyKey: "answer:" + x.ID, Payload: payload}
+	if _, err := app.Submit(c, reply, now); err != nil {
+		log.Printf("tenant %s: %s refused the answer to its model request %s: %v", t.ID, x.App, x.ID, err) // a defect of the app
+		return
+	}
+	t.journal(app, c.Member, reply, now)
 }

@@ -34,6 +34,7 @@ const (
 	// Settings of the defaults a limit overrides (ADR-0029 D1).
 	SettingDailyTokens = "daily-tokens"     // tokens per person per day; 0: none
 	SettingPerMinute   = "calls-per-minute" // calls per person or agent per minute; 0: none
+	SettingAppModel    = "app-model"        // the model apps ask when they name none (ADR-0029 D3)
 	Admin              = "admin"
 	User               = "user" // may call models open to users
 )
@@ -183,6 +184,8 @@ func (a *AI) Manifest() platform.Manifest {
 		Settings: []platform.Setting{
 			{Name: SettingDailyTokens, Title: "Tokens per person per day", Type: "integer", Default: "0",
 				Description: "What each person may spend on models a day, unless an AI limit says otherwise; 0: no limit. Agents have their own, in the Agents settings."},
+			{Name: SettingAppModel, Title: "Model apps ask", Type: "text", Default: "",
+				Description: "The enabled model (<provider>/<model>) an app's request asks when it names none, such as a ticket's summary; empty: such requests are refused."},
 			{Name: SettingPerMinute, Title: "Calls per minute", Type: "integer", Default: "60",
 				Description: "How many model calls each person or agent may make a minute, unless an AI limit says otherwise; 0: no limit."}}}
 }

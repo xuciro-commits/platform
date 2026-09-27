@@ -23,6 +23,10 @@ func (r runtime) Probe(c platform.Caller, protocol, action, id string, payload [
 }
 
 func (r runtime) Request(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
+	if q.Protocol == "" { // a model's (ADR-0029 D3): owned work, rebuilt by a replay, answered once
+		r.t.askModel(c, rec, q)
+		return
+	}
 	if c.Replaying {
 		return // the journal holds what the request decided
 	}

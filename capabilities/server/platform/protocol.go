@@ -70,11 +70,25 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 // Request is a protocol action an accepted decision asks of the tenant's provider
 // (ADR-0026 D2). The host submits it after the decision, as the member, and
 // submits the provider's Answer to the app's Reply action on the decision's target.
+//
+// A request of a model (ADR-0029 D3) names no protocol: Model is
+// "<provider>/<model>", or empty for the tenant's model for apps; Payload is a
+// Prompt; Target is what the answer is about. The host asks the model after
+// the decision, outside its lock and as the app, within the app's limits, and
+// submits the Answer — its Text the model's — to Reply; a replay asks nothing.
 type Request struct {
 	Protocol, Action string
+	Model            string
 	Target           string // the provider's record the action is about
 	Payload          any
 	Reply            string // the app's own action that receives the Answer; a member may take it too (D5)
+}
+
+// Prompt is what an app asks a model: instructions and the question.
+type Prompt struct {
+	System    string `json:"system,omitempty"`
+	User      string `json:"user"`
+	MaxTokens int    `json:"maxTokens,omitempty"`
 }
 
 // Answer is how the provider answered a Request: the payload of the Reply action.
@@ -85,6 +99,7 @@ type Answer struct {
 	Outcome string `json:"outcome"`          // accepted or refused; a protocol's events may add their own, e.g. released
 	Code    string `json:"code,omitempty"`   // the refusal's code
 	Ref     string `json:"ref,omitempty"`    // "<type>/<id>" of the provider's record
+	Text    string `json:"text,omitempty"`   // a model's answer (ADR-0029 D3)
 }
 
 // AnswerFields are the payload fields of a Reply action.
@@ -93,7 +108,8 @@ func AnswerFields() []Field {
 		{Name: "action", Type: "string", Description: "The protocol action"},
 		{Name: "outcome", Type: "string", Required: true, Description: "accepted or refused", Choices: []string{"accepted", "refused", "released"}},
 		{Name: "code", Type: "string", Description: "Why it was refused"},
-		{Name: "ref", Type: "string", Description: "The provider's record"}}
+		{Name: "ref", Type: "string", Description: "The provider's record"},
+		{Name: "text", Type: "string", Description: "A model's answer"}}
 }
 
 // Request asks for a protocol action once the decision r is accepted: made in

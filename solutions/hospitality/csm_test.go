@@ -33,6 +33,10 @@ func TestCSMTriage(t *testing.T) {
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Messages []map[string]any }
 		json.NewDecoder(r.Body).Decode(&req)
+		if system, _ := req.Messages[0]["content"].(string); strings.HasPrefix(system, "Say in one short line") { // an app's request (ADR-0029 D3)
+			fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","content":"Wifi drops in the rooms"}}],"usage":{"prompt_tokens":20,"completion_tokens":6}}`)
+			return
+		}
 		goal, _ := req.Messages[1]["content"].(string)
 		var results []string
 		for _, m := range req.Messages {
@@ -124,6 +128,7 @@ func TestCSMTriage(t *testing.T) {
 	w.expect(do(ops, ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "lm", map[string]any{"kind": "local", "baseUrl": model.URL + "/v1"}), "ok")
 	w.expect(do(ops, ai.ID, ai.SchemaModelEnable, ai.ModelType, "lm/triage", map[string]string{"access": "users"}), "ok")
 	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaSettingSet, platformserver.SettingType, "agent/model", map[string]string{"value": "lm/triage"}), "ok")
+	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaSettingSet, platformserver.SettingType, "ai/"+ai.SettingAppModel, map[string]string{"value": "lm/triage"}), "ok")
 	open := func(id, subject string) {
 		w.t.Helper()
 		w.expect(do(desk, "csm", csm.SchemaOpen, csm.TicketType, id,
@@ -140,11 +145,12 @@ func TestCSMTriage(t *testing.T) {
 	x := ticket("T-1")
 	w.expect(fmt.Sprint(x.Status, " ", x.Category, " ", x.Priority, " ", x.Due.Sub(x.Created.At), " ", x.Replied, " | ", x.Reply),
 		"answered booking high 4h0m0s agent:csm.triage | About your Board offsite: the front desk resets the wifi password (House rules). A colleague is on it.")
+	w.expect(x.Summary, "Wifi drops in the rooms") // the app asked the tenant's model for apps, and its reply action took the answer (ADR-0029 D3)
 	agents := platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.AgentApp: platformserver.AgentAdmin}}
 	cited, _ := w.tenant.Records(agents, platformserver.RunType, platform.Query{Domain: json.RawMessage(`[["goal","like","T-1"]]`)}, now)
 	w.expect(fmt.Sprint(cited.Records[0].(platformserver.AgentRunRecord).Citations), "[{knowledge.document/RULES House rules 0 2}]")
 	effects, _ := w.tenant.Read(ops, "effects")
-	held := effects.([]platform.Effect)
+	held := slices.DeleteFunc(effects.([]platform.Effect), func(e platform.Effect) bool { return e.Endpoint != "mail-gateway" }) // the summary's request aside
 	w.expect(fmt.Sprint(len(held), " ", held[0].State, " ", len(mailed)), "1 held 0")
 	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaEffectApprove, platformserver.EffectType, held[0].ID, map[string]any{}), "ok")
 	tick(2 * time.Second)

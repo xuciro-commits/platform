@@ -1,4 +1,10 @@
 {
+ "released": "已释放",
+ "Summarise ticket": "总结工单",
+ "Record what the customer wants in a line: the model's answer when the ticket was opened, or a person's.": "用一句话记下客户想要什么：工单打开时由模型回答，也可以由人来写。",
+ "What the customer wants, in a line; written by the tenant's model for apps": "客户想要什么，一句话；由租户给应用用的模型写",
+ "Summary": "摘要",
+ "A model's answer": "模型的回答",
  "Reply not sent": "回复未发出",
  "A ticket's reply, for the mail gateway to send to the customer.": "工单的回复，由邮件网关发给客户。",
  "Answer due": "回复期限",

@@ -292,10 +292,14 @@ hosp platform "$MGR" hd-k2 platform.setting.set platform.setting knowledge/embed
 hosp knowledge "$MGR" hd-k3 knowledge.document.create knowledge.document RULES '{"title":"House rules","text":"# Wifi\n\nWifi keeps dropping? The password is on the key card, and the front desk resets it."}' | jq -e .record >/dev/null || fail "house rules"
 kn() { curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/knowledge?q=wifi%20password" | jq -r '.[0].document'; }
 [[ $(kn) == knowledge.document/RULES ]] || fail "knowledge search: $(kn)"
+hosp platform "$MGR" hd-3m platform.setting.set platform.setting ai/app-model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "the model apps ask"
 hosp csm "$MGR" hd-5 csm.ticket.open csm.ticket T-1 '{"subject":"Wifi keeps dropping","customer":"anna@acme.test","account":"ACME"}' | jq -e .record >/dev/null || fail "open ticket"
 ticket() { records "$MGR" 'csm.ticket/T-1' | jq -r '.record.status + " " + .record.priority + " " + .record.replied'; }
 for _ in $(seq 40); do [[ $(ticket) == answered* ]] && break; sleep 0.5; done
 [[ $(ticket) == "answered normal agent:csm.triage" ]] || fail "ticket after triage: $(ticket)"
+# The helpdesk asked the tenant's model for apps for a line on the ticket, and took its answer (ADR-0029 D3).
+for _ in $(seq 20); do [[ -n $(records "$MGR" 'csm.ticket/T-1' | jq -r '.record.summary // empty') ]] && break; sleep 0.5; done
+[[ $(records "$MGR" 'csm.ticket/T-1' | jq -r .record.summary) == "echo: Wifi keeps dropping" ]] || fail "ticket summary: $(records "$MGR" 'csm.ticket/T-1' | jq -r .record.summary)"
 [[ $(records "$MGR" 'csm.ticket/T-1' | jq -r .record.reply) == *"House rules"* ]] || fail "the reply cites nothing: $(records "$MGR" 'csm.ticket/T-1' | jq -r .record.reply)"
 [[ $(records "$MGR" 'agent.run?sort=-id' | jq -r '[.records[] | select(.goal | contains("T-1")) | .citations[0].document][0]') == knowledge.document/RULES ]] || fail "the run's citation"
 [[ $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/transcripts" | jq 'length > 0') == true ]] || fail "transcripts"
@@ -311,7 +315,7 @@ hosp platform "$MGR" hd-7 platform.setting.set platform.setting agent/published 
 a2a=$(curl -s -H "Authorization: Bearer $MGR" -H 'A2A-Version: 1.0' -H 'Content-Type: application/json' "$HOSPITALITY/a2a/hotel-a/csm.triage" \
   -d '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"messageId":"ext-1","role":"ROLE_USER","parts":[{"text":"Triage and answer ticket T-1 from anna@acme.test (account ACME).\nSubject: Wifi keeps dropping"}]}}}')
 [[ $(jq -r .result.task.status.state <<<"$a2a") == TASK_STATE_COMPLETED ]] || fail "A2A task: $a2a"
-echo "ok   CSM: published over A2A and answered a client outside; the triage agent found the house rules (knowledge, embedded on the local model), triaged and replied citing them; its transcripts kept; its reply's mail held, approved by the manager, and sent to the mail gateway"
+echo "ok   CSM: summarised by the model for apps; published over A2A and answered a client outside; the triage agent found the house rules (knowledge, embedded on the local model), triaged and replied citing them; its transcripts kept; its reply's mail held, approved by the manager, and sent to the mail gateway"
 before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 

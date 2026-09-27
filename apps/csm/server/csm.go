@@ -29,16 +29,18 @@ var languageFiles embed.FS
 var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const (
-	ID           = "csm"
-	TicketType   = "csm.ticket"
-	SchemaOpen   = "csm.ticket.open"
-	SchemaTriage = "csm.ticket.triage"
-	SchemaReply  = "csm.ticket.reply"
-	SchemaClose  = "csm.ticket.close"
-	SchemaLate   = "csm.ticket.escalate"
-	EffectReply  = "reply"
-	Desk         = "desk" // answers tickets
-	Lead         = "lead" // leads the desk: late tickets come to them
+	ID         = "csm"
+	TicketType = "csm.ticket"
+	SchemaOpen = "csm.ticket.open"
+	// SchemaSummary takes the model's one-line summary of a ticket (ADR-0029 D3); a person may write it too.
+	SchemaSummary = "csm.ticket.summary"
+	SchemaTriage  = "csm.ticket.triage"
+	SchemaReply   = "csm.ticket.reply"
+	SchemaClose   = "csm.ticket.close"
+	SchemaLate    = "csm.ticket.escalate"
+	EffectReply   = "reply"
+	Desk          = "desk" // answers tickets
+	Lead          = "lead" // leads the desk: late tickets come to them
 )
 
 // Levels are the service levels: how soon a ticket of a priority is answered.
@@ -59,6 +61,8 @@ type Ticket struct {
 	Escalated bool      `json:"escalated,omitempty" field:"readonly"`
 	Reply     string    `json:"reply,omitempty" field:"readonly" type:"longtext"`
 	Replied   string    `json:"replied,omitempty" field:"readonly" title:"Replied by"`
+	// Summary is a model's line on what the customer wants, asked when the ticket is opened.
+	Summary string `json:"summary,omitempty" field:"readonly" help:"What the customer wants, in a line; written by the tenant's model for apps"`
 	// Unsent says why the last reply never reached the customer (F-24).
 	Unsent string `json:"unsent,omitempty" field:"readonly" title:"Reply not sent"`
 }
@@ -135,7 +139,10 @@ func Actions() *platform.Catalog {
 		Payload: []platform.Field{{Name: "subject", Type: "string", Required: true, Description: "Subject"},
 			{Name: "body", Type: "string", Description: "What the customer wrote"},
 			{Name: "customer", Type: "string", Required: true, Description: "The customer's e-mail"},
-			{Name: "account", Type: "string", Description: "The customer's account ID, if known"}}}},
+			{Name: "account", Type: "string", Description: "The customer's account ID, if known"}}},
+		{Schema: SchemaSummary, Target: TicketType, Capability: "tickets", Title: "Summarise ticket",
+			Description: "Record what the customer wants in a line: the model's answer when the ticket was opened, or a person's.", Roles: []string{Desk, Lead},
+			Payload: platform.AnswerFields()}},
 		platform.EntityActions(Entities()[0])...)...)
 }
 
@@ -195,6 +202,9 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 		return record, err
 	}
 	return a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
+		if s.GetSchema().GetName() == SchemaSummary {
+			return summarise(c, s)
+		}
 		var p struct{ Subject, Body, Customer, Account string }
 		if s.GetSchema().GetName() != SchemaOpen || json.Unmarshal(s.GetPayload(), &p) != nil || !strings.Contains(p.Customer, "@") {
 			return nil, invalid()
@@ -210,6 +220,9 @@ func (a *App) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.Ch
 		return func(r *pb.ChangeRecord) {
 			t.Number, _ = c.Next(r, "ticket", now)
 			c.Put(r, t)
+			// The tenant's model for apps summarises it, after this decision (ADR-0029 D3).
+			c.Request(r, platform.Request{Target: t.ID, Reply: SchemaSummary, Payload: platform.Prompt{MaxTokens: 60,
+				System: "Say in one short line what the customer wants. Answer with the line only.", User: t.Subject + "\n\n" + t.Body}})
 		}, nil
 	})
 }
@@ -310,4 +323,25 @@ func cmpOr(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// summarise records the model's answer, or a person's line, as the ticket's
+// summary; a refused request leaves it empty.
+func summarise(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kernel.Error) {
+	var a platform.Answer
+	if json.Unmarshal(s.GetPayload(), &a) != nil {
+		return nil, invalid()
+	}
+	t, known := platform.Get[Ticket](c, s.GetTarget().GetId())
+	if !known {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	if a.Outcome != "accepted" {
+		return func(*pb.ChangeRecord) {}, nil // nothing to record; the request's refusal is on the effect
+	}
+	t.Summary = strings.TrimSpace(a.Text)
+	if len(t.Summary) > 300 {
+		t.Summary = t.Summary[:300]
+	}
+	return func(r *pb.ChangeRecord) { c.Put(r, t) }, nil
 }
