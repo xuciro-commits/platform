@@ -15,7 +15,9 @@ wait_for() { for _ in $(seq 60); do curl -sf -o /dev/null "$1" && return; sleep 
 
 compose down -v --remove-orphans >/dev/null 2>&1 || true
 pnpm --dir ../../web/apps/workspace build >/dev/null # served by both hosts (ADR-0018)
-compose up -d --build --quiet-pull >"$backup/up.log" 2>&1 || { tail -n 30 "$backup/up.log" >&2; fail "compose up"; }
+# Built apart, with plain progress: an image build whose output goes to a file can stall otherwise.
+compose build --progress plain >"$backup/build.log" 2>&1 || { tail -n 30 "$backup/build.log" >&2; fail "compose build"; }
+compose up -d --quiet-pull >"$backup/up.log" 2>&1 || { tail -n 30 "$backup/up.log" >&2; fail "compose up"; }
 wait_for "$IDP/.well-known/openid-configuration"
 [[ $(curl -s "$IDP/.well-known/openid-configuration" | jq -r .issuer) == "http://localhost:$IDP_PORT/auth/v1/" ]] || fail "issuer"
 
@@ -203,7 +205,10 @@ AUTHORITY=agent submit "$SUP" a2a-2 agent.run.start agent.run PLAN-1 '{"agent":"
 plan() { curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/agent.run/PLAN-1" | jq -r '.record.state + " " + (.record.result // "")'; }
 for _ in $(seq 40); do [[ $(plan) == done* ]] && break; sleep 0.5; done
 [[ $(plan) == *'"leadTimeDays":12'* ]] || fail "the planner's answer: $(plan)"
-echo "ok   agent-to-agent: the plant's planner asked the supplier's agent over A2A through an effect and answered with its lead time"
+# Its chain shows the question it sent the supplier's agent (ADR-0029 D6).
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/chain/agent.run/PLAN-1" | jq -c '[.edges[] | .from + ">" + .to] | length > 0') == true ]] || fail "the planner's chain: $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/chain/agent.run/PLAN-1")"
+[[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/chain/agent.run/PLAN-1" | jq -r '[.nodes[] | select(.kind == "effect")][0].detail') == supplier* ]] || fail "the supplier's task in the chain"
+echo "ok   agent-to-agent: the plant's planner asked the supplier's agent over A2A through an effect and answered with its lead time; the question is in the run's chain"
 
 # The hospitality solution: the CRM books a stay through the lodging protocol and the
 # PMS provides it (ADR-0011); the platform app revokes a role and the catalog

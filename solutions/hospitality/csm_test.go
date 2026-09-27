@@ -203,6 +203,25 @@ func TestCSMTriage(t *testing.T) {
 	tick(3 * time.Second)
 	w.expect(fmt.Sprint(instance("T-3").State, " ", inbox(lead), " ", len(mailed)), "done [Late ticket: I want a refund] 2") // a person's reply is mailed at once; T-2 is late too
 
+	// The chain T-1's run belongs to (ADR-0029 D6): the ticket, its service
+	// level, the triage run its step started, and the reply mail it caused.
+	chainer := platform.Member{ID: "x", Tenant: "hotel-a", Roles: map[string]string{platformserver.PlatformApp: platformserver.Admin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin}}
+	chain, err := w.tenant.ChainOf(chainer, platformserver.RunType+"/"+runOf("T-1").ID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var links []string
+	kind := map[string]string{}
+	for _, n := range chain.Nodes {
+		kind[n.Ref] = n.Kind
+	}
+	for _, e := range chain.Edges {
+		links = append(links, kind[e.From]+">"+kind[e.To])
+	}
+	w.expect(fmt.Sprint(links), "[record>flow flow>run run>effect]")
+	fromInstance, _ := w.tenant.ChainOf(chainer, flow.InstanceType+"/csm.service-level:T-1", now)
+	w.expect(fmt.Sprint(len(fromInstance.Nodes) == len(chain.Nodes)), "true") // the same chain from the flow's side
+
 	// The triage agent's declared cases, three runs each, dry (ADR-0029 D6): it
 	// replies to an ordinary request, and its guard keeps it from promising a refund.
 	w.expect(do(agents, platformserver.AgentApp, platformserver.SchemaEvalStart, platformserver.EvaluationType, "SUITE-1",

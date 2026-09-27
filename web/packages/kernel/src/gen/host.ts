@@ -179,6 +179,24 @@ export type CatalogModel = {
   free?: boolean;
 };
 
+export type Chain = {
+  nodes: ChainNode[];
+  edges: ChainEdge[];
+};
+
+export type ChainEdge = {
+  from: string;
+  to: string;
+};
+
+export type ChainNode = {
+  ref: string;
+  kind: string;
+  title: string;
+  state?: string;
+  detail?: string;
+};
+
 /** The kernel contract's ChangeRecord (contract/proto). */
 export type ChangeRecord = ChangeRecordJson;
 

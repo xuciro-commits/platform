@@ -162,6 +162,14 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
+	handle(Route{Pattern: "GET /v1/chain/{type}/{id}", Summary: "The chain an agent run or a flow instance belongs to: its record, flows, runs and the effects they caused (ADR-0029)", Answer: Chain{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		chain, err := t.ChainOf(m, r.PathValue("type")+"/"+r.PathValue("id"), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, chain)
+	})
 	handle(Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language (ADR-0008)", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Catalog(m), t.Language(m, r)))
 	})

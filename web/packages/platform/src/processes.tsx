@@ -1,5 +1,5 @@
 // Settings: flows (ADR-0020), agents and their evaluations (ADR-0021).
-import { Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
+import { ChainGraph, Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
 import { Button, DataTable, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, Input, PageHeader, Select, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
@@ -52,6 +52,7 @@ export function FlowPage({ id }: { id: string }) {
           {can("flow.instance.cancel") && <Button size="sm" variant="danger" onClick={() => void decide("flow.instance.cancel", target, {})}>{t("Cancel")}</Button>}
         </div>
       )}
+      <ChainGraph of={`flow.instance/${x.id}`} />
       <FlowView definition={definition} instance={x} actions={(k) => live && can("flow.instance.skip") && (k.waits === "stuck" || k.waits === "retry" || k.waits === "undo")
         ? <Button size="sm" variant="ghost" onClick={() => void decide("flow.instance.skip", target, { token: k.id })}>{t("Skip")}</Button> : null} />
     </div>

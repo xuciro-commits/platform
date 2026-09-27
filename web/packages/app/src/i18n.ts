@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Chain": "调用链",
+  "record": "记录",
+  "flow": "流程",
+  "agent run": "智能体运行",
+  "effect": "对外动作",
   "Close": "关闭",
   "Import": "导入",
   "create": "新建",

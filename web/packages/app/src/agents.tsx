@@ -83,6 +83,7 @@ export function RunView({ id, compact }: { id: string; compact?: boolean }) {
       {run.stopped && <p className="text-sm text-[var(--tone-danger)]">{t("Stopped:")} {run.stopped}</p>}
       {run.result && <Card className="p-3"><div className="mb-1 text-xs text-muted">{t("Result")}</div><p className="whitespace-pre-wrap text-sm">{run.result}</p></Card>}
       {!compact && run.steps.length > 0 && <RunGraph run={run} onStep={setOpen} />}
+      {!compact && <ChainGraph of={`agent.run/${run.id}`} />}
       <ol className="grid gap-1">
         {run.steps.map((s, i) => (
           <li key={i} className="rounded-md border border-border bg-surface px-3 py-2 text-sm">
@@ -145,6 +146,31 @@ function RunGraph({ run, onStep }: { run: AgentRun; onStep: (i: number) => void 
   nodes.push({ id: "end", ...end, current: run.state === "running" || run.state === "waiting", detail: run.stopped ?? run.draft?.[0]?.action });
   edges.push({ from: last, to: "end" });
   return <Graph nodes={nodes} edges={edges} height={200} label={t("Steps")} onOpen={(n) => n.id.startsWith("step-") && onStep(Number(n.id.slice(5)))} />;
+}
+
+const chainTone = (state?: string) => state === "done" || state === "delivered" ? "success" as const
+  : state === "stopped" || state === "stuck" || state === "failed" || state === "rejected" || state === "discarded" ? "danger" as const
+  : state === "held" || state === "waiting" ? "warning" as const : state ? "info" as const : undefined;
+
+/**
+ * The chain a run or a flow instance belongs to (ADR-0029 D6): the record, the
+ * flows, the runs their steps started and the effects those caused, as the
+ * member may read them; a node opens its record.
+ */
+export function ChainGraph({ of, title = t("Chain") }: { of: string; title?: string }) {
+  const openRecord = useOpenRecord();
+  const chain = useReadQuery<Api.Chain>(`/v1/chain/${of.split("/").map(encodeURIComponent).join("/")}`).data;
+  if (!chain || chain.nodes.length < 2) return null;
+  const kinds: Record<string, string> = { record: t("record"), flow: t("flow"), run: t("agent run"), effect: t("effect") };
+  const nodes: GraphNode[] = chain.nodes.map((n) => ({ id: n.ref, label: n.title, detail: [kinds[n.kind] ?? n.kind, n.state].filter(Boolean).join(" · "),
+    tone: chainTone(n.state), current: n.ref === of }));
+  const edges: GraphEdge[] = chain.edges.map((e) => ({ from: e.from, to: e.to }));
+  return (
+    <section className="grid gap-1">
+      <h3 className="text-xs uppercase text-muted">{title}</h3>
+      <Graph nodes={nodes} edges={edges} height={200} label={title} onOpen={(n) => { if (!n.id.startsWith("platform.effect/")) openRecord(n.id); }} />
+    </section>
+  );
 }
 
 /** Every model call of a run in full, for agent administrators (ADR-0022 D8). */

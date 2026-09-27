@@ -108,3 +108,10 @@ They agree:
 - **A suite** (`agent.evaluation.start` with `suite`): each case runs dry against the candidate model three times, through the dry run the evaluation of past runs uses (`dryRun`: reads read now, actions are probed and never taken, the guard applies); a case passes when every run does, varies when some do, fails when none does, with why per run; the score is the runs that pass. Settings → Evaluations offers "Declared cases".
 - **Proven:** `TestAgents` (a case passing 3/3 and one failing 0/3 with why, nothing changed, `CheckReplay`), `TestCSMTriage` (the triage agent's cases: it replies to an ordinary ticket and its guard keeps it from promising a refund, 3/3 each), Playwright route 26.
 - **Not yet:** the MES assistant's cases, the second app the build table names — app depth waits (Intent.md).
+
+### 12e: traces across agents
+
+- **The chain** (`chain.go`, `GET /v1/chain/{type}/{id}`): from an agent run or a flow instance, up to the first flow and down again — the record the flow is about (its `Subject`), the flows it called, the runs its steps started, and the effects those runs caused (a held reply, a question to another agent over A2A) — from what the records already name: a run's flow, an instance's parent and subject, an effect's run. Only what the member may read; effects for the platform's administrators.
+- **Drawn** on the graph canvas (`ChainGraph` in `@platform/app`) on a run's page and a flow instance's page; a node opens its record. OpenTelemetry stays the export for outside collectors (ADR-0027 D5).
+- The CSM's service-level flow now declares its subject, the ticket.
+- **Proven:** `TestCSMTriage` (a ticket's chain: the ticket, its service level, the triage run and its reply's mail, the same from the run and from the flow), the rehearsal (the planner's question to the supplier's agent over A2A in its run's chain).

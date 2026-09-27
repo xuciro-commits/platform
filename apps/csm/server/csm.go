@@ -252,7 +252,7 @@ func serviceLevel() platform.Flow {
 	replied := func(_ platform.Caller, r *platform.Run, e platform.Event) bool {
 		return e.Record.GetSubmission().GetTarget().GetId() == r.Key
 	}
-	return platform.Flow{Name: "service-level", Title: "Ticket service level", Version: 1, Owners: []string{Lead},
+	return platform.Flow{Name: "service-level", Title: "Ticket service level", Version: 1, Owners: []string{Lead}, Subject: TicketType,
 		Start: platform.Start{On: []string{SchemaOpen}, Begin: func(c platform.Caller, e platform.Event) (string, any, bool) {
 			t, _ := platform.Get[Ticket](c, e.Record.GetSubmission().GetTarget().GetId())
 			return t.ID, clock{Due: t.Due}, true
