@@ -224,6 +224,38 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if strings.TrimSpace(s.Text) == "" {
 				return fmt.Errorf("%s: no words to show", where)
 			}
+		case "filter":
+			if len(s.Fields) == 0 {
+				return fmt.Errorf("%s: no fields to filter by", where)
+			}
+			for _, name := range s.Fields {
+				f, ok := info.Field(name)
+				if !ok {
+					return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)
+				}
+				if !slices.Contains(platform.Filterable, f.Type) {
+					return fmt.Errorf("%s: %s is a %s field; a filter takes %s fields", where, name, f.Type, strings.Join(platform.Filterable, ", "))
+				}
+			}
+		case "form":
+			// A form makes a new record through the object's own create action,
+			// so it asks for everything that action needs.
+			if err := t.checkAction(p.Name, info.Type+".create", info.Type); err != nil {
+				return fmt.Errorf("%s: %s cannot be created here", where, info.Type)
+			}
+			if len(s.Fields) == 0 {
+				return fmt.Errorf("%s: no fields to fill in", where)
+			}
+			for _, name := range s.Fields {
+				if err := field(name); err != nil {
+					return err
+				}
+			}
+			for _, f := range info.Fields {
+				if f.Required && !f.ReadOnly && !slices.Contains(s.Fields, f.Name) {
+					return fmt.Errorf("%s: %s needs %s, which the form does not ask for", where, info.Type, f.Name)
+				}
+			}
 		}
 	}
 	return nil

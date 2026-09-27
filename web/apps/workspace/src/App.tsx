@@ -149,6 +149,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   // belongs there too (ADR-0036).
   const open = useRef<AppUI[]>([]);
   open.current = all;
+  const registry = useRef<Definition[]>([]); // read by tab titles, as the launcher reads `open`
+  registry.current = definitions;
   const app = all.find((a) => a.id === current);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   const select = useCallback((id: string) => { setCurrent(id); remember("workspace:app", id); }, []);
@@ -157,7 +159,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       select(id);
       const home = open.current.find((a) => a.id === id)?.home; // with its params: an app's home may be one of its pages
       location.hash = home ? routeToHash(home) : "#/home";
-    }),
+    }, () => registry.current),
       ...(apps ?? []).flatMap((a) => a.views)];
     const seen = new Set<string>();
     for (const v of views) {

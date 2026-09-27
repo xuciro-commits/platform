@@ -51,6 +51,7 @@ export default {
   "Group by": "分组",
   "Hide navigation": "隐藏导航",
   "History": "历史",
+  "No changes yet.": "还没有改动。",
   "Processes": "流程",
   "Search records, go to, open, run…": "搜索记录、跳转、打开、执行…",
   "Records": "记录",

@@ -326,6 +326,34 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   );
 }
 
+/** A record's history from the journal: who changed what, newest last. Its
+ *  page shows it, and so does a composed page's timeline (ADR-0035 16b). */
+export function RecordHistory({ info, history, heading = true }: { info: EntityInfo; history: RecordView["history"]; heading?: boolean }) {
+  return (
+    <section aria-label={t("History")}>
+      {heading && <h2 className="mb-1 flex items-center gap-1 text-sm font-semibold"><HistoryIcon className="size-3.5" />{t("History")}</h2>}
+      {history.length === 0 && <p className="text-sm text-muted">{t("No changes yet.")}</p>}
+      <ol className="grid gap-2">
+        {history.map((h, i) => (
+          <li key={`${h.change}:${i}`} className="rounded-md border border-border bg-surface p-2 text-xs">
+            <div className="flex gap-2"><span className="font-mono">{h.schema}</span><span className="text-muted">{h.by} · {new Date(h.at).toLocaleString()}</span></div>
+            {h.fields.length > 0 && (
+              <ul className="mt-1 grid gap-0.5">
+                {h.fields.map((f) => {
+                  const declared = info.fields.find((x) => x.name === f.field);
+                  return <li key={f.field}><span className="text-muted">{declared?.title ?? f.field}</span>{" "}
+                    {declared?.type === "lines" ? <LinesChange field={declared} before={f.before} after={f.after} />
+                      : <>{f.before !== undefined && <><s className="text-muted">{shown(f.before)}</s> → </>}{shown(f.after)}</>}</li>;
+                })}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
@@ -399,26 +427,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           </ol>
         </section>
       )}
-      <section>
-        <h2 className="mb-1 flex items-center gap-1 text-sm font-semibold"><HistoryIcon className="size-3.5" />{t("History")}</h2>
-        <ol className="grid gap-2">
-          {view.history.map((h, i) => (
-            <li key={`${h.change}:${i}`} className="rounded-md border border-border bg-surface p-2 text-xs">
-              <div className="flex gap-2"><span className="font-mono">{h.schema}</span><span className="text-muted">{h.by} · {new Date(h.at).toLocaleString()}</span></div>
-              {h.fields.length > 0 && (
-                <ul className="mt-1 grid gap-0.5">
-                  {h.fields.map((f) => {
-                    const declared = info.fields.find((x) => x.name === f.field);
-                    return <li key={f.field}><span className="text-muted">{declared?.title ?? f.field}</span>{" "}
-                      {declared?.type === "lines" ? <LinesChange field={declared} before={f.before} after={f.after} />
-                        : <>{f.before !== undefined && <><s className="text-muted">{shown(f.before)}</s> → </>}{shown(f.after)}</>}</li>;
-                  })}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ol>
-      </section>
+      <RecordHistory info={info} history={view.history} />
     </div>
   );
 }
@@ -549,7 +558,7 @@ function Approvals({ source, approvals }: { source: RecordSource; approvals: Api
 }
 
 /** The open tasks about a record: what is asked, by when, and its answers as buttons. */
-function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void> } }) {
+export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void> } }) {
   const [busy, setBusy] = useState<string>();
   const answer = async (task: Api.InboxTask, a?: string) => { setBusy(task.id); try { await tasks?.answer(task, a); } finally { setBusy(undefined); } };
   return (

@@ -43,11 +43,11 @@ type Page struct {
 
 // Section is one widget on a composed page, as someone lays it out.
 type Section struct {
-	Widget  string   `json:"widget" field:"required" choices:"table,detail,actions,chart,metric,text" help:"What it shows"`
+	Widget  string   `json:"widget" field:"required" choices:"table,detail,actions,chart,metric,text,filter,form,timeline,tasks" help:"What it shows"`
 	Title   string   `json:"title,omitempty"`
 	Width   string   `json:"width,omitempty" choices:"full,half"`
 	Object  string   `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
-	Fields  []string `json:"fields,omitempty" help:"For a table or a detail: the fields it shows"`
+	Fields  []string `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
 	Actions []string `json:"actions,omitempty" help:"For actions: the schemas it offers"`
 	Group   string   `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
 	Measure string   `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`

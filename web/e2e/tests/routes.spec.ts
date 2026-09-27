@@ -483,3 +483,35 @@ test("route 32: an application's headings, a page's settings, a page not yours",
   await expect(desk.getByRole("heading", { name: /Welcome/ })).toBeVisible();
   await desk.close();
 });
+
+// Route 33 (ADR-0035 16b): a filter the table and metric read, a form that
+// makes a record through the object's own create action, and the selected
+// record's timeline and tasks — composed over the CRM's accounts and used.
+test("route 33: filter, form, timeline and tasks on a composed page", async ({ page, request }, testInfo) => {
+  const stamp = Date.now().toString(36).slice(-5), name = `accounts${stamp}`, id = fresh("P");
+  await decide(request, "manager", "build", "build.page.create", { type: "build.page", id },
+    { name, title: "Accounts " + stamp, object: "crm.account", list: ["name"], detail: ["name"] });
+  await open(page, "manager", `/compose?id=${id}`);
+  for (const widget of ["Filter", "Table", "Form", "Timeline", "Tasks"]) await page.getByRole("button", { name: widget, exact: true }).click();
+  // The form started with what an account needs; the filter with its kind.
+  await page.getByRole("region", { name: "Widgets and layout" }).getByRole("button", { name: "Form 1", exact: true }).click(); // the section, in the layout
+  await expect(page.getByRole("group", { name: "Fields it asks for" }).getByRole("button", { name: "Name *" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The page is in the workspace.")).toBeVisible();
+
+  // Used: a person makes an account from the form, narrows the table to people, selects it.
+  await open(page, "manager", `/page?app=build&kind=page&name=${name}`);
+  await expect(page.getByRole("heading", { name: "Accounts " + stamp })).toBeVisible();
+  const person = "Filtered person " + stamp;
+  await page.getByRole("textbox", { name: "Name" }).fill(person);
+  await page.getByRole("combobox", { name: "Kind" }).last().selectOption("person");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("search").getByRole("combobox", { name: "Kind" }).selectOption("company");
+  await page.getByRole("textbox", { name: "Search" }).first().fill(person);
+  await expect(page.getByRole("row").filter({ hasText: person })).toHaveCount(0); // a person is not a company
+  await page.getByRole("search").getByRole("combobox", { name: "Kind" }).selectOption("person");
+  await page.getByRole("row").filter({ hasText: person }).click();
+  await expect(page.getByRole("region", { name: "History" }).getByText("crm.account.create")).toBeVisible();
+  await expect(page.getByText("Nothing waits on it.")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("page-16b.png"), fullPage: true });
+});

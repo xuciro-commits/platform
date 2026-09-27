@@ -58,14 +58,15 @@ type Page struct {
 // how wide it sits (ADR-0035). A table outputs the record someone selects; a
 // detail and the actions read it.
 type Section struct {
-	// Widget is table, detail, actions, chart, metric or text.
+	// Widget is table, detail, actions, chart, metric, text, filter, form,
+	// timeline or tasks.
 	Widget string `json:"widget"`
 	Title  string `json:"title,omitempty"`
 	// Width is full or half, in the order the sections are laid out.
 	Width string `json:"width,omitempty"`
 	// Object is what it shows; empty: the page's own object.
 	Object  AssetRef   `json:"object,omitempty"`
-	Fields  []string   `json:"fields,omitempty"`  // table, detail
+	Fields  []string   `json:"fields,omitempty"`  // table, detail, filter, form
 	Actions []AssetRef `json:"actions,omitempty"` // actions
 	Group   string     `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
 	Measure string     `json:"measure,omitempty"` // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
@@ -73,7 +74,12 @@ type Section struct {
 }
 
 // Widgets are the widget kinds a composed page may hold (ADR-0035 D2).
-var Widgets = []string{"table", "detail", "actions", "chart", "metric", "text"}
+// A filter outputs the page's second variable — the records it narrows to —
+// which the table, chart and metric over the same object read (16b).
+var Widgets = []string{"table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks"}
+
+// Filterable are the field types a filter widget offers: values that repeat.
+var Filterable = []string{"choice", "boolean", "reference"}
 
 // Application is what someone in this tenant hands to its people (ADR-0036): a
 // name, an icon from the platform's set, and the pages it holds in order. It

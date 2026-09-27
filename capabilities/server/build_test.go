@@ -190,6 +190,12 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"widget": "metric", "width": "half", "title": "How many", "measure": "count"},
 		{"widget": "chart", "width": "half", "title": "By kind", "group": "kind", "measure": "count"},
 		{"widget": "text", "width": "full", "text": "Ask the guest before you keep anything."},
+		// 16b: a filter the table, chart and metric read; a form that makes a
+		// visit; the selected record's history; what waits on it.
+		{"widget": "filter", "width": "full", "fields": []string{"kind"}},
+		{"widget": "form", "width": "half", "title": "New visit", "fields": []string{"guest", "kind"}},
+		{"widget": "timeline", "width": "half"},
+		{"widget": "tasks", "width": "half"},
 	}
 	if got := do("dana", build.PageType+".edit", build.PageType, "P-1", map[string]any{"sections": sections}); got != "ok" {
 		t.Fatalf("lay out the page: %s", got)
@@ -198,7 +204,7 @@ func TestTenantDefinedObject(t *testing.T) {
 		t.Fatalf("publish the composed page: %s", got)
 	}
 	laid := composedPage("eli", "visits")
-	if laid == nil || laid.Layout != "composed" || len(laid.Sections) != 6 || laid.Sections[0].Widget != "table" ||
+	if laid == nil || laid.Layout != "composed" || len(laid.Sections) != 10 || laid.Sections[0].Widget != "table" ||
 		len(laid.Sections[2].Actions) != 1 || laid.Sections[2].Actions[0].Name != visit+".edit" {
 		t.Fatalf("the composed page: %+v", laid)
 	}
@@ -213,6 +219,9 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"a measure that is not one", map[string]any{"widget": "metric", "measure": "median:qty"}, "is not count"},
 		{"a chart with nothing to group by", map[string]any{"widget": "chart", "measure": "count"}, "nothing to group by"},
 		{"text with no words", map[string]any{"widget": "text"}, "no words to show"},
+		{"a filter over nothing", map[string]any{"widget": "filter", "fields": []string{}}, "no fields to filter by"},
+		{"a filter over words people type", map[string]any{"widget": "filter", "fields": []string{"guest"}}, "guest is a text field"},
+		{"a form that leaves out what a visit needs", map[string]any{"widget": "form", "fields": []string{"kind"}}, "needs guest"},
 	} {
 		if got := do("dana", build.PageType+".edit", build.PageType, "P-1", map[string]any{"sections": []map[string]any{x.section}}); got != "ok" {
 			t.Fatalf("%s: edit: %s", x.why, got)
@@ -221,7 +230,7 @@ func TestTenantDefinedObject(t *testing.T) {
 			t.Errorf("%s: %s, want %q", x.why, got, x.want)
 		}
 	}
-	if still := composedPage("eli", "visits"); still == nil || len(still.Sections) != 6 {
+	if still := composedPage("eli", "visits"); still == nil || len(still.Sections) != 10 {
 		t.Errorf("a refused layout changed the page people open: %+v", still)
 	}
 	// An application handed to the people it was built for (ADR-0036): a name,

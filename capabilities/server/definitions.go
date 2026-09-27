@@ -212,6 +212,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					}
 					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool { _, ok := shown.Field(name); return !ok })
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
+					if _, creates := actions[shown.Type+".create"]; section.Widget == "form" && !creates {
+						continue // a form this member could not submit is not on their page
+					}
 					sections = append(sections, section)
 				}
 				page.Sections = sections

@@ -213,7 +213,7 @@ function Saved({ id }: { id: string }) {
   return view ? <Records type={view.entity} saved={view} /> : <p className="text-sm text-muted">{t("No saved view")} {id}.</p>;
 }
 
-export const chromeViews = (apps: () => AppUI[], select: (id: string) => void): View[] => [
+export const chromeViews = (apps: () => AppUI[], select: (id: string) => void, definitions: () => Definition[] = () => []): View[] => [
   { id: "saved", title: () => t("Saved view"), render: (p) => <Saved id={p.id ?? ""} /> },
   { id: "dashboard", title: (p) => apps().find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
     render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
@@ -225,7 +225,7 @@ export const chromeViews = (apps: () => AppUI[], select: (id: string) => void): 
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
   { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /> },
-  { id: "page", title: (p) => p.name ?? t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} /> },
+  { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} /> },
   { id: "page-preview", title: (p) => p.name ?? t("Page preview"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview /> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} /> },

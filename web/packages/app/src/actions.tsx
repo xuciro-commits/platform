@@ -56,7 +56,7 @@ function RecordPicker({ id, type, value, onChange }: { id: string; type: string;
 }
 
 /** A short ID prefix from a type's name, never its translated title: "crm.account" → ACC, "hcm.leave" → LEA. */
-const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
+export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** One action taken through a dialog: the record's ID for a new one, then its payload. */
 function ActionDialog({ declared, type, record, onClose }: { declared: ActionDeclaration; type: string; record?: EntityRecord; onClose: () => void }) {

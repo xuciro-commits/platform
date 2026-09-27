@@ -119,14 +119,16 @@ export const defineApp = (app: AppUI): AppUI => app;
 // Generated pages (ADR-0016), for any app's entity types.
 
 /** A form generated from an entity's declaration; submits only editable fields. */
-export function GeneratedForm({ type, record, onSubmit, onCancel, submitLabel }: {
+export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submitLabel }: {
   type: string; record?: EntityRecord; onSubmit: (values: object) => void | Promise<void>; onCancel: () => void; submitLabel: string;
+  /** Presentation subset, in this order: a composed page's form asks for these (ADR-0035 16b). */
+  fields?: string[];
 }) {
   const { source } = useHost();
   const info = source.entity(type);
   if (!info) return null;
-  const editable = info.fields.filter((f) => !f.readOnly).map((f) => f.name);
-  return <RecordForm entity={entityFrom(info, {}, source)} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
+  const editable = info.fields.filter((f) => !f.readOnly && (!fields || fields.includes(f.name))).map((f) => f.name);
+  return <RecordForm entity={entityFrom(info, {}, source)} keys={fields?.filter((name) => editable.includes(name))} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 

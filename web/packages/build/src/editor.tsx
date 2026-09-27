@@ -23,11 +23,14 @@ type Draft = NonNullable<PageRecord["sections"]>[number];
 
 const pageStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 
-const widgets = ["table", "detail", "actions", "chart", "metric", "text"] as const;
+const widgets = ["table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks"] as const;
 const widgetTitles: Record<string, () => string> = {
   table: () => t("Table"), detail: () => t("Detail"), actions: () => t("Actions"),
   chart: () => t("Chart"), metric: () => t("Metric"), text: () => t("Text"),
+  filter: () => t("Filter"), form: () => t("Form"), timeline: () => t("Timeline"), tasks: () => t("Tasks"),
 };
+/** The field types a filter offers: values that repeat (the host's platform.Filterable). */
+const filterable = ["choice", "boolean", "reference"];
 
 /** The page being composed, as the renderer takes it. */
 const asPage = (record: PageRecord, sections: Draft[]): Api => ({
@@ -90,6 +93,9 @@ export function PageEditor({ id }: { id: string }) {
   const add = (widget: string) => {
     const section: Draft = { widget, width: widget === "metric" ? "half" : "full", title: widgetTitles[widget]?.() ?? widget };
     if (widget === "table" || widget === "detail") section.fields = info?.fields.slice(0, 4).map((f) => f.name) ?? [];
+    if (widget === "filter") section.fields = info?.fields.filter((f) => filterable.includes(f.type)).slice(0, 2).map((f) => f.name) ?? [];
+    // A form starts with what the object's create action needs, so it can publish.
+    if (widget === "form") section.fields = info?.fields.filter((f) => f.required && !f.readOnly).map((f) => f.name) ?? [];
     if (widget === "chart" || widget === "metric") section.measure = "count";
     setSections([...sections, section]);
     setChosen(sections.length);
@@ -212,6 +218,27 @@ function Properties({ section, info, catalog, object, onChange }: {
           <option value="half">{t("Half width")}</option>
         </Select>
       </label>
+      {section.widget === "filter" && (
+        <fieldset className="grid gap-1 text-xs">
+          <legend className="mb-1">{t("Fields it filters by")}</legend>
+          <Toggles options={fields.filter((f) => filterable.includes(f.type)).map((f) => ({ value: f.name, label: f.title }))} value={section.fields ?? []}
+            onChange={(value) => onChange({ fields: value })} empty={t("This object has no choice, yes/no or reference field to filter by.")} />
+          <p className="text-muted">{t("Tables, charts and metrics over the same object show only what it lets through.")}</p>
+        </fieldset>
+      )}
+      {section.widget === "form" && (
+        <fieldset className="grid gap-1 text-xs">
+          <legend className="mb-1">{t("Fields it asks for")}</legend>
+          <Toggles options={fields.filter((f) => !f.readOnly).map((f) => ({ value: f.name, label: f.required ? `${f.title} *` : f.title }))} value={section.fields ?? []}
+            onChange={(value) => onChange({ fields: value })} />
+          <p className="text-muted">{t("It makes a new record through the object's own create action; fields marked * are needed.")}</p>
+        </fieldset>
+      )}
+      {(section.widget === "timeline" || section.widget === "tasks") && (
+        <p className="text-xs text-muted">{section.widget === "timeline"
+          ? t("It shows what happened to the record selected in a table.")
+          : t("It shows what waits on the record selected in a table, for whoever opens the page.")}</p>
+      )}
       {(section.widget === "table" || section.widget === "detail") && (
         <fieldset className="grid gap-1 text-xs">
           <legend className="mb-1">{t("Fields it shows")}</legend>
