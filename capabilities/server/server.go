@@ -129,7 +129,7 @@ func (h *Host) Handler() http.Handler {
 			return
 		}
 		record, err := t.Submit(m, sub, h.Now())
-		Reply(w, record, err)
+		Reply(w, record, t.said(err, t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/connectors/{input}", Summary: "Deliver a connector's batch or page as the connector's member (K8)", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
@@ -386,7 +386,11 @@ var statuses = map[pb.ErrorCode]int{
 func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *kernel.Error) {
 	switch {
 	case err != nil:
-		WriteJSON(w, statuses[err.Code], map[string]any{"error": map[string]string{"code": err.Error()}})
+		body := map[string]string{"code": err.Error()}
+		if err.Message != "" {
+			body["message"] = err.Message
+		}
+		WriteJSON(w, statuses[err.Code], map[string]any{"error": body})
 	case record == nil:
 		WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	default:

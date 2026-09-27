@@ -1,4 +1,10 @@
 {
+ "An entry needs at least two lines: one debited, one credited": "凭证至少要有两行：一行借方，一行贷方",
+ "The date {date} is not in an open period": "日期 {date} 不在已开启的会计期间内",
+ "Line {line} needs an account that exists and is active": "第 {line} 行需要一个存在且未停用的科目",
+ "Line {line} is either a debit or a credit, with an amount above zero": "第 {line} 行只能填借方或贷方其中之一，金额要大于零",
+ "Line {line} is in {currency}; the books are kept in {books}": "第 {line} 行的币种是 {currency}，账簿用 {books} 记账",
+ "Debits {debit} do not equal credits {credit}": "借方合计 {debit} 与贷方合计 {credit} 不相等",
  "A company the ERP buys from or sells to.": "ERP 向其采购或销售的公司。",
  "A journal entry: debits and credits that balance. Posting makes it final and numbers it; a mistake is corrected by reversing it.": "会计凭证：借贷相等的分录。过账后即为最终状态并取得编号；有误时以冲销更正。",
  "A posted line of a journal entry on one account; balances and the trial balance add them up.": "会计凭证过账后落在某个科目上的一行；余额和试算平衡表由它们汇总。",

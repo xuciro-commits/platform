@@ -108,4 +108,6 @@ They agree on three separate things. We take them apart the same way:
   - A rejection keeps who rejected it and the note (`RejectedBy`, `Outcome`), told to the requester and to whoever approved an earlier level. A record's page lists its approvals (`RecordView.Approvals`).
   - HCM's leave is pending while approvers decide, rejected with the note, and may be submitted again (`TestLeaveApprovals`, Playwright route 4).
 - **Not yet:** delegation of tasks outside approvals (delegation of approvals and business calendars are built, ADR-0028). The helpdesk reference app, stage 2's second proof, was built as the CSM (ADR-0021 batch 2).
+- **Tasks on their record's page** (2026-09-27): a record's page lists the open tasks about it that the member may take (`RecordView.Tasks`) with their answers as buttons, so a flow's question — the MES correction's "resend" or "correct myself" — is answered where its notification leads, not only in the inbox.
+
 

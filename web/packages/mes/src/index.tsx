@@ -6,7 +6,7 @@ import { Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, Graph, PageHeader, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type GraphEdge, type GraphNode,
  t } from "@platform/ui";
-import { Activity, ClipboardList, Cpu, Factory, ListOrdered, Plus, ShieldAlert } from "lucide-react";
+import { Activity, ClipboardList, Factory, ListOrdered, Plus, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 
@@ -18,7 +18,7 @@ type Master = { products: Product[]; workCenters: WorkCenter[] };
 type Order = { id: string; product: string; quantity: number; sfcs: string[]; planned?: string;
   erp?: "sent" | "confirmed" | "refused" | "failed"; confirmation?: string; erpDetail?: string; resent?: number };
 type SFC = {
-  id: string; order: string; product: string; step: number; state: "queued" | "active" | "hold" | "done" | "scrapped";
+  id: string; order: string; product: string; quantity?: number; step: number; state: "queued" | "active" | "hold" | "done" | "scrapped";
   resource?: string; revision: number; ncs: { step: number; code: string; by: string }[]; signatures: { action: string; meaning: string; by: string }[];
 };
 type Planned = { erpId: string; number: string; product: string; quantity: number; due: string; state: string };
@@ -170,13 +170,22 @@ function ShopOrders() {
   );
 }
 
-function SFCTable({ filter, title, description }: { filter: (s: SFC) => boolean; title: string; description: string }) {
-  const sfcs = (useRead<{ records: SFC[] }>(sfcsQuery)?.records ?? []).filter(filter);
+// The shop floor's lots in one list: what waits or is in work first, and a
+// choice to see those on hold, done or all (the work queue and all SFCs were
+// one list twice, the owner's testing 2026-09-27).
+const shown = { work: (s: SFC) => s.state === "queued" || s.state === "active", hold: (s: SFC) => s.state === "hold",
+  done: (s: SFC) => s.state === "done" || s.state === "scrapped", all: () => true };
+
+function SFCTable({ initial = "work", title, description }: { initial?: keyof typeof shown; title: string; description: string }) {
+  const [which, setWhich] = useState<keyof typeof shown>(initial);
+  const sfcs = (useRead<{ records: SFC[] }>(sfcsQuery)?.records ?? []).filter(shown[which]);
   const { master } = usePlant();
   const { open } = useWorkspace();
   const columns: ColumnDef<SFC, any>[] = [
     { accessorKey: "id", header: "SFC", meta: { width: 120 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { accessorKey: "order", header: t("Shop order"), meta: { width: 120 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { accessorKey: "product", header: t("Product"), meta: { width: 90 } },
+    { accessorKey: "quantity", header: t("Quantity"), meta: { width: 80, align: "right" } },
     { id: "operation", header: t("Operation"), accessorFn: (s) => { const op = routing(master, s.product)?.operations[s.step]; return op ? `${op.step} ${op.name}` : ""; } },
     { id: "workCenter", header: t("Work center"), meta: { width: 110 }, accessorFn: (s) => routing(master, s.product)?.operations[s.step]?.workCenter ?? "" },
     { accessorKey: "resource", header: t("Resource"), meta: { width: 100 } },
@@ -184,7 +193,11 @@ function SFCTable({ filter, title, description }: { filter: (s: SFC) => boolean;
   ];
   return (
     <>
-      <PageHeader title={title} description={description} />
+      <PageHeader title={title} description={description} actions={
+        <Select aria-label={t("Show")} value={which} onChange={(e) => setWhich(e.target.value as keyof typeof shown)} className="w-44">
+          <option value="work">{t("Waiting or in work")}</option><option value="hold">{t("On hold")}</option>
+          <option value="done">{t("Done or scrapped")}</option><option value="all">{t("All")}</option>
+        </Select>} />
       <DataTable data={sfcs} columns={columns} getRowId={(s) => s.id} height="calc(100dvh - 190px)"
         onRowClick={(s) => open({ view: "sfc", params: { id: s.id } }, { window: "float" })} empty={t("Nothing here")} />
     </>
@@ -323,16 +336,16 @@ export default defineApp({
   views: [
     { id: "orders", title: () => t("Shop orders"), render: () => <ShopOrders /> },
     { id: "planned", title: () => t("Planned orders"), render: () => <PlannedOrders /> },
-    { id: "queue", title: () => t("Work queue"), render: () => <SFCTable title={t("Work queue")} description={t("SFCs waiting or in work")} filter={(s) => s.state === "queued" || s.state === "active"} /> },
-    { id: "holds", title: () => t("Quality holds"), render: () => <SFCTable title={t("Quality holds")} description={t("SFCs held by a nonconformance")} filter={(s) => s.state === "hold"} /> },
-    { id: "sfcs", title: () => t("All SFCs"), render: () => <SFCTable title={t("All SFCs")} description={t("Every lot of every released order")} filter={() => true} /> },
+    { id: "queue", title: () => t("SFCs"), render: () => <SFCTable title={t("SFCs")} description={t("The lots of every released order, each with its quantity; what waits or is in work first")} /> },
+    { id: "holds", title: () => t("Quality holds"), render: () => <SFCTable initial="hold" title={t("Quality holds")} description={t("SFCs held by a nonconformance")} /> },
+    { id: "sfcs", title: () => t("SFCs"), render: () => <SFCTable initial="all" title={t("SFCs")} description={t("The lots of every released order, each with its quantity; what waits or is in work first")} /> },
     { id: "sfc", title: (p) => p.id ?? t("SFC"), render: (p) => <SFCDetail id={p.id ?? ""} /> },
     { id: "equipment", title: () => t("Downtime"), render: () => <Equipment /> },
   ],
   nav: () => [
     { label: t("Planning"), items: [{ label: t("Shop orders"), icon: <ListOrdered />, route: { view: "orders" } },
       { label: t("Planned orders"), icon: <ClipboardList />, route: { view: "planned" } }] },
-    { label: t("Execution"), items: [{ label: t("Work queue"), icon: <Factory />, route: { view: "queue" } }, { label: t("All SFCs"), icon: <Cpu />, route: { view: "sfcs" } }] },
+    { label: t("Execution"), items: [{ label: t("SFCs"), icon: <Factory />, route: { view: "queue" } }] },
     { label: t("Quality"), items: [{ label: t("Holds"), icon: <ShieldAlert />, route: { view: "holds" } }] },
     { label: t("Equipment"), items: [{ label: t("Downtime"), icon: <Activity />, route: { view: "equipment" } }] },
   ],

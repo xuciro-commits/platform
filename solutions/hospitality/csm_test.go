@@ -187,6 +187,9 @@ func TestCSMTriage(t *testing.T) {
 	open("T-3", "fail: the invoice is wrong")
 	tick(8 * time.Second)
 	w.expect(fmt.Sprint(slices.Contains(inbox(desk), "Triage and answer: fail: the invoice is wrong")), "true")
+	// The ticket's page offers the question to whom it is asked, to answer there.
+	page, _ := w.tenant.RecordOf(desk, csm.TicketType, "T-3", now)
+	w.expect(fmt.Sprint(len(page.Tasks), " ", page.Tasks[0].(work.WorkTask).Title), "1 Triage and answer: fail: the invoice is wrong")
 	now = now.Add(24 * time.Hour)
 	tick(3 * time.Second)
 	w.expect(fmt.Sprint(ticket("T-3").Escalated, " ", slices.Contains(inbox(lead), "Late ticket: fail: the invoice is wrong")), "true true")

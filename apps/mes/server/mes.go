@@ -107,6 +107,7 @@ type SFC struct {
 	platform.Record
 	Order      platform.Ref[Order] `json:"order" field:"readonly"`
 	Product    string              `json:"product" field:"readonly,search" help:"The product this lot becomes"`
+	Quantity   int                 `json:"quantity" field:"readonly" help:"Units in this lot: its order's quantity split over its SFCs"`
 	Step       int                 `json:"step" field:"readonly" help:"The index of its current operation in the product's routing"` // index into the product's operations
 	State      string              `json:"state" field:"readonly" choices:"queued,active,hold,done,scrapped"`
 	Resource   string              `json:"resource,omitempty" field:"readonly" help:"The machine or station working on it now"`
@@ -295,7 +296,11 @@ func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (
 		}
 		return func(record *pb.ChangeRecord) {
 			for n := 1; n <= r.SFCs; n++ {
-				sfc := SFC{Record: platform.Record{ID: fmt.Sprintf("%s-%03d", id, n)}, Order: platform.Ref[Order](id), Product: r.Product, NCs: []NC{}, Signatures: []Signature{}}
+				quantity := r.Quantity / r.SFCs // the remainder goes to the first lots: 10 in 3 is 4, 3, 3
+				if n <= r.Quantity%r.SFCs {
+					quantity++
+				}
+				sfc := SFC{Record: platform.Record{ID: fmt.Sprintf("%s-%03d", id, n)}, Order: platform.Ref[Order](id), Product: r.Product, Quantity: quantity, NCs: []NC{}, Signatures: []Signature{}}
 				o.SFCs = append(o.SFCs, platform.Ref[SFC](sfc.ID))
 				p.identity.Create(&pb.EntityRef{Type: SFCType, Id: sfc.ID})
 				who.Put(record, sfc)

@@ -19,6 +19,7 @@ type books struct {
 	journal []platformserver.Entry
 	now     time.Time
 	keys    int
+	why     string // the last refusal's message
 }
 
 func newBooks(t *testing.T) *books {
@@ -47,6 +48,7 @@ func (b *books) do(who, schema, typ, id string, payload any) string {
 }
 
 func (b *books) as(authority, who, schema, typ, id string, payload any) string {
+	b.why = ""
 	b.keys++
 	m, _ := b.tn.Member(who)
 	raw, _ := json.Marshal(payload)
@@ -54,6 +56,7 @@ func (b *books) as(authority, who, schema, typ, id string, payload any) string {
 		Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, b.now)
 	switch {
 	case err != nil:
+		b.why = err.Message
 		return err.Error()
 	case r.GetSubmission().GetSchema().GetName() != schema: // held for approval (ADR-0017)
 		return r.GetSubmission().GetSchema().GetName()
@@ -104,6 +107,8 @@ func TestBooks(t *testing.T) {
 
 	draft("E-1", "2026-10-01", line("1002", 100000, 0), line("4001", 0, 90000))
 	b.expect("unbalanced", post("E-1"), "ERROR_CODE_INVALID_ARGUMENT")
+	// A refusal says why, in the reader's language (F-23).
+	b.expect("why", b.why+" / "+b.tn.Say("zh-CN", b.why), "Debits 1000.00 do not equal credits 900.00 / 借方合计 1000.00 与贷方合计 900.00 不相等")
 	b.expect("no number for a refusal", b.entry("E-1").Number, "")
 	b.expect("fix the draft", b.do("ada", EntryType+".edit", EntryType, "E-1", map[string]any{"lines": []any{line("1002", 100000, 0), line("4001", 0, 100000)}}), "ok")
 	b.expect("post", post("E-1"), "ok")
@@ -114,8 +119,10 @@ func TestBooks(t *testing.T) {
 	draft("E-2", "2026-10-02", line("1403", 30000, 0), line("1002", 0, 30000))
 	draft("E-X", "2026-10-02", line("1403", 500, 0), line("1403", 0, 0))
 	b.expect("a line has one side", post("E-X"), "ERROR_CODE_INVALID_ARGUMENT")
+	b.expect("why", b.why, "Line 2 is either a debit or a credit, with an amount above zero")
 	draft("E-Y", "2026-11-02", line("1403", 500, 0), line("1002", 0, 500))
 	b.expect("no open period", post("E-Y"), "ERROR_CODE_INVALID_ARGUMENT")
+	b.expect("why", b.tn.Say("zh-CN", b.why), "日期 2026-11-02 不在已开启的会计期间内")
 	b.expect("post E-2", post("E-2"), "ok")
 	b.expect("gapless", b.entry("E-2").Number, "GJ/2026/00002")
 

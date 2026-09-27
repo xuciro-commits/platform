@@ -123,4 +123,6 @@ Our constraints:
 - **Checked by hand:** a scaffolded purchasing app on its development host with the workspace's build: a member created a request, the manager's inbox showed 审核 PR-1 with the answers 完成 and 保持进行中, the manager answered 完成 in the browser, and the request read 已完成.
 - **Not yet:** a developer MCP (coding agents read the repository, not the host); a scaffold for a protocol or an agent.
 - **Every split of a pattern** (F-25, 2026-09-27): a text is said through the most specific pattern with a split whose every value the language can say — a field's help holding ": " reads whole — and only then through the first pattern that matches at all.
+- **Refusals say why** (F-23, 2026-09-27): `platform.Refuse(code, text, values…)` gives a refusal a message for people — English with `{placeholders}`, said through the app's dictionary in the reader's language — in the kernel error's `Message`, which is never contract (`contract/spec/errors.md`: vectors compare codes only). `POST /v1/submissions` answers `{code, message}`; the workspace shows the message. The ERP's posting says which line and why.
+
 

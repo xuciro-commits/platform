@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode"
 
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
 
@@ -508,6 +509,14 @@ func (t *Tenant) patterns(lang string) []pattern {
 	slices.SortFunc(out, func(a, b pattern) int { return b.fixed - a.fixed })
 	t.patternCache.Store(lang, out)
 	return out
+}
+
+// said is a refusal with its message in a language (F-23); the code stays.
+func (t *Tenant) said(err *kernel.Error, lang string) *kernel.Error {
+	if err == nil || err.Message == "" {
+		return err
+	}
+	return &kernel.Error{Code: err.Code, Message: t.Say(lang, err.Message)}
 }
 
 // Say is a text an app wrote for people, in a language: its translation, or

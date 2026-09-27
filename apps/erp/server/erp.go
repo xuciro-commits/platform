@@ -218,28 +218,37 @@ func invalid() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_COD
 func post(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *kernel.Error {
 	e := record.(*Entry)
 	currency := c.Setting("platform/currency")
-	if len(e.Lines) < 2 || !open(c, e.Date) {
-		return invalid()
+	refuse := func(text string, values ...any) *kernel.Error {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, text, values...)
+	}
+	if len(e.Lines) < 2 {
+		return refuse("An entry needs at least two lines: one debited, one credited")
+	}
+	if !open(c, e.Date) {
+		return refuse("The date {date} is not in an open period", e.Date)
 	}
 	var debit, credit int64
 	for i := range e.Lines {
 		l := &e.Lines[i]
 		account, known := platform.Get[Account](c, string(l.Account))
-		if !known || account.Archived || l.Debit.Amount < 0 || l.Credit.Amount < 0 || (l.Debit.Amount > 0) == (l.Credit.Amount > 0) {
-			return invalid()
+		if !known || account.Archived {
+			return refuse("Line {line} needs an account that exists and is active", i+1)
+		}
+		if l.Debit.Amount < 0 || l.Credit.Amount < 0 || (l.Debit.Amount > 0) == (l.Credit.Amount > 0) {
+			return refuse("Line {line} is either a debit or a credit, with an amount above zero", i+1)
 		}
 		for _, m := range []*platform.Money{&l.Debit, &l.Credit} {
 			if m.Currency == "" {
 				m.Currency = currency
 			}
 			if m.Currency != currency {
-				return invalid()
+				return refuse("Line {line} is in {currency}; the books are kept in {books}", i+1, m.Currency, currency)
 			}
 		}
 		debit, credit = debit+l.Debit.Amount, credit+l.Credit.Amount
 	}
 	if debit != credit {
-		return invalid()
+		return refuse("Debits {debit} do not equal credits {credit}", fmt.Sprintf("%.2f", float64(debit)/100), fmt.Sprintf("%.2f", float64(credit)/100))
 	}
 	return nil
 }

@@ -597,6 +597,7 @@ export type RecordView = {
   related: Related[];
   processes: unknown[];
   approvals: unknown[];
+  tasks: unknown[];
   files: unknown[];
   comments: unknown[];
   following: boolean;

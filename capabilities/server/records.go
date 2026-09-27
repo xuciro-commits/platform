@@ -819,6 +819,7 @@ type RecordView struct {
 	Related   []Related      `json:"related"`
 	Processes []any          `json:"processes"`
 	Approvals []any          `json:"approvals"` // requests to move it, newest first (F-38)
+	Tasks     []any          `json:"tasks"`     // open tasks about it the member may take, to answer from its page
 	Files     []any          `json:"files"`     // attached to it (ADR-0028)
 	Comments  []any          `json:"comments"`  // on it, oldest first (ADR-0028 D6)
 	Following bool           `json:"following"` // the member follows it
@@ -853,7 +854,7 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		return RecordView{}, notFound
 	}
 	seen, hidden := viewOf(m, et)
-	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Files: []any{}, Comments: []any{}}
+	view := RecordView{Record: masked(et, r.value, hidden), History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}}
 	if c := t.app(relations.ID); c != nil && typ != relations.CommentType && typ != relations.FollowType {
 		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
 		if page, err := t.Records(m, relations.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {
@@ -874,6 +875,12 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		domain, _ := json.Marshal([]any{[]any{"subject", "=", typ + "/" + id}})
 		if page, err := t.Records(m, flow.InstanceType, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20, Archived: true}, now); err == nil {
 			view.Processes = page.Records
+		}
+	}
+	if typ != work.TaskType && t.app(work.ID) != nil {
+		domain, _ := json.Marshal([]any{[]any{"ref", "=", typ + "/" + id}, []any{"state", "=", "open"}})
+		if page, err := t.Records(m, work.TaskType, platform.Query{Domain: domain, Sort: []string{"due"}, Limit: 20}, now); err == nil {
+			view.Tasks = page.Records
 		}
 	}
 	if typ != work.ApprovalType && t.app(work.ID) != nil {

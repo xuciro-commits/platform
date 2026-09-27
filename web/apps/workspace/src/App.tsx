@@ -93,7 +93,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       ok = entry.state === "SUBMISSION_STATE_CONFIRMED";
       const declared = actions?.find((a) => a.schema === schema);
       const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree (ADR-0017)
-      if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? schema, target: target.id, outcome: ok ? done : entry.outcome ?? "" }));
+      if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? schema, target: target.id, outcome: ok ? done : entry.reason ?? entry.outcome ?? "" }));
     }
     setOutbox([...client.authorities.outbox]);
     await queries.invalidateQueries();

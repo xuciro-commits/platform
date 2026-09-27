@@ -201,6 +201,9 @@ func TestOrderThroughRouting(t *testing.T) {
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-0", releasePayload{Product: "P-100", Quantity: 2, SFCs: 2, Planned: "PO-9001"}), "ERROR_CODE_INVALID_ARGUMENT")
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-1", releasePayload{Product: "P-100", Quantity: 2, SFCs: 2}), "ok")
 	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-2", releasePayload{Product: "P-100", Quantity: 1, SFCs: 1}, "no-such-fact"), "ERROR_CODE_INVALID_REFERENCE")
+	// The order's quantity is split over its lots, the remainder to the first ones.
+	expect(t, submit(p, sup, SchemaRelease, OrderType, "SO-3", releasePayload{Product: "P-100", Quantity: 10, SFCs: 3}), "ok")
+	expect(t, fmt.Sprint(sfc(p, "SO-3-001").Quantity, sfc(p, "SO-3-002").Quantity, sfc(p, "SO-3-003").Quantity), "4 3 3")
 	for _, resource := range []string{"FURNACE-1", "CNC-11", "CMM-1"} {
 		expect(t, submit(p, op1, SchemaStart, SFCType, "SO-1-001", sfcPayload{Resource: resource}), "ok")
 		expect(t, submit(p, op1, SchemaComplete, SFCType, "SO-1-001", sfcPayload{}), "ok")

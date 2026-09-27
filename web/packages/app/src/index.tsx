@@ -253,6 +253,7 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
       <RecordPage source={source} type={type} id={id} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={can} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
+        tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); } } : undefined}
         actions={(r) => <>
           <RecordActions type={type} record={r} />
           {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}

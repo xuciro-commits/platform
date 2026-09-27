@@ -36,7 +36,9 @@ export type AttachedFile = EntityRecord & { name: string; size: number; contentT
 /** A comment on a record (ADR-0028 D6). */
 export type RecordComment = EntityRecord & { text: string; by: string; mentions?: string[] };
 
-export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes" | "approvals" | "files" | "comments"> & {
+export type RecordView = Omit<Api.RecordView, "record" | "related" | "processes" | "approvals" | "tasks" | "files" | "comments"> & {
+  /** Open tasks about the record the member may take (a flow's question, a correction to make). */
+  tasks: Api.InboxTask[];
   /** The approval requests to move the record, newest first (F-38). */
   approvals: Api.ApprovalRequest[];
   files: AttachedFile[];
@@ -314,7 +316,9 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments }: {
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks }: {
+  /** Answering the open tasks about the record from its page; without it they are listed only. */
+  tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void> };
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
   /** Uploading a file to the record and downloading one (ADR-0028); without it the files are listed only. */
   files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void };
@@ -347,6 +351,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           [t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
           [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
       </section>
+      {view.tasks.length > 0 && <Tasks list={view.tasks} tasks={tasks} />}
       {info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
       {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} />}
       {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
@@ -504,6 +509,29 @@ function Approvals({ source, approvals }: { source: RecordSource; approvals: Api
             </li>
           );
         })}
+      </ul>
+    </section>
+  );
+}
+
+/** The open tasks about a record: what is asked, by when, and its answers as buttons. */
+function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void> } }) {
+  const [busy, setBusy] = useState<string>();
+  const answer = async (task: Api.InboxTask, a?: string) => { setBusy(task.id); try { await tasks?.answer(task, a); } finally { setBusy(undefined); } };
+  return (
+    <section aria-label={t("Waiting for you")}>
+      <h2 className="mb-1 text-sm font-semibold">{t("Waiting for you")}</h2>
+      <ul className="grid gap-1">
+        {list.map((task) => (
+          <li key={task.id} className="grid gap-1.5 rounded-md border border-[var(--tone-warning)] bg-surface px-3 py-2 text-sm">
+            <span className="font-medium">{task.title}</span>
+            {task.body && <span className="whitespace-pre-wrap text-xs text-muted">{task.body}</span>}
+            {tasks && <span className="flex flex-wrap gap-1.5">
+              {(task.answers?.length ? task.answers : [undefined]).map((a) =>
+                <Button key={a ?? "done"} size="sm" variant={a === task.answers?.[0] ? "primary" : undefined} disabled={busy === task.id} onClick={() => void answer(task, a)}>{a ?? t("Done")}</Button>)}
+            </span>}
+          </li>
+        ))}
       </ul>
     </section>
   );

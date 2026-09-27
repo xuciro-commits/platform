@@ -5,7 +5,8 @@ import type { ErrorCodeJson } from "./gen/platform/kernel/v1alpha1/error_pb";
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
 
 export type State = Exclude<SubmissionStateJson, "SUBMISSION_STATE_UNSPECIFIED">;
-export type Entry = { submission: SubmissionJson; state: State; outcome?: string };
+/** `reason` is a refusal's message for people (F-23), never contract: the state and the code are. */
+export type Entry = { submission: SubmissionJson; state: State; outcome?: string; reason?: string };
 export type Event = "send" | "confirm" | "conflict" | "reject" | "timeout" | "retry" | "undelivered";
 
 export class KernelError extends Error {

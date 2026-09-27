@@ -176,10 +176,11 @@ export class EdgeClient {
           method: "POST", body: JSON.stringify(entry.submission), signal: AbortSignal.timeout(timeoutMs),
           headers: this.headers(true),
         });
-        const body = await response.json().catch(() => ({})) as { record?: { changeId?: string }; error?: { code?: string } };
+        const body = await response.json().catch(() => ({})) as { record?: { changeId?: string }; error?: { code?: string; message?: string } };
         if (response.ok || body.error?.code) {
           this.authorities.answer(tenantId, idempotencyKey, body.error?.code);
           entry.outcome = body.error?.code ?? body.record?.changeId ?? "";
+          entry.reason = body.error?.message;
           answered.push(entry);
           if (body.error?.code === "ERROR_CODE_NOT_AUTHORITY") await this.refreshDeclarations().catch(() => undefined);
         } else {

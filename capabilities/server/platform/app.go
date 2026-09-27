@@ -6,7 +6,9 @@
 package platform
 
 import (
+	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"time"
 
@@ -165,3 +167,22 @@ type Answerer interface {
 }
 
 func notFound() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND} }
+
+var slot = regexp.MustCompile(`\{\w+\}`)
+
+// Refuse is a refusal with why, for people (F-23): text is English with
+// {placeholders} filled by values in order — "Line {line} needs an account"
+// with 2 reads "Line 2 needs an account" — and the app's dictionary says the
+// same text with the placeholders in another language. Only the code is
+// contract; the host shows the text in the reader's language.
+func Refuse(code pb.ErrorCode, text string, values ...any) *kernel.Error {
+	i := 0
+	message := slot.ReplaceAllStringFunc(text, func(p string) string {
+		if i >= len(values) {
+			return p
+		}
+		i++
+		return fmt.Sprint(values[i-1])
+	})
+	return &kernel.Error{Code: code, Message: message}
+}
