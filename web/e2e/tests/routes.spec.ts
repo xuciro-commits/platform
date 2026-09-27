@@ -640,3 +640,39 @@ test("route 35: who may do what with an object a tenant defines", async ({ page,
   // Leave sales as the shared host had it.
   await decide(request, "manager", "platform", "platform.member.revoke", { type: "platform.member", id: "sales-1" }, { app: "build" });
 });
+
+// Route 36 (ADR-0037 18c): a tenant action uses the work app's approval,
+// edited in the process builder and decided in the same inbox as coded apps.
+test("route 36: approve a tenant-defined action", async ({ page, request }, testInfo) => {
+  const stamp = Date.now().toString(36).slice(-5), name = `found${stamp}`, id = fresh("O");
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id }, {
+    name, title: "Found item", fields: [{ name: "item", title: "Item", type: "text", required: true, search: true }],
+    states: [{ name: "found", title: "Found" }, { name: "pending", title: "Pending review" }, { name: "returned", title: "Returned" }],
+    actions: [{ name: "handback", title: "Hand it back", from: ["found"], to: "returned" }],
+  });
+  await open(page, "manager", `/process?id=${id}`);
+  const outline = page.getByRole("region", { name: "States and actions" });
+  const inHand = page.getByRole("region", { name: "The piece in hand" });
+  await outline.getByRole("button", { name: "Hand it back", exact: true }).click();
+  await inHand.getByRole("checkbox", { name: "Wait for approval" }).check();
+  await inHand.getByRole("combobox", { name: "While it waits" }).selectOption("pending");
+  await expect(page.getByRole("region", { name: "What people see" }).getByText("Waits in Pending review for Approver (builder)")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("defined-approval-editor.png"), fullPage: true });
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The object is installed with its states and actions.")).toBeVisible();
+
+  const type = `build.${name}`, record = `F-${stamp}`;
+  await decide(request, "desk", "build", `${type}.create`, { type, id: record }, { item: `Scarf ${stamp}` });
+  const desk = await page.context().newPage();
+  await open(desk, "desk", `/page?app=build&kind=page&name=${name}`);
+  await desk.getByRole("row").filter({ hasText: `Scarf ${stamp}` }).click();
+  await desk.getByRole("button", { name: "Hand it back" }).click();
+  await expect(desk.getByText(/^waiting for Approver:/)).toBeVisible();
+  await expect(desk.getByText("Pending review", { exact: true }).first()).toBeVisible();
+  await open(page, "manager", "/inbox");
+  const task = page.getByRole("listitem").filter({ hasText: record });
+  await expect(task).toBeVisible();
+  await task.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(desk.getByText("Returned", { exact: true }).first()).toBeVisible();
+  await desk.close();
+});

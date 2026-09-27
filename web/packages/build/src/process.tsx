@@ -15,7 +15,9 @@ type State = { name: string; title: string; tone?: string; description?: string 
 type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean };
 type Set_ = { field: string; from: string };
 type Condition = { field: string; operator: string; value?: string; message: string };
-type Action = { name: string; title: string; description?: string; from: string[]; to?: string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[] };
+type ApproverLevel = { title: string; role: string; all?: boolean };
+type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
+type Action = { name: string; title: string; description?: string; from: string[]; to?: string; inputs?: Input_[]; sets?: Set_[]; conditions?: Condition[]; roles?: string[]; approval?: Approval };
 /** What one role of the builder app may do with the object (ADR-0037 18b). */
 type Access = { role: string; read: "all" | "own" | "none"; create?: boolean; edit?: boolean; archive?: boolean };
 type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[] };
@@ -112,7 +114,7 @@ export function ProcessEditor({ id }: { id: string }) {
           {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
             onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
             onFields={(fields) => change({ ...process, fields })} />}
-          {action && chosen && <ActionProperties action={action} states={process.states} fields={object.fields} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")}
+          {action && chosen && <ActionProperties action={action} states={process.states} fields={object.fields} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")} approverRoles={["builder", ...(process.access.length ? process.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])]}
             onChange={(patch) => change({ ...process, actions: process.actions.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })} />}
           {!chosen && <Card className="p-3 text-xs text-muted">{t("Choose a state or an action to configure it.")}</Card>}
         </div>
@@ -188,6 +190,10 @@ function Preview({ object, process, action }: { object: ObjectRecord; process: P
           from: action.from.map((s) => process.states.find((x) => x.name === s)?.title ?? s).join(", ") || "—",
           to: action.to ? process.states.find((x) => x.name === action.to)?.title ?? action.to : t("where it was"),
         })}</p>
+        {action.approval && <p className="text-xs text-muted">{t("Waits in {state} for {levels}", {
+          state: process.states.find((s) => s.name === action.approval?.pending)?.title ?? action.approval.pending,
+          levels: action.approval.levels.map((level) => `${level.title} (${level.role})`).join(" → "),
+        })}</p>}
         <PayloadFields preview values={values} onChange={setValues} fields={(action.inputs ?? []).map((i) => ({
           name: i.name, type: i.type === "integer" ? "integer" : i.type === "decimal" ? "number" : i.type === "date" ? "date" : i.type === "boolean" ? "boolean" : "string",
           required: i.required, description: i.title, choices: i.type === "choice" ? (i.choices ?? "").split(",").map((c) => c.trim()).filter(Boolean) : undefined,
@@ -216,8 +222,8 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
   );
 }
 
-function ActionProperties({ action, states, fields, roles, onChange }: {
-  action: Action; states: State[]; fields: Field[]; roles: string[]; onChange: (patch: Partial<Action>) => void;
+function ActionProperties({ action, states, fields, roles, approverRoles, onChange }: {
+  action: Action; states: State[]; fields: Field[]; roles: string[]; approverRoles: string[]; onChange: (patch: Partial<Action>) => void;
 }) {
   const inputs = action.inputs ?? [], sets = action.sets ?? [], conditions = action.conditions ?? [];
   const sources = [...inputs.map((i) => ({ value: i.name, label: t("Input: {name}", { name: i.title }) })),
@@ -243,6 +249,29 @@ function ActionProperties({ action, states, fields, roles, onChange }: {
           {states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}
         </Select>
       </Label>
+      <fieldset className="grid gap-2 border-t border-border pt-2 text-xs"><legend className="mb-1 font-semibold text-muted">{t("Approval")}</legend>
+        <Checkbox checked={!!action.approval} onChange={(enabled) => onChange({ approval: enabled ? {
+          pending: states.find((s) => s.name !== action.from[0] && s.name !== action.to)?.name ?? "",
+          levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }],
+        } : undefined })}>{t("Wait for approval")}</Checkbox>
+        {action.approval && <>
+          <p className="text-muted">{t("Use one starting state. The approver decides in the work inbox; the action runs after the last approval.")}</p>
+          <Label text={t("While it waits")}><Select value={action.approval.pending} onChange={(e) => onChange({ approval: { ...action.approval!, pending: e.target.value } })}>
+            <option value="">{t("Choose a state")}</option>{states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}
+          </Select></Label>
+          <Label text={t("If rejected")}><Select value={action.approval.rejected ?? ""} onChange={(e) => onChange({ approval: { ...action.approval!, rejected: e.target.value || undefined } })}>
+            <option value="">{t("Return to the starting state")}</option>{states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}
+          </Select></Label>
+          <Rows<ApproverLevel> title={t("Approver levels, in order")} add={t("Add a level")} items={action.approval.levels}
+            make={() => ({ title: t("Approver"), role: approverRoles[0] ?? "builder" })}
+            onChange={(levels) => onChange({ approval: { ...action.approval!, levels } })}
+            row={(level, set) => <>
+              <Label text={t("What this level is called")}><Input value={level.title} onChange={(e) => set({ title: e.target.value })} /></Label>
+              <Label text={t("Approver role")}><Select value={level.role} onChange={(e) => set({ role: e.target.value })}>{approverRoles.map((role) => <option key={role} value={role}>{role}</option>)}</Select></Label>
+              <Checkbox checked={!!level.all} onChange={(all) => set({ all })}>{t("Everyone in the role must approve")}</Checkbox>
+            </>} />
+        </>}
+      </fieldset>
       <Rows<Input_> title={t("What people give")} add={t("Add an input")} items={inputs}
         make={() => ({ name: nameOf(t("Input"), inputs.map((i) => i.name)), title: t("Input"), type: "text" })}
         onChange={(next) => onChange({ inputs: next })}

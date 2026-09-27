@@ -38,7 +38,22 @@ type Action struct {
 	Sets        []Set       `json:"sets,omitempty" title:"What it sets"`
 	Conditions  []Condition `json:"conditions,omitempty" title:"What it needs"`
 	// Roles are who may take it (ADR-0037 18b); empty: every role of the object.
-	Roles []string `json:"roles,omitempty" title:"Taken by"`
+	Roles    []string        `json:"roles,omitempty" title:"Taken by"`
+	Approval *ActionApproval `json:"approval,omitempty" title:"Approval"`
+}
+
+// ActionApproval uses the work app's approval chain for a tenant action.
+type ActionApproval struct {
+	Pending  string          `json:"pending" title:"While it waits"`
+	Rejected string          `json:"rejected,omitempty" title:"If rejected"`
+	Levels   []ApproverLevel `json:"levels" title:"Approver levels"`
+}
+
+// ApproverLevel is a role of the builder app, resolved when the request opens.
+type ApproverLevel struct {
+	Title string `json:"title" title:"What this level is called"`
+	Role  string `json:"role" title:"Approver role"`
+	All   bool   `json:"all,omitempty" title:"Everyone in the role must approve"`
 }
 
 // Input is one value a person gives when taking an action.
@@ -115,6 +130,26 @@ func checkProcess(o Object) error {
 		for _, s := range a.From {
 			if !states[s] {
 				return fmt.Errorf("%s is taken from %q, which is not a state of the object", where, s)
+			}
+		}
+		if approval := a.Approval; approval != nil {
+			switch {
+			case len(a.From) != 1:
+				return fmt.Errorf("%s waiting for approval needs exactly one starting state", where)
+			case !states[approval.Pending] || approval.Pending == a.From[0] || approval.Pending == a.To:
+				return fmt.Errorf("%s waits in %q, which must be a separate state of the object", where, approval.Pending)
+			case approval.Rejected != "" && (!states[approval.Rejected] || approval.Rejected == approval.Pending):
+				return fmt.Errorf("%s rejects into %q, which must be a state other than pending", where, approval.Rejected)
+			case len(approval.Levels) == 0:
+				return fmt.Errorf("%s waiting for approval needs an approver level", where)
+			}
+			for i, level := range approval.Levels {
+				if strings.TrimSpace(level.Title) == "" || level.Role == "" {
+					return fmt.Errorf("%s approval level %d needs a title and role", where, i+1)
+				}
+				if level.Role != Builder && (len(o.Access) == 0 && level.Role != User || len(o.Access) > 0 && !slices.ContainsFunc(o.Access, func(x Access) bool { return x.Role == level.Role && x.Read == "all" })) {
+					return fmt.Errorf("%s approval level %d names %q, which cannot read every record of this object", where, i+1, level.Role)
+				}
 			}
 		}
 		if a.To == "" && len(a.From) == 0 {
@@ -207,8 +242,15 @@ func lifecycle(o Object, roles []string) *platform.Lifecycle {
 		if len(a.Roles) > 0 { // the builder always tries what it builds
 			takers = append([]string{Builder}, a.Roles...)
 		}
+		var approval *platform.Approval
+		if a.Approval != nil {
+			approval = &platform.Approval{Pending: a.Approval.Pending, Rejected: a.Approval.Rejected}
+			for _, level := range a.Approval.Levels {
+				approval.Levels = append(approval.Levels, platform.ApprovalLevel{Title: level.Title, AppRole: level.Role, All: level.All})
+			}
+		}
 		l.Transitions = append(l.Transitions, platform.Transition{Name: a.Name, Title: a.Title, Description: a.Description,
-			From: slices.Clone(a.From), To: reach, Roles: takers, Capability: o.Name, Payload: payload,
+			From: slices.Clone(a.From), To: reach, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
 				return take(o, action, c, record, raw, now)
 			}})
