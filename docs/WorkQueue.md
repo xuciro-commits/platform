@@ -12,6 +12,14 @@ Next implementation sequence: fix the known authorization gap (**#130**); define
 
 Owner priority (2026-09-27): platform developers build the platform until the foundation gate in Platform.md §10.6 is substantially met (roughly 80–90% in the owner's phrasing). CRM/MES/ERP and reference apps receive only the smallest changes needed for a named cross-industry platform proof. FDE delivery and industry-specific depth are later validation and customer work, not the current engineering queue.
 
+## Handoff to Claude Code (2026-09-27)
+
+Use the latest `main-969ol0` checkout; `1a9177e` is the pushed 13b implementation commit. Its code and automated routes are recorded in [ADR-0032](ADR/0032-shared-application-definitions.md#as-built) and [Testing.md](Testing.md). Read `CLAUDE.md` → `AGENTS.md`, [Intent.md](Intent.md), Platform.md §10 and the rows below before editing. The owner has not yet accepted 13b's visual/interaction quality; keep #123 open. `scripts/verify.sh web` regenerates route 4/28 screenshots under ignored `web/e2e/test-results/` for review; they are not owner acceptance.
+
+Take the next bounded platform batch from **#130**, the first open priority: audit and close the remaining derived-read and previously journaled agent observation/citation permission gaps against Testing.md N2. Begin with a failing positive/negative probe for same-tenant owner/unit scope, restricted fields and revocation; keep cross-tenant denial. Extend the host's canonical authorization owner instead of adding a separate filter in the builder, page or app. Use CRM/MES/HCM only where a platform guarantee needs a probe. Update the canonical capability map, test route and this queue in the same commit after checks.
+
+Before **#131 batch 13c** publishes or activates tenant definitions, settle **#135**'s accepted-result journal/recovery boundary and **#136**'s minimal closed release contract through `architecture-gate`; verify #130's relevant read boundary. Then implement a small durable draft → validate → publish → activate slice using the existing record/action/UI execution paths, with crash/restart and permission tests. Do not treat 13b's local sample-data preview as a stateful isolation sandbox or its manifest version as an immutable published revision. The done-when and dependencies remain in the rows below and ADR-0032; use `close-out` and the touched `scripts/verify.sh` targets before committing.
+
 ## Main and supporting tracks
 
 | # · Status | Task, purpose and owner | First batch and dependencies | Done when |
