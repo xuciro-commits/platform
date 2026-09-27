@@ -102,6 +102,24 @@ test("route 26: an evaluation suite", async ({ page, request }) => {
   await expect(page.getByRole("cell", { name: `${provider}/candidate` }).first()).toBeVisible();
 });
 
+// Route 27 (ADR-0032 13a): code and the read-only workspace catalog use the
+// same qualified object/action references and the caller's existing grants.
+test("route 27: installed definitions", async ({ page, request }) => {
+  const response = await request.get("/v1/definitions", { headers: { Authorization: "Bearer sales" } });
+  expect(response.status()).toBe(200);
+  const definitions = await response.json() as { ref: { app: string; kind: string; name: string }; requires: { app: string; kind: string; name: string }[] }[];
+  const crm = (kind: string, name: string) => definitions.find((d) => d.ref.app === "crm" && d.ref.kind === kind && d.ref.name === name);
+  expect(crm("object", "crm.opportunity")).toBeTruthy();
+  expect(crm("action", "crm.opportunity.open")?.requires).toContainEqual({ app: "crm", kind: "object", name: "crm.opportunity" });
+  expect(definitions.some((d) => d.ref.app === "erp")).toBe(false);
+
+  await open(page, "sales", "/definitions");
+  await expect(page.getByRole("heading", { name: "Definitions" })).toBeVisible();
+  await page.getByRole("row").filter({ hasText: "crm/action/crm.opportunity.open" }).click();
+  await expect(page.getByText("crm/action/crm.opportunity.open")).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Field" })).toBeVisible();
+});
+
 // Route 18 (ADR-0027): the process answers /healthz; Settings → Automation shows the tenant's health.
 test("route 18: health", async ({ page, request }) => {
   expect((await (await request.get("/healthz")).json()).status).toBe("ok");

@@ -7,7 +7,7 @@ import { HostContext, type AppUI, type Host, type Me, type SavedView } from "@pl
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
 import { Workspace, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Bookmark, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
+import { Bell, Bookmark, Boxes, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { chromeViews } from "./chrome";
 
@@ -180,6 +180,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
             { label: t("My requests"), icon: <Send />, route: { view: "requests" } },
             { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" }, badge: badge(unread) },
             { label: t("Records"), icon: <Database />, route: { view: "records" } },
+            { label: t("Definitions"), icon: <Boxes />, route: { view: "definitions" } },
             { label: t("Search"), icon: <Search />, route: { view: "search" } },
             ...(host.can("agent.run.start") ? [{ label: t("Assistant"), icon: <Sparkles />, route: { view: "assistant" } }] : []),
             ...(waiting ? [{ label: t("Outbox"), icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] : []),

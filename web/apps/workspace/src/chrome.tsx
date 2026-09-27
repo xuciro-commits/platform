@@ -3,11 +3,11 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { Assistant, DashboardView, RecordDetail, Records, RunView, Search, useHost, useOpenRecord, useRead, type AppUI, type SavedView } from "@platform/app";
+import { Assistant, DashboardView, RecordDetail, Records, RunView, Search, assetKey, findDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
-  type ColumnDef, type InboxTask, type View,
+  useWorkspace, type ColumnDef, type InboxTask, type View,
  t } from "@platform/ui";
 import { useState } from "react";
 
@@ -128,6 +128,52 @@ function AllRecords() {
   );
 }
 
+// The installed definitions share the records/actions' host contracts. This
+// read-only surface is the first SDK/catalog path, before builder drafts exist.
+function DefinitionsCatalog() {
+  const { data, isPending, error } = useDefinitions();
+  const { open } = useWorkspace();
+  const columns: ColumnDef<Definition, any>[] = [
+    { id: "title", header: t("Asset"), accessorFn: (d) => d.entity?.title ?? d.action?.title ?? d.ref.name },
+    { id: "ref", header: t("Reference"), accessorFn: (d) => assetKey(d.ref), meta: { width: 320 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    { id: "version", header: t("App version"), accessorKey: "version", meta: { width: 110 } },
+    { id: "dependencies", header: t("Depends on"), accessorFn: (d) => d.requires.map(assetKey).join(", "), meta: { width: 320 },
+      cell: (c) => <span className="font-mono text-xs text-muted">{c.getValue()}</span> },
+  ];
+  return <>
+    <PageHeader title={t("Definitions")} description={t("Installed objects and actions from your apps. Open one to inspect the same contract used by code and the workspace.")} />
+    {error ? <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>
+      : isPending ? <p className="text-sm text-muted">{t("Loading…")}</p>
+        : <DataTable data={data ?? []} columns={columns} getRowId={(d) => assetKey(d.ref)} height="calc(100dvh - 190px)"
+          empty={t("No definitions available.")} onRowClick={(d) => open({ view: "definition", params: d.ref })} />}
+  </>;
+}
+
+function DefinitionView({ ref }: { ref: AssetRef }) {
+  const { data, isPending, error } = useDefinitions();
+  const definition = findDefinition(data ?? [], ref);
+  if (error) return <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>;
+  if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
+  if (!definition) return <p role="alert" className="text-sm text-danger">{t("This definition is unavailable.")}</p>;
+  if (definition.entity) return <>
+    <p className="mb-2 font-mono text-xs text-muted">{assetKey(definition.ref)}</p>
+    <Records type={definition.entity.type} description={definition.entity.description} />
+  </>;
+  const action = definition.action;
+  if (!action) return null;
+  const columns: ColumnDef<(typeof action.payload)[number], any>[] = [
+    { accessorKey: "name", header: t("Field") },
+    { accessorKey: "type", header: t("Type") },
+    { id: "required", header: t("Required"), accessorFn: (f) => f.required ? t("Yes") : t("No") },
+    { accessorKey: "description", header: t("Description") },
+  ];
+  return <>
+    <PageHeader title={action.title} description={action.description} />
+    <p className="mb-3 font-mono text-xs text-muted">{assetKey(definition.ref)} · {action.target}</p>
+    <DataTable data={action.payload} columns={columns} getRowId={(f) => f.name} height={320} empty={t("No input fields.")} />
+  </>;
+}
+
 // A member's saved view (ADR-0019 D4), opened from the navigation.
 function Saved({ id }: { id: string }) {
   const views = useRead<SavedView[]>("/v1/views");
@@ -146,6 +192,8 @@ export const chromeViews = (apps: AppUI[], select: (id: string) => void): View[]
   { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },
   { id: "outbox", title: () => t("Outbox"), render: () => <Outbox /> },
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
+  { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
+  { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} /> },
   { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },

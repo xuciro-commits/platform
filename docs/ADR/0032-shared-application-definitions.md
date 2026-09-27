@@ -1,6 +1,6 @@
 # ADR-0032: One definition registry for code, builders and application releases
 
-**Status:** Proposed (2026-09-27, #131). ADR-0031 authorizes the product direction and this implementation design; the identity, publication and extension choices below have lasting cost and await the owner's decision. No public API or runtime behavior is changed by this ADR.
+**Status:** Accepted for batch 13a (2026-09-27, #131). The owner asked to start the next batch after the D1–D4 proposal was presented; this proceeds with the recommended identity and code-binding choices for the read-only registry. Publication and activation remain later batches with their durability gates.
 
 ## Context
 
@@ -59,4 +59,6 @@ The recommendation is to accept D1–D4 together as the minimum contract. The ex
 
 ## As built
 
-Proposed design only. #131 has no registry, published definition or builder runtime in code yet.
+Batch 13a (2026-09-27, #131): `platform.AssetRef` qualifies an installed code asset by app, kind and name. At tenant composition, `registerDefinitions` indexes the existing record/entity and action declarations, rejects duplicate references, missing object/data-class targets or record-field references, and incompatible reference field types, and records object dependencies. The registry does not execute actions: `Tenant.Definitions` reuses the live `Entities` field mask and `Catalog` role/protocol grant before `GET /v1/definitions` translates and returns descriptors. `@platform/app` exposes `useDefinitions`, `assetKey` and `findDefinition`; the workspace's read-only Definitions view inspects the same object/action metadata and opens the existing generic records view. CRM and MES composition tests bind their own objects and actions through the registry; the workspace browser route exercises the CRM action.
+
+The asset reference is stable only for the currently installed code declaration. `Version` is the app manifest's version, **not** an immutable published asset revision. The registry does not yet model links, pages, flows, agents, reusable AI functions, draft validation, publication, activation or compatibility across releases. Its dependency list covers record fields and action targets/payload record references, not the complete protocol, flow or code dependency closure. D3's durable publication and activation remain gated by #135/#136, and the visual editor/registered page contract remains batch 13b/#123.

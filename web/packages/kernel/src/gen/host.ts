@@ -135,6 +135,12 @@ export type ApprovalStep = {
   decidedBy?: Record<string, string>;
 };
 
+export type AssetRef = {
+  app: string;
+  kind: string;
+  name: string;
+};
+
 export type AuditEntry = {
   at: string;
   member: string;
@@ -258,6 +264,16 @@ export type ContextView = {
   links: string[];
   flows: FlowSummary[];
   tasks: TaskSummary[];
+};
+
+export type Definition = {
+  ref: AssetRef;
+  source: string;
+  version: string;
+  contractVersion: number;
+  requires: AssetRef[];
+  entity?: EntityInfo;
+  action?: Action;
 };
 
 export type Delivery = {

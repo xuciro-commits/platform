@@ -19,6 +19,8 @@ The app API is `platformserver/platform` (`capabilities/server/platform`); an ap
 
 Controlled, typed definitions and visual composition are approved directions (ADR-0031), replacing the old blanket ban on configuration-driven composition. They must reuse the same semantic contracts, permissions and component owners as code. Until their canonical runtime is built, do not create a private per-app interpreter or describe planned tools as usable commands. This direction does not promise arbitrary tenant code execution.
 
+Installed code objects and actions can now be inspected through `GET /v1/definitions` or `@platform/app`'s `useDefinitions()` hook (ADR-0032 13a). `AssetRef{App, Kind, Name}` is their qualified reference; `assetKey` and `findDefinition` use the same identity in UI code. The host checks record/action references when it composes a tenant, and the read reflects the caller's current entity fields and action catalog. The workspace's **Definitions** view is a read-only example. This API does not create, publish or execute tenant-authored definitions; the app's current action and record APIs still do that work.
+
 Before scaffolding, name the builder, the operator's complete task, the shared capabilities being exercised and each capability's owner. Include the required data/AI integration and customer variation. A reference app is sufficient only when the intended task can be built, used and changed; frontend quality and FDE effort are part of the proof. Additional industry detail must justify the platform capability it proves.
 
 ## 1. Create app

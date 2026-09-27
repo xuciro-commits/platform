@@ -54,6 +54,7 @@ type Tenant struct {
 	agentRun     string   // the run whose agent is submitting, under mu: its effects name it
 	mu           sync.Mutex
 	apps         []platform.App
+	definitions  []platform.Definition   // installed code assets; member views are derived on read
 	owner        map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
@@ -252,6 +253,9 @@ func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
 		if err := t.procs.Declare(a); err != nil {
 			return nil, fmt.Errorf("tenant %s: %v", id, err)
 		}
+	}
+	if err := t.registerDefinitions(); err != nil {
+		return nil, fmt.Errorf("tenant %s: %v", id, err)
 	}
 	return t, nil
 }

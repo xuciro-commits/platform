@@ -14,6 +14,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
 export type AppEntry = Api.AppEntry;
+export type AssetRef = Api.AssetRef;
+export type Definition = Api.Definition;
 /** The signed-in member on this host, with their language (ADR-0023). */
 export type Me = Api.MeView;
 /** `quiet`: no word on success, as for a notification marked read by opening it; a refusal is still told. */
@@ -58,6 +60,17 @@ export function useReadQuery<T>(path: string, refetchInterval?: number): UseQuer
 
 export function useRead<T>(path: string, refetchInterval?: number): T | undefined {
   return useReadQuery<T>(path, refetchInterval).data;
+}
+
+/** The member's installed semantic assets, through the host's one registry. */
+export function useDefinitions(): UseQueryResult<Definition[]> {
+  return useReadQuery<Definition[]>("/v1/definitions");
+}
+
+export const assetKey = (ref: AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;
+export function findDefinition(definitions: Definition[], ref: AssetRef): Definition | undefined {
+  const key = assetKey(ref);
+  return definitions.find((d) => assetKey(d.ref) === key);
 }
 
 /**
