@@ -586,7 +586,11 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			}
 		}
 		refined := sf.Tag.Get("type")
-		switch ft := sf.Type; {
+		ft := sf.Type
+		if ft.Kind() == reflect.Pointer {
+			ft = ft.Elem() // optional scalar values retain their declared field kind
+		}
+		switch {
 		case ft.Implements(refIface):
 			f.Type = "reference"
 			f.Ref = typeOf(reflect.Zero(ft).Interface().(reference).refType())

@@ -403,7 +403,13 @@ func Entity(o Object) platform.Entity {
 		if len(f.Write) > 0 {
 			tag += fmt.Sprintf(` write:"%s"`, strings.Join(append([]string{Builder}, f.Write...), ","))
 		}
-		fields = append(fields, reflect.StructField{Name: goName(f.Name), Type: goType(f.Type), Tag: reflect.StructTag(tag)})
+		fieldType := goType(f.Type)
+		// Optional scalar values need a nil state. Otherwise an omitted number
+		// or boolean is indistinguishable from an explicitly supplied zero.
+		if !f.Required && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
+			fieldType = reflect.PointerTo(fieldType)
+		}
+		fields = append(fields, reflect.StructField{Name: goName(f.Name), Type: fieldType, Tag: reflect.StructTag(tag)})
 	}
 	if len(o.States) > 0 { // where a record stands, which only its actions move (ADR-0037 D2)
 		names := make([]string, 0, len(o.States))

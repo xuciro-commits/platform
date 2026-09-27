@@ -103,10 +103,13 @@ export const percent = (o: Common): FieldType<number> => ({
 });
 
 export const checkbox = (o: Common): FieldType<boolean> => ({
-  type: "checkbox", align: "left", width: 90, ...o, schema: z.boolean(), compare: (a, b) => Number(a) - Number(b), text: (v) => (v ? "yes" : "no"),
-  operators: [{ id: "checked", label: t("is checked"), needsArg: false, test: (v) => !!v }, { id: "unchecked", label: t("is not checked"), needsArg: false, test: (v) => !v }],
-  display: (v) => (v ? <Check className="size-3.5 text-[var(--tone-success)]" aria-label="yes" /> : <span className="text-muted" aria-label="no">—</span>),
-  editor: ({ id, value, onChange }) => <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-[var(--primary)]" />,
+  type: "checkbox", align: "left", width: 90, ...o, schema: z.boolean(), compare: (a, b) => Number(a) - Number(b), text: (v) => v === undefined ? "" : v ? "yes" : "no",
+  operators: [{ id: "checked", label: t("is checked"), needsArg: false, test: (v) => v === true }, { id: "unchecked", label: t("is not checked"), needsArg: false, test: (v) => v === false }, isEmpty, notEmpty],
+  display: (v) => v === undefined || v === null ? muted : v ? <Check className="size-3.5 text-[var(--tone-success)]" aria-label="yes" /> : <span className="text-muted">{t("No")}</span>,
+  editor: ({ id, value, onChange }) => <span className="inline-flex items-center gap-2">
+    <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-[var(--primary)]" />
+    {!o.required && value !== undefined && <button type="button" className="rounded p-0.5 text-muted hover:bg-row-hover" aria-label={t("Clear value")} title={t("Clear value")} onClick={() => onChange(undefined)}><X className="size-3.5" /></button>}
+  </span>,
 });
 
 export const date = (o: Common): FieldType<string> => ({

@@ -584,6 +584,11 @@ test("route 34: states and actions a tenant defines", async ({ page, request }, 
   await page.mouse.move(targetPort.x + targetPort.width / 2, targetPort.y + targetPort.height / 2, { steps: 8 });
   await page.mouse.up();
   await expect(inHand.getByRole("group", { name: "Taken from" }).getByRole("button", { name: "Found" })).toHaveAttribute("aria-pressed", "true");
+  await page.mouse.move(sourcePort.x + sourcePort.width / 2, sourcePort.y + sourcePort.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetPort.x + targetPort.width / 2, targetPort.y + targetPort.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(graph.getByRole("alert")).toHaveText("This connection already exists.");
   const actionNode = graph.locator('.react-flow__node[data-id="action:handback"]');
   const beforeDrag = await actionNode.boundingBox();
   const line = graph.locator('.react-flow__edge[data-id="from:handback:found"] .react-flow__edge-path');

@@ -47,6 +47,7 @@ func TestTenantDefinedActions(t *testing.T) {
 	fields := []map[string]any{
 		{"name": "item", "title": "Item", "type": "text", "required": true, "search": true},
 		{"name": "value", "title": "Value", "type": "integer"},
+		{"name": "checked", "title": "Checked", "type": "boolean"},
 		{"name": "claimant", "title": "Handed to", "type": "text"},
 		{"name": "clerk", "title": "Handed back by", "type": "text"},
 		{"name": "returned", "title": "Returned on", "type": "date"},
@@ -61,6 +62,8 @@ func TestTenantDefinedActions(t *testing.T) {
 			"message": "Something worth 500 or more goes back through the manager."}}}
 	note := map[string]any{"name": "note", "title": "Note who asked", "from": []string{"found"},
 		"inputs": []map[string]any{{"name": "who", "title": "Who asked", "type": "text"}}, "sets": []map[string]any{{"field": "claimant", "from": "who"}}}
+	verify := map[string]any{"name": "verify", "title": "Verify unchecked", "from": []string{"found"},
+		"conditions": []map[string]any{{"field": "checked", "operator": "=", "value": "false", "message": "This item has not been marked unchecked."}}}
 	lost := build.TypeOf("lost")
 
 	// What the host refuses while it is a draft, with the reason.
@@ -95,7 +98,7 @@ func TestTenantDefinedActions(t *testing.T) {
 
 	// Published with its states and actions.
 	if got := do("dana", build.ObjectType+".create", build.ObjectType, "O-1",
-		map[string]any{"name": "lost", "title": "Lost item", "plural": "Lost property", "fields": fields, "states": states, "actions": []any{handBack, note}}); got != "ok" {
+		map[string]any{"name": "lost", "title": "Lost item", "plural": "Lost property", "fields": fields, "states": states, "actions": []any{handBack, note, verify}}); got != "ok" {
 		t.Fatalf("draft: %s", got)
 	}
 	if got := do("dana", build.SchemaPublish, build.ObjectType, "O-1", map[string]any{}); got != "ok" {
@@ -117,6 +120,29 @@ func TestTenantDefinedActions(t *testing.T) {
 	if got := do("eli", lost+".create", lost, "L-2", map[string]any{"item": "Watch", "value": 900}); got != "ok" {
 		t.Fatalf("a second found item: %s", got)
 	}
+	if got := do("eli", lost+".create", lost, "L-3", map[string]any{"item": "Unknown value"}); got != "ok" {
+		t.Fatalf("a found item without an optional value: %s", got)
+	}
+	if got := do("eli", lost+".create", lost, "L-4", map[string]any{"item": "No value", "value": 0, "checked": false}); got != "ok" {
+		t.Fatalf("a found item with an explicit zero value: %s", got)
+	}
+	if _, present := record("L-3")["value"]; present {
+		t.Error("an omitted optional number appeared as zero in the record")
+	}
+	if _, present := record("L-3")["checked"]; present {
+		t.Error("an omitted optional boolean appeared as false in the record")
+	}
+	if value := record("L-4")["value"]; value != float64(0) {
+		t.Errorf("an explicit zero value was lost: %v", value)
+	}
+	if value := record("L-4")["checked"]; value != false {
+		t.Errorf("an explicit false value was lost: %v", value)
+	}
+	domain, _ := json.Marshal([]any{[]any{"value", "<", 500}})
+	page, err := tn.Records(member("eli"), lost, platform.Query{Domain: domain, Sort: []string{"value"}}, now)
+	if err != nil || page.Total != 2 {
+		t.Errorf("an absent optional number matched an ordered record query: total=%d, error=%v", page.Total, err)
+	}
 	if state := record("L-1")["state"]; state != "found" {
 		t.Fatalf("a new record starts in the first state: %v", state)
 	}
@@ -130,6 +156,18 @@ func TestTenantDefinedActions(t *testing.T) {
 	}
 	if got := do("eli", lost+".handback", lost, "L-2", map[string]any{"to": "Ada"}); !strings.Contains(got, "Something worth 500 or more goes back through the manager.") {
 		t.Errorf("a condition that does not hold: %s", got)
+	}
+	if got := do("eli", lost+".handback", lost, "L-3", map[string]any{"to": "Ada"}); !strings.Contains(got, "Something worth 500 or more goes back through the manager.") {
+		t.Errorf("an omitted optional value passed an ordered condition: %s", got)
+	}
+	if got := do("eli", lost+".verify", lost, "L-3", map[string]any{}); !strings.Contains(got, "This item has not been marked unchecked.") {
+		t.Errorf("an omitted optional boolean passed a false condition: %s", got)
+	}
+	if got := do("eli", lost+".verify", lost, "L-4", map[string]any{}); got != "ok" {
+		t.Errorf("an explicit false value failed a false condition: %s", got)
+	}
+	if got := do("eli", lost+".handback", lost, "L-4", map[string]any{"to": "Ada"}); got != "ok" {
+		t.Errorf("an explicit zero value failed an ordered condition: %s", got)
 	}
 	if got := do("eli", lost+".note", lost, "L-1", map[string]any{"who": "Grace"}); got != "ok" {
 		t.Fatalf("an action that leaves the record where it was: %s", got)

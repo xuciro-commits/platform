@@ -502,6 +502,16 @@ func holds(got any, kind, op, want, me string) bool {
 
 // textOf is a value as a condition reads it: money by its amount, a time by its day.
 func textOf(v any) string {
+	if v != nil {
+		rv := reflect.ValueOf(v)
+		for rv.Kind() == reflect.Pointer {
+			if rv.IsNil() {
+				return ""
+			}
+			rv = rv.Elem()
+		}
+		v = rv.Interface()
+	}
 	switch x := v.(type) {
 	case nil:
 		return ""

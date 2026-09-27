@@ -2,8 +2,9 @@
 // share the UI kit's frame, viewport and edge language; the owning capability
 // applies edits to its definition. This canvas executes no business logic.
 import { ConnectionLineType, Handle, MarkerType, Position, ReactFlow, useEdgesState, useNodesState, useUpdateNodeInternals, type Connection, type Edge, type Node, type NodeProps } from "@xyflow/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "../lib/cn";
+import { t } from "../i18n";
 import { CanvasFrame, CanvasFurniture, CanvasRefit, fitting } from "./CanvasFrame";
 
 export type NodePort = { id: string; label: string; type: string; limit?: number };
@@ -11,9 +12,10 @@ export type NodeKind = { id: string; title: string; description?: string; catego
 export type CanvasNode = { id: string; kind: string; label: string; detail?: string; position: { x: number; y: number } };
 export type CanvasEdge = { id: string; source: string; sourcePort: string; target: string; targetPort: string };
 export type NodeCatalog = readonly NodeKind[];
+type ConnectionIssue = "endpoint" | "port" | "duplicate" | "source-capacity" | "target-capacity";
 
 /** A semantic adapter may add stricter rules; the kit checks endpoints, port types and capacity. */
-export function validateCanvasConnection(connection: Connection, nodes: readonly CanvasNode[], edges: readonly CanvasEdge[], catalog: NodeCatalog): string | undefined {
+export function validateCanvasConnection(connection: Connection, nodes: readonly CanvasNode[], edges: readonly CanvasEdge[], catalog: NodeCatalog): ConnectionIssue | undefined {
   const source = nodes.find((n) => n.id === connection.source);
   const target = nodes.find((n) => n.id === connection.target);
   if (!source || !target || source.id === target.id) return "endpoint";
@@ -79,6 +81,7 @@ export function NodeCanvas({ catalog, nodes, edges, selected, onSelect, onConnec
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(edges.map(toFlowEdge));
   const moved = useRef<Record<string, { x: number; y: number }>>({});
   const lastIds = useRef(nodes.map((n) => n.id).join("|"));
+  const [connectionIssue, setConnectionIssue] = useState<string>();
   // A parent edit changes the semantic graph. Keep dragged positions for nodes
   // that still exist, but never re-send local positions as business meaning.
   useEffect(() => {
@@ -114,6 +117,25 @@ export function NodeCanvas({ catalog, nodes, edges, selected, onSelect, onConnec
       fitView fitViewOptions={fitting} colorMode="system" minZoom={0.2} maxZoom={1.6} zoomOnScroll={false} preventScrolling={false}
       nodesConnectable={!!onConnect} edgesFocusable={!!onDisconnect} deleteKeyCode={onDisconnect ? ["Backspace", "Delete"] : null}
       connectionLineType={ConnectionLineType.SmoothStep} isValidConnection={valid} onConnect={onConnect}
+      onConnectStart={() => setConnectionIssue(undefined)}
+      onConnectEnd={(_, state) => {
+        if (state.isValid) return;
+        const from = state.fromHandle, to = state.toHandle;
+        if (!from || !to || from.type === to.type) {
+          setConnectionIssue(t("Connect an output to a compatible input port."));
+          return;
+        }
+        const source = from.type === "source" ? from : to;
+        const target = from.type === "target" ? from : to;
+        const issue = validateCanvasConnection({ source: source.nodeId, sourceHandle: source.id ?? null,
+          target: target.nodeId, targetHandle: target.id ?? null }, nodes, edges, catalog);
+        const reasons: Record<ConnectionIssue, string> = {
+          endpoint: "Choose two different nodes.", port: "These ports have different types.",
+          duplicate: "This connection already exists.", "source-capacity": "This output already has its allowed connection.",
+          "target-capacity": "This input already has its allowed connections.",
+        };
+        setConnectionIssue(t(issue ? reasons[issue] : "This connection is not allowed."));
+      }}
       onEdgesDelete={(gone) => onDisconnect?.(edges.filter((e) => gone.some((x) => x.id === e.id)))}
       onNodeClick={(_, n) => onSelect?.(n.id)} onNodeDragStop={(_, n) => { moved.current[n.id] = n.position; }}>
       <CanvasRefit signature={nodes.map((n) => n.id).join("|")} />
@@ -122,5 +144,6 @@ export function NodeCanvas({ catalog, nodes, edges, selected, onSelect, onConnec
     {onAdd && <div className="absolute left-2 top-2 z-10 flex max-w-[70%] flex-wrap gap-1 rounded-md bg-surface/95 p-1 shadow-sm" aria-label={label}>
       {catalog.map((kind) => <button key={kind.id} type="button" className="rounded border border-border px-2 py-1 text-xs hover:bg-row-hover" title={kind.description} onClick={() => onAdd(kind.id)}>{kind.title}</button>)}
     </div>}
+    {connectionIssue && <div role="alert" className="pointer-events-none absolute bottom-2 left-2 z-20 max-w-[70%] rounded border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-sm">{connectionIssue}</div>}
   </CanvasFrame>;
 }

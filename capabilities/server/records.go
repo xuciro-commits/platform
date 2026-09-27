@@ -362,6 +362,12 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 		if f.Required && fv.IsZero() {
 			return invalid
 		}
+		if fv.Kind() == reflect.Pointer {
+			if fv.IsNil() {
+				continue
+			}
+			fv = fv.Elem()
+		}
 		switch f.Type {
 		case "choice":
 			if !fv.IsZero() && !slices.Contains(f.Choices, fv.String()) {
@@ -476,7 +482,7 @@ func (s *recordStore) matching(et *entityType, domain json.RawMessage, search st
 			continue
 		}
 		if search != "" && !strings.Contains(strings.ToLower(recordOf(v).ID), search) && !slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
-			return strings.Contains(strings.ToLower(fmt.Sprint(v.FieldByIndex(f.Index).Interface())), search)
+			return strings.Contains(strings.ToLower(searchable(f, v.FieldByIndex(f.Index).Interface())), search)
 		}) {
 			continue
 		}
@@ -506,6 +512,16 @@ func (k sortKey) of(v reflect.Value) any {
 // comparable is a field value as it is compared and sorted: strings, numbers,
 // times; money by its amount.
 func comparable(f platform.FieldInfo, v any) any {
+	if v != nil {
+		rv := reflect.ValueOf(v)
+		for rv.Kind() == reflect.Pointer {
+			if rv.IsNil() {
+				return nil
+			}
+			rv = rv.Elem()
+		}
+		v = rv.Interface()
+	}
 	switch x := v.(type) {
 	case platform.Money:
 		return float64(x.Amount)
@@ -516,6 +532,9 @@ func comparable(f platform.FieldInfo, v any) any {
 			return 1.0
 		}
 		return 0.0
+	}
+	if v == nil {
+		return nil
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
@@ -531,7 +550,24 @@ func comparable(f platform.FieldInfo, v any) any {
 	return fmt.Sprint(v)
 }
 
+func searchable(f platform.FieldInfo, v any) string {
+	x := comparable(f, v)
+	if x == nil {
+		return ""
+	}
+	return fmt.Sprint(x)
+}
+
 func compareValues(a, b any) int {
+	if a == nil {
+		if b == nil {
+			return 0
+		}
+		return -1
+	}
+	if b == nil {
+		return 1
+	}
 	switch x := a.(type) {
 	case float64:
 		y, _ := b.(float64)
@@ -666,11 +702,11 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 	case "<", "<=", ">", ">=":
 		textual := f.Type != "integer" && f.Type != "decimal" && f.Type != "money" && f.Type != "boolean"
 		return func(v reflect.Value) bool {
-			x := read(v)
-			if textual && reflect.ValueOf(x).IsZero() {
+			x := comparable(f, read(v))
+			if x == nil || textual && reflect.ValueOf(x).IsZero() {
 				return false // an empty value is neither before nor after anything
 			}
-			c := compareValues(comparable(f, x), value)
+			c := compareValues(x, value)
 			return op == "<" && c < 0 || op == "<=" && c <= 0 || op == ">" && c > 0 || op == ">=" && c >= 0
 		}, nil
 	case "in", "not in":
@@ -689,7 +725,7 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 		return has, nil
 	case "like":
 		s := strings.ToLower(fmt.Sprint(value))
-		return func(v reflect.Value) bool { return strings.Contains(strings.ToLower(fmt.Sprint(read(v))), s) }, nil
+		return func(v reflect.Value) bool { return strings.Contains(strings.ToLower(searchable(f, read(v))), s) }, nil
 	}
 	return nil, fmt.Errorf("unknown operator %s", op)
 }
