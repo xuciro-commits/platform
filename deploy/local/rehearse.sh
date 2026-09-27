@@ -218,7 +218,7 @@ catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$HOSPITALITY/v1/actio
 SERVER=$HOSPITALITY TENANT=hotel-a AUTHORITY=platform submit "$MGR" w-1 platform.endpoint.add platform.endpoint sink \
   '{"url":"http://webhook-sink:8080/hook","secret":"sink","events":["lodging.booking/1#canceled"],"allowPrivate":true}' | jq -e .record >/dev/null || fail "add endpoint"
 hosp pms "$MGR" s-c pms.reservation.cancel pms.reservation OPP-1-B1 '{}' | jq -e .record >/dev/null || fail "PMS cancel"
-note=$(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/timeline" | jq -r '.[] | select(.entity == "crm.opportunity/OPP-1") | "\(.by): \(.text)"')
+note=$(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/timeline" | jq -r '.[] | select(.entity == "crm.opportunity/OPP-1") | "\(.by): \(.title) (\(.text))"')
 [[ $note == "app:pms: Booking canceled (pms.reservation/OPP-1-B1, by manager-1)" ]] || fail "timeline: $note"
 for _ in $(seq 20); do [[ $(curl -s "$SINK/received" | jq '.kept | length') == 1 ]] && break; sleep 0.5; done
 [[ $(curl -s "$SINK/received" | jq -r '.kept[] | .type + " " + .data.entity') == "lodging.booking/1#canceled pms.reservation/OPP-1-B1" ]] || fail "webhook: $(curl -s "$SINK/received")"

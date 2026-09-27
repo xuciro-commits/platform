@@ -59,6 +59,8 @@ type Ticket struct {
 	Escalated bool      `json:"escalated,omitempty" field:"readonly"`
 	Reply     string    `json:"reply,omitempty" field:"readonly" type:"longtext"`
 	Replied   string    `json:"replied,omitempty" field:"readonly" title:"Replied by"`
+	// Unsent says why the last reply never reached the customer (F-24).
+	Unsent string `json:"unsent,omitempty" field:"readonly" title:"Reply not sent"`
 }
 
 // Entities declares the ticket and its lifecycle.
@@ -105,7 +107,7 @@ func reply(c platform.Caller, record any, payload json.RawMessage, _ time.Time) 
 	if strings.TrimSpace(p.Reply) == "" {
 		return invalid()
 	}
-	t.Reply, t.Replied = strings.TrimSpace(p.Reply), c.ID
+	t.Reply, t.Replied, t.Unsent = strings.TrimSpace(p.Reply), c.ID, ""
 	return nil
 }
 
@@ -159,6 +161,24 @@ func (a *App) Manifest() platform.Manifest {
 }
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
+
+// Answer hears what became of a reply's mail: a reply never sent (discarded,
+// refused or failed) leaves the ticket unanswered again, and the desk is told
+// to answer it (F-24).
+func (a *App) Answer(c platform.Caller, e platform.Effect, out platform.Outcome, now time.Time) *kernel.Error {
+	id, _, _ := strings.Cut(e.Key, ":")
+	t, known := platform.Get[Ticket](c, id)
+	if e.Event != ID+"/"+EffectReply || !known || e.State == "delivered" || t.Status != "answered" {
+		return nil
+	}
+	t.Status, t.Unsent = "triaged", strings.TrimSpace(e.State+" "+out.Detail)
+	if err := c.PutAt(now, "Reply not sent", t); err != nil {
+		return err
+	}
+	c.Notify(platform.Notification{Title: "Reply not sent: " + t.Subject, Body: t.Unsent, Ref: TicketType + "/" + t.ID, Key: "unsent:" + e.ID},
+		now, platform.Recipient{AppRole: Desk}, platform.Recipient{AppRole: Lead})
+	return nil
+}
 
 func (a *App) Read(platform.Caller, string) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}

@@ -1,4 +1,5 @@
 {
+ "Reply not sent": "回复未发出",
  "A ticket's reply, for the mail gateway to send to the customer.": "工单的回复，由邮件网关发给客户。",
  "Answer due": "回复期限",
  "Answer the customer; the reply is mailed to them.": "回复客户；回复会通过邮件发给对方。",

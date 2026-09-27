@@ -80,6 +80,8 @@ func TestLanguages(t *testing.T) {
 		{"Something no dictionary knows", "Something no dictionary knows"},
 		{"Move a task from open or done to canceled.", "把任务从进行中或已完成改为已取消。"}, // a generated sentence, by its words
 		{"Create saved view", "新建已保存视图"},
+		// A field whose help holds ": " is said through the split whose every value is known (F-25).
+		{"Settings: A language the tenant speaks, such as zh-CN; empty: the tenant's default", "设置：租户支持的语言，例如 zh-CN；留空：使用租户默认语言"},
 	} {
 		if got := tn.Say("zh-CN", c.in); got != c.want {
 			t.Errorf("Say(%q) = %q, want %q", c.in, got, c.want)

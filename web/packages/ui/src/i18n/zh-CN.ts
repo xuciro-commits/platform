@@ -40,6 +40,7 @@ export default {
   "Hide navigation": "隐藏导航",
   "History": "历史",
   "Processes": "流程",
+  "unchanged": "未变",
   "Start": "开始",
   "Approved": "已批准",
   "Refused when run": "执行时被拒绝",

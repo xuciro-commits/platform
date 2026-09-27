@@ -127,6 +127,7 @@ An outbound effect is the server playing the edge toward an external authority. 
   - Each notification to a member who signs in as `user:<email>` becomes an effect inside the input that notified. Its ID is the Message-ID; the receiver deduplicates by it.
   - A 4xx answer is retried, a 5xx answer rejects the effect.
   - These mails go to members only. Mail to people outside the tenant would be an irreversible kind.
+- **A discarded effect is answered** (F-24, 2026-09-27): discarding an effect, or removing its endpoint, tells the app that emitted it through `Answerer` with the result `discarded`, inside that decision; the CSM puts a ticket whose reply was never sent back to triaged and tells the desk (`TestCSM`). The console's lock now guards only its directory, so a decision about effects may notify members by role as it applies.
 
 ## Done-when, for the implementation item that follows acceptance
 

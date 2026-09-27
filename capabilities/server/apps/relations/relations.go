@@ -79,6 +79,7 @@ type Note struct {
 	Entity string    `json:"entity"`
 	By     string    `json:"by"`
 	At     time.Time `json:"at"`
+	Title  string    `json:"title,omitempty"` // a protocol event's title, said in the reader's language (F-37)
 	Text   string    `json:"text"`
 }
 
@@ -243,7 +244,7 @@ func (r *Relations) Observe(e platform.Event, events []string) {
 	defer r.mu.Unlock()
 	for _, name := range events {
 		declared, _ := r.host.ProtocolEvent(name)
-		text := declared.Title + " (" + entity + ", by " + s.GetPrincipalId() + ")"
+		text := entity + ", by " + s.GetPrincipalId()
 		about := []string{entity}
 		for _, l := range r.links {
 			if l.From == entity && !slices.Contains(about, l.To) {
@@ -254,7 +255,7 @@ func (r *Relations) Observe(e platform.Event, events []string) {
 			}
 		}
 		for _, x := range about {
-			r.notes = append(r.notes, Note{Entity: x, By: "app:" + e.App, At: e.Record.GetRecordedTime().AsTime(), Text: text})
+			r.notes = append(r.notes, Note{Entity: x, By: "app:" + e.App, At: e.Record.GetRecordedTime().AsTime(), Title: declared.Title, Text: text})
 		}
 	}
 }

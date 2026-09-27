@@ -204,13 +204,24 @@ func (d *Console) Manifest() platform.Manifest {
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
 
+// Submit decides the console's actions under the tenant's lock, as every
+// decision; its own lock guards only the directory, so a tenant's operations
+// (effects, endpoints, settings) may notify members by role as they apply.
 func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		declared, _ := d.ledger.Catalog.Action(s.GetSchema().GetName())
 		if declared.Target == MemberType {
-			return d.decideMember(c, s)
+			d.mu.Lock()
+			apply, err := d.decideMember(c, s)
+			d.mu.Unlock()
+			if apply == nil {
+				return nil, err
+			}
+			return func(r *pb.ChangeRecord) {
+				d.mu.Lock()
+				defer d.mu.Unlock()
+				apply(r)
+			}, err
 		}
 		if d.t == nil { // not composed: a tenant's operations need one
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}

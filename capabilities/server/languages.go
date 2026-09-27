@@ -32,7 +32,7 @@ var translated = map[string]bool{"title": true, "plural": true, "description": t
 // requests), which read in the member's language through Say.
 var (
 	declarationReads = map[string]bool{"settings": true, "flows": true, "agents": true}
-	messageReads     = map[string]bool{"notifications": true, "inbox": true, "requests": true}
+	messageReads     = map[string]bool{"notifications": true, "inbox": true, "requests": true, "timeline": true}
 )
 
 // Language is the language a member reads in a request: their own choice,
@@ -284,19 +284,24 @@ func (t *Tenant) says(lang, s string, depth int) bool {
 		return ok || depth <= maxSay
 	}
 	for _, p := range t.patterns(lang) {
-		m := p.re.FindStringSubmatch(s)
-		if m == nil {
-			continue
-		}
-		all := true
-		for _, v := range m[1:] {
-			all = all && t.says(lang, v, depth+1)
-		}
-		if all {
+		if _, ok := t.split(lang, p, s, depth); ok {
 			return true
 		}
 	}
 	return false
+}
+
+// split is the first way s fills p whose every value the language can say.
+func (t *Tenant) split(lang string, p pattern, s string, depth int) ([]string, bool) {
+	if !p.re.MatchString(s) {
+		return nil, false
+	}
+	for _, values := range p.splits(s, 32) {
+		if !slices.ContainsFunc(values, func(v string) bool { return !t.says(lang, v, depth+1) }) {
+			return values, true
+		}
+	}
+	return nil, false
 }
 
 // meaning describes an app's entity types as their declarations explain them
@@ -441,8 +446,37 @@ func (t *Tenant) glossary(app string) string {
 type pattern struct {
 	re    *regexp.Regexp
 	names []string
+	parts []string // the text around the placeholders: len(names)+1
 	out   string
 	fixed int // characters outside placeholders: the more, the more specific
+}
+
+// splits are the ways s fills the pattern's placeholders, at most limit of
+// them: "Kind: Where it goes: out" fills "{field}: {help}" twice (F-25).
+func (p pattern) splits(s string, limit int) [][]string {
+	var out [][]string
+	var fill func(rest string, i int, values []string)
+	fill = func(rest string, i int, values []string) {
+		if len(out) >= limit {
+			return
+		}
+		lit := p.parts[i+1]
+		if i == len(p.names)-1 { // the last placeholder takes all but the closing text
+			if v, ok := strings.CutSuffix(rest, lit); ok && v != "" {
+				out = append(out, append(slices.Clone(values), v))
+			}
+			return
+		}
+		for j := 1; j < len(rest); j++ {
+			if strings.HasPrefix(rest[j:], lit) {
+				fill(rest[j+len(lit):], i+1, append(values, rest[:j]))
+			}
+		}
+	}
+	if rest, ok := strings.CutPrefix(s, p.parts[0]); ok && len(p.names) > 0 {
+		fill(rest, 0, nil)
+	}
+	return out
 }
 
 var placeholder = regexp.MustCompile(`\{(\w+)\}`)
@@ -458,16 +492,18 @@ func (t *Tenant) patterns(lang string) []pattern {
 		if len(idx) == 0 {
 			continue
 		}
-		expr, names, last, fixed := "^", []string{}, 0, 0
+		expr, names, parts, last, fixed := "^", []string{}, []string{}, 0, 0
 		for _, m := range idx {
+			parts = append(parts, key[last:m[0]])
 			expr += regexp.QuoteMeta(key[last:m[0]]) + "(.+)"
 			fixed += m[0] - last
 			names = append(names, key[m[2]:m[3]])
 			last = m[1]
 		}
 		expr += regexp.QuoteMeta(key[last:]) + "$"
+		parts = append(parts, key[last:])
 		fixed += len(key) - last
-		out = append(out, pattern{re: regexp.MustCompile("(?s)" + expr), names: names, out: tr, fixed: fixed})
+		out = append(out, pattern{re: regexp.MustCompile("(?s)" + expr), names: names, parts: parts, out: tr, fixed: fixed})
 	}
 	slices.SortFunc(out, func(a, b pattern) int { return b.fixed - a.fixed })
 	t.patternCache.Store(lang, out)
@@ -487,14 +523,23 @@ func (t *Tenant) say(lang, s string, depth int) string {
 	if tr, ok := t.lookup(lang, s); ok {
 		return tr
 	}
-	for _, p := range t.patterns(lang) {
-		m := p.re.FindStringSubmatch(s)
-		if m == nil {
-			continue
+	// The most specific pattern with a split the language can say wholly; else
+	// the first that matches at all, with what it cannot say left as written.
+	var p pattern
+	var filled []string
+	for _, q := range t.patterns(lang) {
+		if found, ok := t.split(lang, q, s, depth); ok {
+			p, filled = q, found
+			break
 		}
+		if m := q.re.FindStringSubmatch(s); m != nil && filled == nil {
+			p, filled = q, m[1:]
+		}
+	}
+	if filled != nil {
 		values := map[string]string{}
 		for i, name := range p.names {
-			values[name] = t.say(lang, m[i+1], depth+1)
+			values[name] = t.say(lang, filled[i], depth+1)
 		}
 		return placeholder.ReplaceAllStringFunc(p.out, func(x string) string {
 			if v, ok := values[x[1:len(x)-1]]; ok {

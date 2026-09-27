@@ -396,6 +396,14 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	return true
 }
 
+// told tells the app that emitted an effect that it was discarded, inside the
+// decision that discarded it, so a replay tells it again (F-24).
+func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, replaying bool) {
+	if a, ok := t.app(x.App).(platform.Answerer); ok && x.App != "" {
+		a.Answer(t.automation(x.App, replaying), x, o, now)
+	}
+}
+
 func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) {
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
@@ -459,7 +467,7 @@ func effectActions() []platform.Action {
 }
 
 // decideEndpoint decides adding and removing an endpoint.
-func (t *Tenant) decideEndpoint(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
+func (t *Tenant) decideEndpoint(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	t.opsMu.Lock()
@@ -471,12 +479,17 @@ func (t *Tenant) decideEndpoint(_ platform.Caller, s *pb.Submission, _ time.Time
 		}
 		return func(*pb.ChangeRecord) {
 			t.opsMu.Lock()
-			defer t.opsMu.Unlock()
 			t.endpoints = slices.DeleteFunc(t.endpoints, func(e *Endpoint) bool { return e.ID == id })
+			var dropped []platform.Effect
 			for _, x := range t.outbound {
 				if x.Endpoint == id && !settled(x.State) {
 					x.State = "discarded"
+					dropped = append(dropped, x.Effect)
 				}
+			}
+			t.opsMu.Unlock()
+			for _, x := range dropped {
+				t.told(x, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "its endpoint was removed by " + c.ID}, now, c.Replaying)
 			}
 		}, nil
 	}
@@ -569,6 +582,7 @@ func (t *Tenant) decideEffect(c platform.Caller, s *pb.Submission, now time.Time
 			if t.agents != nil {
 				t.agents.effectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
 			}
+			t.told(x.Effect, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "discarded by " + c.ID}, now, c.Replaying)
 		}, nil
 	}
 	if x == nil || (x.State != "failed" && x.State != "rejected") {

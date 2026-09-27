@@ -372,7 +372,12 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
               <div className="flex gap-2"><span className="font-mono">{h.schema}</span><span className="text-muted">{h.by} · {new Date(h.at).toLocaleString()}</span></div>
               {h.fields.length > 0 && (
                 <ul className="mt-1 grid gap-0.5">
-                  {h.fields.map((f) => <li key={f.field}><span className="text-muted">{info.fields.find((x) => x.name === f.field)?.title ?? f.field}</span> {f.before !== undefined && <><s className="text-muted">{shown(f.before)}</s> → </>}{shown(f.after)}</li>)}
+                  {h.fields.map((f) => {
+                    const declared = info.fields.find((x) => x.name === f.field);
+                    return <li key={f.field}><span className="text-muted">{declared?.title ?? f.field}</span>{" "}
+                      {declared?.type === "lines" ? <LinesChange field={declared} before={f.before} after={f.after} />
+                        : <>{f.before !== undefined && <><s className="text-muted">{shown(f.before)}</s> → </>}{shown(f.after)}</>}</li>;
+                  })}
                 </ul>
               )}
             </li>
@@ -381,6 +386,38 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       </section>
     </div>
   );
+}
+
+type Row = Record<string, unknown>;
+
+/** The cell of a line as people read it: money with its currency, the rest as shown elsewhere. */
+const cellOf = (f: FieldInfo, v: unknown) => f.type === "money" && v && typeof v === "object"
+  ? `${((v as Money).amount / 100).toFixed(2)} ${(v as Money).currency}` : shown(v);
+
+/**
+ * A changed lines field row by row (F-26, F-37): lines added, removed, and
+ * changed in some cells. Lines are matched by the first column whose values
+ * are unique on both sides (a booking, an account), else by position.
+ */
+export function LinesChange({ field, before, after }: { field: FieldInfo; before: unknown; after: unknown }) {
+  const columns = field.fields ?? [];
+  const was = Array.isArray(before) ? (before as Row[]) : [], is = Array.isArray(after) ? (after as Row[]) : [];
+  const unique = (rows: Row[], name: string) => rows.every((r) => ["string", "number"].includes(typeof r[name]) && r[name] !== "")
+    && new Set(rows.map((r) => r[name])).size === rows.length;
+  const key = columns.find((c) => c.type !== "money" && unique(was, c.name) && unique(is, c.name))?.name;
+  const id = (r: Row, i: number) => String(key ? r[key] : i);
+  const text = (r: Row) => columns.filter((c) => r[c.name] !== undefined && r[c.name] !== "" && r[c.name] !== null).map((c) => `${c.title} ${cellOf(c, r[c.name])}`).join(" · ");
+  const old = new Map(was.map((r, i) => [id(r, i), r])), now = new Map(is.map((r, i) => [id(r, i), r]));
+  const lines: ReactNode[] = [];
+  is.forEach((r, i) => {
+    const k = id(r, i), prior = old.get(k);
+    if (!prior) { lines.push(<li key={`+${k}`} className="text-[var(--tone-success)]">+ {text(r)}</li>); return; }
+    const changed = columns.filter((c) => JSON.stringify(prior[c.name]) !== JSON.stringify(r[c.name]));
+    if (changed.length) lines.push(<li key={`~${k}`}>{key ? `${r[key]}: ` : `${i + 1}: `}{changed.map((c, j) =>
+      <span key={c.name}>{j > 0 && " · "}{c.title} <s className="text-muted">{cellOf(c, prior[c.name])}</s> → {cellOf(c, r[c.name])}</span>)}</li>);
+  });
+  was.forEach((r, i) => { const k = id(r, i); if (!now.has(k)) lines.push(<li key={`-${k}`} className="text-muted"><s>− {text(r)}</s></li>); });
+  return lines.length ? <ul className="ml-3 grid gap-0.5">{lines}</ul> : <span className="text-muted">{t("unchanged")}</span>;
 }
 
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${Math.round(n / 1024)} KB` : `${(n / (1 << 20)).toFixed(1)} MB`);

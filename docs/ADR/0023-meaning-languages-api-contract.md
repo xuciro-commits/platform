@@ -122,3 +122,5 @@ Our constraints:
 - **Kept honest in CI:** `scripts/verify.sh capabilities` scaffolds an app in `.build/scaffold` and runs its tests; `composition` checks every Go module under `apps/` and `protocols/` (tests and `boundaries.sh`) without a list, and the kit's i18n test reads every UI package with a dictionary, so a new app is verified as soon as it exists.
 - **Checked by hand:** a scaffolded purchasing app on its development host with the workspace's build: a member created a request, the manager's inbox showed 审核 PR-1 with the answers 完成 and 保持进行中, the manager answered 完成 in the browser, and the request read 已完成.
 - **Not yet:** a developer MCP (coding agents read the repository, not the host); a scaffold for a protocol or an agent.
+- **Every split of a pattern** (F-25, 2026-09-27): a text is said through the most specific pattern with a split whose every value the language can say — a field's help holding ": " reads whole — and only then through the first pattern that matches at all.
+

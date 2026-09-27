@@ -12,7 +12,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 type Account = { id: string; name: string; kind: string; revision: number };
-type Note = { entity: string; at: string; by: string; text: string };
+type Note = { entity: string; at: string; by: string; title?: string; text: string };
 type Opportunity = { id: string; account: string; title: string; owner: string; stage: "open" | "won" | "lost"; revision: number; bookings: Booking[];
   rooms?: number; roomType?: string; arrive?: string; depart?: string; cutoff?: string; block?: string };
 type Customer = Account & { opportunities: Opportunity[] };
@@ -134,7 +134,8 @@ function Timeline({ opportunity: o }: { opportunity: Opportunity }) {
         <p key={i} className="text-sm">
           <span className="mr-2 text-xs text-muted">{new Date(n.at).toLocaleString()}</span>
           {n.by.startsWith("app:") ? <Tag label={n.by} tone="info" /> : <span className="text-xs font-medium">{n.by}</span>}
-          <span className="ml-2">{n.text}</span>
+          {n.title && <span className="ml-2 font-medium">{n.title}</span>}
+          <span className={n.title ? "ml-2 text-xs text-muted" : "ml-2"}>{n.text}</span>
         </p>
       ))}
       {can("platform.note") && (

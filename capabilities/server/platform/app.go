@@ -158,6 +158,8 @@ type Runner interface {
 // receiver's answer, rejected, or failed. The answer comes from outside, so it is
 // journaled with the outcome, and replay hands the app the same answer (D4): the
 // app records it as an observation and decides on it; it never changes state by itself.
+// A discarded effect is answered too, with the result "discarded", when a
+// person discards it or its endpoint is removed (F-24).
 type Answerer interface {
 	Answer(c Caller, e Effect, o Outcome, now time.Time) *kernel.Error
 }

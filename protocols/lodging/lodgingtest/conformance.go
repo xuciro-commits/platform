@@ -98,7 +98,7 @@ func Conformance(t *testing.T, tenant *platformserver.Tenant, member platform.Me
 	var told []string
 	for _, n := range timeline.([]relations.Note) {
 		if strings.HasSuffix(n.Entity, "/LB-1") {
-			told = append(told, strings.SplitN(n.Text, " (", 2)[0])
+			told = append(told, n.Title)
 		}
 	}
 	if !slices.Equal(told, []string{"Booking changed", "Booking canceled"}) {

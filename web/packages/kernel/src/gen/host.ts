@@ -502,6 +502,7 @@ export type Note = {
   entity: string;
   by: string;
   at: string;
+  title?: string;
   text: string;
 };
 

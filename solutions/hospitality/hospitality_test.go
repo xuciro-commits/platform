@@ -105,7 +105,11 @@ func (w *world) timeline(who, entity string) []string {
 	var out []string
 	for _, n := range w.read(who, "timeline").([]relations.Note) {
 		if n.Entity == entity {
-			out = append(out, n.By+": "+n.Text)
+			if n.Title != "" {
+				out = append(out, n.By+": "+n.Title+" ("+n.Text+")")
+			} else {
+				out = append(out, n.By+": "+n.Text)
+			}
 		}
 	}
 	return out

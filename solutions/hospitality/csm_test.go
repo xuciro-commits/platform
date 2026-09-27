@@ -167,6 +167,10 @@ func TestCSMTriage(t *testing.T) {
 	i := slices.IndexFunc(effects.([]platform.Effect), func(e platform.Effect) bool { return e.State == "held" })
 	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaEffectDiscard, platformserver.EffectType, effects.([]platform.Effect)[i].ID, map[string]any{}), "ok")
 	w.expect(runOf("T-4").Signals[0].Kind, "discarded")
+	// The helpdesk hears it too: the ticket is unanswered again, and the desk is told (F-24).
+	w.expect(ticket("T-4").Status+" "+ticket("T-4").Unsent, "triaged discarded discarded by ops")
+	deskNotes, _ := w.tenant.Read(desk, "notifications")
+	w.expect(fmt.Sprint(slices.ContainsFunc(deskNotes.([]platform.Notification), func(n platform.Notification) bool { return n.Title == "Reply not sent: Wifi slow in the lobby" })), "true")
 	memories, _ := w.tenant.Records(agents, platformserver.MemoryType, platform.Query{}, now)
 	w.expect(fmt.Sprint(len(memories.Records), " ", memories.Records[0].(platformserver.Memory).State), "1 proposed")
 

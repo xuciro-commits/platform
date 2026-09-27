@@ -56,7 +56,7 @@
 7. **客户服务 CSM**（酒店业主机，`manager@hotel.test`，他是客户服务的 lead）：
    1. 和第 6 条一样先给酒店业主机设智能体模型（AI → Providers 添加 local 并启用 echo，或者用 OpenRouter 的支持 tools 的模型；再在 App settings → Agents 填模型）；在 Integrations 添加一个接收地址，勾选 effect `csm/reply`（本地可以用 `http://webhook-sink:8080/hook`，秘钥随便填，允许私有地址）；
    2. 打开 CSM → Open ticket，客户账号填 `ACME`（先在 CRM 建好这个账户和商机，模型才能查到）；
-   3. 分诊智能体会分类、定优先级（优先级决定回复期限），再回复；因为是智能体写的回复，邮件会被扣住，Notifications 里会有"Approve Reply to the customer"，到 Integrations 批准后才发出去（本地在 `http://127.0.0.1:8497/received` 能看到）；
+   3. 分诊智能体会分类、定优先级（优先级决定回复期限），再回复；因为是智能体写的回复，邮件会被扣住，Notifications 里会有"Approve Reply to the customer"，到 Integrations 批准后才发出去（本地在 `http://127.0.0.1:8497/received` 能看到）；如果在 Integrations 里丢弃它，工单会从"已回复"回到"已分诊"，"回复未发出"写着谁丢弃的，客服和 lead 收到"Reply not sent"通知，要重新回复；
    4. 回复里承诺退款、补偿、折扣的会被智能体的规则拒绝，工单留给人处理；模型不可用时工单直接进客服的收件箱；到期还没回复的，lead 会收到"Late ticket"任务和通知。
 8. **助手和评估**（任一主机）：
    1. 打开任一记录（比如 CRM 的商机，或 MES 的订单），点 "Ask the assistant"，选智能体（酒店业主机的 "Sales assistant"，MES 的 "ERP correction"），写下要做什么，比如"把这个商机标记为赢单"；
