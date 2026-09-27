@@ -254,7 +254,8 @@ function Remembered() {
       {memories.map((m) => (
         <Card key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm">
           <Tag label={m.state === "proposed" ? "proposed" : "remembered"} tone={m.state === "proposed" ? "warning" : "success"} />
-          <span className="flex-1">{m.fact} <span className="text-xs text-muted">{m.agent}{m.expires ? ` · until ${m.expires.slice(0, 10)}` : " · kept"}</span></span>
+          <span className="flex-1">{m.withheld ? <em className="text-muted">{t("It came from records you may no longer read.")}</em> : m.fact}
+            {" "}<span className="text-xs text-muted">{m.agent}{m.expires ? ` · until ${m.expires.slice(0, 10)}` : " · kept"}</span></span>
           {(m.state === "proposed" || m.expires) && <Button size="sm" onClick={() => act(m, "keep")}>{t("Keep")}</Button>}
           <Button size="sm" variant="ghost" onClick={() => act(m, "forget")}>{t("Forget")}</Button>
         </Card>

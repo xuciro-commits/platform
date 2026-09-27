@@ -9,7 +9,6 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
-	"platformserver/internal/host"
 	"platformserver/platform"
 )
 
@@ -29,9 +28,9 @@ func (t *Tenant) admits(m platform.Member) *kernel.Error {
 	return nil
 }
 
-// mayRead reports whether m may read a record ("<type>/<id>") or one field of
-// it ("<type>/<id>#<field>") now, remembering each answer. held says the
-// record store's lock is already held by the caller.
+// mayRead reports whether m may read a source now, remembering each answer: a
+// record ("<type>/<id>"), one field of it ("<type>/<id>#<field>") or a named
+// app read ("read:<name>"). held says the record store's lock is already held.
 func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref string) bool {
 	seen := map[string]bool{}
 	return func(ref string) bool {
@@ -39,6 +38,11 @@ func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref s
 			return true
 		}
 		if ok, known := seen[ref]; known {
+			return ok
+		}
+		if name, isRead := strings.CutPrefix(ref, "read:"); isRead {
+			ok := t.mayCallRead(m, name)
+			seen[ref] = ok
 			return ok
 		}
 		record, field, _ := strings.Cut(ref, "#")
@@ -54,6 +58,15 @@ func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref s
 		seen[ref] = ok
 		return ok
 	}
+}
+
+// mayCallRead reports whether m may call a named app read now, by the rule
+// Tenant.Read applies: a role in the app that declares it, or a read its
+// manifest opens to every member. A source may name a read instead of a record
+// when what a read answers with is not records (ADR-0033 D1).
+func (t *Tenant) mayCallRead(m platform.Member, name string) bool {
+	a := t.owner["read:"+name]
+	return a != nil && (m.Roles[a.Manifest().ID] != "" || slices.Contains(a.Manifest().Everyone, name))
 }
 
 // readsField reports whether m's role in the owning app reads one field of a
@@ -73,25 +86,33 @@ func (t *Tenant) readsField(m platform.Member, ref, field string, held bool) boo
 	return ok && f.Reads(m.Roles[et.info.App])
 }
 
-// narrowing is the app that owns a type and declares how its records narrow.
-func (t *Tenant) narrowing(et *entityType) host.Narrowing {
-	n, _ := t.app(et.info.App).(host.Narrowing)
-	return n
-}
-
-// narrowable are the fields of a type that narrowing may leave out.
+// narrowable are the fields a type's derivations may leave out.
 func (t *Tenant) narrowable(et *entityType) []string {
-	n := t.narrowing(et)
-	if n == nil {
-		return nil
-	}
 	var out []string
-	for _, name := range n.Narrowable() {
-		if typ, field, ok := strings.Cut(name, "."); ok && typ == et.info.Type {
-			out = append(out, field)
+	for _, d := range et.info.Derived {
+		for _, path := range d.Fields {
+			if len(d.List) == 0 {
+				if f := fieldName(et.info.Go, path); f != "" {
+					out = append(out, f)
+				}
+			}
+		}
+		if len(d.List) > 0 {
+			if f := fieldName(et.info.Go, d.List); f != "" {
+				out = append(out, f)
+			}
 		}
 	}
 	return out
+}
+
+// fieldName is the JSON name of a field index path in a struct.
+func fieldName(t reflect.Type, path []int) string {
+	if len(path) == 0 {
+		return ""
+	}
+	name, _, _ := strings.Cut(t.FieldByIndex(path).Tag.Get("json"), ",")
+	return name
 }
 
 // narrowed is v as m may read it now: every record within it keeps only the
@@ -103,12 +124,18 @@ func (t *Tenant) narrowed(m platform.Member, v any, now time.Time, held bool) an
 	if v == nil {
 		return v
 	}
-	w := &narrower{t: t, m: m, may: t.mayRead(m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}}
+	w := t.narrower(m, now, held)
 	out, changed := w.value(reflect.ValueOf(v))
 	if !changed {
 		return v
 	}
 	return out.Interface()
+}
+
+// narrower narrows what leaves for one member at one moment, remembering each
+// answer about a record and each type's restricted fields.
+func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *narrower {
+	return &narrower{t: t, m: m, may: t.mayRead(m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}}
 }
 
 type narrower struct {
@@ -194,30 +221,136 @@ func (w *narrower) value(v reflect.Value) (reflect.Value, bool) {
 	return v, false
 }
 
-// record narrows one record: the fields m's role may not read, then the app's
-// own narrowing of what the record derives from other records.
+// record narrows one record: first the fields m's role may not read, then the
+// content the type declares it took from other records (ADR-0033).
 func (w *narrower) record(et *entityType, v reflect.Value) (reflect.Value, bool) {
 	hidden, known := w.hidden[et.info.Go]
 	if !known {
 		_, hidden = viewOf(w.m, et)
 		w.hidden[et.info.Go] = hidden
 	}
-	n, changed := w.t.narrowing(et), false
+	changed := false
 	out := v
 	if len(hidden) > 0 {
 		out, changed = reflect.ValueOf(masked(et, v, hidden)), true
 	}
-	if n == nil {
+	if len(et.info.Derived) == 0 {
 		return out, changed
 	}
-	narrow := n.Narrow(out.Interface(), w.may)
-	if reflect.TypeOf(narrow) != et.info.Go {
-		return out, changed
-	}
-	if raw, _ := json.Marshal(narrow); !equalJSON(raw, out.Interface()) {
-		return reflect.ValueOf(narrow), true
+	derived, narrowed := w.derive(et, out)
+	if narrowed {
+		return derived, true
 	}
 	return out, changed
+}
+
+// derive applies a type's derivations to a copy of the record: content whose
+// source the reader may not read now is emptied, or its element left out, and
+// the declared withheld field says so.
+func (w *narrower) derive(et *entityType, v reflect.Value) (reflect.Value, bool) {
+	out := copyOf(et.info.Go, v.Interface())
+	withheld, every := false, []string{}
+	for _, d := range et.info.Derived { // every source the type names, for "*"
+		if !d.All {
+			every = append(every, w.sources(out, d)...)
+		}
+	}
+	for _, d := range et.info.Derived {
+		switch {
+		case d.All:
+			if !w.readable(every) {
+				withheld = true
+				empty(out, d.Fields)
+			}
+		case len(d.List) == 0:
+			if !w.readable(w.refsAt(out, d.Refs)) {
+				withheld = true
+				empty(out, d.Fields)
+			}
+		default:
+			list := out.FieldByIndex(d.List)
+			kept := reflect.MakeSlice(list.Type(), 0, list.Len())
+			for i := range list.Len() {
+				element := list.Index(i)
+				if w.readable(w.refsAt(element, d.Refs)) {
+					kept = reflect.Append(kept, element)
+					continue
+				}
+				withheld = true
+				if d.Element {
+					continue // the element is left out altogether
+				}
+				narrowed := reflect.New(element.Type()).Elem()
+				narrowed.Set(element)
+				empty(narrowed, d.Fields)
+				kept = reflect.Append(kept, narrowed)
+			}
+			list.Set(kept)
+		}
+	}
+	if !withheld {
+		return v, false
+	}
+	if len(et.info.Withheld) > 0 {
+		out.FieldByIndex(et.info.Withheld).SetBool(true)
+	}
+	return out, true
+}
+
+// sources are every record a derivation names, over a list's elements too.
+func (w *narrower) sources(v reflect.Value, d platform.DerivationInfo) []string {
+	if len(d.List) == 0 {
+		return w.refsAt(v, d.Refs)
+	}
+	var out []string
+	list := v.FieldByIndex(d.List)
+	for i := range list.Len() {
+		out = append(out, w.refsAt(list.Index(i), d.Refs)...)
+	}
+	return out
+}
+
+// refsAt reads the records a derivation's fields name: one field holding a ref
+// or a list of them, or two fields joined as "<type>/<id>".
+func (w *narrower) refsAt(v reflect.Value, paths [][]int) []string {
+	if len(paths) == 2 {
+		typ, id := v.FieldByIndex(paths[0]).String(), v.FieldByIndex(paths[1]).String()
+		if typ == "" || id == "" {
+			return nil
+		}
+		return []string{typ + "/" + id}
+	}
+	at := v.FieldByIndex(paths[0])
+	if at.Kind() == reflect.Slice {
+		var out []string
+		for i := range at.Len() {
+			if ref := at.Index(i).String(); ref != "" {
+				out = append(out, ref)
+			}
+		}
+		return out
+	}
+	if ref := at.String(); ref != "" {
+		return []string{ref}
+	}
+	return nil
+}
+
+// readable reports whether the reader may read every one of these records.
+func (w *narrower) readable(refs []string) bool {
+	for _, ref := range refs {
+		if !w.may(ref) {
+			return false
+		}
+	}
+	return true
+}
+
+// empty sets the fields of a record or an element to their zero value.
+func empty(v reflect.Value, fields [][]int) {
+	for _, path := range fields {
+		v.FieldByIndex(path).SetZero()
+	}
 }
 
 func equalJSON(raw []byte, v any) bool {

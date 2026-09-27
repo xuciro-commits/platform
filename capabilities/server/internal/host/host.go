@@ -57,23 +57,6 @@ type Host interface {
 	Processes() Processes
 }
 
-// Narrowing is an app whose records carry content derived from other records:
-// an agent run's trace, a citation, a drafted payload. What a reader may not
-// read at the source is not read through the derived record either, however it
-// was journaled: the host calls Narrow again on every member-facing read,
-// because authority changes after the content was written (#130).
-type Narrowing interface {
-	// Narrowable are the fields Narrow may leave out ("<type>.<field>"); they
-	// are neither grouped nor measured in an aggregate.
-	Narrowable() []string
-	// Narrow is record as the reader may read it now. may reports whether they
-	// may read a record ("<type>/<id>") or one of its fields
-	// ("<type>/<id>#<field>") at this moment. It decides on the record in hand
-	// and may read no other record: the host calls it while serving a page, so
-	// what a narrowing needs is kept on the record itself.
-	Narrow(record any, may func(ref string) bool) any
-}
-
 // Listener is a platform app delivered other apps' events as owned work, with
 // every name an event goes by (its action and the protocol events it is).
 type Listener interface {

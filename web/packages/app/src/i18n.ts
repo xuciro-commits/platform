@@ -7,6 +7,7 @@ register("zh-CN", {
   "Preview record is unavailable.": "预览记录不可用。",
   "Preview uses sample data. Actions do not run.": "预览使用示例数据，不会执行动作。",
   "Part of this trace came from records you may no longer read, and is left out.": "这条轨迹中有部分来自你已无权读取的记录，已被隐去。",
+  "It came from records you may no longer read.": "它来自你已无权读取的记录。",
   "This definition is unavailable.": "此定义不可用。",
   "Chain": "调用链",
   "record": "记录",

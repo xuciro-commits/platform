@@ -544,6 +544,7 @@ export type Memory = {
   sources?: string[];
   state: "proposed" | "active" | "forgotten";
   expires?: string;
+  withheld?: boolean;
 };
 
 export type Message = {

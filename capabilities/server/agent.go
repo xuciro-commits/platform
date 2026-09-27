@@ -169,7 +169,16 @@ func NewAgents(tenant string) *Agents {
 }
 
 func agentEntities() []platform.Entity {
-	return []platform.Entity{{Type: RunType, Title: "Agent run", Model: AgentRunRecord{}, Display: "title"},
+	return []platform.Entity{{Type: RunType, Title: "Agent run", Model: AgentRunRecord{}, Display: "title",
+		// What the agent saw, read, cited, drafted and concluded came from other
+		// records, so each reader reads it only while they may read those (ADR-0033).
+		Derived: []platform.Derivation{
+			{From: "ref", Fields: []string{"seen"}},
+			{From: "steps.sources", Fields: []string{"arguments", "outcome"}},
+			{From: "citations.document", Element: true},
+			{From: "draft.type/target", Element: true},
+			{From: "*", Fields: []string{"result"}}},
+		Withheld: "withheld"},
 		{Type: EvaluationType, Title: "Agent evaluation", Model: Evaluation{}, Display: "model"}, memoryEntity(),
 		{Type: SwitchType, Title: "Agent switch", Model: Switch{}, Description: "An agent's off switch: suspended by an administrator, or working."}}
 }
@@ -516,13 +525,8 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	return out, nil
 }
 
-// Narrowable are the fields narrowing leaves out (host.Narrowing).
-func (a *Agents) Narrowable() []string {
-	return []string{RunType + ".seen", RunType + ".steps", RunType + ".citations", RunType + ".draft", RunType + ".result", MemoryType + ".fact"}
-}
-
 // sourcesOf are the records a run has read, cited or acted on so far: what
-// anything derived from it is checked against when it is read again (#130).
+// anything derived from it is checked against when it is read again (ADR-0033).
 func sourcesOf(run AgentRunRecord) []string {
 	out := []string{}
 	if run.Ref != "" {
@@ -536,55 +540,6 @@ func sourcesOf(run AgentRunRecord) []string {
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
-}
-
-// Narrow is a run as the reader may read it now (#130): what the agent saw of
-// a record, read or cited at a step, drafted, and concluded is left out when
-// its source is no longer theirs to read — a record whose owner or unit
-// changed, a field restricted since, an app grant revoked. The run itself, its
-// goal, cost and state stay: a person still sees that the agent ran.
-func (a *Agents) Narrow(record any, may func(ref string) bool) any {
-	if fact, ok := record.(Memory); ok { // a fact an agent kept from what it read
-		for _, ref := range fact.Sources {
-			if !may(ref) {
-				fact.Fact, fact.Sources = "", nil
-				return fact
-			}
-		}
-		return fact
-	}
-	run, ok := record.(AgentRunRecord)
-	if !ok {
-		return record
-	}
-	withheld := false
-	readable := func(refs ...string) bool {
-		out := true
-		for _, ref := range refs {
-			if ref != "" && !may(ref) {
-				out, withheld = false, true
-			}
-		}
-		return out
-	}
-	if !readable(run.Ref) {
-		run.Seen = ""
-	}
-	steps := slices.Clone(run.Steps)
-	for i, step := range steps {
-		if !readable(step.Sources...) {
-			steps[i].Arguments, steps[i].Outcome = "", ""
-		}
-	}
-	run.Steps = steps
-	run.Citations = slices.DeleteFunc(slices.Clone(run.Citations), func(c Citation) bool { return !readable(c.Document) })
-	run.Draft = slices.DeleteFunc(slices.Clone(run.Draft), func(d Draft) bool {
-		return d.Type != "" && d.Target != "" && !readable(d.Type+"/"+d.Target)
-	})
-	if withheld { // the answer restates what it read, so it goes with the sources
-		run.Result, run.Withheld = "", true
-	}
-	return run
 }
 
 // AgentInfo is a declared agent as people see it.

@@ -294,6 +294,14 @@ func TestCorrectedByTheAgent(t *testing.T) {
 	runs, _ := x.tn.Records(agents, platformserver.RunType, platform.Query{}, x.now)
 	run := runs.Records[0].(platformserver.AgentRunRecord)
 	x.expect("its run", fmt.Sprint(run.State, " ", run.Steps[0].Tool, " ", run.Steps[1].Tool, " ", run.ActionsUsed), "done read_planned_orders finish 0")
+	// The trace is read against what the agent read (ADR-0033): the supervisor
+	// holds the roles of the apps it read, an administrator of agents alone does
+	// not, so the planned orders it saw and the answer it gave are withheld and
+	// the reader is told.
+	x.expect("withheld from an agent administrator", fmt.Sprint(run.Withheld, " ", run.Steps[0].Outcome, " ", run.Result), "true  ")
+	whole, _ := x.tn.Records(x.member("sup-1"), platformserver.RunType, platform.Query{}, x.now)
+	mine := whole.Records[0].(platformserver.AgentRunRecord)
+	x.expect("whole for the supervisor", fmt.Sprint(mine.Withheld, " ", strings.Contains(mine.Steps[0].Outcome, "PO-9002"), " ", mine.Result != ""), "false true true")
 	out, _ := x.tn.Read(x.member("sup-1"), "inbox")
 	x.expect("resend", x.do("sup-1", work.ID, "work.task.complete", work.TaskType, out.([]work.WorkTask)[0].ID, map[string]string{"answer": "resend"}), "ok")
 	x.work(6)

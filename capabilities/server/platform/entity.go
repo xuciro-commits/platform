@@ -74,6 +74,40 @@ type Entity struct {
 	// a package's configuration, like the organisation's seed); decisions change
 	// them afterwards, and replay starts from them again.
 	Seed []any
+	// Derived is content this type took from other records (ADR-0033), and
+	// Withheld the boolean field the host sets when it left some of it out for
+	// a reader. The host checks every source again at each read; the app's only
+	// duty is to keep the refs on the record when it writes the content.
+	Derived  []Derivation
+	Withheld string
+}
+
+// Derivation says that some of a type's content came from other records
+// (ADR-0033): what the reader may not read at the source is not read here
+// either, however long ago it was written.
+type Derivation struct {
+	// From is the field holding the records the content came from: refs
+	// ("<type>/<id>", or "<type>/<id>#<field>" for one field of a record), one
+	// or a list of them. A path may enter one list of records the type holds
+	// ("steps.sources": the field sources of each step), and its last segment
+	// may join two fields as a type and an id ("draft.type/target"). "*" is
+	// every source the type's other derivations name.
+	From string
+	// Fields are emptied for a reader who may not read one of the sources —
+	// relative to the element when From enters a list. Element instead leaves
+	// that element out altogether.
+	Fields  []string
+	Element bool
+}
+
+// DerivationInfo is a Derivation resolved to field indices for the host.
+type DerivationInfo struct {
+	All     bool     // From "*": every source the type names
+	List    []int    // the list of records holding it, none for the record itself
+	Refs    [][]int  // the fields holding the sources; two are joined as "<type>/<id>"
+	Fields  [][]int  // what is emptied, within the element when List is set
+	Element bool     // leave the element out instead
+	Names   []string // the declared field names, for diagnostics
 }
 
 // Lifecycle declares a status field, its states and the transitions between
@@ -224,6 +258,10 @@ type EntityInfo struct {
 	Lifecycle      *LifecycleInfo `json:"lifecycle,omitempty"`
 	Go             reflect.Type   `json:"-"`
 	Scope          Scope          `json:"-"`
+	// Derived and Withheld are ADR-0033's declaration, resolved: the host
+	// narrows these fields to the sources the reader may still read.
+	Derived  []DerivationInfo `json:"-"`
+	Withheld []int            `json:"-"`
 }
 
 // Field is the named field's description.
@@ -322,6 +360,9 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		if x[0].(bool) {
 			info.Standard = append(info.Standard, e.Type+x[1].(string))
 		}
+	}
+	if err := describeDerived(&info, e); err != nil {
+		return EntityInfo{}, err
 	}
 	return info, nil
 }
@@ -570,4 +611,95 @@ func (f FieldInfo) Reads(role string) bool {
 // Writes reports whether a member holding role sets it through generated actions.
 func (f FieldInfo) Writes(role string) bool {
 	return f.Reads(role) && (len(f.Write) == 0 || slices.Contains(f.Write, role))
+}
+
+// describeDerived resolves Entity.Derived and Entity.Withheld to field indices
+// (ADR-0033), refusing a declaration that names a field the type does not have:
+// a tenant with one does not start, like any other manifest error.
+func describeDerived(info *EntityInfo, e Entity) error {
+	fail := func(format string, args ...any) error {
+		return fmt.Errorf("entity %s: derived content: "+format, append([]any{e.Type}, args...)...)
+	}
+	if e.Withheld != "" {
+		f, ok := info.Field(e.Withheld)
+		if !ok || f.Type != "boolean" {
+			return fail("the withheld field %q is not a boolean field", e.Withheld)
+		}
+		info.Withheld = f.Index
+	}
+	if len(e.Derived) == 0 {
+		return nil
+	}
+	if e.Withheld == "" {
+		return fail("a type that derives content names a withheld field, so a reader is told (ADR-0033 D4)")
+	}
+	for _, d := range e.Derived {
+		out := DerivationInfo{Element: d.Element, Names: append([]string{d.From}, d.Fields...)}
+		if d.From == "" {
+			return fail("a derivation names no source field")
+		}
+		holder, at := info.Go, ""
+		if d.From == "*" {
+			out.All = true
+		} else {
+			list, last, entered := strings.Cut(d.From, ".")
+			if entered {
+				f, ok := info.Field(list)
+				if !ok || f.Type != "lines" {
+					return fail("%q enters %q, which is not a list of records the type holds", d.From, list)
+				}
+				out.List, holder, at = f.Index, elementOf(info.Go, f.Index), list+"."
+			} else {
+				last = list
+			}
+			for _, name := range strings.Split(last, "/") {
+				path, err := pathTo(holder, name)
+				if err != nil {
+					return fail("%q: %v", at+name, err)
+				}
+				out.Refs = append(out.Refs, path)
+			}
+			if len(out.Refs) > 2 {
+				return fail("%q joins more than a type and an id", d.From)
+			}
+		}
+		if out.Element && len(out.List) == 0 {
+			return fail("%q drops an element, but names no list", d.From)
+		}
+		if !out.Element && len(d.Fields) == 0 {
+			return fail("%q empties no field and drops no element", d.From)
+		}
+		for _, name := range d.Fields {
+			path, err := pathTo(holder, name)
+			if err != nil {
+				return fail("%q: %v", at+name, err)
+			}
+			out.Fields = append(out.Fields, path)
+		}
+		info.Derived = append(info.Derived, out)
+	}
+	return nil
+}
+
+// elementOf is the struct type of a list field's elements.
+func elementOf(t reflect.Type, index []int) reflect.Type {
+	f := t.FieldByIndex(index).Type
+	for f.Kind() == reflect.Slice || f.Kind() == reflect.Pointer {
+		f = f.Elem()
+	}
+	return f
+}
+
+// pathTo is the index of the field a JSON name names in a struct.
+func pathTo(t reflect.Type, name string) ([]int, error) {
+	if t.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("%s holds no fields", t)
+	}
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if json, _, _ := strings.Cut(f.Tag.Get("json"), ","); json == name && f.IsExported() {
+			return []int{i}, nil
+		}
+	}
+	return nil, fmt.Errorf("%s has no field %q", t, name)
 }

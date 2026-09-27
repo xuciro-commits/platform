@@ -36,11 +36,17 @@ type Memory struct {
 	Sources []string  `json:"sources,omitempty" field:"readonly" title:"Records behind it"`
 	State   string    `json:"state" field:"readonly" choices:"proposed,active,forgotten"`
 	Expires time.Time `json:"expires,omitzero" field:"readonly"` // none: kept
+	// Withheld is set for a reader who may no longer read what the fact came
+	// from; it is never journaled (ADR-0033).
+	Withheld bool `json:"withheld,omitempty" field:"readonly" title:"Part of this is no longer readable to you"`
 }
 
 func memoryEntity() platform.Entity {
 	people := []string{AgentAdmin, platform.AnyMember}
 	return platform.Entity{Type: MemoryType, Title: "Agent memory", Model: Memory{}, Display: "fact",
+		// A fact was taken from what the run read (ADR-0033).
+		Derived:  []platform.Derivation{{From: "sources", Fields: []string{"fact", "sources"}}},
+		Withheld: "withheld",
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "proposed",
 			States: []platform.State{{Name: "proposed", Title: "Proposed", Tone: "warning"}, {Name: "active", Title: "Remembered", Tone: "success"},
 				{Name: "forgotten", Title: "Forgotten", Tone: "neutral"}},

@@ -2,6 +2,8 @@ package platformserver
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,5 +162,44 @@ func TestAgentTraceScope(t *testing.T) {
 	foreign.Tenant = "t-2"
 	if out, err := tn.Read(foreign, "runs"); err == nil && len(out.([]AgentRunRecord)) != 0 {
 		t.Errorf("another tenant read runs: %+v", out)
+	}
+}
+
+// A declaration the type cannot honour is a manifest error: the tenant does not
+// start, rather than serving content whose sources nobody checks (ADR-0033 D1).
+func TestDerivedDeclarationIsChecked(t *testing.T) {
+	type note struct {
+		platform.Record
+		Name     string   `json:"name" field:"search"`
+		Owner    string   `json:"owner"`
+		Text     string   `json:"text"`
+		Sources  []string `json:"sources,omitempty"`
+		Withheld bool     `json:"withheld,omitempty"`
+	}
+	for _, x := range []struct {
+		why     string
+		derived []platform.Derivation
+		field   string
+		want    string
+	}{
+		{"an unknown source field", []platform.Derivation{{From: "origin", Fields: []string{"text"}}}, "withheld", `has no field "origin"`},
+		{"an unknown emptied field", []platform.Derivation{{From: "owner", Fields: []string{"summary"}}}, "withheld", `has no field "summary"`},
+		{"a source path into a field that is no list", []platform.Derivation{{From: "name.sources", Fields: []string{"text"}}}, "withheld", "not a list of records"},
+		{"no withheld field", []platform.Derivation{{From: "sources", Fields: []string{"text"}}}, "", "names a withheld field"},
+		{"a withheld field that is no boolean", []platform.Derivation{{From: "sources", Fields: []string{"text"}}}, "text", "is not a boolean field"},
+		{"a derivation that changes nothing", []platform.Derivation{{From: "sources"}}, "withheld", "empties no field"},
+	} {
+		e := platform.Entity{Type: "stock.note", Title: "Note", Model: note{}, Derived: x.derived, Withheld: x.field}
+		_, err := platform.Describe("stock", e, func(reflect.Type) string { return "" })
+		if err == nil || !strings.Contains(err.Error(), x.want) {
+			t.Errorf("%s: %v, want %q", x.why, err, x.want)
+		}
+	}
+	ok := platform.Entity{Type: "stock.note", Title: "Note", Model: note{},
+		Derived:  []platform.Derivation{{From: "sources", Fields: []string{"text"}}, {From: "*", Fields: []string{"name"}}},
+		Withheld: "withheld"}
+	info, err := platform.Describe("stock", ok, func(reflect.Type) string { return "" })
+	if err != nil || len(info.Derived) != 2 || len(info.Withheld) == 0 {
+		t.Fatalf("a sound declaration was refused: %v, %+v", err, info.Derived)
 	}
 }

@@ -116,6 +116,5 @@ func (t *Tenant) withheld(m platform.Member, run string, now time.Time) bool {
 	if !known {
 		return true
 	}
-	narrowed, _ := t.agents.Narrow(r, t.mayRead(m, now, false)).(AgentRunRecord)
-	return narrowed.Withheld
+	return !t.narrower(m, now, false).readable(sourcesOf(r))
 }

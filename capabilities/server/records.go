@@ -835,12 +835,12 @@ func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now ti
 	}
 	out := RecordPage{Records: make([]any, len(page)), Total: total}
 	var ids []string
-	narrow := t.narrowing(et)
-	may := t.mayRead(m, now, true)
+	w := t.narrower(m, now, true)
 	for i, v := range page {
 		out.Records[i] = masked(et, v, hidden)
-		if narrow != nil { // derived content is checked against its sources again (#130)
-			out.Records[i] = narrow.Narrow(out.Records[i], may)
+		if len(et.info.Derived) > 0 { // checked against its sources again (ADR-0033)
+			narrowed, _ := w.derive(et, reflect.ValueOf(out.Records[i]))
+			out.Records[i] = narrowed.Interface()
 		}
 		ids = append(ids, recordOf(v).ID)
 	}
@@ -898,8 +898,9 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	}
 	seen, hidden := viewOf(m, et)
 	record := masked(et, r.value, hidden)
-	if narrow := t.narrowing(et); narrow != nil {
-		record = narrow.Narrow(record, t.mayRead(m, now, false))
+	if len(et.info.Derived) > 0 {
+		narrowed, _ := t.narrower(m, now, false).derive(et, reflect.ValueOf(record))
+		record = narrowed.Interface()
 	}
 	view := RecordView{Record: record, History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
 	if c := t.app(relations.ID); c != nil && typ != relations.CommentType && typ != relations.FollowType {

@@ -394,7 +394,9 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if err != nil {
 			return "refused: " + err.Error(), nil
 		}
-		step.Sources = t.refsIn(out)
+		// The read's own authority is a source too: what it answers with is not
+		// always records to check one by one (ADR-0033 D1).
+		step.Sources = append(t.refsIn(out), "read:"+tool.schema)
 		raw, _ := json.Marshal(out)
 		return string(raw), nil
 	}
