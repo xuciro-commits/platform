@@ -40,21 +40,42 @@ test("route 5: a group block is held, then confirmed", async ({ page, request })
 
 // Route 4 (#118, F-38): a leave request waits as pending, is approved by the
 // manager, and the requester's open page follows; a rejection shows its reason.
-test("route 4: an approval reaches the requester's page", async ({ page, request }) => {
+test("route 4: an approval reaches the requester's page", async ({ page, request }, testInfo) => {
   const leave = fresh("LEA");
   const day = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
-  await decide(request, "sales", "hcm", "hcm.leave.create", { type: "hcm.leave", id: leave }, { kind: "vacation", from: day(30), until: day(31) });
-  const submitted = await decide(request, "sales", "hcm", "hcm.leave.submit", { type: "hcm.leave", id: leave }, {});
-  await open(page, "sales", `/record?type=hcm.leave&id=${leave}`);
+  await open(page, "sales", "/definitions");
+  await page.getByRole("row").filter({ hasText: "hcm/page/leaves" }).click();
+  await page.getByRole("button", { name: "Open page" }).click();
+  await page.getByRole("button", { name: /Draft leave request/ }).click();
+  const draft = page.getByRole("dialog");
+  await draft.getByRole("textbox").first().fill(leave);
+  await draft.getByRole("combobox").first().selectOption("vacation");
+  await draft.locator('input[type="date"]').first().fill(day(30));
+  await draft.locator('input[type="date"]').last().fill(day(32));
+  await draft.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("textbox", { name: "Search" }).fill(leave);
+  const leaveRow = page.getByRole("row").filter({ hasText: leave });
+  await expect(leaveRow).toBeVisible();
+  await leaveRow.click();
+  await page.getByRole("button", { name: "Submit for approval" }).click();
   await expect(value(page, "Pending approval")).toBeVisible();
   await expect(page.getByText(/^waiting for Manager:/)).toBeVisible();
   const chain = page.getByRole("figure", { name: "Approvals" }); // the chain drawn (#122)
   await expect(chain.getByText("Manager", { exact: true })).toBeVisible();
   await expect(chain.getByText("sales-1", { exact: true })).toBeVisible();
-  const approval = `hcm.${submitted.key}`;
-  await decide(request, "manager", "work", "work.approval.approve", { type: "work.approval", id: approval }, {});
+  await page.screenshot({ path: testInfo.outputPath("hcm-page-pending-desktop.png"), fullPage: true });
+  const requests = await (await request.get("/v1/requests", { headers: { Authorization: "Bearer sales" } })).json() as { id: string; target: string }[];
+  const approval = requests.find((r) => r.target === `hcm.leave/${leave}`)?.id;
+  expect(approval).toBeTruthy();
+  const managerPage = await page.context().newPage();
+  await open(managerPage, "manager", "/inbox");
+  const task = managerPage.getByRole("listitem").filter({ hasText: leave });
+  await expect(task).toBeVisible();
+  await task.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(value(page, "Approved")).toBeVisible();
-  const opened = await request.get(`/v1/records/work.approval/${encodeURIComponent(approval)}`, { headers: { Authorization: "Bearer sales" } });
+  await page.screenshot({ path: testInfo.outputPath("hcm-page-approved-desktop.png"), fullPage: true });
+  await managerPage.close();
+  const opened = await request.get(`/v1/records/work.approval/${encodeURIComponent(approval!)}`, { headers: { Authorization: "Bearer sales" } });
   expect(opened.status()).toBe(200);
 
   // Rejected with a reason (F-38): the leave says so and may be submitted again.
@@ -115,9 +136,76 @@ test("route 27: installed definitions", async ({ page, request }) => {
 
   await open(page, "sales", "/definitions");
   await expect(page.getByRole("heading", { name: "Definitions" })).toBeVisible();
-  await page.getByRole("row").filter({ hasText: "crm/action/crm.opportunity.open" }).click();
+  await page.getByRole("cell", { name: "crm/action/crm.opportunity.open", exact: true }).click();
   await expect(page.getByText("crm/action/crm.opportunity.open")).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Field" })).toBeVisible();
+});
+
+// Route 28 (ADR-0032 13b): one installed page descriptor drives the live
+// list/detail task and a local preview whose action form cannot submit.
+test("route 28: page descriptor, preview and keyboard task", async ({ page, request }, testInfo) => {
+  const account = fresh("ACC"), opp = fresh("OPP");
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Page test " + account, kind: "company" });
+  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Page task " + opp });
+  await open(page, "sales", "/definitions");
+  await page.getByRole("row").filter({ hasText: "crm/page/opportunities" }).click();
+  await page.getByRole("button", { name: "Open page" }).click();
+  await expect(page.getByRole("heading", { name: "Opportunities" })).toBeVisible();
+  const search = page.getByRole("textbox", { name: "Search" });
+  await search.fill(opp);
+  const row = page.getByRole("row").filter({ hasText: opp });
+  await expect(row).toBeVisible();
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Selected record" }).getByText("Page task " + opp).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Plan group stay" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("page-desktop.png"), fullPage: true });
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect(page.getByRole("button", { name: "Back to list" })).toBeVisible();
+  await expect.poll(async () => (await page.getByRole("region", { name: "Selected record" }).boundingBox())?.width ?? 0).toBeGreaterThan(300);
+  await expect.poll(async () => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("page-mobile.png"), fullPage: true });
+  await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Toggle navigation" }).click();
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+  await page.getByRole("button", { name: "Close navigation" }).click({ position: { x: 380, y: 400 } });
+  await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Back to list" }).click();
+  await expect(page.getByRole("region", { name: "Records in this page" })).toBeVisible();
+
+  await open(page, "sales", "/definitions");
+  await page.getByRole("row").filter({ hasText: "crm/page/opportunities" }).click();
+  await page.getByRole("button", { name: "Preview page" }).click();
+  await expect(page.getByText("Preview uses sample data. Actions do not run.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Selected record" }).getByText("SAMPLE-001")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("page-preview-mobile.png"), fullPage: true });
+  await page.getByRole("button", { name: "Back to list" }).click();
+  await expect(page.getByRole("row").filter({ hasText: "SAMPLE-001" })).toBeVisible();
+  const writes: string[] = [];
+  page.on("request", (r) => { if (r.method() !== "GET" && r.url().includes("/v1/")) writes.push(r.url()); });
+  await page.getByRole("button", { name: "Plan group stay" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Preview only")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Plan group stay" })).toBeDisabled();
+  expect(writes).toEqual([]);
+
+  const chinese = await page.context().newPage();
+  await chinese.addInitScript(() => localStorage.setItem("platform.language", "zh-CN"));
+  await chinese.setViewportSize({ width: 390, height: 780 });
+  await open(chinese, "sales", "/definitions");
+  await expect(chinese.getByRole("heading", { name: "定义" })).toBeVisible();
+  await chinese.getByRole("row").filter({ hasText: "crm/page/opportunities" }).click();
+  await chinese.getByRole("button", { name: "打开页面" }).click();
+  await expect(chinese.getByRole("heading", { name: "商机" })).toBeVisible();
+  await chinese.getByRole("textbox", { name: "搜索" }).fill(opp);
+  const chineseRow = chinese.getByRole("row").filter({ hasText: opp });
+  await expect(chineseRow).toBeVisible();
+  await chineseRow.click();
+  await expect(chinese.getByRole("button", { name: "返回列表" })).toBeVisible();
+  await expect(chinese.getByRole("heading", { name: "Page task " + opp })).toBeVisible();
+  await chinese.screenshot({ path: testInfo.outputPath("page-chinese-mobile.png"), fullPage: true });
+  await chinese.close();
 });
 
 // Route 18 (ADR-0027): the process answers /healthz; Settings → Automation shows the tenant's health.
@@ -167,7 +255,8 @@ test("route 21: pickers, choices and comments", async ({ page, request }) => {
   await page.getByRole("button", { name: /Open opportunity/ }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox").first().fill(opp);
-  await dialog.getByRole("combobox").first().selectOption({ label: `${account} Picker ${account}` });
+  await dialog.getByRole("combobox").first().fill(account);
+  await dialog.getByRole("option", { name: `${account} · Picker ${account}` }).click();
   await dialog.getByRole("textbox").last().fill("Retreat");
   await dialog.getByRole("button", { name: "Open opportunity" }).click();
   await open(page, "sales", `/record?type=crm.opportunity&id=${opp}`);

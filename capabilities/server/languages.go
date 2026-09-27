@@ -200,7 +200,7 @@ func (t *Tenant) Texts(app string) []string {
 	}
 	m := a.Manifest()
 	var parts []any
-	parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Settings, m.Emits)
+	parts = append(parts, map[string]any{"title": m.Title}, m.Actions.All(), m.Pages, m.Settings, m.Emits)
 	for _, et := range t.records.types {
 		if et.info.App == app {
 			parts = append(parts, et.info)

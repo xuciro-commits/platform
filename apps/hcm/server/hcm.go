@@ -95,7 +95,7 @@ func ownOrHR(c platform.Caller, record any, payload json.RawMessage, now time.Ti
 }
 
 func Actions() *platform.Catalog {
-	return platform.NewCatalog(append([]platform.Action{{Schema: SchemaCreate, Target: LeaveType, Capability: "leave", Title: "Draft leave request",
+	return platform.NewCatalog(append([]platform.Action{{Schema: SchemaCreate, Target: LeaveType, Capability: "leave", Title: "Draft leave request", New: true,
 		Description: "Draft a request for days off, from its first to its last day.", Roles: []string{Employee},
 		Payload: []platform.Field{{Name: "kind", Type: "string", Required: true, Description: "vacation, sick or unpaid", Choices: []string{"vacation", "sick", "unpaid"}},
 			{Name: "from", Type: "date", Required: true, Description: "First day"}, {Name: "until", Type: "date", Required: true, Description: "Last day"},
@@ -120,7 +120,13 @@ func (a *App) Snapshot() (json.RawMessage, error) { return a.ledger.Snapshot() }
 func (a *App) Restore(raw json.RawMessage) error { return a.ledger.Restore(raw) }
 
 func (a *App) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: "HCM", Version: "1", Actions: a.ledger.Catalog, Entities: Entities()}
+	return platform.Manifest{Languages: languages, ID: ID, Title: "HCM", Version: "1", Actions: a.ledger.Catalog, Entities: Entities(),
+		Pages: []platform.Page{{Name: "leaves", Title: "Leave requests", Layout: "list-detail",
+			Object:       platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: LeaveType},
+			ListFields:   []string{"employee", "kind", "from", "until", "state"},
+			DetailFields: []string{"employee", "kind", "from", "until", "days", "note", "health", "state"},
+			Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: SchemaCreate},
+				{App: ID, Kind: platform.AssetAction, Name: SchemaSubmit}, {App: ID, Kind: platform.AssetAction, Name: SchemaCancel}}}}}
 }
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }

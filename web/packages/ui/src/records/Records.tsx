@@ -12,6 +12,7 @@ import { columnsFor, defineEntity, type Entity } from "../fields/entity";
 import { checkbox, date, datetime, longText, multiSelect, number, singleSelect, text, type FieldType } from "../fields/types";
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
+import { RecordLookup } from "./RecordLookup";
 import { Chart } from "../charts/Chart";
 import { Graph, type GraphEdge, type GraphNode } from "../graph/Graph";
 import { Pivot } from "../charts/Pivot";
@@ -87,11 +88,11 @@ const money = (o: { label: string; required?: boolean; readOnly?: boolean }): Fi
 export type Options = Record<string, { value: string; label: string }[]>;
 
 /** A kit entity from the host's description; `options` gives the choices of reference fields, a line's by "<lines>.<column>". */
-export function entityFrom(info: EntityInfo, options: Options = {}): Entity<EntityRecord> {
-  return defineEntity<EntityRecord>({ name: info.type, fields: fieldsOf(info, info.fields, options), primary: info.display === "id" ? "id" : info.display });
+export function entityFrom(info: EntityInfo, options: Options = {}, source?: RecordSource): Entity<EntityRecord> {
+  return defineEntity<EntityRecord>({ name: info.type, fields: fieldsOf(info, info.fields, options, source), primary: info.display === "id" ? "id" : info.display });
 }
 
-function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options): Record<string, FieldType<any, EntityRecord>> {
+function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source?: RecordSource): Record<string, FieldType<any, EntityRecord>> {
   const fields: Record<string, FieldType<any, EntityRecord>> = {};
   for (const f of infos) {
     const common = { label: f.title, help: f.help, required: f.required, readOnly: f.readOnly };
@@ -106,10 +107,12 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options): Recor
         case "boolean": return checkbox(common);
         case "choice": return info.lifecycle?.field === f.name ? lifecycleField(common, info.lifecycle)
           : singleSelect({ ...common, options: (f.choices ?? []).map((c, i) => ({ value: c, label: f.choiceTitles?.[i] ?? c })) });
-        case "reference": return options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
+        case "reference": return source && f.ref
+          ? { ...text(common), type: "reference", editor: ({ id, value, onChange }) => <RecordLookup id={id} source={source} type={f.ref!} value={value} onChange={onChange} /> }
+          : options[f.name] ? singleSelect({ ...common, options: options[f.name]! }) : { ...text(common), readOnly: true };
         case "references": case "tags": return multiSelect({ ...common, readOnly: f.type === "references" || f.readOnly, options: options[f.name] ?? [] });
         case "lines": return f.fields?.length
-          ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : []))))
+          ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source))
           : { ...text(common), readOnly: true, display: (v: unknown) => <span className="text-muted">{Array.isArray(v) ? `${v.length} lines` : "—"}</span> } as FieldType<any>;
         default: return text(common);
       }
@@ -208,8 +211,10 @@ export type ListState = {
   group?: string; columns?: string; measure?: string; mark?: Mark;
 };
 
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave }: {
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields }: {
   source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
+  /** Presentation subset. The source's permission-filtered entity is still authoritative. */
+  fields?: string[];
   /** Always applied, like an app's own view of the type. */
   domain?: unknown[];
   /** Where the list starts, such as a saved view; `onSave` offers to save where it is. */
@@ -245,7 +250,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   }, [source, type, info, search, sort, offset, archived, pageSize, domain, view]);
   if (!info || !entity) return <p className="text-sm text-muted">{t("Unknown entity type")} {type}.</p>;
   const columnsOf = [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    ...columnsFor(entity, listed(entity)).map((c) => ({ ...c, enableSorting: false }))];
+    ...columnsFor(entity, listed(entity).filter((name) => !fields || fields.includes(name))).map((c) => ({ ...c, enableSorting: false }))];
   const total = page?.total ?? 0;
   const aggregate = source.aggregate;
   const query = { domain, search, archived };
@@ -321,10 +326,12 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks }: {
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields }: {
   /** Answering the open tasks about the record from its page; without it they are listed only. */
   tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void> };
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
+  /** Presentation subset. No field omitted by source.entity can be restored here. */
+  fields?: string[];
   /** Uploading a file to the record and downloading one (ADR-0028); without it the files are listed only. */
   files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void };
   /** Commenting and following (ADR-0028 D6); without it comments are listed only. */
@@ -352,7 +359,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       {info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={can}
         onTransition={onTransition && ((schema) => onTransition(schema, r))} />}
       <section className="rounded-md border border-border bg-surface p-3">
-        <PropertyList items={[...info.fields.map((f) => [f.title, entity.fields[f.name]!.display(r[f.name] as never, r)] as [string, ReactNode]),
+        <PropertyList items={[...info.fields.filter((f) => !fields || fields.includes(f.name)).map((f) => [f.title, entity.fields[f.name]!.display(r[f.name] as never, r)] as [string, ReactNode]),
           [t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
           [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
       </section>

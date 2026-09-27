@@ -4,7 +4,7 @@
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, Checkbox, Dialog, Input, Select, Textarea, t, type EntityRecord } from "@platform/ui";
+import { Button, Checkbox, Dialog, Input, RecordLookup, Select, Textarea, t, type EntityRecord } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { GeneratedForm, newId, useHost } from "./index";
@@ -12,34 +12,37 @@ import { GeneratedForm, newId, useHost } from "./index";
 type Field = ActionDeclaration["payload"][number];
 
 /** Inputs for an action's declared payload fields. */
-export function PayloadFields({ fields, values, onChange }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void }) {
+export function PayloadFields({ fields, values, onChange, preview = false }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean }) {
   return <>{fields.map((f) => {
     const value = values[f.name];
     const set = (v: unknown) => onChange({ ...values, [f.name]: v });
     const label = `${f.description || f.name}${f.required ? " *" : ""}`;
+    const id = `payload-${f.name}`;
     if (f.type === "boolean" && !f.choices?.length && !f.ref)
       return <Checkbox key={f.name} className="text-xs text-muted" checked={!!value} onChange={set}>{label}</Checkbox>;
     return (
-      <label key={f.name} className="grid gap-1 text-xs text-muted">{label}
-        {f.choices?.length ? <Select value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
+      <div key={f.name} className="grid gap-1 text-xs text-muted"><label htmlFor={id}>{label}</label>
+        {f.choices?.length ? <Select id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value || undefined)}>
             <option value="">—</option>{f.choices.map((c) => <option key={c} value={c}>{t(c)}</option>)}</Select>
-          : f.ref ? <RecordPicker type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
-          : f.from ? <ReadPicker field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
-          : f.type === "string" && String(value ?? "").length > 60 ? <Textarea rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
-          : <Input type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} value={value === undefined ? "" : String(value)}
+          : f.ref ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
+            : <RecordPicker id={id} type={f.ref} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
+          : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
+            : <ReadPicker id={id} field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
+          : f.type === "string" && String(value ?? "").length > 60 ? <Textarea id={id} rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
+          : <Input id={id} type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} value={value === undefined ? "" : String(value)}
               onChange={(e) => set(f.type === "integer" || f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value)} />}
-      </label>
+      </div>
     );
   })}</>;
 }
 
 /** A list of the items of an app's read, for a payload field whose values are not records here (#129). */
-function ReadPicker({ field, value, onChange }: { field: Field; value: string; onChange: (key: string) => void }) {
+function ReadPicker({ id, field, value, onChange }: { id: string; field: Field; value: string; onChange: (key: string) => void }) {
   const { client } = useHost();
   const items = useQuery({ queryKey: ["read", field.from], queryFn: () => client.get<Record<string, unknown>[]>(`/v1/${field.from}`) }).data ?? [];
   const key = (x: Record<string, unknown>) => String(x[field.key ?? "id"] ?? "");
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
+    <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">—</option>
       {items.map((x) => <option key={key(x)} value={key(x)}>{field.label ? `${String(x[field.label] ?? "")} · ${key(x)}` : key(x)}</option>)}
     </Select>
@@ -47,16 +50,9 @@ function ReadPicker({ field, value, onChange }: { field: Field; value: string; o
 }
 
 /** A list of the records of a type the member may read, for a payload field that names one (ADR-0028 D5). */
-function RecordPicker({ type, value, onChange }: { type: string; value: string; onChange: (id: string) => void }) {
+function RecordPicker({ id, type, value, onChange }: { id: string; type: string; value: string; onChange: (id: string) => void }) {
   const { source } = useHost();
-  const info = source.entity(type);
-  const records = useQuery({ queryKey: ["picker", type], queryFn: () => source.list(type, { limit: 500 }) }).data?.records ?? [];
-  const label = (r: EntityRecord) => (info && info.display !== "id" && r[info.display] ? `${r.id} ${String(r[info.display])}` : r.id);
-  return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">—</option>{records.map((r) => <option key={r.id} value={r.id}>{label(r)}</option>)}
-    </Select>
-  );
+  return <RecordLookup id={id} source={source} type={type} value={value} onChange={(selected) => onChange(selected ?? "")} />;
 }
 
 /** A short ID prefix from a type's name, never its translated title: "crm.account" → ACC, "hcm.leave" → LEA. */
@@ -94,10 +90,10 @@ function ActionDialog({ declared, type, record, onClose }: { declared: ActionDec
 }
 
 /** The type's actions that make a new record, except those a hand-written view already offers (`covers`). */
-export function NewActions({ type, covers = [] }: { type: string; covers?: string[] }) {
+export function NewActions({ type, covers = [], allowed }: { type: string; covers?: string[]; allowed?: string[] }) {
   const { catalog } = useHost();
   const [taking, setTaking] = useState<ActionDeclaration>();
-  const offered = catalog.filter((a) => a.target === type && a.new && !covers.includes(a.schema));
+  const offered = catalog.filter((a) => a.target === type && a.new && !covers.includes(a.schema) && (!allowed || allowed.includes(a.schema)));
   return <>
     {offered.map((a) => <Button key={a.schema} variant="primary" onClick={() => setTaking(a)}>+ {a.title}</Button>)}
     {taking && <ActionDialog declared={taking} type={type} onClose={() => setTaking(undefined)} />}
@@ -105,11 +101,11 @@ export function NewActions({ type, covers = [] }: { type: string; covers?: strin
 }
 
 /** The actions on one record the member may take, besides its lifecycle's transitions and the generated edit and archive. */
-export function RecordActions({ type, record }: { type: string; record: EntityRecord }) {
+export function RecordActions({ type, record, allowed }: { type: string; record: EntityRecord; allowed?: string[] }) {
   const { catalog, source } = useHost();
   const [taking, setTaking] = useState<ActionDeclaration>();
   const transitions = new Set(source.entity(type)?.lifecycle?.transitions.map((x) => x.schema) ?? []);
-  const offered = catalog.filter((a) => a.target === type && !a.new && !transitions.has(a.schema) && a.schema !== `${type}.edit` && a.schema !== `${type}.archive`);
+  const offered = catalog.filter((a) => a.target === type && !a.new && !transitions.has(a.schema) && a.schema !== `${type}.edit` && a.schema !== `${type}.archive` && (!allowed || allowed.includes(a.schema)));
   return <>
     {offered.map((a) => <Button key={a.schema} size="sm" onClick={() => setTaking(a)}>{a.title}</Button>)}
     {taking && <ActionDialog declared={taking} type={type} record={record} onClose={() => setTaking(undefined)} />}

@@ -3,7 +3,7 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { Assistant, DashboardView, RecordDetail, Records, RunView, Search, assetKey, findDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Assistant, DashboardView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -128,20 +128,20 @@ function AllRecords() {
   );
 }
 
-// The installed definitions share the records/actions' host contracts. This
-// read-only surface is the first SDK/catalog path, before builder drafts exist.
+// Installed definitions share the records/actions' host contracts. Code page
+// descriptors can be inspected, operated and previewed from this one path.
 function DefinitionsCatalog() {
   const { data, isPending, error } = useDefinitions();
   const { open } = useWorkspace();
   const columns: ColumnDef<Definition, any>[] = [
-    { id: "title", header: t("Asset"), accessorFn: (d) => d.entity?.title ?? d.action?.title ?? d.ref.name },
+    { id: "title", header: t("Asset"), accessorFn: (d) => d.entity?.title ?? d.action?.title ?? d.page?.title ?? d.ref.name },
     { id: "ref", header: t("Reference"), accessorFn: (d) => assetKey(d.ref), meta: { width: 320 }, cell: (c) => <span className="font-mono text-xs">{c.getValue()}</span> },
     { id: "version", header: t("App version"), accessorKey: "version", meta: { width: 110 } },
     { id: "dependencies", header: t("Depends on"), accessorFn: (d) => d.requires.map(assetKey).join(", "), meta: { width: 320 },
       cell: (c) => <span className="font-mono text-xs text-muted">{c.getValue()}</span> },
   ];
   return <>
-    <PageHeader title={t("Definitions")} description={t("Installed objects and actions from your apps. Open one to inspect the same contract used by code and the workspace.")} />
+    <PageHeader title={t("Definitions")} description={t("Installed objects, actions and pages from your apps. Open one to inspect its contract or preview a page.")} />
     {error ? <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>
       : isPending ? <p className="text-sm text-muted">{t("Loading…")}</p>
         : <DataTable data={data ?? []} columns={columns} getRowId={(d) => assetKey(d.ref)} height="calc(100dvh - 190px)"
@@ -151,10 +151,17 @@ function DefinitionsCatalog() {
 
 function DefinitionView({ ref }: { ref: AssetRef }) {
   const { data, isPending, error } = useDefinitions();
+  const { open } = useWorkspace();
   const definition = findDefinition(data ?? [], ref);
   if (error) return <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>;
   if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   if (!definition) return <p role="alert" className="text-sm text-danger">{t("This definition is unavailable.")}</p>;
+  if (isPageDefinition(definition)) return <>
+    <PageHeader title={definition.page.title} description={definition.page.description}
+      actions={<><Button onClick={() => open({ view: "page", params: ref })}>{t("Open page")}</Button>
+        <Button variant="primary" onClick={() => open({ view: "page-preview", params: ref })}>{t("Preview page")}</Button></>} />
+    <p className="font-mono text-xs text-muted">{assetKey(ref)} · {assetKey(definition.page.object)}</p>
+  </>;
   if (definition.entity) return <>
     <p className="mb-2 font-mono text-xs text-muted">{assetKey(definition.ref)}</p>
     <Records type={definition.entity.type} description={definition.entity.description} />
@@ -172,6 +179,15 @@ function DefinitionView({ ref }: { ref: AssetRef }) {
     <p className="mb-3 font-mono text-xs text-muted">{assetKey(definition.ref)} · {action.target}</p>
     <DataTable data={action.payload} columns={columns} getRowId={(f) => f.name} height={320} empty={t("No input fields.")} />
   </>;
+}
+
+function PageDefinitionView({ ref, preview }: { ref: AssetRef; preview: boolean }) {
+  const { data, isPending, error } = useDefinitions();
+  if (error) return <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>;
+  if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
+  const definition = findDefinition(data ?? [], ref);
+  if (!isPageDefinition(definition)) return <p role="alert" className="text-sm text-danger">{t("This definition is unavailable.")}</p>;
+  return preview ? <PagePreview definition={definition} definitions={data ?? []} /> : <PageWorkspace definition={definition} />;
 }
 
 // A member's saved view (ADR-0019 D4), opened from the navigation.
@@ -194,6 +210,8 @@ export const chromeViews = (apps: AppUI[], select: (id: string) => void): View[]
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
   { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /> },
+  { id: "page", title: (p) => p.name ?? t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} /> },
+  { id: "page-preview", title: (p) => p.name ?? t("Page preview"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview /> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} /> },
   { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },

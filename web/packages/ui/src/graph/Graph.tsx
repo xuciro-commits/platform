@@ -101,7 +101,8 @@ export function Graph({ nodes, edges, direction = "right", height: tall = 280, o
     const at = layout(nodes, edges, direction);
     const byId = new Map(nodes.map((n) => [n.id, n]));
     return {
-      nodes: nodes.map((n): Node<Data> => ({ id: n.id, type: "box", position: at.get(n.id)!, data: { ...n, direction }, draggable: false, connectable: false })),
+      nodes: nodes.map((n): Node<Data> => ({ id: n.id, type: "box", position: at.get(n.id)!, data: { ...n, direction },
+        width, height, draggable: false, connectable: false })),
       edges: edges.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e, i): Edge => {
         const color = e.tone ? toneColor(e.tone) : "var(--muted)";
         return {

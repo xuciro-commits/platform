@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Action preview": "动作预览",
+  "Preview only": "仅预览",
+  "Preview record is unavailable.": "预览记录不可用。",
+  "Preview uses sample data. Actions do not run.": "预览使用示例数据，不会执行动作。",
+  "This definition is unavailable.": "此定义不可用。",
   "Chain": "调用链",
   "record": "记录",
   "flow": "流程",

@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "Back to list": "返回列表",
+  "Search records": "搜索记录",
+  "No matching records.": "没有匹配的记录。",
+  "Records could not be loaded.": "无法加载记录。",
+  "Records in this page": "此页面的记录",
+  "Selected record": "选中的记录",
+  "Select a record to see its details.": "选择一条记录查看详情。",
   "contains": "包含",
   "is": "是",
   "{n} rows": "{n} 行",
@@ -22,6 +29,7 @@ export default {
   "Changed": "修改",
   "Chart": "图表",
   "Clear drill-down ×": "清除下钻 ×",
+  "Clear selection": "清除选择",
   "Close tab": "关闭标签页",
   "Columns": "列",
   "Command palette": "命令面板",
@@ -118,6 +126,7 @@ export default {
   "This view failed to show.": "这个视图显示出错。",
   "Try again": "重试",
   "Toggle navigation": "切换导航",
+  "Close navigation": "关闭导航",
   "Total": "合计",
   "Undoing": "撤销中",
   "Undoing:": "撤销中：",

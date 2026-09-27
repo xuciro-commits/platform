@@ -88,6 +88,16 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     return () => { live = false; clearTimeout(wait); };
   }, [search, typed]);
   const [navOpen, setNavOpen] = useState(true);
+  const [compact, setCompact] = useState(() => typeof matchMedia !== "undefined" && matchMedia("(max-width: 639px)").matches);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    const media = matchMedia("(max-width: 639px)");
+    const changed = () => { setCompact(media.matches); setMobileNavOpen(false); };
+    media.addEventListener("change", changed);
+    return () => media.removeEventListener("change", changed);
+  }, []);
+  const navigationVisible = compact ? mobileNavOpen : navOpen;
+  const toggleNavigation = () => compact ? setMobileNavOpen((open) => !open) : setNavOpen((open) => !open);
   const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
   const followed = useRef(onActiveRoute);
   followed.current = onActiveRoute;
@@ -134,8 +144,11 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) api.fromJSON(JSON.parse(saved));
-      for (const p of [...api.panels]) { // tabs of views a new version removed
-        if (!byId.has((p.params as { route?: Route } | undefined)?.route?.view ?? "")) p.api.close();
+      for (const p of [...api.panels]) { // discard removed views; refresh titles in the reader's language
+        const route = (p.params as { route?: Route } | undefined)?.route;
+        const view = byId.get(route?.view ?? "");
+        if (!view) p.api.close();
+        else p.setTitle(view.title(route?.params ?? {}));
       }
     } catch {
       api.clear(); // a stale or corrupt layout falls back to the home view
@@ -168,7 +181,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   const builtInMenus: Menu[] = [
     { label: t("View"), items: [
       { label: t("Command palette"), shortcut: "⌘K", onSelect: () => setPaletteOpen(true) },
-      { label: navOpen ? t("Hide navigation") : t("Show navigation"), onSelect: () => setNavOpen(!navOpen) },
+      { label: navigationVisible ? t("Hide navigation") : t("Show navigation"), onSelect: toggleNavigation },
       { label: t("Reset layout"), onSelect: () => { dock.current?.clear(); open(home); } },
     ] },
     { label: t("Window"), items: [
@@ -181,12 +194,12 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
 
   return (
     <WorkspaceContext.Provider value={workspace}>
-      <div className="grid h-dvh grid-rows-[36px_1fr] bg-background text-foreground">
-        <header className="flex items-center gap-2 border-b border-border bg-surface px-2">
-          <button type="button" aria-label={t("Toggle navigation")} onClick={() => setNavOpen(!navOpen)}
+      <div className="grid h-dvh w-full min-w-0 max-w-full grid-rows-[36px_1fr] overflow-hidden bg-background text-foreground">
+        <header className="flex min-w-0 items-center gap-2 overflow-hidden border-b border-border bg-surface px-2">
+          <button type="button" aria-label={t("Toggle navigation")} aria-expanded={navigationVisible} onClick={toggleNavigation}
             className="rounded-sm p-1 text-muted hover:bg-row-hover hover:text-foreground"><PanelLeft className="size-4" /></button>
           {launcher ? <AppMenu launcher={launcher} product={product} /> : <span className="pr-2 text-sm font-semibold tracking-tight">{product}</span>}
-          <Menubar.Root className="flex items-center">
+          <Menubar.Root className="hidden items-center sm:flex">
             {[...menus, ...builtInMenus].map((menu) => (
               <Menubar.Menu key={menu.label}>
                 <Menubar.Trigger className="h-6 rounded-sm px-2 text-sm outline-none hover:bg-row-hover data-[state=open]:bg-row-hover">
@@ -209,20 +222,22 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
             <Search className="size-3.5" />{t("Search and commands")}<kbd className="ml-auto text-xs">⌘K</kbd>
           </button>
           <div className="ml-auto flex items-center gap-2">
-            {status}
+            <span className="max-sm:hidden">{status}</span>
             {session && <SessionMenu session={session} onLanguage={onLanguage} />}
           </div>
         </header>
-        <div className={cn("grid min-h-0", navOpen ? "grid-cols-[220px_1fr]" : "grid-cols-1")}>
-          {navOpen && (
-            <nav aria-label={t("Main")} className="overflow-auto border-r border-border bg-surface p-2">
+        <div className={cn("relative grid min-h-0 min-w-0", !compact && navOpen ? "grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1")}>
+          {compact && mobileNavOpen && <button type="button" aria-label={t("Close navigation")} className="fixed inset-0 z-20 bg-black/25" onClick={() => setMobileNavOpen(false)} />}
+          {(!compact && navOpen || compact && mobileNavOpen) && (
+            <nav aria-label={t("Main")} className={cn("overflow-auto border-r border-border bg-surface p-2",
+              compact && "fixed inset-y-9 left-0 z-30 w-[min(19rem,85vw)] shadow-lg")}>
               {nav.map((section) => (
                 <div key={section.label} className="mb-3">
                   <div className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted">{section.label}</div>
                   {section.items.map((item) => {
                     const key = routeKey(item.route);
                     return (
-                      <button key={key} type="button" onClick={() => open(item.route)} aria-current={key === active ? "page" : undefined}
+                      <button key={key} type="button" onClick={() => { open(item.route); setMobileNavOpen(false); }} aria-current={key === active ? "page" : undefined}
                         className={cn("flex h-7 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-row-hover [&_svg]:size-3.5",
                           key === active && "bg-row-selected font-medium")}>
                         {item.icon}{item.label}<span className="ml-auto">{item.badge}</span>
@@ -233,7 +248,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
               ))}
             </nav>
           )}
-          <div className="platform-dock min-h-0 min-w-0">
+          <div className="platform-dock min-h-0 min-w-0 overflow-hidden">
             <DockviewReact components={components} onReady={onReady} theme={themeLight} />
           </div>
         </div>

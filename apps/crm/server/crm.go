@@ -413,6 +413,10 @@ func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) 
 
 func (c *CRM) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(),
+		Pages: []platform.Page{{Name: "opportunities", Title: "Opportunities", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: OpportunityType},
+			Layout: "list-detail", ListFields: []string{"title", "account", "stage", "rooms"},
+			DetailFields: []string{"title", "account", "owner", "stage", "margin", "rooms", "roomType", "arrive", "depart", "cutoff", "block", "stays"},
+			Actions:      []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: SchemaOpen}, {App: ID, Kind: platform.AssetAction, Name: SchemaPlan}, {App: ID, Kind: platform.AssetAction, Name: SchemaClose}}}},
 		Agents:     []platform.Agent{Assistant()},
 		Consumes:   []platform.Consumption{{Protocol: lodging.ID, Optional: true}},
 		Subscribes: []string{platform.ProtocolAction(lodging.ID, "released")}}

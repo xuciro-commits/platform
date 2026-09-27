@@ -255,7 +255,7 @@ func (h *Host) Handler() http.Handler {
 	handle(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Entities(m), t.Language(m, r)))
 	})
-	handle(Route{Pattern: "GET /v1/definitions", Summary: "Installed object and action definitions the caller may discover, with stable qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	handle(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Definitions(m), t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller (ADR-0028)",

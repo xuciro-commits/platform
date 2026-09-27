@@ -1,7 +1,7 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { DataTable, EntityForm, NotificationList, StatusTag, submissionStatuses, type ColumnDef } from "./index";
+import { DataTable, EntityForm, NotificationList, RecordLookup, StatusTag, submissionStatuses, type ColumnDef, type RecordSource } from "./index";
 
 afterEach(cleanup);
 
@@ -34,6 +34,26 @@ test("DataTable filters and sorts", () => {
   expect(screen.getAllByRole("cell")[0]!.textContent).toBe("Item 49");
   fireEvent.click(screen.getByRole("button", { name: /Qty/ }));
   expect(screen.getAllByRole("cell")[0]!.textContent).toBe("Item 4");
+});
+
+test("RecordLookup finds a scoped record beyond the first 500 without preloading them", async () => {
+  const all = Array.from({ length: 600 }, (_, i) => ({ id: `A-${String(i + 1).padStart(3, "0")}`, name: `Account ${i + 1}` }));
+  const list = vi.fn(async (_type: string, q: { search?: string; offset?: number; limit?: number }) => {
+    const matching = all.filter((r) => !q.search || `${r.id} ${r.name}`.toLowerCase().includes(q.search.toLowerCase()));
+    return { records: matching.slice(q.offset ?? 0, (q.offset ?? 0) + (q.limit ?? 25)) as never[], total: matching.length };
+  });
+  const source = { entity: () => ({ type: "crm.account", display: "name" }), list } as unknown as RecordSource;
+  const chosen = vi.fn();
+  render(<RecordLookup id="account" source={source} type="crm.account" onChange={chosen} />);
+  const input = screen.getByRole("combobox");
+  fireEvent.focus(input);
+  await waitFor(() => expect(screen.getByRole("option", { name: "A-001 · Account 1" })).toBeTruthy());
+  expect(list).toHaveBeenCalledWith("crm.account", expect.objectContaining({ limit: 25, offset: 0 }));
+  fireEvent.change(input, { target: { value: "A-599" } });
+  await waitFor(() => expect(screen.getByRole("option", { name: "A-599 · Account 599" })).toBeTruthy());
+  fireEvent.click(screen.getByRole("option", { name: "A-599 · Account 599" }));
+  expect(chosen).toHaveBeenCalledWith("A-599");
+  expect(list).toHaveBeenCalledWith("crm.account", expect.objectContaining({ search: "A-599", limit: 25 }));
 });
 
 test("StatusTag maps states to tones and falls back to neutral", () => {

@@ -552,6 +552,10 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 // and the protocol it reaches an ERP through (ADR-0024).
 func (p *Plant) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "MES", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
+		Pages: []platform.Page{{Name: "shop-orders", Title: "Shop orders", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: OrderType},
+			Layout: "list-detail", ListFields: []string{"product", "quantity", "status", "erp"},
+			DetailFields: []string{"product", "quantity", "status", "planned", "sfcs", "erp", "confirmation", "erpDetail"},
+			Actions:      []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: SchemaRelease}, {App: ID, Kind: platform.AssetAction, Name: SchemaResend}}}},
 		Reads: []string{"master", "planned-orders", "downtime"}, Entities: p.entities,
 		Consumes: []platform.Consumption{{Protocol: production.ID, Optional: true}},
 		Inputs:   map[string]bool{"states": true},

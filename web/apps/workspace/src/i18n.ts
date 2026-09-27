@@ -36,6 +36,10 @@ register("zh-CN", {
   "No definitions available.": "没有可用的定义。",
   "No entity types in apps you hold a role in.": "你有角色的应用中没有实体类型。",
   "No input fields.": "没有输入字段。",
+  "Open page": "打开页面",
+  "Page": "页面",
+  "Page preview": "页面预览",
+  "Preview page": "预览页面",
   "No": "否",
   "No requests": "没有申请",
   "No saved view": "没有保存的视图",
@@ -79,5 +83,6 @@ register("zh-CN", {
   "Yes": "是",
   "You": "我的",
   "Installed objects and actions from your apps. Open one to inspect the same contract used by code and the workspace.": "你有权限查看的应用对象和动作。打开一项，可查看代码与工作台共用的契约。",
+  "Installed objects, actions and pages from your apps. Open one to inspect its contract or preview a page.": "你有权限查看的应用对象、动作和页面。打开一项可检查契约或预览页面。",
   "{email} is not a member of this host.": "{email} 不是此宿主的成员。",
 });

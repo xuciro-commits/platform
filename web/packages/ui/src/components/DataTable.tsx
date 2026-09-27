@@ -109,10 +109,11 @@ export function DataTable<T>({
             {virtualizer.getVirtualItems().map((item) => {
               const row = rows[item.index]!;
               return (
-                <div role="row" key={row.id} aria-rowindex={item.index + 1} aria-selected={row.id === selectedId}
+                <div role="row" key={row.id} aria-rowindex={item.index + 1} aria-selected={row.id === selectedId} tabIndex={onRowClick ? 0 : undefined}
                   onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                  onKeyDown={onRowClick ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onRowClick(row.original); } } : undefined}
                   className={cn("absolute inset-x-0 grid items-center border-b border-border/60 text-sm hover:bg-row-hover",
-                    onRowClick && "cursor-pointer", row.id === selectedId && "bg-row-selected")}
+                    onRowClick && "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", row.id === selectedId && "bg-row-selected")}
                   style={{ gridTemplateColumns: template, height: rowHeight, transform: `translateY(${item.start}px)` }}>
                   {row.getVisibleCells().map((cell) => {
                     const field = cell.column.columnDef.meta?.field;

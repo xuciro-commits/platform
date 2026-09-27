@@ -22,9 +22,11 @@ func (t *Tenant) registerDefinitions() error {
 		}
 	}
 	objects := map[string]platform.AssetRef{}
+	objectInfo := map[string]platform.EntityInfo{}
 	for _, et := range t.records.sortedTypes() {
 		info := et.info
 		objects[info.Type] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: info.Type}
+		objectInfo[info.Type] = info
 	}
 	seen := map[platform.AssetRef]bool{}
 	add := func(def platform.Definition) error {
@@ -59,6 +61,7 @@ func (t *Tenant) registerDefinitions() error {
 			return err
 		}
 	}
+	actionByRef := map[platform.AssetRef]platform.Action{}
 	for _, app := range t.apps {
 		manifest := app.Manifest()
 		for _, action := range manifest.Actions.All() {
@@ -84,6 +87,53 @@ func (t *Tenant) registerDefinitions() error {
 			}
 			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
 				Requires: uniqueRefs(requires), Action: &action}); err != nil {
+				return err
+			}
+			actionByRef[ref] = action
+		}
+	}
+	for _, app := range t.apps {
+		manifest := app.Manifest()
+		for _, page := range manifest.Pages {
+			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetPage, Name: page.Name}
+			if page.Layout != "list-detail" {
+				return fmt.Errorf("asset %s has unsupported layout %q", ref, page.Layout)
+			}
+			if page.Object.Kind != platform.AssetObject || objects[page.Object.Name] != page.Object {
+				return fmt.Errorf("asset %s requires missing object %s", ref, page.Object)
+			}
+			info := objectInfo[page.Object.Name]
+			for _, fields := range [][]string{page.ListFields, page.DetailFields} {
+				if len(fields) == 0 {
+					return fmt.Errorf("asset %s needs list and detail fields", ref)
+				}
+				seenFields := map[string]bool{}
+				for _, field := range fields {
+					if seenFields[field] {
+						return fmt.Errorf("asset %s repeats field %s", ref, field)
+					}
+					seenFields[field] = true
+					if _, ok := info.Field(field); !ok {
+						return fmt.Errorf("asset %s requires missing field %s on %s", ref, field, page.Object)
+					}
+				}
+			}
+			requires := []platform.AssetRef{page.Object}
+			for _, actionRef := range page.Actions {
+				action, ok := actionByRef[actionRef]
+				if !ok {
+					return fmt.Errorf("asset %s requires missing action %s", ref, actionRef)
+				}
+				if action.Target != page.Object.Name {
+					return fmt.Errorf("asset %s action %s targets %s, not %s", ref, actionRef, action.Target, page.Object.Name)
+				}
+				requires = append(requires, actionRef)
+			}
+			if len(uniqueRefs(requires)) != len(requires) {
+				return fmt.Errorf("asset %s repeats an action", ref)
+			}
+			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
+				Requires: uniqueRefs(requires), Page: &page}); err != nil {
 				return err
 			}
 		}
@@ -131,6 +181,24 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 				continue
 			}
 			def.Action = &action
+		case platform.AssetPage:
+			if m.Roles[def.Ref.App] == "" || def.Page == nil {
+				continue
+			}
+			page := *def.Page
+			info, ok := entities[page.Object.Name]
+			if !ok {
+				continue
+			}
+			visibleFields := map[string]bool{}
+			for _, field := range info.Fields {
+				visibleFields[field.Name] = true
+			}
+			page.ListFields = slices.DeleteFunc(slices.Clone(page.ListFields), func(name string) bool { return !visibleFields[name] })
+			page.DetailFields = slices.DeleteFunc(slices.Clone(page.DetailFields), func(name string) bool { return !visibleFields[name] })
+			page.Actions = slices.DeleteFunc(slices.Clone(page.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
+			def.Requires = append([]platform.AssetRef{page.Object}, page.Actions...)
+			def.Page = &page
 		}
 		out = append(out, def)
 	}

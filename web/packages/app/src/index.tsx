@@ -6,7 +6,7 @@ import "./i18n";
 import type { ActionDeclaration, Api, EdgeClient, Entry } from "@platform/kernel";
 import {
   Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
-  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type Options, type RecordSource, type Route, type ShellCommand, type View,
+  type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { NewActions, RecordActions, useTransition } from "./actions";
@@ -116,20 +116,9 @@ export function GeneratedForm({ type, record, onSubmit, onCancel, submitLabel }:
 }) {
   const { source } = useHost();
   const info = source.entity(type);
-  // The choices of reference fields and of lines' reference columns: the referred records the member may list.
-  const refs = (info?.fields ?? []).flatMap((f) => f.type === "reference" && !f.readOnly ? [[f.name, f.ref!] as const]
-    : f.type === "lines" ? (f.fields ?? []).filter((c) => c.type === "reference").map((c) => [`${f.name}.${c.name}`, c.ref!] as const) : []);
-  const options = useQuery({
-    queryKey: ["options", type, refs], enabled: refs.length > 0,
-    queryFn: async () => Object.fromEntries(await Promise.all(refs.map(async ([key, ref]) => {
-      const refInfo = source.entity(ref);
-      const page = await source.list(ref, { limit: 500 });
-      return [key, page.records.map((r) => ({ value: r.id, label: refInfo && refInfo.display !== "id" && r[refInfo.display] ? `${r.id} ${String(r[refInfo.display])}` : r.id }))];
-    }))) as Options,
-  });
-  if (!info || (refs.length > 0 && !options.data)) return null;
+  if (!info) return null;
   const editable = info.fields.filter((f) => !f.readOnly).map((f) => f.name);
-  return <RecordForm entity={entityFrom(info, options.data)} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
+  return <RecordForm entity={entityFrom(info, {}, source)} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }
 
@@ -225,7 +214,7 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
 }
 
 /** A record page with its lifecycle's transitions and the generated edit and archive where the catalog grants them. */
-export function RecordDetail({ type, id }: { type: string; id: string }) {
+export function RecordDetail({ type, id, fields, allowed }: { type: string; id: string; fields?: string[]; allowed?: string[] }) {
   const { source, can, decide, client, me } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
@@ -257,15 +246,15 @@ export function RecordDetail({ type, id }: { type: string; id: string }) {
   };
   return (
     <>
-      <RecordPage source={source} type={type} id={id} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
-        can={can} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
+      <RecordPage source={source} type={type} id={id} fields={fields} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
+        can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); } } : undefined}
         actions={(r) => <>
-          <RecordActions type={type} record={r} />
+          <RecordActions type={type} record={r} allowed={allowed} />
           {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}
-          {can(`${type}.edit`) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
-          {can(`${type}.archive`) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>{t("Archive")}</Button>}
+          {can(`${type}.edit`) && (!allowed || allowed.includes(`${type}.edit`)) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
+          {can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>{t("Archive")}</Button>}
         </>} />
       {transition.dialog}
       <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
@@ -281,3 +270,4 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(
 export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./agents";
 
 export { NewActions, PayloadFields, RecordActions } from "./actions";
+export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";

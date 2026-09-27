@@ -12,6 +12,7 @@ type AssetKind string
 const (
 	AssetObject AssetKind = "object"
 	AssetAction AssetKind = "action"
+	AssetPage   AssetKind = "page"
 )
 
 // AssetRef is the stable identity shared by code and construction surfaces.
@@ -26,10 +27,24 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction {
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
+}
+
+// Page is the first bounded page composition: one object, a list, a detail and
+// an explicit action set. It binds existing records/actions; it runs no rules.
+// Its field choices shape presentation, never grant access to hidden fields.
+type Page struct {
+	Name         string     `json:"name"`
+	Title        string     `json:"title"`
+	Description  string     `json:"description,omitempty"`
+	Object       AssetRef   `json:"object"`
+	Layout       string     `json:"layout"` // list-detail in 13b
+	ListFields   []string   `json:"listFields"`
+	DetailFields []string   `json:"detailFields"`
+	Actions      []AssetRef `json:"actions"`
 }
 
 // Definition is one installed code asset as the reader may discover it.
@@ -43,4 +58,5 @@ type Definition struct {
 	Requires        []AssetRef  `json:"requires"`
 	Entity          *EntityInfo `json:"entity,omitempty"`
 	Action          *Action     `json:"action,omitempty"`
+	Page            *Page       `json:"page,omitempty"`
 }

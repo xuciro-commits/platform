@@ -274,6 +274,7 @@ export type Definition = {
   requires: AssetRef[];
   entity?: EntityInfo;
   action?: Action;
+  page?: Page;
 };
 
 export type Delivery = {
@@ -583,6 +584,17 @@ export type OrgSeed = {
   units: Unit[];
   edges: Edge[];
   memberships: Membership[];
+};
+
+export type Page = {
+  name: string;
+  title: string;
+  description?: string;
+  object: AssetRef;
+  layout: string;
+  listFields: string[];
+  detailFields: string[];
+  actions: AssetRef[];
 };
 
 export type Passage = {
