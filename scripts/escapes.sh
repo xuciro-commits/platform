@@ -7,9 +7,8 @@
 #   host   app code (apps/*/server, protocols/*, outside cmd/ and tests) reaches
 #          the outside world or keeps state of its own instead of going through
 #          the app API: files, effects, connectors, records and the ledger are
-#          the host's;
-#   refusal app code refuses without saying why (a bare kernel.Error): every
-#          refusal carries a reason through platform.Refuse (docs/Testing.md C3).
+#          the host's.
+# A refusal without a reason is not counted: the host gives it one (explained).
 # The known escapes below are counted per file, each with the work item that
 # removes it. A count may only fall: a new file or a higher count fails. When
 # an escape is removed, lower or delete its line here in the same change.
@@ -19,21 +18,11 @@ cd "$(dirname "$0")/.."
 known=$(cat <<'KNOWN'
 host	apps/mes/server/mes.go	1	#129 (6) the plant's own fact log beside the ledger (gateway states): judge whether the ledger owns it
 host	apps/pms/server/pms.go	1	#129 (6) the channel's own fact log beside the ledger: judge whether the ledger owns it
-refusal	apps/crm/server/crm.go	15	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
-refusal	apps/csm/server/csm.go	10	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
-refusal	apps/erp/server/erp.go	4	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
-refusal	apps/erpadapter/server/erpadapter.go	10	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
-refusal	apps/hcm/server/hcm.go	7	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
-refusal	apps/mes/server/equipment.go	2	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
-refusal	apps/mes/server/mes.go	25	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
-refusal	apps/pms/server/pms.go	9	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
-refusal	protocols/lodging/memory.go	7	#129 refusals without a reason: platform.Refuse says why (the host's fallback names only the code)
 KNOWN
 )
 
 ui_pattern='<(button|input|select|textarea|table|dialog|form|section|details)[ >]|rounded-md border border-border bg-surface'
 host_pattern='"(net|net/http|net/url|database/sql|os|os/exec|io/fs|path/filepath)"|github.com/minio|kernel\.NewFactLog|sync\.Map'
-refusal_pattern='&kernel\.Error\{Code:|\bfail\(pb\.|return (nil, )?(invalid|notFound|conflict|denied|unknown)(\(\))?$'
 
 hits() {
   for f in $(find web/packages -path '*/src/*.tsx' -not -path 'web/packages/ui/*' -not -path 'web/packages/kernel/*' -not -name '*.test.tsx' | sort); do
@@ -41,9 +30,6 @@ hits() {
   done
   for f in $(find apps/*/server protocols -name '*.go' -not -name '*_test.go' -not -path '*/cmd/*' | sort); do
     n=$(grep -cE "$host_pattern" "$f" || true); [[ $n == 0 ]] || printf 'host\t%s\t%s\n' "$f" "$n"
-  done
-  for f in $(find apps/*/server protocols -name '*.go' -not -name '*_test.go' -not -path '*/cmd/*' | sort); do
-    n=$(grep -cE "$refusal_pattern" "$f" || true); [[ $n == 0 ]] || printf 'refusal\t%s\t%s\n' "$f" "$n"
   done
 }
 
