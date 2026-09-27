@@ -5,7 +5,8 @@
 // everything again when the object is published.
 import { PayloadFields, useHost, useReadQuery } from "@platform/app";
 import {
-  Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, StatusBar, StatusTag, Textarea, Toggles, cn, defineStatuses, notify, t, useWorkspace,
+  Button, Card, Checkbox, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, StatusBar, StatusTag, Textarea, Toggles, cn, defineStatuses, notify, t, useWorkspace,
+  type CanvasEdge, type CanvasNode, type NodeCatalog,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -23,12 +24,56 @@ type Access = { role: string; read: "all" | "own" | "none"; create?: boolean; ed
 type ObjectRecord = { id: string; revision: number; name: string; title: string; state: string; fields: Field[]; states?: State[]; actions?: Action[]; access?: Access[] };
 type Process = { states: State[]; actions: Action[]; access: Access[]; fields: Field[] };
 /** What is in hand: a state, an action, or who may do what, by its place. */
-type Chosen = { kind: "state" | "action" | "access"; at: number } | undefined;
+type Chosen = { kind: "field" | "state" | "action" | "access"; at: number } | undefined;
 
 const objectStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 const tones = ["info", "success", "warning", "danger", "neutral"];
 const inputTypes = ["text", "longtext", "integer", "decimal", "date", "boolean", "choice"];
+const fieldTypes = ["text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"];
 const operators = ["=", "!=", "<", "<=", ">", ">=", "empty", "not empty"];
+const inputFits = (input: string, field: string) => field === "text" || field === "longtext"
+  ? ["text", "longtext", "choice"].includes(input)
+  : field === "decimal" ? ["decimal", "integer"].includes(input) : input === field;
+const valueFits = (kind: string, raw: string) => {
+  switch (kind) {
+    case "integer": return /^-?\d+$/.test(raw);
+    case "decimal": return raw.trim() !== "" && Number.isFinite(Number(raw));
+    case "date": return /^\d{4}-\d{2}-\d{2}$/.test(raw) && !Number.isNaN(Date.parse(raw));
+    case "datetime": return !Number.isNaN(Date.parse(raw));
+    case "boolean": return raw === "true" || raw === "false";
+    default: return true;
+  }
+};
+/** Early authoring hints; the host's publication check is authoritative. */
+function actionIssues(action: Action, process: Process): string[] {
+  const issues: string[] = [];
+  if (action.from.length === 0) issues.push(t("Choose at least one starting state."));
+  for (const set of action.sets ?? []) {
+    const field = process.fields.find((f) => f.name === set.field);
+    const input = action.inputs?.find((i) => i.name === set.from);
+    if (field && input && !inputFits(input.type, field.type)) issues.push(t("{field} needs {type}; {input} is {inputType}.", {
+      field: field.title, type: t(field.type), input: input.title, inputType: t(input.type),
+    }));
+    if (field?.type === "choice" && input?.type === "choice") {
+      const allowed = (field.choices ?? "").split(",").map((x) => x.trim());
+      if ((input.choices ?? "").split(",").map((x) => x.trim()).some((x) => x && !allowed.includes(x)))
+        issues.push(t("{input} has a choice outside {field}.", { input: input.title, field: field.title }));
+    }
+  }
+  for (const condition of action.conditions ?? []) {
+    const field = process.fields.find((f) => f.name === condition.field);
+    const input = action.inputs?.find((i) => `input.${i.name}` === condition.field);
+    const kind = condition.field === "state" ? "choice" : field?.type ?? input?.type;
+    if (!condition.message.trim()) issues.push(t("Write the message people see when a rule fails."));
+    if (condition.operator === "empty" || condition.operator === "not empty" || !kind) continue;
+    if (kind === "money") { issues.push(t("Money rules need a currency-aware comparison.")); continue; }
+    if (!["=", "!="].includes(condition.operator) && !["integer", "decimal", "date", "datetime"].includes(kind))
+      issues.push(t("{type} cannot be ordered.", { type: t(kind) }));
+    if (condition.value === "$me" ? !["text", "longtext"].includes(kind) : !condition.value || !valueFits(kind, condition.value))
+      issues.push(t("{field} needs a {type} value.", { field: field?.title ?? input?.title ?? t("State"), type: t(kind) }));
+  }
+  return issues;
+}
 /** A name from what people call it: lower-case letters and digits (the host's rule). */
 const nameOf = (title: string, taken: string[]) => {
   const base = title.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^[0-9]+/, "") || "step";
@@ -56,6 +101,7 @@ export function ProcessEditor({ id }: { id: string }) {
   const object = read?.record;
   const [process, setProcess] = useState<Process>({ states: [], actions: [], access: [], fields: [] });
   const [chosen, setChosen] = useState<Chosen>();
+  const [center, setCenter] = useState<"map" | "preview">("map");
   const [dirty, setDirty] = useState(false);
   const [refused, setRefused] = useState<string>(); // why the host refused, kept on screen
   useEffect(() => {
@@ -65,13 +111,13 @@ export function ProcessEditor({ id }: { id: string }) {
   const change = (next: Process) => { setProcess(next); setDirty(true); };
   const addState = () => {
     const title = process.states.length === 0 ? t("New") : t("State {n}", { n: process.states.length + 1 });
-    change({ ...process, states: [...process.states, { name: nameOf(title, process.states.map((s) => s.name)), title, tone: "info" }] });
+    change({ ...process, states: [...process.states, { name: nameOf("state", process.states.map((s) => s.name)), title, tone: "info" }] });
     setChosen({ kind: "state", at: process.states.length });
   };
   const addAction = () => {
     const title = t("Step {n}", { n: process.actions.length + 1 });
     const from = process.states[0]?.name;
-    change({ ...process, actions: [...process.actions, { name: nameOf(title, process.actions.map((a) => a.name)), title, from: from ? [from] : [], to: process.states[1]?.name }] });
+    change({ ...process, actions: [...process.actions, { name: nameOf("action", process.actions.map((a) => a.name)), title, from: from ? [from] : [], to: process.states[1]?.name }] });
     setChosen({ kind: "action", at: process.actions.length });
   };
   const save = async () => {
@@ -87,10 +133,12 @@ export function ProcessEditor({ id }: { id: string }) {
   };
   const action = chosen?.kind === "action" ? process.actions[chosen.at] : undefined;
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;
+  const field = chosen?.kind === "field" ? process.fields[chosen.at] : undefined;
+  const issues = process.actions.flatMap((a) => actionIssues(a, process).map((message) => `${a.title || a.name}: ${message}`));
   return (
     <div className="flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3">
-      <PageHeader title={t("{object}: process and access", { object: object.title })}
-        description={t("What its records go through, and the steps people take on them. Save keeps your work; publish installs it.")}
+      <PageHeader title={t("Design {object}", { object: object.title })}
+        description={t("Define its fields, states, actions and access. Save keeps your work; publish installs it.")}
         actions={<div className="flex items-center gap-2">
           <StatusTag status={object.state} registry={objectStates} />
           <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: "objects" } })}>{t("Back to objects")}</Button>
@@ -98,29 +146,113 @@ export function ProcessEditor({ id }: { id: string }) {
           <Button variant="primary" onClick={() => void publish()}>{t("Publish")}</Button>
         </div>} />
       {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {refused}</Panel>}
+      {issues.length > 0 && <Panel role="alert" className="text-xs text-[var(--tone-danger)]"><strong>{t("Check these rules before publishing:")}</strong>
+        <ul className="ml-4 list-disc">{issues.map((message, i) => <li key={i}>{message}</li>)}</ul></Panel>}
       {dirty && <Panel role="status" className="text-xs text-muted">{t("Not saved yet. Publishing saves first.")}</Panel>}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_21rem]">
         <div role="region" aria-label={t("States and actions")} className="min-h-0 overflow-y-auto">
+          <FieldsOutline fields={process.fields} chosen={chosen} onChoose={setChosen}
+            onAdd={() => { change({ ...process, fields: [...process.fields, { name: nameOf("field", process.fields.map((f) => f.name)), title: t("Field"), type: "text" }] }); setChosen({ kind: "field", at: process.fields.length }); }} />
           <Outline process={process} chosen={chosen} onChoose={setChosen} onAddState={addState} onAddAction={addAction} onChange={change} />
           <AccessOutline access={process.access} chosen={chosen} onChoose={setChosen}
-            onAdd={() => { change({ ...process, access: [...process.access, { role: nameOf(t("Role"), process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); setChosen({ kind: "access", at: process.access.length }); }}
+            onAdd={() => { change({ ...process, access: [...process.access, { role: nameOf("role", process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); setChosen({ kind: "access", at: process.access.length }); }}
             onRemove={(i) => { change({ ...process, access: process.access.filter((_, at) => at !== i) }); setChosen(undefined); }} />
         </div>
         <div role="region" aria-label={t("What people see")} className="min-h-0 min-w-0 overflow-y-auto rounded-md border border-dashed border-border p-3">
-          <Preview object={object} process={process} action={action} />
+          <div role="tablist" aria-label={t("Object view")} className="mb-3 flex gap-1 border-b border-border pb-2">
+            <Button role="tab" aria-selected={center === "map"} size="sm" variant={center === "map" ? "primary" : "ghost"} onClick={() => setCenter("map")}>{t("Process map")}</Button>
+            <Button role="tab" aria-selected={center === "preview"} size="sm" variant={center === "preview" ? "primary" : "ghost"} onClick={() => setCenter("preview")}>{t("Record preview")}</Button>
+          </div>
+          {center === "map" ? <ProcessGraph process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
+            : <Preview object={object} process={process} action={action} />}
         </div>
         <div role="region" aria-label={t("The piece in hand")} className="min-h-0 overflow-y-auto">
+          {field && chosen && <FieldProperties field={field} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
           {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
           {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
             onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
             onFields={(fields) => change({ ...process, fields })} />}
-          {action && chosen && <ActionProperties action={action} states={process.states} fields={object.fields} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")} approverRoles={["builder", ...(process.access.length ? process.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])]}
+          {action && chosen && <ActionProperties action={action} states={process.states} fields={process.fields} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")} approverRoles={["builder", ...(process.access.length ? process.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])]}
             onChange={(patch) => change({ ...process, actions: process.actions.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })} />}
-          {!chosen && <Card className="p-3 text-xs text-muted">{t("Choose a state or an action to configure it.")}</Card>}
+          {!chosen && <Card className="p-3 text-xs text-muted">{t("Choose a field, state or action to configure it.")}</Card>}
         </div>
       </div>
     </div>
   );
+}
+
+/** The lifecycle is the semantic source. Canvas edges only edit its From/To declarations. */
+function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAction }: {
+  process: Process; chosen: Chosen; onChoose: (c: Chosen) => void; onChange: (p: Process) => void;
+  onAddState: () => void; onAddAction: () => void;
+}) {
+  const catalog: NodeCatalog = [
+    { id: "state", title: t("State"), category: "lifecycle", description: t("A record's named status"),
+      inputs: [{ id: "result", label: t("Arrives here"), type: "action-result" }],
+      outputs: [{ id: "take", label: t("May take"), type: "action-start" }] },
+    { id: "action", title: t("Action"), category: "lifecycle", description: t("A governed step on one record"),
+      inputs: [{ id: "from", label: t("Taken from"), type: "action-start" }],
+      outputs: [{ id: "to", label: t("Leaves it in"), type: "action-result", limit: 1 }] },
+  ];
+  const nodes: CanvasNode[] = [
+    ...process.states.map((s, i) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: { x: 20, y: i * 145 + 55 } })),
+    ...process.actions.map((a, i) => ({ id: `action:${a.name}`, kind: "action", label: a.title || a.name, detail: a.name, position: { x: 235, y: i * 145 + 55 } })),
+  ];
+  const edges: CanvasEdge[] = process.actions.flatMap((a) => [
+    ...a.from.map((s) => ({ id: `from:${a.name}:${s}`, source: `state:${s}`, sourcePort: "take", target: `action:${a.name}`, targetPort: "from" })),
+    ...(a.to ? [{ id: `to:${a.name}:${a.to}`, source: `action:${a.name}`, sourcePort: "to", target: `state:${a.to}`, targetPort: "result" }] : []),
+  ]);
+  const selected = chosen?.kind === "state" ? `state:${process.states[chosen.at]?.name}` : chosen?.kind === "action" ? `action:${process.actions[chosen.at]?.name}` : undefined;
+  return <div className="mb-4 grid gap-2">
+    <div><h3 className="text-sm font-semibold">{t("Process map")}</h3>
+      <p className="text-xs text-muted">{t("Connect a state to an action to allow it; connect an action to a state for its result. Select a node to edit it. Delete a selected line to remove it.")}</p></div>
+    <NodeCanvas label={t("Process map")} catalog={catalog} nodes={nodes} edges={edges} selected={selected}
+      onAdd={(kind) => { if (kind === "state") onAddState(); else if (process.states.length) onAddAction(); }}
+      onSelect={(id) => {
+        const [kind, name] = id.split(":");
+        const at = kind === "state" ? process.states.findIndex((s) => s.name === name) : process.actions.findIndex((a) => a.name === name);
+        if (at >= 0) onChoose({ kind: kind as "state" | "action", at });
+      }}
+      onConnect={(c) => {
+        if (c.source?.startsWith("state:") && c.target?.startsWith("action:")) {
+          const state = c.source.slice(6), name = c.target.slice(7);
+          onChange({ ...process, actions: process.actions.map((a) => a.name === name ? { ...a, from: [...a.from, state] } : a) });
+        } else if (c.source?.startsWith("action:") && c.target?.startsWith("state:")) {
+          const name = c.source.slice(7), state = c.target.slice(6);
+          onChange({ ...process, actions: process.actions.map((a) => a.name === name ? { ...a, to: state } : a) });
+        }
+      }}
+      onDisconnect={(removed) => {
+        onChange({ ...process, actions: process.actions.map((a) => ({ ...a,
+          from: a.from.filter((s) => !removed.some((e) => e.source === `state:${s}` && e.target === `action:${a.name}`)),
+          to: removed.some((e) => e.source === `action:${a.name}` && e.target === `state:${a.to}`) ? undefined : a.to,
+        })) });
+      }} />
+  </div>;
+}
+
+function FieldsOutline({ fields, chosen, onChoose, onAdd }: { fields: Field[]; chosen: Chosen; onChoose: (c: Chosen) => void; onAdd: () => void }) {
+  return <Card className="mb-3 grid gap-2 p-3">
+    <div className="flex items-center justify-between text-xs font-semibold text-muted">{t("Fields")}
+      <Button size="sm" variant="ghost" onClick={onAdd}><Plus className="size-3" />{t("Add a field")}</Button></div>
+    <ul className="grid gap-1">{fields.map((f, at) => <li key={`${f.name}:${at}`}>
+      <Button size="sm" variant="ghost" className={cn("w-full justify-start", chosen?.kind === "field" && chosen.at === at && "bg-row-selected")}
+        aria-pressed={chosen?.kind === "field" && chosen.at === at} onClick={() => onChoose({ kind: "field", at })}>{f.title || f.name} <span className="text-muted">· {t(f.type)}</span></Button>
+    </li>)}</ul>
+  </Card>;
+}
+
+function FieldProperties({ field, onChange }: { field: Field; onChange: (patch: Partial<Field>) => void }) {
+  return <Card className="grid content-start gap-3 p-3">
+    <div className="text-xs font-semibold text-muted">{t("Field")}</div>
+    <Label text={t("What people call it")}><Input value={field.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
+    <Label text={t("Name")}><Input className="font-mono" value={field.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
+    <Label text={t("Type")}><Select value={field.type} onChange={(e) => onChange({ type: e.target.value })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
+    {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
+    {field.type === "reference" && <Label text={t("Reference object")}><Input value={field.ref ?? ""} onChange={(e) => onChange({ ref: e.target.value })} /></Label>}
+    <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
+    <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
+  </Card>;
 }
 
 /** The left pane: the states in order (a new record starts in the first), then the actions. */
@@ -249,7 +381,8 @@ function ActionProperties({ action, states, fields, roles, approverRoles, onChan
           {states.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}
         </Select>
       </Label>
-      <fieldset className="grid gap-2 border-t border-border pt-2 text-xs"><legend className="mb-1 font-semibold text-muted">{t("Approval")}</legend>
+      <Disclosure summary={<span className="text-xs font-semibold">{t("Approval settings")}</span>} className="border-t border-border pt-2">
+      <fieldset className="grid gap-2 text-xs"><legend className="sr-only">{t("Approval")}</legend>
         <Checkbox checked={!!action.approval} onChange={(enabled) => onChange({ approval: enabled ? {
           pending: states.find((s) => s.name !== action.from[0] && s.name !== action.to)?.name ?? "",
           levels: [{ title: t("Approver"), role: approverRoles[0] ?? "builder" }],
@@ -272,8 +405,10 @@ function ActionProperties({ action, states, fields, roles, approverRoles, onChan
             </>} />
         </>}
       </fieldset>
+      </Disclosure>
+      <Disclosure summary={<span className="text-xs font-semibold">{t("Inputs and rules")}</span>} className="border-t border-border pt-2">
       <Rows<Input_> title={t("What people give")} add={t("Add an input")} items={inputs}
-        make={() => ({ name: nameOf(t("Input"), inputs.map((i) => i.name)), title: t("Input"), type: "text" })}
+        make={() => ({ name: nameOf("input", inputs.map((i) => i.name)), title: t("Input"), type: "text" })}
         onChange={(next) => onChange({ inputs: next })}
         row={(input, set) => <>
           <Input aria-label={t("Label")} value={input.title} onChange={(e) => set({ title: e.target.value })} />
@@ -301,6 +436,7 @@ function ActionProperties({ action, states, fields, roles, approverRoles, onChan
           {c.operator !== "empty" && c.operator !== "not empty" && <Input aria-label={t("Value")} placeholder={t("a value, or $me")} value={c.value ?? ""} onChange={(e) => patch({ value: e.target.value })} />}
           <Input aria-label={t("Message when it does not hold")} placeholder={t("What a person reads when it does not hold")} value={c.message} onChange={(e) => patch({ message: e.target.value })} />
         </>} />
+      </Disclosure>
     </Card>
   );
 }

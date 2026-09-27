@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -190,8 +191,19 @@ func checkProcess(o Object) error {
 					return fmt.Errorf("%s sets %q to %q: %v", where, f.Name, strings.TrimPrefix(set.From, "="), err)
 				}
 			default:
-				if inputs[set.From].Name == "" {
+				in := inputs[set.From]
+				if in.Name == "" {
 					return fmt.Errorf("%s sets %q from %q, which is not one of its inputs, $me, $now or =<value>", where, f.Name, set.From)
+				}
+				if !inputFits(in.Type, f.Type) {
+					return fmt.Errorf("%s sets %q (%s) from %q (%s), which does not fit", where, f.Name, f.Type, in.Name, in.Type)
+				}
+				if f.Type == "choice" {
+					for _, option := range choices(in.Choices) {
+						if !slices.Contains(choices(f.Choices), option) {
+							return fmt.Errorf("%s sets %q from %q, whose value %q is not one of the field's choices", where, f.Name, in.Name, option)
+						}
+					}
 				}
 			}
 		}
@@ -208,9 +220,97 @@ func checkProcess(o Object) error {
 			case strings.TrimSpace(cond.Message) == "":
 				return fmt.Errorf("%s: the condition on %s says nothing to a person it stops", where, cond.Field)
 			}
+			kind, options := "", []string(nil)
+			switch {
+			case cond.Field == "state":
+				kind = "choice"
+				for _, s := range o.States {
+					options = append(options, s.Name)
+				}
+			case isInput:
+				kind, options = inputs[name].Type, choices(inputs[name].Choices)
+			default:
+				f := fields[cond.Field]
+				kind, options = f.Type, choices(f.Choices)
+			}
+			if err := checkCondition(kind, options, cond); err != nil {
+				return fmt.Errorf("%s: the condition on %s: %w", where, cond.Field, err)
+			}
 		}
 	}
 	return nil
+}
+
+// inputFits is the publication-time contract for assigning an action input to
+// an object field. In particular a string is not silently accepted as a date,
+// number or reference merely because both travel through JSON.
+func inputFits(input, field string) bool {
+	switch field {
+	case "text", "longtext":
+		return input == "text" || input == "longtext" || input == "choice"
+	case "decimal":
+		return input == "decimal" || input == "integer"
+	case "choice":
+		return input == "choice"
+	default:
+		return input == field
+	}
+}
+
+// checkCondition prevents a published rule from silently changing meaning
+// through lexical comparison (for example an integer compared with "abc").
+func checkCondition(kind string, options []string, c Condition) error {
+	if c.Operator == "empty" || c.Operator == "not empty" {
+		return nil
+	}
+	if kind == "money" {
+		return fmt.Errorf("money needs a currency-aware comparison rule")
+	}
+	if c.Value == "$me" {
+		if kind != "text" && kind != "longtext" {
+			return fmt.Errorf("$me only compares with a text field")
+		}
+		return nil
+	}
+	if c.Operator != "=" && c.Operator != "!=" && kind != "integer" && kind != "decimal" && kind != "date" && kind != "datetime" {
+		return fmt.Errorf("%s does not support ordered comparison", kind)
+	}
+	if _, err := conditionValue(kind, c.Value); err != nil {
+		return fmt.Errorf("%q does not fit %s: %w", c.Value, kind, err)
+	}
+	if kind == "choice" && !slices.Contains(options, c.Value) {
+		return fmt.Errorf("%q is not one of this field's choices", c.Value)
+	}
+	return nil
+}
+
+func conditionValue(kind, raw string) (any, error) {
+	switch kind {
+	case "integer":
+		return strconv.ParseInt(raw, 10, 64)
+	case "decimal":
+		x, err := strconv.ParseFloat(raw, 64)
+		if err == nil && (math.IsInf(x, 0) || math.IsNaN(x)) {
+			err = fmt.Errorf("a finite number is required")
+		}
+		return x, err
+	case "date":
+		if day, err := time.Parse(time.DateOnly, raw); err == nil {
+			return day, nil
+		}
+		// Record fields are decoded as times; authored literals are dates.
+		instant, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return time.Parse(time.DateOnly, instant.UTC().Format(time.DateOnly))
+	case "datetime":
+		return time.Parse(time.RFC3339, raw)
+	case "boolean":
+		return strconv.ParseBool(raw)
+	default:
+		return raw, nil
+	}
 }
 
 // lifecycle is the object's states and actions as the platform's own lifecycle
@@ -282,7 +382,25 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		return f.Interface()
 	}
 	for _, cond := range a.Conditions {
-		if !holds(value(cond.Field), cond.Operator, cond.Value, c.ID) {
+		kind := "choice"
+		if cond.Field != "state" {
+			if name, isInput := strings.CutPrefix(cond.Field, "input."); isInput {
+				for _, in := range a.Inputs {
+					if in.Name == name {
+						kind = in.Type
+						break
+					}
+				}
+			} else {
+				for _, f := range o.Fields {
+					if f.Name == cond.Field {
+						kind = f.Type
+						break
+					}
+				}
+			}
+		}
+		if !holds(value(cond.Field), kind, cond.Operator, cond.Value, c.ID) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
 		}
 	}
@@ -317,9 +435,9 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 	return nil
 }
 
-// holds compares a value with what a condition names. Numbers compare as
-// numbers, everything else as its text; $me is the person taking the action.
-func holds(got any, op, want, me string) bool {
+// holds compares typed values. An unset or malformed value fails closed; it
+// never falls back to lexical order when a numeric or temporal parse fails.
+func holds(got any, kind, op, want, me string) bool {
 	if want == "$me" {
 		want = me
 	}
@@ -330,15 +448,40 @@ func holds(got any, op, want, me string) bool {
 	case "not empty":
 		return text != ""
 	}
-	a, errA := strconv.ParseFloat(text, 64)
-	b, errB := strconv.ParseFloat(want, 64)
-	numeric := errA == nil && errB == nil
-	cmp := strings.Compare(text, want)
-	if numeric {
-		cmp = map[bool]int{true: -1, false: 0}[a < b]
-		if a > b {
+	if text == "" {
+		return false
+	}
+	a, errA := conditionValue(kind, text)
+	b, errB := conditionValue(kind, want)
+	if errA != nil || errB != nil {
+		return false
+	}
+	cmp := 0
+	switch x := a.(type) {
+	case int64:
+		y := b.(int64)
+		cmp = map[bool]int{true: -1, false: 0}[x < y]
+		if x > y {
 			cmp = 1
 		}
+	case float64:
+		y := b.(float64)
+		cmp = map[bool]int{true: -1, false: 0}[x < y]
+		if x > y {
+			cmp = 1
+		}
+	case time.Time:
+		y := b.(time.Time)
+		cmp = map[bool]int{true: -1, false: 0}[x.Before(y)]
+		if x.After(y) {
+			cmp = 1
+		}
+	case bool:
+		if x != b.(bool) {
+			cmp = 1
+		}
+	case string:
+		cmp = strings.Compare(x, b.(string))
 	}
 	switch op {
 	case "=":

@@ -8,30 +8,29 @@ import { defineApp } from "@platform/app";
 import { PageEditor, PagesList } from "./editor";
 import { ProcessEditor, ProcessPicker } from "./process";
 import { t, type NavSection } from "@platform/ui";
-import { AppWindow, Boxes, Hammer, LayoutList, Workflow } from "lucide-react";
+import { AppWindow, Boxes, Hammer, LayoutList } from "lucide-react";
 
 /** A page of the builder app, by its name in the registry. */
 const page = (name: string) => ({ view: "page", params: { app: "build", kind: "page", name } });
 
 export default defineApp({
   id: "build",
-  title: t("Builder"),
+  title: t("Application Studio"),
   icon: <Hammer />,
   home: page("objects"),
   views: [
     { id: "pages", title: () => t("Pages"), render: () => <PagesList /> },
     { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
-    { id: "process", title: () => t("Process and access"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
+    { id: "process", title: () => t("Object design"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
   ],
-  opens: { "build.page": "compose" }, // a page record opens where it is composed
+  opens: { "build.page": "compose", "build.object": "process" }, // open a semantic asset in its editor
   nav: (host): NavSection[] => {
     const own = host.definitions.filter((d) => d.ref.kind === "page" && d.ref.app === "build" && d.source === "tenant");
     return [
       {
-        label: t("Builder"),
+        label: t("Application Studio"),
         items: [
           { label: t("Objects"), icon: <Hammer />, route: page("objects") },
-          { label: t("Process and access"), icon: <Workflow />, route: { view: "process" } },
           { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },
           { label: t("Applications"), icon: <AppWindow />, route: page("applications") },
         ],

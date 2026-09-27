@@ -293,7 +293,7 @@ test("route 23: import and export", async ({ page }) => {
 test("route 29: define an object, publish it, use it", async ({ page }, testInfo) => {
   const name = `visit${Date.now().toString(36).slice(-5)}`;
   await open(page, "manager", "/home");
-  await page.getByRole("button", { name: "Builder" }).first().click(); // the app, from the launcher
+  await page.getByRole("button", { name: "Application Studio" }).first().click(); // the app, from the launcher
   await expect(page.getByRole("heading", { name: "Objects" })).toBeVisible();
   await page.getByRole("button", { name: "Create object" }).click();
   const dialog = page.getByRole("dialog");
@@ -334,7 +334,7 @@ test("route 30: compose a page of widgets and use it", async ({ page, request },
   await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Composed " + account, kind: "company" });
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Composed offsite " + opp });
   await open(page, "manager", "/home");
-  await page.getByRole("button", { name: "Builder" }).first().click();
+  await page.getByRole("button", { name: "Application Studio" }).first().click();
   await page.getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
   const dialog = page.getByRole("dialog");
@@ -389,7 +389,7 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Handed offsite " + opp });
   // A page to hand over, composed as in route 30.
   await open(page, "manager", "/home");
-  await page.getByRole("button", { name: "Builder" }).first().click();
+  await page.getByRole("button", { name: "Application Studio" }).first().click();
   await page.getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
   let dialog = page.getByRole("dialog");
@@ -541,6 +541,7 @@ test("route 34: states and actions a tenant defines", async ({ page, request }, 
   await inHand.getByRole("textbox", { name: "What people call it" }).fill("Hand it back");
   await inHand.getByRole("textbox", { name: "Name" }).fill("handback");
   await expect(inHand.getByRole("combobox", { name: "Leaves it in" })).toHaveValue("returned");
+  await inHand.getByRole("button", { name: "Inputs and rules" }).click();
   await inHand.getByRole("button", { name: "Add an input" }).click();
   await inHand.getByRole("textbox", { name: "Label" }).fill("Handed to");
   await inHand.getByRole("textbox", { name: "Name" }).last().fill("to");
@@ -553,9 +554,24 @@ test("route 34: states and actions a tenant defines", async ({ page, request }, 
   await inHand.getByRole("combobox", { name: "Operator" }).selectOption("<");
   await inHand.getByRole("textbox", { name: "Value" }).fill("500");
   await inHand.getByRole("textbox", { name: "Message when it does not hold" }).fill("Valuables go back through the manager.");
+  // The visual edge edits the same declaration as the inspector.
+  await inHand.getByRole("group", { name: "Taken from" }).getByRole("button", { name: "Found" }).click();
+  await expect(inHand.getByRole("group", { name: "Taken from" }).getByRole("button", { name: "Found" })).toHaveAttribute("aria-pressed", "false");
+  const graph = page.getByRole("region", { name: "Process map" });
+  const sourcePort = await graph.locator('.react-flow__handle[data-nodeid="state:found"][data-handleid="take"]').boundingBox();
+  const targetPort = await graph.locator('.react-flow__handle[data-nodeid="action:handback"][data-handleid="from"]').boundingBox();
+  if (!sourcePort || !targetPort) throw new Error("The lifecycle ports were not visible");
+  await page.mouse.move(sourcePort.x + sourcePort.width / 2, sourcePort.y + sourcePort.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetPort.x + targetPort.width / 2, targetPort.y + targetPort.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(inHand.getByRole("group", { name: "Taken from" }).getByRole("button", { name: "Found" })).toHaveAttribute("aria-pressed", "true");
   // What people will see, while it is composed: the status bar and the action's form.
   const preview = page.getByRole("region", { name: "What people see" });
-  await expect(preview.getByText("Found", { exact: true })).toBeVisible();
+  await expect(graph.getByText("Found", { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("process-map.png"), fullPage: true });
+  await preview.getByRole("tab", { name: "Record preview" }).click();
+  await expect(preview.locator("ol").getByText("Found", { exact: true })).toBeVisible();
   await expect(preview.getByText("Handed to *")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("object-process.png"), fullPage: true });
   await page.getByRole("button", { name: "Publish" }).click();
@@ -654,8 +670,10 @@ test("route 36: approve a tenant-defined action", async ({ page, request }, test
   const outline = page.getByRole("region", { name: "States and actions" });
   const inHand = page.getByRole("region", { name: "The piece in hand" });
   await outline.getByRole("button", { name: "Hand it back", exact: true }).click();
+  await inHand.getByRole("button", { name: "Approval settings" }).click();
   await inHand.getByRole("checkbox", { name: "Wait for approval" }).check();
   await inHand.getByRole("combobox", { name: "While it waits" }).selectOption("pending");
+  await page.getByRole("tab", { name: "Record preview" }).click();
   await expect(page.getByRole("region", { name: "What people see" }).getByText("Waits in Pending review for Approver (builder)")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("defined-approval-editor.png"), fullPage: true });
   await page.getByRole("button", { name: "Publish" }).click();

@@ -50,6 +50,8 @@ func TestTenantDefinedActions(t *testing.T) {
 		{"name": "claimant", "title": "Handed to", "type": "text"},
 		{"name": "clerk", "title": "Handed back by", "type": "text"},
 		{"name": "returned", "title": "Returned on", "type": "date"},
+		{"name": "grade", "title": "Grade", "type": "choice", "choices": "a,b"},
+		{"name": "price", "title": "Price", "type": "money"},
 	}
 	states := []map[string]any{{"name": "found", "title": "Found", "tone": "warning"}, {"name": "returned", "title": "Returned", "tone": "success"}}
 	handBack := map[string]any{"name": "handback", "title": "Hand it back", "from": []string{"found"}, "to": "returned",
@@ -72,6 +74,10 @@ func TestTenantDefinedActions(t *testing.T) {
 		{"a field that is not there", map[string]any{"states": states, "actions": []any{merge(handBack, map[string]any{"sets": []map[string]any{{"field": "colour", "from": "to"}}})}}, `sets "colour"`},
 		{"an input that is not there", map[string]any{"states": states, "actions": []any{merge(handBack, map[string]any{"sets": []map[string]any{{"field": "claimant", "from": "nobody"}}})}}, `from "nobody"`},
 		{"a condition with no message", map[string]any{"states": states, "actions": []any{merge(handBack, map[string]any{"conditions": []map[string]any{{"field": "value", "operator": "<", "value": "5"}}})}}, "says nothing to a person"},
+		{"a numeric condition with text", map[string]any{"states": states, "actions": []any{merge(handBack, map[string]any{"conditions": []map[string]any{{"field": "value", "operator": "<", "value": "five", "message": "Too much"}}})}}, "does not fit integer"},
+		{"a text input assigned to a number", map[string]any{"states": states, "actions": []any{merge(handBack, map[string]any{"sets": []map[string]any{{"field": "value", "from": "to"}}})}}, "which does not fit"},
+		{"a choice outside the field", map[string]any{"states": states, "actions": []any{merge(handBack, map[string]any{"inputs": []map[string]any{{"name": "grade", "title": "Grade", "type": "choice", "choices": "a,c"}}, "sets": []map[string]any{{"field": "grade", "from": "grade"}}})}}, "not one of the field's choices"},
+		{"money without currency", map[string]any{"states": states, "actions": []any{merge(handBack, map[string]any{"conditions": []map[string]any{{"field": "price", "operator": "=", "value": "10", "message": "Wrong amount"}}})}}, "currency-aware comparison"},
 		{"the platform's own name", map[string]any{"states": states, "actions": []any{merge(handBack, map[string]any{"name": "edit"})}}, "the platform's own"},
 	} {
 		draft := "O-" + strings.ReplaceAll(x.why, " ", "-")
