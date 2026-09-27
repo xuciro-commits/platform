@@ -133,3 +133,52 @@ func TestKnowledgeIndexesPastFirstPage(t *testing.T) {
 		t.Fatalf("last page was not searchable: %+v", found)
 	}
 }
+
+// ADR-0033 14b: the index reads the tenant once and then follows the records
+// that change. A search over a tenant nothing changed in costs nothing,
+// whatever its size, and one changed record costs that record — not a walk of
+// every knowledge field, which is what a search used to do (#130).
+func TestKnowledgeAtScale(t *testing.T) {
+	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	tn := stockTenant(t, knowledge.New("t-1"))
+	const records = 20_000
+	for i := range records {
+		id := fmt.Sprintf("I%06d", i)
+		if err := tn.automation("stock", false).PutAt(now, "test.seed", Item{Record: platform.Record{ID: id},
+			Name: "Machine " + id, Note: fmt.Sprintf("hydraulic inspection %d of the press line", i), Owner: "ana", Line: "L1"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	search := func(q string) (time.Duration, []Passage) {
+		start := time.Now()
+		found := tn.Knowledge(nil, "stock", q, 3, now)
+		return time.Since(start), found
+	}
+	first, found := search("hydraulic inspection 19999")
+	if len(found) == 0 || found[0].Document != "stock.item/I019999#note" {
+		t.Fatalf("the last record was not found: %+v", found)
+	}
+	unchanged, _ := search("hydraulic inspection 19999")
+	if err := tn.automation("stock", false).PutAt(now, "test.correct", Item{Record: platform.Record{ID: "I000001"},
+		Name: "Machine I000001", Note: "coolant leak at the press", Owner: "ana", Line: "L1"}); err != nil {
+		t.Fatal(err)
+	}
+	one, leak := search("coolant leak")
+	if len(leak) == 0 || leak[0].Document != "stock.item/I000001#note" {
+		t.Fatalf("the changed record was not searchable: %+v", leak)
+	}
+	rare, _ := search("coolant leak") // the same words again, with nothing changed
+	item, _ := platform.Get[Item](tn.automation("stock", false), "I000001")
+	item.Archived = true
+	if err := tn.automation("stock", false).PutAt(now, "test.archive", item); err != nil {
+		t.Fatal(err)
+	}
+	if _, gone := search("coolant leak"); len(gone) != 0 {
+		t.Errorf("an archived record stayed in the index: %+v", gone)
+	}
+	t.Logf("%d knowledge fields on this machine: the first search reads the tenant in %v; a word every record holds costs %v; "+
+		"after one record changed %v; words few records hold %v", records, first, unchanged, one, rare)
+	if timed() && (unchanged > first/10 || one > first/10 || rare > first/50) {
+		t.Errorf("a search still walks the tenant: first %v, common word %v, one changed %v, rare words %v", first, unchanged, one, rare)
+	}
+}

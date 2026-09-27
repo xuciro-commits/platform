@@ -48,7 +48,7 @@ Declined for this stage: automatic marking inheritance across every field of a r
 | Batch | Item | Done when |
 |---|---|---|
 | 14a | Promote the declaration to the app API: `platform.Derivation`, `Entity.Derived`, `Entity.Withheld`, host enforcement and composition validation; the agent app declares its run and memory derivations; `internal/host.Narrowing` is deleted | `scripts/verify.sh capabilities composition web` passes; positive and negative tests cover record scope, unit change, restricted field, an administrator without the business role and cross-tenant, on two industries' apps (hospitality CSM, manufacturing MES); an invalid declaration refuses a tenant |
-| 14b | The rest of #130: knowledge source synchronization redesign and measured latency on a larger tenant; declare provenance wherever another app keeps derived content | Measured index and read latency recorded on a tenant of representative size; the declaration used by a non-agent app or stated to be unnecessary with evidence |
+| 14b | The rest of #130: knowledge source synchronization redesign and measured latency on a larger tenant; declare provenance wherever another app keeps derived content | Measured index and read latency recorded on a tenant of representative size (done); the declaration used by a non-agent app or stated to be unnecessary with evidence (open) |
 
 ## Consequences
 
@@ -62,4 +62,11 @@ Derived content is authorized by the source it came from, wherever an app keeps 
 - **The agent app declares, and no longer filters** (`agent.go`, `agent_memory.go`): the run derives `seen` from its `ref`, each step's `arguments` and `outcome` from that step's `sources`, each citation from its `document` (with the field it cited), each draft from its target, and `result` from every source; a memory derives its `fact` from the `sources` kept when the fact was written. `internal/host.Narrowing` is deleted.
 - **What people see**: the run page and the remembered facts say that content came from records the reader may no longer read (`@platform/app`, English and Chinese).
 - **Proven on two industries**: hospitality `TestCSMTriage` (the triage agent's citations and model calls) and manufacturing `TestCorrectedByTheAgent` (the assistant's planned-order step and answer), plus `TestAgentTraceScope` for owner and unit change, a field only another role reads, an administrator without the business role, and cross-tenant. `scripts/verify.sh ci`, `composition` and `web` pass.
-- **Not built**: 14b — knowledge source synchronization and measured latency on a larger tenant; no non-agent app declares derivations yet, so the second declaring app remains the next proof.
+- **Not built**: no non-agent app declares derivations yet, so the second declaring app remains the next proof.
+
+## As built (14b)
+
+- **Synchronization follows the changes** (`knowledge.go`, `records.go`): the record store marks a record dirty when it is put and its type can become knowledge (`entityType.knowledge`); `sync` reads the tenant in full once, then cuts only the dirty records again (`sourcesOf`), dropping the passages of one that was archived or is no longer knowledge. A source's revision is now a fingerprint of its text, not the record's revision, which an app's own automation does not bump — passages used to go stale that way.
+- **A search scores what holds the words asked** (`index.postings`, kept as chunks are cut): document frequencies and the average length come from the whole index, so only candidate passages are read and authorized. With an embedding model set, every passage stays a candidate, because meaning needs no shared word; that path waits for pgvector (ADR-0022 D2 a).
+- **Measured** (`TestKnowledgeAtScale`, 20 000 knowledge fields on the owner's Mac, bounds off in CI): the first search reads the tenant in ~1.0 s; afterwards a question whose words every record holds costs ~45 ms, one whose words few records hold ~3 µs, and a search right after one record changed ~0.7 ms. Before this batch every search walked and re-cut the whole tenant.
+- **Not measured**: a tenant with many large documents and an embedding model set, and PostgreSQL-backed vector reads at that size.

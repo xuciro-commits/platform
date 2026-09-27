@@ -13,6 +13,7 @@ import (
 	"platformkernel/kernel"
 	"platformserver/apps/files"
 	"platformserver/apps/flow"
+	"platformserver/apps/knowledge"
 	"platformserver/apps/relations"
 	"platformserver/apps/work"
 	"platformserver/platform"
@@ -30,6 +31,10 @@ type recordStore struct {
 	byGo  map[reflect.Type]*entityType
 	// touched, when set, hears of each record put, under mu (the PostgreSQL projection, ADR-0019).
 	touched func(typ, id string)
+	// dirty are the records of knowledge-bearing types put since the index last
+	// read it, under mu: knowledge is cut again for those records alone, not by
+	// walking the tenant at every search (ADR-0033 14b, #130).
+	dirty map[string]bool
 	// changed are the records each recent decision put ("<app>/<change>" →
 	// "<type>/<id>"), for flows started by a record's state (ADR-0028 D8).
 	changed map[string][]string
@@ -76,6 +81,10 @@ func (t *Tenant) Held(ref string) (any, bool) {
 type entityType struct {
 	info platform.EntityInfo
 	rows map[string]*row
+	// knowledge says a record of this type may become knowledge: it declares a
+	// knowledge field, it is a knowledge document, or it is a file that may be
+	// attached to one (ADR-0022 D1).
+	knowledge bool
 }
 
 // viewOf is a type as m may see it (ADR-0028 D3): without the fields m's role
@@ -169,7 +178,7 @@ func (s *recordStore) declare(a platform.App) error {
 		if s.types[e.Type] != nil || s.byGo[info.Go] != nil {
 			return fmt.Errorf("entity %s is declared twice", e.Type)
 		}
-		et := &entityType{info: info, rows: map[string]*row{}}
+		et := &entityType{info: info, rows: map[string]*row{}, knowledge: knowledgeBearing(info)}
 		s.types[e.Type], s.byGo[info.Go] = et, et
 	}
 	for _, e := range m.Entities { // seeds after every type is known, so references resolve
@@ -188,6 +197,14 @@ func (s *recordStore) declare(a platform.App) error {
 		}
 	}
 	return nil
+}
+
+// knowledgeBearing says a record of this type may become a knowledge passage:
+// a knowledge field of its own, the knowledge app's document, or a file that
+// may be attached to either (ADR-0022 D1). The index re-cuts only these.
+func knowledgeBearing(info platform.EntityInfo) bool {
+	return info.Type == knowledge.DocumentType || info.Type == files.FileType || info.KnowledgeFiles ||
+		slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Knowledge })
 }
 
 // sortedTypes are the declared entity types, by name.
@@ -306,6 +323,12 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	}
 	et.rows[rec.ID] = &row{value: v, history: append(history, change)}
 	s.remember(c.App+"/"+r.GetChangeId(), et.info.Type+"/"+rec.ID)
+	if et.knowledge {
+		if s.dirty == nil {
+			s.dirty = map[string]bool{}
+		}
+		s.dirty[et.info.Type+"/"+rec.ID] = true
+	}
 	if s.touched != nil {
 		s.touched(et.info.Type, rec.ID)
 	}

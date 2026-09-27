@@ -45,6 +45,7 @@ type chunk struct {
 	apps                   []string
 	terms                  map[string]int
 	length                 int
+	gone                   bool // cut again or removed: the postings still hold it
 }
 
 // Store keeps what is derived from the journal outside it: passages' vectors
@@ -75,9 +76,61 @@ type index struct {
 	docs   map[string]string   // source key → the revision indexed
 	chunks map[string][]*chunk // by source key
 	texts  map[string]string   // attached text files by content hash
+	// walked says the tenant was read once in full; after that the index
+	// follows the records the store marks dirty (ADR-0033 14b, #130), so a
+	// search costs nothing when nothing changed.
+	walked bool
+	// postings are the chunks each word appears in, with the corpus totals BM25
+	// needs: a search scores the passages holding a word of the question, not
+	// every passage of the tenant (ADR-0033 14b). stale counts the chunks left
+	// in the postings after being cut again; the postings are rebuilt when they
+	// are half of them.
+	postings map[string][]*chunk
+	total    int
+	length   int
+	stale    int
+}
+
+// keep puts a source's chunks in the postings, and forgets what was there.
+func (k *index) keep(key string, cs []*chunk) {
+	for _, c := range k.chunks[key] {
+		c.gone = true
+		k.total, k.length, k.stale = k.total-1, k.length-c.length, k.stale+1
+	}
+	if k.postings == nil {
+		k.postings = map[string][]*chunk{}
+	}
+	if cs == nil {
+		delete(k.chunks, key)
+	} else {
+		k.chunks[key] = cs
+	}
+	for _, c := range cs {
+		k.total, k.length = k.total+1, k.length+c.length
+		for w := range c.terms {
+			k.postings[w] = append(k.postings[w], c)
+		}
+	}
+	if k.stale > k.total {
+		k.rebuild()
+	}
+}
+
+// rebuild drops the chunks cut again from the postings.
+func (k *index) rebuild() {
+	k.postings, k.stale = map[string][]*chunk{}, 0
+	for _, cs := range k.chunks {
+		for _, c := range cs {
+			for w := range c.terms {
+				k.postings[w] = append(k.postings[w], c)
+			}
+		}
+	}
 }
 
 // source is one text to index: a document, or an app's knowledge field.
+// revision fingerprints the text, so a change the record's revision does not
+// count — an app's automation writing a record — is still re-cut (#130).
 type source struct {
 	key, title, text, revision string
 	scope                      string
@@ -89,9 +142,9 @@ func (t *Tenant) sources() []source {
 	var out []source
 	docs, _, _ := platform.Find[knowledge.Document](t.automation(knowledge.ID, false), platform.Query{Limit: 100000})
 	for _, d := range docs {
-		out = append(out, source{key: knowledge.DocumentType + "/" + d.ID, title: d.Title, text: d.Text, revision: fmt.Sprint(d.Revision), apps: d.Apps})
+		out = append(out, documentSource(d))
 	}
-	out = append(out, t.fileSources(docs)...)
+	out = append(out, t.fileSources()...)
 	t.records.mu.Lock()
 	types := slices.Collect(func(yield func(*entityType) bool) {
 		for _, et := range t.records.types {
@@ -108,18 +161,7 @@ func (t *Tenant) sources() []source {
 				break
 			}
 			for _, r := range page.Records {
-				v := reflect.ValueOf(r)
-				rec := v.FieldByName("Record").Interface().(platform.Record)
-				title := rec.ID
-				if f, ok := et.info.Field(et.info.Display); ok && len(f.Read) == 0 {
-					title = fmt.Sprint(v.FieldByIndex(f.Index).Interface())
-				}
-				for _, f := range et.info.Fields {
-					if text := fmt.Sprint(v.FieldByIndex(f.Index).Interface()); f.Knowledge && len(f.Read) == 0 && strings.TrimSpace(text) != "" {
-						out = append(out, source{key: et.info.Type + "/" + rec.ID + "#" + f.Name, title: et.info.Title + " " + title + ": " + f.Title,
-							text: text, revision: fmt.Sprint(rec.Revision), scope: et.info.Type + "/" + rec.ID, apps: []string{et.info.App}})
-					}
-				}
+				out = append(out, recordSources(et, reflect.ValueOf(r))...)
 			}
 			if offset+len(page.Records) >= page.Total || len(page.Records) == 0 {
 				break
@@ -129,10 +171,96 @@ func (t *Tenant) sources() []source {
 	return out
 }
 
-// sync cuts new and changed sources into passages and forgets removed ones.
+// recordSources are the knowledge fields of one record. A restricted field is
+// not indexed (ADR-0028 D3); the record itself is the passage's scope, so the
+// reader's authority over it is checked again at every search (#130).
+func recordSources(et *entityType, v reflect.Value) []source {
+	var out []source
+	rec := v.FieldByName("Record").Interface().(platform.Record)
+	title := rec.ID
+	if f, ok := et.info.Field(et.info.Display); ok && len(f.Read) == 0 {
+		title = fmt.Sprint(v.FieldByIndex(f.Index).Interface())
+	}
+	for _, f := range et.info.Fields {
+		if text := fmt.Sprint(v.FieldByIndex(f.Index).Interface()); f.Knowledge && len(f.Read) == 0 && strings.TrimSpace(text) != "" {
+			out = append(out, source{key: et.info.Type + "/" + rec.ID + "#" + f.Name, title: et.info.Title + " " + title + ": " + f.Title,
+				text: text, revision: fingerprint(title, text), scope: et.info.Type + "/" + rec.ID, apps: []string{et.info.App}})
+		}
+	}
+	return out
+}
+
+// fingerprint is what a source's text and title amount to: the index cuts it
+// again when this changes.
+func fingerprint(title, text string) string {
+	sum := sha256.Sum256([]byte(title + "\x00" + text))
+	return hex.EncodeToString(sum[:12])
+}
+
+// documentSource is a knowledge document as one source.
+func documentSource(d knowledge.Document) source {
+	return source{key: knowledge.DocumentType + "/" + d.ID, title: d.Title, text: d.Text, revision: fingerprint(d.Title, d.Text) + "/" + strings.Join(d.Apps, ","), apps: d.Apps}
+}
+
+// sourcesOf are the sources of the records that changed since the last sync:
+// what one search has to cut again, instead of the whole tenant (ADR-0033 14b).
+func (t *Tenant) sourcesOf(changed map[string]bool) []source {
+	var out []source
+	for ref := range changed {
+		typ, id, _ := strings.Cut(ref, "/")
+		switch typ {
+		case knowledge.DocumentType:
+			if d, known := platform.Get[knowledge.Document](t.automation(knowledge.ID, false), id); known && !d.Archived {
+				out = append(out, documentSource(d))
+			}
+			about, _ := json.Marshal([]any{[]any{"target", "=", ref}}) // its attached files carry its grant
+			attached, _, _ := platform.Find[files.File](t.automation(files.ID, false), platform.Query{Domain: about, Limit: 200})
+			for _, f := range attached {
+				if s, ok := t.fileSource(f); ok {
+					out = append(out, s)
+				}
+			}
+		case files.FileType:
+			if f, known := platform.Get[files.File](t.automation(files.ID, false), id); known && !f.Archived {
+				if s, ok := t.fileSource(f); ok {
+					out = append(out, s)
+				}
+			}
+		default:
+			t.records.mu.Lock()
+			et := t.records.types[typ]
+			var v reflect.Value
+			if et != nil && et.rows[id] != nil {
+				v = et.rows[id].value
+			}
+			t.records.mu.Unlock()
+			if et == nil || !v.IsValid() || v.FieldByName("Record").Interface().(platform.Record).Archived {
+				continue
+			}
+			out = append(out, recordSources(et, v)...)
+		}
+	}
+	return out
+}
+
+// sync brings the index up to date: the tenant is read in full once, and after
+// that only the records the store marked dirty are cut again (ADR-0033 14b).
+// A search over an unchanged tenant does no work at all, whatever its size.
 func (t *Tenant) sync() {
 	k := &t.index
-	srcs := t.sources()
+	k.mu.Lock()
+	walked := k.walked
+	k.mu.Unlock()
+	changed := t.dirtyRecords(walked)
+	if walked && len(changed) == 0 {
+		return
+	}
+	var srcs []source
+	if !walked {
+		srcs = t.sources()
+	} else {
+		srcs = t.sourcesOf(changed)
+	}
 	if k.docs == nil {
 		k.docs, k.chunks = map[string]string{}, map[string][]*chunk{}
 	}
@@ -144,24 +272,50 @@ func (t *Tenant) sync() {
 		if k.docs[s.key] == s.revision {
 			continue
 		}
-		var cs []*chunk
-		for i, text := range passages(s.text) {
-			sum := sha256.Sum256([]byte(text))
-			c := &chunk{doc: s.key, title: s.title, text: text, hash: hex.EncodeToString(sum[:12]), scope: s.scope, n: i, apps: s.apps, terms: map[string]int{}}
-			for _, w := range words(s.title + " " + text) {
-				c.terms[w]++
-				c.length++
-			}
-			cs = append(cs, c)
-		}
-		k.docs[s.key], k.chunks[s.key] = s.revision, cs
+		k.keep(s.key, cut(s))
+		k.docs[s.key] = s.revision
 	}
 	for key := range k.docs {
-		if !seen[key] {
+		if seen[key] {
+			continue
+		}
+		record, _, isField := strings.Cut(key, "#")
+		if !walked || isField && changed[record] || changed[key] {
+			k.keep(key, nil) // its record is gone, archived, or no longer knowledge
 			delete(k.docs, key)
-			delete(k.chunks, key)
 		}
 	}
+	k.walked = true
+}
+
+// cut is a source's passages as chunks, with the words each one holds.
+func cut(s source) []*chunk {
+	var out []*chunk
+	for i, text := range passages(s.text) {
+		sum := sha256.Sum256([]byte(text))
+		c := &chunk{doc: s.key, title: s.title, text: text, hash: hex.EncodeToString(sum[:12]), scope: s.scope, n: i, apps: s.apps, terms: map[string]int{}}
+		for _, w := range words(s.title + " " + text) {
+			c.terms[w]++
+			c.length++
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// dirtyRecords takes the records put since the last sync from the store, and
+// forgets them there: the index owns them from here on. Before the first walk
+// they are irrelevant, so they are only cleared.
+func (t *Tenant) dirtyRecords(walked bool) map[string]bool {
+	s := t.records
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := s.dirty
+	s.dirty = nil
+	if !walked {
+		return nil
+	}
+	return out
 }
 
 // passages cuts a text at its headings, then into pieces of about 800 tokens
@@ -260,12 +414,45 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 		return out
 	}
 	t.sync()
+	asked := slices.Compact(slices.Sorted(slices.Values(words(q))))
+	model := t.setting(t.automation(knowledge.ID, false), knowledge.SettingEmbeddingModel)
 	k.mu.Lock()
+	// The passages holding a word of the question, and the corpus totals BM25
+	// needs; with an embedding model every passage is a candidate, because
+	// meaning does not need a shared word.
+	df, total, avg := map[string]int{}, k.total, 1.0
+	if k.total > 0 {
+		avg = float64(k.length) / float64(k.total)
+	}
+	found := map[*chunk]bool{}
 	var candidates []*chunk
-	for _, cs := range k.chunks {
-		for _, c := range cs {
-			if readable(c, reader, app) {
-				candidates = append(candidates, c)
+	take := func(c *chunk) {
+		if c.gone || found[c] || !readable(c, reader, app) {
+			return
+		}
+		found[c] = true
+		candidates = append(candidates, c)
+	}
+	if model == "" {
+		for _, w := range asked {
+			for _, c := range k.postings[w] {
+				if !c.gone {
+					df[w]++
+				}
+				take(c)
+			}
+		}
+	} else {
+		for _, w := range asked {
+			for _, c := range k.postings[w] {
+				if !c.gone {
+					df[w]++
+				}
+			}
+		}
+		for _, cs := range k.chunks {
+			for _, c := range cs {
+				take(c)
 			}
 		}
 	}
@@ -290,7 +477,6 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 		return out
 	}
 	var query []float32
-	model := t.setting(t.automation(knowledge.ID, false), knowledge.SettingEmbeddingModel)
 	if model != "" {
 		if vs, err := t.embed(model, []string{q}, now); err == nil {
 			query = vs[0]
@@ -311,21 +497,13 @@ func (t *Tenant) Knowledge(reader *platform.Member, app, q string, limit int, no
 			ranks[c] += 1 / float64(60+i+1) // reciprocal rank fusion
 		}
 	}
-	// BM25 over the passages the reader may read.
-	avg, df := 0.0, map[string]int{}
-	for _, c := range all {
-		avg += float64(c.length)
-		for w := range c.terms {
-			df[w]++
-		}
-	}
-	avg /= float64(len(all))
+	// BM25 over the candidates, with the whole index's document frequencies.
 	bm := map[*chunk]float64{}
-	for _, w := range slices.Compact(slices.Sorted(slices.Values(words(q)))) {
+	for _, w := range asked {
 		if df[w] == 0 {
 			continue
 		}
-		idf := math.Log(1 + (float64(len(all))-float64(df[w])+0.5)/(float64(df[w])+0.5))
+		idf := math.Log(1 + (float64(total)-float64(df[w])+0.5)/(float64(df[w])+0.5))
 		for _, c := range all {
 			if f := float64(c.terms[w]); f > 0 {
 				bm[c] += idf * f * 2.2 / (f + 1.2*(0.25+0.75*float64(c.length)/avg))
@@ -541,31 +719,43 @@ func decodeVector(b []byte) []float32 {
 // fileSources are the text files attached to knowledge documents, and to
 // records of types whose files are knowledge (ADR-0028 D3), read from the
 // store once per content.
-func (t *Tenant) fileSources(docs []knowledge.Document) []source {
+func (t *Tenant) fileSources() []source {
 	if t.app(files.ID) == nil {
 		return nil
 	}
 	attached, _, _ := platform.Find[files.File](t.automation(files.ID, false), platform.Query{Limit: 100000})
 	var out []source
 	for _, f := range attached {
-		if !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
-			continue
+		if s, ok := t.fileSource(f); ok {
+			out = append(out, s)
 		}
+	}
+	return out
+}
+
+// fileSource is one attached text file as a source, if it is one: text within a
+// megabyte, attached to a knowledge document or to a record of a type whose
+// files are knowledge. Its text is read from the store once per content.
+func (t *Tenant) fileSource(f files.File) (source, bool) {
+	if t.app(files.ID) == nil || f.Archived || !strings.HasPrefix(f.ContentType, "text/") || f.Size > 1<<20 {
+		return source{}, false
+	}
+	{
 		typ, id, _ := strings.Cut(f.Target, "/")
 		var apps []string
 		switch {
 		case typ == knowledge.DocumentType:
-			i := slices.IndexFunc(docs, func(d knowledge.Document) bool { return d.ID == id })
-			if i < 0 {
-				continue
+			d, known := platform.Get[knowledge.Document](t.automation(knowledge.ID, false), id)
+			if !known || d.Archived {
+				return source{}, false
 			}
-			apps = docs[i].Apps
+			apps = d.Apps
 		default:
 			t.records.mu.Lock()
 			et := t.records.types[typ]
 			t.records.mu.Unlock()
 			if et == nil || !et.info.KnowledgeFiles {
-				continue
+				return source{}, false
 			}
 			apps = []string{et.info.App}
 		}
@@ -573,7 +763,7 @@ func (t *Tenant) fileSources(docs []knowledge.Document) []source {
 		if !ok {
 			body, _, err := t.files().Get(context.Background(), t.ID+"/"+f.Hash)
 			if err != nil {
-				continue
+				return source{}, false
 			}
 			raw, _ := io.ReadAll(io.LimitReader(body, 1<<20))
 			body.Close()
@@ -587,7 +777,7 @@ func (t *Tenant) fileSources(docs []knowledge.Document) []source {
 		if typ == knowledge.DocumentType { // the document's Apps grant also covers its attached files
 			scope = ""
 		}
-		out = append(out, source{key: files.FileType + "/" + f.ID, title: f.Name, text: text, revision: f.Hash + "/" + f.Target, scope: scope, apps: apps})
+		return source{key: files.FileType + "/" + f.ID, title: f.Name, text: text,
+			revision: f.Hash + "/" + f.Target + "/" + strings.Join(apps, ","), scope: scope, apps: apps}, true
 	}
-	return out
 }
