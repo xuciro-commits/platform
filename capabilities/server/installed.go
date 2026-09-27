@@ -252,3 +252,39 @@ func (t *Tenant) entity(typ string) (platform.EntityInfo, bool) {
 	}
 	return et.info, true
 }
+
+// InstallApplication offers an application a tenant handed to its people: a
+// name over pages that are already installed (ADR-0036). It grants nothing —
+// the registry offers each page to whoever may read what it shows, and an
+// application to whoever may open one of its pages.
+func (t *Tenant) InstallApplication(app platform.App, a platform.Application) error {
+	id := app.Manifest().ID
+	if a.Name == "" || a.Title == "" {
+		return fmt.Errorf("application %q: it needs a name and a title", a.Name)
+	}
+	if len(a.Pages) == 0 {
+		return fmt.Errorf("application %s: it holds no page", a.Name)
+	}
+	if a.Icon != "" && !slices.Contains(platform.Icons, a.Icon) {
+		return fmt.Errorf("application %s: no icon %s", a.Name, a.Icon)
+	}
+	for _, page := range a.Pages {
+		ref := platform.AssetRef{App: id, Kind: platform.AssetPage, Name: page}
+		if !slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref }) {
+			return fmt.Errorf("application %s: no page %s", a.Name, page)
+		}
+	}
+	installed := a
+	def := platform.Definition{Ref: platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, Source: "tenant", Version: "1",
+		ContractVersion: 1, Application: &installed}
+	for _, page := range a.Pages {
+		def.Requires = append(def.Requires, platform.AssetRef{App: id, Kind: platform.AssetPage, Name: page})
+	}
+	if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
+		t.definitions[i] = def
+	} else {
+		t.definitions = append(t.definitions, def)
+	}
+	slices.SortFunc(t.definitions, func(x, y platform.Definition) int { return strings.Compare(x.Ref.String(), y.Ref.String()) })
+	return nil
+}

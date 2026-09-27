@@ -5,6 +5,7 @@ register("zh-CN", {
   "Builder": "构建器",
   "Objects": "对象",
   "Pages": "页面",
+  "Applications": "应用",
   "Pages this organisation published": "本组织发布的页面",
   "Compose a page": "组合页面",
   "The pages this organisation composes. Open one to compose it, publish it to put it in the workspace.": "本组织组合的页面。打开一个开始组合，发布后放进工作区。",

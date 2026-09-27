@@ -8,8 +8,9 @@ import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, typ
 import { Workspace, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Bookmark, Boxes, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chromeViews } from "./chrome";
+import { tenantApps } from "./tenantApps";
 
 /** A development identity of a host on development tokens (GET /v1/sign-in); generated from the host (ADR-0023). */
 export type Identity = Api.Identity;
@@ -140,22 +141,30 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, queries, revision]);
 
   const [current, setCurrent] = useState(remembered("workspace:app"));
-  const app = apps?.find((a) => a.id === current);
+  // The apps this member may open: the code packages above, and the
+  // applications this tenant handed to its people (ADR-0036).
+  const all = useMemo(() => [...(apps ?? []), ...tenantApps(definitions)], [apps, definitions]);
+  // The launcher is drawn inside a panel that outlives this render, so it reads
+  // the apps through a reference: one handed over while the workspace is open
+  // belongs there too (ADR-0036).
+  const open = useRef<AppUI[]>([]);
+  open.current = all;
+  const app = all.find((a) => a.id === current);
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   const select = useCallback((id: string) => { setCurrent(id); remember("workspace:app", id); }, []);
   const views = useMemo(() => {
-    const all = [...chromeViews(apps ?? [], (id) => {
+    const views = [...chromeViews(() => open.current, (id) => {
       select(id);
-      const home = apps?.find((a) => a.id === id)?.home; // with its params: an app's home may be one of its pages
+      const home = open.current.find((a) => a.id === id)?.home; // with its params: an app's home may be one of its pages
       location.hash = home ? routeToHash(home) : "#/home";
     }),
       ...(apps ?? []).flatMap((a) => a.views)];
     const seen = new Set<string>();
-    for (const v of all) {
+    for (const v of views) {
       if (seen.has(v.id)) console.error(`view ${v.id} is declared twice; view ids are unique across the workspace`);
       seen.add(v.id);
     }
-    return all;
+    return views;
   }, [apps, select]);
 
   if (meQuery.error) {
@@ -184,8 +193,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       <Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         views={views} home={{ view: "home" }}
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
-        launcher={{ apps: apps.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
-          onSelect: (id) => { select(id); const home = apps.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } }}
+        launcher={{ apps: all.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
+          onSelect: (id) => { select(id); const home = all.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } }}
         onActiveRoute={(route: Route) => { const id = owner.get(route.view); if (id && id !== current) select(id); }}
         nav={[
           { label: t("You"), items: [

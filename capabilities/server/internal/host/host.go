@@ -55,6 +55,10 @@ type Host interface {
 	// served to the members who may read its object. Composed again, it replaces
 	// the one before it.
 	InstallPage(p platform.Page) error
+	// InstallApplication offers an application someone in this tenant handed to
+	// its people (ADR-0036): a name, an icon and the pages it holds, checked
+	// against what is installed. Handed over again, it replaces the one before.
+	InstallApplication(a platform.Application) error
 	// Entity is an entity type's declaration, for an app composing over it.
 	Entity(typ string) (platform.EntityInfo, bool)
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.

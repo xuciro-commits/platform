@@ -110,6 +110,11 @@ func (h hostView) Runs() host.Runs {
 // InstallPage offers a page composed in this tenant (ADR-0034).
 func (h hostView) InstallPage(p platform.Page) error { return h.t.InstallPage(h.app, p) }
 
+// InstallApplication offers an application handed over in this tenant (ADR-0036).
+func (h hostView) InstallApplication(a platform.Application) error {
+	return h.t.InstallApplication(h.app, a)
+}
+
 // Entity is an entity type's declaration.
 func (h hostView) Entity(typ string) (platform.EntityInfo, bool) { return h.t.entity(typ) }
 

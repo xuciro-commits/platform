@@ -377,3 +377,56 @@ test("route 30: compose a page of widgets and use it", async ({ page, request },
   await expect(page.getByRole("button", { name: "Close opportunity" })).toBeVisible(); // the CRM's own action, on a page someone composed
   await page.screenshot({ path: testInfo.outputPath("composed-page.png"), fullPage: true });
 });
+
+// Route 31 (ADR-0036): what someone builds is handed to the people it was
+// built for — a name and an icon in their launcher, holding the page composed
+// in route 30, and nobody gains access they did not already have.
+test("route 31: hand an application to the people who use it", async ({ page, request }, testInfo) => {
+  const account = fresh("ACC"), opp = fresh("OPP");
+  const name = `desk${Date.now().toString(36).slice(-5)}`, pageName = `handed${Date.now().toString(36).slice(-5)}`;
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Handed " + account, kind: "company" });
+  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Handed offsite " + opp });
+  // A page to hand over, composed as in route 30.
+  await open(page, "manager", "/home");
+  await page.getByRole("button", { name: "Builder" }).first().click();
+  await page.getByRole("button", { name: "Pages", exact: true }).click();
+  await page.getByRole("button", { name: "Create page" }).click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name" }).first().fill(pageName);
+  await dialog.getByRole("textbox", { name: "What people call it" }).fill("Handed offsites");
+  await dialog.getByRole("textbox", { name: "Object it shows" }).fill("crm.opportunity");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("row").filter({ hasText: pageName }).click();
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The page is in the workspace.")).toBeVisible();
+
+  // The application: a name, an icon, the page it holds.
+  await page.getByRole("button", { name: "Applications", exact: true }).click();
+  await page.getByRole("button", { name: "Create application" }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name" }).first().fill(name);
+  await dialog.getByRole("textbox", { name: "What people call it" }).fill("Front desk");
+  await dialog.getByRole("combobox", { name: "Icon" }).selectOption("clipboard");
+  await dialog.getByLabel("Pages", { exact: true }).fill(pageName);
+  await dialog.getByLabel("Pages", { exact: true }).press("Enter");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("row").filter({ hasText: name }).click();
+  await expect(page.getByRole("definition").filter({ hasText: pageName })).toBeVisible(); // the page it holds
+  await page.getByRole("button", { name: "Hand it over" }).click();
+  await expect(page.getByRole("definition").filter({ hasText: "Published" })).toBeVisible(); // the host took it
+
+  // The registry offers it, with the page it holds.
+  const offered = await (await request.get("/v1/definitions", { headers: { Authorization: "Bearer manager" } })).json() as { ref: { kind: string; name: string }; application?: { title: string; pages: string[] } }[];
+  const application = offered.find((d) => d.ref.kind === "app" && d.ref.name === name);
+  expect(application?.application, `the registry's applications: ${JSON.stringify(offered.filter((d) => d.ref.kind === "app"))}`).toBeTruthy();
+  expect(application!.application!.pages).toContain(pageName);
+
+  // It is in the launcher, and its page opens from its own navigation.
+  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Apps", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible(); // the launcher itself
+  await expect(page.getByRole("button", { name: "Front desk" }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Front desk" }).first().click();
+  await expect(page.getByRole("heading", { name: "Handed offsites" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("handed-application.png"), fullPage: true });
+});

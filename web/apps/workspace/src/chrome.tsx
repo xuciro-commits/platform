@@ -18,7 +18,8 @@ const requestStates = defineStatuses({ pending: { label: t("Pending"), tone: "wa
   rejected: { label: t("Rejected"), tone: "danger" }, refused: { label: t("Refused when run"), tone: "danger" }, withdrawn: { label: t("Withdrawn"), tone: "neutral" } });
 
 // The launcher as a page: every app the member may open, like a home screen.
-function Home({ apps, onSelect }: { apps: AppUI[]; onSelect: (id: string) => void }) {
+function Home({ apps: appsOf, onSelect }: { apps: () => AppUI[]; onSelect: (id: string) => void }) {
+  const apps = appsOf(); // read when the launcher draws: an application published while it is open belongs here
   const { me } = useHost();
   return (
     <>
@@ -198,10 +199,10 @@ function Saved({ id }: { id: string }) {
   return view ? <Records type={view.entity} saved={view} /> : <p className="text-sm text-muted">{t("No saved view")} {id}.</p>;
 }
 
-export const chromeViews = (apps: AppUI[], select: (id: string) => void): View[] => [
+export const chromeViews = (apps: () => AppUI[], select: (id: string) => void): View[] => [
   { id: "saved", title: () => t("Saved view"), render: (p) => <Saved id={p.id ?? ""} /> },
-  { id: "dashboard", title: (p) => apps.find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
-    render: (p) => { const d = apps.find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
+  { id: "dashboard", title: (p) => apps().find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
+    render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
   { id: "home", title: () => t("Apps"), render: () => <Home apps={apps} onSelect={select} /> },
   { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
   { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },

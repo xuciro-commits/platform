@@ -107,6 +107,14 @@ export type AppSettings = {
   settings: SettingValue[];
 };
 
+export type Application = {
+  name: string;
+  title: string;
+  description?: string;
+  icon?: string;
+  pages: string[];
+};
+
 export type ApprovalRequest = {
   id: string;
   revision: number;
@@ -276,6 +284,7 @@ export type Definition = {
   entity?: EntityInfo;
   action?: Action;
   page?: Page;
+  application?: Application;
 };
 
 export type Delivery = {

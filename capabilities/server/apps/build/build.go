@@ -72,7 +72,8 @@ func (b *Build) Attach(h host.Host) { b.host = h }
 func New(tenant string) *Build {
 	b := &Build{installed: map[string]platform.Entity{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType)
+	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType)
 	return b
 }
 
@@ -101,7 +102,7 @@ func (b *Build) objectEntity() platform.Entity {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -112,6 +113,12 @@ func (b *Build) Manifest() platform.Manifest {
 			DetailFields: []string{"title", "name", "plural", "description", "fields", "state", "installed"},
 			Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".create"},
 				{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}},
+			{Name: "applications", Title: "Applications", Description: "The applications this organisation hands to its people. Each holds pages and appears in their launcher.",
+				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: AppType},
+				ListFields:   []string{"title", "name", "icon", "state"},
+				DetailFields: []string{"title", "name", "description", "icon", "pages", "state"},
+				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: AppType + ".create"},
+					{App: ID, Kind: platform.AssetAction, Name: AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaHandOver}}},
 			{Name: "pages", Title: "Pages", Description: "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",
 				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: PageType},
 				ListFields:   []string{"title", "name", "object", "state"},
@@ -172,7 +179,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -324,6 +331,16 @@ func (b *Build) Reinstall() error {
 		}
 		if err := b.release(was); err != nil {
 			return fmt.Errorf("page %s: %v", p.Name, err)
+		}
+	}
+	applications, _, _ := platform.Find[Application](b.host.Automation(ID, false), platform.Query{Limit: 1000, Sort: []string{"id"}})
+	for _, a := range applications { // after the pages they hold
+		was, ok := wasPublished[Application](a.Published)
+		if !ok || a.Archived {
+			continue
+		}
+		if err := b.hand(was); err != nil {
+			return fmt.Errorf("application %s: %v", a.Name, err)
 		}
 	}
 	return nil

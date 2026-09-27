@@ -224,5 +224,52 @@ func TestTenantDefinedObject(t *testing.T) {
 	if still := composedPage("eli", "visits"); still == nil || len(still.Sections) != 6 {
 		t.Errorf("a refused layout changed the page people open: %+v", still)
 	}
+	// An application handed to the people it was built for (ADR-0036): a name,
+	// an icon and the pages it holds, offered to whoever may open one of them.
+	if got := do("dana", build.AppType+".create", build.AppType, "A-1",
+		map[string]any{"name": "frontdesk", "title": "Front desk", "icon": "clipboard", "pages": []string{"visits"}}); got != "ok" {
+		t.Fatalf("an application: %s", got)
+	}
+	if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); got != "ok" {
+		t.Fatalf("hand it over: %s", got)
+	}
+	handed := func(who string) *platform.Application {
+		for _, d := range tn.Definitions(member(who)) {
+			if d.Ref.Kind == platform.AssetApp && d.Ref.Name == "frontdesk" {
+				return d.Application
+			}
+		}
+		return nil
+	}
+	if app := handed("eli"); app == nil || app.Title != "Front desk" || app.Icon != "clipboard" || len(app.Pages) != 1 {
+		t.Fatalf("the application eli was handed: %+v", app)
+	}
+	// It grants nothing: someone who may not open its pages is not handed it.
+	if app := handed("boss"); app != nil {
+		t.Errorf("an application was handed to someone who may open none of its pages: %+v", app)
+	}
+	for _, x := range []struct {
+		why    string
+		fields map[string]any
+		want   string
+	}{
+		{"a page that is not there", map[string]any{"pages": []string{"nothing"}}, "no page nothing"},
+		{"no page at all", map[string]any{"pages": []string{}}, "holds at least one page"},
+	} {
+		if got := do("dana", build.AppType+".edit", build.AppType, "A-1", x.fields); got != "ok" {
+			t.Fatalf("%s: edit: %s", x.why, got)
+		}
+		if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); !strings.Contains(got, x.want) {
+			t.Errorf("%s: %s, want %q", x.why, got, x.want)
+		}
+	}
+	if still := handed("eli"); still == nil || len(still.Pages) != 1 {
+		t.Errorf("a refused hand-over changed the application people have: %+v", still)
+	}
+	// An icon the platform does not draw is refused where it is written, by the
+	// field's own choices — the application never reaches publication with one.
+	if got := do("dana", build.AppType+".edit", build.AppType, "A-1", map[string]any{"icon": "rocket"}); got == "ok" {
+		t.Error("an icon outside the platform's set was stored")
+	}
 	CheckReplay(t, tn, journal, compose)
 }

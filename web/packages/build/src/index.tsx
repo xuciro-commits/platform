@@ -7,7 +7,7 @@ import "./i18n";
 import { defineApp } from "@platform/app";
 import { PageEditor, PagesList } from "./editor";
 import { t, type NavSection } from "@platform/ui";
-import { Boxes, Hammer, LayoutList } from "lucide-react";
+import { AppWindow, Boxes, Hammer, LayoutList } from "lucide-react";
 
 /** A page of the builder app, by its name in the registry. */
 const page = (name: string) => ({ view: "page", params: { app: "build", kind: "page", name } });
@@ -27,7 +27,11 @@ export default defineApp({
     return [
       {
         label: t("Builder"),
-        items: [{ label: t("Objects"), icon: <Hammer />, route: page("objects") }, { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } }],
+        items: [
+          { label: t("Objects"), icon: <Hammer />, route: page("objects") },
+          { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },
+          { label: t("Applications"), icon: <AppWindow />, route: page("applications") },
+        ],
       },
       ...(own.length > 0
         ? [{ label: t("Pages this organisation published"), items: own.map((d) => ({ label: d.page?.title ?? d.ref.name, icon: <Boxes />, route: page(d.ref.name) })) }]

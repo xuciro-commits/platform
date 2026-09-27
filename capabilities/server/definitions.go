@@ -197,10 +197,53 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			page.ListFields = slices.DeleteFunc(slices.Clone(page.ListFields), func(name string) bool { return !visibleFields[name] })
 			page.DetailFields = slices.DeleteFunc(slices.Clone(page.DetailFields), func(name string) bool { return !visibleFields[name] })
 			page.Actions = slices.DeleteFunc(slices.Clone(page.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
+			// A composed page's widgets are trimmed the same way: a field or an
+			// action this member may not have is not on the page (ADR-0035).
+			if len(page.Sections) > 0 {
+				sections := make([]platform.Section, 0, len(page.Sections))
+				for _, section := range page.Sections {
+					shown := info
+					if section.Object.Name != "" && section.Object.Name != page.Object.Name {
+						other, ok := entities[section.Object.Name]
+						if !ok {
+							continue // its object is not this member's to read
+						}
+						shown = other
+					}
+					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool { _, ok := shown.Field(name); return !ok })
+					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
+					sections = append(sections, section)
+				}
+				page.Sections = sections
+			}
 			def.Requires = append([]platform.AssetRef{page.Object}, page.Actions...)
 			def.Page = &page
+		case platform.AssetApp:
+			continue // after the pages, below: an application is offered with them
 		}
 		out = append(out, def)
 	}
+	// An application is offered to whoever may open one of its pages (ADR-0036).
+	opens := map[platform.AssetRef]bool{}
+	for _, def := range out {
+		if def.Ref.Kind == platform.AssetPage {
+			opens[def.Ref] = true
+		}
+	}
+	for _, registered := range t.definitions {
+		if registered.Ref.Kind != platform.AssetApp || registered.Application == nil || m.Roles[registered.Ref.App] == "" {
+			continue
+		}
+		def, application := registered, *registered.Application
+		application.Pages = slices.DeleteFunc(slices.Clone(application.Pages), func(name string) bool {
+			return !opens[platform.AssetRef{App: def.Ref.App, Kind: platform.AssetPage, Name: name}]
+		})
+		if len(application.Pages) == 0 {
+			continue
+		}
+		def.Application = &application
+		out = append(out, def)
+	}
+	slices.SortFunc(out, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return out
 }
