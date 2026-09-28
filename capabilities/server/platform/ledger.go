@@ -117,7 +117,15 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		return nil, nil
 	}
 	refused := false // the kernel's policy step said no
-	receiver := kernel.Receiver{Changes: l.Changes, Authorities: l.authorities,
+	changes := l.Changes
+	// ADR-0038 19a: a host-owned decision view may use a private change log.
+	// Ordinary callers and replay retain the existing authoritative path.
+	if draft, ok := c.rt.(interface {
+		DraftChanges(*Ledger) *kernel.ChangeLog
+	}); ok {
+		changes = draft.DraftChanges(l)
+	}
+	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
 			ok := c.Replaying || c.Automation || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
 			refused = !ok
