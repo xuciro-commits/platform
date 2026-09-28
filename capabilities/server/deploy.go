@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -94,27 +95,41 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			if d.SnapshotEvery > 0 {
 				seq, state, ok, err := journal.Snapshot(ctx, t.ID, code)
 				if err != nil {
+					if errors.Is(err, errTenantSnapshot) {
+						t.quarantine(err)
+						log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+						continue
+					}
 					return fmt.Errorf("snapshot %s: %w", t.ID, err)
 				}
 				if ok {
-					if err := t.Restore(state); err != nil {
-						return fmt.Errorf("restore %s from the snapshot at %d: %w (start with -snapshot-every=0 to replay the whole journal)", t.ID, seq, err)
+					if err := t.recoverSnapshot(state, seq); err != nil {
+						log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+						continue
 					}
 					after = seq
 				}
 				restored[t.ID] = after
 			}
 			entries, err := journal.Entries(ctx, t.ID, after)
-			if err == nil {
-				err = t.Replay(entries)
-			}
 			if err != nil {
-				return fmt.Errorf("replay %s: %w", t.ID, err)
+				if errors.Is(err, errTenantJournal) {
+					t.quarantine(err)
+					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+					continue
+				}
+				return fmt.Errorf("read journal %s: %w", t.ID, err) // a database error is not tenant-local
+			}
+			if err := t.recoverEntries(entries); err != nil {
+				log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+				continue
 			}
 			fresh[t.ID] = after == 0 && len(entries) == 0
 			if t.procs != nil {
 				if err := t.procs.Check(); err != nil { // running instances need their flow's version (ADR-0020 D6)
-					return fmt.Errorf("tenant %s: %w", t.ID, err)
+					t.quarantine(fmt.Errorf("process recovery: %w", err))
+					log.Printf("quarantined %s: %s", t.ID, t.fault.Load().Reason)
+					continue
 				}
 			}
 			if after > 0 {
@@ -141,7 +156,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 		}
 	}
 	for _, t := range tenants {
-		if d.Seed != nil && (journal == nil || fresh[t.ID]) {
+		if d.Seed != nil && !t.quarantined() && (journal == nil || fresh[t.ID]) {
 			if err := d.Seed(t, time.Now()); err != nil {
 				return fmt.Errorf("seed %s: %w", t.ID, err)
 			}
@@ -157,6 +172,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	}
 	if journal != nil && d.Project {
 		for _, t := range tenants {
+			if t.quarantined() {
+				continue
+			}
 			p, err := Project(ctx, journal.pool, t)
 			if err != nil { // a copy for outside tools: the host serves without it
 				log.Printf("projection %s: %v", t.ID, err)
@@ -241,6 +259,9 @@ type snapshotter struct {
 }
 
 func (s *snapshotter) save(ctx context.Context, t *Tenant, final bool) {
+	if t.quarantined() {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	grown := s.journal.Position(t.ID) - s.saved[t.ID]
@@ -249,6 +270,9 @@ func (s *snapshotter) save(ctx context.Context, t *Tenant, final bool) {
 	}
 	started := time.Now()
 	state, seq, err := t.Snapshot(func() int64 { return s.journal.Position(t.ID) })
+	if t.quarantined() {
+		return
+	}
 	if err == nil {
 		err = s.journal.SaveSnapshot(ctx, t.ID, seq, s.code, state)
 	}
@@ -298,6 +322,9 @@ func RunWork(tenants ...*Tenant) {
 	go func() { // evaluations, embeddings and old transcripts: many calls, apart from runs
 		for range time.Tick(5 * time.Second) {
 			for _, t := range tenants {
+				if t.quarantined() {
+					continue
+				}
 				t.Evaluate(Now())
 				t.Embed(Now())
 				t.PurgeTranscripts(Now())

@@ -44,7 +44,8 @@ export function Automation() {
       {health && <div role="region" className="mb-3 grid gap-2 text-sm" aria-label={t("Health")}>
         {/* Every indicator, zero included: a healthy tenant reads as such, not as missing figures (the owner's testing). */}
         <div className="flex flex-wrap items-center gap-2">
-          <Tag label={health.status === "ok" ? t("Healthy") : t("Needs attention")} tone={health.status === "ok" ? "success" : "warning"} />
+          <Tag label={health.status === "quarantined" ? t("Quarantined") : health.status === "ok" ? t("Healthy") : t("Needs attention")}
+            tone={health.status === "quarantined" ? "danger" : health.status === "ok" ? "success" : "warning"} />
           <Tag label={t("Waiting: {n}", { n: health.queues.reduce((n, q) => n + q.depth, 0) })} tone="info" />
           <Tag label={t("Gave up: {n}", { n: health.failed })} tone={health.failed > 0 ? "danger" : "neutral"} />
           <Tag label={t("Past their quota: {n}", { n: health.deferred.length })} tone={health.deferred.length > 0 ? "warning" : "neutral"} />
@@ -55,6 +56,10 @@ export function Automation() {
           <span className="text-muted">{t("Host started {at}", { at: new Date(health.started).toLocaleString() })}
             {health.built ? ` · ${t("built from {revision}", { revision: health.built })}` : ""}</span>
         </div>
+        {health.status === "quarantined" && <div role="alert" className="text-danger">
+          {t("This tenant is quarantined. Inputs and work are stopped until its journal or snapshot is repaired and the host is restarted.")}
+          {health.recoveryError && <code className="block break-all">{health.recoveryError}</code>}
+        </div>}
         {(health.queues.length > 0 || health.deferred.length > 0 || health.breakers.length > 0) && <div className="flex flex-wrap items-center gap-2">
           {health.queues.map((q) => <Tag key={q.app} label={t("{app}: {n} waiting, oldest {s} s", { app: q.app, n: q.depth, s: Math.round(q.oldestSeconds) })} tone="info" />)}
           {health.deferred.map((a) => <Tag key={a} label={t("{app} past its quota", { app: a })} tone="warning" />)}

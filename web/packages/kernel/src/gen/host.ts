@@ -811,6 +811,7 @@ export type TaskSummary = {
 
 export type TenantHealth = {
   status: string;
+  recoveryError?: string;
   started: string;
   built?: string;
   apps: number;

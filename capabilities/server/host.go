@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -57,6 +58,7 @@ type Tenant struct {
 	patternCache sync.Map // language → []pattern
 	agentRun     string   // the run whose agent is submitting, under mu: its effects name it
 	mu           sync.Mutex
+	fault        atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
 	apps         []platform.App
 	definitions  []platform.Definition   // installed code assets; member views are derived on read
 	owner        map[string]platform.App // "action:", "read:" and "input:" names → app
@@ -280,12 +282,18 @@ func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_COD
 
 // Submit routes a submission to the app declaring its action and records it when accepted.
 func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, err *kernel.Error) {
+	if t.quarantined() {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
 	a := t.owner["action:"+s.GetSchema().GetName()]
 	if a == nil {
 		return nil, unknown()
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.quarantined() {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
@@ -361,15 +369,31 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 		}
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
 	}
+	// Once committed, even an unexpected application panic is tenant-local:
+	// never answer from a possibly half-applied memory image or take down the
+	// other tenants. A repaired journal requires a fresh process to resume.
+	defer func() {
+		if failure := recover(); failure != nil {
+			t.quarantine(fmt.Errorf("apply committed result: %v", failure))
+			record = nil
+			refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+	}()
+	saved, receipt, err := decodeAcceptedResult(committed)
+	if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID || saved.RequestHash != result.RequestHash {
+		t.quarantine(fmt.Errorf("committed result differs from the accepted request: %v", err))
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	for _, subscriber := range saved.Event.Subscribers {
+		if t.app(subscriber) == nil {
+			t.quarantine(fmt.Errorf("committed result requires missing subscriber %s", subscriber))
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+	}
 	applied, err := t.applyAcceptedResult(ledger, committed)
 	if err != nil {
-		// After a successful append it is unsafe to serve this tenant. The
-		// process must stop and recover from the durable result.
-		panic(fmt.Errorf("committed accepted result could not be applied: %w", err))
-	}
-	saved, receipt, err := decodeAcceptedResult(committed)
-	if err != nil {
-		panic(err)
+		t.quarantine(fmt.Errorf("committed accepted result could not be applied: %w", err))
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if saved.At.IsZero() {
 		saved.At = receipt.GetRecordedTime().AsTime()
@@ -470,12 +494,18 @@ func (t *Tenant) request(m platform.Member, a platform.App, s *pb.Submission, no
 
 // Input routes a connector input (push batch, poll page, heartbeat) to its app.
 func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Time) (out any, err *kernel.Error) {
+	if t.quarantined() {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
 	a := t.owner["input:"+name]
 	if a == nil {
 		return nil, unknown()
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.quarantined() {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
 	end := t.begin("input "+name, trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
 	defer t.enqueue(now)

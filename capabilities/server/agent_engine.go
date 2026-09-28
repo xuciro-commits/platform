@@ -50,12 +50,16 @@ func (t *Tenant) Think(now time.Time) { onLane(t.turns(now)) }
 // turns are the agents' due turns, to run on the I/O lane (ADR-0027 D2): each
 // calls its model outside the tenant's lock.
 func (t *Tenant) turns(now time.Time) []func() {
-	if t.agents == nil {
+	if t.agents == nil || t.quarantined() {
 		return nil
 	}
 	var out []func()
 	for _, x := range t.agents.due(now) {
-		out = append(out, func() { t.take(x, now) })
+		out = append(out, func() {
+			if !t.quarantined() {
+				t.take(x, now)
+			}
+		})
 	}
 	return out
 }
@@ -76,6 +80,9 @@ func (t *Tenant) take(x turn, now time.Time) {
 			}
 		}
 		answer, failure := t.call(x.pv, x.model, t.agents.member(x.run.Agent), x.req, now)
+		if t.quarantined() {
+			return // do not apply a late model answer to a tenant under recovery
+		}
 		body := stepBody{Run: x.run.ID, Content: answer.Content, Usage: answer.Usage}
 		if failure != nil {
 			body.Failure = failure.Detail
@@ -222,6 +229,9 @@ func (a *Agents) reader(run AgentRunRecord) *platform.Member {
 func (t *Tenant) agentStep(b stepBody, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.quarantined() {
+		return
+	}
 	delete(t.agents.busy, b.Run)
 	run, _ := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
 	if b.Evaluation != nil {

@@ -42,6 +42,8 @@ type Journal struct {
 }
 
 var errAcceptedConflict = errors.New("accepted result idempotency key reused for another request")
+var errTenantJournal = errors.New("tenant journal is damaged")
+var errTenantSnapshot = errors.New("tenant snapshot is damaged")
 
 // schema is forward-only: new statements are appended, never edited.
 var schema = []string{
@@ -92,16 +94,24 @@ func (j *Journal) Entries(ctx context.Context, tenant string, after int64) ([]En
 	last := after
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&last, &e.App, &e.Kind, &e.Principal, &e.Body, &e.At, &e.Versions); err != nil {
-			return nil, err
+		var seq int64
+		if err := rows.Scan(&seq, &e.App, &e.Kind, &e.Principal, &e.Body, &e.At, &e.Versions); err != nil {
+			return nil, fmt.Errorf("%w: tenant %s entry after %d: %v", errTenantJournal, tenant, last, err)
 		}
+		if seq != last+1 {
+			return nil, fmt.Errorf("%w: tenant %s expected entry %d, found %d", errTenantJournal, tenant, last+1, seq)
+		}
+		last = seq
 		e.At = e.At.UTC() // jsonb replay must reproduce the original audit bytes
 		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err // a database/transport failure affects more than this tenant
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.next[tenant] = last + 1
-	return out, rows.Err()
+	return out, nil
 }
 
 // Position is the number of the tenant's last entry.
@@ -141,10 +151,16 @@ func (j *Journal) Snapshot(ctx context.Context, tenant, code string) (int64, []b
 	}
 	r, err := gzip.NewReader(bytes.NewReader(packed))
 	if err != nil {
-		return 0, nil, false, err
+		return 0, nil, false, fmt.Errorf("%w: tenant %s at %d: %v", errTenantSnapshot, tenant, seq, err)
 	}
 	state, err := io.ReadAll(r)
-	return seq, state, err == nil, err
+	if err != nil {
+		return 0, nil, false, fmt.Errorf("%w: tenant %s at %d: %v", errTenantSnapshot, tenant, seq, err)
+	}
+	if err := r.Close(); err != nil {
+		return 0, nil, false, fmt.Errorf("%w: tenant %s at %d: %v", errTenantSnapshot, tenant, seq, err)
+	}
+	return seq, state, true, nil
 }
 
 // Append adds an entry to a tenant's journal. The order is per tenant, so

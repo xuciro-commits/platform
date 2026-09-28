@@ -116,6 +116,11 @@ func (h *Host) Handler() http.Handler {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
+			if t.quarantined() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") {
+				WriteJSON(w, http.StatusServiceUnavailable, map[string]any{
+					"error": map[string]string{"code": "TENANT_QUARANTINED"}})
+				return
+			}
 			f(w, r, m, t)
 		})
 	}
@@ -391,7 +396,17 @@ func (h *Host) Handler() http.Handler {
 	// The process is alive and holds its tenants (ADR-0027 D6); a tenant's own
 	// health is the administrators' read /v1/health.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		WriteJSON(w, http.StatusOK, map[string]any{"status": "ok", "tenants": len(h.tenants)})
+		quarantined := 0
+		for _, t := range h.tenants {
+			if t.quarantined() {
+				quarantined++
+			}
+		}
+		status := "ok"
+		if quarantined > 0 {
+			status = "degraded"
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"status": status, "tenants": len(h.tenants), "quarantined": quarantined})
 	})
 	if h.Web != "" {
 		// The workspace is one page: a path that is not a file is its route.

@@ -154,9 +154,18 @@ func (t *Tenant) Work(now time.Time) {
 // last round stopped (ADR-0027 D3): each app's first ready delivery, then due
 // jobs. An app past its quota is deferred to the next minute. It reports
 // whether ready work remains.
-func (t *Tenant) Round(now time.Time, budget int) bool {
+func (t *Tenant) Round(now time.Time, budget int) (more bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.quarantined() {
+		return false
+	}
+	defer func() {
+		if failure := recover(); failure != nil {
+			t.quarantine(fmt.Errorf("owned work panicked: %v", failure))
+			more = false
+		}
+	}()
 	took, n := 0, len(t.apps)
 	for progressed := true; progressed && took < budget; {
 		progressed = false

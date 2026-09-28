@@ -257,6 +257,9 @@ func (t *Tenant) Dispatch(now time.Time) { onLane(t.dispatches(now)) }
 // side by side, each in its order; an endpoint whose breaker is open waits,
 // spending no attempts.
 func (t *Tenant) dispatches(now time.Time) []func() {
+	if t.quarantined() {
+		return nil
+	}
 	type job struct {
 		effect   platform.Effect
 		endpoint Endpoint
@@ -282,10 +285,16 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	var sends []func()
 	for _, j := range jobs {
 		sends = append(sends, func() {
+			if t.quarantined() {
+				return
+			}
 			span := outside(j.span, "send "+j.effect.Event+" to "+j.endpoint.ID, attribute.String("platform.tenant", t.ID),
 				attribute.String("platform.endpoint", j.endpoint.ID), attribute.String("platform.effect", j.effect.ID))
 			outcome := t.send(j.endpoint, j.effect, now)
 			end(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
+			if t.quarantined() {
+				return // an already in-flight call may have escaped; do not record its answer in damaged state
+			}
 			counted(t, "effect", j.effect.App, outcome.Result)
 			if j.endpoint.Kind != modelEndpoint {
 				t.breakers.report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
@@ -386,6 +395,9 @@ func guardedDialer(allowPrivate bool) *net.Dialer {
 func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.quarantined() {
+		return
+	}
 	body, _ := json.Marshal(o)
 	if p := t.app(PlatformApp); p != nil {
 		t.record(p, "effect", t.automation(PlatformApp, false).Member, body, now)

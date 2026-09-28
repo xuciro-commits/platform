@@ -223,6 +223,21 @@ test("route 18: health", async ({ page, request }) => {
   await expect(page.getByText(/^Host started /)).toBeVisible();
 });
 
+test("route 18: quarantined tenant is explicit", async ({ page }) => {
+  await page.route("**/v1/health", async (route) => {
+    await route.fulfill({ json: {
+      status: "quarantined", recoveryError: "entry 4: invalid accepted result", started: "2026-09-28T14:00:00Z",
+      apps: 4, queues: [], failed: 0, deferred: [], breakers: [], openBreakers: 0,
+      connectorsFailing: 0, endpointsFailing: 0,
+    } });
+  });
+  await open(page, "manager", "/automation");
+  await expect(page.getByText("Quarantined", { exact: true })).toBeVisible();
+  const notice = page.getByRole("region", { name: "Health" }).getByRole("alert");
+  await expect(notice).toContainText("Inputs and work are stopped");
+  await expect(notice).toContainText("entry 4: invalid accepted result");
+});
+
 // Route 19 (ADR-0028): a file added on a record's page is listed there and
 // downloads for whoever may read the record.
 test("route 19: a file on a ticket", async ({ page, request }) => {

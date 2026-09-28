@@ -92,6 +92,9 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row, int64, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.quarantined() {
+		return tenantState{}, nil, 0, fmt.Errorf("tenant %s is quarantined", t.ID)
+	}
 	if len(t.events) > 0 {
 		return tenantState{}, nil, 0, fmt.Errorf("tenant %s: events pending", t.ID)
 	}

@@ -10,7 +10,8 @@ import (
 // administrators and for metrics: its queues, what gave up, what waits past a
 // quota, its breakers, and its connectors and endpoints.
 type TenantHealth struct {
-	Status string `json:"status"` // ok, or degraded when something waits for a person or a destination fails
+	Status        string `json:"status"`                  // ok, or degraded when something waits for a person or a destination fails
+	RecoveryError string `json:"recoveryError,omitempty"` // diagnostic for an isolated tenant; no work runs
 	// Started is when this process began, and Built the code it was built from:
 	// what answers "is this host running the code I just changed?" — the
 	// question that cost three walks before it was on screen.
@@ -36,6 +37,10 @@ type QueueHealth struct {
 
 // Health is the tenant's health at now.
 func (t *Tenant) Health(now time.Time) TenantHealth {
+	if fault := t.fault.Load(); fault != nil {
+		return TenantHealth{Status: "quarantined", RecoveryError: fault.Reason, Started: Started,
+			Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: []string{}, Breakers: []Breaker{}}
+	}
 	h := TenantHealth{Status: "ok", Started: Started, Built: Built(), Apps: len(t.apps), Queues: []QueueHealth{}, Deferred: t.Deferred(now), Breakers: t.Breakers(now)}
 	if h.Deferred == nil {
 		h.Deferred = []string{}
