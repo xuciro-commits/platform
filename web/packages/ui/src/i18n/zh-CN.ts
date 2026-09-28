@@ -144,6 +144,8 @@ export default {
   "Search": "搜索",
   "Search and commands": "搜索和命令",
   "Search {things}": "搜索{things}",
+  "Select a record to see related {records}.": "请选择一条记录以查看关联的{records}。",
+  "Select a {object} to see it here.": "请选择一个{object}以在此查看。",
   "Sending": "发送中",
   "Show navigation": "显示导航",
   "Sort": "排序",

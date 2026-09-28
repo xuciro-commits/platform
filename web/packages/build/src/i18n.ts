@@ -32,6 +32,8 @@ register("zh-CN", {
   "Grouped by": "分组依据",
   "Choose a field": "选择一个字段",
   "Words": "文字",
+  "Object": "数据对象",
+  "{object} (this page)": "{object}（本页面对象）",
   "Title": "标题",
   "Width": "宽度",
   "Full width": "整行",

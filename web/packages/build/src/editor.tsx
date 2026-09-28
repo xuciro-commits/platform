@@ -9,7 +9,7 @@ import {
   type EntityInfo,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Settings2, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Api = NonNullable<Definition["page"]>;
 type Section = NonNullable<Api["sections"]>[number];
@@ -59,7 +59,7 @@ export function PagesList() {
 }
 
 export function PageEditor({ id }: { id: string }) {
-  const { decide, source, catalog } = useHost();
+  const { decide, source, catalog, definitions } = useHost();
   const record = useReadQuery<PageRecord>(`/v1/records/${encodeURIComponent("build.page")}/${encodeURIComponent(id)}`).data as unknown as { record?: PageRecord } | undefined;
   const page = (record as { record?: PageRecord } | undefined)?.record;
   const [sections, setSections] = useState<Draft[]>([]);
@@ -72,6 +72,12 @@ export function PageEditor({ id }: { id: string }) {
   const [refused, setRefused] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const relatedObjects = useMemo(() => {
+    return (definitions ?? [])
+      .filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
+      .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && f.ref === page?.object))
+      .map((d) => d.ref.name);
+  }, [definitions, page?.object]);
   useEffect(() => {
     if (page && !dirty) {
       setSections(page.sections ?? []);
@@ -156,8 +162,9 @@ export function PageEditor({ id }: { id: string }) {
         <div role="region" aria-label={t("The widget in hand")} className="lg:min-h-0 lg:overflow-y-auto">
           {chosen < 0 && settings ? <Settings value={settings} object={info?.title ?? page.object}
             onChange={(patch) => { setSettings({ ...settings, ...patch }); setDirty(true); }} /> :
-          <Properties section={sections[chosen]} info={info} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            object={page.object} onChange={(patch) => change(chosen, patch)} />}
+          <Properties section={sections[chosen]} info={source.entity(sections[chosen]?.object || page.object)}
+            catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
+            object={page.object} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
         </div>
       </div>
     </div>
@@ -173,45 +180,45 @@ function Layout({ sections, chosen, title, onChoose, onAdd, onMove, onRemove }: 
     <Card className="grid content-start gap-3 p-3">
       <Button variant="ghost" size="sm" aria-pressed={chosen < 0} aria-label={t("Page settings")} onClick={() => onChoose(-1)}
         className={cn("justify-start border", chosen < 0 ? "border-primary bg-row-selected" : "border-border")}>
-        <Settings2 className="size-3" /><span className="truncate">{t("Page settings")}</span>
-        <span aria-hidden className="ml-auto truncate pl-1 text-[10px] text-muted">{title}</span>
-      </Button>
-      <div className="grid gap-1">
-        <div className="text-xs font-semibold text-muted">{t("Add a widget")}</div>
-        <div className="grid grid-cols-2 gap-1">
-          {widgets.map((widget) => (
-            <Button key={widget} size="sm" className="justify-start" onClick={() => onAdd(widget)}>
-              <Plus className="size-3" />{widgetTitles[widget]!()}
-            </Button>
-          ))}
-        </div>
+      <Settings2 className="size-3" /><span className="truncate">{t("Page settings")}</span>
+      <span aria-hidden className="ml-auto truncate pl-1 text-[10px] text-muted">{title}</span>
+    </Button>
+    <div className="grid gap-1">
+      <div className="text-xs font-semibold text-muted">{t("Add a widget")}</div>
+      <div className="grid grid-cols-2 gap-1">
+        {widgets.map((widget) => (
+          <Button key={widget} size="sm" className="justify-start" onClick={() => onAdd(widget)}>
+            <Plus className="size-3" />{widgetTitles[widget]!()}
+          </Button>
+        ))}
       </div>
-      <div className="grid gap-1 border-t border-border pt-3">
-        <div className="text-xs font-semibold text-muted">{t("Layout")}</div>
-        <ul className="grid gap-1">
-          {sections.map((section, i) => (
-            <li key={i}>
-              <div className={cn("flex items-center gap-0.5 rounded-md border px-1 py-0.5", i === chosen ? "border-primary bg-row-selected" : "border-border")}>
-                <Button variant="ghost" size="sm" className="min-w-0 flex-1 justify-start" aria-pressed={i === chosen} onClick={() => onChoose(i)}>
-                  <span className="truncate">{section.title || widgetTitles[section.widget]?.() || section.widget}</span>
-                  <span className="ml-auto pl-1 font-mono text-[10px] text-muted">{section.width === "half" ? "½" : "1"}</span>
-                </Button>
-                <Button size="sm" variant="ghost" aria-label={t("Move up")} onClick={() => onMove(i, -1)}><ArrowUp className="size-3" /></Button>
-                <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => onMove(i, 1)}><ArrowDown className="size-3" /></Button>
-                <Button size="sm" variant="ghost" aria-label={t("Remove section")} onClick={() => onRemove(i)}><Trash2 className="size-3" /></Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-        {sections.length === 0 && <p className="text-xs text-muted">{t("Add what people should see.")}</p>}
-      </div>
-    </Card>
+    </div>
+    <div className="grid gap-1 border-t border-border pt-3">
+      <div className="text-xs font-semibold text-muted">{t("Layout")}</div>
+      <ul className="grid gap-1">
+        {sections.map((section, i) => (
+          <li key={i}>
+            <div className={cn("flex items-center gap-0.5 rounded-md border px-1 py-0.5", i === chosen ? "border-primary bg-row-selected" : "border-border")}>
+              <Button variant="ghost" size="sm" className="min-w-0 flex-1 justify-start" aria-pressed={i === chosen} onClick={() => onChoose(i)}>
+                <span className="truncate">{section.title || widgetTitles[section.widget]?.() || section.widget}</span>
+                <span className="ml-auto pl-1 font-mono text-[10px] text-muted">{section.width === "half" ? "½" : "1"}</span>
+              </Button>
+              <Button size="sm" variant="ghost" aria-label={t("Move up")} onClick={() => onMove(i, -1)}><ArrowUp className="size-3" /></Button>
+              <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => onMove(i, 1)}><ArrowDown className="size-3" /></Button>
+              <Button size="sm" variant="ghost" aria-label={t("Remove section")} onClick={() => onRemove(i)}><Trash2 className="size-3" /></Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {sections.length === 0 && <p className="text-xs text-muted">{t("Add what people should see.")}</p>}
+    </div>
+  </Card>
   );
 }
 
 /** The panel that configures the widget in hand: only what that widget binds. */
-function Properties({ section, info, catalog, object, onChange }: {
-  section?: Draft; info?: EntityInfo; object: string;
+function Properties({ section, info, catalog, object, relatedObjects = [], onChange }: {
+  section?: Draft; info?: EntityInfo; object: string; relatedObjects?: string[];
   catalog: { schema: string; title: string; target: string }[];
   onChange: (patch: Partial<Draft>) => void;
 }) {
@@ -222,6 +229,14 @@ function Properties({ section, info, catalog, object, onChange }: {
   return (
     <Card className="grid content-start gap-3 p-3">
       <div className="text-xs font-semibold text-muted">{widgetTitles[section.widget]?.() ?? section.widget}</div>
+      {relatedObjects.length > 0 && (section.widget === "table" || section.widget === "detail" || section.widget === "chart" || section.widget === "metric" || section.widget === "form") && (
+        <label className="grid gap-1 text-xs">{t("Object")}
+          <Select value={section.object ?? object} onChange={(e) => onChange({ object: e.target.value === object ? undefined : e.target.value, fields: [] })}>
+            <option value={object}>{t("{object} (this page)", { object })}</option>
+            {relatedObjects.map((rel) => <option key={rel} value={rel}>{rel}</option>)}
+          </Select>
+        </label>
+      )}
       <label className="grid gap-1 text-xs">{t("Title")}
         <Input value={section.title ?? ""} onChange={(e) => onChange({ title: e.target.value })} />
       </label>
