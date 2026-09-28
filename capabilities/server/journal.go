@@ -41,6 +41,8 @@ type Journal struct {
 	locks map[string]*sync.Mutex // one per tenant: appends of a tenant are in order
 }
 
+var errAcceptedConflict = errors.New("accepted result idempotency key reused for another request")
+
 // schema is forward-only: new statements are appended, never edited.
 var schema = []string{
 	`create table if not exists journal (
@@ -59,6 +61,9 @@ var schema = []string{
 		tenant text not null, at timestamptz not null, member text not null, model text not null,
 		run text not null default '', request jsonb not null, answer jsonb not null, outcome text not null)`,
 	`create index if not exists transcripts_run on transcripts (tenant, run, at)`,
+	`create unique index if not exists journal_accepted_key on journal
+		(tenant, app, (body #>> '{receipt,submission,idempotencyKey}'))
+		where kind = 'accepted-result'`,
 }
 
 func OpenJournal(ctx context.Context, url string) (*Journal, error) {
@@ -90,6 +95,7 @@ func (j *Journal) Entries(ctx context.Context, tenant string, after int64) ([]En
 		if err := rows.Scan(&last, &e.App, &e.Kind, &e.Principal, &e.Body, &e.At, &e.Versions); err != nil {
 			return nil, err
 		}
+		e.At = e.At.UTC() // jsonb replay must reproduce the original audit bytes
 		out = append(out, e)
 	}
 	j.mu.Lock()
@@ -169,6 +175,66 @@ func (j *Journal) Append(ctx context.Context, tenant string, e Entry) error {
 	j.next[tenant] = seq + 1
 	j.mu.Unlock()
 	return nil
+}
+
+// AppendAccepted commits a complete decision as one journal row. The partial
+// unique index makes retries after an unknown commit outcome return the prior
+// result; a competing writer with a stale sequence cannot advance this tenant.
+func (j *Journal) AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
+	j.mu.Lock()
+	lock := j.locks[tenant]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		j.locks[tenant] = lock
+	}
+	j.mu.Unlock()
+	lock.Lock()
+	defer lock.Unlock()
+	read := func() ([]byte, error) {
+		var raw []byte
+		err := j.pool.QueryRow(ctx, `select body from journal where tenant=$1 and app=$2
+			and kind='accepted-result' and body #>> '{receipt,submission,idempotencyKey}'=$3`,
+			tenant, e.App, key).Scan(&raw)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		result, _, err := decodeAcceptedResult(raw)
+		if err != nil {
+			return nil, err
+		}
+		if result.RequestHash != hash {
+			return nil, errAcceptedConflict
+		}
+		return raw, nil
+	}
+	if prior, err := read(); err != nil || prior != nil {
+		return prior, err
+	}
+	j.mu.Lock()
+	seq, ok := j.next[tenant]
+	j.mu.Unlock()
+	if !ok {
+		return nil, fmt.Errorf("journal: append to %s before reading its entries", tenant)
+	}
+	tag, err := j.pool.Exec(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions)
+		values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict do nothing`,
+		tenant, seq, e.App, e.Kind, e.Principal, e.Body, e.At, e.Versions)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		if prior, err := read(); err != nil || prior != nil {
+			return prior, err
+		}
+		return nil, fmt.Errorf("journal: concurrent writer changed tenant %s at %d", tenant, seq)
+	}
+	j.mu.Lock()
+	j.next[tenant] = seq + 1
+	j.mu.Unlock()
+	return e.Body, nil
 }
 
 func (j *Journal) Close() { j.pool.Close() }

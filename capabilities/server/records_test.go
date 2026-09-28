@@ -40,6 +40,8 @@ type Item struct {
 
 type stock struct{ ledger *platform.Ledger }
 
+func (s *stock) AcceptedLedger() *platform.Ledger { return s.ledger }
+
 func stockEntities() []platform.Entity {
 	return []platform.Entity{
 		{Type: "stock.bin", Title: "Bin", Model: Bin{}, Standard: platform.Standard{Create: true, Roles: []string{"clerk", "lead"}}},

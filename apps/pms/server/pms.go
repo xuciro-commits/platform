@@ -208,6 +208,8 @@ func (h *Hotel) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	})
 }
 
+func (h *Hotel) AcceptedLedger() *platform.Ledger { return h.ledger }
+
 // Settings, job and notices of the hotel (ADR-0013), the second app on them after the MES.
 const (
 	SettingOverbooking  = "allow-overbooking"

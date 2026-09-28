@@ -130,6 +130,14 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 					log.Fatalf("journal append: %v", err)
 				}
 			}
+			tenantID := t.ID
+			t.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+				raw, err := journal.AppendAccepted(ctx, tenantID, e, key, hash)
+				if err != nil && err != errAcceptedConflict {
+					log.Fatalf("accepted result append: %v", err)
+				}
+				return raw, err
+			}
 		}
 	}
 	for _, t := range tenants {

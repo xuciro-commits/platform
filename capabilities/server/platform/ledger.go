@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 )
@@ -89,6 +91,19 @@ func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.Changes.ApplyAccepted(record)
+}
+
+// AcceptedFor returns a saved receipt for a key without running application
+// decision code. The host uses this before staging a generated action.
+func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, record := range l.Changes.Records(tenant) {
+		if record.GetSubmission().GetIdempotencyKey() == key {
+			return proto.Clone(record).(*pb.ChangeRecord)
+		}
+	}
+	return nil
 }
 
 // Receive accepts s from c or refuses it: an action outside the enabled catalog

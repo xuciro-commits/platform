@@ -66,7 +66,9 @@ func (*stagedDecision) Probing() bool { return false }
 
 // The first family excludes nested submissions and all other owned effects.
 // A forbidden call must not silently escape to the live tenant.
-func unsupportedStagedEffect() { panic("effect outside staged decision's supported family") }
+type stagedEffectPanic struct{}
+
+func unsupportedStagedEffect() { panic(stagedEffectPanic{}) }
 
 func (*stagedDecision) Probe(platform.Caller, string, string, string, []byte, time.Time) *kernel.Error {
 	unsupportedStagedEffect()

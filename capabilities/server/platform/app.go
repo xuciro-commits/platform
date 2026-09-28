@@ -135,6 +135,13 @@ type App interface {
 	Input(c Caller, name string, body []byte, now time.Time) (any, *kernel.Error)
 }
 
+// ResultApp opts a code app's generated record actions into the host's
+// accepted-result boundary. Other actions still use the legacy input journal.
+type ResultApp interface {
+	App
+	AcceptedLedger() *Ledger
+}
+
 // Event is an accepted decision, delivered to subscribers after commit.
 type Event struct {
 	App    string

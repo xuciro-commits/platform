@@ -169,6 +169,7 @@ func (a *App) Manifest() platform.Manifest {
 }
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
+func (a *App) AcceptedLedger() *platform.Ledger         { return a.ledger }
 func (a *App) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *App) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
 

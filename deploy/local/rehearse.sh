@@ -343,6 +343,10 @@ sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == "$calls" ]] || fail "a de
 echo "ok   restart: each host saved a snapshot at shutdown and started from it (plant $(compose logs manufacturing-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
 
 # The journal is what to back up: the projections are copies rebuilt at start-up (ADR-0019).
+accepted=$(compose exec -T postgres psql -U platform -d platform -Atc \
+  "select count(distinct tenant) from journal where kind='accepted-result' and tenant in ('plant-sz','hotel-a')")
+[[ $accepted == 2 ]] || fail "accepted-result entries absent from either industry journal"
+echo "ok   accepted results: both industry journals kept generated record decisions before backup"
 compose exec -T postgres pg_dump -U platform -d platform -Fc --exclude-schema='tenant_*' >"$backup/platform.dump"
 submit "$OP1" c-1 mes.sfc.complete mes.sfc WO-1-001 '{}' 1 | jq -e .record >/dev/null || fail complete
 after=$(state)
@@ -368,5 +372,5 @@ echo "ok   the edge outbox resends what the backup missed; state matches again"
 
 compose exec -T postgres createdb -U platform journal_test
 (cd ../../capabilities/server && PLATFORM_TEST_DATABASE=postgres://platform:platform-local-only@localhost:$PG_PORT/journal_test \
-  go test -count=1 -run TestJournal . 2>&1) >"$backup/journal-test.log" || { cat "$backup/journal-test.log" >&2; fail "journal test"; }
-echo "ok   journal numbering refuses a second writer (capabilities/server TestJournal)"
+  go test -count=1 -run 'TestJournal|TestJournalAcceptedResult' . 2>&1) >"$backup/journal-test.log" || { cat "$backup/journal-test.log" >&2; fail "journal test"; }
+echo "ok   journal numbering and accepted result retry/recovery (capabilities/server)"

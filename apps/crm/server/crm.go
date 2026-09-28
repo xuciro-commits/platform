@@ -140,6 +140,8 @@ type CRM struct {
 	ledger *platform.Ledger
 }
 
+func (c *CRM) AcceptedLedger() *platform.Ledger { return c.ledger }
+
 func New(tenant string) *CRM {
 	return &CRM{tenant: tenant, ledger: platform.NewLedger(tenant, ID, Actions(), AccountType, OpportunityType)}
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -41,6 +42,9 @@ type Tenant struct {
 	// Record, when set, makes each accepted input durable before it is answered;
 	// a failure must stop the server (ADR-0007).
 	Record func(Entry)
+	// AcceptResult persists a complete generated-record decision before it is
+	// visible. It is installed only by the durable deployment.
+	AcceptResult func(Entry, string, string) ([]byte, error)
 	// Store keeps what is derived outside the journal: vectors and transcripts
 	// (ADR-0022); without one they stay in memory.
 	Store        Store
@@ -289,6 +293,11 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	if m.Agent && t.suspended(m.ID) { // an agent an administrator switched off (ADR-0029 D4)
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
+	if t.AcceptResult != nil {
+		if resultApp, ok := a.(platform.ResultApp); ok && t.acceptsGenerated(a, s) {
+			return t.submitAccepted(resultApp, m, s, now)
+		}
+	}
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil && t.owner["action:"+work.SchemaRequest] != nil {
 		return t.request(m, a, s, now)
 	}
@@ -297,6 +306,86 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 		t.journal(a, m, s, now)
 	}
 	return record, explained(err, a, s.GetSchema().GetName(), target(s))
+}
+
+func (t *Tenant) acceptsGenerated(a platform.App, s *pb.Submission) bool {
+	schema := s.GetSchema().GetName()
+	if !strings.HasSuffix(schema, ".create") && !strings.HasSuffix(schema, ".edit") {
+		return false
+	}
+	t.records.mu.Lock()
+	defer t.records.mu.Unlock()
+	et := t.records.types[s.GetTarget().GetType()]
+	return et != nil && et.info.App == a.Manifest().ID &&
+		slices.Contains(et.info.Standard, schema) &&
+		(schema == et.info.Type+".create" || schema == et.info.Type+".edit")
+}
+
+func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
+	ledger := a.AcceptedLedger()
+	if prior := ledger.AcceptedFor(t.ID, s.GetIdempotencyKey()); prior != nil {
+		if !proto.Equal(prior.GetSubmission(), s) {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		}
+		return prior, nil
+	}
+	draft := t.newStagedDecision()
+	record, refusal = decideAccepted(a, draft, m, s, now)
+	if refusal != nil {
+		return nil, explained(refusal, a, s.GetSchema().GetName(), target(s))
+	}
+	raw, err := draft.result(a.Manifest().ID, record)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
+	}
+	result, _, err := decodeAcceptedResult(raw)
+	if err != nil {
+		panic(err)
+	}
+	member, _ := json.Marshal(m)
+	var versions map[string]int
+	if t.procs != nil {
+		versions = t.procs.Versions()
+	}
+	committed, err := t.AcceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
+		Principal: member, Body: raw, At: now, Versions: versions}, s.GetIdempotencyKey(), result.RequestHash)
+	if err != nil {
+		if err == errAcceptedConflict {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		}
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
+	}
+	applied, err := t.applyAcceptedResult(ledger, committed)
+	if err != nil {
+		// After a successful append it is unsafe to serve this tenant. The
+		// process must stop and recover from the durable result.
+		panic(fmt.Errorf("committed accepted result could not be applied: %w", err))
+	}
+	saved, receipt, err := decodeAcceptedResult(committed)
+	if err != nil {
+		panic(err)
+	}
+	if applied {
+		t.remember(submitted(m.ID, a, receipt.GetSubmission(), now))
+		t.publish(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed})
+		t.changed()
+	}
+	return receipt, nil
+}
+
+// Only decision evaluation may turn an unsupported-effect panic into a
+// refusal. A panic after the journal commit must escape so the tenant stops.
+func decideAccepted(a platform.ResultApp, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if _, ok := p.(stagedEffectPanic); !ok {
+				panic(p)
+			}
+			record = nil
+			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")
+		}
+	}()
+	return a.Submit(platform.NewCaller(draft, m, a.Manifest().ID, false, false), s, now)
 }
 
 // explained gives a refusal an app returned without saying why the reason its
@@ -496,6 +585,24 @@ func (t *Tenant) Replay(entries []Entry) error {
 			if err := t.replayWork(e.Kind, e.Body, e.At); err != nil {
 				return fmt.Errorf("entry %d: %v", i+1, err)
 			}
+			continue
+		}
+		if e.Kind == "accepted-result" {
+			ra, ok := a.(platform.ResultApp)
+			if !ok {
+				return fmt.Errorf("entry %d: app %s cannot apply accepted results", i+1, e.App)
+			}
+			saved, receipt, decodeErr := decodeAcceptedResult(e.Body)
+			if decodeErr != nil || saved.App != e.App {
+				return fmt.Errorf("entry %d: invalid accepted result: %v", i+1, decodeErr)
+			}
+			applied, applyErr := t.applyAcceptedResult(ra.AcceptedLedger(), e.Body)
+			if applyErr != nil || !applied {
+				return fmt.Errorf("entry %d: accepted result: %v (applied=%t)", i+1, applyErr, applied)
+			}
+			t.remember(submitted(m.ID, a, receipt.GetSubmission(), e.At))
+			t.publish(platform.Event{App: e.App, Record: receipt, Changed: saved.Event.Changed})
+			t.enqueue(e.At)
 			continue
 		}
 		if e.Kind == "submission" {
