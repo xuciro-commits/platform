@@ -195,6 +195,12 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 		reply.Diagnostic = err.Error()
 		return reply, nil
 	}
+	if kind == platform.AssetObject {
+		if err := t.validateDraftPageDependentsLocked(owner, id, candidate); err != nil {
+			reply.Diagnostic = err.Error()
+			return reply, nil
+		}
+	}
 	reply.CandidateID = candidate.ID
 	if !hadPrior {
 		for _, asset := range candidate.Assets {
@@ -204,6 +210,58 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 	}
 	reply.Added, reply.Removed, reply.Changed, err = platform.CandidateDiff(current, candidate)
 	return reply, err
+}
+
+// Reuse the host's normal page validation against a private record/registry
+// fork. A closed dependency graph alone does not prove that an existing page
+// still binds fields of an edited object. This runs without installing the
+// draft in the live tenant or altering the builder's action catalog.
+func (t *Tenant) validateDraftPageDependentsLocked(owner *build.Build, id string, candidate platform.ReleaseCandidate) error {
+	entity, err := owner.DraftEntity(id)
+	if err != nil {
+		return err
+	}
+	draft := (hostView{t: t, app: owner}).installationDraft()
+	if err := draft.Install(owner, entity, platform.EntityActions(entity)); err != nil {
+		return err
+	}
+	generatedName := entity.Type[len(build.ID)+1:]
+	explicitGeneratedPage, err := owner.PublishedPage(generatedName)
+	if err != nil {
+		return err
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.Kind != platform.AssetPage {
+			continue
+		}
+		// The freshly generated page already passed ValidateInstall. A
+		// published page elsewhere (including a code-owned page) may still
+		// refer to fields this draft removes, and must pass the same validator.
+		if asset.Ref.App == build.ID && asset.Ref.Name == generatedName && !explicitGeneratedPage {
+			continue
+		}
+		registered := slices.IndexFunc(t.definitions, func(def platform.Definition) bool { return def.Ref == asset.Ref })
+		if registered < 0 {
+			continue
+		}
+		page := t.definitions[registered].Page
+		if page == nil {
+			continue
+		}
+		if page.Object.Name != entity.Type && !slices.ContainsFunc(page.Sections, func(s platform.Section) bool {
+			return s.Object.Name == entity.Type
+		}) {
+			continue
+		}
+		app := t.app(asset.Ref.App)
+		if app == nil {
+			return fmt.Errorf("page %s has no owner %s", asset.Ref, asset.Ref.App)
+		}
+		if err := draft.InstallPage(app, *page); err != nil {
+			return fmt.Errorf("release dependent %s: %w", asset.Ref, err)
+		}
+	}
+	return nil
 }
 
 // Code behavior is pinned by Manifest.Version rather than serialized Go

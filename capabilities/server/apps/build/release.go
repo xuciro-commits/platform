@@ -122,6 +122,42 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 	return before, after, prior, next, hadPrior, err
 }
 
+// DraftEntity gives the host's existing installation validator the actual
+// typed shape of one saved draft; it does not return a member-filtered view or
+// install the entity. The caller must already have checked builder authority.
+func (b *Build) DraftEntity(id string) (platform.Entity, error) {
+	if b.host == nil {
+		return platform.Entity{}, fmt.Errorf("builder has no host")
+	}
+	record, found := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), id)
+	if !found || record.Archived {
+		return platform.Entity{}, fmt.Errorf("draft object %q not found", id)
+	}
+	return Entity(record), nil
+}
+
+// PublishedPage reports whether the generated page of an object was
+// intentionally replaced by an explicit installed page of the same name.
+func (b *Build) PublishedPage(name string) (bool, error) {
+	_, pages, _, err := b.releaseInventory()
+	if err != nil {
+		return false, err
+	}
+	for _, record := range pages {
+		if record.Archived || record.Published == "" {
+			continue
+		}
+		saved, ok := wasPublished[Page](record.Published)
+		if !ok {
+			return false, fmt.Errorf("invalid published page %s", record.ID)
+		}
+		if saved.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // releaseAssets uses the saved publication, never a later mutable draft. The
 // object body retains every declarative field (including access, conditions
 // and approvals), excluding only record identity/stamps and editor state.

@@ -77,3 +77,46 @@ func TestHotelBuilderPreviewIsReadOnlyAndRestricted(t *testing.T) {
 		t.Fatalf("incompatible rename was not rejected before affecting an installed application: %+v, %v", renamed, err)
 	}
 }
+
+func TestHotelObjectPreviewRejectsAnInstalledPageWithRemovedField(t *testing.T) {
+	w := newWorld(t, hotelProvider)
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".create", build.ObjectType, "O-CLOSURE", "closure-object",
+		map[string]any{"name": "delivery", "title": "Delivery", "fields": []map[string]any{
+			{"name": "guest", "title": "Guest", "type": "text"}, {"name": "room", "title": "Room", "type": "text"},
+		}}), "ok")
+	w.expect(w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-CLOSURE", "closure-publish", map[string]any{}), "ok")
+	w.expect(w.submit("manager", build.ID, build.PageType+".create", build.PageType, "P-CLOSURE", "closure-page",
+		map[string]any{"name": "deliverydesk", "title": "Delivery desk", "object": "build.delivery",
+			"list": []string{"guest"}, "detail": []string{"room"}}), "ok")
+	w.expect(w.submit("manager", build.ID, build.SchemaRelease, build.PageType, "P-CLOSURE", "closure-page-publish", map[string]any{}), "ok")
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".edit", build.ObjectType, "O-CLOSURE", "closure-remove-room",
+		map[string]any{"fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}}}), "ok")
+	preview, err := w.tenant.PreviewRelease(w.members["manager"], platform.AssetObject, "O-CLOSURE")
+	if err != nil || preview.CandidateID != "" || preview.CurrentID == "" ||
+		!strings.Contains(preview.Diagnostic, "page deliverydesk: build.delivery has no field room") {
+		t.Fatalf("a dependent page lost its bound field without diagnosis: %+v, %v", preview, err)
+	}
+	if live, err := w.tenant.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "deliverydesk"}}); err != nil || live.ID == "" {
+		t.Fatalf("a rejected draft changed the installed page: %+v, %v", live, err)
+	}
+}
+
+func TestHotelObjectPreviewChecksExplicitPageOverGeneratedName(t *testing.T) {
+	w := newWorld(t, hotelProvider)
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".create", build.ObjectType, "O-SAME", "same-object",
+		map[string]any{"name": "pickup", "title": "Pickup", "fields": []map[string]any{
+			{"name": "guest", "title": "Guest", "type": "text"}, {"name": "room", "title": "Room", "type": "text"},
+		}}), "ok")
+	w.expect(w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-SAME", "same-object-publish", map[string]any{}), "ok")
+	w.expect(w.submit("manager", build.ID, build.PageType+".create", build.PageType, "P-SAME", "same-page",
+		map[string]any{"name": "pickup", "title": "Pickup desk", "object": "build.pickup",
+			"list": []string{"guest"}, "detail": []string{"room"}}), "ok")
+	w.expect(w.submit("manager", build.ID, build.SchemaRelease, build.PageType, "P-SAME", "same-page-publish", map[string]any{}), "ok")
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".edit", build.ObjectType, "O-SAME", "same-remove-room",
+		map[string]any{"fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}}}), "ok")
+	preview, err := w.tenant.PreviewRelease(w.members["manager"], platform.AssetObject, "O-SAME")
+	if err != nil || preview.CandidateID != "" ||
+		!strings.Contains(preview.Diagnostic, "page pickup: build.pickup has no field room") {
+		t.Fatalf("explicit page over generated name escaped validation: %+v, %v", preview, err)
+	}
+}
