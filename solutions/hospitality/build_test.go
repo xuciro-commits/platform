@@ -77,4 +77,18 @@ func TestTheHotelDefinesItsOwnObject(t *testing.T) {
 	if page := composed("desk"); page != nil {
 		t.Errorf("a page over an object the member may not read was offered: %+v", page)
 	}
+	// The actual published builder page closes over the CRM's code-owned
+	// object and action, rather than a test-only copy of their descriptors.
+	candidate, releaseErr := w.tenant.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "offsites"}})
+	if releaseErr != nil {
+		t.Fatal(releaseErr)
+	}
+	for _, required := range []platform.AssetRef{
+		{App: crm.ID, Kind: platform.AssetObject, Name: crm.OpportunityType},
+		{App: crm.ID, Kind: platform.AssetAction, Name: crm.SchemaClose},
+	} {
+		if !slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == required }) {
+			t.Errorf("hotel builder release omits %s", required)
+		}
+	}
 }

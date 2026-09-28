@@ -75,8 +75,9 @@ type releaseBytes struct {
 	Assets []ReleaseAsset `json:"assets"`
 }
 
-// Candidate closes roots over pinned assets. It rejects cycles, missing or
-// duplicate references, malformed descriptors and ambiguous JSON object keys.
+// Candidate closes roots over pinned assets. Reciprocal object references are
+// one semantic graph; structural cycles, missing or duplicate references,
+// malformed descriptors and ambiguous JSON object keys are rejected.
 // The same logical input has the same bytes regardless of map key, declaration
 // or dependency order; semantic changes produce a new content ID.
 func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, error) {
@@ -97,12 +98,19 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 	visiting := map[AssetRef]bool{}
 	visited := map[AssetRef]bool{}
 	var closed []ReleaseAsset
-	var visit func(AssetRef) error
-	visit = func(ref AssetRef) error {
+	var visit func(AssetRef, AssetRef) error
+	visit = func(ref, from AssetRef) error {
 		if err := ref.Check(); err != nil {
 			return err
 		}
 		if visiting[ref] {
+			// Objects can reference one another (for example an order's SFCs
+			// and an SFC's order). They form one closed semantic graph, not a
+			// recursive publication step. Keep both edges in the exact bytes.
+			// A self-dependency or a structural page/action cycle is invalid.
+			if from.Kind == AssetObject && ref.Kind == AssetObject && from != ref {
+				return nil
+			}
 			return fmt.Errorf("release dependency cycle at %s", ref)
 		}
 		if visited[ref] {
@@ -129,7 +137,7 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			if i > 0 && dep == deps[i-1] {
 				return fmt.Errorf("release asset %s repeats dependency %s", ref, dep)
 			}
-			if err := visit(dep); err != nil {
+			if err := visit(dep, ref); err != nil {
 				return fmt.Errorf("%s: %w", ref, err)
 			}
 		}
@@ -144,7 +152,7 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 		return nil
 	}
 	for _, root := range roots {
-		if err := visit(root); err != nil {
+		if err := visit(root, AssetRef{}); err != nil {
 			return empty, err
 		}
 	}

@@ -79,6 +79,33 @@ func TestReleaseCandidateRefusesUnclosedAndAmbiguousAssets(t *testing.T) {
 	}
 }
 
+func TestReleaseCandidateClosesReciprocalObjectReferences(t *testing.T) {
+	order := AssetRef{App: "mes", Kind: AssetObject, Name: "mes.order"}
+	sfc := AssetRef{App: "mes", Kind: AssetObject, Name: "mes.sfc"}
+	assets := []ReleaseAsset{
+		{Ref: order, ContractVersion: 1, SourceVersion: "1", Requires: []AssetRef{sfc},
+			Body: json.RawMessage(`{"type":"mes.order","fields":[{"name":"sfcs","ref":"mes.sfc"}]}`)},
+		{Ref: sfc, ContractVersion: 1, SourceVersion: "1", Requires: []AssetRef{order},
+			Body: json.RawMessage(`{"type":"mes.sfc","fields":[{"name":"order","ref":"mes.order"}]}`)},
+	}
+	first, err := Candidate([]AssetRef{order}, assets)
+	if err != nil || len(first.Assets) != 2 {
+		t.Fatalf("reciprocal relation is not closed: %v, %+v", err, first.Assets)
+	}
+	if _, err := ReadCandidate(first.ID, first.Bytes); err != nil {
+		t.Fatal(err)
+	}
+	assets[1].Body = json.RawMessage(`{"type":"mes.sfc","fields":[{"name":"order","ref":"mes.order","required":true}]}`)
+	changed, err := Candidate([]AssetRef{order}, assets)
+	if err != nil || changed.ID == first.ID {
+		t.Fatalf("referenced object rule did not change release: %v", err)
+	}
+	assets = assets[:1]
+	if _, err := Candidate([]AssetRef{order}, assets); err == nil || !strings.Contains(err.Error(), "missing asset") {
+		t.Fatalf("missing reciprocal target not diagnosed: %v", err)
+	}
+}
+
 func TestReleaseCandidateNormalizesNumbersWithoutLosingPrecision(t *testing.T) {
 	ref := AssetRef{App: "erp", Kind: AssetObject, Name: "erp.amount"}
 	makeCandidate := func(body string) ReleaseCandidate {

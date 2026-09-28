@@ -203,6 +203,18 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	if !has(platform.AssetApp, "frontdesk") {
 		t.Fatal("committed application was not installed")
 	}
+	releaseID := func(tenant *Tenant) string {
+		t.Helper()
+		candidate, err := tenant.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "frontdesk"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(candidate.Assets) != 3 { // application, page, object; the page names no action
+			t.Fatalf("published builder closure has %d assets, want 3", len(candidate.Assets))
+		}
+		return candidate.ID
+	}
+	publishedID := releaseID(live)
 	var publications int
 	for _, e := range entries {
 		if e.Kind == "accepted-result" {
@@ -229,6 +241,9 @@ func TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores(t *testing.
 	afterCrash := compose()
 	if err := afterCrash.Replay(entries); err != nil {
 		t.Fatal(err)
+	}
+	if recoveredID := releaseID(afterCrash); recoveredID != publishedID {
+		t.Fatalf("saved publication changed identity after code-free recovery: %s -> %s", publishedID, recoveredID)
 	}
 	if _, ok := afterCrash.entity(build.TypeOf("visit")); !ok ||
 		!slices.ContainsFunc(afterCrash.definitions, func(d platform.Definition) bool {
