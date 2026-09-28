@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { DataTable, EntityForm, NotificationList, RecordLookup, StatusTag, submissionStatuses, type ColumnDef, type RecordSource } from "./index";
+import { DataTable, EntityForm, Markdown, MarkdownEditor, NotificationList, RecordLookup, RecordPage, StatusTag, humanizeKernelError, setLanguage, submissionStatuses, type ColumnDef, type RecordSource } from "./index";
 
 afterEach(cleanup);
 
@@ -34,6 +34,83 @@ test("DataTable filters and sorts", () => {
   expect(screen.getAllByRole("cell")[0]!.textContent).toBe("Item 49");
   fireEvent.click(screen.getByRole("button", { name: /Qty/ }));
   expect(screen.getAllByRole("cell")[0]!.textContent).toBe("Item 4");
+});
+
+test("DataTable shows loading state when loading is true and data is empty", () => {
+  render(<DataTable data={[]} columns={columns} getRowId={(r) => r.id} loading />);
+  expect(screen.getByText("Loading…")).toBeTruthy();
+});
+
+test("DataTable shows custom empty text when not loading and data is empty", () => {
+  render(<DataTable data={[]} columns={columns} getRowId={(r) => r.id} empty="Nothing here" />);
+  expect(screen.getByText("Nothing here")).toBeTruthy();
+});
+
+test("DataTable handles cell editing, Escape cancel, Enter commit, and Tab hop", () => {
+  const onCellEdit = vi.fn();
+  const editableColumns: ColumnDef<Row, any>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      meta: {
+        field: {
+          label: "Name",
+          editor: ({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) => (
+            <input
+              data-testid="cell-input"
+              value={String(value ?? "")}
+              onChange={(e) => onChange(e.target.value)}
+            />
+          ),
+        } as any,
+      },
+    },
+    {
+      accessorKey: "qty",
+      header: "Qty",
+    },
+  ];
+
+  render(
+    <DataTable
+      data={rows.slice(0, 5)}
+      columns={editableColumns}
+      getRowId={(r) => r.id}
+      onCellEdit={onCellEdit}
+    />
+  );
+
+  const firstCell = screen.getAllByRole("cell")[0]!;
+
+  // Double-click to begin editing
+  fireEvent.doubleClick(firstCell);
+  const input = screen.getByTestId("cell-input") as HTMLInputElement;
+  expect(input).toBeTruthy();
+  expect(input.value).toBe("Item 0");
+
+  // Type new value
+  fireEvent.change(input, { target: { value: "Updated Item 0" } });
+
+  // Escape cancels edit and does not commit
+  fireEvent.keyDown(input, { key: "Escape" });
+  expect(screen.queryByTestId("cell-input")).toBeNull();
+  expect(onCellEdit).not.toHaveBeenCalled();
+
+  // Double-click again, type and press Enter to commit
+  fireEvent.doubleClick(firstCell);
+  const input2 = screen.getByTestId("cell-input") as HTMLInputElement;
+  fireEvent.change(input2, { target: { value: "Committed Item 0" } });
+  fireEvent.keyDown(input2, { key: "Enter" });
+  expect(onCellEdit).toHaveBeenCalledWith(rows[0], "name", "Committed Item 0");
+  expect(screen.queryByTestId("cell-input")).toBeNull();
+
+  // Double-click again, change and press Tab to commit and hop
+  fireEvent.doubleClick(firstCell);
+  const input3 = screen.getByTestId("cell-input") as HTMLInputElement;
+  fireEvent.change(input3, { target: { value: "Tab Item 0" } });
+  fireEvent.keyDown(input3, { key: "Tab" });
+  expect(onCellEdit).toHaveBeenCalledWith(rows[0], "name", "Tab Item 0");
+  expect(screen.queryByTestId("cell-input")).toBeNull();
 });
 
 test("RecordLookup finds a scoped record beyond the first 500 without preloading them", async () => {
@@ -80,6 +157,37 @@ test("EntityForm validates with the schema before submitting", async () => {
   expect(submit).toHaveBeenCalledWith({ guest: "Ada", nights: 2 }, expect.anything());
 });
 
+test("EntityForm disables buttons and indicates saving while submitting", async () => {
+  let finishSubmit: () => void = () => {};
+  const pending = new Promise<void>((resolve) => { finishSubmit = resolve; });
+  const submit = vi.fn().mockImplementation(() => pending);
+  const cancel = vi.fn();
+  const schema = z.object({ title: z.string().min(1) });
+  render(<EntityForm schema={schema} onSubmit={submit} onCancel={cancel} defaultValues={{ title: "Hello" }}
+    fields={[{ name: "title", label: "Title" }]} />);
+
+  const saveBtn = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+  const cancelBtn = screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement;
+  expect(saveBtn.disabled).toBe(false);
+  expect(cancelBtn.disabled).toBe(false);
+
+  await act(async () => {
+    fireEvent.click(saveBtn);
+  });
+
+  expect(submit).toHaveBeenCalled();
+  const savingBtn = screen.getByRole("button", { name: "Saving…" }) as HTMLButtonElement;
+  expect(savingBtn.disabled).toBe(true);
+  expect(cancelBtn.disabled).toBe(true);
+
+  await act(async () => {
+    finishSubmit();
+  });
+
+  expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(false);
+  expect(cancelBtn.disabled).toBe(false);
+});
+
 test("routes round-trip through the URL and name one tab per entity", async () => {
   const { routeFromHash, routeKey, routeToHash } = await import("./shell/route");
   const route = { view: "workOrder", params: { tenant: "plant-1", id: "WO 7/2" } };
@@ -100,3 +208,107 @@ test("NotificationList marks unread notifications and reads them", () => {
   fireEvent.click(buttons[0]!);
   expect(read).toHaveBeenCalledWith(expect.objectContaining({ id: "n-2" }));
 });
+
+test("humanizeKernelError maps error codes and translates to reader's language", () => {
+  expect(humanizeKernelError("ERROR_CODE_CONFLICT")).toBe("The record was modified by another operation. Please refresh and try again.");
+  setLanguage("zh-CN");
+  expect(humanizeKernelError("ERROR_CODE_CONFLICT")).toBe("该记录已被他人修改，请刷新后重试。");
+  expect(humanizeKernelError("ERROR_CODE_POLICY_DENIED")).toBe("你无权执行此操作。");
+  expect(humanizeKernelError("Custom error message")).toBe("Custom error message");
+  setLanguage("en");
+});
+
+test("RecordPage shows structured error state with retry on fetch failure", async () => {
+  let callCount = 0;
+  const mockSource: RecordSource = {
+    entity: () => ({ app: "crm", type: "crm.account", title: "Account", plural: "Accounts", display: "id", fields: [], standard: [] }),
+    get: vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return Promise.reject(new Error("ERROR_CODE_NOT_FOUND"));
+      return Promise.resolve({
+        record: { id: "ACC-1", type: "crm.account", revision: 1, created: { at: "2026-09-01T00:00:00Z" }, changed: { at: "2026-09-01T00:00:00Z" } },
+        tasks: [], approvals: [], processes: [], files: [], comments: [], related: [],
+      });
+    }),
+    list: vi.fn() as any,
+    aggregate: vi.fn() as any,
+  };
+
+  render(<RecordPage source={mockSource} type="crm.account" id="ACC-1" />);
+
+  await waitFor(() => {
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(screen.getByText("Could not load record.")).toBeTruthy();
+    expect(screen.getByText("The record was not found or is outside your scope.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  });
+
+  await waitFor(() => {
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("ACC-1")).toBeTruthy();
+  });
+});
+
+test("Markdown renders headings, formatting, lists, code blocks and links safely", () => {
+  const content = `# Title\n\n## Subtitle\n\n**bold text** and *italic text* and \`code snippet\`\n\n[Documentation](https://example.com/docs)\n\n> This is a quote\n\n- item 1\n- item 2\n\n\`\`\`js\nconst x = 42;\n\`\`\``;
+  const { container } = render(<Markdown content={content} />);
+  expect(screen.getByRole("heading", { level: 1, name: "Title" })).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 2, name: "Subtitle" })).toBeTruthy();
+  expect(screen.getByText("bold text")).toBeTruthy();
+  expect(screen.getByText("italic text")).toBeTruthy();
+  expect(screen.getByText("code snippet")).toBeTruthy();
+  const link = screen.getByRole("link", { name: "Documentation" }) as HTMLAnchorElement;
+  expect(link.href).toBe("https://example.com/docs");
+  expect(screen.getByText("This is a quote")).toBeTruthy();
+  expect(screen.getByText("item 1")).toBeTruthy();
+  expect(screen.getByText("item 2")).toBeTruthy();
+  expect(container.querySelector("pre code")?.textContent).toBe("const x = 42;");
+});
+
+test("MarkdownEditor switches between Write and Preview tabs", () => {
+  const onChange = vi.fn();
+  render(<MarkdownEditor value="# Hello World" onChange={onChange} />);
+
+  expect(screen.getByRole("tab", { name: "Write", selected: true })).toBeTruthy();
+  expect(screen.getByDisplayValue("# Hello World")).toBeTruthy();
+  expect(screen.getByText("13 characters")).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Preview" }));
+  expect(screen.getByRole("tab", { name: "Preview", selected: true })).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 1, name: "Hello World" })).toBeTruthy();
+  expect(screen.queryByDisplayValue("# Hello World")).toBeNull();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Write" }));
+  expect(screen.getByDisplayValue("# Hello World")).toBeTruthy();
+});
+
+test("EntityForm renders helper text and read-only field states", () => {
+  const schema = z.object({
+    title: z.string(),
+    content: z.string(),
+    status: z.string(),
+  });
+  render(
+    <EntityForm
+      schema={schema}
+      onSubmit={vi.fn()}
+      defaultValues={{ title: "Doc 1", content: "Details", status: "Published" }}
+      fields={[
+        { name: "title", label: "Title", help: "Give the document a descriptive name" },
+        { name: "content", label: "Content", kind: "longText", help: "Markdown supported" },
+        { name: "status", label: "Status", readOnly: true },
+      ]}
+    />
+  );
+
+  expect(screen.getByText("Give the document a descriptive name")).toBeTruthy();
+  expect(screen.getByText("Markdown supported")).toBeTruthy();
+  expect(screen.getByText("Read only")).toBeTruthy();
+  expect(screen.getByText("Published")).toBeTruthy();
+});
+
+

@@ -8,6 +8,7 @@ import { cn } from "../lib/cn";
 import { Input, Select } from "../primitives/input";
 import { Toggles } from "../primitives/controls";
 import { Tag, type Tone } from "../components/StatusTag";
+import { Markdown, MarkdownEditor } from "../components/Markdown";
 import { WorkspaceContext } from "../shell/Workspace";
 import type { Route } from "../shell/route";
 import { t } from "../i18n";
@@ -66,13 +67,23 @@ export const text = (o: Common & { placeholder?: string; maxLength?: number }): 
   editor: input("text", (s) => s, String, { placeholder: o.placeholder }), compare: byString, operators: textOps, text: (v) => v ?? "",
 });
 
-export const longText = (o: Common): FieldType<string> => ({
+
+export const longText = (o: Common & { rows?: number; placeholder?: string }): FieldType<string> => ({
   ...text(o), type: "longText",
   display: (v) => (empty(v) ? muted : <span className="line-clamp-2 whitespace-pre-wrap">{v}</span>),
   editor: ({ id, value, onChange, invalid, autoFocus }) => (
-    <textarea id={id} aria-invalid={invalid} autoFocus={autoFocus} rows={3} value={value ?? ""}
+    <textarea id={id} aria-invalid={invalid} autoFocus={autoFocus} rows={o.rows ?? 4} value={value ?? ""}
+      placeholder={o.placeholder}
       onChange={(e) => onChange(e.target.value || undefined)}
-      className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm outline-none focus-visible:border-ring" />
+      className="w-full min-h-[88px] rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring" />
+  ),
+});
+
+export const markdown = (o: Common & { rows?: number; placeholder?: string }): FieldType<string> => ({
+  ...text(o), type: "markdown",
+  display: (v) => (empty(v) ? muted : <Markdown content={v!} />),
+  editor: ({ id, value, onChange, invalid, autoFocus }) => (
+    <MarkdownEditor id={id} value={value} onChange={onChange} invalid={invalid} autoFocus={autoFocus} placeholder={o.placeholder} rows={o.rows} />
   ),
 });
 

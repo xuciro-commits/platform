@@ -1,6 +1,6 @@
 // Settings: documents and the glossary (ADR-0022, ADR-0023).
 import { GeneratedForm, Records, newId, useHost, type Passage } from "@platform/app";
-import { Button, Card, Dialog, Form, Input, t } from "@platform/ui";
+import { Button, Card, Dialog, Form, Input, Markdown, t } from "@platform/ui";
 import { BookA, BookOpen } from "lucide-react";
 import { useState } from "react";
 
@@ -41,9 +41,9 @@ export function Knowledge() {
         {found.map((p) => <Card key={`${p.document}#${p.chunk}`} className="p-3">
           <div className="text-sm font-medium">{p.title}</div>
           <div className="font-mono text-xs text-muted">{p.document} {t("· passage")} {p.chunk + 1} {t("· score")} {p.score}</div>
-          <p className="mt-1 whitespace-pre-wrap text-sm">{p.text}</p></Card>)}
+          <Markdown content={p.text} className="mt-1" /></Card>)}
       </div>}
-      <Dialog open={writing} onOpenChange={setWriting} title={t("New document")}>
+      <Dialog open={writing} onOpenChange={setWriting} title={t("New document")} wide>
         <GeneratedForm type="knowledge.document" submitLabel={t("Save")} onCancel={() => setWriting(false)}
           onSubmit={async (v) => { if (await decide("knowledge.document.create", { type: "knowledge.document", id: newId("DOC") }, v, { expectedRevision: 0 })) setWriting(false); }} />
       </Dialog>

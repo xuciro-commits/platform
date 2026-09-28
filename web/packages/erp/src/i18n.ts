@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "ERP": "ERP",
   "Account": "科目",
   "Accounting": "财务",
   "Accounts": "科目",

@@ -8,7 +8,7 @@ export function PropertyList({ items }: { items: [label: string, value: ReactNod
       {items.map(([label, value]) => (
         <div key={label} className="contents">
           <dt className="text-muted">{label}</dt>
-          <dd className="min-w-0 truncate">{value}</dd>
+          <dd className="min-w-0 break-words">{value}</dd>
         </div>
       ))}
     </dl>

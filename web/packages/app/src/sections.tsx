@@ -5,7 +5,7 @@
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, Panel, RecordHistory, RecordList, RecordLookup, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
+  Button, Card, Chart, Markdown, Panel, RecordHistory, RecordList, RecordLookup, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
 } from "@platform/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
@@ -37,16 +37,37 @@ const domainOf = (narrowed: Narrowed, object: string): unknown[] =>
 function TableWidget({ page, section, onSelect, selected, narrowed }: Bound) {
   const { source } = useHost();
   const type = objectOf(page, section);
+  const isMaster = type === page.object.name;
+  const info = source.entity(type);
+  const refField = !isMaster ? info?.fields.find((f) => f.type === "reference" && f.ref === page.object.name) : undefined;
+
+  if (refField && !selected) {
+    return (
+      <div className="flex h-40 items-center justify-center rounded-md border border-dashed border-border p-4 text-center">
+        <p className="text-sm text-muted">
+          {t("Select a record to see related {records}.", { records: info?.plural?.toLowerCase() ?? type })}
+        </p>
+      </div>
+    );
+  }
+
+  const relationDomain = refField && selected ? [[refField.name, "=", selected.id]] : [];
+  const domain = [...domainOf(narrowed, type), ...relationDomain];
+
   return (
-    <RecordList source={source} type={type} fields={section.fields} height={320} domain={domainOf(narrowed, type)}
-      onOpen={(record) => onSelect(record.id === selected?.id ? undefined : record)} />
+    <RecordList source={source} type={type} fields={section.fields} height={320} domain={domain}
+      onOpen={isMaster ? (record) => onSelect(record.id === selected?.id ? undefined : record) : undefined} />
   );
 }
 
 /** The record the page has selected, with the fields the builder chose. */
 function DetailWidget({ page, section, selected }: Bound) {
   const type = objectOf(page, section);
+  const isMaster = type === page.object.name;
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
+  if (!isMaster && selected.type && selected.type !== type) {
+    return <p className="text-sm text-muted">{t("Select a {object} to see it here.", { object: type })}</p>;
+  }
   // The fields alone: what people do with it is the actions widget's (ADR-0035 D2).
   return <RecordDetail type={type} id={selected.id} fields={section.fields} allowed={[]} />;
 }
@@ -80,10 +101,17 @@ function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]
   };
 }
 
-function ChartWidget({ page, section, kpi, narrowed }: Bound & { kpi: boolean }) {
+function ChartWidget({ page, section, kpi, narrowed, selected }: Bound & { kpi: boolean }) {
   const { source } = useHost();
   const aggregate = source.aggregate;
-  return <Chart spec={chartSpec(page, section, kpi, domainOf(narrowed, objectOf(page, section)))} frame={false} height={kpi ? 120 : 240}
+  const type = objectOf(page, section);
+  const isMaster = type === page.object.name;
+  const info = source.entity(type);
+  const refField = !isMaster ? info?.fields.find((f) => f.type === "reference" && f.ref === page.object.name) : undefined;
+  const relationDomain = refField && selected ? [[refField.name, "=", selected.id]] : [];
+  const domain = [...domainOf(narrowed, type), ...relationDomain];
+
+  return <Chart spec={chartSpec(page, section, kpi, domain)} frame={false} height={kpi ? 120 : 240}
     source={aggregate ? { aggregate, revision: source.revision } : undefined} />;
 }
 
@@ -187,7 +215,7 @@ export function SectionView(bound: Bound & Composing) {
       case "actions": return <ActionsWidget {...bound} />;
       case "chart": return <ChartWidget {...bound} kpi={false} />;
       case "metric": return <ChartWidget {...bound} kpi />;
-      case "text": return <p className="whitespace-pre-wrap text-sm">{section.text}</p>;
+      case "text": return <Markdown content={section.text} className="text-sm" />;
       case "filter": return <FilterWidget {...bound} />;
       case "form": return <FormWidget {...bound} />;
       case "timeline": return <TimelineWidget {...bound} />;

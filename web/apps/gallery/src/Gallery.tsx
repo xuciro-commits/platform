@@ -2,9 +2,13 @@ import {
   Button, DataTable, EntityCard, EntityForm, Graph, PageHeader, StatusTag, Workspace, defineStatuses, notify, useWorkspace,
   type ColumnDef, type GraphEdge, type GraphNode, type View,
 } from "@platform/ui";
-import { Activity, BedDouble, Boxes, Factory, Moon, Plus, Sun } from "lucide-react";
+import { Activity, BedDouble, Boxes, Factory, FileText, LayoutGrid, Moon, Network, Plus, Sparkles, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Materials } from "./Materials";
+import { PrimitivesShowcase } from "./showcase/PrimitivesShowcase";
+import { FeedbackShowcase } from "./showcase/FeedbackShowcase";
+import { VisualizationsShowcase } from "./showcase/VisualizationsShowcase";
+import { KnowledgeShowcase } from "./showcase/KnowledgeShowcase";
 import { z } from "zod";
 
 // Three industries, one component set: the data shapes differ, the organisation does not.
@@ -141,6 +145,10 @@ const bookingNodes: GraphNode[] = [
 const bookingEdges: GraphEdge[] = [{ from: "ask", to: "fo" }, { from: "fo", to: "rev" }, { from: "rev", to: "gm" }, { from: "rev", to: "out", dashed: true, label: "20 rooms or fewer" }, { from: "gm", to: "out" }];
 
 const views: View[] = [
+  { id: "primitives", title: () => "Primitives", render: () => <PrimitivesShowcase /> },
+  { id: "feedback", title: () => "Status & Feedback", render: () => <FeedbackShowcase /> },
+  { id: "visualizations", title: () => "Visualizations", render: () => <VisualizationsShowcase /> },
+  { id: "knowledge", title: () => "Knowledge & Tasks", render: () => <KnowledgeShowcase /> },
   { id: "workOrders", title: () => "Work orders", render: () => <WorkOrders /> },
   { id: "workOrder", title: (p) => p.id ?? "Work order", render: (p) => <WorkOrder id={p.id ?? ""} /> },
   { id: "materials", title: () => "Materials", render: () => <Materials /> },
@@ -171,11 +179,17 @@ export function Gallery() {
   const [tenant, principal] = identity.split("/") as [string, string];
 
   return (
-    <Workspace product="Platform UI" storageKey="gallery.layout" views={views} home={{ view: "workOrders" }}
+    <Workspace product="Platform UI" storageKey="gallery.layout" views={views} home={{ view: "primitives" }}
       nav={[
+        { label: "UI Kit Showroom", items: [
+          { label: "Primitives & Overlays", icon: <LayoutGrid />, route: { view: "primitives" } },
+          { label: "Status & Feedback", icon: <Sparkles />, route: { view: "feedback" } },
+          { label: "Visualizations", icon: <Network />, route: { view: "visualizations" } },
+          { label: "Knowledge & Tasks", icon: <FileText />, route: { view: "knowledge" } },
+        ] },
         { label: "Manufacturing", items: [
           { label: "Work orders", icon: <Factory />, route: { view: "workOrders" } },
-          { label: "Materials", icon: <Boxes />, route: { view: "materials" } },
+          { label: "Materials (Inline Edit)", icon: <Boxes />, route: { view: "materials" } },
           { label: "Graphs", icon: <Activity />, route: { view: "graphs" } },
           { label: "New work center", icon: <Plus />, route: { view: "workCenterForm" } },
         ] },
