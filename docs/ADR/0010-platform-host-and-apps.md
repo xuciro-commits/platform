@@ -1,169 +1,169 @@
-# ADR-0010: The platform is a host that runs apps; its own administration is an app
+# ADR-0010: 平台是运行应用的宿主；其自身的运维治理本身亦为一个应用
 
-> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The target adds governed application definitions, publication and activation on the existing app API and host; current code composition remains until implemented. This note records the target; the historical decision and As built below remain evidence of their time.
+> **由 [ADR-0031](0031-ai-application-platform.md) 修订，2026-09-27。** 目标架构在既有应用 API 与宿主之上，进一步扩展了受管的交付应用定义、发布与激活机制；当前基于纯代码编排的应用模式在具体新能力落地前保持可用。此注记记录最终目标；下方的历史决策与实际构建依然真实反映其所处时代的技术切片。
 
-**Status:** Accepted (2026-09-24; direction approved by the owner, host capabilities detailed in this revision). Amended by ADR-0011 (protocols replace requirements) and by the owner in #104 (see "Amendments"). What of this is built, partial or deferred is reconciled in `docs/Platform.md` §2 "ADR reconciliation" (#103).
+**状态：** 已接受 (2026-09-24；总体战略方向由负责人正式批准，宿主具体能力在本修订版本中详细展开)。由 ADR-0011 修订（标准化协议全面取代直接依赖关系），并由负责人在 #104 任务中进一步修订（详见“修订记录”节）。其中哪些能力已经构建就绪、部分完成或已推迟，已在 `docs/Platform.md` §2 “ADR 承诺对齐”中完成系统梳理 (#103)。
 
-**Context.** Composition #91 worked by hand:
-- each package defines its own principal (F-21);
-- routing across packages is composition code (F-23);
-- no journal spans packages.
+**背景上下文。** 早期基于 #91 任务的粗糙编排严重依赖手写胶水代码：
+- 每个业务包都需要各自重复定义其自身的操作主体 (F-21)；
+- 跨业务包的路由逻辑完全写死在编排代码中 (F-23)；
+- 缺乏一个能够贯穿统领各个业务包的统一日志体系。
 
-The owner's model is the architecture logic of an operating system. The platform hosts and gives base capabilities; business packages are installable, pluggable apps; the platform's own administration is an app like Settings. Apps also offer capabilities to each other, and what they offer must be discoverable without the dependencies turning into a tangle. Mature business platforms already work this way:
-- Odoo: modules with a manifest, installed through Settings, with a technical registry of models, access rights, record rules, scheduled actions and sequences.
-- ServiceNow: scoped applications, an application repository, and system administration.
-- SAP BTP and CAP: extensions, per-tenant feature toggles, and SaaS provisioning.
-- Salesforce: packages, permission sets, and Setup.
-- Microsoft Power Platform: solutions with dependencies, publishers, upgrade, and uninstall.
+平台负责人确立了向现代化操作系统架构范式看齐的宏伟蓝图：平台作为宿主 (Host) 提供通用的底层底座能力；业务应用包作为可插拔、可安装的应用 (Apps) 接入；而平台自身的运维管理本身，就是一个类似操作系统“系统设置 (Settings)”的标准内建应用。各应用之间亦可相互对外暴露能力，且其所暴露的能力必须具备高度自发现性，避免系统依赖演化成一团杂乱无章的乱麻。业界最成熟的企业级商业平台早已验证了这种模式的威力：
+- Odoo：带有清单描述符的模块，通过“应用设置”统一管理安装，底层维护包含模型、访问权限、记录级规则、定时动作与编号序列在内的技术注册表。
+- ServiceNow：限定作用域的应用 (Scoped Applications)、统一的应用市场仓库、以及成熟的系统管理中心。
+- SAP BTP 与 CAP：扩展机制、针对单租户的特性开关控制、以及 SaaS 自动化开通配置。
+- Salesforce：打包发布的托管包、权限集配置 (Permission Sets)、以及企业级控制台 Setup。
+- Microsoft Power Platform：具备显式依赖声明的解决方案包 (Solutions)、发布商凭据、平滑升级与卸载机制。
 
-This ADR fixes the relationship between the platform and apps, and details what the host provides.
+本 ADR 形式化确立平台与各业务应用之间的标准关系契约，并深度详述宿主对外提供的一整套通用基础设施能力。
 
-## Part 1. The platform and apps
+## 第一部分：平台宿主与业务应用
 
-1. **Host.** One platform host per deployment runs a set of apps for each tenant.
-   - Apps only declare themselves and write business knowledge.
-   - Apps never wire the kernel, authenticate, route, keep their own journal, or define principals.
-2. **App manifest.** Each app declares itself in typed code, not configuration:
-   - identity, publisher and version;
-   - data classes it is authority for (K5);
-   - actions (ADR-0008), public reads and events it emits;
-   - roles it defines, and the attributes those roles may be scoped by (line, property);
-   - settings (typed, per tenant);
-   - capabilities that can be deactivated;
-   - connectors and scheduled work;
-   - navigation entries and its UI package (`@pkg/<app>`);
-   - requirements: other apps' actions, reads or events it uses.
-3. **Three tiers, one direction.** Platform services ← business apps ← bridges and solution apps.
-   - A business app requires only the platform.
-   - A bridge (ADR-0009) requires the apps it joins.
-   - An app that uses another app's action, read or event declares it, and the requirement graph is acyclic.
-   - The build checks the graph. The host refuses to enable an app whose requirements are not enabled for that tenant, and refuses to disable one that an enabled app requires.
-4. **All cross-app traffic goes through the host,** by name (action, read, event), never through another app's code. Every call is therefore:
-   - authorized with the caller's role in the called app;
-   - ordered in the tenant journal;
-   - audited;
-   - drawn in the dependency graph.
-5. **Discovery** is the host's registry of manifests, filtered per caller. People, integrations and AI agents receive the same catalog (`/v1/actions`, `/v1/apps`). What exists is fixed at build time (ADR-0008): there is no runtime service lookup and no runtime code loading.
-6. **Lifecycle.**
-   - Install: the app is built into the host.
-   - Enable or disable: per tenant, as a decision of the platform app.
-   - Upgrade: rebuild the host, restart, and replay the journal (ADR-0007). Payload versions move through K7.
-   - Remove: when an app is disabled, its actions and navigation leave every catalog, and its scheduled work and subscriptions stop (K9 owner close). Its recorded history stays, and references to its entities keep resolving. No accepted decision is undone (ADR-0008 point 4).
-7. **The platform app.** It is an app on the same host, with the Settings workspace (Part 3), and its decisions go through the kernel like any app's. The platform administers itself with the same tools it gives apps.
+1. **宿主运行时 (Host)。** 每次部署由一个统一的平台宿主实例为各个租户承载运行一组业务应用。
+   - 应用仅需专注于自声明元数据并编写纯粹的业务领域知识代码。
+   - 应用绝严禁自行装配内核引擎、自行处理底层网络鉴权、自行搭建路由分发、自建独立的日志存储、或私自定义底层操作主体。
+2. **应用清单 (App manifest)。** 每个应用在强类型代码中完成自声明，而非依赖脆弱无约束的配置文件：
+   - 全局唯一标识、发布商信息与语义版本号；
+   - 其所统辖拥有绝对权威的数据类别 (K5)；
+   - 其对外提供的标准化动作 (ADR-0008)、公开的读取接口、以及其所发出的业务事件；
+   - 其所定义的角色列表，以及这些角色所允许被限定的维度属性（如特定产线、特定酒店门店）；
+   - 类型化的配置项（按租户隔离）；
+   - 支持被动态停用的非核心能力集；
+   - 连接器描述与定时任务作业定义；
+   - 导航菜单栏入口及其专属的前端 UI 包 (`@pkg/<app>`)；
+   - 依赖需求：其所依赖的其他应用的动作、读取接口或业务事件。
+3. **清晰的三层单向架构。** 平台通用服务层 ← 垂直业务应用层 ← 协同桥接与行业解决方案层。
+   - 业务应用仅允许单向依赖底层平台。
+   - 桥接包 (ADR-0009) 仅依赖其所连接协同的具体业务应用。
+   - 任何需要调用另一个应用的动作、读取或事件的应用，必须在清单中显式声明，且整个依赖关系图谱必须是有向无环图 (DAG)。
+   - 系统在构建期严格校验该依赖图谱。若某个租户尚未启用某应用所声明的前置依赖，宿主坚决拒绝启用该应用；反之，若某个应用正被其他已启用的应用所依赖，宿主坚决拒绝将其停用。
+4. **所有跨应用的交互流量必须统一经由宿主调度路由，** 一律按逻辑名称（动作名称、读取名称、事件名称）发起调用，严禁直接在代码层面直接调用另一个应用的私有方法。因此，每一次跨应用交互均能天然享有：
+   - 按照调用者在目标被调用应用中所持有的合法角色实施严格的鉴权控制；
+   - 在租户日志中实现全局单调严格保序；
+   - 自动纳入全链路审计追踪日志；
+   - 能够清晰在系统的全局依赖图谱中可视化绘制呈现。
+5. **能力发现机制 (Discovery)。** 宿主基于注册表维护全量应用清单，并依据当前调用者的实际权限进行动态裁剪过滤。人类用户、外部系统集成商与 AI 智能体获得完全一致的标准动态目录（`/v1/actions`、`/v1/apps`）。系统包含的能力在构建期便已静态确定 (ADR-0008)：在运行时绝不搞动态的服务寻找发现，亦不进行不受信任的任意源码动态热加载。
+6. **全生命周期管理 (Lifecycle)。**
+   - 安装：应用直接随宿主源码一同编译打包进可执行二进制中。
+   - 启用或停用：按租户粒度进行隔离控制，体现为平台级管理应用中的一项受审决策记录。
+   - 升级：重新编译构建宿主、重启进程、并通过重放机制无损恢复日志数据 (ADR-0007)。有效负载的版本平滑演进全面交由 K7 模式机制统辖。
+   - 移除卸载：当某个应用被停用后，其所贡献的动作与导航入口立即从所有调用者的目录中彻底下线剥离，其配置的定时任务与事件订阅立即终止运行（严格遵循 K9 所有者关闭语义）。其历史上已被记录在案的客观事实永久保留，对其中历史实体的引用依然能够被正常寻址解析。历史已持久化接受的决策绝不发生回滚 (ADR-0008 第 4 点)。
+7. **平台管理应用 (The platform app)。** 运行在同一宿主之上的特殊核心内建应用，拥有专属的“系统设置 (Settings)”管理工作区（详见第三部分），其内部产生的所有系统管理决策完全同普通业务应用一样，通过内核契约严格记入日志。平台完全依托其赋予普通应用的相同工具体系来实现自身的日常治理。
 
-## Part 2. What the host provides
+## 第二部分：宿主对外提供的标准能力
 
-The rows below name the capability and what an app gets from it. The "When" column is the work item that delivers it; "later" means built when an app first needs it, never ahead of a user.
+下表清晰罗列各项底层基础设施能力及其为业务应用赋予的核心价值。“交付时机”一栏标注落地该能力的工作项编号；标为“后续”的能力意味着遵循敏捷演进原则：仅在首个业务应用真正产生痛点需求时才行构建，绝不超前脱离用户空想造轮子。
 
-**A. App management**
+**A. 应用管理与生命周期**
 
-| Capability | An app gets | Reference | When |
+| 核心能力 | 应用所获得的支持 | 业界成熟标杆参考 | 交付时机 |
 |---|---|---|---|
-| App registry | Its manifest registered; discoverable by name | Odoo `ir.module.module`, ServiceNow app repository | #92 |
-| Requirement check | Start-up and build refuse unmet or cyclic requirements | Odoo `depends`, Power Platform solution dependencies | #92 |
-| Enable and disable per tenant | Activation as a recorded decision; its contributions appear or leave | SAP CAP feature toggles | #92 (start-up), #93 (Settings) |
-| Upgrade | Rebuild, restart, replay; payload upgrades through K7 | Power Platform solution upgrade | exists (ADR-0007) |
+| 应用注册表 | 其清单被规范注册；支持按名称全局发现 | Odoo `ir.module.module`、ServiceNow 应用仓库 | #92 |
+| 依赖完整性校验 | 启动与构建时自动拒绝未满足或存在循环依赖的非法组合 | Odoo `depends`、Power Platform 解决方案依赖检查 | #92 |
+| 按租户启用与停用 | 功能激活体现为受审的决策记录；其功能入口可优雅上线或剥离 | SAP CAP 特性开关切换 (Feature toggles) | #92 (启动期), #93 (设置中心) |
+| 版本平滑升级 | 重新编译、安全重启、确定性日志重放；数据载荷演进交由 K7 统筹 | Power Platform 解决方案平滑升级 | 已存在 (ADR-0007) |
 
-**B. Identity and access**
+**B. 身份认证与权限访问控制**
 
-| Capability | An app gets | Reference | When |
+| 核心能力 | 应用所获得的支持 | 业界成熟标杆参考 | 交付时机 |
 |---|---|---|---|
-| Authentication | Callers proven by OIDC; apps never see credentials | Rauthy (ADR-0007) | exists |
-| Directory | Members of a tenant, with attributes (lines, properties) and organisational units | Odoo users and companies | #92 |
-| Roles per app | The app defines roles; each member holds zero or one role per app | Odoo groups, Salesforce permission sets | #92 |
-| Scoped grants | A role limited by attributes (line L1, property A); the app's policy reads them (K6) | Odoo record rules | #92 |
-| Grant and revoke | Decisions with history; effective on the next request | — | #92 |
-| Service accounts and AI agents | Non-human members with their own grants and catalog | ServiceNow integration users | #92 |
-| Effective permissions | "Who may do X", "what may Y do" | Salesforce permission analysis | #93 |
+| 统一身份认证 | 调用者身份由标准 OIDC 严格证明；业务应用绝不接触明文密码凭据 | Rauthy (ADR-0007) | 已存在 |
+| 企业人员目录 | 租户名下的组织成员体系，附带属性信息（产线、所属门店）与组织架构单元 | Odoo 用户与多公司体系 | #92 |
+| 应用专属角色 | 应用自主定义角色模型；每位成员在每个应用内部拥有零个或一个专属角色 | Odoo 权限组 (groups)、Salesforce 权限集 (permission sets) | #92 |
+| 视野限定授权 | 角色权限受具体属性约束（如仅限产线 L1、仅限门店 A）；应用的策略引擎直接查阅上下文 (K6) | Odoo 记录级安全规则 (record rules) | #92 |
+| 权限授予与撤销 | 包含完整历史记录的受管决策；在下一次即时请求中即刻生效 | — | #92 |
+| 服务账号与 AI 智能体 | 具备独立权限授权体系与受限动作目录的非人类主体凭据 | ServiceNow 系统集成账号 (Integration users) | #92 |
+| 有效权限穿透分析 | “谁有权执行动作 X”、“用户 Y 能够执行哪些操作”的一键反查 | Salesforce 权限深度分析工具 | #93 |
 
-**C. Tenancy and organisation**
+**C. 多租户与组织架构治理**
 
-| Capability | An app gets | Reference | When |
+| 核心能力 | 应用所获得的支持 | 业界成熟标杆参考 | 交付时机 |
 |---|---|---|---|
-| Tenants | Isolation of data, journal, members and settings (K6) | SAP BTP subaccount | exists |
-| Organisational units | A tree (group → company → property/plant → line) apps use as policy context, never as kernel schema | Odoo multi-company | #93 |
-| App settings | Typed per-tenant settings declared by the app, edited in Settings | Odoo `res.config.settings` | #97 |
-| Number sequences | Readable document numbers (SO-1042) per tenant and unit, without gaps across replays | Odoo `ir.sequence` | later |
+| 多租户强隔离 | 业务数据、持久化日志、组织成员与系统配置的物理/逻辑强隔离 (K6) | SAP BTP 子账户体系 (Subaccount) | 已存在 |
+| 组织架构单元 | 树状层级网络（集团 → 法人公司 → 门店/生产厂区 → 作业产线），供应用作为策略上下文查阅，绝不硬编码为内核模式 | Odoo 多公司架构 | #93 |
+| 应用高级设置 | 由应用自主声明的类型化配置项，在平台设置中心由管理员可视化配置维护 | Odoo `res.config.settings` | #97 |
+| 单据保序编号序列 | 面向人类可读的业务单据流水号生成规则 (如 SO-1042)，按租户与单元隔离，在日志重放中保证绝对无断号跳号 | Odoo `ir.sequence` 自动序号机制 | 后续按需 |
 
-**D. Data**
+**D. 数据与持久化底座**
 
-| Capability | An app gets | Reference | When |
+| 核心能力 | 应用所获得的支持 | 业界成熟标杆参考 | 交付时机 |
 |---|---|---|---|
-| Tenant journal | One ordered, durable journal across the tenant's apps; replay; backup and restore | ADR-0007 | #92 |
-| Kernel logs per app | Change log, facts, authority for its data classes (`Ledger`) | — | exists (#91) |
-| Entity references | Open any entity by type and ID across apps (routes, links, redirects, K1) | — | #93 |
-| Files and attachments | Stored files referenced from entities | — | later |
-| Analysis datasets | Read-only projections for customer models and dashboards (ADR-0008 point 2) | SAP datasphere, Dataverse views | later |
-| Retention and privacy | Erasure duties reconciled with history (K4 falsifier) | — | later |
+| 租户统一日志 | 贯穿租户下所有应用的统一保序、强持久化日志；无损重放；完备备份与灾备自愈 | ADR-0007 | #92 |
+| 应用级内核账本 | 变更记录日志、客观事实日志、针对自身数据类别的绝对权威控制 (`Ledger`) | — | 已存在 (#91) |
+| 全局实体引用寻址 | 能够根据类型与全局 ID 跨越所有应用直接打开任意业务实体（系统路由、跳转链接、重定向解析，K1） | — | #93 |
+| 文件存储与附件体系 | 能够对任意实体挂接并持久化存储大文件二进制资产 | — | 后续按需 |
+| 多维分析数据集 | 专门服务于客户自定义数据模型与运营仪表盘的只读投影视图 (ADR-0008 第 2 点) | SAP Datasphere、Microsoft Dataverse 视图 | 后续按需 |
+| 数据生命周期与隐私合规 | 满足法规要求的历史数据安全擦除抹除职责，同时妥善调和历史可溯性矛盾 (K4 可证伪性要求) | — | 后续按需 |
 
-**E. Actions, events and integration**
+**E. 动作编排、事件驱动与系统集成**
 
-| Capability | An app gets | Reference | When |
+| 核心能力 | 应用所获得的支持 | 业界成熟标杆参考 | 交付时机 |
 |---|---|---|---|
-| Action catalog and invocation | Declared actions; callers receive their own catalog; cross-app calls through the host | ADR-0008 | exists; routing through the host in #92 |
-| Public reads | Named queries other apps and the UI may use | Salesforce OSDK-like APIs | #92 |
-| Events | Subscriptions over change records, delivered after commit, handlers owned as work (K9) | ServiceNow business rules and events, Odoo automated actions | #94; owned work with retries in #97 |
-| Scheduled work | Jobs with owner, checkpoints and cancellation (K9) | Odoo `ir.cron`, ServiceNow scheduled jobs | #97 (ADR-0013) |
-| Connectors | Push and poll sources with cursors and health (K8) | ServiceNow IntegrationHub | exists (manufacturing); managed in Settings in #97 |
-| Outbound API and webhooks | External systems call actions or receive events with the same grants | — | #100 (ADR-0014) |
-| Agent adapters | CLI and MCP over a caller's catalog | ADR-0008 | exists (CLI); MCP in #95 |
+| 动作目录与安全调用 | 声明式动作全景；调用者仅能获取到其自身受权调用的专属子目录；所有跨应用交互统一经由宿主路由 | ADR-0008 | 已存在；经由宿主的统一路由在 #92 |
+| 公开读取接口 | 对外暴露标准命名的查询接口，供其他应用或前端 UI 界面直接调用 | 类似 Salesforce OSDK 标准数据读取 API | #92 |
+| 业务事件通知网格 | 构建于变更记录之上的可靠订阅机制，在事务提交落盘后保序分发，事件处理者作为受属工作被可靠追踪监管 (K9) | ServiceNow 业务规则与系统事件、Odoo 自动化动作机制 | #94；带自动重试的受属工作在 #97 |
+| 计划作业定时任务 | 具备所有权归属、故障自愈检查点与优雅取消机制的后台定时作业 (K9) | Odoo `ir.cron` 定时器、ServiceNow 计划作业 | #97 (ADR-0013) |
+| 外部连接器拓扑 | 原生支持针对推送源与轮询源的增量同步游标治理与健康状态检测机制 (K8) | ServiceNow IntegrationHub 统一集成中心 | 离线制造已存在；在设置中心集中管理见 #97 |
+| 出站开放 API 与 Webhook | 外部异构系统以完全相同的安全授权标准调用业务动作或订阅接收业务事件 | — | #100 (ADR-0014) |
+| 智能体标准化适配器 | 在调用者专属受权目录之上，向外提供即插即用的命令行 CLI 与现代化 MCP 服务端点 | ADR-0008 | CLI 已存在；MCP 支持见 #95 |
 
-**F. Operations**
+**F. 运营审计与全方位运维监控**
 
-| Capability | An app gets | Reference | When |
+| 核心能力 | 应用所获得的支持 | 业界成熟标杆参考 | 交付时机 |
 |---|---|---|---|
-| Audit | Who did what, when, through which app, from the journal | — | #93 (view) |
-| Logs and correlation | Correlation IDs across cross-app calls, no business content | Platform.md §7 floor | #92 |
-| Health | App, connector and journal health | — | #93 |
-| Backup and restore | Rehearsed | ADR-0007 | exists |
-| Notifications | In-app notices from events; email later | — | #97 (in-app) |
+| 运营审计追踪 | 从底层持久化日志中全息回溯：谁在何时通过哪个应用发起了何种具体操作 | — | #93 (可视化审计视图) |
+| 结构化日志与链路追踪 | 跨越所有跨应用调用的分布式链路关联 ID，严格过滤杜绝记录任何敏感业务机密 | Platform.md §7 底线运营标准 | #92 |
+| 全景健康度监控 | 应用运行状态、连接器连通性以及租户日志追加健康度的全息指标采集 | — | #93 |
+| 备份与灾难恢复演练 | 经过实战高频自动化演练的生产级备份还原全链路 | ADR-0007 | 已存在 |
+| 全局业务通知体系 | 由底层业务事件直接触发的应用内站内通知；后续逐步扩充邮件外发渠道 | — | #97 (应用内站内信) |
 
-**G. The UI host**
+**G. 现代化前端 UI 宿主底座**
 
-| Capability | An app gets | Reference | When |
+| 核心能力 | 应用所获得的支持 | 业界成熟标杆参考 | 交付时机 |
 |---|---|---|---|
-| Workspace shell | Docking workspace, command palette, session, theme | `@platform/ui` | exists |
-| App launcher and navigation | Entries contributed from the manifest; shown only when the caller's catalog allows | VS Code contribution points, OpenMRS extension slots | #93 |
-| Cross-app links | Open another app's entity view by reference | — | #93 |
-| App UI packages | `@pkg/<app>` views used by any software | ADR-0009 | exists (#91) |
-| Preferences | Language, theme, density per member | — | later |
+| 统一工作区外壳 | 可自由停靠与拖拽拆分的多标签页工作区、全局快捷命令面板、会话管理、深浅色主题自由切换 | `@platform/ui` | 已存在 |
+| 应用启动器与全局导航 | 自动汇聚各应用清单声明的导航菜单项；依据当前调用者的实际动作目录动态过滤展示 | 类似 VS Code 插件贡献点体系 (Contribution points)、OpenMRS 扩展插槽 | #93 |
+| 跨应用无缝联动跳转 | 能够依据类型与全局 ID 跨越不同业务应用无缝打开并查看目标实体详情界面 | — | #93 |
+| 领域专属 UI 包体系 | 由 `@pkg/<app>` 交付的各业务专属视图，能够被嵌入集成至平台的任意应用界面中 | ADR-0009 | 已存在 (#91) |
+| 个人偏好设置管理 | 允许每位组织成员自主定制其界面语言、主题风格及数据展示密度 | — | 后续按需 |
 
-## Part 3. Settings (the platform app's workspace)
+## 第三部分：设置中心（平台管理专属工作区）
 
-| Area | Operations |
+| 管理领域 | 涵盖的核心系统运维操作 |
 |---|---|
-| Apps | Installed apps and versions; enable or disable per tenant with the requirement graph; deactivate capabilities; health |
-| Members and access | Members from the identity provider; roles per app with attribute scopes; service accounts and AI agents; grant history; effective permissions |
-| Organisation | Tenant profile; organisational units; per-app settings forms from app declarations |
-| Integrations | Connectors with health, cursor and last error; API clients |
-| Data and audit | Journal and audit explorer by app, member and entity; entity history; backup status |
-| Automation | Scheduled and running work; event subscriptions and failed deliveries |
-| Capability matrix | Live from the registry: what each app provides and requires, and which platform capabilities it uses |
+| 应用管理中心 | 当前已安装的应用全景列表与其具体版本；基于应用依赖图谱为各个租户实施启用或停用；精细化停用特定非核心能力；各应用实时健康度检测 |
+| 组织成员与访问控制 | 从企业身份提供商同步而来的组织全员名录；面向各个应用的角色指派与基于属性的视野限定；服务账号与 AI 智能体管理；权限变更全息历史；有效权限穿透反查 |
+| 组织架构管理 | 租户全局基础信息配置；多层级组织架构树状网络维护；直接基于各业务应用声明自动渲染的应用级配置表单 |
+| 第三方集成枢纽 | 外部连接器集中管理面板，呈现实时连通健康状态、增量同步游标及最近报错异常详情；开放 API 授权客户端治理 |
+| 数据中心与审计总览 | 跨应用、按操作主体与业务实体全息钻取的日志与安全审计探查器；单条实体的完整变更生命史回溯；自动化备份最新状态监控 |
+| 流程自动化监控 | 已规划编排与正在运行中的异步任务全景；全量事件订阅管道及分发失败重试队列的深度监控与人工干预 |
+| 系统能力矩阵视窗 | 从注册表中实时动态生成的全景能力拓扑图谱：清晰呈现每个应用对外提供了哪些能力、依赖了哪些能力、以及消耗了平台的哪些通用能力 |
 
-## Consequences
+## 影响与后果
 
-- **Delivery order.**
-  - #92: the host, manifests, the directory with per-app roles and scoped grants, the tenant journal, and cross-app routing and reads. The sales composition and manufacturing move onto it.
-  - #93: Settings and the platform capabilities it needs to show.
-  - #94: events.
-  - Everything marked "later" waits for its first user.
-- **Kernel.** The kernel contract does not change. The manifest becomes contract (spec and vectors) when a non-Go app needs it.
-- **Deleted.** Composition code in `crmhotel.NewServer` and per-package principal types.
+- **开发交付推进顺序。**
+  - #92 任务：交付平台宿主、应用清单机制、包含应用级角色与视野限定的人员目录、租户统一日志、以及跨应用路由调度与数据读取。销售业务组合与离线制造全面迁移至该底座。
+  - #93 任务：交付系统设置中心，以及其为了完整呈现系统状态所必须依赖的平台级各项能力。
+  - #94 任务：交付底层的业务事件网格体系。
+  - 所有被标为“后续”的能力，必须严格保持克制定力，直至首个业务应用真正产生痛点需求时再行立项。
+- **内核契约。** 内核底层契约无需做任何修改。应用清单机制未来唯有在非 Go 语言开发的应用需要对外暴露清单时，才正式升级晋升为内核契约的一部分（模式与测试向量先行）。
+- **废弃清理。** 彻底删除并清理在 `crmhotel.NewServer` 中临时手写的硬编码胶水编排代码，以及早期为各个独立包分散定义的碎片化主体类型。
 
-**Revisit when:**
-- an app must run in its own process or be released on its own (the host then becomes a gateway over app processes);
-- third parties build apps (ADR-0008 point 1: isolation, a public manifest API, review).
+**重新评估时机：**
+- 当某个业务应用因极端性能隔离诉求，必须运行在独立的独立操作系统进程中或需要独立发布时（宿主届时将自然演进为统领各个独立应用进程的微服务 API 网关）；
+- 当系统正式接纳第三方外部合作伙伴独立开发应用包时（此时需正式引入 ADR-0008 第 1 点所规定的强代码沙箱隔离、公开的清单 API、以及严格的应用上架审查体系）。
 
-## Amendments (#104, owner decisions after the convergence audit)
+## 架构重大修订记录（#104，负责人基于架构收敛审计作出的权威决策）
 
-- **Points 2–4, requirements and tiers.** Superseded by ADR-0011:
-  - An app declares the protocols it provides and consumes, never another app. There is no requirement graph and no bridge tier.
-  - Cross-app traffic goes through the host, from a consumer to the bound provider.
-  - The protocol graph is what composition checks: a provider is composed before its consumers.
-  - `Manifest.Requires`, `Caller.Submit` and `Caller.Read` were removed.
-- **Point 6, enable and disable.** Apps are composed per tenant in code, by the solution or the deployment. Capabilities are deactivated at start-up. Enabling or disabling an app as a recorded decision of the platform app is deferred until a tenant must change its apps without a release. That decision then needs:
-  - catalog removal;
-  - stopping the app's work (ADR-0013);
-  - references that keep resolving.
-- **Point 7, the platform app.** Its type is `Console`. The directory of members is one of its areas; connectors, settings, work, protocol bindings, notifications, endpoints and effects are the others. Each decision goes to the area that owns its target type.
-- **The app boundary.** An app sees the package `platformserver/platform`: `Caller`, `Manifest`, the declarations and `Ledger`. The host runtime (`platformserver`) implements `platform.Runtime`, the only way from an app into the host.
+- **关于第 2–4 点（应用依赖需求与三层架构）：** 已被 ADR-0011 正式全面取代：
+  - 应用仅需声明其所**提供 (provides)** 与**消费 (consumes)** 的标准化协议，严禁在代码中直接声明对另一个具体应用的直接硬编码依赖。系统中彻底废除应用间的显式需求依赖图谱，彻底取消“桥接层”这一中间层级概念。
+  - 所有跨应用的数据交互统一经由平台宿主调度，由协议消费者向宿主已绑定的具体协议提供者发起请求。
+  - 协议图谱成为系统编排时进行拓扑检查的唯一标准：协议提供者必须确保在其消费者之前完成系统的装配。
+  - 彻底从代码中移除了旧有的 `Manifest.Requires`、`Caller.Submit` 以及 `Caller.Read`。
+- **关于第 6 点（应用的启用与停用）：** 应用按租户维度在纯代码中完成编排组装，由具体行业解决方案或底层部署代码统一确立。底层能力在系统启动初始化时完成停用。将“启用或停用某个应用”作为平台级记录在案的动态决策推迟落地，直至出现某个租户必须在完全不停机且不重新发版的前提下动态变更其业务应用的强需求为止。届时，该决策落地必须严格满足：
+  - 动态从所有调用者的可用目录中剥离对应功能；
+  - 严格停止该应用名下所有的后台受属工作 (ADR-0013)；
+  - 确保历史上指向该应用实体的跨系统引用始终能够被正常寻址解析。
+- **关于第 7 点（平台管理应用）：** 其核心底层 Go 类型正式确立为 `Console`。人员组织目录是其统辖的其中一个管理业务领域；连接器配置、系统设置、受属工作、协议动态绑定、通知中心、出站端点以及外部效果管理则构成其他各个独立管理领域。每一次管理决策，严格投递流转给统领该目标实体类型的专属领域去执行裁决。
+- **应用与平台的代码隔离边界：** 业务应用在编译期唯一允许导入的底层包严格收敛为 `platformserver/platform`：其中包含 `Caller`、`Manifest`、各类元数据声明、以及 `Ledger` 账本。平台宿主运行时 (`platformserver`) 实现内部的 `platform.Runtime` 接口，这是从一个业务应用安全跨入宿主内部的唯一合法通道。

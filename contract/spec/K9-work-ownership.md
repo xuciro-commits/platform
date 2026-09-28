@@ -1,26 +1,26 @@
-# K9 Work ownership — semantics (contract v1alpha1)
+# K9 工作所有权 — 语义规范 (契约 v1alpha1)
 
-Schema: `proto/platform/kernel/v1alpha1/work.proto`. Vectors: `vectors/k9-work.json`. Errors: `errors.md`.
+模式定义：`proto/platform/kernel/v1alpha1/work.proto`。一致性测试向量：`vectors/k9-work.json`。错误代码：`errors.md`。
 
-## Model
+## 概念模型
 
-- **Work** is anything that runs longer than a request: an import, a recomputation, a fingerprint scan, a batch of releases. It has exactly one **owner** (a session, a window, a job runner) that keeps it alive.
-- Every start begins a new **generation**. A result carries the generation it was computed for; results of an older generation are **stale** and discarded, never applied.
-- A **checkpoint** is an opaque resume point. It survives cancellation and failure, so a restart resumes instead of repeating.
-- Work produces decisions (K4) along the way. Cancelling or closing an owner stops further work; it never reverts decisions already accepted.
+- **工作 (Work)** 指执行耗时超越单次即时请求的任何计算任务：数据导入、全量重算、文本指纹扫描、批量发布下发。它拥有唯一明确的**所有者 (owner)**（一个会话、一个窗口、或一个作业运行器）来维系其生命周期。
+- 每次启动均开启一个全新的**世代 (generation)**。计算结果携带其所属的目标世代标识；来自旧世代的计算结果属于**陈旧过期结果 (stale)**，直接予以丢弃，绝不生效应用。
+- **检查点 (checkpoint)** 是不透明的断点续传恢复锚点。它在取消与故障中完好存活，使重启得以断点续传而非从头重复执行。
+- 工作在推进过程中逐步产出决策 (K4)。取消工作或关闭所有者仅中止后续操作；已持久化接受的既有决策绝不发生回滚。
 
-## Rules
+## 语义规则
 
-| # | Rule | Error when violated |
+| 编号 | 规则描述 | 违规返回错误 |
 |---|---|---|
-| W1 | Starting work needs a work ID and an owner. Starting new work, or restarting work that is not running, begins the next generation in `RUNNING` and returns the last checkpoint to resume from. Starting running work fails. | `INVALID_ARGUMENT`, `CONFLICT` |
-| W2 | Progress, checkpoints, completion and failure name a generation; they are accepted only for the current generation of running work. | `CONFLICT` |
-| W3 | Progress never decreases within a generation. | `CONFLICT` |
-| W4 | Cancelling running work makes it `CANCELLED`; cancelling work that is not running fails. | `CONFLICT` |
-| W5 | Closing an owner cancels all its running work; completed and failed work stay as they are. | — |
-| W6 | Operations on unknown work fail. | `NOT_FOUND` |
+| W1 | 启动工作必须指定工作 ID 与所有者。启动新工作、或重启处于非运行状态的工作，会将下一世代置为 `RUNNING`（运行中）并返回用于断点续传的最后检查点。启动正在运行中的工作报错失败。 | `INVALID_ARGUMENT`, `CONFLICT` |
+| W2 | 进度上报、检查点提交、完工确认与失败抛出均必须明确标注世代号；系统仅对处于运行中工作的当前最新世代接纳这些操作。 | `CONFLICT` |
+| W3 | 在同一世代内部，上报的进度数值单调递增，绝不倒退。 | `CONFLICT` |
+| W4 | 取消处于运行中的工作将其状态置为 `CANCELLED`；取消非运行状态的工作报错失败。 | `CONFLICT` |
+| W5 | 关闭所有者会自动取消其名下所有处于运行中的工作；已完工或已失败的工作保持原状不变。 | — |
+| W6 | 针对未知工作执行操作报错失败。 | `NOT_FOUND` |
 
-## Notes
+## 补充说明
 
-- W2 is the platform-wide form of stale-result invalidation: a search whose query changed, a page loaded for a closed window, a recomputation superseded by newer data.
-- Server job runners follow these vectors (the host's `Tenant.Work`).
+- 规则 W2 是平台级过期结果作废机制的形式化表达：例如搜索词已改变的历史搜索、针对已关闭窗口加载的页面、被更新数据所取代的过期重算。
+- 服务端作业运行器严格遵循这些测试向量（宿主的 `Tenant.Work`）。

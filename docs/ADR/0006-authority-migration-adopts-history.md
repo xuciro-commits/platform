@@ -1,11 +1,11 @@
-# ADR-0006: Authority migration adopts the previous authority's history
+# ADR-0006: 权威迁移完整采纳前一任权威的历史记录
 
-**Status:** Accepted (2026-09-24)
+**状态：** 已接受 (2026-09-24)
 
-**Context.** K5 promised that authority can migrate (a personal library becoming shared, drill E2), and A2 let a data class be redeclared with a new epoch. Nothing said what happens to the decisions the old authority accepted: the new authority's log starts empty, so replays of old keys would be applied again and the history would split between devices.
+**背景上下文。** 内核假说 K5 承诺权威归属支持在线迁移（例如个人曲库升级为共享家庭库，演练 E2），且 A2 允许某个数据类别以全新的纪元 `epoch` 进行重新声明。然而此前规范并未明确原权威已经接受的历史决策应当如何处置：新权威的日志在初始时是完全为空的，这将导致旧幂等键的重放被当作全新操作再次执行，从而导致不同设备之间的历史事实发生分裂割裂。
 
-**Decision.** K5 A10: after a migration the new authority adopts the previous authority's records unchanged — change IDs, times, principals, the old authority's name — into an empty tenant log, in recorded order, with unique change IDs and keys, before accepting new submissions. Replays of adopted keys return the adopted record. A broken history is refused as a whole (`CONFLICT`). The tenant ID does not change, so a personal space needs a globally unique tenant ID from its creation.
+**决策。** 确立 K5 A10 条款：在发生权威迁移后，新权威在接纳任何新提交之前，必须将前任权威已接受的历史记录原样完整**采纳 (adopt)**——严格保留变更 ID、时间戳、操作主体凭据以及原权威名称——导入至其原先为空的租户日志中，并确保按记录时间保序，且变更 ID 与幂等键全局唯一。被采纳键的幂等重放必须直接返回对应的被采纳记录。损坏或不连续的历史事实将作为一个整体被直接拒绝 (`CONFLICT`)。租户 ID 在迁移过程中保持绝对恒定，因此个人空间从创建之初就必须分配全局唯一的租户 ID。
 
-**Consequences.** Go and Swift implement `adopt` and run `vectors/k5-migration.json`. MSRU must replace its fixed `local` tenant with a unique one before any sharing (MSRU work queue). Transport of the records (upload, sync cursor) is not kernel; it is a connector or sync capability.
+**影响与后果。** Go 与 Swift 均原生实现 `adopt` 接口并运行 `vectors/k5-migration.json` 测试向量。MSRU 必须在开展任何共享之前，将其固定的 `local` 租户 ID 替换为全局唯一的独立 ID（已记录在 MSRU 工作队列中）。记录的具体网络传输机制（上传通道、增量同步游标）不属于内核范畴；它属于连接器或同步机制通用能力。
 
-**Revisit when** two authorities must merge histories (two personal libraries joining one shared library), which adoption into an empty log does not cover.
+**重新评估时机：** 当必须将两个独立权威的历史进行双向融合合并时（例如将两个不同的个人独立曲库合并为一个共享曲库），单纯将单方历史采纳进空日志的机制无法涵盖该场景。

@@ -1,32 +1,32 @@
-# ADR-0016: The application model — declare entities once, get the rest
+# ADR-0016: 应用模型 —— 声明实体一次，派生其余一切
 
-**Status:** Accepted (2026-09-25, #106). The owner accepted D1–D8 as recommended. What is built is under "As built".
+**状态：** 已采纳 (2026-09-25, #106)。业务负责人按推荐采纳了 D1–D8。实际构建内容见“实际构建（As built）”。
 
-## Context
+## 背景
 
-The host already runs apps, journals their decisions, governs actions and composes apps through protocols. What it does not know is an app's **data**. Every app keeps its own maps in memory, writes its own list reads (which return everything), its own forms and screens, and its own scope checks. Odoo, Salesforce, Dataverse, Frappe, Foundry and Oracle all start from the opposite end: a model of the business data from which lists, forms, search, APIs, history and security follow. That is the largest gap between where we are and where we are going (Platform.md §10.1).
+宿主已经能够运行应用、记录其决策日志、治理操作并通过协议组合应用。但宿主此前并不了解应用的**数据**。每个应用都在内存中维护自己的映射表，自行编写列表读取（往往一次性返回全部数据）、自行编写表单与界面，并自行实现范围检查。而 Odoo、Salesforce、Dataverse、Frappe、Foundry 和 Oracle 都是从对立面出发：建立业务数据模型，列表、表单、搜索、API、历史和安全控制皆由此自然派生。这是我们当前状态与目标愿景之间最大的鸿沟（[Platform.md](../Platform.md) §10.1）。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| Platform | Declaration | Relations | Rules | Record security | What follows for free |
+| 平台 | 声明方式 | 关联关系 | 业务规则 | 记录级安全 | 自然附带获得的能力 |
 |---|---|---|---|---|---|
-| Odoo | Python classes, typed fields (`Char`, `Many2one`, `One2many`, `Monetary` …), computed and related fields, constraints | Many-to-one, one-to-many, many-to-many | Methods, `@api.constrains` | Groups, access rights, record rules (domains), multi-company | List, form, kanban, calendar, pivot, search, chatter, import/export, JSON-RPC |
-| Frappe | DocType as JSON metadata, Link fields, child tables | Links, child tables | Controller hooks (validate, on_submit) | Role permissions, user permissions on linked values | Desk list and form, REST API, reports, print formats |
-| Salesforce | Objects and fields defined as metadata, formula fields, validation rules | Lookup, master-detail | Apex triggers, validation rules | Profiles, permission sets, sharing rules, field-level security | Record pages, list views, reports, REST/SOQL, history tracking |
-| Dataverse | Tables, columns, relationships | 1:N, N:N | Business rules, plug-ins | Security roles with access levels: user, business unit, parent–child units, organisation | Model-driven apps, views, forms, Web API (OData) |
-| Palantir Foundry | Object types backed by datasets, link types | Link types | Action types, functions | Markings, object security policies | Object Explorer, Workshop widgets, OSDK |
-| Oracle Fusion / APEX | Application Composer custom objects and fields; APEX on tables | Relationships, child objects | Groovy triggers and validations | Data security policies, business units | Pages and forms, interactive grids, REST for every object |
+| Odoo | Python 类，类型化字段（`Char`, `Many2one`, `One2many`, `Monetary` …），计算字段与关联字段，约束 | 多对一、一对多、多对多 | 方法，`@api.constrains` | 用户组、访问权限、记录规则（域过滤 domains）、多公司支持 | 列表、表单、看板、日历、透视表、搜索、讨论动态（chatter）、导入/导出、JSON-RPC |
+| Frappe | DocType 作为 JSON 元数据，Link 字段，子表 | Links，子表 | 控制器钩子（validate, on_submit） | 角色权限，关联字段上的用户级权限 | Desk 列表与表单，REST API，报表，打印格式 |
+| Salesforce | 对象与字段定义为元数据，公式字段，校验规则 | Lookup，主从关系（master-detail） | Apex 触发器，校验规则 | 简档（Profiles）、权限集、共享规则、字段级安全 | 记录页面、列表视图、报表、REST/SOQL、变更历史追踪 |
+| Dataverse | 表、列、实体关系 | 1:N, N:N | 业务规则，插件（plug-ins） | 具备访问级别的安全角色：用户、业务单元、父子业务单元、整个组织 | 模型驱动应用、视图、表单、Web API (OData) |
+| Palantir Foundry | 由数据集支持的对象类型，链接类型（link types） | 链接类型 | 操作类型（Action types），函数 | 标记（Markings），对象安全策略 | 对象浏览器（Object Explorer）、Workshop 部件、OSDK |
+| Oracle Fusion / APEX | Application Composer 自定义对象与字段；基于表的 APEX | 关联关系，子对象 | Groovy 触发器与校验 | 数据安全策略，业务单元 | 页面与表单，交互式网格，每个对象的 REST API |
 
-Two things we keep that they mostly do not have:
-- **Every change is a journaled decision, replayed through the same code** (ADR-0007). Record history, audit, replay safety and approvals are native rather than added on.
-- **Rules and models are typed code**, never tenant metadata edited at run time (ADR-0008, AGENTS.md rule 5). We take what their metadata buys — declare once, get the rest — through typed declarations in code.
+我们保留了两项上述平台大多不具备的特性：
+- **每次变更皆为记入日志的决策，并通过相同的代码重放**（[ADR-0007](0007-input-journal-and-oidc.md)）。记录历史、审计、重放安全性和审批是原生内置的，而非后期附加。
+- **规则与模型均为类型化代码**，绝非在运行时编辑的租户元数据（[ADR-0008](0008-packages-customization-and-callers.md)，AGENTS.md 规则 5）。我们通过代码中的类型化声明，获取其元数据所带来的全部收益 —— 声明一次，派生其余一切。
 
-## Design
+## 设计
 
-1. **Entity types are declared in the app's manifest, as Go types.**
-   - A struct with field tags gives the entity's fields. The platform reads the declaration once, when the tenant is composed, and checks it like the rest of the manifest.
-   - Field types extend the UI kit's: text, long text, integer, decimal, money (amount and currency), date, date-time, boolean, choice, reference, references, tags.
-   - Each type declares a display name, required fields, search fields, and a scope rule (D4).
+1. **实体类型在应用的清单中以 Go 类型声明。**
+   - 带有字段标签（field tags）的结构体定义实体的各字段。平台在租户组合编排时读取一次声明，并像校验清单其余部分一样对其进行静态检查。
+   - 字段类型扩展了 UI 套件的类型：文本（text）、长文本（long text）、整数（integer）、小数（decimal）、货币（money，金额与币种）、日期（date）、日期时间（date-time）、布尔（boolean）、枚举选择（choice）、单实体引用（reference）、多实体引用（references）、标签集（tags）。
+   - 每种类型声明显示名称、必填字段、搜索字段以及范围作用域规则（D4）。
 
    ```go
    type Opportunity struct {
@@ -38,80 +38,80 @@ Two things we keep that they mostly do not have:
    }
    ```
 
-2. **The host keeps the records; the app keeps the rules.**
-   - A decision's rules read records through the caller: `platform.Get[T]`, `platform.Find[T]`, and validate them with `c.Check`.
-   - A decision's apply step puts the changed record (`c.Put`). The host stores it, in the input, so replay rebuilds it exactly as today.
-   - The kernel logs (change log, facts, identity) stay the app's `Ledger`.
-3. **One read contract for every entity type.**
-   - Endpoints:
-     - `GET /v1/records/<type>` with a filter, sort, page and count;
-     - `GET /v1/records/<type>/<id>`;
-     - the record's history;
-     - the records that reference it (related lists).
-   - The filter language is small and typed: field, operator, value, joined by and/or. It is a subset of Odoo domains and OData `$filter`, never free SQL.
-   - Every read applies the type's scope for the caller (D4).
-   - Protocol reads and app-specific reads stay as they are, for what is not a list of one type.
-4. **Generated actions only where they are plain.**
-   - An entity type may ask for standard create, edit (of editable fields) and archive actions. They are catalog actions with roles, like any other, journaled and replayed.
-   - Business actions (release, check in, win) stay hand-written actions. Lifecycles are stage 2.
-5. **Record history comes from the journal.**
-   - Each record change keeps the decision that made it (K4 target, principal, time) and the fields it changed.
-   - The record page shows this history. Nothing is added to the journal for it.
-6. **The UI kit renders from the declaration.**
-   - `GET /v1/entities` describes the types a member may read.
-   - The kit gets a generic list page with server paging and a record page: header, fields in sections, related lists, a history and comments panel. It also gets forms generated from the declaration.
-   - An app uses these as they are or composes its own views from the same parts, in typed TypeScript (ADR-0004). No page is described by configuration.
+2. **宿主维护记录；应用维护规则。**
+   - 决策的规则通过调用方读取记录：`platform.Get[T]`, `platform.Find[T]`，并使用 `c.Check` 进行业务校验。
+   - 决策的应用步骤写入已变更的记录（`c.Put`）。宿主将其保存在输入日志中，因此重放能够像今天一样精确重建状态。
+   - 内核日志（变更日志、事实、身份凭证）依然保留在应用的 `Ledger` 中。
+3. **针对每种实体类型提供统一的读取契约。**
+   - 端点：
+     - `GET /v1/records/<type>` 支持过滤、排序、分页与计数；
+     - `GET /v1/records/<type>/<id>`；
+     - 记录的历史变更记录；
+     - 引用该记录的相关记录（关联列表）。
+   - 过滤语言小巧且强类型化：字段、操作符、值，通过 and/or 组合。它是 Odoo 域（domains）与 OData `$filter` 的子集，绝非自由 SQL。
+   - 每次读取都对调用方应用该类型的范围作用域（D4）。
+   - 协议读取与应用特定读取保持现状，用于处理不属于单类型列表的场景。
+4. **仅在通用常规场景下生成操作。**
+   - 实体类型可声明启用标准的创建、编辑（仅限可编辑字段）和归档操作。它们与其它操作一样属于带有角色的目录操作，同样被记入日志并重放。
+   - 业务操作（如发布 release、签入 check in、赢单 win）依然保留手写操作。生命周期是第二阶段的工作。
+5. **记录历史直接来自日志。**
+   - 每次记录变更都会保留触发该变更的决策（K4 目标、主体、时间戳）以及变更的字段列表。
+   - 记录详情页直接展示该历史，无需为此向日志额外添加内容。
+6. **UI 套件基于声明进行渲染。**
+   - `GET /v1/entities` 描述成员有权读取的类型。
+   - UI 套件获得具备服务端分页的通用列表页面与记录详情页：头部信息、分节展示的字段、关联列表、历史与评论面板。它还获得由声明自动生成的表单。
+   - 应用可以直接使用这些组件，也可以在强类型 TypeScript 中使用相同部件组合自己的自定义视图（[ADR-0004](0004-web-ui-stack.md)）。不存在由配置驱动描述的静态页面。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Where records live | (a) Each app's memory, as now. (b) A host-owned record store: in memory now, projected into PostgreSQL in stage 3 behind the same read contract. (c) PostgreSQL now | **(b)**: one store the platform understands, with no database dependency added to rules; the projection comes with read models and snapshots |
-| D2 | How entities are declared | (a) Go structs with field tags, read by reflection at composition. (b) A builder in code (`platform.Entity("crm.opportunity", fields…)`). (c) Metadata files | **(a)**: rules get typed records, the declaration and the type cannot drift, and the UI metadata is derived from it. (c) is excluded by ADR-0008 |
-| D3 | What a reference may point to | (a) Any entity type of the tenant. (b) The app's own types, or a protocol's entity type (ADR-0011); links between apps through `relations` | **(b)**: apps stay unaware of each other; a CRM opportunity may reference a `lodging.booking/1` booking, never a `hotel.reservation` |
-| D4 | Record-level security | (a) A Go function per type. (b) Declared scope by the organisation: own, unit, unit and below, whole tenant (Dataverse's access levels) on a named structure and field, with a Go function as the escape hatch. (c) None in stage 1 | **(b)**: declared scope works for in-memory filtering now and for SQL in stage 3; manufacturing's line scope and the hotel's property scope both fit it |
-| D5 | Generated create, edit and archive actions | (a) Always. (b) Opt-in per type, with roles. (c) Never | **(b)**: master data (products, room types, accounts) wants them; documents with lifecycles do not |
-| D6 | Migrating existing apps | (a) All at once. (b) CRM and Hotel first, manufacturing after stage 2 (its orders and SFCs are lifecycles). Action schemas stay, so existing journals replay unchanged | **(b)**: the owner's local journals replay unchanged; each move deletes that app's hand-written lists and forms |
-| D7 | The filter language | (a) A subset of OData `$filter`. (b) Odoo-style domain arrays in JSON. (c) Our own | **(b)**, as JSON arrays: easy to build from a UI and to type-check against the declaration; translatable to SQL in stage 3 |
-| D8 | Kernel | (a) Entity declarations enter the kernel contract now. (b) They stay a platform capability until a second runtime (a Tauri or Swift client offline) needs them | **(b)**, as ADR-0015 did for models |
+| D1 | 记录保存在哪里 | (a) 保留在各应用内存中，与现状一致。(b) 宿主所有的记录存储：当前在内存中，第三阶段在同一读取契约后投影到 PostgreSQL。(c) 立即放入 PostgreSQL | **(b)**：平台能够统一理解的集中存储，且无需给业务规则引入数据库依赖；投影能力随读取模型和快照一同引入 |
+| D2 | 实体如何声明 | (a) 带有字段标签的 Go 结构体，在组合编排时通过反射读取。(b) 代码中的构建器（`platform.Entity("crm.opportunity", fields…)`）。(c) 元数据文件 | **(a)**：业务规则直接获取强类型记录，声明与类型绝对不会漂移，UI 元数据由其直接派生。(c) 已被 [ADR-0008](0008-packages-customization-and-callers.md) 排除 |
+| D3 | 引用可以指向什么 | (a) 租户的任意实体类型。(b) 应用自有的类型，或协议的实体类型（[ADR-0011](0011-apps-interoperate-through-protocols.md)）；跨应用链接通过 `relations` 进行 | **(b)**：应用之间保持互不感知；CRM 销售机会可以引用 `lodging.booking/1` 预订，但绝不能直接引用 `hotel.reservation` |
+| D4 | 记录级安全 | (a) 每种类型编写一个 Go 函数。(b) 基于组织的声明式作用域：本人（own）、本部门（unit）、本部门及下属部门（unit and below）、全租户（Dataverse 的访问级别），针对指定的组织结构与字段生效，并以 Go 函数作为逃生舱口。(c) 第一阶段暂不实现 | **(b)**：声明式作用域既适用于当前的内存过滤，也适用于第三阶段的 SQL；制造业的产线范围与酒店的物业范围都能自然适配 |
+| D5 | 生成创建、编辑和归档操作 | (a) 总是生成。(b) 按类型选择性开启（Opt-in），并指定角色权限。(c) 从不生成 | **(b)**：主数据（产品、房型、客户账户）需要它们；具备生命周期的业务单据则不需要 |
+| D6 | 现有应用的迁移策略 | (a) 一次性全部迁移。(b) CRM 和酒店（Hotel）优先迁移，制造业在第二阶段之后迁移（其工单与 SFC 属于生命周期范畴）。保留操作契约定义，现有日志完全重放无误 | **(b)**：业务负责人本地的现有日志重放完全不受影响；每迁移一个应用，就彻底删除该应用中手写的列表和表单代码 |
+| D7 | 过滤语言设计 | (a) OData `$filter` 的子集。(b) JSON 格式的 Odoo 风格域数组（domain arrays）。(c) 自行定义 | **(b)**，采用 JSON 数组：极易从前端 UI 构建，极易对照声明进行类型检查；第三阶段可直接翻译为 SQL |
+| D8 | 内核边界 | (a) 实体声明现在就纳入内核契约。(b) 暂时作为平台能力，直到第二个运行时（离线的 Tauri 或 Swift 客户端）确实需要它时再纳入 | **(b)**，如同 [ADR-0015](0015-ai-providers.md) 对模型的处理方式 |
 
-## Build items after the decisions (stage 1)
+## 决策后的构建项（第一阶段）
 
-| Item | Done when |
+| 事项 | 完成标志 |
 |---|---|
-| Entity kit in `platformserver/platform` and the host's record store | CRM declares account and opportunity; its hand-written maps and list reads are gone; `CheckReplay` passes, and the local sales journal replays unchanged |
-| Generic reads, scope and history | Filter, sort, page and count on 100 000 records answer in under 100 ms in memory; a member sees only records in their scope; a record's history lists its decisions and changed fields |
-| Kit: list page, record page, generated form | The sales workspace shows accounts and opportunities through them; Settings gains an entity browser for administrators |
-| Hotel moved | Room types and reservations are declared; the Hotel Desk and sales views keep working |
+| `platformserver/platform` 中的实体套件与宿主记录存储 | CRM 声明客户账户与销售机会；删除其手写的映射表和列表读取；`CheckReplay` 测试通过，本地销售日志重放完全一致 |
+| 通用读取、范围作用域与历史记录 | 对 100,000 条记录的过滤、排序、分页与计数在内存中响应时间低于 100 毫秒；成员只能查看到其作用域范围内的记录；记录详情展示其决策与变更字段历史 |
+| 套件：列表页、记录详情页、自动生成表单 | 销售工作空间通过上述通用部件展示客户账户与销售机会；“设置”中新增面向管理员的实体浏览器 |
+| 酒店应用迁移 | 声明房型与预订；酒店工作台（Hotel Desk）与销售视图正常工作 |
 
-## Consequences
+## 影响
 
-- An app becomes mostly declarations plus the rules that make its business. Lists, forms, record pages, history, search and API come from the platform.
-- The record store is where stage 3 (read models, snapshots, reports) attaches, and where stage 2 (lifecycles, approvals, tasks) reads state.
-- Replay remains the test: records are rebuilt from decisions, never written directly.
+- 应用代码大幅瘦身为：业务声明 + 构成其业务逻辑的核心规则。列表、表单、记录详情页、历史记录、搜索和 API 全部由平台统一提供。
+- 记录存储成为了第三阶段（读取模型、快照、分析报表）挂接的锚点，也是第二阶段（生命周期、审批、任务）读取业务状态的唯一起点。
+- 重放依然是核心检验标准：所有记录必须由历史决策重放重建，绝不允许直接绕过日志写入。
 
-## As built (#106)
+## 实际构建（As built, #106）
 
-- **App API** (`platform/entity.go`):
-  - `Record`, `Ref[T]`, `Money` and `Entity` with `Scope` and `Standard`;
-  - `Describe`, which reads the struct's JSON names and its `field`, `title`, `choices` and `type` tags;
-  - `StandardActions`, `Ledger.Standard`;
-  - for rules: `Caller.Put`, `Caller.Check`, `Get[T]`, `Find[T]`, `Records[T]`;
-  - `Query`, whose domain is in Odoo's prefix form.
-- **Host** (`records.go`): the record store. `put` keeps each record's changed fields as its history. A new record's owner field defaults to its creator.
-  - Reads: `GET /v1/entities`, `GET /v1/records/<type>` (domain, search, sort, offset, limit, archived) and `GET /v1/records/<type>/<id>` (the record, its history, related records).
-  - Scope by own, unit, below or tenant per role. `CheckReplay` compares every record and its history.
-- **CRM** declares accounts (with generated create, edit and archive; `crm.account.create` kept its schema) and opportunities. A sales member sees their own opportunities, a manager all of them. Its maps and its `accounts` and `opportunities` reads are gone. The owner's local sales journal (21 entries) replays unchanged into records.
-- **UI kit** (`records/Records.tsx`): `entityFrom`, `RecordList` (server search, sort and pages), `RecordPage` (fields, related records, history) and generated forms through `RecordForm`.
-  - The sales workspace lists accounts and opportunities and opens record pages with edit and archive where the catalog grants them. Its new-account form is generated.
-  - Settings has a records browser.
-- **Measured:** a filtered, sorted page of 100 000 records in about 62 ms in memory.
-- **Hotel** declares room types and reservations.
-  - Room types are master data a manager maintains through generated actions. They start from the deployment's configuration as the type's **seed**: records a type starts with, before the journal replays; `Entity.Seed`.
-  - Its capacity rules read reservations through `Find` with a domain. Its maps and its `reservations` read are gone.
-  - The Hotel Desk (the Tauri client's snapshot) and the sales workspace read records. Room-type choices come from the records, not a hard-coded list.
-  - The owner's local sales journal replays into 2 room types and 6 reservations.
-- **Not yet:** references to a protocol's entity type (D3 allows them, none needed yet). The reference picker in generated forms was built with the ERP (ADR-0024 7a).
-- **Lines in history** (F-26, F-37, 2026-09-27): a record's history shows a changed lines field row by row — lines added, removed, and the cells changed — matched by the first column unique on both sides (`LinesChange`); a timeline note keeps a protocol event's title apart (`Note.Title`), said in the reader's language.
-- **No null lists** (the owner's testing, 2026-09-27): every record is stored with its nil lists made empty (`emptyLists`, in the one store every record passes and on restoring a snapshot), so a page never reads null where the type says a list — an approval request with no levels had crashed its page.
-- **One page per record, other apps included (#129, 2026-09-27).** A record page also lists the records of any app linked to it through the relations app (`RecordView.linked`, by type, within each record's scope) and what apps told about it through protocols (`RecordView.activity`). The CRM's own customer page, its `customers` read, its activity timeline and people's notes (`platform.note`, a second owner beside comments) are gone: an account's page lists its opportunities, an opportunity's page its stays at whichever provider holds them. The customers read had shown every rep every opportunity; the record page keeps scope (`TestStaysThroughTheLodgingProtocol`). Memstay keeps its stays as records instead of a map of its own. A declared payload field may choose from an app's read (`Field.From`, `Key`, `Label`) when its values are not records here, as the MES's resend names an ERP planned order.
+- **应用 API** (`platform/entity.go`)：
+  - `Record`, `Ref[T]`, `Money` 以及带有 `Scope` 和 `Standard` 的 `Entity`；
+  - `Describe`：通过反射读取结构体的 JSON 字段名及其 `field`、`title`、`choices` 和 `type` 标签；
+  - `StandardActions`, `Ledger.Standard`；
+  - 面向规则的函数：`Caller.Put`, `Caller.Check`, `Get[T]`, `Find[T]`, `Records[T]`；
+  - `Query`：过滤域采用 Odoo 前缀表示法。
+- **宿主** (`records.go`)：记录存储。`put` 记录每条记录的变更字段作为其历史。新建记录的所属人字段默认赋为创建者。
+  - 读取端点：`GET /v1/entities`，`GET /v1/records/<type>`（支持域过滤、搜索、排序、偏移、限制、归档标记），以及 `GET /v1/records/<type>/<id>`（返回记录自身、其历史记录、关联记录）。
+  - 作用域支持按角色划分为本人（own）、本部门（unit）、本部门及下属部门（below）或全租户（tenant）。`CheckReplay` 校验比对每条记录及其完整历史。
+- **CRM** 声明了客户账户（启用自动生成的创建、编辑与归档；`crm.account.create` 保持原有 Schema）和销售机会。销售成员仅能看到自己的销售机会，经理能看到全部。其手写的内存映射表以及 `accounts` 和 `opportunities` 读取端点已全部删除。业务负责人本地的销售日志（21 条分录）原封不动重放为实体记录。
+- **UI 套件** (`records/Records.tsx`)：`entityFrom`, `RecordList`（服务端搜索、排序与分页），`RecordPage`（字段展示、关联记录、历史记录）以及通过 `RecordForm` 自动生成的表单。
+  - 销售工作空间展示账户与机会列表，并在目录权限允许时打开带有编辑和归档能力的记录详情页。其“新建账户”表单由模型自动生成。
+  - “设置”包含记录浏览器。
+- **性能实测：** 在内存中对 100,000 条记录执行过滤、排序与分页，响应耗时约 62 毫秒。
+- **酒店应用（Hotel）** 声明了房型与预订。
+  - 房型是主数据，由经理通过自动生成的操作进行维护。它们以部署配置作为该类型的**种子数据（seed）**开始：类型在日志重放前所拥有的初始记录；即 `Entity.Seed`。
+  - 其房态容量规则通过带有过滤域的 `Find` 读取预订记录。其手写的内存映射表和 `reservations` 读取端点已全部删除。
+  - 酒店工作台（Tauri 客户端的快照）和销售工作空间统一读取记录。房型选项直接来自实际记录，而非硬编码列表。
+  - 业务负责人本地销售日志顺利重放为 2 个房型和 6 条预订记录。
+- **暂未构建：** 指向协议实体类型的引用（D3 规范已允许，目前尚无业务场景需要）。生成表单中的引用选择器（reference picker）已随 ERP 一同构建（[ADR-0024](0024-erp.md) 7a）。
+- **历史记录中的行级明细对比**（F-26, F-37, 2026-09-27）：记录历史逐行展示变更的明细行字段 —— 新增行、删除行、修改的单元格 —— 通过两端唯一的首列进行精确匹配（`LinesChange`）；时间线动态将协议事件的标题独立展示（`Note.Title`），并使用阅读者的语言显示。
+- **杜绝 Null 列表**（业务负责人测试发现，2026-09-27）：每条记录在存储时其 nil 列表都会被正规化为空切片（`emptyLists`，在每条记录必经的统一存储入口以及快照恢复时统一处理），因此前端页面绝不会在类型声明为列表的地方读到 null —— 此前一个没有配置层级的审批申请曾导致其详情页崩溃。
+- **每条记录统一单页，内联呈现关联应用数据（#129, 2026-09-27）。** 记录详情页还会列出通过关系应用（relations app）与其链接的任意应用的记录（`RecordView.linked`，按类型分组，严格限制在各记录的作用域内），以及各应用通过协议上报的相关活动（`RecordView.activity`）。CRM 自有的客户详情页、其 `customers` 读取、活动时间线和人员便签（`platform.note`，此前作为评论之外的第二所有者）已彻底删除：客户账户页面列出其名下的销售机会，销售机会页面列出在各个供应商处持有的住宿预订。原先的客户读取曾将每个销售机会暴露给所有销售代表；现在的记录详情页严格保持作用域隔离（`TestStaysThroughTheLodgingProtocol`）。Memstay 将其预订作为通用记录存储，而不再维护专有映射表。当载荷字段的值并非本地记录时，声明的载荷字段可以从应用的读取中选择可选值（`Field.From`, `Key`, `Label`），例如 MES 重新发送时引用 ERP 计划订单。

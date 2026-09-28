@@ -1,24 +1,24 @@
-# K6 Tenancy and policy — semantics (contract v1alpha1)
+# K6 租户隔离与策略 — 语义规范 (契约 v1alpha1)
 
-Schema: `proto/platform/kernel/v1alpha1/tenancy.proto`. Vectors: `vectors/k6-receive.json`. Errors: `errors.md`.
+模式定义：`proto/platform/kernel/v1alpha1/tenancy.proto`。一致性测试向量：`vectors/k6-receive.json`。错误代码：`errors.md`。
 
-## Model
+## 概念模型
 
-- A **tenant** is an isolation boundary for data, configuration and audit, not an organisation schema. A personal space is a tenant with one principal and device authority.
-- A **caller** is the principal the receiver authenticated, by any transport; the kernel defines only that submissions are bound to it.
-- **Policy** is supplied by the domain and evaluated once per new submission with the principal, the action (the payload's schema name) and the target. Organisation structure (departments, plants, roles) is domain data the policy may consult; the kernel never interprets it.
-- **Receiving** is the fixed order in which an authority applies the kernel's rules to a submission (T2). Domains plug in the policy and their own rules (K4 C10) and nothing else.
+- **租户 (tenant)** 是面向数据、配置与审计的强隔离边界，而不是具体的组织架构模式。个人空间是具备单一操作主体与设备端权威的退化租户。
+- **调用者 (caller)** 是接收方通过任意底层传输协议完成身份认证后的主体凭据；内核仅规定提交提议必须与其严格绑定。
+- **策略 (policy)** 由业务领域提供，针对每项全新的提交提议执行一次求值评估，输入参数为主体凭据、业务动作（有效负载的模式名称）及目标实体。组织架构（部门、工厂、岗位角色）属于策略可以查阅的领域数据；内核绝不对其进行解析。
+- **接收处理 (receiving)** 是权威向提交提议应用内核规则的确定性固定处理顺序 (T2)。业务领域仅可接入授权策略及其专属业务规则 (K4 C10)，绝无其他侵入点。
 
-## Rules
+## 语义规则
 
-| # | Rule | Error when violated |
+| 编号 | 规则描述 | 违规返回错误 |
 |---|---|---|
-| T1 | A submission's `tenant_id` and `principal_id` equal the caller's. | `POLICY_DENIED` |
-| T2 | Receiving order: T1; K4 C1, C2; replay detection (C4, C5); C3, C11, C12; K5 A3; policy (T3); domain rules (C10); append (C6, C7). The first failing rule decides the error. A replay returns the original record without evaluating A3, policy or domain rules. | — |
-| T3 | Policy is evaluated for every new submission; a denial rejects it. | `POLICY_DENIED` |
-| T4 | Every read is scoped to the caller's tenant; no operation returns or references another tenant's records (K4 C3, C11). | — |
+| T1 | 提交中的 `tenant_id` 与 `principal_id` 必须与调用者的身份凭据严格相等。 | `POLICY_DENIED` |
+| T2 | 固定的接收处理顺序：T1；K4 C1, C2；幂等重放检测 (C4, C5)；C3, C11, C12；K5 A3；策略评估 (T3)；领域业务规则 (C10)；日志追加 (C6, C7)。首个违背的规则决定最终返回的错误。幂等重放直接返回原始记录，绝不重新评估 A3、策略或领域业务规则。 | — |
+| T3 | 对每项全新的提交提议执行策略评估；策略显式拒绝则驳回该操作。 | `POLICY_DENIED` |
+| T4 | 每次读取操作的作用域均严格限制在调用者所在的租户内部；任何操作绝不返回或跨租户引用另一个租户的记录 (K4 C3, C11)。 | — |
 
-## Notes
+## 补充说明
 
-- Replays skip policy (T2): permissions revoked after a decision do not rewrite history; the replay only returns what was accepted.
-- Audit is the change log itself: every accepted decision names its principal and authority (K3 P4).
+- 幂等重放跳过策略评估 (T2)：在某项决策生效后撤销权限绝不重写历史事实；重放仅原样返回当时已被正式接受的内容。
+- 审计系统即为变更日志本身：每项已被接受的决策均记录其操作主体与权威归属 (K3 P4)。

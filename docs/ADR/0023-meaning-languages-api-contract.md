@@ -1,130 +1,126 @@
-# ADR-0023: The model speaks — meaning, languages and the API contract
+# ADR-0023: 让模型发声 —— 业务语义、多语言与 API 契约体系
 
-**Status:** Accepted (2026-09-26, #114, the architecture gate of stage 6 in Platform.md §10.5). The owner delegated where languages live ("你看多语言放到哪一层"), so D2 to D6 were decided as recommended and batch 6a built first. Then the owner decided D1 (yes, and very restrained: a tenant may layer a glossary on top, never change a declaration's identity or meaning), D7 (the platform's core stays typed code: the contract is generated from it, never the source), D8 (the developer kit's path: create app → declare entities → declare actions → declare flows → add translations → run), and left D9 to the agent (decided below). What is built is under "As built".
+**状态：** 已采纳 (2026-09-26, #114，[Platform.md](../Platform.md) §10.5 第六阶段的架构关卡)。业务负责人将多语言架构层级决策委托给智能代理（“你看多语言放到哪一层”），因此 D2 至 D6 按推荐方案确立并先行完成了 6a 批次的构建。随后业务负责人裁决了 D1（采纳，且保持高度克制：租户可在上层叠加专有术语词汇表，但绝不能修改底层声明的标识或核心含义）、D7（平台内核与核心保持强类型代码：对外契约由此动态生成，而非以契约为源头反向生成代码）、D8（开发者套件标准路径：创建应用 → 声明实体 → 声明操作 → 声明业务流 → 补充翻译字典 → 启动运行），并将 D9 委托给智能代理裁决（见下文裁决结论）。实际构建内容见“实际构建（As built）”。
 
-## Context
+## 背景
 
-What exists:
-- **Declarations in code** (ADR-0016 to ADR-0022): entity types with fields, lifecycles with states and transitions, actions, settings, flows, agents, effect kinds. Each carries an English title; actions carry a description; generated actions describe a field by its title.
-- **One host API** that every client, integrator and agent uses: `/v1/entities`, `/v1/actions`, `/v1/records`, `/v1/inbox`, `/v1/context`, `/v1/search`, `/v1/knowledge`, `/mcp`, `/a2a`. Its TypeScript side is written by hand.
-- **No language but English.** Every title, button and message is English; the owner tests in Chinese.
+当前已具备的能力：
+- **代码化声明体系**（[ADR-0016](0016-application-model.md) 至 [ADR-0022](0022-knowledge-memory-a2a.md)）：包含字段的实体类型、带有状态与迁移的生命周期、目录操作、租户配置、业务流、智能代理、出站效果类型。每项声明均带有英文标题；操作带有功能描述；自动生成的操作基于字段标题描述其字段。
+- **所有客户端、外部集成与智能代理共用的统一宿主 API：** `/v1/entities`, `/v1/actions`, `/v1/records`, `/v1/inbox`, `/v1/context`, `/v1/search`, `/v1/knowledge`, `/mcp`, `/a2a`。其前端 TypeScript 客户端类型目前纯靠手工编写维护。
+- **除英文外缺乏多语言支持：** 所有的标题、界面按钮和系统提示信息均为英文；而业务负责人需要以中文进行交互测试。
 
-What is missing:
-- **Meaning.** Agents, MCP clients and search see field names and titles, not what a field means, what a state implies, or what people also call it.
-- **Languages.** People who do not read English cannot use the workspace.
-- **A contract for the host API.** Integrators, coding agents and our own TypeScript read Go to learn it.
-- **A developer kit.** Nothing scaffolds an app or explains how one is built (Platform.md §10.3).
+此前欠缺的核心能力：
+- **业务语义（Meaning）：** 智能代理、MCP 客户端和搜索模块只能机械地看到字段名称和标题，无法理解字段的真实业务含义、状态的深层内涵，或人们在日常口语中对它们的习惯叫法（同义词）。
+- **多语言（Languages）：** 不懂英文的人员无法顺畅使用统一工作空间。
+- **宿主 API 的正式契约：** 外部集成开发者、代码辅助代理以及我们自己的前端 TypeScript 开发者必须查阅 Go 源码才能了解 API 细节。
+- **开发者套件（Developer kit）：** 缺乏脚手架工具与官方指南，外部开发者无从得知如何标准地构建一个应用（[Platform.md](../Platform.md) §10.3）。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| Platform | Meaning for AI | Languages | API contract |
+| 平台 | 面向 AI 的业务语义 | 多语言本地化支持 | API 契约机制 |
 |---|---|---|---|
-| Microsoft Dataverse | The semantic model (preview June 2026): descriptions, glossary, synonyms curated over tables and columns | Labels of tables, columns and choices per installed language; solutions carry translations; the user's language setting | OData metadata (`$metadata`), Web API, generated SDKs |
-| Salesforce | Descriptions and help text on objects and fields; semantic definitions in Data 360 | Translation Workbench: labels, picklists and custom labels per language; the user's language | REST describe calls, OpenAPI for sObjects |
-| SAP (BTP, CAP) | The Knowledge Graph over tables, fields and APIs | CAP's `i18n` property files per language, keyed labels in the model | CDS models compiled to OData and OpenAPI |
-| Odoo | Field `help` strings; Odoo 19's AI fields | `.po` files per module keyed by the English source; the user's language; translatable fields | JSON-RPC with `fields_get` |
-| ServiceNow | Descriptions in the dictionary; AI Search synonyms | UI messages and field labels per language plugin; the user's language | REST API Explorer, OpenAPI |
+| Microsoft Dataverse | 语义模型（Semantic Model，2026年6月预览）：在数据表和列上维护说明描述、业务术语词汇表、同义词 | 按已安装语言包管理表、列与选项集的标签；解决方案携带翻译包；支持用户级语言设置 | OData 元数据（`$metadata`），Web API，自动生成强类型 SDK |
+| Salesforce | 对象与字段上的描述与帮助文本；Data 360 中的语义定义 | Translation Workbench：按语言管理标签、下拉选项与自定义标签；支持用户偏好语言 | REST describe 描述接口，面向 sObjects 的 OpenAPI 规范 |
+| SAP (BTP, CAP) | 跨越数据表、字段与 API 的知识图谱（Knowledge Graph） | CAP 按语言提供 `i18n` 属性配置文件，数据模型中基于 key 绑定标签 | CDS 模型自动编译为 OData 与 OpenAPI 契约 |
+| Odoo | 字段上的 `help` 帮助文本；Odoo 19 的 AI 字段增强 | 每个模块携带以英文为 key 的 `.po` 翻译文件；支持用户语言偏好；支持字段级内容翻译 | 支持 `fields_get` 的 JSON-RPC 接口 |
+| ServiceNow | 数据字典中的字段描述；AI Search 专有同义词库 | 按语言插件管理 UI 消息与字段标签；支持用户级语言偏好设置 | REST API Explorer，OpenAPI 导出 |
 
-They agree:
-- **Meaning and labels live with the model**, declared by whoever declares the model; tenants add glossary on top.
-- **Languages are a platform capability, not app code.** The model's labels and the UI's words are translated per language from catalogs that ship with the module; the person's language chooses; record data is not translated unless a field says so.
-- **The API describes itself** from the same model.
+上述平台达成的高度共识：
+- **业务语义与显示标签同数据模型紧密共生**，由模型的声明者统一声明；租户可在上层补充专属词汇表；
+- **多语言本地化属于平台级基础设施，而非业务应用私有逻辑。** 模型标签与 UI 文案根据模块自带的翻译字典按语言动态转换；基于当前用户的语言偏好呈现；实体记录的数据内容除非字段显式声明支持多语言，否则不予翻译；
+- **API 基于同一套业务模型实现完备的自描述能力。**
 
-Our constraints:
-- **Typed code, not configuration** (ADR-0008): meaning and translations of declarations ship with the app's code.
-- **Replay** must not depend on a person's language: what is journaled stays language-free, except what a person wrote.
-- **No new dependency or download without the owner's approval.**
+我们面临的核心技术约束：
+- **强类型代码而非纯配置**（[ADR-0008](0008-packages-customization-and-callers.md)）：声明的业务语义与多语言翻译必须随同应用源码一同打包交付。
+- **日志重放绝对不能依赖具体用户的个人语言：** 业务日志中记录的内容必须保持与自然语言解耦的中立性，用户手填的文本除外。
+- **未经业务负责人批准，严禁引入任何新的外部依赖或下载。**
 
-## Design
+## 设计
 
-1. **Languages are a platform capability across three layers, never the kernel.**
-   - **App API:** an app ships its translations with its manifest: `Manifest.Languages`, a dictionary per language from the English text of its titles and descriptions to their translation, loaded from JSON files embedded in the app (`i18n/zh-CN.json`).
-   - **Host:** it chooses the language of each request and translates the declarations it serves — entity types, fields, states, transitions, actions and their fields, apps, settings, flows and agents — from the app's dictionary, then the platform's own. Records, history and the journal are never translated.
-   - **UI:** `@platform/ui` owns `t()`, the current language and date and number formats; the kit, `@platform/app`, the workspace, Settings and each app's UI package register their own dictionaries.
-2. **Dictionaries are keyed by the English source text**, as Odoo's and gettext's are: English stays the source and the fallback, a missing translation shows English, and an app is translated one text at a time without renaming anything.
-3. **The language of a request:** the workspace sends the person's choice as `Accept-Language`; the host takes the first language it has a dictionary for, else English. The choice is kept per browser in 6a; a member's preference kept as a console decision, with a tenant default, follows in 6b.
-4. **What is not translated:** record data people wrote, the journal, audit, error codes (the UI translates their messages), agents' instructions. Notifications and task titles are texts apps write at the time; they become a key and arguments rendered in the reader's language in 6b.
-5. **Agents answer in the person's language.** A run records the language it was started in (part of its start payload, so replay sees the same prompt), and the prompt asks the model to answer in it; instructions stay English.
-6. **Formats** (dates, numbers, money) follow the browser's own locale through `Intl` in 6a, and the chosen language once members keep a preference (6b).
-7. **Meaning (the semantic model):** entity types, fields, states and actions gain a description, examples and synonyms, declared in code (`Entity.Description`, field tags `help:"…"` and `synonyms:"…"`, `State.Description`). They are served by `/v1/entities` in the reader's language, put into agents' prompts and MCP tool schemas, search (synonyms) and forms (help text). **A tenant's glossary** is records of the knowledge app (`knowledge.term`: a term, what it means here, its synonyms, and the declaration it refers to). It is layered on top: agents read it and search expands by it, but it never renames, retitles or redefines a declaration; the declaration's name, type and meaning stay the code's.
-8. **The host API contract:** the Go types are the source. The host describes its routes and, per tenant, each entity type and action as JSON Schema, served as OpenAPI 3.1 at `/v1/openapi.json`; the TypeScript types of the host API are generated from the same Go types by a Go command and never edited, and the hand-written ones are deleted.
-9. **The developer kit** follows one path: create app → declare entities → declare actions → declare flows → add translations → run. A scaffold creates a working app at the first step (manifest, an entity with a lifecycle, an action, a flow, `i18n/zh-CN.json`, tests with `CheckReplay` and the Chinese check, and a development host that runs it in the workspace); the guide (`docs/Apps.md`) walks each step; a `new-app` skill lets a coding agent walk it.
+1. **多语言作为跨越三个层级的平台通用能力，绝对不进入底层内核契约。**
+   - **应用 API 层：** 应用在其清单中随同交付翻译字典：`Manifest.Languages`，按语言提供从英文标题和描述映射到目标语言的字典映射，从应用内嵌的 JSON 文件中读取加载（`i18n/zh-CN.json`）。
+   - **宿主层：** 宿主根据每次请求的语言上下文，自动翻译其对外暴露的声明元数据 —— 包括实体类型、字段、状态、状态迁移、操作及其输入载荷字段、应用、配置项、业务流以及智能代理 —— 优先查找应用专属字典，回退时查找平台级通用字典。实体记录数据、变更历史与底层日志绝不执行翻译。
+   - **前端 UI 层：** `@platform/ui` 统一持有 `t()` 翻译函数、当前活动语言以及日期和数字的本地化格式化；UI 套件自身、`@platform/app`、工作空间、系统设置以及各应用的前端 UI 包分别注册各自的字典。
+2. **翻译字典一律以英文原文作为 Key，** 对标 Odoo 与 GNU gettext 体系：英文始终作为基准源头与兜底回退语言，缺失翻译时优雅展示英文原文，且无需对业务标识进行重命名即可逐词平滑本地化。
+3. **请求的语言判定机制：** 统一工作空间通过 `Accept-Language` 请求头传递用户的语言选择；宿主优先匹配自身拥有字典的首选语言，否则回退为英文。在 6a 阶段按浏览器本地保存语言选择；在 6b 阶段引入作为控制台决策持久化存储的成员偏好语言，并支持配置租户全局默认语言。
+4. **明确不予翻译的内容：** 用户手工录入的业务记录数据、底层输入日志、审计日志、机器错误码（前端 UI 负责将其翻译为用户友好的提示文案）、智能代理的原始系统指令。通知与任务标题此前由应用动态拼接；在 6b 阶段将其正规化为带有参数槽位的 Key，在阅读者查阅时动态渲染为其首选语言。
+5. **智能代理使用用户的母语作答。** 单次运行在启动载荷中明确记录启动时的语言上下文（作为日志记录的一部分，确保日志重放时提示词严格一致），提示词明确指示大模型使用该语言进行推理作答；而底层系统指令保持英文基准。
+6. **本地化格式化：** 日期、数字、货币等格式在 6a 阶段通过浏览器原生 `Intl` API 跟随浏览器区域设置，在 6b 阶段在成员持久化配置偏好语言后跟随其选择的语言。
+7. **业务语义（语义模型体系）：** 实体类型、字段、状态和操作均支持声明功能说明、示例数据与同义词，全部在代码中强类型声明（`Entity.Description`，结构体标签 `help:"…"` 与 `synonyms:"…"`, `State.Description`）。这些信息由 `/v1/entities` 以阅读者的母语输出，自动注入智能代理的系统提示词、MCP 工具描述、全局检索同义词库以及表单的帮助说明中。**租户业务术语词汇表**作为知识应用中的实体记录管理（`knowledge.term`：包含专业术语、在此处的具体定义、同义词，以及关联引用的声明对象）。词汇表作为上层叠加机制：智能代理可读取理解，全文检索可基于此进行语义扩展，但它绝不允许重命名、修改标题或篡改底层声明的核心含义；声明的名称、类型与核心定义牢不可破地归属于源码。
+8. **宿主 API 契约：** Go 强类型结构体是唯一的绝对源头。宿主统一对路由进行自描述，并针对每个租户将每种实体类型与操作描述为 JSON Schema，统一在 `/v1/openapi.json` 端点对外暴露标准 OpenAPI 3.1 规范；前端使用的 TypeScript 类型由 Go 代码生成器基于这同一批 Go 结构体自动生成，严禁手工修改，同时彻底删除此前手写的前端类型定义。
+9. **标准化开发者套件**遵循单一的标准路径：创建应用 → 声明实体 → 声明操作 → 声明业务流 → 补充翻译字典 → 启动运行。脚手架命令能够在第一步瞬间生成一个五脏俱全的可运行应用（包含应用清单、带有生命周期的实体、操作、业务流、`i18n/zh-CN.json`、涵盖 `CheckReplay` 与中文完备性检查的单元测试，以及支持在统一工作空间中即刻运行的独立开发宿主服务）；官方指南（[docs/Apps.md](../Apps.md)）分步拆解每个环节；专属的 `new-app` 技能让代码辅助代理能够严格依照规范一步到位完成开发。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Where meaning is declared | (a) In code with the declarations (descriptions, examples, synonyms), a tenant's glossary as knowledge. (b) As tenant metadata edited in Settings (Dataverse's curated semantic model) | **(a), decided:** very restrained; the glossary layers on top and never changes a declaration's identity or meaning |
-| D2 | Where languages live | (a) A platform capability: apps ship dictionaries with their manifests and UI packages, the host translates declarations, the kit owns `t()` and formats. (b) Each app translates itself. (c) Translations as tenant data | **(a)**, decided on the owner's delegation |
-| D3 | Dictionary keys | (a) The English source text. (b) Qualified keys (`field:crm.opportunity.amount`) | **(a)**, decided: nothing is renamed, English is the fallback; a qualified key can override one text later if a word means two things in one app |
-| D4 | Choosing the language | (a) Per browser now, as `Accept-Language`; a member's preference and a tenant default next. (b) Member preference first | **(a)**, decided: the owner can test at once |
-| D5 | What is translated | Declarations and the UI now; notifications and task titles as keys with arguments next; never record data, the journal or instructions | As listed, decided |
-| D6 | Agents' language | The run's language in its start payload; the model answers in it | As listed, decided |
-| D7 | The API contract | (a) OpenAPI 3.1 generated by the host from routes and manifests; TypeScript types generated from it. (b) Keep hand-written types | **(a), decided:** typed Go code stays the source; OpenAPI and the TypeScript types are both generated from it by the host's own code, so no new dependency |
-| D8 | The developer kit | Guide, scaffold, skill | **Decided:** the path create app → entities → actions → flows → translations → run |
-| D9 | Proof | (1) CRM and MES used in Chinese end to end, and an agent answering in Chinese on a real model. (2) Meaning reaches every reader: tests show descriptions and the glossary in agents' prompts and tool schemas, forms' help and search by synonym; a before/after evaluation is optional, as free models are rate-limited. (3) `/v1/openapi.json` is valid OpenAPI and the workspace compiles with the hand-written host types deleted. (4) A scaffolded app runs in its development host and passes `CheckReplay`, `boundaries.sh` and the Chinese check in CI | **Decided by the agent on the owner's delegation, as listed** |
+| D1 | 业务语义在何处声明 | (a) 在代码中随声明一同定义（说明描述、示例、同义词），租户专有词汇表作为知识库实体维护。(b) 作为租户元数据在系统设置中运行时编辑（类似 Dataverse 的语义模型） | **(a)，业务负责人已裁决：** 保持高度克制；词汇表仅作为上层叠加参考，绝不能改变底层声明的标识或核心含义 |
+| D2 | 多语言能力所属层级 | (a) 作为平台级通用能力：应用在其清单与 UI 包中携带字典，宿主负责翻译元数据声明，UI 套件持有 `t()` 与格式化逻辑。(b) 各应用各自独立处理翻译。(c) 翻译作为租户数据维护 | **(a)**，根据业务负责人委托完成裁决 |
+| D3 | 翻译字典的 Key 结构 | (a) 采用英文原文作为 Key。(b) 采用全限定命名前缀的限定 Key（如 `field:crm.opportunity.amount`） | **(a)**，已裁决：无需重命名任何已有代码，英文作为天然兜底语言；后续若某一英文词汇在同一应用中具有歧义，可针对个别词汇引入限定 Key 进行精准覆盖 |
+| D4 | 语言选择的判定机制 | (a) 现阶段基于浏览器维度的 `Accept-Language` 判定；后续引入成员个人偏好设置与租户全局默认配置。(b) 优先实现成员个人偏好设置 | **(a)**，已裁决：便于业务负责人即刻开展中文交互验证 |
+| D5 | 哪些内容纳入翻译 | 现阶段覆盖声明元数据与前端 UI；下一步覆盖通知与任务标题（采用带参模板 Key）；绝不翻译业务记录数据、输入日志或大模型原始指令 | 按照所列机制，已裁决 |
+| D6 | 智能代理的语言交互 | 单次运行在启动载荷中记录语言偏好；大模型按该语言进行思考与输出 | 按照所列机制，已裁决 |
+| D7 | API 契约机制 | (a) 由宿主基于底层路由与清单反射动态生成标准 OpenAPI 3.1 规范；前端 TypeScript 类型由其自动编译生成。(b) 继续保留手写的前端类型定义 | **(a)，业务负责人已裁决：** 强类型 Go 代码始终作为唯一源头；OpenAPI 与 TypeScript 类型均由宿主内部代码生成，不引入任何新的外部生成工具或依赖 |
+| D8 | 开发者套件落地形态 | 官方指南、代码脚手架、专属代理技能 | **业务负责人已裁决：** 严格遵循 创建应用 → 实体 → 操作 → 流程 → 翻译 → 运行 的标准交付链路 |
+| D9 | 验证载体（Proof） | (1) CRM 与 MES 模块在全中文环境下端到端交互，且智能代理在真实大模型下使用中文流畅作答。(2) 业务语义全链路渗透：测试验证实体说明与词汇表成功注入智能代理提示词、MCP 工具 Schema、表单帮助文本以及基于同义词的全局搜索；前后对比评测作为可选，因为免费模型存在限流。(3) `/v1/openapi.json` 完全符合 OpenAPI 3.1 规范，且在彻底删除手写前端类型后工作空间顺利通过类型编译。(4) 由脚手架生成的全新应用在其独立开发宿主中平稳运行，且在 CI 中顺利通过 `CheckReplay`、`boundaries.sh` 架构边界检查以及中文完备性检查 | **根据业务负责人委托，智能代理裁决采纳所列方案** |
 
-## Build items
+## 构建项清单
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 6a (built) | Languages: `Manifest.Languages`, the host's translation of declarations by `Accept-Language`, the kit's `t()` and switcher, dictionaries for the platform, CRM, MES and the workspace in Simplified Chinese; agents answer in the run's language | The owner switches to 中文 and works in CRM and MES; a test fails when a declared title of CRM or MES has no Chinese translation |
-| 6b (built) | Meaning (D1) with the tenant glossary; a member's language and a tenant default; notifications, tasks and mail in the reader's language | Descriptions and the glossary reach prompts, tool schemas, forms and search (tests); a notification written in English reads in Chinese for a member who prefers it |
-| 6c (built) | The host API contract and generated types | `/v1/openapi.json` validates; the workspace compiles with the hand-written types deleted |
-| 6d (built) | The developer kit | A scaffolded app runs in its development host and passes its tests in CI |
+| 6a (已构建) | 多语言基础体系：`Manifest.Languages`、宿主基于 `Accept-Language` 动态翻译声明、UI 套件 `t()` 与语言切换器、平台/CRM/MES/工作空间的简体中文全量字典；代理按运行语言作答 | 业务负责人切换为中文并在 CRM 和 MES 中顺畅作业；一旦 CRM 或 MES 中声明的标题缺失中文翻译，自动化测试立即报错拦截 |
+| 6b (已构建) | 业务语义模型（D1）与租户词汇表；成员个人偏好语言与租户默认语言；通知、任务与邮件按阅读者母语本地化呈现 | 字段说明与词汇表成功贯通至提示词、工具 Schema、表单与搜索（有测试保障）；英文写入的系统通知，在中文偏好成员查阅时自动呈现为纯正中文 |
+| 6c (已构建) | 宿主 API 契约与全自动 TypeScript 类型生成 | `/v1/openapi.json` 顺利通过格式校验；彻底删除手写类型后工作空间编译零错误 |
+| 6d (已构建) | 标准化应用开发套件 | 由脚手架生成的标准化应用在其独立宿主中稳健运行，并在 CI 中顺利通过全套自动化测试 |
 
-## Consequences
+## 影响
 
-- Every declaration speaks the reader's language and, after 6b, explains itself to people and agents alike.
-- Translations are code: reviewed, versioned and tested with the app; a tenant cannot mistranslate a rule.
-- The host's API becomes a contract that integrators and coding agents read without reading Go.
+- 每一个业务声明均能以阅读者的母语对话，并在 6b 阶段后能够向人类用户与智能代理清晰自我解释其业务内涵。
+- 翻译字典本身即代码：伴随应用源码经历严格的 Code Review、版本追踪与自动化测试；租户绝对无法通过前端修改篡改底层的业务规则。
+- 宿主 API 演进为一套具备严格自描述契约的标准化体系，外部系统集成商与代码辅助代理无需查阅底层 Go 源码即可直接理解消费。
 
-## As built
+## 实际构建（As built）
 
-### 6a: languages (#114)
+### 6a: 多语言基础设施 (#114)
 
-- **App API** (`platform/languages.go`): `Manifest.Languages`, loaded by `platform.LoadLanguages` from JSON files embedded in the app (`//go:embed i18n`). CRM, MES, Hotel, HR, the helpdesk and memstay ship `i18n/zh-CN.json`; the platform apps' dictionary is the host's own (`capabilities/server/i18n/zh-CN.json`).
-- **Host** (`languages.go`): `Tenant.Language` takes the first language of `Accept-Language` the tenant has a dictionary for (`zh`, `zh-Hans` and `zh-SG` read as `zh-CN`; English is the source). `/v1/me` (with `language` and `languages`), `/v1/actions`, `/v1/apps`, `/v1/protocols`, `/v1/entities` and the declaration reads `settings`, `flows` and `agents` are served translated: every `title`, `plural` and `description`, and each list of `choices` gains `choiceTitles` while the values stay what records hold. Responses carry `Vary: Accept-Language`. Records, history, audit and the journal are never translated.
-- **Completeness:** `Tenant.Texts` lists an app's declaration texts and choices, and `Tenant.Untranslated` those a language lacks. `TestLanguages` (the eight platform apps), `TestChinese` in the sales solution (CRM, Hotel, HR, helpdesk, memstay) and in the plant fail on any text without Chinese.
-- **Agents** (D6): `agent.run.start` takes `language`, kept on the run; the prompt asks the model to write its rationale, questions, drafts' free text and result in it. The assistant sends the page's language. `TestAgents` checks that a run in `zh-CN` gets the instruction and one without does not.
-- **UI** (`@platform/ui` `i18n.ts`): `t()` with `{name}` placeholders, `language()`, `setLanguage()` (kept per browser, the page reloads), `register()`; the page's language is `<html lang>`, which `@platform/kernel`'s client sends as `Accept-Language`. The profile menu switches between English and 简体中文. The kit, `@platform/app`, the workspace, Settings and the UI packages of CRM, MES, HR, the helpdesk, Hotel and lodging translate their words from their own `i18n.ts`; the kit shows choice titles and history by field title. A kit test fails when any package's `t()` text lacks Chinese.
-- **Found on the way:** generated descriptions said "a account"; they now take their article from the title.
-- **Checked in the browser** (headless, the sales host on development tokens): the home page, a CRM opportunity's record page with its stage and history, and Settings → Members in Chinese.
-- **Checked on a real model** (OpenRouter, `inclusionai/ling-3.0-flash-fin:free`, 2026-09-26): the CRM's sales assistant, asked in Chinese about an opportunity, read its context and answered in Chinese (two steps, 5 203 tokens). Most free models were rate-limited upstream, and some do not call tools.
-- **Left for 6b (built below):** a member's language and a tenant default; notifications and task titles in the reader's language.
+- **应用 API 层** (`platform/languages.go`)：引入 `Manifest.Languages`，通过 `platform.LoadLanguages` 从应用内嵌的 JSON 文件中加载翻译字典（基于 Go 1.16+ `//go:embed i18n` 特性）。CRM、MES、Hotel、HR、服务台与 memstay 均随同交付 `i18n/zh-CN.json`；各平台通用应用的翻译字典由宿主自身集中交付（`capabilities/server/i18n/zh-CN.json`）。
+- **宿主层** (`languages.go`)：`Tenant.Language` 解析请求头 `Accept-Language`，选取租户已支持的首选匹配语言（`zh`, `zh-Hans` 与 `zh-SG` 统一映射解析为 `zh-CN`；英文作为终极兜底）。`/v1/me`（扩展返回 `language` 与 `languages` 支持列表）、`/v1/actions`、`/v1/apps`、`/v1/protocols`、`/v1/entities` 以及各声明读取端点 `settings`、`flows` 与 `agents` 统一以目标语言动态输出：涵盖所有的 `title`, `plural` 以及 `description`；且每个枚举选项列表（`choices`）在保留其原始物理值的同时，追加提供 `choiceTitles` 显示名称映射。响应头部统一附加 `Vary: Accept-Language` 缓存标记。业务记录数据、变更历史、审计日志与底层输入日志绝不执行翻译。
+- **中文完备性强制防护：** `Tenant.Texts` 提取应用声明中的全量文案与选项，`Tenant.Untranslated` 严密排查目标语言所缺失的翻译项。宿主测试 `TestLanguages`（覆盖 8 个平台通用应用）、销售解决方案测试 `TestChinese`（覆盖 CRM、Hotel、HR、服务台、memstay）以及工厂测试一旦发现任何未翻译的声明文本，CI 立即强制报错失败。
+- **智能代理作答语言支持 (D6)：** `agent.run.start` 支持传入 `language` 参数并持久化记入运行上下文；系统提示词强制指示大模型使用该语言进行推理思考、协同提问、起草草稿以及输出结论。智能助手面板自动透传当前前端页面的活动语言。`TestAgents` 严格验证了指定 `zh-CN` 时系统指令的精准注入，以及未指定时保持原状。
+- **前端 UI 层** (`@platform/ui` 中 `i18n.ts`)：提供支持 `{name}` 参数插值的 `t()` 函数、`language()` 查询、`setLanguage()`（按浏览器本地持久化并重载页面）以及 `register()` 注册函数；当前页面语言同步写入根节点 `<html lang>`，并由 `@platform/kernel` 的 HTTP 客户端自动提取作为 `Accept-Language` 请求头发出。个人中心菜单提供在 English 与 简体中文 之间的自由切换。UI 套件自身、`@platform/app`、统一工作空间、“系统设置”以及 CRM、MES、HR、服务台、Hotel、住宿协议的前端 UI 包均通过自有的 `i18n.ts` 注册中文翻译；UI 套件基于字段标题展示选项标签与变更历史。UI 套件测试若发现任何包的 `t()` 文案缺少中文，立即报错拦截。
+- **演进中的细节修正：** 修复了此前自动生成的英文描述中存在类似 "a account" 的语法瑕疵，现已根据标题动态自适应冠词。
+- **真实浏览器环境核验**（无头模式，基于销售开发宿主与开发测试身份）：工作空间首页、CRM 销售机会记录详情页（含阶段流转条与变更历史），以及“系统设置” → “成员管理”全部在纯正中文环境下完美呈现。
+- **真实大模型连通性验证**（基于 OpenRouter 接入 `inclusionai/ling-3.0-flash-fin:free` 免费模型，2026-09-26）：在 CRM 销售助手面板中以中文就某销售机会发起提问，大模型成功自主查阅该销售机会的业务事实，并全程以纯正流利的中文输出建议（经历 2 轮迭代，消耗 5,203 Token）。实测多数上游免费模型存在严重限流，且部分模型不支持工具调用能力。
+- **交由 6b 批次实现的内容（见下文）：** 成员个人偏好语言与租户全局默认语言；通知与待办任务标题按阅读者语言本地化呈现。
 
-### 6b: meaning, the glossary, and every text in the reader's language
+### 6b: 业务语义、租户词汇表与全量文案本地化
 
-- **Meaning in declarations** (`platform/entity.go`): `Entity.Description` and `Entity.Synonyms`; field tags `help`, `synonyms` and `example`; `State.Description`. `/v1/entities` serves them in the reader's language (`help` and `synonyms` are translated like titles). A generated action describes a field by its title, help, choices and example, so tool schemas (agents, MCP) and forms read the same words. The kit shows a field's help under its label in generated forms, and a list's subtitle is its type's description.
-- **Agents** read the meaning of their app's records in their prompt ("What the records of your app mean", from `Tenant.meaning`), only what is declared.
-- **Search reads names** (`Tenant.names`): a word naming an entity type — its type, title, plural (English plurals too), synonyms, their translations, or a glossary term referring to it — narrows the search to that type, and the rest of the query searches within it ("cases wifi", "交易 年度").
-- **The glossary** (`knowledge.term`, Settings → Knowledge → Glossary): a term, what it means here, its synonyms, the declaration it refers to (an entity type, `<type>.<field>` or an action; a name that is no declaration is refused), and the apps whose members read it. Agents get their app's terms in their prompt after the meaning, marked as the organisation's own words; search expands by them. A term never renames, retitles or redefines a declaration (`TestMeaning` checks the declaration is unchanged).
-- **A member's language** (`platform.member.language`, offered to every member for themselves and to administrators for anyone) and **a tenant default** (the platform's setting `language`). A request reads in the member's language, else the browser's `Accept-Language`, else the tenant's default. `/v1/me` tells `preferred`; the workspace saves a switch as the member's language and adopts it on any other browser.
-- **Texts apps write for people** (notifications, tasks, approval requests, mail) read in the reader's language without changing what is stored: a dictionary key with `{placeholders}` is a pattern (`"Downtime on {resource}"`) that matches the English an app wrote with `fmt` and says it with the same values, each said in turn (`Tenant.Say`). The reads `notifications`, `inbox` and `requests` are served that way, and mail is written in the recipient's language when the notice is made (replay makes the same). Patterns cover the platform's approvals, tasks, agents' drafts and takeovers, held effects and stuck flows, the hotel's overbooking, arrivals and channel bookings, the helpdesk's late tickets, and the plant's downtime and ERP refusals.
-- **Proven:** `TestMeaning` (declared meaning in entities, generated field descriptions and the prompt; search by synonym, plural and glossary; a term for nothing refused; the declaration unchanged), `TestLanguages` (patterns, nested values, English as written; a member's own language over the browser's, refusals for someone else's or an unknown language; the tenant default under an unnamed or unknown browser language), and the Chinese checks of every app.
-- **Not yet:** dates in the chosen language (they follow the browser); a qualified key where one English word means two things in one tenant (the plant's `active` and a memory's `active`); a before/after evaluation of descriptions on a paid model.
+- **声明层深度支持业务语义** (`platform/entity.go`)：扩展了 `Entity.Description` 与 `Entity.Synonyms`；结构体字段支持 `help`、`synonyms` 与 `example` 标签；生命周期状态支持 `State.Description`。`/v1/entities` 以阅读者的母语输出这些元数据（`help` 与 `synonyms` 像普通标题一样被完整本地化）。自动生成的操作根据字段标题、帮助提示、可选枚举与示例数据联合生成字段描述，确保大模型工具 Schema、MCP 工具描述与前端表单共享完全相同的语义描述。UI 套件在自动生成的表单中直接在输入框下方展示帮助提示，且列表视图的副标题直接展示实体类型的业务说明。
+- **智能代理深刻理解业务：** 代理系统提示词中自动注入当前所属应用实体记录的业务含义（“您所在应用的业务数据含义说明”，依托 `Tenant.meaning` 提取），严格以类型声明为准。
+- **全局搜索深度感知实体命名** (`Tenant.names`)：当检索词中包含某个实体类型的名称 —— 无论是其类型标识、单数标题、复数名称（支持英文复数形态）、同义词、对应的中文翻译，还是词汇表中指向该实体的业务术语 —— 搜索算法自动将检索范围收窄过滤至该实体类型，并在该类型内部执行剩余检索词的全文检索（例如输入 "cases wifi" 或 "交易 年度"）。
+- **租户业务术语词汇表**（`knowledge.term`，统一工作空间入口在“系统设置” → “业务知识” → “术语表”）：包含业务术语、在该企业内部的具体定义、同义词库、关联引用的底层声明对象（可关联实体类型、`<type>.<field>` 字段或具体目录操作；若关联了不存在的声明则直接拒绝报错），以及被授权阅读的业务应用列表。智能代理在系统提示词中业务语义小节之后，自动获取所属应用的术语词条，并明确标注为“企业专有用语”；全局检索自动基于术语同义词进行扩展。词汇表绝对不允许重命名、修改标题或篡改底层声明的核心含义（`TestMeaning` 严格校验底层声明在此期间完好无损）。
+- **成员个人语言偏好**（`platform.member.language`，向所有成员开放配置自身偏好，并向管理员开放配置任意成员偏好）以及**租户全局默认语言**（平台通用配置项 `language`）。请求的处理优先级为：成员个人偏好语言 > 浏览器请求头 `Accept-Language` > 租户全局默认语言。`/v1/me` 在响应中返回 `preferred` 偏好设置；工作空间中的语言切换会自动保存为成员个人语言偏好，并在用户更换任意其它浏览器时无缝保持。
+- **应用动态生成的文案（通知、任务、审批申请、邮件）按阅读者语言本地化输出：** 且完全不破坏底层持久化存储。翻译字典中带有 `{placeholders}` 占位符的 Key 被作为匹配模板（例如 `"Downtime on {resource}"`），精准匹配应用使用 `fmt` 拼接生成的英文原文，并动态提取参数值依次翻译后按目标语言模板输出（落实 `Tenant.Say`）。`notifications`、`inbox` 与 `requests` 读取端点统一以此种方式输出，且外发邮件在生成通知时直接以收件人的偏好语言编写并发出（系统重放时保持完全相同逻辑）。该模板体系全面覆盖了平台的审批流、任务分派、代理草稿与人工接管、挂起的外部效果与受阻流程、酒店超售告警/抵店通知/渠道预订提醒、服务台工单逾期告警，以及工厂车间设备停机与 ERP 拒绝确认通知。
+- **经过全面验证：** `TestMeaning`（验证实体声明语义、自动生成的字段描述与提示词注入；基于同义词、复数与术语词汇表的搜索；关联不存在声明的拦截保护；底层声明不可篡改性校验）、`TestLanguages`（模板解析、嵌套参数处理、英文原文回退；成员偏好语言优先于浏览器请求头、为他人配置或配置非法语言的拦截；浏览器语言未指定或未知时回退租户默认配置），以及所有业务应用的中文完备性检查。
+- **暂未构建：** 日期格式跟随选择的语言（当前仍跟随浏览器区域设置）；针对在同一租户内一词多义的英文单词引入限定 Key（如工厂的 `active` 状态与代理记忆的 `active` 状态）；在付费大模型上对提示词业务语义描述进行客观的前后效果对比评测。
 
-### 6c: the host API contract
+### 6c: 宿主 API 契约与全自动类型派生
 
-- **Routes declared once** (`server.go`, `api.go`): each route is registered with a `Route` naming its pattern, a summary, its query parameters, and the Go types of its body and answer; the handler sits beside it. The platform apps' named reads (`inbox`, `settings`, `members`, `runs`, …), all served by `GET /v1/{read}`, are documented with their Go types too (`namedReads`). `/v1/me` and `/v1/sign-in` answer named types (`MeView`, `SignIn`) instead of maps; the flows', agents' and usage reads name theirs (`FlowDefinition`, `AgentInfo`, `AIUsage`).
-- **OpenAPI 3.1 at `/v1/openapi.json`**, generated from those types by the host's own reflection (no dependency): structs by their JSON tags, embedded structs merged, `omitempty` optional, `choices` and `enum` tags as enums, kernel messages as references to the contract's Protobuf JSON. For the caller, it adds each entity type they may read (`entity:<type>`, with each field's meaning) and each action's payload (`payload:<schema>`).
-- **TypeScript generated from it** (`cmd/api-types` → `web/packages/kernel/src/gen/host.ts`, exported as `Api` from `@platform/kernel`); kernel messages reuse the contract's generated `*Json` types. The hand-written host types of `@platform/kernel` (the action), the kit (entity types, fields, states, lifecycles, records' pages, views and history, tasks, flow definitions), `@platform/app` (me, apps, saved views, agent runs, drafts, signals, citations, passages, memories, transcripts), Settings (members, apps, protocols, deliveries, work, connectors, endpoints, effects, settings, audit, organisation, providers, models, usage) and the workspace (identities, notifications, requests, sign-in) are deleted in favour of the generated ones; the kit keeps only what it adds in general (any entity's record).
-- **Proven:** `TestAPIContract` (OpenAPI 3.1, every reference resolves, every route described with a unique operation, the member's entity and payload schemas with meaning, every documented read served by an app, and `host.ts` exactly what the Go types generate, so a stale file fails CI); the workspace and every package typecheck against the generated types.
-- **Not yet:** the plant's own reads (`@pkg/mes` `model.ts`) are an app's, not the host's, and stay typed by hand until apps' reads declare their types; the answers to named reads are documented, not checked against the app's actual type at run time.
+- **路由集中强类型声明** (`server.go`, `api.go`)：每个对外暴露的 HTTP 路由均通过 `Route` 规范注册，明确定义其路径模式、摘要说明、查询参数列表，以及请求体（Body）和响应体（Answer）所对应的 Go 强类型结构体；底层处理 Handler 紧随其后声明。平台通用应用的一系列具名读取接口（如 `inbox`, `settings`, `members`, `runs` 等，统一由 `GET /v1/{read}` 路由分发），同样通过 Go 强类型结构体在 `namedReads` 中完成自描述文档注册。`/v1/me` 与 `/v1/sign-in` 严格返回命名强类型结构体（`MeView`, `SignIn`）而非无类型的通用 Map；业务流、智能代理与 AI 用量的读取端点同样明确了返回结构体类型（`FlowDefinition`, `AgentInfo`, `AIUsage`）。
+- **统一在 `/v1/openapi.json` 提供 OpenAPI 3.1 契约规范：** 由宿主内部代码基于上述 Go 强类型通过反射动态生成（零第三方工具依赖）：结构体根据 JSON 标签精准生成字段，支持内联匿名嵌套结构体字段合并，正确处理 `omitempty` 可选属性，将 `choices` 与 `enum` 标签正规化为枚举类型，将内核消息映射为指向内核契约 Protobuf JSON 的引用定义。针对当前调用方的权限上下文，动态追加该调用方有权读取的各个实体类型 Schema（`entity:<type>`，附带字段业务语义），以及各项目录操作的请求载荷 Schema（`payload:<schema>`）。
+- **全自动派生 TypeScript 类型：** 执行 `cmd/api-types` 自动生成 `web/packages/kernel/src/gen/host.ts` 文件，并在 `@platform/kernel` 中作为 `Api` 命名空间统一对外导出；内核消息无缝复用内核契约生成的 `*Json` 类型。彻底删除了此前散落在各处的全部手工编写的宿主类型定义 —— 包括 `@platform/kernel`（操作）、UI 套件（实体类型、字段、状态、生命周期、记录分页、视图与变更历史、任务、业务流定义）、`@platform/app`（me、apps、已保存视图、代理运行、草稿、反馈信号、引用溯源、文档切片、记忆、会话记录）、“系统设置”（成员、应用、协议、自有机制作业交付、作业任务、连接器、端点、出站效果、配置项、审计日志、组织架构、AI 提供商、模型、用量计量）以及工作空间（身份列表、通知、申请单、单点登录）中的所有冗余手写类型，全部统一替换为生成的标准化类型；UI 套件仅保留其自身特有的前端泛型扩展逻辑（针对任意实体的记录视图）。
+- **经过全面验证：** `TestAPIContract`（验证 OpenAPI 3.1 规范完整性、所有 Schema 引用均能正确解析、每条路由具备唯一操作标识、当前成员的实体与载荷 Schema 附带完整业务语义、所有在文档中声明的具名读取均真实挂载运行，并严密校验 `host.ts` 与 Go 结构体反射结果逐字一致，一旦生成文件发生漂移 CI 立即报错拦截）；统一工作空间及所有前端代码包对照自动生成的类型完成无缝类型编译检查。
+- **暂未构建：** 工厂私有的读取接口（`@pkg/mes` 中 `model.ts`）属于具体应用的专有接口而非宿主通用接口，在业务应用读取接口支持声明类型之前暂时保持手写类型；具名读取端点的响应在文档中已明确定义，但在运行时暂未对应用实际返回的结构体进行二次强校验。
 
+### 6d: 标准化应用开发套件（Developer Kit）
 
-### 6d: the developer kit
-
-- **The guide** (`docs/Apps.md`): the path of D8, one section per step, each naming the declarations it uses and the reference app that shows it at larger size.
-- **The scaffold** (`capabilities/server/cmd/new-app`): writes `apps/<id>/server` — an entity type with meaning, standard actions, a lifecycle with a manager's transition, a review flow that asks a manager and finishes the record, its dictionary, `TestApp` (create, a refused transition, the flow's task and answer, `CheckReplay`) and `TestChinese`, and a development host with the tokens `manager` and `member` — and `web/packages/<id>`, a UI package of generated lists and forms, registered in the workspace. Each step is marked in the generated code.
-- **The skill** (`.claude/skills/new-app`): for a coding agent, the path and the rules that keep an app an app (the app API only, declarations over hand-written code, every change an action, every text in Chinese, the kit's components).
-- **Found on the way:** a generated action ("Create purchase request") and a question's answers had no Chinese unless an app listed each; the host now says generated sentences through the platform's patterns from the app's own words (a lower-case title finds its title's entry), and the inbox serves each task's `answerTitles` beside the answers it submits. `Tenant.Untranslated` counts a text a pattern can say as translated. `Tenant.Member` gives tests and hosts a member by ID.
-- **Kept honest in CI:** `scripts/verify.sh capabilities` scaffolds an app in `.build/scaffold` and runs its tests; `composition` checks every Go module under `apps/` and `protocols/` (tests and `boundaries.sh`) without a list, and the kit's i18n test reads every UI package with a dictionary, so a new app is verified as soon as it exists.
-- **Checked by hand:** a scaffolded purchasing app on its development host with the workspace's build: a member created a request, the manager's inbox showed 审核 PR-1 with the answers 完成 and 保持进行中, the manager answered 完成 in the browser, and the request read 已完成.
-- **Not yet:** a developer MCP (coding agents read the repository, not the host); a scaffold for a protocol or an agent.
-- **Every split of a pattern** (F-25, 2026-09-27): a text is said through the most specific pattern with a split whose every value the language can say — a field's help holding ": " reads whole — and only then through the first pattern that matches at all.
-- **Refusals say why** (F-23, 2026-09-27): `platform.Refuse(code, text, values…)` gives a refusal a message for people — English with `{placeholders}`, said through the app's dictionary in the reader's language — in the kernel error's `Message`, which is never contract (`contract/spec/errors.md`: vectors compare codes only). `POST /v1/submissions` answers `{code, message}`; the workspace shows the message. The ERP's posting says which line and why.
-- **Refusals of the platform's own checks say why** (2026-09-27): a role that does not reach an action ("The role … in … may not …", or no role at all), a record not in a state a generated transition leaves, an archived record — in the reader's language like apps' messages.
-
-
-
+- **官方开发指南** ([docs/Apps.md](../Apps.md))：严格贯彻 D8 确立的标准路径，按步骤拆解每个小节，明确标注该环节所使用的核心声明规范，并指引对应更大型业务参考应用的实现范例。
+- **代码脚手架命令行** (`capabilities/server/cmd/new-app`)：自动生成规范的 `apps/<id>/server` 目录结构 —— 包含具备业务语义的实体类型声明、标准目录操作、带有经理流转动作的生命周期、负责向经理提问并完工记录的审批业务流、专属多语言字典、覆盖完整流转的自动化测试 `TestApp`（包含记录创建、非法状态迁移拦截、业务流任务派发与作答、`CheckReplay` 重放测试）与 `TestChinese` 中文检查，以及预置了 `manager` 和 `member` 凭据的独立本地开发宿主服务；同时生成 `web/packages/<id>` 前端 UI 包，内置自动生成的通用列表与表单，并自动在统一工作空间中挂载注册。生成的源码中清晰标注了每个开发步骤的落地点。
+- **专属代理技能** (`.claude/skills/new-app`)：为代码辅助代理树立清晰的操作规范与行为准则，确保开发的应用严格符合架构规范（严格仅依赖应用 API、声明优先于硬编码、一切变更走目录操作、全量文案配备中文、全面复用 UI 套件标准组件）。
+- **演进中的细节完善：** 发现自动生成的通用操作（如“创建采购申请”）以及流程提问的选项此前若未经应用逐一翻译则会缺少中文；宿主现在能够基于平台级通用模板，结合应用自身的词汇动态翻译自动生成的句子（小写开头的短语可自动匹配其首字母大写标题的字典项），并在收件箱中将每个任务的 `answerTitles` 与选项标识并排提供。`Tenant.Untranslated` 能够正确将通过模板成功翻译的文案视为已翻译。`Tenant.Member` 为测试与独立宿主提供便捷的成员主键查询函数。
+- **CI 持续自动化捍卫：** `scripts/verify.sh capabilities` 每次在 `.build/scaffold` 动态脚手架生成一个全新应用并严格运行其全套测试；`composition` 自动遍历扫描 `apps/` 与 `protocols/` 下的每个 Go 模块并执行测试与 `boundaries.sh` 架构边界检查，UI 套件的多语言测试会自动扫描所有携带字典的 UI 包，确保新应用一旦生成便立即受到最严苛的质量防护。
+- **手工端到端严密核验：** 在独立开发宿主上启动脚手架生成的采购应用，挂载工作空间进行验证：普通成员创建采购申请单，经理收件箱立即收到“审核 PR-1”任务并提供“完成”与“保持进行中”选项，经理在浏览器中点击“完成”，采购申请单状态瞬间更新为“已完成”。
+- **暂未构建：** 面向开发者的 MCP 接口（目前代码辅助代理直接查阅代码仓库而非调用宿主接口）；针对标准协议或智能代理的专属脚手架工具。
+- **模板切分算法优化** (F-25, 2026-09-27)：文案翻译时优先匹配最具针对性且其切分的所有参数值均能被当前语言成功翻译的模板 —— 包含 ": " 的字段帮助文本能够被完整翻译 —— 仅在无法满足时才回退至首个命中规则的通用模板。
+- **明确提示拦截与拒绝动因** (F-23, 2026-09-27)：引入 `platform.Refuse(code, text, values…)` 为规则拒绝赋予面向人类的友好错误信息 —— 英文模板携带 `{placeholders}` 占位符，通过应用字典动态输出为阅读者的母语 —— 承载于内核错误的 `Message` 字段中，该字段绝不属于内核契约的一部分（[contract/spec/errors.md](../../contract/spec/errors.md)：向量比对仅对比机器错误码）。`POST /v1/submissions` 统一返回 `{code, message}`；统一工作空间直观弹窗提示该错误信息。ERP 系统的记账凭证过账清晰指明哪一行由于何种原因被拒绝。
+- **平台自身校验拒绝同样明确提示原因** (2026-09-27)：角色无权执行操作（提示“位于 … 中的角色 … 无权执行 …”，或完全无角色）、记录当前所处状态无法执行某自动生成的状态迁移、记录已归档等各类拦截 —— 均像业务应用提示一样，以阅读者的母语详尽输出原因。

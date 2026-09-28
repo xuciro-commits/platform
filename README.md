@@ -1,27 +1,27 @@
-# Platform
+# 平台
 
-The **AI business application platform**: kernel contract (`contract/`), Go host runtime (`capabilities/server/`), web workspaces (`web/`), reference apps (`apps/`), and cross-industry solutions (`solutions/`). Multi-tenant and surviving domain evolution (ADR-0003, ADR-0025). Its next stage equips FDEs and customers to grow industry applications through shared semantics, governed AI and code or controlled visual composition (ADR-0031); today's authoring path remains typed Go and TypeScript.
+**AI 业务应用平台**：内核契约 (`contract/`)、Go 宿主运行时 (`capabilities/server/`)、Web 工作区 (`web/`)、参考应用 (`apps/`) 以及跨行业解决方案 (`solutions/`)。具备多租户能力并在业务领域演进中保持稳健 (ADR-0003, ADR-0025)。其下一阶段赋能 FDE 与客户通过共享语义、受管 AI 以及代码或受控可视化编排来发展行业应用 (ADR-0031)；当前的开发路径仍为类型化的 Go 与 TypeScript。
 
-The primary business target apps are **CRM, MES, and ERP**, with PMS, HCM, and CSM serving as reference apps.
+主要业务目标应用为 **CRM、MES 和 ERP**，PMS、HCM 和 CSM 作为参考应用。
 
-## Documentation Index
+## 文档索引
 
-- **For AI Coding Assistants:** Start at [AGENTS.md](AGENTS.md) (Claude Code reaches this via [CLAUDE.md](CLAUDE.md)).
-- **Local Environment & Running:** Start at [deploy/local/README.md](deploy/local/README.md) for Docker Compose, Rauthy OIDC, accounts, and server endpoints.
-- **Product Intent & Rules:** [docs/Intent.md](docs/Intent.md) (capability-led, reference-grounded, apps as probes).
-- **Architecture & Capability Map:** [docs/Platform.md](docs/Platform.md) (current layers, replay semantics and hypotheses K1–K9; §10 is the authoritative next-stage design, dated audit, annual roadmap and acceptance criteria).
-- **Testing Scenarios:** [docs/Testing.md](docs/Testing.md) (platform capability guarantees tested across business scenarios).
-- **Active Plan & Friction:** [docs/WorkQueue.md](docs/WorkQueue.md) (the only active task list).
-- **Architecture Decisions:** [docs/ADR/](docs/ADR/) (decisions with lasting cost; [ADR-0031](docs/ADR/0031-ai-application-platform.md) establishes the AI application platform direction).
-- **App Authoring Guide:** [docs/Apps.md](docs/Apps.md) (today's scaffold, entities, actions, flows, translations and run; the boundary with future FDE/customer building tools).
-- **Kernel Contract:** [contract/spec/](contract/spec/) (K1–K9 semantics, error codes, conformance vectors).
+- **面向 AI 编程助手：** 从 [AGENTS.md](AGENTS.md) 开始（Claude Code 通过 [CLAUDE.md](CLAUDE.md) 访问）。
+- **本地环境与运行：** 参阅 [deploy/local/README.md](deploy/local/README.md)，了解 Docker Compose、Rauthy OIDC、账号密码及服务端点。
+- **产品意图与原则：** [docs/Intent.md](docs/Intent.md)（能力主导、标杆对齐、应用作为探针）。
+- **架构与能力地图：** [docs/Platform.md](docs/Platform.md)（当前分层、重放语义与假说 K1–K9；§10 为权威的下一阶段设计、历史审计、年度路线图与验收标准）。
+- **测试场景：** [docs/Testing.md](docs/Testing.md)（跨业务场景验证的平台能力保证）。
+- **活动计划与摩擦力：** [docs/WorkQueue.md](docs/WorkQueue.md)（唯一的活动任务列表）。
+- **架构决策记录：** [docs/ADR/](docs/ADR/)（具有持久成本的决策；[ADR-0031](docs/ADR/0031-ai-application-platform.md) 确立了 AI 应用平台方向）。
+- **应用编写指南：** [docs/Apps.md](docs/Apps.md)（当前的脚手架、实体、动作、工作流、翻译与运行；与未来 FDE/客户构建工具的边界）。
+- **内核契约：** [contract/spec/](contract/spec/)（K1–K9 语义、错误代码、一致性测试向量）。
 
-## Quick Verification
+## 快速验证
 
-Choose work by reading Intent → Platform §10 → WorkQueue. Current capability evidence, target design and task completion have separate homes; a planned builder is not an available product feature.
+阅读顺序：Intent → Platform §10 → WorkQueue。当前能力证据、目标设计与任务完成状态各自拥有唯一归宿；规划中的构建器不代表已可用的产品特性。
 
 ```sh
-scripts/verify.sh ci          # Continuous integration suite
-scripts/verify.sh web         # Web workspaces and UI tests
-scripts/verify.sh composition # App boundaries and layout
+scripts/verify.sh ci          # 持续集成测试套件
+scripts/verify.sh web         # Web 工作区与 UI 测试
+scripts/verify.sh composition # 应用边界与布局检查
 ```

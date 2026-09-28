@@ -1,129 +1,129 @@
-# ADR-0028: The application half — files, field security and the classic features
+# ADR-0028: 应用业务拼图补全 —— 文件管理、字段级安全与经典业务特性
 
-> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** Code-only model declarations are extended by governed customer object/field and rule definitions with explicit extension points. The current typed Go model and implemented capability record remain unchanged. This note records the target; the historical decision and As built below remain evidence of their time.
+> **由 [ADR-0031](0031-ai-application-platform.md) 于 2026-09-27 修订。** 仅限纯代码的数据模型声明已被扩充：支持受治理的客户自定义对象/字段与业务规则定义，并配备显式的扩展锚点。当前强类型的 Go 数据模型以及已落实的能力基线保持不变。此说明记录了目标愿景；下文的历史决策与“实际构建”部分依然保留作为当时的实施证据。
 
-**Status:** Accepted (2026-09-26, stage 7 in Platform.md §10.5, #121). The owner decided D1 (files in an S3-compatible object store: first MinIO, "加上minio", then RustFS locally instead, as MinIO no longer publishes its community images: "用它吧") and accepted D2 to D8 as recommended, all batches at once ("按推荐来做，一波干完").
+**状态：** 已采纳 (2026-09-26, [Platform.md](../Platform.md) §10.5 第七阶段，#121)。业务负责人裁决了 D1（文件采用兼容 S3 的对象存储：起初计划采用 MinIO，批示“加上minio”，鉴于 MinIO 官方已停止发布社区版镜像，本地环境替换为 RustFS：批示“用它吧”），并按推荐方案采纳了 D2 至 D8，全批次一次性推进（“按推荐来做，一波干完”）。
 
-## Context
+## 背景
 
-What exists:
-- **No files.** Nothing in the host or the app API stores, attaches or serves a file. Knowledge documents are text typed into a record (`apps/knowledge`, ADR-0022); a supplier's bill, a nonconformance photo or a guest's passport scan has nowhere to go. The journal and snapshots are the only storage (`journal.go`), and they must stay small enough to replay.
-- **Security stops at the record.** A member reads an app's records by role and scope (own, unit, below, tenant) or as a participant (`platform.Scope`, `records.go` `visible`). Every field of a readable record is read: an HCM leave's note, a CRM contact's phone and a salary would be shown to everyone who may see the record, in lists, search, aggregates, projections to PostgreSQL, agents' context and knowledge.
-- **Action forms type choices and references by hand** (F-36): `platform.Field` has a name, type, description and required flag, nothing more.
-- **Missing classics** (Platform.md §10.4, ADR-0017 and ADR-0020 open promises): comments and followers on a record (the timeline has notes, `relations`), business calendars for due times and timeouts, flows started by a record's state instead of an event, import and export of records, and delegation of one's approvals while away.
+当前已具备的状态：
+- **缺乏文件对象存储：** 宿主内部与应用 API 均无法存储、挂接或对外提供文件服务。业务知识文档目前纯粹是手动录入实体记录中的纯文本（`apps/knowledge`，[ADR-0022](0022-knowledge-memory-a2a.md)）；供应商发票扫描件、制造缺陷照片或住客护照证件影印件此前无处安放。业务日志与快照是平台此前唯一的存储介质（`journal.go`），且必须保持极简以确保日志重放极速。
+- **安全管控止步于记录级：** 成员依据角色和作用域（本人、本部门、下属部门、全租户）或参与人身份查阅业务记录（`platform.Scope`，`records.go` 中的 `visible`）。但一旦记录可见，记录上的所有字段均被全量暴露：例如 HCM 请假单上的健康病情隐私、CRM 联系人的私人电话以及员工薪资字段，此前会被无差别暴露给列表中所有有权查看该记录的人员，在全文检索、聚合分析、PostgreSQL 数据库投影、智能代理上下文以及知识库中彻底裸奔。
+- **操作表单此前手写输入枚举与引用关系** (F-36)：`platform.Field` 仅包含名称、类型、描述和必填标记，缺乏对可选枚举与实体引用的元数据表达。
+- **经典企业级特性的缺失**（[Platform.md](../Platform.md) §10.4，[ADR-0017](0017-lifecycles-approvals-tasks.md) 与 [ADR-0020](0020-flows.md) 遗留承诺）：实体记录上的评论与关注者机制（时间线目前仅有便签 note，依托 `relations`）、用于到期日与超时计算的业务工作日历、基于记录状态变更直接唤起的业务流（此前仅支持显式事件触发）、实体记录的导入导出，以及员工休假期间的审批委派代理人机制。
 
-What the reference platforms do now:
+业界参考平台的做法：
 
-| | Files | Field security | Personal data | Collaboration |
+| | 文件对象管理 | 字段级安全控制（FLS） | 个人隐私数据保护 | 业务协同机制 |
 |---|---|---|---|---|
-| Salesforce Platform | Files (`ContentVersion`) linked to records (`ContentDocumentLink`), shared with who may see the record | Field-level security on permission sets, not only profiles ([FLS on permission sets](https://help.salesforce.com/s/articleView?id=platform.users_fields_fls_permsets.htm&language=en_US&type=5)) | Data classification fields; Shield encryption | Chatter feeds, @mentions, following |
-| SAP CAP / BTP | The `Attachments` aspect on any entity, bytes in the SAP Object Store (S3, Azure, GCS), malware scanning, re-scanned after three days ([cap-js/attachments](https://github.com/cap-js/attachments)) | `@restrict` by role and instance; field masking by roles | `@PersonalData` annotations drive audit logging of reads and changes and erasure ([Annotating Personal Data](https://cap.cloud.sap/docs/guides/data-privacy/annotations)) | Notes, workflow comments |
-| Odoo 19 | `ir.attachment` on any record, in the filestore on disk or S3 | `groups=` on a field hides it from other groups ([Restrict access to data](https://www.odoo.com/documentation/19.0/developer/tutorials/restrict_data_access.html)) | — | Chatter: messages, @mentions, followers per record |
-| ServiceNow | `sys_attachment` on any record, readable when the record is | Field ACLs | Data privacy classification | Work notes, comments, watch lists |
+| Salesforce Platform | 文件（`ContentVersion`）链接至实体记录（`ContentDocumentLink`），权限与记录可见性强绑定 | 字段级安全可在权限集上精细配置，不再局限于简档（[权限集上的 FLS 规范](https://help.salesforce.com/s/articleView?id=platform.users_fields_fls_permsets.htm&language=en_US&type=5)） | 数据分类标记；Shield 平台底层加密 | Chatter 动态流、@提及机制、记录关注（Following） |
+| SAP CAP / BTP | 任何实体均可混入 `Attachments` 附件切面，底层存储于 SAP Object Store（S3, Azure, GCS），内置恶意软件扫描并在 3 天后复检（[cap-js/attachments](https://github.com/cap-js/attachments)） | 基于角色与实例上下文施加 `@restrict`；基于角色实施字段级数据脱敏（Masking） | `@PersonalData` 语义注解驱动只读审计、变更审计以及合规数据擦除（[个人数据注解规范](https://cap.cloud.sap/docs/guides/data-privacy/annotations)） | 业务便签、工作流审批批注 |
+| Odoo 19 | 任何记录均可关联 `ir.attachment`，存储于本地磁盘 filestore 或 S3 | 字段上配置 `groups=` 对非授权用户组物理隐藏（[限制数据访问教程](https://www.odoo.com/documentation/19.0/developer/tutorials/restrict_data_access.html)） | — | Chatter 协作区：留言沟通、@提及通知、记录关注者名单 |
+| ServiceNow | 任何记录关联 `sys_attachment`，查阅权限严格与主记录一致 | 字段级访问控制列表（Field ACLs） | 数据隐私等级分类与合规保护 | 工作便签（Work notes）、对外评论、关注列表（Watch lists） |
 
-Odoo's pages are cited from search results; the other rows from each vendor's own pages.
+上表 Odoo 规范引自检索结果；其余各行均引自各厂商官方最新技术文档。
 
-They agree:
-1. **A file is attached to a record and readable exactly when the record is**; the bytes live in an object store, the metadata with the record.
-2. **Field security is declared per field for roles**, and it holds everywhere the field goes — lists, search, reports, APIs, exports.
-3. **Personal data is marked in the model**, and the marking drives who may read it, audit of reads, and erasure.
-4. **Collaboration lives on the record**: comments with @mentions and followers who hear what changes.
+业界核心共识：
+1. **文件挂载于实体记录之上，且查阅权限与主记录严格一致；** 文件二进制物理存储于对象存储中，文件元数据随记录紧密维系。
+2. **字段级安全在数据模型中按角色显式声明，** 且在字段流向的任何环节全链路严格生效 —— 涵盖列表、搜索、报表、API、导出与分析。
+3. **个人隐私数据在模型中强类型标记，** 该标记自动驱动访问授权、查阅审计追踪以及合规被遗忘权擦除。
+4. **企业协同深度植根于实体记录：** 带有 @提及的人员评论，以及自动感知记录状态跃迁的关注者通知机制。
 
-## Our constraints
+## 我们的架构约束
 
-- Replay never calls outside; the journal stays small. File bytes never enter the journal; the journal holds each file's content hash, so a replay needs the store but reads nothing from it.
-- Rules and models stay typed code (ADR-0008): field security and personal data are declarations, not configuration.
-- No new dependency without the owner's approval: the owner approved the object store (RustFS locally, S3 in production); the one Go dependency this ADR adds is an S3 client, `github.com/minio/minio-go/v7` (Apache-2.0, it speaks any S3 API, RustFS's included).
-- No domain vocabulary in `contract/`.
+- 系统重放绝不发起外部网络调用；业务日志必须保持轻巧。文件的二进制字节流绝对禁止塞入业务日志；业务日志仅记录文件内容的 SHA-256 哈希指纹，因此日志重放仅需依赖对象存储存在，重放期间绝不从中读取任何实际字节。
+- 业务规则与模型严格保留在类型化代码中（[ADR-0008](0008-packages-customization-and-callers.md)）：字段级安全与个人隐私标记均属于强类型声明，绝非易失的界面配置。
+- 未经业务负责人批准，严禁引入任何新的外部依赖：业务负责人已明确批准对象存储依赖（本地采用 RustFS，生产采用标准 S3）；本 ADR 仅引入一个微型 Go S3 客户端 SDK：`github.com/minio/minio-go/v7`（Apache-2.0 协议，天然兼容包括 RustFS 在内的任意标准 S3 API）。
+- 内核 `contract/` 绝不混入具体业务词汇。
 
-## Design
+## 设计
 
-1. **Files** are a platform app, `files` (`capabilities/server/apps/files`, ADR-0025 D4). Uploading streams the bytes to the object store under `<tenant>/<sha256>` and answers with the hash; nothing is decided yet. Attaching is a decision of the `files` app (`files.file.attach`: hash, name, content type, size, the record `<type>/<id>`), journaled like any other; detaching is another. An upload no decision attached is removed after a day. A file is readable, and downloadable through the host, exactly when its record is (scope, participants, field security of a file field). The store is S3-compatible — RustFS locally (Apache-2.0, in Rust; MinIO stopped publishing its community images in 2025), any S3 in production; without one (development in memory) the host keeps bytes in memory. Size is limited per tenant (a setting, 25 MB by default). Backups cover the bucket with the journal; the rehearsal restores both.
-2. **File fields.** An entity may declare `platform.Files` fields (`[]FileRef`, each a hash and name) that its rules read; generated forms upload into them and record pages show and download them. A file attached to a record without a field shows under the record's files.
-3. **Files as knowledge.** A text, Markdown or HTML file attached to a knowledge document, or to a record whose type declares its files as knowledge, is cut into passages like a knowledge field, readable to whoever may read the record (ADR-0022). PDF text waits for a parser the owner approves.
-4. **Field security.** A field tag `read:"role,role"` names the roles of its app that read it; for everyone else the field is absent from reads, lists, search, sort and filter, aggregates, the timeline, history, exports, agents' context, knowledge and the projection to PostgreSQL, and generated forms do not offer it. `write:"role"` narrows who may set it through generated actions; an app's own rules decide their own actions as before. Participants read what the roles they hold allow, nothing more.
-5. **Personal data.** A field tag `personal:"<category>"` (contact, identity, health, finance …) marks personal data. Reads of a record's personal fields are audited (who, which record, which fields, when) in a derived store outside the journal; Settings shows them to administrators; erasure of a person's personal fields is a later batch.
-6. **Payload fields gain choices and references** (F-36): `platform.Field{Choices, Ref}`. The host refuses a value outside the choices; generated forms offer a list for choices and a record picker for references, within what the member may read.
-7. **Comments and followers** on every record, in the `relations` app: `platform.comment` on `<type>/<id>` with @mentions that notify; members follow a record (its creator and owner by default) and hear its decisions through the timeline's observer. A comment is readable when its record is.
-8. **Business calendars** in the organisation (ADR-0012): a unit's working days, hours and holidays, inherited down a structure. An approval level's `Due` and a flow step's `Timeout` may be `platform.Working(d)`, counted in the calendar of the unit concerned.
-9. **Record-state triggers**: `Flow.Start.When(record) bool` on an entity type starts a flow when a decision brings a record into a state (ADR-0020's promise), beside starts on events.
-10. **Import and export**: a CSV import runs each row as the type's generated create or edit action, with a preview of what each row would do and the refusals, keyed by the file's hash and the row so a resend repeats nothing; an export writes a list's query as CSV within the member's scope and field security.
-11. **Delegation**: a member delegates their approvals and tasks to another for a period (ADR-0017's promise); the delegate decides as themselves, and the request's history says for whom.
+1. **文件服务作为平台应用 `files` 统一管理**（`capabilities/server/apps/files`，落实 [ADR-0025](0025-one-shape-for-every-app.md) D4）。上传文件采用流式传输直达对象存储，物理 Key 路径为 `<tenant>/<sha256>`，上传完毕后向客户端返回该哈希值；此时尚未产生任何实质业务决策。文件挂载作为 `files` 应用的标准决策执行（`files.file.attach`：录入文件哈希、原始文件名、MIME 类型、文件大小、目标记录 `<type>/<id>`），像所有决策一样持久化记入日志；卸载脱落作为另一笔反向决策。上传后若 24 小时内未被任何业务决策正式挂接，该临时文件将被自动清理回收。文件的查阅与下载权限严格与目标记录绑定一致（严格校验作用域、参与人身份以及文件字段自身的字段级安全）。底层全面拥抱兼容 S3 规范的对象存储 —— 本地环境采用基于 Rust 开发的高性能 RustFS（Apache-2.0 协议；MinIO 自 2025 年起停止发布免费社区镜像），生产环境采用标准 S3；在无对象存储的纯内存开发测试模式下，宿主在内存中暂存字节流。单个文件大小按租户施加配额上限（通过配置项管理，默认 25 MB）。数据备份全量覆盖对象存储 Bucket 与业务日志；部署演练验证双向协同恢复。
+2. **实体上的文件字段：** 实体类型支持声明 `platform.Files` 字段（`[]FileRef`，每个引用包含哈希与文件名），业务规则可直接读取；自动生成的表单支持在字段处直接上传文件，记录详情页直观展示并支持一键下载。对于未声明专有文件字段的记录，挂接的文件统一在记录详情页的通用文件区呈现。
+3. **文件直接作为业务知识：** 挂载至知识文档、或挂载至声明了“文件即知识”的实体记录上的纯文本、Markdown 或 HTML 文件，自动被分块切片并编入全文检索与向量索引中，有权查阅该记录的人员可精准检索并引用溯源（[ADR-0022](0022-knowledge-memory-a2a.md)）。PDF 文本解析等待业务负责人批准安全解析器后再行引入。
+4. **全链路字段级安全（Field security）：** 结构体字段标签 `read:"role,role"` 明确指定本应用中哪些角色有权查阅该字段；对于非授权人员，该字段在所有数据暴露通道中被全面物理擦除 —— 包含详情读取、列表分页、全文检索、排序、过滤域条件、聚合分析、业务时间线、变更历史、数据导出、智能代理上下文图谱、知识库以及向 PostgreSQL 的物理投影，且自动生成的表单彻底不提供该字段。`write:"role"` 进一步收窄通过自动生成的通用操作编辑该字段的角色范围；应用自有的定制操作规则像此前一样独立裁决。协作参与人查阅数据严格受其自身所持角色的字段级安全约束。
+5. **个人隐私数据合规保护（Personal data）：** 结构体字段标签 `personal:"<category>"`（标记 contact 通讯、identity 身份、health 健康医疗、finance 财务资产等分类）明确标识个人隐私数据。对实体记录中隐私字段的查阅操作，自动在业务日志之外的派生审计表中留痕存证（记录查阅人、查阅记录主键、查阅了哪些隐私字段、时间戳）；“系统设置”面向管理员提供可视化审计大盘；基于被遗忘权的个人数据物理擦除排在后续批次。
+6. **操作载荷字段增强（F-36）：** 扩展 `platform.Field{Choices, Ref}`。宿主严密拦截超出可选枚举的非法入参；自动生成的表单针对枚举提供标准下拉框，针对引用提供实体记录选择器，且严格限制在当前成员有权读取的记录范围内。
+7. **跨记录协同与动态关注：** 归属于 `relations` 关系应用体系：在 `<type>/<id>` 记录上发表 `platform.comment` 评论，支持 `@member` 提及通知；成员可关注特定业务记录（记录创建者与所属人默认自动关注），并通过时间线观测器实时接收其状态变更通知。评论的查阅权限严格与目标记录绑定一致。
+8. **组织架构内置业务工作日历**（[ADR-0012](0012-organization-model.md)）：在组织单元上声明工作日、工作时长与法定节假日，并支持沿部门树向下继承。审批层级的超时截止时间 `Due` 与流程步骤的超时时间 `Timeout` 均支持声明为 `platform.Working(d)`，严格按关联部门的专属工作日历精细计算。
+9. **基于记录状态变更直接唤起业务流：** 在实体类型上支持声明 `Flow.Start.When(record) bool`，当单笔决策使记录进入满足条件的目标状态时，系统自动触发拉起该业务流（兑现 [ADR-0020](0020-flows.md) 的承诺），与显式事件触发并列共存。
+10. **通用数据导入与导出：** CSV 批量导入将每行数据转换为实体类型的通用创建或编辑操作执行，提供导入前影响预览与校验拒绝提示，基于文件哈希与行号强制幂等防重，确保重复提交零副作用；数据导出基于当前列表查询条件导出为 CSV 文件，严格受当前成员的数据作用域与字段级安全过滤制约。
+11. **假期审批委派代理人：** 成员可在指定时间段内将其名下的审批申请与待办任务委派给另一位成员代为裁决（兑现 [ADR-0017](0017-lifecycles-approvals-tasks.md) 承诺）；受托代理人以其自身真实身份签署审批决策，审批历史中清晰标注实际审批人与被代表人员。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Where file bytes live | (a) An S3-compatible object store, RustFS locally. (b) PostgreSQL `bytea`. (c) The host's disk | **(a), decided by the owner.** Content-addressed keys; the journal holds hashes |
-| D2 | Files as a platform app, attached by decision | (a) A `files` app; upload, then attach as a decision. (b) Bytes inside the record's own decision | **(a)**: decisions stay small, one upload serves any app, replay needs no bytes |
-| D3 | Where field security is declared | (a) Tags on the entity's fields in code, for the app's roles. (b) Administrators configure it per role in Settings (Salesforce permission sets). (c) Both | **(a)**: rules and models are code (ADR-0008) and a field's reach must be tested with its app; (b) would let configuration widen what the code allows |
-| D4 | Personal data | (a) A `personal` tag with audit of reads now, erasure later. (b) Nothing until a real tenant | **(a)**: the marking costs little and every later privacy duty builds on it |
-| D5 | Choices and references in payloads (F-36) | (a) `Choices` and `Ref` on `platform.Field`, checked by the host. (b) Forms only | **(a)** |
-| D6 | Comments and followers | (a) In `relations`, beside notes and links. (b) A new collaboration app | **(a)**: the timeline is already where a record's activity lives |
-| D7 | Business time | (a) Calendars on organisation units, used by approvals and flow timeouts. (b) One calendar per tenant | **(a)**: a plant and an office keep different hours; one tenant-wide calendar is the unit at the top |
-| D8 | Order | 11a files, 11b field security and personal data, 11c choices and references, comments and followers, 11d calendars and record-state triggers, 11e import, export and delegation | **As listed**: files and security first, as the owner's testing and the external review asked |
+| D1 | 文件二进制数据保存在何处 | (a) 兼容 S3 的对象存储，本地采用 RustFS。(b) 保存在 PostgreSQL `bytea` 大字段中。(c) 存储在宿主宿主机本地磁盘 | **(a)，业务负责人已明确裁决。** 采用内容寻址的哈希 Key；业务日志仅持久化哈希指纹 |
+| D2 | 文件服务的架构归属 | (a) 作为平台应用 `files` 统一管理；先上传二进制，随后通过决策进行挂载。(b) 将文件直接塞入实体记录自身的决策事务中 | **(a)**：业务决策保持小巧，单个已上传文件可跨业务灵活复用，系统重放完全不碰底层文件流 |
+| D3 | 字段级安全的声明位置 | (a) 在代码中以结构体字段标签形式按角色声明。(b) 由管理员在系统设置中运行时可视化配置（类似 Salesforce 权限集）。(c) 二者结合 | **(a)**：业务规则与模型牢固作为代码存在（[ADR-0008](0008-packages-customization-and-callers.md)），且字段的可见性必须随同应用代码进行严谨自动化测试；(b) 允许界面随意修改会意外突破代码既定的安全边界 |
+| D4 | 个人隐私数据保护机制 | (a) 引入 `personal` 标签并立即建立只读审计存证，合规擦除排在后续。(b) 等待面向真实商业租户交付时再处理 | **(a)**：代码标签的引入成本极低，且后续所有的隐私合规能力均以此为唯一基石 |
+| D5 | 载荷字段枚举与引用 (F-36) | (a) 在 `platform.Field` 上扩展 `Choices` 与 `Ref`，由宿主集中强校验。(b) 仅在前端表单层面做限制 | **(a)** |
+| D6 | 记录评论与关注者归属 | (a) 收敛于 `relations` 关系应用，与便签和链接并列。(b) 建立全新的协同应用 | **(a)**：业务时间线本身就是承载记录全量业务动态的权威集散地 |
+| D7 | 业务日历的覆盖维度 | (a) 在组织架构部门单元上声明，供审批流与业务流超时复用。(b) 全租户全局共用单一简单日历 | **(a)**：生产制造车间与职能办公室的作息差异巨大；全租户全局日历只需配置在顶层组织节点即可自然达成 |
+| D8 | 交付与构建节奏 | 11a 文件服务，11b 字段级安全与隐私审计，11c 载荷增强与评论关注，11d 业务日历与状态触发，11e 导入导出与审批委派 | **按业务负责人“一波干完”指示：全部构建落地** |
 
-Declined for now: malware scanning (no scanner to call locally; files are served as attachments with their content type, never rendered inline by the host); document versions beyond detaching and attaching a new file; the kit's remaining families (boards, time views, trees, mobile), which follow in their own batch once each.
+明确暂缓实现（Declined）：恶意软件杀毒扫描（本地缺乏可用的杀毒引擎；文件均以独立附件形式通过特定 Content-Type 提供下载，宿主严禁内联直接执行脚本）；除脱落与重新挂载之外的多版本文件管理；UI 套件剩余的前端组件族（看板视图、时间线视图、树状视图、移动端适配），后续逐个独立交付。
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 11a | RustFS in Docker Compose and the rehearsal; the `files` app; upload, attach, detach, download within the record's visibility; file fields in forms and record pages; text files as knowledge; per-tenant size limit; stale uploads removed | Tests: a file attached to a CSM ticket is downloadable by the ticket's readers only; a nonconformance photo on an MES SFC; replay (`CheckReplay`) never reads the store; the rehearsal backs up and restores journal and bucket; routes walked in the browser and written as Playwright tests |
-| 11b | Field security (`read`, `write`) everywhere a field goes; personal data tags and the audit of reads | Tests: an HCM leave's health note and a CRM contact's phone are absent for other roles in reads, search, aggregates, exports, projections, agents' context and knowledge; audited reads listed in Settings |
-| 11c | Choices and references in payload fields (F-36); comments with @mentions and followers | The CRM's close form offers won and lost; the opportunity's account is picked; a comment on an ERP purchase order notifies whom it mentions and its followers |
-| 11d | Business calendars; working-time due times and timeouts; record-state triggers | An approval due in two working days skips a weekend and a holiday; a flow starts when an MES order becomes completed without an event subscription |
-| 11e | CSV import with preview, CSV export, delegation of approvals and tasks | Importing products into the ERP twice creates them once; an export honours scope and field security; a delegate approves a leave for a manager on holiday |
+| 11a | Docker Compose 与部署演练接入 RustFS；`files` 应用；文件的上传、挂载、卸载，受记录可见性约束的下载；表单与详情页的文件展示；纯文本作为知识库索引；租户配额与过期清理 | 自动化测试验证：挂载在 CSM 工单上的附件仅限该工单查阅者下载；MES 车间 SFC 挂载缺陷照片；系统重放（`CheckReplay`）完全不读取底层存储；部署演练完美备份并恢复日志与存储 Bucket；浏览器全链路走查并编写为 Playwright 自动化用例 |
+| 11b | 字段级安全（`read`, `write`）全链路生效；个人隐私数据标签与只读留痕审计 | 自动化测试验证：HCM 请假单上的健康病情与 CRM 联系人的私人电话，对非授权角色在读取、搜索、聚合、导出、数据库投影、智能代理上下文与知识库中彻底隐形；“系统设置”直观展示隐私查阅审计日志 |
+| 11c | 载荷字段枚举与引用强校验（F-36）；带有 @提及的评论与记录关注者机制 | CRM 结单表单提供标准赢单/丢单枚举；销售机会从下拉选择器中选取客户账户；ERP 采购订单上的评论自动通知被提及人员与记录关注者 |
+| 11d | 业务工作日历；基于工作日的到期日与超时计算；基于记录状态变更的业务流触发器 | 2 个工作日到期的审批申请自动顺延跳过周末与法定节假日；MES 生产订单完工瞬间自动拉起完工确认流程，无需显式订阅事件 |
+| 11e | 带有预览的 CSV 批量导入、CSV 数据导出、假期审批委派代理人 | ERP 产品导入执行两次仅生成一次数据；数据导出严格遵守权限作用域与字段级安全；经理休假期间受托代理人成功为其代批请假单 |
 
-## Consequences
+## 影响
 
-- Business apps can carry the documents their industries run on, without the journal growing with them.
-- A field's reach becomes part of its declaration and holds on every path out of the host, including agents and projections.
-- The deployment gains a second stateful service (the object store); backups and restores cover both.
-- The classic features that every reference app still missed become platform capabilities, each proved in two industries.
+- 业务应用正式具备承载企业真实单据附件（图片、合同、发票）的能力，且完全不导致核心业务日志膨胀。
+- 字段的数据暴露边界成为数据模型类型声明的一部分，在离开宿主的所有可能路径上（含大模型代理与数据库投影）得到绝对刚性捍卫。
+- 生产环境部署引入了第二个有状态基础服务（对象存储）；自动化备份与灾备恢复全面覆盖二者。
+- 业界参考平台中经典且高频的企业级协同特性全部演变为平台级通用基础设施，并在两个行业中完成端到端实证。
 
-## As built
+## 实际构建（As built）
 
-### 11a: files in RustFS
+### 11a: 基于 RustFS 的统一对象存储体系
 
-- **The store** (`filestore.go`): `FileStore` with an S3 implementation (`NewS3Files`, through the Apache-2.0 client `minio-go`, which speaks any S3 API) and one in memory for development and tests. `-files http(s)://host:port/bucket` with `PLATFORM_S3_ACCESS_KEY` and `PLATFORM_S3_SECRET_KEY` points a host at it; the bucket is made when missing. Keys are `<tenant>/<sha256>`.
-- **Locally, RustFS** (`deploy/local/compose.yaml`, image pinned by digest): MinIO no longer publishes community images (Docker Hub and quay.io refused the pulls), so the owner chose RustFS; its console is on port 9001.
-- **Uploading and downloading** (`files.go`, `server.go`): `POST /v1/files` keeps the body (within the tenant's `files/max-size-mb`, 25 by default) and answers `{hash, size, contentType, name}`; `GET /v1/files/{id}` serves a file its caller may read, as an attachment with `nosniff` and a sandboxing CSP. Bytes no file attaches are swept a day later (`SweepUploads`, the maintenance loop; the list of uploads is volatile, so bytes uploaded before a restart and never attached stay).
-- **The `files` app** (`apps/files`): `files.file` records (name, content type, size, hash, the record `<type>/<id>`, who attached it) made by `files.file.attach` and archived by `files.file.detach` (only by who attached it). Attaching checks, live only, that the member may read the record and that the bytes are stored; a replay reads no bytes. `platform.Scope.Through` makes a file readable exactly when its record is — a new scope every type may use.
-- **Record pages** list a record's files (`RecordView.Files`), download them, and add one (`EdgeClient.upload`, then the attach decision); the page follows the change.
-- **Knowledge**: text files attached to a knowledge document, or to records of a type declaring `Entity.KnowledgeFiles`, are cut into passages and found with citations to the file.
-- **Proven:** `TestFiles` (attach within visibility only, only uploaded bytes, readers download and others get 404, knowledge from a Markdown file, detach by the attacher only, the sweep, `CheckReplay` with an empty store), `TestFilesOnTickets` (hospitality: the desk and the lead download a ticket's screenshot, a salesperson does not), the manufacturing test (a shop order's photo for its line's operator, not the ERP's clerk), Playwright route 19 (a file added on a ticket's page), the rehearsal (upload to RustFS, attach, download, and again after the restore).
-- **Not yet:** file fields declared on entity types (D2's `platform.Files`) — files attach to any record through its page instead; PDF text.
+- **存储驱动层** (`filestore.go`)：抽象 `FileStore` 接口，提供标准 S3 驱动实现（`NewS3Files`，依托 Apache-2.0 协议的 `minio-go` SDK 驱动，完全兼容任何标准 S3 API）以及专供开发测试的纯内存实现。宿主通过启动参数 `-files http(s)://host:port/bucket` 配合环境变量 `PLATFORM_S3_ACCESS_KEY` 与 `PLATFORM_S3_SECRET_KEY` 连接对象存储；Bucket 缺失时自动初始化创建。文件物理存储以 `<tenant>/<sha256>` 作为内容寻址 Key。
+- **本地环境集成 RustFS** (`deploy/local/compose.yaml`，镜像严格按 Digest 哈希锁定)：MinIO 官方自 2025 年起停止公开发布免费社区版镜像（Docker Hub 与 quay.io 均拒绝拉取），因此业务负责人选定采用 RustFS；本地管理控制台映射至 9001 端口。
+- **上传与下载安全机制** (`files.go`, `server.go`)：`POST /v1/files` 接收上传的文件流（严格受租户 `files/max-size-mb` 单文件上限控制，默认 25 MB），成功后返回 `{hash, size, contentType, name}`；`GET /v1/files/{id}` 仅向有权查阅关联记录的用户提供文件下载，强制携带 `nosniff` 防嗅探响应头与沙箱隔离级 CSP 策略。未被任何业务决策正式挂接的悬空文件，在 24 小时后由后台维护作业自动安全清理（`SweepUploads`；上传清单驻留内存，服务重启前未挂接的临时文件在重启后不再误删）。
+- **`files` 平台应用** (`apps/files`)：`files.file` 实体记录（记录文件名、MIME 类型、文件大小、哈希指纹、关联记录 `<type>/<id>` 以及挂载人身份），由 `files.file.attach` 操作创建，由 `files.file.detach` 操作归档（且严格限制仅能由当初的挂载人卸载）。挂载操作在实时运行期严密校验当前成员是否有权查阅目标记录以及底层文件流是否已真实存储；系统重放阶段完全不读取任何底层存储流。引入全新的 `platform.Scope.Through` 作用域机制，确保文件的可读性百分之百与关联记录对齐绑定 —— 该能力成为面向所有实体类型开放的通用机制。
+- **前端无缝集成：** 通用记录详情页自动列出关联的文件清单（`RecordView.Files`），提供直接下载与一键上传挂载（前端调用 `EdgeClient.upload` 完成流传输，随后发起 attach 决策）；页面实时响应变更。
+- **业务知识无缝融入：** 挂载至知识文档、或挂载至声明了 `Entity.KnowledgeFiles` 的业务实体上的纯文本文件，自动被切片提取并建立向量索引，大模型在作答时能够精准引用溯源至具体文件。
+- **经过全面验证：** `TestFiles`（仅限可见范围内的记录挂载、必须是已上传的字节、查阅者成功下载而无关人员返回 404、Markdown 文件切片编入知识库、仅限挂载人亲自卸载、过期文件自动清理、空存储环境下的 `CheckReplay` 确定性重放）、`TestFilesOnTickets`（酒旅行业：服务台坐席与主管顺利下载工单截图，销售人员被严正拦截）、制造行业测试（车间工单现场照片仅对产线操作工开放，ERP 财务人员无权查看）、Playwright 路由 19（在工单页面动态上传文件）、本地部署演练（向 RustFS 上传、挂载、下载，并在备份恢复后再次下载成功）。
+- **暂未构建：** 在实体类型上声明专属文件字段（D2 中提议的 `platform.Files`）—— 目前文件统一通过记录详情页挂载至任意记录；PDF 文本解析。
 
-### 11b: field security and personal data
+### 11b: 全链路字段级安全与隐私合规审计
 
-- **Declared on fields** (`platform/entity.go`): `read:"role,role"` names the app's roles that read a field, `write:"role"` those that set it through generated actions; who may not read a field may not set it either (`FieldInfo.Reads`, `Writes`; generated edits refuse it, `platform/ledger.go`). `personal:"<category>"` marks personal data.
-- **Everywhere a field goes** (`records.go`): each read takes the type as the member may see it (`viewOf`: the fields their role in the app may not read are gone), so search, filters, sort, grouping and measures (`aggregate.go`) never reach them and a filter or group on one is refused; records leave with those fields at their zero value (`masked`) and histories without their changes; `/v1/entities` leaves them out, so generated forms never offer them. Agents' context goes through the same reads. A field some roles may not read is not projected to PostgreSQL (`projection.go`), where no role applies, nor indexed as knowledge. Exports (11e) read the same way.
-- **Reads of personal data** are noted (`PersonalRead`: when, who, which type and records, which personal fields they saw), outside the journal and for the last 5 000 reads; administrators read them at `/v1/personal-reads` and in Settings → Audit. Automation (`app:<id>`) is not noted.
-- **Proven** (`TestFieldSecurity`, hospitality): a sick leave's medical reason (`hcm.leave.health`, `read:"hr" personal:"health"`) is absent for the employee in the record, its history, search, filters, grouping and her forms, and present for HR, whose read is audited; an opportunity's expected margin (`crm.opportunity.margin`, `read` and `write` for sales managers) is set by a manager and neither seen nor set by the salesperson who owns it; `CheckReplay`. Playwright route 20 shows the margin to the manager and not to the salesperson.
-- **Not yet:** erasure of a person's personal fields; purposes beyond roles.
+- **代码化强类型声明** (`platform/entity.go`)：结构体字段标签 `read:"role,role"` 声明哪些应用角色有权查阅该字段；`write:"role"` 声明哪些角色有权通过自动生成的通用操作设置该字段；无权阅读该字段的人员同样被剥夺写入权限（底层维护 `FieldInfo.Reads`, `Writes`；自动生成的编辑操作严密拦截越权修改，`platform/ledger.go`）。`personal:"<category>"` 声明个人隐私数据分类。
+- **全链路严密数据脱敏与拦截** (`records.go`)：所有读取接口均严格按当前成员的角色动态裁剪实体类型元数据（`viewOf`：自动物理抹除当前成员无权查阅的字段），因此全文检索、过滤条件、字段排序、分组透视与度量聚合（`aggregate.go`）彻底无法触达受限字段，若在过滤或分组中强行指定受限字段将当场报错拦截；吐出的实体记录中受限字段被重置为零值（`masked`），且变更历史中自动剔除相关修改细节；`/v1/entities` 动态隐藏受限字段，确保自动生成的表单彻底不渲染它们。智能代理的上下文图谱同样经过这同一套读取管道。存在角色受限的字段绝不向 PostgreSQL 只读数据库投影物理表同步（`projection.go`，因为数据库只读账号缺乏角色概念），同样绝不编入知识库检索。数据导出（11e）复用完全相同的安全规则。
+- **个人隐私数据只读留痕审计：** 系统自动对实体记录中隐私字段的查阅操作建立审计流水（`PersonalRead`：精准记录查阅时间、查阅人主体、目标类型与记录 ID、本次查阅涉及了哪些隐私字段），保存在业务日志之外的独立存储中，循环保留最近 5,000 条流水；管理员可通过 `/v1/personal-reads` 以及“系统设置” → “审计日志”直观调阅。应用自身的后台自动化调用（`app:<id>`）不计入隐私审计。
+- **经过全面验证：** `TestFieldSecurity`（酒旅行业实证：病假申请单中的医疗病情隐私 `hcm.leave.health`，在普通员工查阅自身记录、历史、检索、过滤、分组以及表单中被彻底抹除，仅对 HR 角色开放，且 HR 的查阅被严格留痕审计；CRM 销售机会上的预期毛利率 `crm.opportunity.margin` 仅对销售经理开放读写，负责该单的销售员既无法看到也无法修改；`CheckReplay` 确定性重放）。Playwright 路由 20 真实走查验证：销售经理可见毛利率，销售员查阅时完全隐形。
+- **暂未构建：** 基于被遗忘权的个人数据彻底物理擦除；超越静态角色的业务目的（Purpose）访问治理。
 
-### 11c: choices and references, comments and followers
+### 11c: 载荷枚举与引用、记录评论与关注者体系
 
-- **Payload fields** (`platform.Field`) gain `Choices` and `Ref` (F-36). The ledger checks them after the policy and before the rules, as the kernel's order has it (`Ledger.checked`, K6 T2): a value outside the choices, or naming a record of the type the member may not read (`Runtime.Readable`), is refused; a replay does not check again. Declared on the CRM's close outcome (won, lost) and opportunity's account, HCM's leave kind, the MES's downtime reasons, and every reply action's outcome (`platform.AnswerFields`).
-- **Forms** (`@platform/app` `PayloadFields`) offer a list for choices and a picker of the records the member may read for references.
-- **Comments and follows** are records of the `relations` app (`platform.comment`, `platform.follow`), readable exactly when their record is (`Scope.Through`). `platform.comment.add` on a record the member may read: @member mentions notify those members, the record's followers hear of the comment, and the author then follows the record. `platform.follow.add` and `.remove`. The relations observer tells a record's followers of each member's decision on it (automation's decisions are not told). Record pages list the comments, add one, and follow or unfollow; `RecordView.Comments`, `Following`.
-- **Proven:** the manufacturing test (a supervisor's comment on a shop order mentions the operator, who is told; the operator's reply reaches the supervisor, who follows what he commented on; the ERP's clerk reads no comment of the plant), the MES's refusals keep their order (`POLICY_DENIED` before a bad reason), Playwright routes 17 (the outcome from a list) and 21 (a record picker opens an opportunity; a comment with a mention reaches the manager).
-- **Not yet:** a record's creator following it by default (D6 said so; it would notify people of every change of what they made, and is left to a person's own follow); notification titles of comments said in the reader's language.
+- **操作载荷字段元数据增强** (`platform.Field`)：全面扩充 `Choices` 与 `Ref` 属性（F-36）。底层账本在执行完策略鉴权后、进入业务规则判定前，自动对其执行强类型静态审查，严格遵循内核定义的校验时序（`Ledger.checked`，内核 K6 T2 规范）：超出枚举的可选值，或关联了当前成员无权查阅的实体记录（`Runtime.Readable`），系统直接予以拒绝拦截；日志重放期间跳过重复校验。全面声明于 CRM 结单结果（won, lost）与关联客户、HCM 请假类型、MES 设备停机原因，以及所有协议回执操作的参数定义中（`platform.AnswerFields`）。
+- **前端动态智能表单** (`@platform/app` 中 `PayloadFields`)：枚举字段自动渲染为下拉单选框，引用字段自动渲染为当前成员有权读取的实体记录选择器组件。
+- **记录级评论与关注机制：** 表现为 `relations` 关系应用中的通用记录（`platform.comment`, `platform.follow`），查阅权限通过 `Scope.Through` 机制严格与目标记录绑定一致。在成员有权读取的记录上执行 `platform.comment.add`：评论中通过 `@member` 提及成员自动向对方发送系统通知，记录的所有关注者自动收到新评论提醒，且评论作者自动转为该记录的关注者。提供 `platform.follow.add` 与 `.remove` 关注控制。关系应用的观测器自动将成员在该记录上做出的业务决策同步通知给所有关注者（系统自动化的决策不予打扰）。记录详情页集中展示评论流、支持发表新评论、支持一键关注或取消关注（`RecordView.Comments`, `Following`）。
+- **经过全面验证：** 制造行业实证（车间主管在生产工单上发表评论并 @ 产线操作工，操作工瞬间收到通知；操作工回复评论，主管因关注该单自动收到提醒；ERP 财务人员无权查阅工厂内部的工单评论）、MES 拒绝拦截严格保序（`POLICY_DENIED` 鉴权拦截优先于非法原因报错）、Playwright 路由 17（从下拉枚举中选择结单结果）与路由 21（从记录选择器中选取销售机会；发表带 @提及的评论精准触达经理）。
+- **暂未构建：** 记录创建者默认强制自动关注（D6 曾提议；由于会导致创建者被该记录后续的所有琐碎变动严重打扰，最终调整为由人员自主点击关注）；评论通知标题的多语言本地化输出。
 
-### 11d: business calendars and record-state triggers
+### 11d: 组织业务工作日历与状态变更触发器
 
-- **Calendars** (`platform.Calendar`: working weekdays, holidays; `Works`, `After`) are declared in the organisation (`OrgSeed.Calendars`) and named by units (`Unit.Calendar`). A party's calendar is its primary unit's, else one found up any structure, else the tenant's first, else Monday to Friday (`org.Calendar`, `host.Directory.Calendar`).
-- **Working time**: an approval level's `WorkingDays` is due that many working days of the requester's calendar (the work app); a flow step's `WorkingDays` times out in the calendar of whom the instance runs for, else the tenant's (the flow app). HCM's leave approvals are due in two working days.
-- **Record-state triggers**: `Start.Type` and `Start.When` start a flow the first time a decision brings a record of the type into a state When accepts — whichever record the decision named — keyed by the record's ID and never again for it. Every event carries the records its decision put (`platform.Event.Changed`, kept with queued deliveries in snapshots), so the flow app hears a shop order completed by the decision on its last SFC. The MES's ERP confirmation starts this way now, without subscribing to SFC events.
-- **Proven:** `TestWorkingDays` (hospitality: a Wednesday's request is due on 9 October for the office, over National Day week and the weekend, and on 2 October for the front office, which works every day), HCM's overdue task (not over the weekend, on Monday morning), the manufacturing tests (the confirmation flow starts on the completed order, with the ERP app and with the adapter), `CheckReplay`.
-- **Not yet:** working hours within a day; calendars edited in Settings (they are the organisation's seed).
+- **企业业务工作日历** (`platform.Calendar`：声明工作日、法定节假日；提供 `Works` 工作日判定与 `After` 工作日加算逻辑)：在组织架构中集中声明（`OrgSeed.Calendars`）并由各部门单元直接绑定（`Unit.Calendar`）。成员的工作日历自动继承其所属主部门，未指定时沿组织树向上冒泡查找，再未命中则回退租户顶层日历，最底线回退为周一至周五标准双休（`org.Calendar`, `host.Directory.Calendar`）。
+- **基于工作日的工作时长计算：** 审批层级的到期截止时间 `WorkingDays` 严格按申请人所属部门的工作日历递推计算（协作应用支持）；业务流步骤的超时时间 `WorkingDays` 严格按流程服务对象的日历递推计算，未指定时按租户基准日历计算（流程应用支持）。HCM 请假审批统一规范为 2 个工作日内到期。
+- **基于记录状态变更直接唤起业务流：** 在实体类型上声明 `Start.Type` 与 `Start.When`，当单笔决策使该类型的记录首次进入满足 When 判定的目标状态时，系统自动以该记录 ID 为主键拉起该业务流，且针对同一记录绝对不重复触发。每次业务事件均完备携带该决策所提交变更的全部实体记录（`platform.Event.Changed`，与队列交付一同在快照中持久化保护），流程应用由此敏锐感知到生产订单在其最后一个 SFC 完工时自动达成完工状态。MES 向 ERP 的完工确认流程现已彻底改造为此种优雅机制，彻底删除了此前对 SFC 底层事件的繁琐订阅。
+- **经过全面验证：** `TestWorkingDays`（酒旅行业实证：周三提交的审批申请，职能办公室在跨越国庆黄金周长假与周末后顺延至 10 月 9 日到期，而全年无休的前厅前台部门精准在 10 月 2 日到期）、HCM 逾期告警（周五下班前不告警，周一早晨准时触发告警）、制造行业测试（生产订单完工瞬间自动拉起完工确认流程，在原生 ERP 与外部适配器下均稳定触发）、`CheckReplay` 确定性重放校验。
+- **暂未构建：** 单日内部的工作小时级计算；在“系统设置”界面中动态编辑日历（目前作为组织架构种子数据交付）。
 
-### 11e: import, export and delegation
+### 11e: 通用数据导入导出与假期审批委派
 
-- **Import** (`transfer.go`, `POST /v1/import/{type}`, `?preview=true`): a CSV with an `id` column and field names the member may read and set; money as `12.50 CNY` (the tenant's currency when none), references and tags split by `;`, lines refused. Each row is a decision of the member's own: the type's generated create, and its generated edit when the record already exists, keyed by the file's hash and the row, so a file sent again decides nothing new. A preview probes each row's policy and rules and applies none. Each row answers `ok` or the refusal's code; one bad row stops no other.
-- **Export** (`GET /v1/export/{type}`, the list's query): the ID and every field the member may read, lines aside, through the same reads as the list — scope, filters and field security (11b) hold, and personal reads are noted.
-- **In lists**: every record list of a type with a generated create offers Export CSV and Import CSV, which previews the rows before importing them (`@platform/app` `Transfer`; `EdgeClient.importCSV`, `exportCSV`).
-- **Delegation** (the work app, `work.delegation`): `work.delegation.add` hands a member's approvals to another member from a first to a last day; `.end` ends it. An approval level asked for on a day a delegation covers lists the delegate as a candidate (`ApprovalStep.Delegates`); the delegate's decision counts as the approver's and the request says who decided (`DecidedBy`). Delegations are readable by the two members they name.
-- **Proven:** `TestImportExport` (manufacturing: ERP products previewed, imported once, the same file again decides nothing, a second file edits, a sorted export reads back as imported, `CheckReplay`), `TestDelegationAndExport` (hospitality: a manager on holiday delegates, the delegate sees and approves a leave for her, the request names both; the salesperson's export of opportunities has no margin, the manager's has it; `CheckReplay`), Playwright route 23 (an import with a bad row previewed, imported and exported from the accounts list).
-- **Not yet:** Excel files; delegation of tasks outside approvals, and of approval levels already asked for before the delegation began; import of lines.
+- **通用 CSV 批量导入** (`transfer.go`, `POST /v1/import/{type}`, `?preview=true`)：接收包含 `id` 列与当前成员有权读写的字段列的 CSV 文本；金额格式解析支持 `12.50 CNY`（未声明币种时回退租户记账本位币），引用与标签字段支持以 `;` 分隔，明细子行暂不支持。导入的每一行数据均作为当前成员自有的独立业务决策执行：根据记录是否已存在，自动调用该类型的通用创建或通用编辑操作，防重键基于文件哈希与行号联合计算，因此同一文件即便重复上传也不会产生任何多余操作。提供 `?preview=true` 预检模式，对每行数据执行权限与业务规则探查而不产生实质写入。导入逐行反馈 `ok` 或具体的错误拒绝码；单行数据的失败绝对不中断其余合法行的正常导入。
+- **通用 CSV 数据导出** (`GET /v1/export/{type}`，直接复用当前列表的查询过滤条件)：导出当前成员有权读取的记录 ID 与全部字段（排除明细子行），复用与列表完全相同的读取通道 —— 严格受当前成员的数据作用域、过滤条件以及 11b 字段级安全的制约过滤，且个人隐私数据的导出被完整审计记录。
+- **统一列表交互：** 所有具备通用创建操作的实体列表页面，统一在工具栏提供“导出 CSV”与“导入 CSV”按钮，并在正式执行导入前提供全屏预检明细弹窗（`@platform/app` 中 `Transfer`；基于 `EdgeClient.importCSV` 与 `exportCSV`）。
+- **审批委派代理人（Delegation）：** 作为协作应用的标准实体记录（`work.delegation`）：通过 `work.delegation.add` 将某位成员名下的审批权限在指定起止日期内全权委派给另一位成员代劳；通过 `.end` 可提前解除委派。在委派有效期内发起的审批层级，自动将受托代理人追加为合法审批候选人（`ApprovalStep.Delegates`）；代理人做出的审批决策在业务上等同于原审批人通过，且申请单历史记录中清晰追溯实际签署人身份（`DecidedBy`）。委派关系对委派双方双向透明可见。
+- **经过全面验证：** `TestImportExport`（制造行业实证：ERP 物料产品在线预览、首次批量导入成功、重复上传同一文件零重复操作、上传第二份修改文件成功批量更新、导出排序数据与导入数据逐字比对完全一致、`CheckReplay` 确定性重放校验）、`TestDelegationAndExport`（酒旅行业实证：休假经理配置委派，受托代理人顺利在收件箱中查收并代批请假单，历史中清晰记录双方身份；销售员导出的销售机会绝对不包含毛利率字段，而经理导出的数据中包含毛利率；`CheckReplay`）、Playwright 路由 23（在客户账户列表中上传包含错误行的 CSV，成功预览校验、执行导入并执行导出走查）。
+- **暂未构建：** Excel 物理文件导入导出；审批之外的常规待办任务委派、对委派生效前已经挂起的历史审批进行追溯委派；明细子行的批量导入。

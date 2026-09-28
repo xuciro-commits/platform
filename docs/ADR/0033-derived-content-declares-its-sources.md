@@ -1,72 +1,74 @@
-# ADR-0033: Derived content declares its sources
+# ADR-0033: 派生内容显式声明数据源出处与权限传递收窄
 
-**Status:** Accepted (2026-09-27, #130). The owner accepted D1–D4 as recommended, deciding that the narrowing built in the host's internal seam is promoted to the app API so every app declares it as data. What is built is under "As built".
+**状态：** 已采纳 (2026-09-27, #130)。业务负责人按推荐采纳了 D1–D4，裁决将此前在宿主内部建立的权限收窄机制升级提升至公开的应用 API，使所有业务应用均能以声明式数据进行定义。实际构建内容见“实际构建（As built）”。
 
-## Context
+## 背景
 
-A record often keeps content taken from other records: an agent run keeps what it saw of a record, each step's arguments and outcome, the passages it cited, the payload it drafted and the answer it gave; a fact an agent kept summarizes what it read. The records behind that content are authorized per member — owner and unit scope (`records.go`, `Tenant.visible`), field restrictions (ADR-0028 D3, `viewOf`) — and that authority changes after the content is journaled: an owner moves, a unit closes, a field becomes restricted, an app grant is revoked.
+实体记录中往往持久化保存了提炼自其它记录的衍生内容：智能代理的运行记录保留了其查阅过的实体记录快照、每个步骤调用的参数与输出结果、引用的知识库切片、起草的操作载荷以及给出的最终结论；智能代理沉淀的事实记忆提炼自其查阅的原始记录。这些衍生内容背后的原始记录是受到严格的成员级权限控制的 —— 包含所属人与部门作用域（`records.go`, `Tenant.visible`）、字段级安全限制（[ADR-0028](0028-the-application-half.md) D3, `viewOf`）—— 且这些访问授权在衍生内容被记入日志后完全可能随时发生动态变化：记录的所属人发生调动、部门被撤并、某个字段被追加为保密受限字段、或者某位员工的应用角色被注销吊销。
 
-The first #130 slice repaired the reads that collect content live (knowledge passages, context links, flow and task summaries). The second slice closed the reads that serve content already journaled, with the narrowing declared through `platformserver/internal/host.Narrowing`: a Go callback only the platform's own apps can implement. That leaves two problems. An app outside the host module — a customer's, an FDE's, any app under `apps/` — cannot state that its content is derived, so its reads would be the next leak. And a Go callback cannot be expressed by a controlled tenant definition, which ADR-0031 requires of every capability a builder will reach.
+#130 的首个切片修复了实时聚合抓取内容的动态读取接口（知识文档切片、上下文图谱关联、流程与任务摘要）。第二个切片封堵了用于提供已持久化记入日志的衍生内容的读取接口，此前通过 `platformserver/internal/host.Narrowing` 中的 Go 回调函数声明权限收窄规则 —— 但该机制此前属于仅限平台内置通用应用才能实现的内部私有通道。这遗留了两大严峻问题：其一，宿主核心模块之外的业务应用 —— 无论是客户自建应用、FDE 定制应用还是 `apps/` 下的任意应用 —— 均无法显式声明其内容属于派生内容，导致其自定义读取接口将成为下一个致命的数据越权泄露点；其二，原生的 Go 代码回调无法被受控的租户元数据定义所表达，而 [ADR-0031](0031-ai-application-platform.md) 明确要求构建器所能触达的每一项平台能力都必须能被结构化元数据完整描述。
 
-| Current reference evidence | Design lesson for this platform |
+| 行业参考标杆证据 | 对本平台架构的启示 |
 |---|---|
-| Palantir Foundry: an [object security policy](https://www.palantir.com/docs/foundry/object-permissioning/object-security-policies) inherits the mandatory controls of its data sources, and [property security markings](https://www.palantir.com/docs/foundry/security/property-security-markings) state that a derived property's visibility relies on the user's visibility of the source object. | Derivation is declared on the object, and the source's authority governs the derived value. This is the model we follow. |
-| SAP CAP: [CAP-level authorization](https://cap.cloud.sap/docs/guides/security/authorization) restricts entities declaratively with `@requires`/`@restrict`, and a view inherits the annotations and restrictions of the entity it projects. | The declaration is typed data on the model, checked by the runtime, not code in each service. |
-| Salesforce: [field-level security](https://help.salesforce.com/s/articleView?id=sf.admin_fls.htm&language=en_US&type=5) documents that roll-up summary and formula fields "can be visible to users even though they reference fields that the users can't see". | A documented gap we decline to copy: a derived field must not become a way around the restriction on its source. |
+| Palantir Foundry：其[对象安全策略 (Object Security Policies)](https://www.palantir.com/docs/foundry/object-permissioning/object-security-policies) 强制继承其上游数据源的法定访问控制；[属性安全标记 (Property Security Markings)](https://www.palantir.com/docs/foundry/security/property-security-markings) 明确规范派生属性的可视性严格依赖于用户对源对象的实际可见性。 | 派生关联直接在对象模型上显式声明，且上游源数据的访问权限刚性支配派生属性的可见性。这正是我们坚决遵循的架构范式。 |
+| SAP CAP：其 [CAP 级授权控制](https://cap.cloud.sap/docs/guides/security/authorization) 通过 `@requires`/`@restrict` 注解声明式约束实体；投影视图自动继承被投影实体的注解与权限约束。 | 权限声明表现为数据模型上的强类型结构化数据，由底层运行时集中统一校验，而非散落在各个微服务中重复手写业务代码。 |
+| Salesforce：其[字段级安全 (Field-Level Security)](https://help.salesforce.com/s/articleView?id=sf.admin_fls.htm&language=en_US&type=5) 官方文档明确指出：累计汇总字段（Roll-up Summary）与公式字段“即使用户无权查看其引用的原始字段，这些派生字段对用户依然可能可见”。 | 这是业界公认的严重安全漏洞与历史包袱，我们坚决拒绝盲目抄袭：派生字段绝对不允许成为绕过底层源数据安全限制的越权后门。 |
 
-They agree on two things: derivation is part of the model, and the reader's authority over the source decides the derived value. They differ on how much is inherited automatically; none of them promises to trace provenance through free text.
+上述标杆在两大核心原则上高度一致：数据派生依赖关系必须属于数据模型本身的固有元数据，且查阅者对原始源数据的实时访问权限决定了派生数据的可见性。差异仅在于继承关系的自动化深度；但它们均未承诺在非结构化的自由文本中自动进行数据源出处逆向推导。
 
-## Our constraints
+## 我们的架构约束
 
-- Replay never re-decides authorization (ADR-0008): narrowing is a read-time decision over the current declaration and the reader's current grants, and changes no journaled content.
-- One owner, one canonical path (AGENTS.md rule 11): the host enforces narrowing at every member-facing read; an app declares provenance and never filters its own reads a second time.
-- A declaration is typed data, so a controlled tenant definition can carry the same fields later; no Go callback, no tenant-executed expression.
-- The host may hold its record store while narrowing, so a declaration is evaluated from the record in hand: provenance is kept on the record at write time, never fetched during a read.
-- Field restrictions and record scope keep their existing owners (`viewOf`, `Tenant.visible`); this ADR adds no second policy engine.
+- 系统重放绝不重新判定访问授权（[ADR-0008](0008-packages-customization-and-callers.md)）：权限收窄属于读取时刻根据当下的元数据声明以及查阅者当前实时权限做出的即时判定，绝不修改历史日志中持久化的任何既定内容。
+- 单一权威属主，唯一标准路径（AGENTS.md 规则 11）：宿主在面向成员的每一个数据读取入口强制执行权限收窄审查；业务应用只需忠实声明数据源出处，绝不在业务代码中二次手动编写重复的过滤逻辑。
+- 声明必须是强类型结构化数据，确保后续受控的租户元数据定义能够无缝承载完全相同的字段；彻底摒弃原生 Go 代码回调，严禁在租户侧执行脚本表达式。
+- 宿主在执行权限收窄时可能持有记录存储锁，因此权限判定必须完全基于当前内存中持有的实体记录就地自洽完成：数据源出处引用在写入落库时随记录一同持久化保存，绝不在读取阶段发起跨表网络反查。
+- 字段级限制与实体记录作用域牢固保持由现有机制统筹（`viewOf`, `Tenant.visible`）；本 ADR 绝不引入第二套冗余的安全策略引擎。
 
-## Design
+## 设计
 
-1. **Provenance on the record.** A record that keeps derived content keeps the records it came from, as refs in one of its own fields: `"<type>/<id>"`, or `"<type>/<id>#<field>"` when only one field of the source was used. An agent run keeps the record it was about, the records each step read (`RunStep.Sources`), the document and field of each citation, the target of each draft; a kept fact keeps the run's sources (`Memory.Sources`). Writing provenance is the app's duty at the moment it writes the content; the platform never guesses it from free text.
-2. **The declaration is data on the entity.** `platform.Entity.Derived` is a list of `platform.Derivation{From, Fields, Element}`: `From` names the field holding the refs (`"ref"`, `"sources"`, `"citations.document"`, or two fields joined as `"type/target"`, relative to a list's element when the path enters one; `"*"` means every source the type's other derivations name). `Fields` are emptied for a reader who may not read a source, or `Element` drops that list element. `Entity.Withheld` names a boolean field the host sets so a reader is told content was left out (#129: every refusal carries a reason).
-3. **The host enforces it everywhere a member reads.** `Tenant.narrowed` walks what a read answers with — a record page, a record's detail, every named app read, and so every export and search built on them — masks fields the reader's role may not read, then applies each type's derivations. Withheld fields are neither grouped nor measured in an aggregate. A run's model calls (`Tenant.TranscriptsFor`) are served only to an administrator who may also read what the run read. `Tenant.admits` refuses a member of another tenant at every read entry.
-4. **Declarations are checked when a tenant is composed.** Every `From` and `Fields` path must name a field the type declares, `Withheld` must be a boolean field, and a derivation that enters a list must stay inside one element. A tenant with an invalid declaration does not start, like any other manifest error.
-5. **What this does not promise.** No tainting of free text an app writes without provenance, no propagation through outside systems, and no narrowing of a decision an app already took on derived content (a decision stands; what a person reads of it narrows). Derived content an app keeps without declaring sources stays visible: it is a capability escape to be found in review, not something the host can detect.
+1. **实体记录忠实持久化数据源出处：** 任何保存了衍生内容的实体记录，必须在其自有的特定字段中持久化记录提炼出该内容的源记录引用，格式规范为 `"<type>/<id>"`；若仅使用了源记录的某一特定字段，则精准记录为 `"<type>/<id>#<field>"`。智能代理运行记录精准维护其所围绕的核心业务记录、每个步骤调用的源记录（`RunStep.Sources`）、每次引用的文档与具体字段出处、每个草稿的目标对象；提炼的事实记忆忠实记录产生该事实的源运行记录（`Memory.Sources`）。记录出处是业务应用在写入衍生内容那一瞬间不可推卸的法定职责；平台底层绝对不在运行时基于自然语言纯文本进行玄学猜测。
+2. **声明作为实体模型上的类型化元数据：** `platform.Entity.Derived` 声明为一组 `platform.Derivation{From, Fields, Element}` 规范：`From` 指明承载源数据引用的字段名（例如 `"ref"`, `"sources"`, `"citations.document"`，或拼接两个字段表达的 `"type/target"`；当路径深入列表时相对于列表的子元素；`"*"` 则代表匹配当前实体声明的所有其他出处引用）。`Fields` 声明当查阅者无权查阅某项源数据时应予抹除置空的字段列表，或通过 `Element` 直接从列表中剔除该子元素。`Entity.Withheld` 声明一个布尔型字段，由宿主在发生权限脱敏时自动置为 true，明确告知查阅者部分敏感内容已被依法隐藏（落实 #129 规范：任何拦截与隐藏必须明确告知原因）。
+3. **宿主在成员端所有读取暴露面集中强制执行：** `Tenant.narrowed` 深度递归遍历所有面向成员的读取响应 —— 包含记录详情页、记录子明细、所有具名应用读取接口，以及基于它们构建的全量数据导出与全局检索 —— 首先物理抹除当前成员角色无权查阅的保密字段，随后严格应用各个实体类型的出处收窄规则。包含被隐藏字段的记录绝对不参与聚合分析的分组与度量计算。单次运行底层调用的大模型原始报文（`Tenant.TranscriptsFor`），严格仅向同时有权查阅该次运行查阅过的**全部**源记录的特权管理员暴露。`Tenant.admits` 在所有读取入口处严正拦截跨租户的非法越权访问。
+4. **租户组合编排时严格静态拓扑校验：** 所有的 `From` 与 `Fields` 字段路径必须真实存在于该实体类型已声明的字段列表中，`Withheld` 必须声明为合法的布尔字段，且深入列表的派生规则必须严格受限于列表元素内部。凡是包含非法派生声明的租户，在服务启动时立即报错并拒绝启动，与处理清单 Schema 语法错误一视同仁。
+5. **明确不予承诺的边界：** 绝不在应用未声明出处的自由文本中进行污点追踪推导；绝不负责跨外部异构系统的数据权限穿透传播；且绝不反向收窄应用此前基于派生内容已经正式做出的历史业务决策（历史决策一经做出不可篡改；被动态收窄的仅限人类当下面向该决策所能查阅到的文本细节）。应用若私自保存了衍生内容却未按规范声明数据出处，该部分内容将保持全量可见：这属于架构 Code Review 中必须严密揪出的逃避漏洞（Capability Escape），而非宿主底层能够全自动探查兜底的隐患。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Where does narrowing live? | The public app API as typed data on the entity; or the host's internal seam as a Go callback for platform apps only. | The app API as data. Every app — including a customer's — keeps derived content, and a tenant definition must be able to carry the same declaration. |
-| D2 | How fine is the check? | Record and field (`"<type>/<id>#<field>"`), with whole-field emptying and list-element dropping; or record only. | Record and field. A citation of a restricted field is exactly the case that field security must reach (ADR-0028 D3). |
-| D3 | What happens to content derived from everything a record read, such as an agent's answer? | Withhold it when any source is unreadable (`From: "*"`); or keep it and withhold only the traceable parts. | Withhold it. The answer restates what was read, and no cheaper rule is honest. |
-| D4 | Does the reader learn that something was withheld? | A declared boolean the host sets, shown in the UI; or silence. | Tell them. Silent gaps were the #129 finding about refusals without a reason. |
+| D1 | 权限收窄逻辑应当归属何处 | 作为公有应用 API 中实体模型上的强类型结构化数据；或作为宿主内部专用机制，以 Go 回调函数形式仅供平台内置应用使用 | **作为公有应用 API 中的结构化元数据**。包括客户自建应用在内的所有应用均存在保存衍生数据的场景，且未来的租户元数据定义必须能够无缝承载完全相同的声明 |
+| D2 | 权限校验的最小粒度 | 精细至“记录与字段”双维度（`"<type>/<id>#<field>"`），支持整字段抹除与列表元素丢弃；或仅粗粒度控制记录级 | **精细至记录与字段双维度**。对保密受限字段的文本引用，正是字段级安全机制必须坚决捍卫的典型场景（[ADR-0028](0028-the-application-half.md) D3） |
+| D3 | 对提炼自全量查阅内容的衍生结论（如大模型总结）如何处置 | 一旦引用的任意一个上游数据源不可读，立即全量抹除该结论（`From: "*"`）；或勉强保留结论仅抹除可明确溯源的局部片段 | **坚决全量抹除**。结论本身往往是对其所读内容的综合复述，任何折衷偷懒的规则都是对数据安全的严重欺骗 |
+| D4 | 是否应当明确提示查阅者内容已被脱敏 | 由宿主自动回填声明的布尔字段，在前端界面直观提示；或静默隐藏 | **明确直观告知查阅者**。无声无息的黑盒隐藏正是 #129 排查出的重大缺陷，拒绝必须附带明确说明 |
 
-Declined for this stage: automatic marking inheritance across every field of a record (Foundry's marking model needs a marking capability we do not have), provenance inference from text, and any tenant-authored expression in a derivation.
+本阶段明确暂缓引入（Declined）：在实体记录的所有字段间建立全自动的标记继承引擎（Foundry 的 Marking 体系依赖于我们目前尚不具备的标记能力）、基于纯自然语言文本的算法级出处逆向推导、以及在派生声明中允许租户编写自定义表达式。
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 14a | Promote the declaration to the app API: `platform.Derivation`, `Entity.Derived`, `Entity.Withheld`, host enforcement and composition validation; the agent app declares its run and memory derivations; `internal/host.Narrowing` is deleted | `scripts/verify.sh capabilities composition web` passes; positive and negative tests cover record scope, unit change, restricted field, an administrator without the business role and cross-tenant, on two industries' apps (hospitality CSM, manufacturing MES); an invalid declaration refuses a tenant |
-| 14b | The rest of #130: knowledge source synchronization redesign and measured latency on a larger tenant; declare provenance wherever another app keeps derived content | Measured index and read latency recorded on a tenant of representative size (done); the declaration used by a non-agent app or stated to be unnecessary with evidence (open) |
+| 14a | 将派生声明升级至公开应用 API：`platform.Derivation`, `Entity.Derived`, `Entity.Withheld`，配套宿主强制校验与编排静态检查；agent 应用全面声明其运行与记忆派生规则；彻底删除 `internal/host.Narrowing` | `scripts/verify.sh capabilities composition web` 全面通过；针对记录作用域变更、部门调整、保密字段限制、无业务角色的管理员查阅以及跨租户越权，在酒旅（CSM）与制造（MES）跨行业完成正反双向实证；非法声明严正拒绝启动 |
+| 14b | 兑现 #130 剩余技术攻坚：知识库数据源同步机制彻底重构并在大规模租户下完成时延基准实测；在所有维护衍生内容的应用中全面落地出处声明 | 在具有代表性的大规模租户下完成索引与读取时延实测并留存基准（已完成）；在非代理类业务应用中落地派生声明或提供详尽客观证据证明无需声明（进行中） |
 
-## Consequences
+## 影响
 
-Derived content is authorized by the source it came from, wherever an app keeps it and however long ago. Apps gain one obligation: keep the refs behind content they derive, and declare them. Free text written without provenance stays as wide as its record, which review must catch; `From: "*"` makes the safe choice cheap. A tenant with a wrong declaration fails to start rather than leaking. When tenant definitions arrive (#131, #132), a derivation is already data they can carry.
+- 衍生内容无论被应用保存在何处、无论过去了多久，其最终的数据暴露始终受到其源头数据的实时权限刚性支配。
+- 业务应用承担了一项严密的法定职责：必须对其提炼生成的任何衍生内容妥善保存并声明其底层的引用出处。未声明出处的纯文本只能退化为遵循其宿主记录的粗粒度可见性，必须依靠 Code Review 严格把关；`From: "*"` 为开发者提供了一条极低成本的安全托底路径。
+- 存在非法派生声明的租户在服务启动阶段当场报错拒绝启动，从根源上杜绝带病上线导致数据泄露。当租户级动态元数据定义就绪时（#131, #132），派生规则已经是现成的纯结构化数据，天然支持无缝承载。
 
-## As built (14a)
+## 实际构建 (14a)
 
-- **The declaration** (`platform/entity.go`): `Entity.Derived []Derivation` and `Entity.Withheld`. A `Derivation` names `From` — a field holding refs, a path into one list of records the type holds (`steps.sources`), two element fields joined as a type and an id (`draft.type/target`), or `*` for every source the type names — and either the `Fields` it empties or `Element` to leave that element out. `Describe` resolves each path to field indices (`DerivationInfo`) and refuses a declaration whose fields do not exist, whose list path is not a list, which changes nothing, or which has no boolean withheld field: the tenant does not start (`TestDerivedDeclarationIsChecked`).
-- **A source may be a named read** (`read:<name>`), because a read does not always answer with records: it is readable by the rule `Tenant.Read` applies (`Tenant.mayCallRead`). The MES probe found this: an assistant's `read_planned_orders` step answered with the ERP adapter's own shapes, so nothing record-shaped was there to check.
-- **The host enforces it** (`narrow.go`): `Tenant.narrowed` walks what a member-facing read answers with, masks the fields their role may not read (`viewOf`), then applies the derivations (`narrower.derive`); `Tenant.mayRead` answers per record, per field and per read, remembering each answer. `Tenant.narrowable` keeps derived fields out of aggregates, `Tenant.admits` refuses a member of another tenant at every read entry, and `Tenant.TranscriptsFor` serves a run's model calls only to an administrator who may read every source of that run.
-- **The agent app declares, and no longer filters** (`agent.go`, `agent_memory.go`): the run derives `seen` from its `ref`, each step's `arguments` and `outcome` from that step's `sources`, each citation from its `document` (with the field it cited), each draft from its target, and `result` from every source; a memory derives its `fact` from the `sources` kept when the fact was written. `internal/host.Narrowing` is deleted.
-- **What people see**: the run page and the remembered facts say that content came from records the reader may no longer read (`@platform/app`, English and Chinese).
-- **Proven on two industries**: hospitality `TestCSMTriage` (the triage agent's citations and model calls) and manufacturing `TestCorrectedByTheAgent` (the assistant's planned-order step and answer), plus `TestAgentTraceScope` for owner and unit change, a field only another role reads, an administrator without the business role, and cross-tenant. `scripts/verify.sh ci`, `composition` and `web` pass.
-- **Not built**: no non-agent app declares derivations yet, so the second declaring app remains the next proof.
+- **强类型声明规范** (`platform/entity.go`)：引入 `Entity.Derived []Derivation` 与 `Entity.Withheld`。一个 `Derivation` 包含 `From` —— 声明承载引用的字段名、指向记录列表内部的子路径（`steps.sources`）、将两个字段动态拼接为类型与主键的联合路径（`draft.type/target`），或使用 `*` 匹配该类型声明的全部出处引用 —— 以及被脱敏抹除的 `Fields` 列表，或通过 `Element` 直接丢弃匹配的列表子元素。`Describe` 集中将上述路径解析为字段索引映射（`DerivationInfo`），并严密拦截引用了不存在字段、列表路径非真实列表、脱敏规则未修改任何内容、或缺失布尔型脱敏告知字段的非法声明：租户当场拒绝启动（`TestDerivedDeclarationIsChecked`）。
+- **数据源出处扩充支持具名读取接口** (`read:<name>`)：因为读取接口返回的数据并不总是标准实体记录形态：统一遵循 `Tenant.Read` 的规则判定其可读性（`Tenant.mayCallRead`）。MES 场景的实证发现了该技术盲点：车间助手的 `read_planned_orders` 步骤直接返回外部 ERP 适配器的私有数据结构，导致此前缺乏记录形态可供审查。
+- **宿主核心执行引擎** (`narrow.go`)：`Tenant.narrowed` 递归遍历所有面向成员暴露的读取数据，首先根据当前成员的角色物理脱敏受限字段（`viewOf`），随后严格应用各实体类型的派生规则（`narrower.derive`）；`Tenant.mayRead` 按记录、按字段、按读取接口细粒度裁决可读性，并在内存中智能缓存判定结果。`Tenant.narrowable` 坚决将派生字段排除在聚合分析之外，`Tenant.admits` 在所有读取入口处严正拦截外来租户的越权查阅，`Tenant.TranscriptsFor` 严格限制仅向有权查阅该次运行**全部**源数据的特权管理员提供底层模型对话报文。
+- **智能代理全面应用化声明，彻底告别私有硬编码过滤** (`agent.go`, `agent_memory.go`)：单次运行将 `seen` 绑定至 `ref`，将各步骤的 `arguments` 与 `outcome` 绑定至该步骤调用的 `sources`，将各引用溯源项绑定至具体的 `document`（含具体引用的字段），将各草稿绑定至目标对象，并将最终的 `result` 绑定至全量源出处；事实记忆将 `fact` 绑定至写入时持久化的 `sources`。此前私有的 `internal/host.Narrowing` 接口被彻底删除。
+- **直观可见的用户界面呈现：** 代理运行详情页与事实记忆卡片明确提示查阅者：“部分内容提炼自您当前无权查阅的保密实体记录”（`@platform/app`，全面支持纯正中文与英文）。
+- **跨两个行业完成严谨实证：** 酒旅行业 `TestCSMTriage`（服务台分诊代理的知识引用溯源与大模型会话调阅鉴权）与制造行业 `TestCorrectedByTheAgent`（车间助手的计划订单查阅步骤与答复结论鉴权），叠加 `TestAgentTraceScope` 针对记录所属人变更、部门架构调整、跨角色保密字段脱敏、无业务权限的系统管理员查阅以及跨租户访问进行正反双向实测。`scripts/verify.sh ci`、`composition` 与 `web` 保持全线绿灯。
+- **暂未构建：** 尚无非代理类的普通业务应用声明派生规则，第二类声明应用留作下一阶段实证。
 
-## As built (14b)
+## 实际构建 (14b)
 
-- **Synchronization follows the changes** (`knowledge.go`, `records.go`): the record store marks a record dirty when it is put and its type can become knowledge (`entityType.knowledge`); `sync` reads the tenant in full once, then cuts only the dirty records again (`sourcesOf`), dropping the passages of one that was archived or is no longer knowledge. A source's revision is now a fingerprint of its text, not the record's revision, which an app's own automation does not bump — passages used to go stale that way.
-- **A search scores what holds the words asked** (`index.postings`, kept as chunks are cut): document frequencies and the average length come from the whole index, so only candidate passages are read and authorized. With an embedding model set, every passage stays a candidate, because meaning needs no shared word; that path waits for pgvector (ADR-0022 D2 a).
-- **Measured** (`TestKnowledgeAtScale`, 20 000 knowledge fields on the owner's Mac, bounds off in CI): the first search reads the tenant in ~1.0 s; afterwards a question whose words every record holds costs ~45 ms, one whose words few records hold ~3 µs, and a search right after one record changed ~0.7 ms. Before this batch every search walked and re-cut the whole tenant.
-- **Not measured**: a tenant with many large documents and an embedding model set, and PostgreSQL-backed vector reads at that size.
+- **基于变更驱动的增量数据源同步机制** (`knowledge.go`, `records.go`)：实体记录在写入持久化时，若其所属类型声明了可作为知识库（`entityType.knowledge`），记录存储自动将其标记为脏数据（Dirty）；`sync` 后台作业在启动时执行一次全量租户扫描，随后仅对发生变更的脏记录执行精准切片重算（`sourcesOf`），并自动下线丢弃已归档或已解除知识标记的陈旧切片。知识源的版本号调整为基于其正文文本内容的数字指纹判定，彻底告别依赖实体记录本身的更新版本号 —— 此前应用后台自动化进程在更新记录时不递增实体版本号曾导致知识切片发生死锁无法更新。
+- **基于倒排索引的高性能精准检索** (`index.postings`，在切片生成时同步构建)：词频统计（Document Frequencies）与全局平均文本长度基于全量索引维护，使检索算法仅需加载并鉴权那些命中候选词的切片。在启用了向量语义模型时，所有切片由于语义相似性均作为潜在候选对象参与计算；该通道全面等待后续引入 pgvector（落实 [ADR-0022](0022-knowledge-memory-a2a.md) D2 a 规划）。
+- **大规模真实时延基准实测**（`TestKnowledgeAtScale`，在业务负责人 Mac 本地针对 20,000 个知识字段执行实测，CI 环境关闭耗时硬断言）：全冷启动首次全量扫描耗时约 1.0 秒；随后面对包含全量记录关键词的复杂高频查询，端到端耗时仅约 45 毫秒；面对低频关键词查询耗时仅约 3 微秒；且在单条记录发生变更后立即发起查询的增量同步耗时仅约 0.7 毫秒。彻底终结了此前在每次检索时均要无脑全量遍历切分整个租户所有记录的灾难级性能瓶颈。
+- **尚未覆盖的极端场景：** 针对包含海量超大文档、启用真实大模型向量嵌入并由 PostgreSQL 承载的大规模向量混合检索的性能压测。

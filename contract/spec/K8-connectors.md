@@ -1,24 +1,24 @@
-# K8 Connectors — semantics (contract v1alpha1)
+# K8 连接器 — 语义规范 (契约 v1alpha1)
 
-Schema: `proto/platform/kernel/v1alpha1/connector.proto`. Vectors: `vectors/k8-connectors.json`. Errors: `errors.md`.
+模式定义：`proto/platform/kernel/v1alpha1/connector.proto`。一致性测试向量：`vectors/k8-connectors.json`。错误代码：`errors.md`。
 
-## Model
+## 概念模型
 
-- A **connector** attaches one external system to a tenant through a descriptor: its direction, the entity types it may deliver facts about, and its expected heartbeat. Protocols (REST, MQTT, OPC UA, OTA messages) stay inside the connector; the kernel sees only deliveries.
-- A **delivery** is one batch of facts (K2) from a connector. **Push** connectors deliver when they have data. **Poll** connectors deliver pages: each page names the cursor it starts from and the cursor the next page starts from. Cursors are opaque to the kernel.
-- Identity mapping (external IDs to entities) is a claim (K1 notes) inside the delivered facts, not a connector rule.
+- **连接器 (connector)** 通过统一的描述符将一个外部异构系统接入租户：声明其传输方向、允许分发事实的实体类型集合，以及预期的心跳间隔。具体传输协议（REST、MQTT、OPC UA、OTA 渠道报文）完全封装在连接器内部；内核仅观测到事实的分发动作。
+- **分发 (delivery)** 是来自连接器的单个事实批次 (K2)。**推送型 (Push)** 连接器在拥有新数据时主动分发。**轮询型 (Poll)** 连接器按分页方式分发：每一页指明其起始游标以及下一页的起始游标。游标对于内核而言是不透明的。
+- 身份映射（将外部业务 ID 映射为内部实体）作为分发事实内部携带的断言存在 (K1 补充说明)，而非连接器规则本身。
 
-## Rules
+## 语义规则
 
-| # | Rule | Error when violated |
+| 编号 | 规则描述 | 违规返回错误 |
 |---|---|---|
-| N1 | A descriptor has `tenant_id`, `connector_id`, a direction other than `UNSPECIFIED` and at least one data class. A connector ID is registered once per tenant. | `INVALID_ARGUMENT`, `CONFLICT` |
-| N2 | A delivery comes from a registered connector of the same tenant; disabled connectors and data classes outside the descriptor are refused. | `NOT_FOUND`, `POLICY_DENIED` |
-| N3 | A poll page's starting cursor equals the connector's current cursor (empty before the first page); an accepted page moves the cursor to the page's next cursor. A push delivery carries no cursor. | `CONFLICT`, `INVALID_ARGUMENT` |
-| N4 | Every accepted delivery and every heartbeat sets `last_seen` to the receiver's clock. Health is `DISABLED` for a disabled connector, `STALE` when never seen or silent for longer than `heartbeat`, otherwise `OK`. | — |
-| N5 | A refused delivery changes neither cursor nor `last_seen`. | — |
+| N1 | 连接器描述符必须包含 `tenant_id`、`connector_id`、非 `UNSPECIFIED` 的方向以及至少一个数据类别。连接器 ID 在同一租户内严禁重复注册。 | `INVALID_ARGUMENT`, `CONFLICT` |
+| N2 | 分发操作必须来自同一租户内部已注册的合法连接器；已被停用的连接器以及超出描述符声明范围的数据类别均予以拒绝。 | `NOT_FOUND`, `POLICY_DENIED` |
+| N3 | 轮询页面的起始游标必须等于连接器的当前游标（第一页之前为空）；被接受的页面将连接器游标推进至该页面的下一游标处。推送型分发不得携带任何游标。 | `CONFLICT`, `INVALID_ARGUMENT` |
+| N4 | 每次被接受的分发以及每次心跳信号，均将 `last_seen` 更新为接收方的物理时钟读数。健康状态判定规则：已停用的连接器为 `DISABLED`；从未见过或静默时间超出 `heartbeat` 阈值为 `STALE`；其余状态为 `OK`。 | — |
+| N5 | 被拒绝的分发操作既不改变游标，亦不更新 `last_seen`。 | — |
 
-## Notes
+## 补充说明
 
-- N3 makes a poll import exactly-once per page: a repeated or skipped page is refused instead of importing twice or leaving a gap. Duplicate facts inside a page are still handled by K2 F3 idempotency.
-- A connector's facts carry the connector as their source (K3 P1); the connector ID is the principal-like identity of the external system.
+- 规则 N3 确保轮询导入在单页粒度上达成严格的“恰好一次”：重复提交的旧页面或跳跃漏页的请求均被明确拒绝，避免数据重复导入或形成数据断层空洞。页面内部存在的重复事实依然由 K2 F3 的幂等机制兜底保障。
+- 连接器分发的事实将其连接器自身记录为来源出处 (K3 P1)；连接器 ID 即为外部异构系统在平台内部扮演的主体类凭据身份。

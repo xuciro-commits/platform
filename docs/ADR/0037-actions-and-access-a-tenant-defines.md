@@ -1,94 +1,94 @@
-# ADR-0037: Actions and access a tenant defines on its own objects
+# ADR-0037: 租户在其自身对象上定义的动作与访问控制
 
-**Status:** Accepted (2026-09-28, #132 15c). The owner accepted D1–D6 as recommended ("按照你的建议走"). D1–D3 had been built in 18a under the owner's standing direction to build the builder loop; D4–D6 — an object's roles are roles of the `build` app, "own" is whoever created the record, approval comes in 18c — govern 18b and 18c. ADR-0034 named 15c — bounded actions a tenant authors, per-object roles and scope, and the published revision — and said each would come in its own batch rather than extend that ADR. This one covers the first two. The published revision and its release binding stay with the #135/#136 gate.
+**状态：** 已接受 (2026-09-28, #132 15c)。项目负责人按推荐方案接受了 D1–D6（“按照你的建议走”）。D1–D3 已在负责人构建构建器闭环的既定指示下于 18a 中完成构建；D4–D6——对象的角色属于 `build` 应用的角色、“自有 (own)”指代创建该记录的人员、审批在 18c 中引入——指导了 18b 和 18c 的实施。ADR-0034 提出了 15c——租户编写的有界动作、按对象的角色与范围，以及已发布修订版——并说明各项将在各自的批次中落地，而非就地扩展该 ADR。本篇 ADR 涵盖前两项。已发布修订版及其发布绑定保留在 #135/#136 准入关卡中。
 
-## Context
+## 背景
 
-A tenant can define an object (ADR-0034 15a), lay pages out over it (ADR-0035) and hand them to its people as an application (ADR-0036). What its people can *do* is still only the generated create, edit and archive, and *who* may do it is fixed: every member with the `builder` or `user` role in `build` reads and writes every published object (`Entity` in `apps/build/build.go`, `Standard.Roles: {Builder, User}`). A front desk that logs lost property can record an item but cannot "hand it back" as a step with its own rule, and a supervisor cannot be the only one who may.
+租户可以定义对象（ADR-0034 15a），在其上排布页面（ADR-0035），并将其作为应用程序交付给其成员（ADR-0036）。但其成员所能*做*的事情目前仍然仅限于系统自动生成的创建、编辑和归档，且*谁*可以操作是固定的：在 `build` 中拥有 `builder` 或 `user` 角色的每个成员都可以读取和写入每个已发布的对象（`apps/build/build.go` 中的 `Entity`，`Standard.Roles: {Builder, User}`）。登记遗失物品的前台可以记录一件物品，但无法将其作为具备自身规则的独立步骤“归还物品”，主管也无法成为唯一有权执行该操作的人员。
 
-What exists to build on, all in code today:
+已有可供构建的基础（目前全在代码中）：
 
-- **Lifecycles** (`platform.Lifecycle`, `Transition`): states, transitions from and to them, roles, a payload, `Do` run inside the decision and again in replay, and an `Approval` that routes the transition through the work app (ADR-0017). The ledger generates and routes their actions (`Ledger.Generated`), the UI offers them (`StatusBar`, `useTransition`), and composed pages' `actions` widget already lists them.
-- **Scope** (`platform.Scope`): per role, tenant, unit, below or own, enforced in every read (`Tenant.visible`), knowledge and context included (#130).
-- **Field security** (`FieldInfo.Read`, `Write`): per role, per field.
-- **Role assignment**: the Console grants any role an app's manifest defines (`Manifest.AllRoles`), to a member, per app.
+- **生命周期**（`platform.Lifecycle`，`Transition`）：状态、迁入迁出转换、角色、有效负载、在决策内部运行并在重放中再次运行的 `Do`，以及通过 work 应用路由转换的 `Approval`（ADR-0017）。账本生成并路由它们的动作（`Ledger.Generated`），UI 提供它们（`StatusBar`，`useTransition`），且组合页面的 `actions` 部件已经列出了它们。
+- **作用域**（`platform.Scope`）：按角色、租户、组织单元、下级或自有划分，在每次读取中强制执行（`Tenant.visible`），包括知识与上下文（#130）。
+- **字段级安全**（`FieldInfo.Read`，`Write`）：按角色、按字段。
+- **角色分配**：管理控制台（Console）按应用向成员授予应用清单定义的任何角色（`Manifest.AllRoles`）。
 
-| Current reference evidence (consulted 2026-09-28) | What we take |
+| 当前参考依据 (2026-09-28 调研) | 我们借鉴的内容 |
 |---|---|
-| Palantir Foundry [action type rules](https://www.palantir.com/docs/foundry/action-types/rules): create, modify and delete object, create and delete link, function rule, notification, webhook. | An action is a typed edit of the object it is about, not code. We take *modify object* first. |
-| Foundry [submission criteria](https://www.palantir.com/docs/foundry/action-types/submission-criteria): conditions on the current user, a parameter or an object's property, joined by all/any/none, each with a failure message the builder writes, shown wherever the action is offered. | Conditions are data the host evaluates, and the builder writes what the person reads when one fails. |
-| Salesforce [data access](https://help.salesforce.com/s/articleView?id=platform.security_data_access.htm&language=en_US&type=5): object permissions (create, read, edit, delete) per profile or permission set, then record access starting from ownership and an organisation-wide default. | Two layers: what a role may do with the object, then which records it sees — the owner's, or all of them. |
-| Frappe [custom permission types](https://docs.frappe.io/framework/user/en/basics/doctypes/permissions): read, write, create, delete, submit per role per DocType, plus action-specific permissions such as "approve". | Permissions per role per object, and an action's own grant beside them. The fetched page did not cover Frappe's "if owner" or user permissions. |
+| Palantir Foundry [动作类型规则 (action type rules)](https://www.palantir.com/docs/foundry/action-types/rules)：创建、修改和删除对象，创建和删除链接，函数规则，通知，Webhook。 | 动作是对其所属对象的具类型编辑，而不是代码。我们首先采纳*修改对象 (modify object)*。 |
+| Foundry [提交标准 (submission criteria)](https://www.palantir.com/docs/foundry/action-types/submission-criteria)：针对当前用户、参数或对象属性的条件，通过 all/any/none 组合，每个条件都带有构建者编写的失败消息，展示在提供该动作的任何地方。 | 条件是宿主求值的数据，构建者编写条件失败时人员所读到的消息。 |
+| Salesforce [数据访问 (data access)](https://help.salesforce.com/s/articleView?id=platform.security_data_access.htm&language=en_US&type=5)：按简档或权限集划分的对象权限（创建、读取、编辑、删除），然后是从所有权和全组织默认设置开始的记录访问控制。 | 两层机制：角色对对象可以做什么，然后是它可以看到哪些记录——所有者的记录，还是所有记录。 |
+| Frappe [自定义权限类型 (custom permission types)](https://docs.frappe.io/framework/user/en/basics/doctypes/permissions)：按角色按 DocType 划分的读、写、创、删、提交权限，以及特定动作的权限（例如“审批”）。 | 按角色按对象划分的权限，并列的是动作自身的授权。抓取的页面未涵盖 Frappe 的“如果是所有者 (if owner)”或用户权限。 |
 
-They agree on three things: an action is a declared, typed edit with conditions the platform checks; object access is granted per role; record access narrows from the object to the records a member owns.
+它们在三点上达成一致：动作是带有平台检查条件的声明式具类型编辑；对象访问按角色授予；记录访问从对象收窄至成员拥有的记录。
 
-## Our constraints
+## 我们的约束
 
-- No tenant code and no expression language (ADR-0031, rule 11). An action is data compiled into the platform's own `Transition`; a condition is a field, an operator and a value.
-- Replay never calls outside and rebuilds the same state: an action's effect is a function of the published definition, the record and the payload, run in the decision and again in replay.
-- One owner per capability: actions become lifecycle transitions of the object's entity, access becomes its `Scope` and grants — the same the coded apps use — and the workspace, pages, AI tools and MCP offer them without learning anything new.
-- A definition grants nothing by being published that an administrator did not assign: roles are assigned in the Console as today.
-- Development-grade durability (ADR-0034 D5) until #135/#136: publishing again replaces the definition, and there is still no immutable revision.
+- 不引入租户代码，不引入表达式语言（ADR-0031，规则 11）。动作是编译进平台自身 `Transition` 的数据；条件是字段、运算符和值。
+- 重放绝不向外调用并重建完全相同的状态：动作的效果是已发布定义、记录和有效负载的函数，在决策中运行并在重放中再次运行。
+- 每个能力保持单一归属主件：动作成为对象实体的生命周期转换，访问控制成为其 `Scope` 和授权——与编写代码的应用使用的完全相同——并且工作区、页面、AI 工具和 MCP 无需学习任何新概念即可提供它们。
+- 仅仅发布定义不会授予任何未经管理员分配的权限：角色依然如今天一样在管理控制台中分配。
+- 开发级别持久性（ADR-0034 D5）直至 #135/#136：再次发布会替换定义，此时仍然没有不可变修订版。
 
-## Design
+## 设计
 
-1. **States.** An object may declare its states: a name, what people call it, a tone, what a record in it means. With states it has a read-only `state` field (the name ADR-0034 already kept for the platform) and a `platform.Lifecycle` whose initial state is the first. Without states it has no lifecycle, as today.
-2. **Actions are transitions.** An object may declare actions: a name, a title, what it does, the states it takes a record *from* and the state it leaves it *in* (none: where it was), the inputs a person gives (a name, a label, a field type, required, choices), the fields it *sets* (from an input, a fixed value, the person taking it, or now), and the *conditions* it needs, each with the message a person reads when it fails. Publishing compiles each into a `platform.Transition` whose `Do` checks the conditions and sets the fields. The ledger routes it, replay runs it again, and the workspace, composed pages, record pages, AI tools and MCP offer it as they offer a coded transition: nothing downstream learns a new kind.
-3. **Conditions are data.** A condition is a field of the record or an input, an operator (`=`, `!=`, `<`, `<=`, `>`, `>=`, `empty`, `not empty`) and a value (a literal, or `$me` for the person taking the action). All must hold. There is no expression language, no any/none nesting and no reading of other records in this ADR.
-4. **Access per object.** An object may say, per role of the `build` app, whether that role reads all of its records, only those it created, or none, and which of create, edit and archive it may take. Each action names the roles that may take it. The roles an object names become roles of the `build` app, which the Console already assigns. With no access declared, an object keeps today's rule: `builder` and `user` do everything. `builder` always does everything, since it builds and tests what it publishes.
-5. **The host owns enforcement.** Two small, generic extensions, usable by coded apps too: `Scope.Owner` may name `created`, meaning the member whose decision created the record, so "own" needs no field of its own; and a scope level `none` hides the type and its records from a role. `Standard` gains per-verb roles. Reads, search, aggregates, knowledge, context and composed pages already go through `Tenant.visible` and `Tenant.Definitions`, so they follow.
-6. **Fields may be restricted.** A defined field may name the roles that read it and those that set it, compiled into the same `read:` and `write:` tags a coded field carries (ADR-0028 D3).
-7. **The editor.** Objects get a purpose-built editor in the builder, in the three-pane grammar of the page editor (ADR-0035): on the left the object's fields, states and actions; in the middle what a person will see — its states as a status bar and the action's form, generated from its inputs; on the right the piece in hand. States, actions and access are `aside` fields the editor owns. Refusals stay on screen with their reasons.
+1. **状态。** 对象可以声明其状态：名称、人类可读称谓、色调基调 (tone)、处于该状态下的记录意味着什么。拥有状态后，它拥有一个只读的 `state` 字段（ADR-0034 已经为平台保留的名称）和一个初始状态为第一个状态的 `platform.Lifecycle`。没有状态则没有生命周期，与今天一致。
+2. **动作即转换。** 对象可以声明动作：名称、标题、用途、记录所*离开*的状态以及其所*进入*的状态（none 表示保持原状态）、人员提供的输入（名称、标签、字段类型、必填、选项）、它所*设置*的字段（来自输入、固定值、执行动作的人员或当前时间），以及它所需的*条件*（每个条件均附带失败时人员读到的消息）。发布将每个动作编译为一个 `platform.Transition`，其 `Do` 检查条件并设置字段。账本路由该动作，重放再次运行它，工作区、组合页面、记录页面、AI 工具和 MCP 像提供以代码编写的转换一样提供它：下游没有任何模块需要学习新类型。
+3. **条件即数据。** 条件是记录的字段或输入项、运算符（`=`、`!=`、`<`、`<=`、`>`、`>=`、`empty`、`not empty`）和值（字面量，或代表执行动作人员的 `$me`）。全部条件必须同时满足。本 ADR 中不包含表达式语言，不包含 any/none 嵌套，也不读取其他记录。
+4. **按对象访问控制。** 对象可以按 `build` 应用的角色指明：该角色是读取其所有记录、仅读取其创建的记录，还是完全不读取，以及可以执行创建、编辑和归档中的哪些动作。每个动作指明可以执行它的角色。对象命名的角色成为 `build` 应用的角色，管理控制台已经支持对其进行分配。未声明访问控制时，对象保持今天的规则：`builder` 和 `user` 可以执行所有操作。`builder` 始终可以执行所有操作，因为它需要构建并测试其发布的内容。
+5. **宿主负责强制执行。** 两个小巧、通用的扩展，代码编写的应用也可以使用：`Scope.Owner` 可以命名为 `created`，表示其决策创建了该记录的成员，因此“自有”不需要单独的字段；范围级别 `none` 会对角色隐藏该类型及其记录。`Standard` 获得按动词划分的角色。读取、搜索、聚合、知识、上下文和组合页面已经通过 `Tenant.visible` 和 `Tenant.Definitions` 处理，因此它们自然遵从该控制。
+6. **字段可以受限制。** 已定义的字段可以指明读取它和设置它的角色，编译为代码字段所携带的相同 `read:` 和 `write:` 标签（ADR-0028 D3）。
+7. **编辑器。** 对象在构建器中获得专用编辑器，采用页面编辑器的三栏语法（ADR-0035）：左侧是对象的字段、状态和动作；中间是人员将看到的内容——作为状态栏展示的状态，以及由其输入生成的动作表单；右侧是手头选中的部件。状态、动作和访问控制是编辑器拥有的 `aside` 字段。拒绝提示及其原因会留在屏幕上。
 
-## Decision points for the owner
+## 负责人决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | What is an action a tenant defines? | A lifecycle transition compiled from typed data; or a new action kind with its own runtime. | A transition. It is the owner that already routes, replays, approves and renders; a second kind would be a second runtime. |
-| D2 | Must an object have states to have actions? | Yes, and an action may leave a record where it was; or allow actions on objects without states. | Yes. A transition needs a lifecycle, most business objects have a status, and "stay where it was" covers an action that only records something. |
-| D3 | How are conditions written? | A field, an operator and a value, all of which must hold, each with its message; or an expression language. | The typed triple. It is what Foundry's submission criteria are, the host can check it at publication, and it keeps tenant code out. Any/none nesting and other records' values come later, if walks need them. |
-| D4 | Where do an object's roles live? | As roles of the `build` app, named by the objects that use them; or an authority per object or per application. | Roles of `build`. The Console assigns them today, and ADR-0034 D2 kept one authority. The cost: a member holds one role per app, so one role in `build` decides what they may do with every tenant object. |
-| D5 | What does "own" mean for a defined object? | The member who created the record, through `Scope.Owner = "created"`; or a field the builder adds and fills. | Whoever created it. It needs nothing from the builder and is the record's own stamp; a transferable owner can be a field later. |
-| D6 | May a tenant action require an approval? | Yes, in this ADR through the transition's `Approval`; or in a later batch. | Later (18c). Approval needs a pending state and approver levels in the editor; the transition already carries it, so adding it later changes nothing built now. |
+| D1 | 租户定义的动作是什么？ | 由具类型数据编译而来的生命周期转换；或具有自身运行时的全新动作类型。 | 转换。它是已经负责路由、重放、审批和渲染的主件；第二种类型将意味着第二套运行时。 |
+| D2 | 对象必须拥有状态才能拥有动作吗？ | 必须，且动作可以使记录保持原状态；或允许在没有状态的对象上定义动作。 | 必须。转换需要生命周期，大多数业务对象都具备状态，而“保持原状态”涵盖了仅记录某些内容的动作。 |
+| D3 | 条件如何编写？ | 字段、运算符和值（全部必须满足，各附带消息）；或表达式语言。 | 具类型三元组。这正是 Foundry 提交标准的形态，宿主可以在发布时进行检查，并且排除了租户代码。如果后续走查需要，any/none 嵌套和其他记录的值可在后续引入。 |
+| D4 | 对象的角色驻留在何处？ | 作为 `build` 应用的角色，由使用它们的对象命名；或每个对象/每个应用一个权威。 | `build` 的角色。管理控制台目前统一进行分配，且 ADR-0034 D2 保持了单一权威。代价：成员在每个应用中拥有一个角色，因此他们在 `build` 中的角色决定了他们对所有租户对象可以做什么。 |
+| D5 | 对于已定义对象，“自有 (own)”意味着什么？ | 通过 `Scope.Owner = "created"` 指代创建记录的成员；或构建者添加并填充的字段。 | 谁创建即归谁。它不需要构建者做额外配置，是记录自身的印记；可转让的所有者后续可以作为字段引入。 |
+| D6 | 租户动作可以要求审批吗？ | 可以，在本 ADR 中通过转换的 `Approval` 实现；或在后续批次中。 | 后续（18c）。审批需要在编辑器中具备待定状态和审批层级；转换本身已经承载了它，因此后续添加不会改变目前构建的内容。 |
 
-Declined here: tenant code or expressions, actions that create or change other records (Foundry's create-object and link rules), notifications and webhooks from an action (the platform's effects are the owner, later), and immutable revisions (the #135/#136 gate).
+此处拒绝的方案：租户代码或表达式、创建或修改其他记录的动作（Foundry 的创建对象和链接规则）、动作发出的通知和 Webhook（平台的出站效果是后续的主件），以及不可变修订版（#135/#136 门禁）。
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 18a | States and actions: descriptor, publication checks, compilation into transitions, and the object editor | A builder gives an object states and an action with an input, a condition and a field it sets, in the editor; publishes; a member takes the action from the object's page and from a composed page's actions widget, sees the record move, and reads the builder's message when the condition fails. Bad definitions are refused with reasons. `TestTenantDefinedObject` with `CheckReplay` and a snapshot, a browser route, `scripts/verify.sh ci capabilities web` |
-| 18b | Access: per-role read (all, own, none) and create, edit, archive; per-action roles; field read and write roles; `Scope.Owner = "created"`, level `none` and per-verb roles in the host | Two members with different `build` roles see and do different things on the same object — in lists, search, pages, the assistant's context and actions — proven on hospitality and manufacturing; a builder sees everything |
-| 18c | An action that waits for approval by a role, through the work app | The action holds the record in a pending state, the approver decides in the inbox, and the record moves |
+| 18a | 状态与动作：描述符、发布检查、编译为转换，以及对象编辑器 | 构建者在编辑器中为对象赋予状态，以及包含输入、条件和设置字段的动作；发布；成员从对象页面和组合页面的 actions 部件中执行动作，看到记录转移，并在条件失败时读到构建者的提示消息。不合规定义被拒绝并说明原因。通过包含 `CheckReplay` 与快照的 `TestTenantDefinedObject`、浏览器路由、`scripts/verify.sh ci capabilities web` |
+| 18b | 访问控制：按角色读取（全部、自有、无）以及创建、编辑、归档；按动作角色；字段读写角色；宿主中的 `Scope.Owner = "created"`、级别 `none` 和按动词角色 | 具有不同 `build` 角色的两名成员在同一对象上看到并执行不同的操作——在列表、搜索、页面、助手的上下文和动作中——在 hospitality 和 manufacturing 上得到证明；构建者可以看到所有内容 |
+| 18c | 通过 work 应用等待角色审批的动作 | 动作使记录处于挂起待定状态，审批人在收件箱中做出决策，记录完成流转 |
 
-## Consequences
+## 后果
 
-A tenant's object becomes a small process rather than a table: it has states, steps with rules, and people who may take them. Everything is compiled into declarations the platform already enforces, so the risk is concentrated in two places — the compiler from definition to `Transition`, and the checks at publication — and both are covered by the host's tests. The cost is a descriptor with more shape to version (#136) and D4's coarseness: one role per member in `build` for all tenant objects, which a later ADR may revisit once walks show where it pinches.
+租户的对象变成了微型流程而不仅仅是表格：它具有状态、带有规则的步骤，以及可以执行这些步骤的人员。一切都被编译进平台已经强制执行的声明中，因此风险集中在两处——从定义到 `Transition` 的编译器，以及发布时的检查——且两者都由宿主的测试所覆盖。代价是描述符具有了更多需要版本控制的结构（#136），以及 D4 带来的粗粒度：每个成员在 `build` 中针对所有租户对象仅有一个角色，一旦后续实际走查暴露出痛点，后续的 ADR 可以重新审视这一点。
 
-## As built (18a)
+## 实施现状 (18a)
 
-- **The descriptor** (`apps/build/actions.go`): an object's `states` (name, title, tone, meaning) and `actions` (name, title, description, the states it is taken from, the one it leaves the record in or none, its inputs, the fields it sets from an input, `$me`, `$now` or a fixed value, and its conditions, each with the message a person reads). Both are `aside` fields: the object editor writes them, generated forms do not ask for them.
-- **Checked at publication** (`checkProcess`): actions without states, a state or field or input that is not there, a fixed value that does not fit its field, `$me` into a field that is not text, `$now` into one that is not a date, an operator that is not one, a comparison with nothing, a condition with no message, and the platform's own names (`create`, `edit`, `archive`, `publish`) — each refused with its reason.
-- **Compiled into the platform's lifecycle** (`lifecycle`, `take`): a read-only `state` field and a `platform.Lifecycle` whose initial state is the first; each action a `platform.Transition` whose `Do` checks required inputs and conditions and sets fields, inside the decision and again in replay. The ledger routes it, the catalog offers it, the record page shows it on its status bar, and nothing downstream learned a new kind. The object's own page lists its states and offers its actions.
-- **The object editor** (`@pkg/build`'s `ProcessEditor`, Builder → States and actions): the three panes of the page editor — states and actions on the left, what a person will see in the middle (the status bar and the action's generated form, with its conditions spelled out), the piece in hand on the right. A refusal's reason stays on screen; unsaved work is said.
-- **Two platform repairs it needed**: a generated form now leaves out a field declared `aside`, as generated actions already did — before, an object's `fields` lines appeared twice in its create form once it had other line fields; and a composed page's actions widget now offers the lifecycle steps it names from where the selected record stands (`RecordActions` with `steps`), while its detail widget shows fields only, so a step is offered once.
-- **Proven**: `TestTenantDefinedActions` (six kinds of bad definition refused, a record starting in the first state, a required input left out, a condition refused with the builder's words, an action that leaves the record where it was, one that moves it and sets three fields, one taken from the wrong state, the catalog offering it, `CheckReplay` with a snapshot), and browser route 34 (compose two states and an action with an input, a set field and a condition in the editor; publish; hand back an umbrella from the object's page; be refused on a watch with the builder's message). `scripts/verify.sh format capabilities composition web` passes.
-- **Not built after 18a**: see 18b below.
+- **描述符**（`apps/build/actions.go`）：对象的 `states`（名称、标题、色调、含义）与 `actions`（名称、标题、描述、迁出状态、迁入状态或无、输入、根据输入/`$me`/`$now` 或固定值设置的字段，及其条件和人员阅读的提示消息）。两者均为 `aside` 字段：对象编辑器负责写入，生成的表单不主动请求。
+- **发布时校验**（`checkProcess`）：没有状态的动作、不存在的状态/字段/输入、与字段不匹配的固定值、向非文本字段赋予 `$me`、向非日期字段赋予 `$now`、无效运算符、与空值比较、没有消息的条件，以及平台的内置保留名称（`create`、`edit`、`archive`、`publish`）——各项均被拒绝并提示原因。
+- **编译为平台的生命周期**（`lifecycle`，`take`）：只读的 `state` 字段和初始状态为第一状态的 `platform.Lifecycle`；每个动作编译为一个 `platform.Transition`，其 `Do` 在决策内和重放中检查必填输入与条件并设置字段。账本路由它，目录提供它，记录页面在状态栏中展示它，下游无需学习新类型。对象自身的页面列出其状态并提供其动作。
+- **对象编辑器**（`@pkg/build` 的 `ProcessEditor`，构建器 → 状态与动作）：页面编辑器的三栏布局——左侧为状态与动作，中间为人员将看到的内容（状态栏和动作生成的表单，明确列出条件），右侧为选中的部件。拒绝原因保留在屏幕上；提示未保存的工作。
+- **所需的两项平台修复**：生成的表单现在会忽略声明为 `aside` 的字段，正如生成的动作已经做到的那样——此前，一旦对象拥有其他行字段，其 `fields` 行会在创建表单中出现两次；组合页面的 actions 部件现在会根据选中记录当前所处的状态提供其命名的生命周期步骤（带有 `steps` 的 `RecordActions`），而详情部件仅展示字段，避免步骤被重复提供。
+- **验证通过**：`TestTenantDefinedActions`（拒绝六种不合规定义、记录从第一状态启动、遗漏必填输入、条件被拒绝并展示构建者文本、使记录保持原状态的动作、移动记录并设置三个字段的动作、从错误状态触发的动作、目录提供、带快照的 `CheckReplay`），以及浏览器路由 34（在编辑器中组合两个状态和带输入、设置字段及条件的动作；发布；从对象页面归还雨伞；在手表上触发条件受阻并展示构建者消息）。`scripts/verify.sh format capabilities composition web` 通过。
+- **18a 之后未构建内容**：参见下方 18b。
 
-## As built (18b)
+## 实施现状 (18b)
 
-- **The descriptor** (`build.Access`, `Action.Roles`, `Field.Read`/`Write`): per role of the builder app, which records it reads (`all`, `own`, `none`) and whether it creates, edits or archives; per action, the roles that take it; per field, the roles that read and set it. `builder` always reads and does everything. An object with no access keeps 15a's rule, so existing objects did not change.
-- **Checked at publication** (`checkAccess`): a role that is not a name or is listed twice, the builder's own role, a role that may not read but may create, edit or archive, an action or field naming a role the object does not declare, and a field set by a role that may not read it.
-- **Compiled into the platform's own declarations** (`access`): `Standard` with per-verb roles, a `Scope` whose `own` is the record's creator and whose unnamed roles see nothing, the transitions' roles, and the fields' `read:`/`write:` tags. Every role an object names is declared on the builder app's manifest, so the Console grants it like any other role, including one that only reads.
-- **Three host extensions, generic to every app** (`platform/entity.go`, `platform/ledger.go`, `records.go`): `Standard.CreateRoles`/`EditRoles`/`ArchiveRoles`; `Scope.Owner = "created"` and the level `none`, which also drops the type from the member's entities; and **a generated action or lifecycle step on a record outside the member's read scope is refused as not found**, as a read is. Before this, scope narrowed reads only, and an app had to guard its own actions (the CRM's `owns`); a tenant object has no code to do that. Two tests changed their expected refusal from `POLICY_DENIED` to `NOT_FOUND` for this reason — an agent memory someone else keeps, and an approval someone is not an approver of — which no longer tells a stranger that the record exists.
-- **The editor**: the process editor gained **Who may do what** under states and actions — a role, which records it reads, what it may do, and the fields only some roles read or set — and **Taken by** on each action. The builder app's navigation item is now **Process and access**.
-- **Proven**: `TestTenantDefinedAccess` (four bad access definitions refused; desks each see their own, a supervisor all, a cleaner not the object; a value only the supervisor reads and sets; editing another desk's record not found; a supervisor-only action and archive refused to a desk; the catalog offering each role its own; `CheckReplay` with a snapshot), and browser route 35 (the builder gives `user` own-records-without-edit and a new auditor role all-records-with-the-value in the editor; the front desk sees its own claim without the value and no edit, and gets 404 for the other; the auditor sees both with the value and cannot create). `scripts/verify.sh format capabilities composition mes drills web` passes.
-- **Not built in 18b**: 18c's approval (built in the following batch), access by organisation unit, and a role that differs per object for the same member (D4's accepted cost).
+- **描述符**（`build.Access`，`Action.Roles`，`Field.Read`/`Write`）：按构建器应用的角色划分其读取哪些记录（`all`、`own`、`none`）以及是否可以创建、编辑或归档；按动作划分执行角色；按字段划分读取和设置角色。`builder` 始终读取并执行所有操作。未配置访问控制的对象保持 15a 的规则，因此现有对象不受影响。
+- **发布时校验**（`checkAccess`）：非合规名称或重复列出的角色、构建者自身角色、无权读取却配置了创建/编辑/归档权限的角色、命名了对象未声明角色的动作或字段，以及由无权读取该字段的角色去设置该字段。
+- **编译为平台自身的声明**（`access`）：带有按动词角色的 `Standard`、`own` 为记录创建者且未命名角色不可见任何内容的 `Scope`、转换的角色，以及字段的 `read:`/`write:` 标签。对象命名的每个角色均声明在构建器应用的清单上，因此管理控制台可以像分配其他角色一样分配它（包括只读角色）。
+- **三个通用于所有应用的宿主扩展**（`platform/entity.go`，`platform/ledger.go`，`records.go`）：`Standard.CreateRoles`/`EditRoles`/`ArchiveRoles`；`Scope.Owner = "created"` 以及 `none` 级别（同时从成员的实体中剔除该类型）；以及**针对成员读取范围之外的记录所执行的生成动作或生命周期步骤将被拒绝为未找到 (not found)**，正如读取一样。在此之前，范围仅收窄读取，应用必须自行防范其动作（例如 CRM 的 `owns`）；租户对象没有代码来完成此项工作。因此，两项测试将其预期的拒绝结果从 `POLICY_DENIED` 更改为 `NOT_FOUND`——他人保留的智能体记忆，以及某人非审批人的审批——这不再向陌生人透露该记录的存在。
+- **编辑器**：流程编辑器在状态和动作下方增加了**谁可以做什么 (Who may do what)**——角色、其读取哪些记录、其可以做什么，以及仅部分角色可读取或设置的字段——并在每个动作上增加了**执行角色 (Taken by)**。构建器应用的导航项现已更名为**流程与访问控制 (Process and access)**。
+- **验证通过**：`TestTenantDefinedAccess`（四种不合规访问定义被拒绝；各前台人员仅看到各自记录，主管看到全部，清洁工看不到该对象；仅主管可读写的值；编辑另一前台记录返回 not found；仅主管动作和归档向前台拒绝；目录向每个角色提供其对应动作；带快照的 `CheckReplay`），以及浏览器路由 35（构建者在编辑器中赋予 `user`“自有记录且不可编辑”权限，赋予新审计员角色“包含该值的所有记录”权限；前台看到其自身索赔单且不含该值且无编辑按钮，对另一记录得到 404；审计员看到两者且包含该值但无法创建）。`scripts/verify.sh format capabilities composition mes drills web` 通过。
+- **18b 未构建内容**：18c 的审批（在后续批次构建）、按组织单元划分的访问控制，以及同一成员针对不同对象具备不同角色的能力（D4 接受的代价）。
 
-## As built (18c)
+## 实施现状 (18c)
 
-- **The definition and its owner** (`build.ActionApproval`): an action may name a separate pending state, an optional rejection state, and ordered approver levels. Each level names a role of the `build` app and may require every holder. Publishing compiles this into the existing `platform.Transition.Approval`; the `work` app remains the sole owner of approval requests, inbox tasks, decisions and notifications.
-- **Checked at publication** (`checkProcess`): a waiting action has exactly one starting state, a distinct pending state, a known rejection state if given, at least one level, and each level has a title and a role allowed to read every record of the object (or `builder`, which always can). A role without an assigned member is refused when someone requests approval by the work app's existing rule. The editor offers only roles with all-record access.
-- **The editor** (`ProcessEditor`): the action inspector has “Wait for approval”, pending/rejection state selectors, and ordered levels with role and all-approvers controls. Its center preview says where the record waits and whom it waits for. The normal work inbox handles the decision; no builder-specific approval screen or runtime was added.
-- **Proven**: `TestTenantDefinedApproval` refuses six malformed definitions; a desk asks for an action, the record waits without applying its field change, two approver levels complete in order and then apply it, a rejection moves a second record without applying the action, and `CheckReplay` restores the result. Browser route 36 composes the approval in the editor, publishes it, has a front desk submit it and a manager approve it in the inbox. `scripts/verify.sh format capabilities composition web` passes.
-- **Still open**: development-grade re-publication still replaces the installed definition; immutable revisions and in-flight binding need #135/#136. Organisation-unit based approvers are not in this tenant editor, and D4's one-role-per-member-in-`build` cost remains.
+- **定义与其所属主件**（`build.ActionApproval`）：动作可以指名单独的挂起待定状态、可选的拒绝状态，以及有序的审批层级。每个层级指名 `build` 应用的角色，并可以要求该角色的所有持有者均同意。发布将此编译到现有的 `platform.Transition.Approval` 中；`work` 应用依然是审批请求、收件箱任务、决策和通知的唯一归属主件。
+- **发布时校验**（`checkProcess`）：处于等待审批的动作具备且仅具备一个起始状态、一个独立的待定状态、一个已知的拒绝状态（如果提供）、至少一个审批层级，且每个层级均有标题以及允许读取该对象所有记录的角色（或始终拥有该权限的 `builder`）。通过 work 应用的现有规则，在有人请求审批时，没有分配成员的角色将被拒绝。编辑器仅提供具备全记录访问权限的角色。
+- **编辑器**（`ProcessEditor`）：动作检查器具备“等待审批 (Wait for approval)”选项、待定/拒绝状态选择器，以及带有角色和全员审批控制的有序层级。其中间预览会标明记录在何处等待以及等待谁的审批。正常的 work 收件箱处理该决策；未添加任何特定于构建器的审批界面或运行时。
+- **验证通过**：`TestTenantDefinedApproval` 拒绝六种畸形定义；前台请求执行动作，记录等待流转且不应用其字段变更，两个审批层级按序完成审批随后应用变更，拒绝操作使第二条记录流转且不应用该动作，`CheckReplay` 恢复该结果。浏览器路由 36 在编辑器中组合审批，发布它，由前台提交并由经理在收件箱中审批。`scripts/verify.sh format capabilities composition web` 通过。
+- **仍待处理**：开发级别的重新发布仍会替换已安装的定义；不可变修订版和在线绑定需要 #135/#136。基于组织单元的审批人不在本租户编辑器中，D4 的“每个成员在 `build` 中单一角色”的代价仍然存在。

@@ -1,61 +1,61 @@
-# ADR-0039: A minimal release for tenant definitions
+# ADR-0039: 租户定义的极简发布机制
 
-**Status:** Accepted (2026-09-28, #136 and #131 13c). The owner accepted D1–D4 as recommended. ADR-0031 already accepts independently versioned definition releases and environment bindings. This gate fixes the smallest contract that makes builder publication durable and reviewable; promotion, customer extensions and upgrades follow in later batches. Nothing in today's registry is an immutable revision.
+**状态：** 已接受 (2026-09-28, #136 与 #131 13c)。项目负责人按推荐方案接受了 D1–D4。ADR-0031 已经接受了独立版本化的定义发布与环境绑定。本阶段准入关卡确定使构建器发布具备持久性与可审查性的最小契约；晋级、客户扩展和升级将在后续批次中跟进。当前注册表中的任何内容均尚非不可变修订版。
 
-## Context
+## 背景
 
-`platform.AssetRef` (`capabilities/server/platform/definition.go`) gives a stable qualified name but no immutable revision. `Definition.Version` is currently the installed app's version or constant `"1"`, not a content version. The `build` app keeps a mutable draft and the last published JSON string on object/page/application records; publishing again calls `Install`, `InstallPage` or `InstallApplication` and replaces the running descriptor (`apps/build`, `installed.go`). A page's `Requires` names bare assets. The current preview fabricates local samples and cannot execute live actions, but it is not a stateful isolated test environment. Running flow versions are pinned separately; tenant-built action and approval definitions are not. #135 must establish the accepted-result activation boundary before this ADR can promise atomic durable promotion.
+`platform.AssetRef`（`capabilities/server/platform/definition.go`）提供了稳定的限定名称，但未提供不可变修订版。`Definition.Version` 目前是已安装应用的版本或常量 `"1"`，而非内容版本。`build` 应用在对象/页面/应用记录上保留可变草稿与最新发布的 JSON 字符串；再次发布会调用 `Install`、`InstallPage` 或 `InstallApplication` 并替换正在运行的描述符（`apps/build`，`installed.go`）。页面的 `Requires` 仅指明裸资产。当前的预览机制虚构了本地样例且无法执行实时动作，但它不是有状态的隔离测试环境。运行中的流转版本是单独固定的；而租户构建的动作和审批定义则不然。在本 ADR 能够承诺原子级持久晋级之前，#135 必须首先建立已提交结果的激活边界。
 
-| Current reference evidence, consulted 2026-09-28 | What it contributes here |
+| 当前参考依据 (2026-09-28 调研) | 对此处的贡献 |
 |---|---|
-| [Git's object model](https://git-scm.com/docs/gitdatamodel) and [references](https://git-scm.com/book/en/v2/Git-Internals-Git-References) | Immutable content identity and a separately movable name for the active revision. Business records do not become Git objects. |
-| [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) | A desired version, observed rollout state and explicit history/rollback limits. Activation is not proof that an operator task works. |
-| [Temporal Worker Versioning](https://docs.temporal.io/worker-versioning) | A running process may remain pinned to the version where it started. Our flow/approval/AI work needs an explicit binding or migration rule. |
-| [npm lockfile](https://docs.npmjs.com/files/package-lock.json/) | A closed, exact dependency tree is separately represented from a human-readable package name. We adopt the principle for typed assets, not npm as our release store. |
+| [Git 的对象模型](https://git-scm.com/docs/gitdatamodel) 与 [引用 (references)](https://git-scm.com/book/en/v2/Git-Internals-Git-References) | 不可变内容标识，以及用于活跃修订版的独立可移动名称。业务记录不会变成 Git 对象。 |
+| [Kubernetes Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) | 期望版本、观测到的发布状态以及显式的历史/回滚限制。激活并不代表操作员任务必然能够正常工作。 |
+| [Temporal 工作协程版本控制 (Worker Versioning)](https://docs.temporal.io/worker-versioning) | 运行中的流程可以保持固定在其启动时的版本上。我们的流程/审批/AI 工作需要明确的绑定或迁移规则。 |
+| [npm lockfile](https://docs.npmjs.com/files/package-lock.json/) | 闭包、精确的依赖树与人类可读的包名分离表达。我们对具类型资产采纳此原则，但并不将 npm 作为发布存储。 |
 
-The references agree that a mutable name, immutable content and the version actually running are different things. Our first release contract must express all three without pretending that a local sample preview is production isolation.
+参考依据达成了一致：可变名称、不可变内容以及实际运行的版本是不同的概念。我们的首个发布契约必须同时表达这三者，且不将本地样例预览虚夸为生产隔离。
 
-### Adversarial review of the current publication paths (2026-09-28)
+### 当前发布路径的对抗性审查 (2026-09-28)
 
-The builder's object, page and application transitions call `Install`, `InstallPage` or `InstallApplication` during a decision and only then write the mutable `Published` JSON field. `recordStore.install` can replace a type and convert its rows before a later action or dependency check fails; `InstallApplication` replaces its registry entry in place. Definitions in that registry currently carry constant version `"1"`, and the object/page/application references name logical assets without a revision. The present publisher therefore cannot pin a running approval to the definition it started with, atomically activate a closed set, or prove that a failed publication left the prior release intact. These are prerequisites for 20b and depend on #135's staged commit result.
+构建器的对象、页面和应用状态转换在决策期间调用 `Install`、`InstallPage` 或 `InstallApplication`，随后才写入可变的 `Published` JSON 字段。`recordStore.install` 可以在后续动作或依赖检查失败之前替换类型并转换其行数据；`InstallApplication` 就地替换其注册表条目。该注册表中的定义目前携带常量版本 `"1"`，且对象/页面/应用引用仅命名逻辑资产而无修订版。因此，当前的发布者无法将运行中的审批固定到其启动时的定义上，无法原子化激活闭包集合，也无法证明失败的发布能够保留先前的版本完好无损。这些是 20b 的前提条件，并依赖于 #135 的暂存提交结果。
 
-For D1, the revision format must specify canonical encoding, treatment of absent versus empty fields, ordering of sets versus ordered page sections, normalization of references, and a collision-resistant digest algorithm. Keep the exact canonical bytes and format version; test that equivalent inputs hash alike and a semantic change hashes differently. For D2, validation must resolve the *same* closed graph that activation will install, including references inside sections and actions, and distinguish a missing dependency from an unauthorized one without leaking its contents. A failed candidate or activation leaves the previous pointer and all its descriptors available. A release manifest must identify its tenant/environment binding separately from portable content and avoid hashing credential values. For D4, work records must carry the actual starting revision; either the old evaluator remains available or activation refuses while incompatible work is open. These are acceptance tests, not claims about the present registry.
+对于 D1，修订版格式必须明确规范编码规则、缺失字段与空字段的处理方式、集合排序与有序页面区块的区分、引用的规范化，以及抗碰撞的摘要算法。保留精确的规范字节和格式版本；测试等价输入生成相同哈希，而语义变更生成不同哈希。对于 D2，校验必须解析出与激活所安装的*完全相同*的闭包图，包括区块和动作内部的引用，并在不泄露其内容的情况下区分缺失的依赖与未授权的依赖。失败的候选版本或激活会保留先前的指针及其所有描述符可用。发布清单必须将其租户/环境绑定与可移植内容分开标识，并避免对凭据值计算哈希。对于 D4，工作记录必须携带实际的启动修订版；要么旧的求值器保持可用，要么在存在不兼容的未结工作时拒绝激活。这些是验收测试，而非关于当前注册表已具备能力的断言。
 
-## Our constraints
+## 我们的约束
 
-- Code and controlled, typed definitions share `AssetRef`, validation, authority and UI component owners (ADR-0031). No arbitrary tenant code, expression runtime or downloadable UI bundle is introduced by this gate.
-- A published asset and every reachable dependency must resolve to an immutable, compatible revision. Secrets and customer-specific credentials are environment bindings, never part of a reusable definition's content hash.
-- Publication grants nothing by itself; the Console's roles and execution checks still govern the resulting application. A builder's draft, tested candidate, published release and active release have distinct statuses and permissions.
-- Result-based activation depends on #135; replay of an accepted activation cannot re-run today's validator or business code. Existing flow/approval work must keep the definition it started with or take an explicit migration.
+- 代码与受控的具类型定义共享 `AssetRef`、校验、权威和 UI 组件所属主件（ADR-0031）。本门禁不引入任意租户代码、表达式运行时或可下载的 UI 包。
+- 已发布的资产及其每个可达依赖项必须解析为不可变且兼容的修订版。机密和客户专用凭据属于环境绑定，绝不能成为可复用定义内容哈希的一部分。
+- 发布本身不赋予任何权限；管理控制台的角色和执行检查仍治理生成的应用程序。构建者的草稿、测试候选、已发布版本和活跃版本具有明确的状态与权限区分。
+- 基于结果的激活依赖于 #135；重放已接受的激活不能重新运行今天的校验器或业务代码。现有的流转/审批工作必须保留其启动时的定义，或执行显式迁移。
 
-## Design
+## 设计
 
-1. **Identity.** `AssetRef` remains a logical qualified name. A `RevisionRef` adds a canonical content digest plus format/schema version, with exact descriptor bytes retained. The same bytes under the same contract yield the same digest; title changes produce another revision. A release has its own immutable ID and manifest. Human labels and the tenant's active release pointer may move without changing old revision bytes.
-2. **Closure.** A release manifest names roots (object/action/page/application first), every transitive `RevisionRef`, owning code/runtime contract ranges, and named environment binding requirements. Validation resolves the whole graph, detects cycles where disallowed, checks action/object/page compatibility and reports the dependency path of a refusal. Code assets remain installed by a compatible host build; this contract does not package executable binaries in W1. Missing credentials block activation, while their values stay in the environment.
-3. **Lifecycle and authority.** Save a draft, validate a candidate, preview it, publish immutable revisions, then activate a release for a tenant/environment through a distinct authority. Publication and activation each produce an accepted result (#135). The active pointer changes atomically after closure checks. Readers and tools discover the active revision and its provenance; a builder sees a diff, dependency impact and validation failures before requesting activation. The frontend's editor continues to use `@platform/app` bindings and `@platform/ui` components.
-4. **Running work.** A new action/approval/flow/AI run records the release/revision that decided its semantics. An already-running instance uses that version until completion or an explicit compatible migration; activation does not reinterpret it. The first batch may support only bounded object/page/action changes that require no migration of existing records or work. Unsupported changes are refused with a reason rather than silently replacing a type.
-5. **Preview and promotion.** The current local sample preview keeps its development label. A candidate that mutates state or calls a connector must later run in an isolated fixture environment with no production credentials or effects before it can count as release evidence. W1 activation can require deterministic validation and browser/operator tests while stateful isolated testing is delivered with #132/#133; do not call the current preview a sandbox. Promotion across environments reuses the same release ID with separately checked bindings and rollout status.
-6. **Builder/operator proof.** A customer builder changes an object's action and a bound page, sees a source-to-page diff and dependency diagnostics, publishes and activates a closed version, and an operator completes the task on that exact version. An older in-flight approval remains on its original version. Hospitality and manufacturing provide distinct minimal probes; an FDE later repeats this outside the implementing team. Visual and keyboard acceptance, refusals and recovery are part of the proof.
+1. **标识。** `AssetRef` 保持为逻辑限定名称。`RevisionRef` 增加了规范内容摘要和格式/模式版本，并保留精确的描述符字节。在相同契约下相同的字节产生相同的摘要；标题变更产生新的修订版。发布版本拥有其自身的不可变 ID 和清单。人类可读标签与租户的活跃发布指针可以移动，而无需改变旧修订版的字节。
+2. **闭包。** 发布清单指名根对象（首批包括对象/动作/页面/应用）、每个可传递的 `RevisionRef`、所属代码/运行时契约范围，以及命名的环境绑定要求。校验解析整个依赖图，在不允许的地方检测循环引用，检查动作/对象/页面兼容性，并报告拒绝时的依赖路径。代码资产依然由兼容的宿主构建进行安装；本契约在 W1 中不打包可执行二进制文件。缺少凭据会阻止激活，而其值保留在环境中。
+3. **生命周期与权威。** 保存草稿、校验候选版本、进行预览、发布不可变修订版，然后通过独立的权威为租户/环境激活发布版本。发布和激活各自生成一个已提交结果（#135）。在闭包检查通过后，活跃指针发生原子性切换。读取者与工具发现活跃修订版及其溯源；构建者在请求激活前可以看到 diff、依赖影响和校验失败信息。前端编辑器继续使用 `@platform/app` 绑定和 `@platform/ui` 组件。
+4. **运行中的工作。** 新的动作/审批/流程/AI 运行会记录决定其语义的发布/修订版。已在运行的实例使用该版本直至完成或显式兼容迁移；激活不会重新解释它。第一批切片可仅支持不需要迁移现有记录或工作的有界对象/页面/动作变更。不支持的变更将被拒绝并说明原因，而不是静默替换类型。
+5. **预览与晋级。** 当前的本地样例预览保留其开发标签。修改状态或调用连接器的候选版本后续必须在无生产凭据或效果的隔离固定测试环境中运行，然后才能作为发布实证。W1 激活可以要求确定性校验和浏览器/操作员测试，而有状态隔离测试随 #132/#133 交付；不要将当前的预览称为沙箱。跨环境晋级复用相同的发布 ID，配备独立检查的绑定和发布状态。
+6. **构建者/操作员实证。** 客户构建者更改对象的动作和绑定的页面，查看源码到页面的 diff 以及依赖诊断，发布并激活闭包版本，操作员在该确切版本上完成任务。较旧的在途审批保留在其原始版本上。酒店业和制造业提供不同的极简探针；FDE 后续在实施团队之外复现该过程。视觉与键盘验收、拒绝和恢复是实证的一部分。
 
-## Decision points for the owner
+## 负责人决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | What is the immutable revision identity? | Canonical descriptor digest plus explicit format version; or a tenant-local incrementing number | Digest plus format version, with a human-friendly sequence only for display. This makes closed references stable across environments and rejects silent mutation. |
-| D2 | What activates together in the first release? | A closed set of object/action/page/application revisions under one tenant/environment pointer; or independently moving pointers per asset | One closed release pointer. A page and the action it names must switch together. |
-| D3 | How are coded capabilities included? | Pin owning app/runtime contract versions as dependencies while code deploys separately; or package executable code into this release | Pin contracts only in W1. Executable package distribution and remote code isolation need a later gate. |
-| D4 | How do in-flight instances meet a new release? | Pin their starting revision and require explicit migration; or run the newest definition | Pin. An approval submitted yesterday must not silently change its action or approvers today. |
+| D1 | 不可变修订版标识是什么？ | 规范描述符摘要加上明确的格式版本；或租户本地自增编号 | 摘要加上格式版本，人类友好的序号仅用于展示。这使得闭包引用在跨环境时保持稳定，并拒绝静默篡改。 |
+| D2 | 在第一批发布中什么一起激活？ | 单一租户/环境指针下的对象/动作/页面/应用修订版的闭包集合；或按资产独立移动的指针 | 单一闭包发布指针。页面及其命名的动作必须协同切换。 |
+| D3 | 如何纳入代码编写的能力？ | 将所属应用/运行时契约版本固定为依赖项，而代码单独部署；或将可执行代码打包进此发布版本 | 在 W1 中仅固定契约。可执行包分发和远程代码隔离需要后续的准入关卡。 |
+| D4 | 在途运行实例如何面对新发布？ | 固定其启动修订版并要求显式迁移；或运行最新定义 | 固定。昨天提交的审批今天绝不能静默更改其动作或审批人。 |
 
-Declined: a Git repository as the business database, mutable “published” JSON as a version, arbitrary tenant code, automatic live-work migration, and calling sample-data preview an isolation sandbox.
+已拒绝的方案：将 Git 仓库作为业务数据库、可变的“已发布”JSON 作为版本、任意租户代码、自动的在途工作迁移，以及将样例数据预览虚夸为隔离沙箱。
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 20a | Revision format, canonicalization, graph validation and read-only candidate diff | Equivalent canonical descriptors yield one revision; a semantic change yields another; the exact bytes are retained. One descriptor through code and builder resolves to the same logical asset and exact revision; nested, missing and invalid dependencies are refused with a path; a failed candidate preserves the active graph; tests cover hospitality and manufacturing and `scripts/verify.sh ci capabilities composition web` passes. |
-| 20b | Publish and activate a closed object/action/page/application release on #135's commit result; bind new work to it | A builder completes draft → validation → diff → publish → activate, an operator task uses the active release, and a previous in-flight approval keeps its version; `CheckReplay`, crash-point tests, browser routes, `scripts/verify.sh ci capabilities composition web` and `deploy/local/rehearse.sh` pass. |
-| 20c | Environment bindings, promotion diagnostics and compatibility-aware upgrade plan | The same release goes to two controlled industry environments with separate credentials; activation reports incompatible records/work and an explicit repair path. Owner-observed desktop/narrow-screen and keyboard task evidence, `CheckReplay`, restore/upgrade rehearsal and applicable verify steps pass. |
+| 20a | 修订版格式、规范化、依赖图校验和只读候选 diff | 等价的规范描述符生成同一个修订版；语义变更生成另一个修订版；保留精确字节。代码和构建器的单一描述符解析为相同的逻辑资产和确切修订版；嵌套、缺失和无效的依赖项被拒绝并附带路径；失败的候选版本保留活跃依赖图；测试覆盖酒店业和制造业，且 `scripts/verify.sh ci capabilities composition web` 通过。 |
+| 20b | 在 #135 提交结果之上发布并激活闭包对象/动作/页面/应用发布版本；将新工作绑定到该版本 | 构建者完成草稿 → 校验 → diff → 发布 → 激活，操作员任务使用活跃发布版本，先前的在途审批保留其版本；`CheckReplay`、崩溃点测试、浏览器路由、`scripts/verify.sh ci capabilities composition web` 和 `deploy/local/rehearse.sh` 通过。 |
+| 20c | 环境绑定、晋级诊断和兼容感知升级计划 | 同一发布版本分发到具有独立凭据的两个受控行业环境；激活报告不兼容的记录/工作及明确的修复路径。通过负责人观测的桌面端/窄屏及键盘任务证据、`CheckReplay`、恢复/升级排练及适用的验证步骤。 |
 
-## Consequences
+## 后果
 
-The descriptor and release formats become public compatibility obligations. Storage and the editor gain draft/candidate/revision/active states, but execution remains on canonical records, actions, work and UI bindings. Current “publish again replaces” stays a development behavior until 20b; WorkQueue.md must not call it immutable release. The first version is intentionally narrow so #135 and #136 can be proven together before adding workflows and AI logic.
+描述符和发布格式成为公共兼容性承诺。存储和编辑器增加了草稿/候选/修订版/活跃状态，但执行依然保持在规范记录、动作、工作和 UI 绑定之上。当前的“再次发布直接替换”在 20b 之前仍为开发行为；WorkQueue.md 不得将其称为不可变发布。首个版本刻意保持收敛，以便在添加工作流和 AI 逻辑之前，先共同验证 #135 和 #136。

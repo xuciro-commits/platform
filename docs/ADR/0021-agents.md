@@ -1,207 +1,207 @@
-# ADR-0021: Agents — governed principals in a traced harness
+# ADR-0021: 智能代理 —— 全程可追溯治理线束中的受控主体
 
-> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The target adds versioned customer-authored agent definitions, reusable typed AI functions and a shared preview/evaluation/publication lifecycle; existing code-declared agents remain the implementation. This note records the target; the historical decision and As built below remain evidence of their time.
+> **由 [ADR-0031](0031-ai-application-platform.md) 于 2026-09-27 修订。** 目标愿景增加了版本化、客户自编写的代理定义、可复用的类型化 AI 函数，以及共享的预览/评估/发布生命周期；当前在代码中声明的代理仍作为当前的工程实现事实。此说明记录了目标愿景；下文的历史决策与“实际构建”部分依然保留作为当时的实施证据。
 
-**Status:** Accepted (2026-09-25, #111, the architecture gate of stage 5 in Platform.md §10.5). The owner accepted D1–D10 as recommended. What is built is under "As built" (batches 1 and 2); batch 3 is ADR-0022.
+**状态：** 已采纳 (2026-09-25, #111，[Platform.md](../Platform.md) §10.5 第五阶段的架构关卡)。业务负责人按推荐采纳了 D1–D10。实际构建内容见“实际构建（As built）”（批次 1 与批次 2）；批次 3 见 [ADR-0022](0022-knowledge-memory-a2a.md)。
 
-## Context
+## 背景
 
-What exists:
-- **Models behind one door** (ADR-0015): providers, access per role, and metered calls whose usage is journaled; prompts and answers are not journaled.
-- **Agents as members:** `Member.Agent`, roles, the action catalog as their only way to act (ADR-0008). What they cause that cannot be recalled waits for a person (ADR-0014 D6).
-- **MCP** serves each member's catalog as tools to agents outside, such as the plant's assistant through `mes-agent`.
-- **Flows** (ADR-0020) declare agent steps. A person does them until agents run.
+当前已具备的能力：
+- **统一入口后置的模型管理**（[ADR-0015](0015-ai-providers.md)）：多提供商支持、按角色访问控制，以及用量记入日志的计费调用；提示词与大模型回复内容不记入业务日志。
+- **代理作为租户成员存在：** 具备 `Member.Agent` 标识、拥有角色分配，并将操作目录作为其采取行动的唯一途径（[ADR-0008](0008-packages-customization-and-callers.md)）。代理所引发的不可逆影响必须挂起等待人工裁决（[ADR-0014](0014-outbound-effects.md) D6）。
+- **MCP 协议：** 将每个成员的操作目录作为工具暴露给外部代理，例如工厂通过 `mes-agent` 接入的助手。
+- **业务流**（[ADR-0020](0020-flows.md)）：声明了 Agent 步骤。在代理正式运行前，暂时由人工负责处理。
 
-What does not exist is the harness. Nothing runs an agent inside the platform. An agent gets no narrower grants than a role, and has no budget. Nothing keeps a run's steps and reasons, grounds it in the tenant's context, lets it ask a person and wait, or evaluates a change of model or instructions against past outcomes.
+此前欠缺的是**治理线束（Harness）**。平台内部没有任何机制能够实际调度并运行一个代理。代理无法获得比普通角色更精细狭窄的权限边界，也没有任何调用额度预算。没有机制能够忠实记录一次运行中的每个步骤与判定理由、无法将代理锚定于租户的真实业务上下文中、无法让代理主动向人类提问并稳健等待，也无法对照历史实际结果去科学评估更换模型或修改系统指令所带来的质量变动。
 
-SAP's AI-native North Star (Intent.md, Platform.md §10) puts it plainly: the model reasons, the harness governs, and the harness sets the ceiling.
+SAP 在其“AI 原生北极星（AI-native North Star）”（[Intent.md](../Intent.md), [Platform.md](../Platform.md) §10）中阐述得非常透彻：模型负责推理，线束负责治理，而治理线束的高低决定了能力的上限。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| Platform | Where an agent is defined | Identity and grants | Tools and grounding | People in the loop | Trust, trace and evaluation |
+| 平台 | 代理如何定义 | 身份凭据与授权边界 | 工具与业务事实锚定（Grounding） | 人机协同把关（HITL） | 信任、追踪与评测评估 |
 |---|---|---|---|---|---|
-| SAP (Joule, Joule agents) | Joule Studio; SAP-delivered agents | Agents as principals with their own identity and a bounded subset of permissions | Business APIs and events; the Knowledge Graph and Business Data Cloud for grounding | Exceptions routed to people; Joule as the front door | Harness engineering: sandboxing, memory, guardrails; decision traces |
-| Salesforce Agentforce | Agent Builder: topics, instructions and actions (flows, Apex, prompts) | An agent user with its own permissions | Actions over records, Data Cloud retrieval | Escalation to people; actions that ask to confirm | Einstein Trust Layer (masking, audit); a testing centre |
-| ServiceNow AI Agents | AI Agent Studio; an orchestrator over agents | Agents act with roles; governance in AI Control Tower | Flows and actions on the platform's tables; knowledge bases | Approvals and human review steps in agentic workflows | Guardrails, monitoring, evaluations |
-| Palantir AIP | AIP Logic and Agent Studio, over the ontology | Actions governed by the ontology's permissions | The ontology's objects, links and actions as tools | Actions staged for review before they apply | Evaluations of logic against test cases, run history |
-| Microsoft Copilot Studio | Agents with topics, knowledge, actions (connectors, flows) and autonomous triggers | An agent identity (Entra Agent ID) | Connectors, Dataverse, SharePoint knowledge | Approvals in flows, handoff to people | Analytics, evaluations, audit |
+| SAP (Joule, Joule 代理) | Joule Studio；SAP 官方交付的代理 | 代理作为独立主体，拥有独立身份与受限的权限子集 | 业务 API 与事件；依托知识图谱（Knowledge Graph）与业务数据云进行业务锚定 | 异常情况自动路由给人类；Joule 作为统一交互入口 | 线束工程：沙箱隔离、长期记忆、安全护栏；决策追踪痕迹（Decision traces） |
+| Salesforce Agentforce | Agent Builder：主题（Topics）、指令以及操作（Flows, Apex, Prompts） | 代理用户（Agent User），配置专属权限 | 基于实体记录的操作、Data Cloud 知识检索 | 遇到疑难升级给人工；关键操作需用户主动确认 | Einstein Trust Layer（数据脱敏、审计）；测试评估中心 |
+| ServiceNow AI Agents | AI Agent Studio；上层代理编排器 | 代理以角色执行操作；在 AI Control Tower 中统一治理 | 针对平台数据表的流程与操作；专属知识库 | 代理工作流中的审批节点与人工复核步骤 | 安全护栏、实时监控、效果评测 |
+| Palantir AIP | AIP Logic 与 Agent Studio，构建于本体模型之上 | 操作严格受本体模型权限体系的制约治理 | 将本体中的对象、链接与操作直接作为工具调用 | 关键操作在正式应用生效前暂存供人工复查 | 对照测试用例与历史运行数据评测业务逻辑 |
+| Microsoft Copilot Studio | 具备主题、知识、操作（连接器、流程）与自主触发器的代理 | 专属代理身份（Entra Agent ID） | 连接器、Dataverse、SharePoint 知识库 | 流程中的审批流、平滑转人工交接（Handoff） | 统计分析、效果评测、审计追踪 |
 
-They agree on six things:
-- **A definition:** instructions, the tools it may use, and the knowledge it may read.
-- **An identity of its own**, with permissions narrower than a person's.
-- **Tools that are the platform's own actions**, grounded in the platform's data and relations.
-- **People for exceptions and for anything irreversible.**
-- **Every run observable.**
-- **Evaluation before a change reaches production.**
+上述平台在六项核心原则上高度契合：
+- **明确的定义规范：** 系统指令、允许使用的工具集，以及允许读取的知识库；
+- **独立的专有身份：** 拥有比真实人类更精细、狭窄的权限边界；
+- **工具即平台原生操作：** 工具严格源自平台已有的操作，并深度锚定于平台内的数据与关联关系；
+- **人类托底把关：** 针对异常情况以及一切不可逆的高危影响，必须有人类在环把关；
+- **全生命周期可观测：** 每次代理运行的全部步骤全程清晰可查；
+- **发布前评测机制：** 在模型或指令变更上线前，必须经过客观评测。
 
-Our platform starts from an advantage there: every decision is already journaled and replayed, the catalog is already the only way to act, and flows already hold long waits and people's answers.
+我们的平台在此具备得天独厚的先天优势：每笔业务决策本身就已百分之百持久化记入日志并支持确定性重放，操作目录本就是唯一的行动途径，而业务流引擎本身就已天然支持长时间等待以及人类作答。
 
-## Design
+## 设计
 
-1. **Agents are declared in app code**, like flows (ADR-0020). An `platform.Agent` has:
-   - a name and a title, and the instructions (its system prompt);
-   - its tools: actions and reads of the app, or protocol actions it consumes;
-   - the model it needs (a capability such as "tools", chosen among the tenant's enabled models by a setting);
-   - its budgets, its guards (Go functions that may refuse an action before it is submitted), and the people it escalates to.
-   - A tenant sets values within bounds, such as the model and the budgets, as typed settings. It never edits instructions or tools as data (AGENTS.md rule 5).
-2. **Each agent is a principal.**
-   - It signs as `agent:<app>.<name>`, a member with `Agent` set.
-   - It may do what its declared tools allow. When it runs on behalf of a person, it may do that only where the person may too, so its grants are the intersection.
-   - D6 holds: effects it causes that cannot be recalled wait for a person. People see which agent did what, for whom, in the audit and on the record's history.
-3. **Runs are records, and the loop runs in the host.**
-   - A run is a record of a new platform app `agent`: the goal, who asked or which flow step, the state, the steps taken, budgets used, and the outcome.
-   - The loop runs as owned work: call the model through the `ai` app (access and metering as ADR-0015), then submit the chosen tool call.
-   - Each action the agent takes is a journaled decision by its principal, correlated to the run. Each step the model chose is journaled as an `agent` entry: the tool, its arguments and the rationale it gave. Like an effect's outcome, replay applies it and never calls the model.
-   - A run can wait: for a person's answer (an `ask` tool that opens a task), for an approval (D6), or for a flow. It resumes when they answer.
-4. **Grounding through a context graph.** A read and a tool, within the caller's scope, give a record with:
-   - its fields and history;
-   - the records it references and that reference it;
-   - its links across apps (relations, protocol bookings);
-   - the decisions made about it and their reasons (flow traces);
-   - the flows and tasks about it.
+1. **代理在应用代码中以类型化方式声明，** 正如业务流一样（[ADR-0020](0020-flows.md)）。一个 `platform.Agent` 包含：
+   - 名称、标题，以及系统指令（即 System Prompt）；
+   - 工具集：该应用自有的操作与读取接口，或该应用消费的协议操作；
+   - 所需的模型能力特征（例如“支持工具调用”能力，通过租户配置在租户已启用的模型中匹配选用）；
+   - 调用额度预算（Budgets）、安全守卫（Guards，在操作提交执行前可拦截否决的 Go 函数），以及升级交接的人工责任角色。
+   - 租户仅可在平台设定的安全边界内配置参数（如选用具体模型、配置额度上限等类型化设置）。租户绝不允许直接在界面上将系统指令或工具集作为纯数据随意修改（AGENTS.md 规则 5）。
+2. **每个代理均为独立的受控主体（Principal）。**
+   - 签名标识为 `agent:<app>.<name>`，属于设置了 `Agent` 属性的特殊成员。
+   - 代理仅被允许调用其声明的工具。当其代表某位具体成员行动时，它只能在该成员同样拥有权限的交集范围内行动 —— 授权边界为二者的严格交集。
+   - 严格继承 D6 约束：代理所引发的不可逆影响必须挂起等待人工裁决。审计日志与记录历史中会清晰记录究竟是哪个代理代表谁采取了该行动。
+3. **运行过程表现为标准记录，调度循环由宿主统一驱动。**
+   - 单次代理运行是新平台应用 `agent` 中的标准实体记录：包含业务目标、发起的成员或所归属的流程步骤、当前状态、已执行的步骤、已消耗的额度预算，以及最终达成结果。
+   - 调度循环作为自有机制作业驱动：通过 `ai` 应用调用大模型（权限与计量遵循 [ADR-0015](0015-ai-providers.md)），随后提交模型选定的工具调用。
+   - 代理采取的每项操作，均作为该代理主体签名的独立记入日志的决策，并关联到该次运行。模型所决定的每个步骤均作为 `agent` 类型的分录持久化记入日志：包含工具名称、调用参数以及模型给出的判定理由。正如外部出站效果的结果一样，系统重放时直接应用该步骤结果，绝不再次发起昂贵且不可控的大模型调用。
+   - 单次运行可以安全进入挂起等待：等待人工答复（调用 `ask` 工具派发人工任务）、等待审批（D6 约束），或等待流程推进。外界给出答复后平稳唤醒继续推进。
+4. **基于上下文图谱（Context Graph）的事实锚定。** 在调用方被授权的作用域范围内，读取接口与工具能够为实体记录提供深度的上下文拓扑：
+   - 记录的全部字段与变更历史；
+   - 该记录引用的全部对象，以及引用了该记录的外部对象；
+   - 跨应用的全局链接（通过关系应用建立的链接、协议预订等）；
+   - 围绕该记录做出的全部历史决策及其背后的动因（流程追踪痕迹）；
+   - 与该记录关联的全部流程实例与待办任务。
 
-   A search across the entity types the caller may read joins it; this is the global search ADR-0018 left open. Documents with embeddings (pgvector in the PostgreSQL projections) come in a later batch.
-5. **People in the loop.**
-   - In the workspace, the assistant panel on any record proposes actions as drafts a person confirms. Stating an intent starts a run with that person as "on behalf of".
-   - Agents started by flows or triggers act within their grants.
-   - Every agent can ask a person, and every irreversible effect waits for one.
-   - A run that exceeds a budget, is refused by a guard, or cannot finish stops and hands its goal to a person as a task.
-6. **Budgets and guardrails.**
-   - Per run: steps, tokens, cost and actions.
-   - Per agent and tenant per day: a quota; this is ADR-0015's batch 2.
-   - Guards in code run before each action.
-   - Tools are only catalog actions and reads: no network, files or code outside the host.
-7. **Traces and corrections.**
-   - A run's page shows each step: the model's rationale, the tool, its arguments, the outcome, and the tokens and cost.
-   - A person's correction is recorded as a signal on the run: a rejected held effect, an undone decision, a changed draft, or a task answered against the agent's proposal.
-   - Full prompts and transcripts stay outside the journal, in an observability store with a retention setting, because they may hold personal data (ADR-0015 D6).
-8. **Evaluation.**
-   - An agent's past runs, with the outcomes people confirmed or corrected, form its evaluation set.
-   - A candidate (another model, new instructions) re-runs them dry. The host's probing mode checks policy and rules without recording (ADR-0017), and its tool calls and outcomes are compared with what people accepted.
-   - The result is a report before the candidate is enabled.
-9. **Interoperability.**
-   - MCP stays the door for agents outside, and the catalog stays their only tools.
-   - Agent2Agent in a later batch:
-     - declared agents are published as A2A agents;
-     - external A2A agents are called as effects, held when irreversible.
+   调用方有权读取的跨实体类型的全局全文检索一并汇入此处；这彻底补齐了 [ADR-0018](0018-one-workspace.md) 中悬而未决的全局搜索能力。带有文本嵌入向量的非结构化文档（利用 PostgreSQL 物理投影中的 pgvector 扩展）在后续批次中引入。
+5. **人机协同全流程闭环（Human-in-the-loop）。**
+   - 在统一工作空间中，任何实体记录详情页侧边的智能助手面板均将操作以“草稿（Draft）”形式呈现，必须由人工点击确认。人类在面板中提出业务意图，系统即以该人员作为“代表某人（on behalf of）”开启代理运行。
+   - 由业务流或系统触发器自主唤起的代理，在其严格授权边界内自主行动。
+   - 任何代理均可主动向人类提问，且一切不可逆的外部影响强制等待人类审批。
+   - 一旦运行超出调用额度预算、被安全守卫拦截，或无法自主完成目标，系统立即终止自动流转，并将当前目标转换为人工任务平滑交接给人类。
+6. **资源预算与安全护栏。**
+   - 单次运行级限制：最大迭代步骤数、最大 Token 消耗数、资金成本预算、最大执行操作次数。
+   - 代理及租户日度限额：每日用量配额；这正是 [ADR-0015](0015-ai-providers.md) 的第二批次工作。
+   - 在执行每项具体操作前，强制执行代码级安全守卫（Guards）。
+   - 工具仅限平台已注册的目录操作与数据读取：绝不允许代理在宿主之外随意发起网络请求、读写本地文件或执行外部代码。
+7. **执行追踪与人工干预信号。**
+   - 运行详情页清晰呈现每一步：模型的决策理由、调用的工具、参数快照、执行结果，以及消耗的 Token 与成本。
+   - 人类的修正干预被忠实记录为该次运行上的反馈信号（Signals）：例如驳回挂起的外部影响、撤销某项决策、修改代理生成的草稿，或给出与代理建议相反的任务答复。
+   - 完整的提示词与大模型交互原始对话保留在日志之外具有数据保留期（TTL）的可观测性存储中，因为其中可能包含敏感的个人隐私数据（[ADR-0015](0015-ai-providers.md) D6）。
+8. **客观评测评估系统（Evaluation）。**
+   - 代理的历史运行记录，结合人类确认通过或纠偏修正的真实结果，构成其专属评测数据集。
+   - 候选版本（更换为新模型、调整系统指令）通过离线干跑（Dry re-run）这批历史用例。宿主的探查模式（Probing mode）能够在不产生任何持久化数据的前提下校验策略与规则（[ADR-0017](0017-lifecycles-approvals-tasks.md)），并将候选版本的工具调用与执行结果同历史上人类认可的标杆数据进行自动化比对。
+   - 在启用新模型或新指令前，系统生成详尽的客观评估报告供管理员决策。
+9. **跨平台互操作性。**
+   - MCP 继续作为面向外部代理的入口大门，操作目录始终作为其唯一合法的工具集合。
+   - 代理间通信（A2A）在后续批次实现：
+     - 平台内声明的代理对外发布为标准 A2A 代理服务；
+     - 外部 A2A 代理作为平台出站效果调用，不可逆影响强制拦截挂起。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Where agents are defined | (a) Declared in app code, with bounded values (model, budgets) as tenant settings. (b) Built by administrators at run time, instructions and tools as data (Agent Builder, Copilot Studio) | **(a)**: instructions and tools are behaviour, reviewed and versioned with the app (ADR-0008) |
-| D2 | What an agent may do | (a) Its declared tools, intersected with the grants of the person it acts for, and D6 for irreversible effects. (b) A role like a member's | **(a)**: SAP's bounded subset of permissions. An agent acting for someone never exceeds them |
-| D3 | Where the loop runs | (a) In the host, as owned work: runs are records of an `agent` app, each chosen step journaled, each action a decision by the agent's principal. (b) Only outside, through MCP | **(a)**, with MCP kept for outside agents. Inside, runs are governed, traced, budgeted and resumable |
-| D4 | What is kept | (a) On the run and in the journal: tool calls, arguments, the model's rationale per step, outcomes, budgets. Full prompts and transcripts outside the journal, with retention. (b) Usage only. (c) Everything in the journal | **(a)**: the decision trace without personal data in the journal |
-| D5 | Grounding | (a) The context graph (records, references, links, decisions and their reasons, flows) and search across types, as tools within scope; documents with embeddings later. (b) Documents and embeddings first | **(a)**: our advantage is the governed business context, like Palantir's ontology and SAP's Knowledge Graph |
-| D6 | People in the loop | (a) The assistant proposes and a person confirms. Agents in flows and triggers act within their grants. An `ask` tool for exceptions, D6 for the irreversible, and a person's task when a run stops. (b) Everything confirmed by a person | **(a)**: autonomy where grants and budgets bound it, confirmation where a person is present anyway |
-| D7 | Budgets and guards | Per run: steps, tokens, cost, actions. Per agent and tenant per day: quotas. Guards in code before each action. Tools only through the catalog | As listed |
-| D8 | Evaluation | (a) Dry re-runs of past runs (probing, nothing recorded) against a candidate, compared with what people accepted or corrected; corrections recorded as signals. (b) Later | **(a)**, in the second batch: the harness sets the ceiling, and evaluation is how it is raised safely |
-| D9 | Interoperability | MCP stays; A2A to publish declared agents and to call external ones as effects | As listed, A2A in the third batch |
-| D10 | Proof | (1) The plant: the ERP confirmation flow's correction becomes an agent step. It finds the planned order the refused confirmation fulfils and proposes the resend, and the supervisor approves in the inbox. (2) A thin helpdesk reference app: tickets with an SLA as a flow, and a triage agent that classifies, grounds in the context graph (the customer's opportunities and stays), and drafts a reply that waits for approval before it is mailed | As listed. The helpdesk was also ADR-0017's pending second proof |
+| D1 | 代理在何处定义 | (a) 在应用代码中声明，参数边界（模型选择、预算上限）作为租户配置。(b) 由管理员在运行时通过界面可视化配置，将指令和工具作为数据存储（类似 Agent Builder、Copilot Studio） | **(a)**：指令与工具构成了核心业务行为，必须像应用本身一样经历严谨的代码审查与版本控制（[ADR-0008](0008-packages-customization-and-callers.md)） |
+| D2 | 代理允许做什么 | (a) 严格限于其声明的工具，并与它所代表的人员的权限取交集，不可逆影响强制执行 D6 人工审批。(b) 像普通成员一样直接赋予角色 | **(a)**：遵循 SAP 的严格受限权限子集原则。代表某人行动的代理绝不能突破被代表人的权限天花板 |
+| D3 | 调度循环在何处运行 | (a) 在宿主内部作为自有机制作业运行：运行表现为 `agent` 应用的记录，选定的每步持久化记入日志，每个操作均作为该代理主体的标准决策。(b) 仅作为外部服务通过 MCP 运行 | 当前采用 **(a)**，同时为外部代理保留 MCP 接口。在宿主内部运行可确保全程受控、可追踪、受预算约束且支持挂起恢复 |
+| D4 | 数据保留策略 | (a) 在运行记录与业务日志中：记录工具调用、入参、模型每步的推理理由、执行结果、消耗预算。完整提示词与长文本对话保存在业务日志之外的可观测性存储中并配置淘汰周期。(b) 仅记录资源用量。(c) 所有内容全部强行塞入业务日志 | **(a)**：在业务日志中保留清晰的决策追踪痕迹，同时杜绝在确定性重放日志中混入不可控的个人隐私敏感数据 |
+| D5 | 业务事实锚定（Grounding） | (a) 上下文图谱（实体记录、对象引用、全局链接、历史决策及其动因、关联流程）与跨类型检索，在权限作用域内作为工具提供；后续批次引入向量嵌入文档。(b) 优先实现文档与向量嵌入 | 当前采用 **(a)**：我们最核心的差异化优势在于强治理的结构化业务上下文，对标 Palantir 本体模型与 SAP 业务知识图谱 |
+| D6 | 人机协同闭环机制 | (a) 智能助手生成草稿提议，人工核对确认。流程或触发器发起的代理在其权限内自主行动。提供 `ask` 工具处理异常，不可逆影响受 D6 强力把关，无法完工时退回生成人工任务。(b) 任何一步骤都必须由人工确认 | **(a)**：在授权和预算严格把控的场景下给予自主权，在人类本就在场的交互界面中强化确认 |
+| D7 | 预算与护栏机制 | 单次运行级：步数、Token、成本、操作次数。代理与租户日度级：配额控制。每次操作前执行代码级守卫。工具调用严格受限于目录操作 | 按照所列机制执行 |
+| D8 | 自动化效果评估 | (a) 对历史运行数据进行无痕离线重跑（探查模式，零副作用记入），比对候选模型与历史上人类确认或纠偏的数据差异；将人类纠偏持久化为评估信号。(b) 后续实现 | **(a)**，在第二批次中落地：治理线束决定能力天花板，而客观评测正是安全推高天花板的唯一抓手 |
+| D9 | 互操作性演进 | 保留 MCP；引入 A2A 协议对外发布平台代理并将外部代理作为外部效果调用 | 按照所列机制，A2A 归入第三批次 |
+| D10 | 验证载体（Proof） | (1) 工厂车间：ERP 完工确认流程中的异常纠偏改造为 Agent 步骤。代理自主检索匹配该完工单所对应的 ERP 计划订单并生成重新发送的草稿提议，车间主管在收件箱中一键审批。(2) 轻量级服务台参考应用：通过业务流驱动带有 SLA 的工单，分诊代理负责智能分类、通过上下文图谱（检索客户历史销售机会与住宿）进行业务锚定，并起草回复草稿，经人工审批后正式发送邮件 | 按照所列计划执行。服务台同时也是 ADR-0017 中悬置的第二项验证载体 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 1 | Agent declarations, the `agent` app, the loop with tool calling (OpenAI-compatible and Anthropic tools), budgets, guards, `ask`, stop-to-person | A declared agent runs as owned work with a stub model in host tests. Its steps are journaled and replay without calling a model; the intersection of grants and D6 are enforced; `CheckReplay` and snapshots pass |
-| 1 | Context graph read and search, as a read and as tools | Within scope, a record's context lists references, links, decisions with reasons, flows and tasks. Search finds records across types |
-| 1 | Flows' agent steps run agents; the plant's proof | A refused ERP confirmation is corrected by the agent step and approved by the supervisor, in the plant's tests and the rehearsal with the local model stand-in |
-| 2 | The run page and the assistant panel with intents; corrections as signals; evaluation by dry re-runs | A person asks the assistant on a record, confirms its draft, and sees the run's trace. A candidate model's report compares its runs with accepted ones |
-| 2 | The helpdesk reference app and its triage agent | A ticket is triaged, grounded and answered after approval; its SLA flow escalates when late |
-| 3 | Documents with embeddings, agent memory, A2A | An agent cites a document; a declared agent answers an A2A task; an external A2A agent is called as a held effect |
+| 1 | 代理声明规范、`agent` 平台应用、带有工具调用的调度循环（兼容 OpenAI 与 Anthropic 格式）、预算管理、安全守卫、`ask` 协同提问、退回人工任务 | 声明的代理在宿主测试中结合桩模型作为自有机制作业稳健运行。其执行步骤持久化记入日志，重放时不产生任何模型调用；严格执行权限交集与 D6 规则；`CheckReplay` 与快照测试顺利通过 |
+| 1 | 上下文图谱读取与检索接口（作为读取端点与工具） | 在调用方权限范围内，记录详情提供引用、链接、带有动因的决策、关联流程与任务。搜索接口支持跨类型全文检索 |
+| 1 | 流程中的 Agent 步骤驱动代理运行；工厂场景验证 | 遭遇 ERP 拒绝的完工确认由 Agent 步骤成功纠偏，并在工厂测试以及本地桩模型演练中由主管在收件箱中顺利审批通过 |
+| 2 | 运行详情页、带有用户意图的助手面板；纠偏反馈信号；离线重跑评测机制 | 用户在记录页面向助手提问，确认其生成的草稿提议，并直观查看运行追踪轨迹。候选模型的评测报告能够清晰对比其与历史人工认可行为的吻合度 |
+| 2 | 服务台参考应用与分诊代理 | 工单单据完成智能分诊、业务锚定，回复草稿经审批后发出；SIA 流程在超时时自动告警升级 |
+| 3 | 带有嵌入向量的非结构化文档、代理长期记忆、A2A 跨系统通信 | 代理能够精确引用文档来源；平台声明的代理能够响应外部 A2A 任务；外部 A2A 代理可作为挂起的外部效果被安全调用 |
 
-## Consequences
+## 影响
 
-- An agent is one more governed principal: it does what its declaration and the person it serves allow, leaves a trace people can read, and stops for them when it should.
-- The journal gains the model's choices, not its prompts. Replay stays deterministic, and the trace becomes the evidence that evaluation and people build on.
-- Grounding, search and traces serve people as well as agents: the assistant panel and global search are the same reads.
+- 智能代理成为了平台中又一个受到严密治理的主体：仅能执行其声明及所代表的人类双重允许的操作，留下清晰可读的审计痕迹，并在必要时刻坚决停下等待人类接管。
+- 业务日志记录的是大模型的最终选择，而非冗长的提示词。重放继续保持百分之百确定性，而执行追踪痕迹成为了人类复查与自动化评测的核心依据。
+- 业务事实锚定、全局搜索与决策追踪不仅服务于智能代理，同样直接赋能人类：智能助手面板与全局搜索复用完全相同的底层读取逻辑。
 
-## As built
+## 实际构建（As built）
 
-### Batch 1 (#111)
+### 批次 1 (#111)
 
-- **Declaration** (`platform/agent.go`):
-  - `Manifest.Agents` lists `platform.Agent` values: name, title, instructions, tools, `Budget` (steps, tokens, actions; 10, 40 000 and 3 by default), `Guard` and `To`.
-  - Tools are the app's actions, protocol actions `"<protocol id>#<action>"` it consumes, and its reads as `"read:<name>"`.
-  - Every agent also has `context`, `search`, `ask` and `finish`, and every tool asks the model for a one-sentence rationale.
-  - `NewTenant` checks each tool against the app's catalog, reads and consumed protocols, and requires the agent app.
-- **The agent app** (`agent.go`, `agent_engine.go`):
-  - `agent.run` records hold the goal, who it runs for (or the flow step), the state, every step (tool, arguments, rationale, outcome, tokens, and since #130 the records it read), the budgets used and the result.
-  - **A trace is read against its sources, not only its journal** (#130, 2026-09-27): the host asks the agent app to leave out what the reader may no longer read — the record the run saw, a step's arguments and outcome, a citation of a restricted field, a draft's target, the result — and tells the reader that part is withheld (ADR-0033's `Entity.Derived`, `Tenant.narrowed`, `TestAgentTraceScope`). An administrator of the agent app sees that a run happened without its content unless they hold the business app's role too.
-  - A member starts a run with `agent.run.start` for an agent of an app they hold a role in; flows start runs from agent steps.
-  - `Tenant.Think` runs every second, apart from other owned work. It calls the model outside the tenant's lock through the `ai` app's providers, choosing the model with the setting `agent/model`. It then journals the chosen step as an `agent` entry and applies it as one `agent.run.step` decision.
-  - Replay applies the entries, and a host test fails if a replay calls a model.
-- **Governance:**
-  - An action is submitted as `agent:<app>.<name>` (with `Member.Agent`, so D6 holds its irreversible effects), with the run as correlation.
-  - For a person, the action is first probed as that person, so the agent never does more than they may. A protocol action is checked against the person's role at the provider.
-  - The guard runs before the action, and the action budget is counted.
-  - A run stops over its step or token budget, after three model failures, without a model, or on the daily token quota (`agent/daily-tokens`). A stopped run hands its goal to the person it ran for, or to `To`, as a task.
-  - `ask` opens a task with answers and the run waits; the answer, delivered as owned work, resumes it.
-- **Model calls gain tools:**
-  - on the OpenAI wire: tools, `tool_calls`, and tool messages;
-  - in the Anthropic adapter (official Go SDK): `ToolParam`, `ToolUseBlock`, and tool results sent together as one user turn.
-  - `/v1/ai/chat` passes tools through too.
-- **Grounding** (`context.go`):
-  - `Tenant.Context` gives a record with its history, the records it references and that reference it, its links, the flows keyed on it (with their last trace lines) and the tasks about it. `Tenant.Search` searches by text across the types the reader may read.
-  - Both are served at `/v1/context/<type>/<id>` and `/v1/search`. They are the agents' tools, and the workspace's global search in batch 2.
-- **Flows:**
-  - An agent step starts a run and waits; the run's result is the answer.
-  - A stopped run takes the step's `Fault`, or else a person does the step.
-  - A step's `Choose` may keep data on the run.
-- **Proof (the plant):**
-  - When the ERP refuses a confirmation, the flow gives `mes.erp-fixer` the goal. The agent reads the planned orders and finishes with a proposal; it takes no action.
-  - A supervisor approves the proposal in the inbox ("Resend WO-4 to the ERP against PO-9002?"), and the flow resends it.
-  - Without a model, or without a proposal, the supervisors correct it as before.
-- **Proven:**
-  - `TestAgents`: runs for a clerk and for a viewer (refused, D2), a stranger refused, ask and resume, the guard, the budget and takeover, a flow's agent step answering and stopping to its fault path, metering, and replay with snapshots and no model call.
-  - `TestERPCorrectionByAgent`, with a scripted model.
-  - The rehearsal, on the local stand-in model: the sink's echo model now calls a read tool, then proposes the first item whose product the goal names.
-- **Not yet (then batch 2, all built below):** the run page and the assistant panel, global search in the workspace, corrections as signals, evaluation by dry re-runs, the helpdesk reference app.
+- **代理声明** (`platform/agent.go`)：
+  - `Manifest.Agents` 包含 `platform.Agent` 列表：名称、标题、系统指令、工具列表、`Budget`（最大步数、Token 数、操作数；默认分别为 10, 40,000 与 3）、`Guard` 安全守卫以及升级目标角色 `To`。
+  - 工具涵盖应用自有的操作、所消费的协议操作 `"<protocol id>#<action>"`，以及数据读取接口 `"read:<name>"`。
+  - 每个代理均默认内置赋予 `context`, `search`, `ask` 与 `finish` 工具，且每个工具调用均强制要求大模型提供一句判定理由。
+  - `NewTenant` 启动时严密校验每个工具是否在应用目录、读取接口或消费协议中真实存在，并强制要求挂载 agent 应用。
+- **Agent 平台应用** (`agent.go`, `agent_engine.go`)：
+  - `agent.run` 记录保存业务目标、所代表的人员（或所归属的流程步骤）、当前状态、执行的每个步骤（工具、入参、理由、结果、Token，以及自 #130 起记录其查阅过的实体记录）、已消耗的预算以及最终结论。
+  - **基于数据源实时动态校验追踪权限，而非仅依赖日志** (#130, 2026-09-27)：宿主强制 agent 应用动态剔除当前查阅者已无权访问的敏感内容 —— 运行期间查阅过的敏感记录、步骤的敏感入参及输出、对受限字段的引用摘录、草稿目标、执行结果 —— 并明确告知查阅者该部分内容已被隐藏（遵循 ADR-0033 的 `Entity.Derived`、`Tenant.narrowed` 以及 `TestAgentTraceScope`）。agent 应用的管理员若未兼具具体业务应用的角色，则只能看到发生过运行，但无法窥探其具体业务内容。
+  - 成员通过 `agent.run.start` 启动自己拥有角色的应用中的代理；业务流引擎直接从 Agent 步骤启动代理运行。
+  - `Tenant.Think` 每秒独立调度执行一次，与其它自有机制作业完全隔离。它在租户互斥锁之外通过 `ai` 应用的提供商调用大模型，并通过 `agent/model` 配置项动态选用匹配的模型。随后将选定的步骤作为 `agent` 类型分录持久化记入日志，并作为单笔 `agent.run.step` 决策应用落地。
+  - 日志重放直接应用该分录结果；若重放过程中意外产生模型调用，宿主测试将严正报错失败。
+- **治理体系：**
+  - 操作以 `agent:<app>.<name>` 凭据提交（带有 `Member.Agent` 属性，因此根据 D6 规则其不可逆外部影响强制挂起等待确认），并将单次运行作为关联标识。
+  - 若代表某人行动，操作首先以该人员身份进行规则探查，确保代理行动绝不超出该人员的权限边界。协议操作严格校验调用方在提供商处的角色权限。
+  - 安全守卫在操作执行前拦截校验，并严格累计操作计数预算。
+  - 一旦步数或 Token 耗尽、大模型调用连续失败 3 次、未配置可用模型或突破每日 Token 配额上限（`agent/daily-tokens`），运行立即强制终止。终止的运行自动将其业务目标转换为人工任务派发给被代表人员或 `To` 指定的升级角色。
+  - `ask` 工具打开带有选项的人工待办任务，运行挂起等待；答复作为自有机制作业送达后平稳唤醒运行。
+- **大模型调用支持原生工具机制：**
+  - OpenAI 协议链路：完整支持 tools, `tool_calls` 以及 tool 角色消息；
+  - Anthropic 适配器（基于官方 Go SDK）：完美支持 `ToolParam`, `ToolUseBlock`，并将工具执行结果作为单轮用户消息打包回传。
+  - `/v1/ai/chat` 同样透传支持工具参数。
+- **业务事实锚定（Grounding）** (`context.go`)：
+  - `Tenant.Context` 提供实体记录及其变更历史、引用的外部记录、引用自身的记录、全局业务链接、以该记录为主键的流程实例（含最近一次追踪日志）以及关联的待办任务。`Tenant.Search` 在查阅者有权访问的实体类型范围内进行全文文本检索。
+  - 二者分别通过 `/v1/context/<type>/<id>` 与 `/v1/search` 端点对外暴露。它们不仅作为代理的核心工具，在第二批次中更直接作为统一工作空间的全局搜索基座。
+- **业务流深度集成：**
+  - 流程中的 Agent 步骤拉起代理运行并进入等待；代理运行的最终结果直接作为步骤答复。
+  - 终止失败的运行自动转向步骤声明的 `Fault` 故障分支，或回退交由人工完成该步骤。
+  - 步骤的 `Choose` 钩子可在运行上下文上保留状态数据。
+- **工厂车间场景落地验证：**
+  - 当 ERP 系统拒绝完工确认时，业务流将目标委派给 `mes.erp-fixer` 代理。代理自主查阅相关 ERP 计划订单并输出更正建议；自身不擅自执行修改操作。
+  - 车间主管在收件箱中收到该建议并进行审批（“是否将 WO-4 工单向 ERP 重新确认关联至 PO-9002 采购订单？”），审批通过后流程自动重新发送。
+  - 在未接入大模型或代理无法输出明确提议时，系统平稳回退至此前的主管人工更正机制。
+- **经过严格验证：**
+  - 宿主核心测试 `TestAgents`：涵盖以业务员及只读查看者身份运行（只读人员被严正拒绝，遵循 D2）、外来陌生人员拦截、提问挂起与唤醒恢复、安全守卫拦截、预算超额截断与任务接管、流程 Agent 步骤答复与故障分支流转、用量计量统计，以及结合快照的零模型调用纯净重放。
+  - `TestERPCorrectionByAgent`，通过脚本化模型完成全链路闭环验证。
+  - 部署演练验证：本地桩服务中的 Echo 桩模型精准调用读取工具，随后自主提议与目标商品名称吻合的首个计划订单项。
+- **暂未构建（已在下文批次 2 中全部落地）：** 运行详情页与助手交互面板、工作空间全局搜索、人工干预纠偏反馈信号、离线重跑客观评测、服务台参考应用。
 
-### Batch 2 (#111)
+### 批次 2 (#111)
 
-- **Drafts (D6):**
-  - A run on someone's behalf no longer acts. An action it chooses is probed as that person, kept as the run's `draft`, and the person is notified; the run waits.
-  - `agent.run.confirm` (only by that person) does it as them, with the run as correlation, changed or not. `agent.run.reject` gives the agent the reason and it goes on.
-  - Runs started by flows still act within their grants. Anyone may stop a run on their behalf.
-- **Signals (D7):**
-  - Each run keeps `signals`: confirmed, changed (with the person's value) and rejected drafts.
-  - A flow's `Ask` may name the agent step it `Reviews`: its first answer accepts the proposal, another corrects it, and an event `On` bypasses it. The plant's approval reviews its agent.
-  - Held effects discarded, and decisions undone, are not signals yet.
-- **What the run saw:** `seen` keeps the record's context when the run starts. The prompt uses it, and so does the evaluation.
-- **Evaluation (D8)** (`agent_eval.go`):
-  - An administrator queues `agent.evaluation.start` with an agent and an enabled candidate model. `Tenant.Evaluate` runs apart from `Think`, every 5 seconds.
-  - It re-runs the 20 latest runs that have signals, dry. The candidate sees what the run saw: its `seen` context, and the answers its reads got when it calls them the same way. Other reads read now. Actions are probed as the agent and the person, never taken; the records having moved on since is not a refusal.
-  - Each case agrees or differs with an accepted decision (its actions, else its result), or repeats or avoids a corrected one; asks and failures are counted. Calls are metered to whoever started it.
-  - The report is journaled as an `agent` entry and becomes the `agent.evaluation` record; replay never calls the model.
-- **Workspace** (`@platform/app` `agents.tsx`):
-  - Every record page offers "Ask the assistant". Its run page shows each step with its rationale, the draft with its fields to change, confirm or reject, and the signals.
-  - Search (`/v1/search`) covers every type the member may read.
-  - Settings → Processes lists the declared agents, every run and the evaluations.
-- **Helpdesk (D10 (2))** (`apps/helpdesk`, composed in the sales solution):
-  - Tickets have a lifecycle: triage (the priority sets when the answer is due), reply, close and escalate.
-  - The service-level flow has two branches:
-    - the triage agent, or the desk when it stops;
-    - a clock that follows the due time, which triage moves, and tells the leads when it passes.
-  - The agent grounds itself through search and the context graph in the CRM's account, opportunities and stays, though the helpdesk knows no CRM.
-  - A reply is mailed as the irreversible effect `helpdesk/reply`, so the agent's waits for a person. Its guard refuses replies promising money.
-  - The CRM declares a sales assistant for the workspace.
-- **Also:**
-  - The plant checks that a planned order fits the order it confirms: same product, enough quantity, no other order's. Releases and corrections are refused otherwise, and the agent's proposal is checked by the same rule. Recorded decisions stand on replay.
-  - The context graph lists each reference of a list of references.
-- **Proven:**
-  - `TestAgents`: drafts confirmed as changed, rejected, only by their person; evaluation verdicts, with nothing done; replay.
-  - `TestERPCorrectionByAgent`: the supervisor's acceptance kept as a signal.
-  - `TestHelpdeskTriage`: grounding in the CRM, the held reply approved and mailed, the guard, the desk's fallback and escalation, and replay.
-  - The rehearsal's helpdesk path on the local stand-in model.
-- **Not yet (batch 3, built as ADR-0022; transcripts are kept in the derived store, not a separate observability store):**
-  - documents with embeddings;
-  - agent memory;
-  - A2A;
-  - transcripts in an observability store;
-  - signals from discarded effects and undone decisions.
+- **草稿机制 (D6)：**
+  - 代表具体个人行动的代理不再直接擅自执行操作。代理选定的操作首先以该人员身份进行探查，作为该次运行的 `draft` 草稿暂存，并向该人员发送通知；运行进入挂起等待。
+  - `agent.run.confirm`（仅限该人员本人有权执行）以该人员真实身份执行该操作（可原样确认或修改后确认），并将运行作为关联追踪。`agent.run.reject` 将驳回原因回传给代理，代理继续向下探索。
+  - 由业务流触发的代理在其授权限额内继续自主执行。任何人员均可随时主动中止代表自己运行的代理。
+- **纠偏反馈信号 (D7)：**
+  - 每次运行忠实记录 `signals` 信号集：包括已确认的草稿、经过人工修改的草稿（记录修改后的值），以及被驳回的草稿。
+  - 业务流的 `Ask` 步骤可显式声明其所审查的 Agent 步骤（`Reviews`）：首个答复选项代表采纳建议，另一选项代表纠偏修改，事件 `On` 允许直接跳过。工厂车间的主管审批正是对其代理的全面复核。
+  - 废弃的挂起外部效果与被撤销的业务决策暂未作为信号接入。
+- **运行视界快照（Seen）：** `seen` 忠实记录代理启动时刻该记录的完整上下文快照。提示词构建与后续客观评测均以此为事实基准。
+- **客观评测评估系统 (D8)** (`agent_eval.go`)：
+  - 管理员通过 `agent.evaluation.start` 针对指定代理与已启用的候选模型排队提交评估任务。`Tenant.Evaluate` 每 5 秒独立执行一次，完全脱离 `Think` 循环。
+  - 评估系统取出带有反馈信号的最近 20 次历史真实运行，进行无痕离线重跑（Dry re-run）。候选模型只能看到历史运行当时所看到的上下文（即当时的 `seen` 快照，且当其以相同方式调用读取接口时，回传当时读取到的历史结果）。其它读取实时执行。操作以代理和被代表人员的双重身份进行规则探查，绝不真正落库；历史记录在现实中已经发生演进不被视为拒绝。
+  - 系统严谨评判候选模型与历史人工认可的决策是一致还是相悖（比对执行的操作，或比对输出结论），评判其是重蹈覆辙还是成功规避了此前人工纠偏的错误；详尽统计提问次数与失败次数。评估产生的 Token 计入启动该评估任务的管理人员。
+  - 评估报告作为 `agent` 类型分录持久化记入日志，并沉淀为 `agent.evaluation` 实体记录；重放绝不调用大模型。
+- **统一工作空间接入** (`@platform/app` 中 `agents.tsx`)：
+  - 所有通用记录详情页均配备“向助手提问”入口。其运行详情页清晰呈现每一步骤及其推理理由、呈现待人工修改/确认/驳回的草稿提议，以及反馈信号。
+  - 全局搜索（`/v1/search`）无缝覆盖当前成员有权读取的全部实体类型。
+  - “系统设置” → “业务流程”集中展示已声明的代理清单、全量历史运行记录以及评测评估报告。
+- **服务台应用 (D10 (2))** (`apps/helpdesk`，在销售解决方案中编排组合)：
+  - 工单具备标准生命周期：分诊 triage（基于优先级自动计算答复截止时间）、回复 reply、关闭 close 以及升级 escalate。
+  - 服务等级协议（SLA）流程包含两个并行分支：
+    - 分诊代理，或在代理停机时回退的人工服务台；
+    - 紧随到期时间的计时时钟，分诊阶段可动态调整该时间，一旦逾期自动通知主管。
+  - 分诊代理通过全局搜索与上下文图谱深度锚定于 CRM 客户账户、销售机会与住宿预订数据，尽管服务台源码层面完全不依赖 CRM。
+  - 回复通过不可逆的外部效果 `helpdesk/reply` 发送邮件，因此代理起草的回复强制挂起等待人工审核。安全守卫严正拦截承诺赔偿退款的回复。
+  - CRM 在工作空间中声明了专属的销售助手。
+- **其它重要优化：**
+  - 工厂车间严格校验完工确认所关联的计划订单是否合法：必须为相同物料、数量充足、且未被其它工单占用。违规的下达与更正均被严正拒绝，且代理的提议接受同一业务规则的严密审查。记入日志的决策在重放时完全稳健成立。
+  - 上下文图谱支持将多引用列表中的每条引用对象逐一完整列出。
+- **经过全面验证：**
+  - `TestAgents`：修改后确认草稿、驳回草稿、权限严格仅限本人裁决；评估结论判定正确且零副作用产生；日志确定性重放验证。
+  - `TestERPCorrectionByAgent`：主管的采纳操作忠实记录为正向反馈信号。
+  - `TestHelpdeskTriage`：深度锚定 CRM 业务事实、挂起的回复经审批后发出邮件、安全守卫拦截违规承诺、人工服务台兜底与逾期升级、全链路确定性重放。
+  - 部署演练验证：本地桩模型顺利跑通服务台全链路流转。
+- **暂未构建（属于批次 3，已作为 ADR-0022 落地；长文本对话保留在派生存储中而非独立的可观测性库）：**
+  - 带有向量嵌入的非结构化文档；
+  - 代理长期记忆；
+  - A2A 跨系统代理通信；
+  - 独立可观测性存储中的对话记录；
+  - 来自被废弃外部效果与被撤销决策的纠偏信号。
 
-### #130 principal revocation slice (2026-09-27)
+### #130 主体凭据吊销切片保障 (2026-09-27)
 
-An on-behalf run no longer turns into app automation when its member disappears. Before sending the next model request and before applying a returned tool step, the host checks that the member still exists and holds the declaring app's role; a failed check records a stopped run. A missing member yields a denying reader for in-flight derived reads. The `runs` read hides old traces when the person has lost the declaring app's role, and the `agents` read hides instructions from apps the person cannot open. `TestAgentPrincipalRevocation` reproduced the former fallback and disclosure before the repair, then passed. This does not yet redact individual old step observations after a source record's scope changes; #130 retains that obligation.
+代表具体人员运行的代理，在该人员身份注销消失后，绝不允许偷偷蜕变为不受控的应用自动化进程。在向大模型发送下一次推理请求之前，以及在应用返回的工具执行步骤之前，宿主强制严密检查该成员是否依然真实存在且仍持有声明应用的角色；一旦检查失败，立即终止运行并记录为中断停机。缺失成员在并发进行中的派生读取中将被赋予一票否决的拒绝查阅者身份。当某人员失去声明应用的角色后，`runs` 读取端点对该人员自动隐藏旧的运行追踪记录，且 `agents` 读取端点向其隐藏其无权打开的应用的系统指令。`TestAgentPrincipalRevocation` 完整复现了修复前曾经存在的权限回退与信息泄露隐患，并在修复后稳定通过。这目前尚未包含在源记录作用域变更后对旧步骤单条观测记录执行细粒度擦除；#130 明确保留该项演进承诺。

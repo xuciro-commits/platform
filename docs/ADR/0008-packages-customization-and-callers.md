@@ -1,17 +1,17 @@
-# ADR-0008: First-party packages assembled at build time; customers customize around industry rules; every caller acts through declared, granted actions
+# ADR-0008: 第一方应用包在构建时静态集成；客户围绕行业规则进行外围定制；所有调用者均通过声明且受权的动作实施交互
 
-> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** D2 and D4 are amended to allow typed customer extensions and independently published definition assets over registered capabilities. The common authorized action boundary remains; arbitrary executable package installation is not implied. This note records the target; the historical decision and As built below remain evidence of their time.
+> **由 [ADR-0031](0031-ai-application-platform.md) 修订，2026-09-27。** D2 与 D4 已被正式扩充修订，以支持在已注册底层能力之上，构建类型化的客户定制扩展与独立发布的软件定义资产。统一受权的动作边界铁律保持绝对不变；平台不承诺支持任意可执行代码包的无约束安装。此注记记录最终目标；下方的历史决策与实际构建依然真实反映其所处时代的技术切片。
 
-**Status:** Accepted (2026-09-24, owner decisions on the external product review of that day, §8; the review is in git history)
+**状态：** 已接受 (2026-09-24，负责人针对当日外部产品架构审查作出的权威决策，§8；该审查记录保存在 git 历史提交中)
 
-**Context.** The product intent review left four questions to the owner: who business packages are for, how deep customers may change them, how far AI may act, and whether packages are installed at runtime.
+**背景上下文。** 外部产品意图审查给平台负责人留下了四个悬而未决的战略性问题：业务应用包究竟面向何种受众、允许客户进行多大深度的定制修改、AI 智能体被允许在多大程度上自主执行操作、以及应用包是否应当支持在运行时动态插拔安装。
 
-**Decision.**
-1. **Audience.** Business packages serve our own teams first; third parties come after the packages have matured in our own use. Until then there is no public package API, marketplace or sandbox.
-2. **Customization depth.** The industry-standard part of a package (hotel operations, shop-floor execution: its objects, rules and actions) is not customer-changeable. Customers may change their front-end and operating logic (which screens, which steps, in which order), add their own data models for analysis, and build their own dashboards. Customer additions read the package's data and call its declared actions; they never change its rules.
-3. **Callers, including AI.** Every caller (a person at a screen, an integration, an AI agent) is a principal with a role and attributes from the tenant's directory (RBAC with attribute conditions such as the lines a principal works on). A package declares its actions once (`platformserver.Action`: schema, target, capability, description, payload fields, roles). A caller asks for its catalog and receives only the actions its role may call, so an agent's context holds only what it can use; every submission is checked again, because seeing a description is not permission. An agent is exposed through a thin adapter (CLI or MCP) over its own catalog; it gets no other path to the domain.
-4. **Assembly.** No runtime installation or independent release. A package enters a deployment when the server is rebuilt with it and restarted; the journal replay (ADR-0007) carries state across. Per-tenant activation is start-up configuration: a deactivated capability's actions leave the catalog and are refused, while its recorded history still replays and resolves.
+**决策。**
+1. **目标受众。** 业务应用包首先全力服务于我们自身的内部团队与 FDE；外部第三方生态必须等待应用包在我们的实际使用中彻底成熟之后再行考虑。在此之前，坚决不开放任何面向公众的通用应用 API、插件市场或动态沙箱环境。
+2. **定制化深度。** 应用包中代表行业标准的坚固核心（如酒店前台运营、车间作业执行：其业务对象、底层规则与核心动作）严禁允许客户随意修改篡改。客户被允许自由定制其前端界面展示与操作编排逻辑（包括使用哪些屏幕视图、具体包含哪些工步、以何种顺序流转流转）、为离线分析建模新增其专属的数据模型、以及自主搭建多维运营仪表盘。客户添加的定制内容通过读取应用包的数据并调用其声明的标准动作进行协同；但客户绝不允许篡改应用包内部的核心业务规则。
+3. **调用者（包括 AI）。** 系统中的每一位调用者（坐在屏幕前的人员、外部集成服务、或是 AI 智能体）均被抽象为具备角色与属性的主体凭据，且统一源自租户的人员目录（采用基于属性的访问控制 ABAC，附带属性约束条件，例如某个主体具体被授权管理哪条生产线）。应用包对其支持的动作进行一次性完整声明（`platformserver.Action`：包含模式定义、目标实体、所需能力集、说明文档、有效负载字段规范、以及允许访问的角色）。调用者向系统请求其动作目录，系统仅向其返回该主体当前角色被允许调用的动作列表，确保注入给 AI 智能体的上下文提示词中仅包含其真正合法可用的工具；在实际发起提交时系统依然会二次强制鉴权，因为仅仅能看到工具说明绝不等于获得了执行权限。AI 智能体通过构建在其专属目录之上的轻量适配器（CLI 命令行或 MCP 服务）向外暴露；严禁为智能体开辟通往业务领域的任何其他后门路径。
+4. **系统装配。** 坚决不搞运行时的动态插件安装或未受控的独立热发布。一个应用包唯有在服务端二进制随其重新编译构建并重启之后，才正式进入该部署环境；日志重放机制 (ADR-0007) 负责无损迁移并继承历史持久化状态。按租户维度的功能激活属于系统启动时的配置行为：被停用的能力其动作将自动从该租户的目录中剥离并拒绝执行，但其历史上已记录的客观事实依然能够被正常重放与查询解析。
 
-**Consequences.** Replay does not re-check authorization: who could do what was decided when the input was accepted, and a later change of roles or capabilities must not make history unreplayable. UIs render their actions from the catalog instead of duplicating role checks. Customer customization (point 2) still needs its own design when the first customer asks for it: where customer front-end logic and analysis models live, and how they survive package upgrades. The tenant custom-fields decision in Platform.md is narrowed by point 2: customer data models are for analysis beside the package, not new fields inside its rules.
+**影响与后果。** 日志重放过程绝不重复校验执行权限：某人在历史当时是否有权执行某项操作，在输入被接受的那一刻已经正式确立，后续对角色或能力权限的调整绝不能导致历史日志无法回放重现。前端 UI 界面直接基于获取到的动态目录渲染其操作按钮与菜单，彻底避免在前端重复堆砌脆弱的角色判断代码。面向客户的高级定制机制（第 2 点）将在首个客户提出明确需求时展开专项架构设计：明确客户前端编排逻辑与分析模型的存储载体，以及它们如何安全跨越应用包的版本升级。Platform.md 中关于租户自定义字段的早期设计由第 2 点予以严格收敛：客户自定义的数据模型主要用于并列在应用包身旁的分析度量场景，绝非直接把字段强行塞入应用包的核心规则内部。
 
-**Revisit when** a third party builds a package (a public API, versioning and isolation become necessary), or restart-to-deploy no longer meets an availability requirement.
+**重新评估时机：** 当第三方合作伙伴需要正式独立构建应用包时（届时公开 API、版本控制机制与强物理沙箱隔离将成为绝对刚需）、或者当依赖重启完成部署的方式无法满足严苛的生产高可用性要求时。

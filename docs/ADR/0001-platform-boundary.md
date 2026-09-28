@@ -1,11 +1,11 @@
-# ADR-0001: The platform is a business platform; AppFoundation is an Apple client layer
+# ADR-0001: 平台是业务平台；AppFoundation 是 Apple 客户端层
 
-**Status:** Accepted (2026-09-24)
+**状态：** 已接受 (2026-09-24)
 
-**Context.** The repository grew from a music app plus `AppFoundation`, which was treated as "the platform". Review showed AppFoundation is an Apple UI toolkit (shell, feature host, dependencies, routing, restoration) that had absorbed music types and re-exported music packages and GRDB, while the ideas that are actually foundational (identity/redirects, claims with provenance, source capabilities, review before commit) lived inside the music code. The owner's goal is a multi-tenant business platform with server and edge runtimes that survives domain change.
+**背景上下文。** 该仓库起初源于一个音乐播放应用外加 `AppFoundation`，当时后者被视作“平台”。代码审查表明，AppFoundation 实际上是一个 Apple UI 工具包（外壳、特性宿主、依赖管理、路由、状态恢复），它吸收了音乐相关的业务类型并二次导出了音乐领域包和 GRDB；而真正属于底层基础设施的理念（身份标识/重定向、带出处的事实断言、源端能力、提交前审查）反而混杂在音乐业务代码内部。负责人的战略目标是构建一个多租户业务平台，具备服务端与边缘端运行时，并能在业务领域演进变更中保持稳健。
 
-**Decision.** The platform is defined in `docs/Platform.md` with a working five-layer model (kernel, capabilities, domain models, workflows/policies, runtime configuration) judged by its change gradient. AppFoundation is a domain-neutral Apple client capability; music code lives in the Music domain. Applications (Music, Hotel, manufacturing) validate the platform through cross-domain comparison and evolution drills; they are not its source of truth. The former Stage 3 plan (DocStudio/HotelDesk as AppFoundation UI demos) is withdrawn.
+**决策。** 平台在 `docs/Platform.md` 中进行形式化定义，确立基于变更梯度的五层工作模型（内核、通用能力、领域模型、工作流/策略、运行时配置）。AppFoundation 定位为领域中立的 Apple 客户端通用能力；音乐业务代码归属于 Music 领域。业务应用（Music、酒店、离线制造）通过跨领域横向对比与业务演进演练来验证平台底座；它们绝非平台的真理来源。原先的阶段 3 规划（将 DocStudio/HotelDesk 作为 AppFoundation 的 UI 演示）予以撤销。
 
-**Consequences.** AppFoundation may not depend on domain packages or storage engines, may not re-export modules, and may not expose domain vocabulary (enforced by `Scripts/verify-architecture.py` in the MSRU repository). Kernel concepts enter only through the promotion rules in Platform.md §4.
+**影响与后果。** AppFoundation 严禁依赖领域业务包或特定存储引擎，严禁二次导出模块，严禁暴露领域业务词汇（由 MSRU 仓库中的 `Scripts/verify-architecture.py` 实施强校验）。内核概念唯有通过 Platform.md §4 中严格的晋升规则方可接纳。
 
-**Revisit when** evolution drills show a layer boundary is wrong, or a second Apple product needs a different client layer shape.
+**重新评估时机：** 当业务演进演练证明分层边界有误时，或出现第二个 Apple 生态产品需要不同形态的客户端分层时。

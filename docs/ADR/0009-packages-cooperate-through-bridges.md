@@ -1,16 +1,16 @@
-# ADR-0009: Business packages cooperate through bridge packages
+# ADR-0009: 业务包通过桥接包进行协作
 
-**Status:** Superseded by ADR-0011 (2026-09-24): apps meet through protocols; a bridge remains only for pair-specific logic, and the crm-hotel bridge was removed in #95.
+**状态：** 已被 ADR-0011 取代 (2026-09-24)：应用之间统一通过协议 (Protocols) 进行解耦协作；桥接仅用于成对专属逻辑，且 CRM 与酒店之间的桥接包已在 #95 中被彻底移除。
 
-**Context.** The product intent review asks that business capabilities combine into complete software without packages depending on each other's internals. The first composition joined CRM and Hotel: a sales rep books stays for a customer's opportunity and sees them on the customer.
+**背景上下文。** 产品意图审查要求各项业务能力必须能够无缝组合成一套完整的企业级业务软件，同时绝对避免各个应用包之间相互依赖对方的内部实现细节。首个业务组合切片需要打通 CRM 与酒店管理：使销售代表能够为一个客户的销售商机预订客房住宿，并在该客户视图下直接查阅关联的预订动态。
 
-**Decision.**
-1. A business package depends on the platform only. It offers declared actions (ADR-0008) and public reads; nothing else of it is visible to other packages.
-2. What cooperation adds belongs to a bridge package (Odoo's bridge modules): it imports the packages it joins, owns the cooperation's own entities and decisions, and reaches each package only through its actions and reads.
-3. A bridge action targets an entity the bridge owns (one authority per data class, K5). When it needs another package's decision, that decision runs as the bridge decision's rule (K4 C10): a refusal refuses the bridge decision with the same code, and the called package keeps its own roles, rules and revisions. The called submission's idempotency key is derived from the bridge's, so a resend never acts twice.
-4. A bridge action appears in a caller's catalog only when every package it calls would accept that caller.
-5. A package's UI is a package too (`@pkg/<name>`): every software that shows its data uses its views and model.
+**决策。**
+1. 业务包仅允许单向依赖底层平台。业务包对外暴露显式声明的标准化动作 (ADR-0008) 以及公开的读取接口；其内部的其他任何细节对其他业务包完全不可见。
+2. 跨业务协作所新增的胶水逻辑归属于专门的**桥接包 (bridge package)**（借鉴 Odoo 的桥接模块思想）：桥接包显式导入其所连接的各个业务包，拥有该协同流程所特有的专属实体与决策逻辑，且仅通过各个业务包公开的动作与读取接口进行受控交互。
+3. 桥接动作的目标实体必须严格归属于桥接包自身（捍卫 K5 中每个数据类别单一权威的铁律）。当桥接动作需要促成另一个业务包做出决策时，该调用作为桥接决策的内部规则同步执行 (K4 C10)：被调用的业务包若产生拒绝，直接以相同的错误代码驳回桥接决策，且被调用的业务包完整保留其自身的角色授权、业务规则与版本号校验。被调用的提交提议其幂等键严格由桥接动作的幂等键确定性推导得出，确保任何网络重发绝不产生二次重复执行。
+4. 唯有当桥接动作所涉及的所有下游业务包均能接纳当前调用者时，该桥接动作才会出现在调用者的动态可用目录中。
+5. 业务包的前端 UI 同样作为独立包交付 (`@pkg/<name>`)：任何需要展示该业务包数据的系统界面，均必须直接复用其标准视图与数据模型。
 
-**Consequences.** Packages stay independent (`verify.sh composition` checks it), and a composed software is its packages plus bridges plus composition code for routing and members (F-21, F-23 until a package host exists). Causation between logs is carried by derived keys and correlation IDs (F-22). Reads across packages are live, so a hotel cancellation shows on the customer at once, but a bridge cannot yet react to another package's decisions (no subscriptions).
+**影响与后果。** 业务包之间始终保持完全解耦独立（由 `verify.sh composition` 静态架构检查强制捍卫），编排后的业务软件本质上就是其业务包、桥接包外加负责路由与成员注入的编排代码的简单叠加（在专属应用宿主落地之前暂时作为 F-21、F-23 摩擦力存在）。跨日志之间的因果关系由推导派生的键与关联 ID 紧密维系 (F-22)。跨包之间的读取查询保持实时直连，因此酒店端发生的退订会立即呈现在 CRM 客户界面上，但在当前阶段桥接包尚无法主动响应另一个业务包的历史决策（缺失事件订阅机制）。
 
-**Revisit when** a bridge must react to another package's decisions (subscriptions over change records), or two bridges need the same cooperation (it may belong in one of the packages).
+**重新评估时机：** 当桥接包必须主动响应另一个业务包的决策事件时（需要基于变更记录建立事件订阅机制）、或者当两个不同的桥接包出现相同的协同逻辑时（表明该能力或许应当直接沉淀进其中某个业务包内部）。

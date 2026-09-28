@@ -1,33 +1,33 @@
-# K5 Authority and sync — semantics (contract v1alpha1)
+# K5 权威归属与同步 — 语义规范 (契约 v1alpha1)
 
-Schema: `proto/platform/kernel/v1alpha1/authority.proto`. Vectors: `vectors/k5-authority.json`. Errors: `errors.md`.
+模式定义：`proto/platform/kernel/v1alpha1/authority.proto`。一致性测试向量：`vectors/k5-authority.json`。错误代码：`errors.md`。
 
-## Model
+## 概念模型
 
-- Every data class of a tenant has one declared **authority**: the only receiver that turns K4 submissions into change records. In v1alpha1 a data class is an entity type.
-- Sync behaviour is derived from the declaration, never chosen per call: an **edge** that is itself the authority applies its submissions at once; any other edge queues them in an **outbox** until the authority answers.
-- Declarations are versioned by `epoch`. Declaring epoch n+1 **migrates** the authority (for example a personal library becoming shared). Change records accepted before the migration stay valid history.
-- Observations and claims (K2) need no authority; they are authoritative at their source.
+- 租户的每个数据类别均具备唯一已声明的**权威 (authority)**：即唯一有权将 K4 提交提议转化为变更记录的接收方。在 v1alpha1 中，一个数据类别对应一个实体类型。
+- 同步行为直接由此声明推导产生，绝不在每次调用时临时选择：本身即为权威的**边缘端 (edge)** 能够立即在本地应用其提交；其他任何边缘端则将其排队放入**发件箱 (outbox)** 中，直至权威返回应答。
+- 权威声明按纪元 `epoch` 进行版本化。声明纪元 n+1 意味着发生了一次**权威迁移 (migration)**（例如个人曲库升级为共享家庭库）。在迁移前已被接受的变更记录始终作为合法历史保留。
+- 观察与断言 (K2) 不需要权威；它们在来源处天然具备权威性。
 
-## Rules
+## 语义规则
 
-| # | Rule | Error when violated |
+| 编号 | 规则描述 | 违规返回错误 |
 |---|---|---|
-| A1 | A declaration has `tenant_id`, `data_class`, `authority_id` and a `kind` other than `UNSPECIFIED`. | `INVALID_ARGUMENT` |
-| A2 | The first declaration of a data class has epoch 1; each later one has the current epoch + 1. | `CONFLICT` |
-| A3 | A receiver accepts a submission only if the target's data class is declared and the submission's `authority` is the current `authority_id`. | `NOT_FOUND` (undeclared), `NOT_AUTHORITY` |
-| A4 | An edge enqueuing a submission records it `CONFIRMED` if the edge is the current authority for its data class, otherwise `PENDING`. An undeclared data class is rejected. | `NOT_FOUND` |
-| A5 | Outbox transitions: `PENDING`→`SENDING` (send); `SENDING`→`CONFIRMED` (confirm), `CONFLICT` (conflict), `REJECTED` (reject), `UNKNOWN` (timeout), `PENDING` (undelivered: the edge knows the request never left it); `UNKNOWN`→`SENDING` (retry, with the same idempotency key and fields). Every other transition is refused: `CONFLICT` and `REJECTED` never retry; `CONFIRMED` is final. A transition for an unknown submission fails. | `INVALID_ARGUMENT`, `NOT_FOUND` |
-| A6 | The outbox is keyed by (`tenant_id`, `idempotency_key`). Enqueuing an identical submission returns the existing state; different fields under the same key are rejected. A user revision is a new submission with a new key. | `IDEMPOTENCY_CONFLICT` |
-| A7 | A rejected operation leaves declarations and the outbox unchanged. | — |
-| A8 | An authority's answer maps to exactly one event: no error → confirm; `CONFLICT` or `IDEMPOTENCY_CONFLICT` → conflict; any other code → reject. No answer is a timeout. | — |
-| A9 | An edge takes its declarations from its tenant's authority and refreshes them after a `NOT_AUTHORITY` answer (the data class migrated, A2). | — |
-| A10 | After a migration (A2) the new authority **adopts** the previous authority's accepted records unchanged — change ID, times, principal and authority — before accepting new submissions. Adopted records keep their recorded order (K4 C6) and idempotency keys, so replays of adopted keys return the adopted record (C4). Records out of recorded order, from another tenant, or repeating a change ID or key are refused and nothing is adopted. | `CONFLICT` |
+| A1 | 权威声明必须包含 `tenant_id`、`data_class`、`authority_id` 以及非 `UNSPECIFIED` 的 `kind`。 | `INVALID_ARGUMENT` |
+| A2 | 某个数据类别的首个声明纪元为 1；其后每一次新声明的纪元必须为当前纪元 + 1。 | `CONFLICT` |
+| A3 | 接收方仅在目标数据类别已被声明且提交中的 `authority` 与当前的 `authority_id` 完全一致时方可接受该提交。 | `NOT_FOUND`（未声明）, `NOT_AUTHORITY` |
+| A4 | 边缘端将提交放入队列时：若边缘端本身即为该数据类别的当前权威，则记录为 `CONFIRMED`；否则记录为 `PENDING`。未声明的数据类别予以拒绝。 | `NOT_FOUND` |
+| A5 | 发件箱状态机迁移规则：`PENDING`→`SENDING`（发送）；`SENDING`→`CONFIRMED`（确认）、`CONFLICT`（业务冲突）、`REJECTED`（拒绝）、`UNKNOWN`（网络超时）、`PENDING`（未发出：边缘端明确知晓请求从未离开本地）；`UNKNOWN`→`SENDING`（使用相同的幂等键与字段发起重试）。其他任何状态迁移一律拒绝：处于 `CONFLICT` 与 `REJECTED` 状态的提交绝不自动重试；`CONFIRMED` 为终态。针对未知提交的状态迁移操作报错失败。 | `INVALID_ARGUMENT`, `NOT_FOUND` |
+| A6 | 发件箱以 (`tenant_id`, `idempotency_key`) 为键。放入完全相同的提交返回既有状态；在同一键下提交相异字段予以拒绝。用户发起的修改修订是一项带有全新幂等键的全新提交。 | `IDEMPOTENCY_CONFLICT` |
+| A7 | 被拒绝的操作不改变权威声明与发件箱的状态。 | — |
+| A8 | 权威的应答严格映射为一个事件：无错误 → confirm；`CONFLICT` 或 `IDEMPOTENCY_CONFLICT` → conflict；其他任何错误代码 → reject。无应答视为网络超时。 | — |
+| A9 | 边缘端从其租户的权威处同步声明，并在收到 `NOT_AUTHORITY` 应答时刷新声明（表明该数据类别已发生权威迁移，A2）。 | — |
+| A10 | 在发生权威迁移 (A2) 后，新权威在接纳新提交之前，必须原样**采纳 (adopt)** 前一任权威历史已接受的记录——包含变更 ID、时间戳、主体凭据与权威归属。被采纳的记录严格保留其原有的记录顺序 (K4 C6) 与幂等键，使采纳键的幂等重放直接返回被采纳记录 (C4)。记录若未按记录时间保序、属于其他租户、或出现重复的变更 ID/幂等键，则予以拒绝且不采纳任何记录。 | `CONFLICT` |
 
-## Notes
+## 补充说明
 
-- `UNKNOWN` means the edge cannot tell whether the authority accepted the submission; the retry is safe because K4 C4 returns the original record.
-- A draft in `CONFLICT` or `REJECTED` is kept for the user; resolving it is a revision (A6).
-- Adoption (A10) is how a personal space becomes shared without rewriting history (drill E2); the tenant ID stays the same, so a personal tenant needs a globally unique ID from the start.
-- Negotiated authority (several parties must agree) has no v1alpha1 rules; it is K5's open case.
-- Queues and results are isolated per tenant (A6); per-principal isolation belongs to K6.
+- 状态 `UNKNOWN` 表示边缘端无法判定权威是否已经接受该提交；发起重试是绝对安全的，因为 K4 C4 会直接返回原已生成的记录。
+- 处于 `CONFLICT` 或 `REJECTED` 的本地草稿为用户完好保留；解决冲突表现为一次修改修订 (A6)。
+- 采纳机制 (A10) 是个人空间在不重写历史的前提下平滑升级为共享空间的核心手段（演练 E2）；租户 ID 保持恒定不变，因此个人租户从一开始就需要全局唯一的全局 ID。
+- 协商权威（多方必须共同达成一致）在 v1alpha1 中尚未定义规则；属于 K5 的开放未决场景。
+- 队列与结果按租户实现强隔离 (A6)；按操作主体的隔离属于 K6。

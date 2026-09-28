@@ -1,86 +1,84 @@
-# ADR-0026: Decisions across apps
+# ADR-0026: 跨应用决策 —— 严格边界与请求-应答机制
 
-**Status:** Accepted (2026-09-26, #119, the gate the owner's testing and the external review set after the return path; Platform.md §10.5). The owner delegated it ("其他的就按照你的想法来"), so D1 to D6 are decided as recommended, D2 amended while building (see As built); the owner may amend any of them. Built: 9a to 9c.
+**状态：** 已采纳 (2026-09-26, #119，业务负责人测试与外部评审在确定返回路径后确立的架构关卡；[Platform.md](../Platform.md) §10.5)。业务负责人全权委托智能代理裁决（“其他的就按照你的想法来”），因此 D1 至 D6 均按推荐方案确立，D2 在构建过程中做出细微优化修订（详见“实际构建”）；业务负责人可随时进行修正。已构建：9a 至 9c。
 
-## Context
+## 背景
 
-What exists:
-- **A decision's rules may call another app.** `Caller.Invoke` (`platform/protocol.go`) submits a protocol action to the tenant's provider from inside the caller's rules (K4 C10). The CRM's `crm.opportunity.book` reserves a stay that way, then links it (`apps/crm/server/crm.go`); the MES's `mes.order.confirm` confirms to the ERP that way and records the answer whatever it is (`apps/mes/server/erp.go` `confirm`). Only the outer submission is journaled; a replay runs its rules again and so calls the provider again (`host.go` `Replay`).
-- **That call is not atomic, and the journal can lose what it did.** The provider accepts and applies at once (`Ledger.Receive`); if the caller's rules then refuse, nothing is journaled, yet the provider's change stays in memory and its event is published. Checked on 2026-09-26 with a consumer that reserves and then refuses: the refusal came back, the journal held no entry, and the reference provider held the booking, which a restart would lose. The CRM's booking refuses after reserving whenever its link fails. This is K4's open case ("atomic groups of changes", Platform.md §4), and it lies across apps, as ADR-0024 found: inside one app a decision's records already stand or fall together.
-- **Flows are sagas** (ADR-0020): a step acts, possibly through a protocol, and records an undo; compensation runs the undos newest first. The CRM's group stay books each room when an opportunity is won and cancels them when the customer releases them or does not answer in two days.
-- **A record's state does not show its process.** A won opportunity whose rooms failed to book says "won"; the flow says why, on a page of its own (#118 gives the flow's owners a task).
-- **What an outside system confirms has no declared entry of its own in most apps.** The MES has `mes.order.answer`, which its flow takes once the ERP adapter shows an answer; the CRM has nothing a person could take when the tenant has no lodging provider (ADR-0025 D3: every app works alone first).
+当前已具备的状态：
+- **单笔决策的规则此前可以直接调用另一个应用：** `Caller.Invoke`（`platform/protocol.go`）允许在调用方的业务规则内部直接向租户绑定的协议提供方提交协议操作（内核 K4 C10 规范）。CRM 的 `crm.opportunity.book` 正是以此方式预订住宿并建立关联链接（`apps/crm/server/crm.go`）；MES 的 `mes.order.confirm` 同样以此方式向 ERP 确认完工实绩，无论结果如何均当场记录（`apps/mes/server/erp.go` 中的 `confirm`）。此时只有外层的提交提议被记入日志；系统重放时重新执行该业务规则，从而导致再次发起跨应用调用（`host.go` 中的 `Replay`）。
+- **上述跨应用直接调用不具备原子性，且日志极易丢失其产生的副作用：** 提供方在接收到调用时当场接受并立即应用生效（`Ledger.Receive`）；若调用方随后在自身后续规则中判定拒绝（Refuse），调用方的操作因被拒绝而**不会**记入日志，然而提供方内部已经产生的状态变更却已永久留在内存中，且对外发布的事件也已泼水难收。2026-09-26 在编写一个“先成功预订住宿随后故意抛出拒绝”的测试用例时精准证实了该漏洞：拒绝错误顺利抛出，日志中没有任何分录，然而参考住宿提供商内部却已经凭空产生了一条真实的预订记录，且该记录在服务重启后将彻底丢失。CRM 的预订操作只要在后续建立关联链接失败时就会触发此类拒绝。这正是内核 K4 悬置的遗留问题（“跨变更记录的原子变更组”，[Platform.md](../Platform.md) §4），正如 [ADR-0024](0024-erp.md) 所指出的，该问题天然横跨在多个应用边界之间：在单个应用内部，单笔决策所修改的多条记录早已天然同生共死。
+- **业务流属于 Saga 补偿模式**（[ADR-0020](0020-flows.md)）：每个步骤执行一个操作（可基于协议），并登记撤销补偿操作；触发补偿时倒序执行撤销操作。CRM 此前在销售机会赢单时通过业务流逐间预订团队房间，并在客户主动取消或 2 天未确认时执行自动退订。
+- **记录的业务状态无法直观反映其背后的流转进程：** 一个最终房间预订失败的销售机会在界面上依然显示为“赢单（won）”；只有到独立的业务流页面才能查明失败原因（#118 为此向流程负责人生成了待办任务）。
+- **外部系统确认的业务实绩在大多数应用中缺乏正规的自包含分录：** MES 拥有 `mes.order.answer`，由其业务流在 ERP 适配器暴露出回执时主动调用；而 CRM 在租户没有挂载住宿提供商时完全缺乏人工线下录入确认的手段（违背了 [ADR-0025](0025-one-shape-for-every-app.md) D3 确立的“每个应用必须首先能够完全独立运行”原则）。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| | In one system | Across systems | Holding before committing |
+| | 单系统内部 | 跨系统集成 | 最终提交前的挂起预留机制 |
 |---|---|---|---|
-| SAP S/4HANA (RAP) | One SAP LUW: the interaction phase changes a transactional buffer, the save sequence (check, adjust numbers, save) writes every business object at once ([RAP transactional model and the SAP LUW](https://help.sap.com/docs/abap-cloud/abap-rap/rap-transactional-model-and-sap-luw?version=s4_hana); [save sequence](https://help.sap.com/docs/abap-cloud/abap-rap/save-sequence-runtime?locale=en-)) | Asynchronous messages after commit (qRFC, events); no distributed commit | Availability check, then a reservation |
-| Salesforce Platform | One Apex transaction; savepoints and rollback | Callouts are not rolled back; Flow and platform events after commit | Omnichannel Inventory: create a reservation with `expirationSeconds`, then fulfill or release it ([Create Reservation](https://help.salesforce.com/s/articleView?id=sf.flow_ref_elements_oci_actions_create_reservation.htm&language=en_US); [Fulfill Reservation](https://help.salesforce.com/s/articleView?id=sf.flow_ref_elements_oci_actions_fulfill_reservation.htm&language=en_US&type=5)) |
-| Odoo | One database transaction per request, across modules | Queued jobs and webhooks after commit | Stock reservation on a picking, undone by unreserve |
-| ServiceNow | Business rules in the record's transaction | Flow Designer and IntegrationHub steps, each its own | Stages on the requested item show where its flow stands |
-| Hospitality (OpenTravel) | — | `OTA_HotelResRQ` with `ResStatus` Initiate, then Commit or Ignore; Hold and Book (search results only: [SynXis](https://developer.synxis.com/ota/channel_connect/create_reservation), [Sabre](https://developer.sabre.com/sabre_hospitality/apis/soap_apis/hotel/channel_connect/create_reservation)) | Group blocks are tentative until a cutoff date, then definite or released |
+| SAP S/4HANA (RAP) | 单一 SAP LUW（逻辑工作单元）：交互阶段修改事务缓冲区，保存序列（校验、调整单据编号、物理持久化）一次性原子写入所有业务对象（[RAP 事务模型与 SAP LUW](https://help.sap.com/docs/abap-cloud/abap-rap/rap-transactional-model-and-sap-luw?version=s4_hana); [保存序列运行时规范](https://help.sap.com/docs/abap-cloud/abap-rap/save-sequence-runtime?locale=en-)） | 提交后通过异步消息通信（qRFC、业务事件）；绝不搞分布式两阶段事务提交 | 可用性检查（ATP），随后执行预留（Reservation） |
+| Salesforce Platform | 单一 Apex 事务；支持保存点（Savepoint）与回滚（Rollback） | 外部 Callout 网络调用不支持事务回滚；基于提交后的 Flow 与平台事件解耦通信 | 全渠道库存（Omnichannel Inventory）：创建带有 `expirationSeconds` 过期时间的预留，随后执行履约或主动释放（[创建预留规范](https://help.salesforce.com/s/articleView?id=sf.flow_ref_elements_oci_actions_create_reservation.htm&language=en_US); [履约预留规范](https://help.salesforce.com/s/articleView?id=sf.flow_ref_elements_oci_actions_fulfill_reservation.htm&language=en_US&type=5)） |
+| Odoo | 每次 HTTP 请求跨模块共享单一数据库事务 | 提交后触发排队任务与 Webhook | 拣货单上的库存预留，可通过取消预留（Unreserve）冲正 |
+| ServiceNow | 记录自身事务内部触发业务规则 | Flow Designer 与 IntegrationHub 步骤各自独立推进 | 请求项（Requested Item）上的阶段字段清晰展示其流程推进到了何处 |
+| 酒店行业 (OpenTravel) | — | `OTA_HotelResRQ` 携带 `ResStatus`：先 Initiate（发起预订），随后 Commit（最终确认）或 Ignore（忽略放弃）；Hold and Book 机制（引自 [SynXis 规范](https://developer.synxis.com/ota/channel_connect/create_reservation), [Sabre 规范](https://developer.sabre.com/sabre_hospitality/apis/soap_apis/hotel/channel_connect/create_reservation)） | 团队用房在截止日期前属于试探性锁房（Tentative），到期后转为确定预订或全量释放 |
 
-The OpenTravel specification itself could not be read here; the row cites implementers' pages. The Salesforce and SAP rows cite their own documentation of the current release.
+当前环境无法直接外网访问 OpenTravel 原始规范，上表引自行业实施商公开文档。Salesforce 与 SAP 行引用其官方最新版技术手册。
 
-They agree:
-1. **One system, one commit; across systems, no distributed commit.** Where the reference platforms share one database, a request is one transaction. Across systems they never hold a transaction open: they commit, then send messages, and a later answer or a compensation settles it.
-2. **What must not be lost is held first, with an expiry, then confirmed or released.** Inventory reservations, hotel holds and group blocks, payment authorisations: the holder decides, the hold expires on its own, the requester confirms or releases.
-3. **The answer comes back to the requester as its own change.** A reservation that failed, a block that was released, an ERP that refused a confirmation: each is a change on the requester's record, not a silent state elsewhere.
+业界核心共识：
+1. **单系统单次提交，跨系统绝不搞分布式事务：** 当参考平台共享同一数据库时，单个请求对应单一本地事务。但一旦跨越系统边界，绝不在网络调用期间悬挂长事务：必须各自本地提交，随后基于消息驱动异步对齐，通过后续回执或 Saga 补偿达成最终一致。
+2. **不可遗失的稀缺资源必须采用“先预留挂起（Hold），再确认（Confirm）或释放（Release）”：** 库存锁定、酒店预留与团队锁房、信用卡预授权皆遵循此道：资源持有方拥有最终裁决权，预留具备自驱过期时效，请求方负责后续确认或放弃。
+3. **外部回执必须作为调用方自身的显式独立变更入库：** 预订失败、配额被释放、ERP 拒绝完工确认 —— 每一项回执均应作为调用方实体记录上的显式状态变更，而非散落在外部系统中隐蔽的孤立状态。
 
-## Our constraints
+## 我们的架构约束
 
-- Replay never calls outside; the journal stays small enough to replay.
-- Rules and models stay typed code (ADR-0008).
-- No new dependency or download without the owner's approval.
-- No domain vocabulary in `contract/`.
-- An app changes only its own data (ADR-0010: authority per data class); outside systems reach an app through its declared actions, inputs and protocols (ADR-0025 D3).
-- The host keeps apps' state in memory, rebuilt from the journal; it has no database transaction to roll back.
+- 系统重放绝不发起外部网络调用；业务日志保持轻巧以确保重放极速。
+- 业务规则与数据模型严格保留在类型化代码中（[ADR-0008](0008-packages-customization-and-callers.md)）。
+- 未经业务负责人批准，严禁引入任何新的外部依赖或下载。
+- 内核 `contract/` 绝不混入具体业务词汇。
+- 每个应用只能直接修改归属于自己的业务数据（[ADR-0010](0010-platform-host-and-apps.md)：按数据类别划分权威归属）；外部系统只能通过应用已声明的公开通道与其交互（[ADR-0025](0025-one-shape-for-every-app.md) D3）。
+- 宿主在内存中维护应用状态并通过日志重放重建，不存在底层的物理数据库事务可供强行回滚。
 
-## Design
+## 设计
 
-1. **One decision changes one app.** A decision's rules read its own records, the host (`Query`, links, units) and other apps through protocols, and may **probe** another app: `Caller.Probe(protocol, action, id, payload)` runs the provider's policy and rules for the member, and records and applies nothing (the mechanism approvals use, ADR-0017 D3). Rules may no longer change another app: `Caller.Invoke` leaves the app API. K4's atomic group across authorities is declined; the spec says so.
-2. **Changes in other apps are a decision's requests.** When the decision is accepted, its apply may add **requests**: `Caller.Request(record, platform.Request{Protocol, Action, Target, Payload, Reply})`. The host runs them after the decision and its events, in order, in the same request: the protocol action is submitted to the bound provider as the member (the provider decides with the member's role there, as before), and its **answer** (`platform.Answer`: what was asked, the outcome, `accepted` or `refused` with the refusal's code, the provider's record) is submitted to the caller's `Reply` action on the decision's target, as the caller app. The provider's decision and the answer are ordinary decisions of their apps and are journaled as submissions right after the requesting one: a replay runs what was recorded and never asks the provider again, so a later change to the provider's roles or rules cannot change what was answered. A request with no provider bound is answered `refused` with `NOT_FOUND`; a probe says `NOT_FOUND` too, so an app can leave the answer to a person instead.
-3. **Holds, then confirm or release, are a protocol's own actions.** A protocol that sells something scarce declares hold, confirm and release: a hold carries an expiry, the provider refuses what it cannot hold, and a provider's job releases an expired hold and says so with the protocol's `released` event. `lodging.booking/1` gains them; the reference provider and the PMS provide them, and `lodgingtest` checks any provider. No platform type for reservations: what is held, and for how long, is the domain's.
-4. **A record's business state follows its process, and is the app's.** The state on the record (a group block "holding", "held", "confirmed", "failed", "released"; a shop order's ERP state) is changed only by the app's own decisions, among them its answers and the steps of its flows. The host never writes an app's record. What the host adds is generic: a flow instance knows the record it is about (`Subject`), and a record's page shows the processes about it, where each stands and why it failed.
-5. **What an outside system may confirm, a person may confirm.** The `Reply` action is an ordinary declared action with roles. When the tenant has no provider, or the provider answers by phone, a member takes it; bound, the host takes it with the provider's answer. One entry, two senders; the app works alone first (ADR-0025 D3).
-6. **The group stay is rebuilt on this.** Planning a group stay holds its rooms until a cutoff date (a request per room, each answered on the opportunity); winning the opportunity confirms them, losing it releases them, and the provider releases them when the cutoff passes. The opportunity shows its block's state and each room's. Booking one stay is a request as well, probed first so that what the provider cannot sell is refused at once. The flow that booked on winning and cancelled on silence is deleted: the hold's expiry is the industry's form of it.
+1. **单笔决策严格仅允许修改单个应用：** 决策的业务规则仅能读取自身记录、查询宿主通用能力（`Query`、跨实体关系、组织部门）并通过协议查询其它应用。业务规则允许**探查（Probe）**另一应用：`Caller.Probe(protocol, action, id, payload)` 仅以当前成员身份试运行提供方的策略与规则，期间不产生任何持久化数据，也不应用任何实质变更（正是审批流探查所复用的机制，[ADR-0017](0017-lifecycles-approvals-tasks.md) D3）。业务规则体内严禁再直接修改另一应用：彻底从应用 API 中剔除 `Caller.Invoke`。内核 K4 悬置的跨权威原子事务组被正式否决并在规范中显式记录。
+2. **对其它应用的变更作为决策的“出站请求（Requests）”异步执行：** 当单笔决策被业务规则正式接受后，其应用（Apply）闭包函数可声明附加的**请求**：`Caller.Request(record, platform.Request{Protocol, Action, Target, Payload, Reply})`。宿主在决策自身及其业务事件完成持久化后，在同一个 HTTP 请求生命周期内按序执行这批请求：以当前成员身份向绑定的协议提供方提交该协议操作（提供方像此前一样基于该成员在提供方的角色进行裁决），其执行得到的**回执**（`platform.Answer`：请求入参摘要、执行结果：`accepted` 成功或附带拒绝码的 `refused` 失败、以及提供方的记录快照）随后以调用方应用的系统身份，提交给调用方在目标记录上声明的 `Reply` 回执操作。提供方的裁决决策与调用方的回执处理作为各自应用的常规独立决策，紧随在原始请求决策之后原样持久化记入日志：系统重放时直接顺序重放日志中已记录的决策，绝不再次发起跨应用跨协议查询，从而确保后续对提供方角色或业务规则的修改绝对无法篡改历史已经达成的回执事实。针对未绑定提供方的请求，宿主自动回复带有 `NOT_FOUND` 错误码的 `refused` 回执；探查同样返回 `NOT_FOUND`，以便业务应用能够优雅回退交由人工线下裁决。
+3. **预留（Hold）、确认（Confirm）与释放（Release）作为协议的一等操作：** 凡是涉及稀缺资源交易的标准协议，均显式声明预留、确认与释放操作：预留请求必须携带到期截止时间（`until`），提供方有权拒绝超额预留，且提供方的后台作业负责自动释放逾期未确认的预留，并通过协议的 `released` 事件广播同步。`lodging.booking/1` 全面扩充上述操作；参考提供商与 PMS 均提供标准实现，并由 `lodgingtest` 进行自动化一致性校验。平台绝不抽象通用的预留服务类型：究竟什么资源属于稀缺资源、预留允许保留多长时间，完全属于具体业务领域的专有语义。
+4. **记录的业务状态严格跟随其流转进程，且完全归属于应用自身：** 记录上的状态字段（例如团队锁房状态：“预留中”、“已预留”、“确认中”、“已确认”、“释放中”、“已释放”、“失败”；或者车间工单在 ERP 端的同步状态）只能由应用自有的决策修改（包含其回执处理决策以及流程步骤决策）。宿主绝不直接越权修改应用的业务记录。宿主仅提供通用层面的能力增强：流程实例明确记录其所关联的主体记录（`Subject`），且通用记录详情页直观展示与该记录相关联的全量业务流程、各流程当前推进到的具体环节以及执行失败的详细归因。
+5. **外部系统能够确认的事项，人工同样有权确认：** `Reply` 回执操作本身属于带有角色控制的普通公开目录操作。当租户未挂载自动化提供商、或外部提供商通过电话人工反馈结果时，被授权的成员可手动执行该操作录入结果；在绑定了提供商时，则由宿主自动携带提供方的回执调用该操作。一套操作入口，兼容双向调用主体；严格践行“每个应用必须首先能够完全独立运行”的铁律（[ADR-0025](0025-one-shape-for-every-app.md) D3）。
+6. **团队用房业务基于本架构彻底重构：** 规划团队用房时，系统为每间客房发起预留请求直至截止日期（针对每间客房发起一个独立的出站请求，回执逐一回记到销售机会上）；销售机会赢单时正式确认预订，丢单时主动释放预留，若超过截止日期则由提供商自动超时释放。销售机会详情页清晰呈现整体锁房状态以及各客房的明细状态。预订单个房间同样采用请求机制，发起前先行探查，确保提供商无法售卖的房型当场被拦截报错。原先“赢单时逐间盲订、两天无响应自动取消”的陈旧业务流被彻底删除：基于有效期的预留机制才是该行业最纯正的标准实践。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | What a protocol call inside a decision's rules means | (a) An atomic group across apps: every change the rules cause stands or falls with the decision (K4's open case), with undo for every store in the host. (b) One decision changes one app: rules read and probe; changes elsewhere are requests after acceptance, answered to the app. (c) Keep calls in rules and journal what a refused decision left behind | **(b)**: it is what every reference platform does across systems, and the host's apps are separate authorities (ADR-0010). The same model then holds for an app in the host and a system outside it. (a) is declined: undo for every store is large, and it stops at the host's edge anyway. (c) is declined: it hides the orphan instead of preventing it |
-| D2 | When and how requests run | (a) After their decision, in the same request, the provider's decision and the answer journaled as submissions. (b) As owned work with retries, each attempt journaled | **(a)**: a provider in the host answers at once, and the member sees the answer in the same request. Retries belong to the outside system's adapter (K9). #120 revisits this when one runtime runs all durable work |
-| D3 | Holds | (a) Hold, confirm and release as a protocol's own actions, the hold with an expiry the provider enforces. (b) A platform reservation service (Salesforce's Omnichannel Inventory) | **(a)**: what is scarce, and for how long, is the domain's. (b) is declined: it would put domain vocabulary in the platform |
-| D4 | A record's state and its process | (a) The app's own field, changed by its decisions (answers, flow steps); the host shows the processes about a record on its page. (b) The host writes a flow's stage into the record. (c) Nothing generic | **(a)**: an app keeps authority over its records. (b) is declined for that reason. (c) leaves the gap the owner found |
-| D5 | What an outside system may confirm | (a) The answer action is an ordinary declared action a member may take. (b) Answers only from the host | **(a)**: every app works alone first (ADR-0025 D3) |
-| D6 | `lodging.booking/1` gains hold, confirm and release | (a) Evolve version 1 in place. (b) Publish version 2 and keep 1 | **(a)**: no provider outside this repository exists yet and development data is disposable; protocols count versions from their first outside provider |
+| D1 | 决策规则体内的跨协议调用本质 | (a) 跨应用的分布式原子事务组：规则引发的任何变更必须同主决策同生共死（K4 悬置方案），宿主必须为每种数据存储提供通用的反向撤销机制。(b) 单笔决策严格仅修改单应用：规则仅限只读与探查；跨应用变更一律作为决策通过后的异步请求，回执异步回传给应用。(c) 保留体内调用，对被拒绝决策所遗留的孤岛脏数据进行补偿记日志 | **(b)**：所有参考平台在跨系统时均采用此道，且宿主内的各应用本身就是相互独立的权威主体（[ADR-0010](0010-platform-host-and-apps.md)）。同一架构模型同时适用于宿主内部应用之间以及与外部异构系统之间。(a) 被明确否决：为每种存储维护通用撤销机制过于庞大，且无论如何也无法延伸到宿主外部系统的边界之外。(c) 被明确否决：这是在掩盖孤岛脏数据而非在根源上杜绝它 |
+| D2 | 请求的调度时机与执行方式 | (a) 在决策通过后、在同一 HTTP 请求生命周期内按序执行，提供方的裁决决策与回执处理作为标准决策持久化入库。(b) 作为带有自动重试的持久化自有机制作业派发，每次尝试分别记日志 | 当前采用 **(a)**：宿主内部的应用能够瞬间就地应答，前端用户在单次请求中即可直接感知最终结果。重试机制应归属于外部系统的对接适配器（内核 K9 规范）。#120 将在统一持久化作业运行时中进一步深化探讨 |
+| D3 | 资源预留机制的抽象层级 | (a) 将预留、确认与释放作为业务协议自有的标准操作，预留携带时效并由提供商自主把控强制过期。(b) 构建平台通用的中心化预留服务（类似 Salesforce 的 Omnichannel Inventory） | **(a)**：究竟什么属于稀缺配额、允许保留多久，属于典型的业务领域特性。(b) 被明确否决：它会把大量业务领域专有名词污染进平台通用层 |
+| D4 | 记录状态与业务流展示 | (a) 应用维护自身字段，仅由自身决策（回执处理、流程步骤）修改；宿主在通用记录页直接展示关联的流程拓扑与流转状态。(b) 由宿主强行将流程所处的阶段硬编码写入业务记录的字段中。(c) 不做任何通用呈现 | **(a)**：应用必须牢牢保有对其自有数据的绝对权威。(b) 因此被坚决否决。(c) 则会导致业务负责人排查出的脱节问题继续留存 |
+| D5 | 外部系统实绩确认的操作设计 | (a) 回执操作作为普通的目录操作暴露，允许被授权的人类成员手动调用执行。(b) 严格仅允许宿主底层自动化调用 | **(a)**：坚决贯彻“每个应用必须首先能够完全独立运行”的平台原则（[ADR-0025](0025-one-shape-for-every-app.md) D3） |
+| D6 | `lodging.booking/1` 演进策略 | (a) 在现有版本 1 上原地平滑演进扩充。(b) 正式发布版本 2 并保持版本 1 双轨运行 | **(a)**：本代码仓库之外目前尚无第三方真实提供商接入，且开发期测试数据允许随时重置；解耦协议从其首个外部独立提供商上线时再严格开始计算破坏性大版本 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 9a | The platform: `Caller.Invoke` leaves the app API; `Caller.Probe` in rules; `Caller.Request` in apply with `platform.Answer` to the caller's reply action; the host runs requests after the decision's events; flows and agents call protocols through the host; a flow instance's `Subject` and a record page's processes; K4's spec records the declined atomic group | Host tests: a consumer that refuses after probing leaves nothing behind; requests are answered in order, refused with `NOT_FOUND` when no provider is bound, and replay (`CheckReplay`) rebuilds the provider's and the caller's records; a record page lists the flow about it |
-| 9b | Lodging holds and the group stay rebuilt (hospitality): hold, confirm, release and `released` in the protocol, the reference provider and the PMS, expiry by the provider's job; `lodgingtest` checks them; the CRM's plan holds, won confirms, lost releases, the answer action for a member, one booking probed and called; the group-stay flow deleted | Hospitality tests for plan, win, lose, expiry, a room the hotel cannot hold, and no provider; replay of each; the test routes walked in the browser |
-| 9c | The MES confirms through a request (manufacturing, a second industry): `mes.order.confirm` requests `production.orders/1` and `mes.order.answer` receives the answer, from the ERP in the host at once, from the ERP adapter once the outside ERP answers | Manufacturing tests with the ERP and with the adapter; the rehearsal (`deploy/local/rehearse.sh`) passes |
+| 9a | 平台基础设施升级：彻底从应用 API 中移除 `Caller.Invoke`；在规则中引入 `Caller.Probe`；在应用阶段引入 `Caller.Request` 并将 `platform.Answer` 回传给调用方的回执操作；宿主在决策业务事件后按序调度请求；流程与代理通过宿主标准调用协议；流程实例标记 `Subject` 且记录详情页展示关联流程；内核 K4 规范正式记录否决跨权威原子组决议 | 宿主单元测试通过：消费方探查后抛出拒绝绝不留下任何状态残留；出站请求按序应答，无提供商时精准返回 `NOT_FOUND`，重放测试（`CheckReplay`）完美重建提供方与调用方的完整记录；记录详情页清晰列出关联的业务流 |
+| 9b | 住宿协议扩充预留能力并重构团队锁房业务（酒旅领域）：协议增加预留（hold）、确认（confirm）、释放（release）操作与 `released` 事件，参考提供商与 PMS 提供完整实现，并通过后台作业自动释放逾期预留；`lodgingtest` 完成一致性校验；CRM 规划时预留、赢单时确认、丢单时释放，配备面向人类的人工录入回执操作，单笔预订先行探查后请求；彻底删除原团队住宿业务流 | 酒旅端自动化测试覆盖规划、赢单、丢单、过期释放、酒店房态不足无法锁房以及未配置提供商等全场景；全场景日志重放通过；浏览器端真实路由走查通过 |
+| 9c | MES 车间完工确认切换为请求机制（制造业，第二个落地行业）：`mes.order.confirm` 发起 `production.orders/1#confirm` 请求，`mes.order.answer` 接收回执，宿主内的 ERP 当场同步应答，外部 ERP 适配器在外部系统返回后异步记录 | 制造业针对原生 ERP 以及外部 ERP 适配器的测试全线通过；本地部署演练脚本（`deploy/local/rehearse.sh`）顺利通过 |
 
-## Consequences
+## 影响
 
-- A decision never leaves another app changed when it is refused; the journal and memory cannot disagree through a protocol call.
-- An app's rules can no longer change another app in the same decision. What one person does in one click may now be two or three decisions (the request, the provider's decision, the answer), all in one request and one replay.
-- Outside systems and apps in the host are reached the same way; an app does not know which one answers.
-- K4's open case is closed by declining it; if an app needs several authorities' changes to stand or fall together, the evidence goes to the work queue.
-- Protocols grow: a protocol for anything scarce carries hold, confirm and release, and its conformance kit checks them.
+- 任何单笔决策在被规则拒绝时，绝对绝不可能在其它应用中留下半点脏数据状态；业务日志与内存状态通过协议交互时绝不产生任何冲突与分歧。
+- 应用的业务规则体内再也无法在同一决策中直接篡改其它应用。用户在界面上的一次点击操作，在底层精准拆解为两到三笔清晰的独立决策（发起请求、提供方裁决、接收回执），全部在同一次网络请求与同一次日志重放中完成闭环。
+- 外部异构系统与宿主内部应用通过完全相同的请求-应答机制进行交互；调用方业务应用甚至不需要感知对方究竟是本地应用还是外部系统。
+- 内核 K4 的悬置争议通过显式否决正式终结闭环；若后续业务场景确实证明需要跨权威的强一致原子组，必须将客观工程证据提交至工作队列（WorkQueue）重新立项。
+- 业务协议标准更加成熟饱满：任何涉及有限稀缺资源的交易协议均标准化配备预留、确认与释放机制，且其测试套件提供了自动化的一致性合规校验。
 
-## As built
+## 实际构建（As built）
 
-- **9a, the platform.** `Caller.Invoke` left the app API; flows and agents call protocols through the host (`Tenant.invoke`). `Caller.Probe` runs a provider's policy and rules without effect (in a replay it only says whether a provider is bound); `Caller.Request` queues a request in a decision's apply; `Tenant.answer` runs it after the decision's events and submits the `platform.Answer` to the reply action (`protocol.go`, `operations.go` `enqueue`). D2 was amended while building: the first build re-derived answers on replay without journaling them, and `requests_test.go` showed a replay accept what the provider's policy had refused live (a replay skips policy), so the provider's decision and the answer are journaled as submissions. `Flow.Subject` names the entity type an instance's key is; `RecordView.Processes` lists the flows about a record and the UI kit's record page shows them with their state and step. Test: `requests_test.go` (probe, a refusal after probing leaves nothing, refused answers, the provider's policy, no provider, `CheckReplay`).
-- **9b, hospitality.** `lodging.booking/1` has hold (with `until`), confirm and release, a booking `status` (held, booked, canceled, released) in place of `canceled`, and the events `confirmed` and `released`; the reference provider and the PMS provide them and release holds past their date by a job; `lodgingtest` checks them. The CRM's opportunity keeps its group block (`block`: holding, held, confirming, confirmed, releasing, released, failed) and every room it asked for (`stays`, each with the provider's last answer); plan probes and requests a hold per room, won confirms, lost releases, a refused room fails the block and releases the others, the provider's `released` event is heard (`CRM.Handle`); with no provider the rooms wait and a person records the answers through `crm.opportunity.answer`. Booking one stay is probed and requested the same way. The group-stay flow is deleted. Tests: `block_test.go` (held and won, refused at once, a block that cannot be held whole, lost, expiry, no provider, `CheckReplay` of both), `hospitality_test.go`, the rehearsal (a block held before the restart and confirmed after it). Walked in the browser: plan, win, a refused plan, a failed block on the record page.
-- **9c, manufacturing.** `mes.order.confirm` requests `production.orders/1#confirm` and `mes.order.answer` takes the answer: the ERP app answers at once; the ERP adapter accepts, the order stays sent, and the confirmation flow records the outside ERP's answer later, as before. The flow declares its subject, so a shop order's page shows it. Tests: `manufacturing_test.go` (confirmed and refused at once, the process on the order's page), `external_test.go`, the rehearsal.
-- **After the owner's testing** (2026-09-27):
-  - Winning an opportunity with rooms held keeps it open while the provider confirms them: won once every room is booked; a refused confirmation fails the block and leaves it open, to be planned again or lost, and lost gives back what is still held (F-40, `TestGroupBlock`). The close probes each confirmation first.
-  - A call about an existing target goes to the provider that knows it: when the bound provider answers NOT_FOUND, the host asks the others, applying nothing (`Tenant.holder`), so a hold made before a rebind is confirmed or released where it was made (F-39, `TestHoldsStayWithTheirProvider`).
-- **The provider's reason crosses** (2026-09-27): an Answer carries the refusal's message (`Answer.Reason`), so the consumer shows why the provider refused ("No suite is free from … to …"), not only its code; the PMS's refusals say why (`TestGroupBlock`).
-
-
+- **9a，平台级核心架构改造：** 彻底从应用 API 中删除了 `Caller.Invoke`；流程与智能代理统一通过宿主受控调用协议（`Tenant.invoke`）。引入 `Caller.Probe`，仅执行提供方的安全策略与业务规则而不产生任何实质副作用（在日志重放时仅用于判断提供方是否已绑定）；引入 `Caller.Request` 在决策的应用执行阶段排队登记出站请求；`Tenant.answer` 在决策的业务事件分发完毕后顺序执行请求，并将得到的 `platform.Answer` 回执自动提交给指定的 `Reply` 回执操作（详见 `protocol.go` 以及 `operations.go` 中的 `enqueue` 逻辑）。针对 D2 做出构建期优化修订：最初版本曾尝试在系统重放时动态派生回执而不持久化记入日志，随后 `requests_test.go` 发现重放会意外接受在实时运行期被提供方策略所拒绝的请求（因为重放阶段会跳过策略校验），因此最终明确将提供方的裁决决策与回执处理决策均作为标准提议严格持久化记入业务日志。`Flow.Subject` 声明实例关联的业务实体类型；`RecordView.Processes` 列出围绕该记录展开的全部流程实例，UI 套件的通用记录详情页直观展示这些流程及其当前停留在哪一步。单元测试：`requests_test.go`（涵盖探查、探查后拒绝零状态残留、拒绝回执处理、提供方策略鉴权、无提供商优雅回退，以及 `CheckReplay` 确定性重放校验）。
+- **9b，酒旅行业（Hospitality）实战落地：** `lodging.booking/1` 协议全面扩充了 hold（带有 `until` 截止时间）、confirm 与 release 操作，引入全新的预订状态 `status`（包含 held 预留中、booked 已确认、canceled 已取消、released 已释放），替代了原先粗糙的 `canceled` 单一状态，并增加了 `confirmed` 与 `released` 协议事件；内置参考提供商与 PMS 全面提供该协议的完整实现，并通过后台定时作业自动将逾期未确认的预留予以物理释放；`lodgingtest` 实现了对上述行为的全自动一致性合规审查。CRM 销售机会统一维护其团队锁房总单（`block` 状态：holding 预留中、held 已预留、confirming 确认中、confirmed 已确认、releasing 释放中、released 已释放、failed 失败），并跟踪所申请的每一间客房（`stays` 列表，分别记录提供方的最新回执）；规划时先行探查房态并为每间房发起预留请求，赢单时发起确认请求，丢单时发起释放请求；一旦某间客房遭遇拒绝，系统自动判定锁房失败并自动将其余已锁定的客房全部反向释放，同时监听提供方的 `released` 事件广播（`CRM.Handle`）；在未挂载提供商的独立运行模式下，客房处于挂起状态，允许业务员通过 `crm.opportunity.answer` 手工录入线下确认结果。预订单个房间同样采用探查后发起请求的机制。原先的团队住宿业务流被彻底删除。自动化测试：`block_test.go`（预留并赢单、当场被拒、部分客房无法锁房导致整体回退、丢单主动释放、超时自动释放、无提供商独立运行，以及上述全链路的 `CheckReplay` 重放测试）、`hospitality_test.go`，以及部署演练验证（验证在服务重启前成功预留并在重启后平稳完成确认）。真实浏览器环境全流程走查：团队规划锁房、赢单确认、规划时被拒拦截、以及记录详情页直观呈现失败归因。
+- **9c，制造行业（Manufacturing）实战落地：** `mes.order.confirm` 向 `production.orders/1#confirm` 发起出站请求，`mes.order.answer` 负责接收最终回执：宿主内部的原生 ERP 应用当场同步返回回执；而外部 ERP 适配器当场接受请求，订单状态保持在 sent（已发送），随后由完工确认流程在外部 ERP 异步返回结果时将其持久化入库，与此前保持无缝衔接。流程明确声明其关联主体，因此车间工单的详情页上能够清晰直观展示该完工确认流程的实时执行拓扑。自动化测试：`manufacturing_test.go`（当场确认与当场拒绝、工单页面直观呈现关联流程）、`external_test.go`，以及本地部署演练全流程顺利通过。
+- **业务负责人亲自走查测试后的深度体验优化** (2026-09-27)：
+  - 销售机会在持有预留客房的情况下赢单时，销售机会保持开启状态直至提供方全部确认成功：只有当所有房间均成功完成预订后才正式转为赢单状态；一旦出现确认被拒绝，整体锁房标记为失败并保持销售机会开启，允许销售重新规划用房或转为丢单，且转为丢单时系统会自动归还并释放当前仍然持有的剩余预留（F-40，`TestGroupBlock`）。销售机会关闭时首先对每间房的确认操作进行前置探查。
+  - 针对已有目标对象的跨协议调用，系统能够智能寻址至认识该对象的原始提供方：当当前绑定的提供商返回 NOT_FOUND 时，宿主自动向其它已挂载的提供商进行无副作用探查（`Tenant.holder`），确保在重新绑定提供商之前建立的旧预留，依然能够准确在当初创建它的原始提供商处完成确认或释放（F-39，`TestHoldsStayWithTheirProvider`）。
+- **穿透透传提供方的真实拒绝动因** (2026-09-27)：出站回执完备携带提供方给出的面向人类的拒绝详细说明（`Answer.Reason`），使消费端应用能够直观向用户呈现提供方拒绝的具体缘由（如“在 … 至 … 期间无可用套房”），而不再仅仅机械展示一个抽象的机器错误码；PMS 的拒绝拦截提示全面支持该特性（`TestGroupBlock`）。

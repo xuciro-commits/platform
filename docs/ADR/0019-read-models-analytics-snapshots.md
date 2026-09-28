@@ -1,126 +1,126 @@
-# ADR-0019: Read models, analytics and snapshots
+# ADR-0019: 读取模型、数据分析与快照机制
 
-> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The target persistence foundation becomes committed results with explicit versioned application and migration. Current code-bound snapshots and input replay remain implementation facts until replaced. This note records the target; the historical decision and As built below remain evidence of their time.
+> **由 [ADR-0031](0031-ai-application-platform.md) 于 2026-09-27 修订。** 目标持久化基座演变为带有显式版本化应用与迁移的“已提交结果”。当前与代码绑定的快照及输入重放机制在被替换前仍作为当前的工程实现事实。此说明记录了目标愿景；下文的历史决策与“实际构建”部分依然保留作为当时的实施证据。
 
-**Status:** Accepted (2026-09-25, #109, the architecture gate of stage 3 in Platform.md §10.5). The owner accepted D1–D7 as recommended, with D5 amended: Apache ECharts 6 is the default renderer, and the platform's contract is a small visualization spec of its own, never ECharts options.
+**状态：** 已采纳 (2026-09-25, #109，[Platform.md](../Platform.md) §10.5 第三阶段的架构关卡)。业务负责人按推荐采纳了 D1–D7，其中 D5 经修订：Apache ECharts 6 作为默认渲染器，平台对外契约是一套小巧自主的可视化规范（visualization spec），绝不直接暴露 ECharts 专有配置项。
 
-## Context
+## 背景
 
-Since ADR-0016 the host knows every app's records. It keeps them in memory, rebuilt at start-up by replaying the whole journal through the apps (ADR-0007). Two things follow:
-- **No analytics.** A member can list and filter records, but cannot group, sum or chart them. Nothing outside the host (a BI tool, a spreadsheet) can query them either.
-- **Start-up grows with history.** Every restart replays every decision the tenant has ever made. Measured today, it is fine at thousands of entries. It will not be fine at millions.
+自 [ADR-0016](0016-application-model.md) 引入应用模型以来，宿主全面掌握了所有应用的实体记录。宿主将其保存在内存中，在服务启动时通过让各应用重放完整日志来重建所有状态（[ADR-0007](0007-input-journal-and-oidc.md)）。随之带来两点局限：
+- **缺乏数据分析能力。** 成员可以查看列表和过滤记录，但无法进行分组聚合、求和汇总或生成图表。宿主外部的任何分析工具（BI 软件、电子表格）也无法查询这些数据。
+- **启动耗时随历史增长。** 每次重启都要重新重放该租户有史以来的全部决策。实测当前在数千条分录规模下运行良好，但在数百万条规模下将难以为继。
 
-Almost all state is now owned by the host:
-- records and their history (ADR-0016);
-- the console, the organisation, relations, owned work, effects, notifications and AI usage;
-- each app's kernel change log (`Ledger.Changes`).
+目前几乎全部状态已由宿主统一持有：
+- 实体记录及其变更历史（[ADR-0016](0016-application-model.md)）；
+- 控制台、组织架构、跨实体关系、自有机制作业、出站效果、通知以及 AI 用量计量；
+- 各应用内核变更日志（`Ledger.Changes`）。
 
-The exceptions are small: the plant's derived downtime, and the reference lodging provider's bookings.
+仅有极少数例外：工厂车间派生的设备停机时间，以及参考住宿提供商自有的预订数据。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| Platform | Aggregation for users | Dashboards | Outside tools | Start-up and history |
+| 平台 | 面向用户的聚合分析 | 仪表盘 | 外部工具集成 | 服务启动与历史数据 |
 |---|---|---|---|---|
-| Odoo | `read_group` on any model, in pivot and graph views with measures, row and column groups, date buckets | Spreadsheet dashboards over pivots and lists | SQL on the database, or the JSON-RPC API | The database is the state |
-| Salesforce | Reports (summary and matrix) over report types | Dashboards of report charts, per role | CRM Analytics, Data Cloud, APIs | The database is the state |
-| ServiceNow | List group-by, reports | Performance Analytics: indicators collected on a schedule, time series, targets | Export, the Table API, ODBC | The database is the state |
-| Palantir Foundry | Contour (table analysis), Quiver (time series and objects) | Workshop and Quiver dashboards | Datasets are the analytic store; pipelines rebuild them | Datasets have transactions and can be rebuilt |
-| Event-sourced systems (EventStoreDB, Axon, Marten) | Projections into query tables | — | The query tables | Snapshots at a stream position, then only later events |
+| Odoo | 任何模型均支持 `read_group`，透视表与图表视图支持度量指标、行列分组、日期分桶 | 基于透视表与列表的电子表格仪表盘 | 直接基于底层数据库执行 SQL，或通过 JSON-RPC API 查询 | 数据库即当前状态 |
+| Salesforce | 基于报表类型的报表（汇总报表与矩阵报表） | 按角色配置的报表图表仪表盘 | CRM Analytics, Data Cloud, API 导出 | 数据库即当前状态 |
+| ServiceNow | 列表按字段分组，报表引擎 | 性能分析（Performance Analytics）：定时采集指标、时间序列、目标达成度 | 数据导出、Table API、ODBC 驱动 | 数据库即当前状态 |
+| Palantir Foundry | Contour（表格分析），Quiver（时间序列与对象分析） | Workshop 与 Quiver 交互式仪表盘 | 数据集即分析存储层；由数据流水线（Pipelines）重新生成 | 数据集具备事务性且支持全量重建 |
+| 事件溯源系统 (EventStoreDB, Axon, Marten) | 向只读查询表生成投影（Projections） | — | 直接查询只读投影表 | 基于特定日志流位置的快照，启动时仅重放后续增量事件 |
 
-Two points carry over:
-- **Users aggregate the same model they list**, with the same filters and the same record security (Odoo's `read_group`, Salesforce's reports on report types).
-- **An event-sourced system starts from a snapshot and projects into tables.** It never gives up the log as the truth. Our journal is exactly that log.
+上述系统体现了两大核心共识：
+- **用户对同一套业务模型进行列表与聚合**，复用完全相同的过滤条件与记录级安全规则（如 Odoo 的 `read_group`、Salesforce 基于报表类型的报表）。
+- **事件溯源系统始于快照，并向表结构生成投影。** 日志作为业务真相的地位永不放弃。我们的输入日志正是这一核心真相日志。
 
-## Design
+## 设计
 
-1. **Aggregation over entity types.**
-   - `GET /v1/records/<type>/aggregate` groups and measures records, like Odoo's `read_group`:
-     - groups: any field, with day, week, month or year buckets for dates;
-     - measures: count, sum, average, minimum, maximum.
-   - It uses the same domain as record lists, and the same scope for the caller (ADR-0016 D4). An aggregate never counts a record the member could not list.
-   - Money sums per currency.
-   - It runs over the host's record store, the same one the lists read.
-2. **Analysis in the kit.**
-   - Charts are described by the platform's visualization spec (D5): a mark (bar, line, area, point, arc, KPI), encodings of fields onto x, y, colour, size and theta with their types (nominal, ordinal, temporal, quantitative), and an aggregate per encoding. The kit compiles the spec to the renderer.
-   - A pivot (rows, columns, measures, drill down to the records) and charts (bar, line, pie, KPI tiles), fed by the aggregate read.
-   - Each list page gains "group by" and a pivot and chart view of the same filter.
-3. **Dashboards.**
-   - Apps ship dashboards per role in typed code (`defineApp`'s `dashboards`, ADR-0018): KPI tiles and charts over aggregates.
-   - A member saves their own views (filter, grouping, pivot layout, chart type) as records of the platform. These are the member's data, not UI configuration, and they open in any workspace.
-4. **Projections into PostgreSQL for tools outside the host.**
-   - After commit, the host projects each entity type into its own table (`<app>_<type>`), with columns derived from the declaration. Child lines go to their own tables, and so do changes (the record history).
-   - A projection is only a copy. It is rebuilt from the records when the declaration changes, so it needs no migrations.
-   - External BI reads it through a read-only database role, per tenant schema. Record security does not reach outside tools, so this access is an administrator's grant, per tenant, like a database export.
-5. **Snapshots.**
-   - The host writes a snapshot of a tenant's host-owned state (records, their history, the kernel change logs and every host component's state) at a journal position, every N entries and at shutdown.
-   - At start-up it loads the newest snapshot that matches the code, then replays only the entries after it.
-   - "Matches the code" means the snapshot names the versions of the apps that wrote it. If any app's version has changed, the host replays everything, as now, then writes a new snapshot. Replaying through the new code stays how apps evolve (ADR-0007).
-   - `CheckReplay` also checks that loading a snapshot and replaying the rest equals a full replay.
-   - State an app keeps outside the host (the plant's derived downtime, the lodging provider's bookings) moves into records or host stores first.
+1. **实体类型上的聚合计算。**
+   - `GET /v1/records/<type>/aggregate` 对实体记录进行分组与度量聚合，类似于 Odoo 的 `read_group`：
+     - 分组：任意字段，日期字段支持按天、周、月、年分桶；
+     - 度量指标：计数（count）、求和（sum）、平均值（avg）、最小值（min）、最大值（max）。
+   - 复用与记录列表完全相同的过滤域，并对调用方应用相同的范围作用域（[ADR-0016](0016-application-model.md) D4）。聚合统计绝不会统计当前成员无权查阅的记录。
+   - 货币字段按币种独立汇总求和。
+   - 计算直接在宿主的记录存储上运行，与列表读取使用同一存储。
+2. **UI 套件中的分析组件。**
+   - 图表由平台的可视化规范描述（D5）：包含标记类型（柱状图、折线图、面积图、散点图、饼弧图、KPI 指标卡），字段到 x、y、颜色、大小、角度的通道编码及其类型（定类 nominal、定序 ordinal、时间 temporal、定量 quantitative），以及每个通道的聚合方式。UI 套件负责将规范编译为底层渲染器选项。
+   - 透视表（行分组、列分组、度量指标、支持下钻穿透到明细记录）与图表（柱图、折线图、饼图、KPI 磁贴），由聚合读取端点驱动数据。
+   - 每个通用列表页面均获得“分组依据”功能，以及基于相同过滤条件的透视表和图表视图。
+3. **仪表盘系统。**
+   - 应用以类型化代码形式为不同角色交付专属仪表盘（[ADR-0018](0018-one-workspace.md) 中 `defineApp` 的 `dashboards`）：展示基于聚合数据的 KPI 磁贴与图表。
+   - 成员可将自定义视图（过滤条件、分组、透视表布局、图表类型）保存为平台记录。这些属于成员的业务数据，而非前端 UI 配置文件，可在任何工作空间中加载打开。
+4. **面向宿主外部工具的 PostgreSQL 投影。**
+   - 在日志提交后，宿主将各个实体类型投影到各自的数据库物理表中（`<app>_<type>`），列结构由实体声明动态派生。子明细行与变更历史（记录历史）分别投影到独立的子表中。
+   - 投影仅仅是只读副本。当实体声明发生变化时，直接从内存记录中重建物理表，因此彻底免除数据库迁移脚本（Migrations）。
+   - 外部 BI 工具通过按租户 schema 划分的只读数据库账号读取数据。由于记录级细粒度安全规则无法直接延伸到外部工具，因此此项访问授权属于租户级的管理员特权，类似于数据库全量导出。
+5. **快照机制。**
+   - 宿主在达到指定日志分录步长以及正常停机时，截取租户在宿主端持有的完整状态（记录、变更历史、内核变更日志以及所有宿主组件状态）在当前日志位置上的快照。
+   - 启动时，宿主加载与当前代码版本匹配的最新快照，并仅重放该快照之后的增量日志分录。
+   - “与代码匹配”意味着快照中记录了生成该快照时的各应用代码版本哈希。一旦检测到任何应用版本发生变更，宿主立即回退到全量重放，重放完毕后重新生成新快照。通过新版本代码重放历史日志，依然是业务应用迭代演进的基石（[ADR-0007](0007-input-journal-and-oidc.md)）。
+   - `CheckReplay` 增加校验逻辑：验证加载快照并重放增量分录所得到的状态，与从零全量重放所得到的状态严格二进制一致。
+   - 应用在宿主之外私自保留的状态（工厂派生的停机记录、住宿提供商的预订）必须首先收敛为标准记录或移入宿主统一存储。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | What users aggregate | (a) Entity types, through one aggregate read with the list's domain and scope. (b) A separate semantic layer of metrics and dimensions (Cube, dbt metrics) | **(a)** now: one model to list, filter and aggregate, like Odoo and Salesforce. A metrics layer can come when cross-type indicators need it |
-| D2 | Where aggregates run | (a) Over the host's record store in memory, where lists run. (b) In PostgreSQL projections | **(a)**: the same code as lists and the same scope, and 100 000 records in tens of milliseconds. Keeping records themselves in the database is stage 7's scale question |
-| D3 | Projections for outside tools | (a) Typed tables per entity type, rebuilt from records, read-only role per tenant. (b) One JSON table for all types. (c) None yet | **(a)**: BI tools read plain columns; rebuilding instead of migrating keeps them simple |
-| D4 | Dashboards | (a) Apps' dashboards in typed code, plus members' saved views as data. (b) Dashboards built by administrators at run time as configuration | **(a)**: AGENTS.md rule 5 (UI in typed code); saved views are a member's data, like Odoo favourites |
-| D5 | Charts | The owner's decision: **a renderer-independent visualization spec** is the contract, informed by the Grammar of Graphics and Vega-Lite (data, a mark, encodings of fields onto channels, with types and aggregates). **Apache ECharts 6** is the default renderer behind it. Apps, dashboards and saved views hold specs, never ECharts options, so the renderer can change without touching them | Decided |
-| D6 | Snapshots | (a) Host-owned state at a journal position, valid for the app versions that wrote it; full replay when they change. (b) Snapshots across versions, with migrations of state | **(a)**: replay through the new code stays the way apps evolve; a snapshot only saves time |
-| D7 | Proof | Hotel: occupancy by room type and month, pipeline by stage and owner. Plant: SFCs completed per line per day, nonconformances by disposition, downtime by reason. A tenant with 1 000 000 journal entries restarts from a snapshot in seconds, and `CheckReplay` agrees | As listed |
+| D1 | 用户聚合分析的对象 | (a) 实体类型，通过带有列表相同过滤域和作用域的统一聚合读取接口。(b) 构建独立的指标与维度语义层（类似 Cube、dbt metrics） | 当前采用 **(a)**：列表、过滤和聚合统一面对同一业务模型，对标 Odoo 和 Salesforce。跨实体类型的指标层可在后续需要复合指标时引入 |
+| D2 | 聚合计算在何处运行 | (a) 直接在宿主内存中的记录存储上运行，与列表读取保持一致。(b) 在 PostgreSQL 物理投影表中运行 | **(a)**：与列表复用相同代码和相同安全作用域，在数十毫秒内即可完成 100,000 条记录的聚合。将记录本身持久化在数据库中是第七阶段探讨的扩展性问题 |
+| D3 | 外部工具的数据投影 | (a) 每个实体类型建立类型化物理表，随记录变化自动重建，按租户提供只读账号。(b) 所有类型统一使用单张 JSON 表。(c) 暂不提供 | **(a)**：BI 分析工具可直接查询标准列；通过全量重建替代版本迁移，极大保持架构简洁 |
+| D4 | 仪表盘构建形态 | (a) 应用通过类型化代码内置交付仪表盘，成员自定义视图作为数据持久化。(b) 由管理员在运行时通过配置动态拼装仪表盘 | **(a)**：严格遵循 AGENTS.md 规则 5（UI 采用类型化代码）；已保存视图属于成员的业务数据，类似于 Odoo 的收藏夹（favourites） |
+| D5 | 可视化图表选型 | 业务负责人决定：以**解耦渲染器的独立可视化规范**作为统一契约，汲取图形语法（Grammar of Graphics）与 Vega-Lite 思想（数据、标记、字段到通道的编码、类型与聚合）。底层默认使用 **Apache ECharts 6** 作为渲染器。应用、仪表盘和已保存视图仅保存规范数据，绝不保存 ECharts 专有配置，从而确保切换渲染引擎时业务层完全零改动 | 已采纳决定 |
+| D6 | 快照跨版本策略 | (a) 快照仅对生成它的应用版本有效；代码版本变更时触发全量重放并重新生成。(b) 快照跨版本通用，辅以状态迁移脚本 | **(a)**：通过新版本代码重放是系统平滑演进的标准路径；快照的核心价值在于加速日常重启与灾备恢复 |
+| D7 | 验证载体（Proof） | 酒店应用：按房型和月份统计入住率、按阶段和责任人统计销售管道。工厂应用：各产线每日完工的 SFC 数量、按处置类型统计不合格品、按原因统计停机时间。拥有 1,000,000 条日志分录的租户在数秒内基于快照完成重启，且 `CheckReplay` 严格一致 | 按照所列计划执行 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Item | Done when |
+| 事项 | 完成标志 |
 |---|---|
-| Aggregate read | Group, bucket and measure on 100 000 records in under 100 ms. Scope applies: a sales member's pipeline counts only their opportunities |
-| Kit: pivot, charts, group by | Every record list can group, pivot and chart its filter; drilling down opens the records |
-| Dashboards and saved views | The Hotel and plant apps ship one dashboard per role; a member saves a view and finds it again |
-| Projections | A BI tool connected to the local PostgreSQL with the read-only role sees the hotel and plant tables; a changed declaration rebuilds them |
-| Snapshots | A million-entry tenant restarts in seconds; changing an app's version forces a full replay; the plant's downtime and the lodging bookings are host-owned |
+| 统一聚合读取端点 | 在 100,000 条记录上执行分组、日期分桶与度量计算耗时低于 100 毫秒。安全作用域严格生效：销售成员的销售管道统计仅计算自己名下的销售机会 |
+| UI 套件：透视表、图表与分组 | 所有通用记录列表均支持对当前过滤结果进行分组、透视分析与图表化；点击单元格支持直接下钻穿透到对应的明细记录 |
+| 仪表盘与已保存视图 | 酒店与工厂应用为各自业务角色内置交付仪表盘；成员可保存个性化视图并随时调出 |
+| PostgreSQL 投影管道 | BI 工具通过只读账号连接本地 PostgreSQL，能够清晰查询到酒店和工厂的业务表；实体声明变更时自动平滑重建数据表 |
+| 快照恢复系统 | 百万级日志分录的租户可在数秒内完成重启；修改应用版本号可正确触发全量重放；工厂停机时间与住宿预订全面纳入宿主集中存储 |
 
-## Consequences
+## 影响
 
-- A list, a pivot and a chart are three views of one query over one model, under one record security.
-- The journal stays the truth. Projections and snapshots are copies that can be thrown away and rebuilt.
-- Stage 7 can move the record store itself into the database behind the same reads, with the projection and snapshot machinery already in place.
+- 列表、透视表与图表演变为针对同一数据模型的同一查询在统一安全规则下的三种展示视图。
+- 输入日志牢不可破地作为绝对业务真相。数据库投影与快照均定位为可随时丢弃并重建的性能副本。
+- 第七阶段可借助已经完备的投影和快照体系，将记录存储本身透明下沉至数据库引擎，而对外暴露的读取契约保持百分之百不变。
 
-## As built (#109)
+## 实际构建（As built, #109）
 
-- **Aggregates:** `GET /v1/aggregates/<type>?group=&measure=&domain=&search=` (`Tenant.Aggregate`).
-  - It is a path of its own, not `/v1/records/<type>/aggregate`, so that no record id is shadowed.
-  - Groups: fields, date buckets (day, ISO week, month, year) on dates, datetimes, the `created` and `changed` stamps, and text that starts with a date (the Hotel's check-in holds hours for hourly types).
-  - Measures: count, sum, avg, min, max. A money measure adds its currency as a group, with amounts in minor units.
-  - The list's domain and search apply, and so does the member's scope. Domains now also accept the stamps, and days for datetimes.
-  - Measured: 100 000 records grouped and measured in about 50 ms.
-- **Visualization spec** (`@platform/ui` `charts/spec.ts`), the contract of D5:
-  - `data` is an entity type (with a domain) or inline values; then a `mark` (bar, line, area, point, arc, kpi) and `encoding` channels (x, y, color, theta, size), each with a field, a measurement type, a time unit and an aggregate.
-  - Over records, the kit derives the host aggregate from the encodings. Inline values are aggregated the same way.
-  - `charts/echarts.ts` alone compiles specs to ECharts 6 options. The renderer is loaded the first time a chart draws (about 190 kB gzipped).
-- **Kit:**
-  - `Chart`, with KPI tiles.
-  - `Pivot`: row and column groups, one measure, totals, and drill-down into the records behind a cell, date buckets as ranges.
-  - Every `RecordList` gains List, Pivot and Chart views of its filter, and "Save view…".
-- **Dashboards:** `defineApp({ dashboards })`, specs per app shown to the members `for` admits: CRM pipeline, Hotel occupancy, plant shop floor.
-- **Saved views:** `work.view` records of the work app (`work.view.save`, `work.view.remove`, owner-only), with the read `views` for every member. They are listed under "Saved views" in the workspace.
-- **Projections:** `-project` rebuilds the schema `tenant_<id>` at start-up.
-  - One table per entity type, with typed columns, and `<table>_changes`, keyed by record and position, because one decision may change a record twice. Changes are flushed each second.
-  - The role `tenant_<id>_reader` may read only its own tenant's schema.
-  - Lines are JSON columns, not child tables: simpler for tools, and nothing yet needs them joined.
-  - A failure leaves the host serving. Backups hold only the journal (the rehearsal excludes `tenant_*`).
-- **Proven:** host tests (aggregates with scope, buckets, money, the 100 000-record timing; saved views; projection columns), kit tests (spec to query, inline aggregation, ECharts options, drill domains), the rehearsal (aggregate within scope; projected rows and history read by the tenant's reader role, refused for another tenant's), and the browser (dashboards, pivot with drill-down, chart, a saved view).
-- **Snapshots** (D6):
-  - **What is saved:** the tenant's host state (records and their history, owned work, connectors, notices, settings, endpoints, effects, bindings, the audit) and each app's own, through `platform.Snapshotter`. For apps whose data is records, that is their ledger alone (`Ledger.Snapshot`, `Ledger.SnapshotWith` for more). The plant keeps its facts, identities, redirects and derived downtime, so it snapshots them and they need not become records first.
-  - **The kernel:** the Go kernel gained restore functions for the change log, the fact log, identity, owned work and connectors (`contract/go/kernel/state.go`). They add no contract rule: a restored log answers as the saved one, and its test says so. Kernel messages are kept in their binary form, several times faster than their JSON form.
-  - **Storage:** the table `snapshots` beside the journal, compressed, the two newest per tenant.
-  - **Which snapshot is used:** one is valid for its code, a hash of the binary and the apps' versions, so any other build replays the whole journal and then saves its own.
-  - **When one is taken:** `-snapshot-every` entries once the journal also grew by a tenth, and at shutdown (SIGTERM). A failed restore stops the host with a hint (`-snapshot-every=0` replays everything).
-  - **Pause:** decisions wait only while the state is captured. Records are immutable once stored, so they are encoded after the lock.
-  - **Checked in every composition:** `CheckReplay` takes a snapshot after no entries, a third, half and all of each test's journal, restores it into a new tenant, and checks that saving again gives the same bytes and that replaying the rest reaches the live state. A deliberately broken restore fails the host tests.
-  - **The rehearsal:** both hosts save a snapshot at shutdown and start from it, and a restored backup starts from its snapshot.
-  - **Measured** (`PLATFORM_SCALE=1000000 go test -run TestSnapshotAtScale` in `solutions/sales`), one million entries: full replay 22 s, restore 5.5 s from a 746 MB snapshot (before compression). While one was taken, a decision waited at most 1 s.
-- **Not yet:**
-  - capturing app state without the tenant's lock, which is what that second of waiting is now;
-  - restoring entity types in parallel;
-  - downtime as records, for a plant chart of downtime by reason.
+- **聚合计算接口：** `GET /v1/aggregates/<type>?group=&measure=&domain=&search=` (`Tenant.Aggregate`)。
+  - 采用独立的路径设计，而非 `/v1/records/<type>/aggregate`，确保不会意外遮蔽任何记录 ID。
+  - 分组能力：支持常规字段、针对日期/时间戳/`created`/`changed` 字段的日期分桶（天、ISO 周、月、年），以及以日期开头的文本字段（酒店签入支持按小时拆分）。
+  - 度量指标：count, sum, avg, min, max。货币度量指标自动将币种作为隐式分组维度，金额以最小货币单位汇总。
+  - 列表的过滤域与搜索条件同样生效，且成员的安全作用域严格生效。过滤域现已支持针对时间戳字段及日期维度的过滤。
+  - **性能实测：** 对 100,000 条记录执行分组与度量聚合耗时约 50 毫秒。
+- **可视化规范**（`@platform/ui` 中 `charts/spec.ts`），落实 D5 契约：
+  - `data` 声明为实体类型（可携带过滤域）或内联静态数据；配置 `mark`（bar, line, area, point, arc, kpi）以及 `encoding` 通道（x, y, color, theta, size），每个通道包含字段、度量类型、时间单位以及聚合函数。
+  - 针对实体记录，UI 套件从通道编码中动态生成宿主聚合查询参数。针对内联数据采用相同的逻辑在前端聚合。
+  - 仅由 `charts/echarts.ts` 负责将可视化规范编译为 ECharts 6 选项。渲染引擎在首次绘制图表时按需懒加载（Gzip 压缩后约 190 kB）。
+- **UI 套件扩展：**
+  - `Chart` 组件，集成 KPI 磁贴展示。
+  - `Pivot` 透视表：行列分组、单一度量、总计汇总、点击单元格下钻穿透到背后的实体记录，日期分桶显示为时间区间。
+  - 每个 `RecordList` 均获得针对当前过滤条件的“列表”、“透视表”与“图表”视图切换能力，并支持“保存视图…”。
+- **仪表盘：** `defineApp({ dashboards })`，应用以类型化代码声明仪表盘规范，并根据 `for` 声明仅对被授权的角色展示：涵盖 CRM 销售管道、酒店入住率、工厂车间现场。
+- **已保存视图：** 作为工作协作应用（`work`）内部的 `work.view` 实体记录存储（`work.view.save`, `work.view.remove`，仅创建人可编辑），并为全体成员提供 `views` 读取端点。在统一工作空间中统一聚合展示于“已保存视图”导航下。
+- **PostgreSQL 物理投影：** 传入 `-project` 参数在服务启动时自动构建 `tenant_<id>` schema。
+  - 每个实体类型生成一张独立物理表，包含强类型数据列，并生成 `<table>_changes` 表，以记录 ID 和分录序号为主键（因为单次决策可能多次更新同一记录）。数据变更每秒批量刷盘一次。
+  - 数据库角色 `tenant_<id>_reader` 严格限制仅能读取属于自己租户的 schema。
+  - 明细子行存储为 JSON 列而非独立从表：简化了外部分析工具的读取，且当前无需跨行进行复杂 JOIN。
+  - 投影异常失败不会影响宿主主服务的正常响应。备份仅需备份输入日志（演练脚本中排除了 `tenant_*`）。
+- **经过严格验证：** 宿主单元测试（涵盖安全作用域的聚合、分桶、货币汇总、100,000 条记录时延基准测试；已保存视图；投影物理列验证）、UI 套件测试（规范转查询、内联聚合、ECharts 配置生成、下钻过滤域验证）、部署演练（作用域内聚合；租户专属读取账号可查询物理行与历史，跨租户查询被严正拒绝）以及浏览器真实环境走通（仪表盘呈现、透视表交互及下钻穿透、图表渲染、保存视图与二次调出）。
+- **快照机制落地** (D6)：
+  - **保存内容：** 租户在宿主端持有的完整状态（实体记录及其历史、自有机制作业、连接器、系统通知、租户配置、端点注册、出站效果、协议绑定、审计日志），以及各应用通过 `platform.Snapshotter` 上报的私有状态。对于数据全为标准记录的应用，其快照仅为其账本自身（`Ledger.Snapshot`，有额外需求时使用 `Ledger.SnapshotWith`）。工厂车间维护的事实日志、身份标识、重定向与派生的停机记录，通过该接口直接快照，无需先行强行改造成标准记录。
+  - **内核支持：** Go 内核在 `contract/go/kernel/state.go` 中增加了针对变更日志、事实日志、身份凭证、自有机制作业与连接器的状态恢复函数。此举完全不增加任何内核契约规则：恢复后的日志对象对外界的响应与原对象完全一致，并通过单元测试证实。内核消息在快照中以二进制格式序列化存储，速度比 JSON 格式快数倍。
+  - **存储形态：** 紧随日志表旁的 `snapshots` 物理表，采用高强度压缩存储，每个租户仅保留最新的两份快照。
+  - **快照匹配判定：** 快照绑定其代码特征，由可执行二进制哈希与各应用版本哈希联合计算生成；当检测到任何代码变更时，宿主自动全量重放全部日志，并在重放成功后写入新的匹配快照。
+  - **快照截取时机：** 达到 `-snapshot-every` 指定分录步长且日志新增超过十分之一时自动触发，并在服务停机（捕获 SIGTERM 信号）时强制执行截取。快照恢复失败会立即终止宿主并提示原因（传入 `-snapshot-every=0` 可绕过快照强制全量重放）。
+  - **停顿开销优化：** 业务决策仅在内存状态抓取的一瞬间短暂等待。记录一旦持久化便不可篡改，因此繁重的编码与压缩计算完全置于锁外执行。
+  - **组合编排测试全面覆盖：** `CheckReplay` 在每个测试日志的零进度、三分之一、二分之一及全量位置分别触发快照截取，将其恢复到全新租户中，并严格验证二次保存的二进制完全一致，且重放后续增量日志所达到的最终状态与实时状态毫无二致。故意制造损坏的快照恢复会直接导致宿主测试失败。
+  - **部署演练保障：** 两个宿主在正常关机时均成功截取快照并在重启时瞬间恢复，从快照恢复的备份同样秒级启动。
+  - **超大规模实测**（在 `solutions/sales` 中执行 `PLATFORM_SCALE=1000000 go test -run TestSnapshotAtScale`），在 1,000,000 条日志分录规模下：全量重放需 22 秒，而从 746 MB 快照（压缩前）恢复仅耗时 5.5 秒。在快照截取期间，在线决策的最大等待时间不超过 1 秒。
+- **暂未构建：**
+  - 在完全不持有租户锁的情况下捕获应用内部状态（目前上述 1 秒的等待正是用于此处的内存抓取）；
+  - 多实体类型并行并发恢复；
+  - 将工厂停机事件彻底建模为标准实体记录，以便绘制按停机原因分类的工厂分析图表。

@@ -1,82 +1,82 @@
-# ADR-0031: Build an AI business application platform with layered builders and one governed lifecycle
+# ADR-0031: 打造具备分层构建器与受控统一生命周期的 AI 业务应用平台
 
-**Status:** Accepted (2026-09-27). The owner corrected the scope to the complete FDE and customer application platform, accepted layered builders, and delegated the next-stage design and canonical documentation. This records that direction; it does not authorize implementation or deployment of every future item. Earlier approvals retained here include a fresh development journal baseline, committed-result recovery, tenant-level isolation and Lean in the first implementation wave.
+**状态：** 已采纳 (2026-09-27)。业务负责人将平台愿景纠偏校准为完整的 FDE 与客户级应用平台，采纳了分层构建器架构，并将下一阶段设计与权威文档体系委托给智能代理。本 ADR 旨在记录该战略方向；它并不代表立即批准实施或部署其中的所有远期规划项。此前已被批准保留的内容包括：全新的开发期日志基线、基于已提交结果的状态恢复、租户级隔离，以及在首个实施浪潮中引入 Lean 形式化验证。
 
-**Priority clarification (owner, 2026-09-27):** the implementing team develops the platform foundation first. Until its main capability gates are substantially met (roughly 80–90% in the owner's phrasing), application work is limited to the smallest cross-industry probes that validate platform behavior. FDE delivery remains the product's eventual beneficiary and acceptance scenario, not this team's near-term work queue. Intent.md and Platform.md §10.6 define how to judge the foundation without claiming a numerical completion percentage.
+**优先级澄清（业务负责人，2026-09-27）：** 研发团队必须优先铸牢平台通用底座。在核心能力关卡实质性达标前（业务负责人指示大致达到 80–90% 水准），业务应用层面的工作严格限制为验证平台行为所需的最小跨行业探针。FDE 现场交付是平台的最终受益者与终验场景，绝非当前研发团队的近期排期队列。[Intent.md](../Intent.md) 与 [Platform.md](../Platform.md) §10.6 明确定义了评判平台底座成熟度的方法，不盲目追求形式上的数字百分比。
 
-## Context
+## 背景
 
-The repository already has a language-neutral kernel, a Go app API, typed entity/action declarations, generated interfaces, processes, agents, integrations, effects and replay checks. Its usable construction path is primarily source code: Go apps composed into hosts and React packages statically imported by the workspace. Customers can use apps and configure values or save views; no complete model/page/AI authoring, preview, publication and upgrade lifecycle was found.
+代码仓库当前已具备语言中立的底层内核、Go 应用 API、强类型的实体/操作声明、自动生成的界面、业务流程、智能代理、外部集成、出站效果以及日志重放校验。然而当前可用的开发构建路径主要局限于编写源码：即在 Go 中编写业务应用挂载至宿主，以及在前端工作空间中静态引入 React 代码包。业务人员只能使用已有应用、调整基础配置或保存个人视图；此前并未构建出覆盖数据模型/页面/AI 的完备自描述、在线预览、灰度发布与版本升级生命周期。
 
-The owner wants FDEs to enter industries and rapidly deliver coherent systems, with applications growing on the platform and customers adapting them. The scope includes frontend quality, business components, semantics, AI construction, backend flexibility, integration, delivery and reuse. Improving kernel mechanics alone would not meet it. The audit and current source pointers are in [Platform.md §10.2](../Platform.md#102-audited-capability-matrix-and-robustness); do not duplicate its statuses here.
+业务负责人期望前线部署工程师（FDE）能够深入各行各业迅速交付高度自洽的业务系统，使应用在平台上自然生长且客户能够自主适配微调。平台覆盖的范畴包含前端质感、业务组件、业务语义、AI 构建、后端灵活性、外部集成、交付部署与资产复用。仅仅打磨底层内核机制远远无法达成这一宏伟愿景。当前的现状审计与活跃源码索引详见 [Platform.md §10.2](../Platform.md#102-能力审计矩阵与健壮性状态)；本 ADR 不再赘述其具体状态。
 
-Primary references and precise adoption boundaries are in [Platform.md §10.1](../Platform.md#101-destination-builders-and-reference-products). The governing examples are:
+核心参考基准与精准采纳边界详见 [Platform.md §10.1](../Platform.md#101-目标构建器与参考标杆产品)。关键指导范例如下：
 
-| Reference | Design consequence |
+| 参考基准 | 架构设计启示 |
 |---|---|
-| Palantir AIP Logic, Evals, Workshop and Ontology SDK | AI logic, operational UI and semantic code access form one construction and operation lifecycle |
-| ServiceNow and Salesforce Platform | Customer composition and code extension need discoverable, governed capability contracts |
-| SAP CAP | Shared semantic definitions and explicit customer extension boundaries |
-| Microsoft solutions / Copilot Studio ALM | Applications and agents need dependencies, environment binding, validation and promotion |
-| Odoo / Frappe and Oracle APEX | Fast metadata reuse must grow into capable page and interaction authoring |
+| Palantir AIP Logic, Evals, Workshop 与 Ontology SDK | AI 逻辑、操作界面与语义化代码访问统一构成闭环的构建与运营生命周期 |
+| ServiceNow 与 Salesforce Platform | 客户侧组合拼装与代码级扩展需要清晰可自发现、受严密治理的能力契约 |
+| SAP CAP | 统一共享的语义定义，以及显式清晰的客户定制扩展边界 |
+| Microsoft 解决方案体系 / Copilot Studio ALM | 应用与智能代理需要依赖管理、环境绑定、拓扑校验与跨环境发布晋阶 |
+| Odoo / Frappe 与 Oracle APEX | 极速元数据复用机制必须稳步演进为强大的页面与交互可视化编排能力 |
 
-These references motivate our architecture; their names do not establish our implementation maturity or commit the year to complete product parity.
+上述标杆激发了我们的架构思考；但提及它们的名字并不代表我们当前已经具备了同等的产品成熟度，也不代表承诺在一年内全盘复刻其全部产品功能。
 
-## Constraints
+## 架构约束
 
-- Kernel concepts stay domain-free and language-neutral; changes begin with semantics, errors and conformance vectors. UI and business objects belong above it.
-- Existing app API, action, flow, agent, effects and UI owners remain the canonical paths. Extend them; do not create a second engine in a builder.
-- Go remains the main backend; TypeScript/React and `@platform/ui` remain the web foundation. Code extensions are typed. Customer definitions do not imply arbitrary tenant code or unrestricted SQL execution.
-- Runtime authorization applies after authoring validation. Preview data, credentials and effects are isolated from production.
-- Current code and recorded historical ADR outcomes remain facts until implementation replaces them. An accepted target is not an available API.
-- The owner permits resetting disposable development data when implementing the new baseline. This is not permission to delete real customer data; future releases must preserve supported history and running work through explicit evolution rules.
+- 内核概念必须保持与业务领域解耦且与自然语言/编程语言中立；任何内核变更必须从语义规范、错误模型与一致性向量出发。前端 UI 与具体业务对象牢固归属于内核之上。
+- 现有的应用 API、目录操作、业务流、智能代理、出站效果与 UI 套件，始终作为唯一的官方权威路径。应持续扩展增强它们，绝不在构建器中另起炉灶建立第二套私有引擎。
+- Go 始终作为主力的后端底座；TypeScript/React 与 `@platform/ui` 始终作为前端基石。代码扩展必须是强类型的。支持客户定义绝不意味着允许租户在生产环境运行任意沙箱代码或执行无限制的自由 SQL。
+- 运行时鉴权校验必须前置于在线构建校验。预览环境的数据、调用凭据与外部影响必须同生产环境实现严格物理隔离。
+- 当前代码与历史上已记录的各 ADR 结论作为客观事实存在，直至被后续具体的工程实现正式替换。被采纳的远期目标不等于当前已就绪可用的 API。
+- 业务负责人允许在落地全新基线时重置可丢弃的本地开发测试数据。但这绝非授权随意删除真实客户的数据；未来的正式版本必须通过显式声明的版本演进规则，严密保护受支持的历史数据与在途运行的作业。
 
-## Design
+## 设计
 
-1. **Layered builders, one model.** Platform developers implement capabilities and extension contracts; FDEs create industry and customer solutions using code, visual tools and AI; delegated customers edit typed model, page, rule, workflow and AI assets. Every construction surface produces or references the same validated definition model. Arbitrary code does not need to round-trip through a visual editor.
-2. **Semantic assets as the common language.** Objects, links, actions, functions, queries, components, workflows and AI assets have stable identities, typed contracts and versions. Definitions reference registered code implementations, not serialized closures. Page bindings, tools and automation use those contracts. Provenance, permissions, time and extension rules are part of the model; renames and upgrades expose dependent assets.
-3. **A builder control plane.** Add draft → validate → isolated preview/evaluate → publish → activate/promote → observe → revise. Publication is an authorized decision that binds an immutable asset set and dependencies. The host owns enforcement and runtime state; the app API owns public contracts; frontend bindings belong to `@platform/app` and visual components to `@platform/ui`. Choose the builder platform package's placement in its implementation ADR without moving domain execution into it.
-4. **Frontend as a mainline product.** Design operating, building and administration surfaces coherently. Shared components include typed properties, slots, events, data and action bindings, state/error behavior and accessibility. Generated CRUD is a starting point; complete role workspaces and business tasks require layouts, master/detail, complex forms and cross-component interaction. Owner visual acceptance, measured tasks and narrow-screen/keyboard checks are gates from the first wave.
-5. **Reusable AI functions and versioned agents.** Add typed AI functions combining deterministic computation, authorized retrieval, model calls, validated outputs and action drafts. Reuse existing agents, flows and effect dispatch for the corresponding execution responsibilities. Supply step debugging, versioned cases and evaluation gates; retain definitions for active runs. Model cost/latency and public explanations are observable. Hidden model reasoning is not an API requirement.
-6. **One permission boundary across derived surfaces.** Authoring, publishing and execution have distinct grants. Record, field and tenant restrictions apply to reads, knowledge, context, references, aggregates, citations, traces and preview. Repair the audited knowledge scope gap before broader AI exposure and reproduce the context-summary concern. Irreversible AI-caused protocol actions and effects need the same governing approval intent; publishing a function cannot bypass it.
-7. **Application and industry release assets.** Separate base package, customer extensions and environment bindings. Publish a closed dependency set with code/runtime versions, tests and migration requirements. Keep secrets out of reusable definitions. Upgrade validates extension compatibility and running instances; rollback requires compatible persisted state, otherwise use forward repair. First-year scope is controlled assets over registered capabilities; arbitrary remote executable plugins and a public marketplace remain outside it.
-8. **Committed-result recovery.** Replace input-only re-decision as the target recovery foundation. An accepted commit atomically records its validated changes, evidence/definition references, generated identities and durable work/effect intents. Apply results with versioned deterministic semantics without current business decision code or outbound calls. Distinguish recovery, projection rebuild, migration, resumed execution and counterfactual evaluation. Specify crash/append/publication boundaries before coding. Keep input and source evidence where needed for audit; storing results does not discard provenance.
-9. **Tenant supervision with precise assumptions.** Define tenant health/quarantine/recovery and bound its workers. A persistence or recovery fault must not silently continue writes or automatically terminate healthy tenants. State what logical isolation covers and what needs process/resource separation. Restart semantics depend on committed state and idempotency; they cannot make an inconsistent write safe.
-10. **Formal assurance throughout the year.** Introduce a pinned Lean development toolchain in the first wave, then model idempotency, revisions/generations, definition validity, commit/recovery, capability composition and selected evolution rules in dependency order. Every proof maps to a spec and executable vectors/property/fault tests, with assumptions and trusted components explicit. This supports rigorous guarantees without claiming universal mathematical completeness.
-11. **Deliver complete increments.** The annual product path is shared definitions and page building, then processes/AI composition, then integration and industry reuse, then dependable repeated delivery. Frontend and reliability proceed together. Broad app depth only enters when needed to prove a platform or delivery guarantee. Do not wait for a full rewrite or all proofs before showing usable applications.
+1. **分层构建器，统一元数据模型：** 平台研发人员在底层实现核心能力与扩展契约；FDE 通过类型化代码、可视化工具与 AI 为各行业及客户打造解决方案；被授权的客户可在受限边界内可视化编辑强类型的模型、页面、规则、工作流与 AI 资产。无论何种构建界面，最终生成或引用的均是这同一套经过严密校验的统一元数据定义。不需要强求让任意后端复杂代码都能无损反向解析回可视化拖拽画布。
+2. **语义资产作为通用语言：** 对象（Objects）、链接（Links）、操作（Actions）、函数（Functions）、查询（Queries）、组件（Components）、工作流（Workflows）与 AI 资产均拥有全局唯一的稳定身份标识、强类型契约与版本号。元数据定义引用的是已预先注册的代码实现，绝非序列化的自由闭包。页面数据绑定、代理工具调用与流程自动化统一消费这套契约。来源出处、权限规则、生效时间与扩展约束均属于模型的固有属性；重命名与版本升级能够自动化分析暴露受影响的下游依赖资产。
+3. **构建器统一控制平面：** 建立 录入草稿 → 静态校验 → 隔离预览/离线评测 → 正式发布 → 激活晋阶 → 监控观测 → 迭代修订 的标准化全生命周期。发布本身是一笔经过严格授权的治理决策，负责将一组不可变的资产包及其依赖锁定绑定。宿主掌控底层强制执行与运行时状态；应用 API 掌控对外公开契约；前端数据绑定归属于 `@platform/app`，可视化组件归属于 `@platform/ui`。在后续具体的实施 ADR 中确立构建器专属平台包的落地点，严禁将业务领域的私有执行逻辑揉杂进去。
+4. **前端质感与体验作为核心主线战役：** 统一协调设计日常作业、可视化构建与系统治理三大界面。共享组件库必须包含强类型属性、插槽、事件系统、数据与操作绑定、状态/异常处理以及无障碍支持。自动生成的简易 CRUD 仅仅是初始起点；支撑完备的角色工作空间与复杂业务流程需要精细的版面布局、主从从属明细视图、复合表单以及深度的跨组件联动交互。业务负责人的视觉走查验收、关键任务耗时度量，以及窄屏响应式和全键盘盲操检查，自首个实施浪潮起即作为硬性验收门槛。
+5. **可复用的类型化 AI 函数与版本化代理：** 引入强类型的 AI 函数，有机融合确定性计算逻辑、受控授权的数据检索、大模型推理调用、强校验的结构化输出以及操作草稿提议。复用现有的代理、业务流与外部效果派发引擎来承担对应的底层执行职责。提供单步断点调试、版本化测试用例集以及客观评测门禁；为运行中的存量实例锁定历史定义。模型 Token 开销/时延以及面向用户的解释说明全程透明可观测。平台 API 不强制要求暴露模型的底层私有思维链（CoT）。
+6. **全链路派生数据暴露面的统一权限闭环：** 在资产构建、发布与运行时执行三个阶段分别施加精细隔离的授权控制。实体记录级、字段级以及租户级的安全访问限制，必须百分之百穿透并生效于各类派生通道 —— 包括数据读取、知识库检索、上下文图谱、实体引用、聚合分析、溯源引用、执行追踪以及在线预览。在面向更广泛的 AI 暴露前，必须优先彻底修复已排查出的知识检索作用域漏洞，并复现修复上下文图谱摘要的潜在安全风险。由 AI 触发的不可逆协议操作与出站效果必须受到同等强度的审批护栏约束；发布一个 AI 函数绝对不允许变相绕过该安全机制。
+7. **应用级与行业级发布包资产：** 严格解耦通用基础包、客户定制扩展包以及环境专用绑定配置。对外发布时必须形成包含代码/运行时版本、测试套件与数据迁移声明的自包含闭合依赖集。严禁在可分发的复用定义中硬编码机密密钥。版本升级必须对扩展兼容性以及在途运行的实例执行前置兼容性校验；版本回滚必须建立在底层持久化状态完全兼容的前提下，否则强制通过前向发布修复补丁进行推进。首年规划范围聚焦于针对已注册能力的受控资产交付；动态加载任意不可信远程可执行插件以及公有应用市场明确不纳入近期范围。
+8. **基于已提交结果的状态恢复（Committed-result recovery）：** 逐步替换原先“仅存输入日志、启动时从零全量重跑决策”的恢复架构，将目标确立为“持久化存储已校验通过的已提交结果”。一笔被正式接受的提交提议，必须原子化持久化记录其校验通过的状态变更集、关联的上下文/定义版本引用、核发的系统身份标识，以及派生的持久化作业/出站效果意图。系统重放恢复时，采用版本化的确定性逻辑直接应用该变更结果，期间绝不重复调用当下的业务决策规则代码，也绝不发起外部调用。清晰区分灾难恢复、投影表重建、数据版本迁移、断点续传以及对抗假设反事实评测五大场景。在编写代码前，必须显式定义宕机断电、日志追加与资产发布的严格事务边界。为满足企业审计需求，完整保留原始输入与关键出处证据；存储执行结果并不等于丢弃出处溯源。
+9. **具备严谨前置假设的租户运行时监管：** 建立租户级健康诊断、故障隔离（Quarantine）与灾备恢复机制，并对其后台并发 Worker 施加严格配额。底层存储或恢复阶段发生的异常故障，绝对不允许无声无息地继续执行脏写，也绝不允许意外连带终止其余健康的邻居租户。清晰界定逻辑隔离的覆盖边界，以及何时必须上升至物理进程/物理资源隔离。服务重启语义强依赖于已提交的持久化状态与幂等性设计；优雅重启绝无法自动修复一笔本身就不一致的违规脏写。
+10. **贯穿全年的形式化验证保障（Formal assurance）：** 在首个实施浪潮中引入版本锁定的 Lean 形式化验证开发工具链，随后按依赖关系逐步对操作幂等性、版本修订/世代递增、元数据定义合法性、提交与恢复机制、能力组合编排以及精选的版本演进规则进行严格的数学建模与机器证明。每一个形式化定理证明均必须严格映射至具体的规范条款，并配备可执行的测试向量、基于属性的自动化测试（Property-based testing）以及故障注入测试，同时将前置假设与可信计算基（TCB）显式公之于众。以此提供极其严密的底层正确性保障，同时不盲目吹嘘不切实际的“绝对全覆盖数学完备性”。
+11. **按完整闭环步步为营交付可用增量：** 年度整体推进路线规划为：统一语义定义与可视化页面编排 → 业务流程与 AI 能力深度组合 → 外部异构集成与跨行业资产复用 → 最终达成高确定性、可流水线复制的交付能力。前端质感与底层可靠性并驾齐驱。宽泛的行业应用深度仅在确实需要验证平台底座或交付保证时才作为探针引入。绝不在没有任何可用完整交互应用呈现前，盲目陷入长达一年的底层重写或纯数学推演泥潭。
 
-## Decisions and prior constraints amended
+## 核心决议与历史约束修订
 
-These choices are settled at the strategic level; the exact public APIs, serialization and migration algorithms still require implementation designs with concrete acceptance criteria.
+上述核心方向已在战略架构层面达成高度一致；具体的公共 API、序列化协议细节以及数据迁移算法，仍需在后续各实施子 ADR 中给出具体设计并制定具象的验收标准。
 
-| Decision | Accepted direction | Prior decision affected |
+| 核心决议项 | 已采纳的战略方向 | 受影响的历史 ADR 决议 |
 |---|---|---|
-| D1 Construction | Typed code extensions plus governed customer composition, including conditional rules | ADR-0004 code-only UI composition; ADR-0008 D2 restrictions; Intent and AGENTS rules |
-| D2 Publishing | Independently versioned definition releases over installed capabilities; explicit code/bundle dependency deployment | ADR-0008 D4 build-time-only assembly; ADR-0010 activation and ADR-0018 UI loading promises |
-| D3 Flow and AI authoring | Editable typed definitions with validation, evaluation and runtime version binding | ADR-0020 code-only flows; ADR-0021 code-declared agents; ADR-0028 model-only-in-code scope |
-| D4 Durability | Accepted-result recovery with a fresh disposable development baseline | ADR-0007 input replay as permanent truth model; ADR-0019 code-coupled snapshots require corresponding implementation change |
-| D5 Reliability | Tenant failure lifecycle and explicit logical/process isolation boundaries | ADR-0007/deployment fail-stop behavior is the current implementation, not the target for all tenants |
-| D6 Assurance | Lean starts with the first implementation wave; expand critical proofs across the year | Adds proof obligations without replacing existing contract vectors or runtime tests |
-| D7 Product scope | Frontend, AI and customer construction plus FDE integration/delivery are the mainline | Supersedes the previous §10 order; historical stage numbers and their As built remain unchanged |
+| D1 构建体系 | 强类型代码扩展 + 受治理的客户侧拼装组合（包含条件分支规则） | 修订 ADR-0004 仅限代码编写 UI 的约束；修订 ADR-0008 D2 限制；对齐 Intent 与 AGENTS 规则 |
+| D2 发布管理 | 运行于已安装能力之上的独立版本化定义发布包；显式声明的代码/依赖包部署 | 修订 ADR-0008 D4 仅限构建期装配的约束；落实 ADR-0010 动态激活与 ADR-0018 前端按需加载的远期承诺 |
+| D3 流程与 AI 编排 | 支持可视化编辑的强类型定义，配备前置校验、离线评测与运行时实例版本锁定 | 修订 ADR-0020 仅限纯代码编写流程；修订 ADR-0021 仅限纯代码声明代理；修订 ADR-0028 模型定义仅限纯代码的范围 |
+| D4 持久化与恢复 | 确立基于已提交结果的状态恢复基准，开发阶段引入全新的干净基线 | 修订 ADR-0007 将输入重放作为唯一业务真相的模型；修订 ADR-0019 与代码强绑定的快照机制（需要配套实施代码改动） |
+| D5 可靠性与容灾 | 规范租户故障全生命周期，显式界定逻辑隔离与进程隔离的技术边界 | 修订 ADR-0007 及现有部署中一人生病全家停机（Fail-stop）的现状，明确其仅作为当前实现事实，而非面向多租户的目标愿景 |
+| D6 形式化保障 | 在首个实施浪潮中引入 Lean 工具链；在一年内稳步扩展关键证明范围 | 增加形式化机器证明的研发职责，同时不替代现有的内核契约测试向量或运行时自动化测试 |
+| D7 产品主线范畴 | 前端质感、AI 能力与客户侧构建，叠加 FDE 的集成/交付能力作为绝对核心主线 | 替代此前 Platform.md §10 的旧章节排期；历史阶段代号及其“实际构建”记录作为历史事实完好保留 |
 
-Preserved: one capability owner, canonical actions, server authorization, independent apps, explicit protocols, source/effect provenance, recovery without external calls, and domain-free kernel semantics. Earlier ADRs retain their historical rationale and implementation record with amendment links to this decision.
+牢固保留的架构基石：单一能力权威属主、标准目录操作、服务端强制鉴权、应用间严格解耦、显式清晰的解耦协议、源头/外部效果完整溯源追溯、系统恢复绝不依赖外部网络调用，以及与业务领域解耦的极简内核语义。早期各 ADR 完整保留其历史论证背景与工程实施记录，并通过前向修订超链接指向本决定。
 
-## Build sequence and acceptance
+## 构建序列与验收标准
 
-The one-year outcomes, timing assumptions and product gates have one home in [Platform.md §10.5–10.6](../Platform.md#105-one-year-main-and-supporting-tracks). The executable batches, priorities and unresolved findings have one home in [WorkQueue.md](../WorkQueue.md). [Testing.md](../Testing.md) separates future acceptance methods from already walked routes.
+本平台为期一年的里程碑目标、关键时间假设与产品关卡统一收敛沉淀于 [Platform.md §10.5–10.6](../Platform.md#105-一年规划主线与支撑支线)。可执行的具体工程批次、优先级排序以及尚未解决的排查发现统一收敛沉淀于 [WorkQueue.md](../WorkQueue.md)。[Testing.md](../Testing.md) 严格将未来的验收方案同历史上已实际走通的测试路由隔离开来。
 
-Each implementation slice must identify its canonical owner, dependency, typed contract and failure semantics; deliver a builder/operator-visible outcome; specify and verify affected invariants; explain transition/removal of old paths; and update its As built and the current capability map. Checks match what changed: contract vectors for kernel changes, `CheckReplay`/its result-recovery successor and crash tests for durable changes, permission closure for new reads, and actual browser/user tasks for frontend or builder changes. Use two industry probes before claiming a cross-industry capability; report controlled trials honestly.
+每一个具体实施切片必须做到：明确其唯一的权威属主、依赖项、强类型契约与故障异常语义；交付面向构建者或业务人员直观可见的确定性产出；显式定义并验证所涉及的不变量；详尽说明对旧实现路径的平滑过渡或彻底废除策略；并同步更新其对应 ADR 的“实际构建”部分以及最新的能力全景图。验证机制必须与变更范畴严格匹配：内核变更运行契约测试向量；持久化变更运行 `CheckReplay`（或其基于结果恢复的下一代演进）与宕机故障注入测试；新增读取通道必须完成严格的权限闭环审查；前端或构建器界面的改动必须在真实浏览器中由人类用户完成端到端任务走查。在宣称具备跨行业通用能力前，必须至少在两个不同行业的探针中完成实证；严谨客观报告受控环境下的实测数据，绝不浮夸造假。
 
-## Consequences
+## 影响
 
-- The product expands from source-code application development into governed customer construction. This increases responsibility for definition languages, editing tools, compatibility and release quality.
-- Frontend and delivery outcomes constrain backend abstractions from the start. A new primitive or proof alone cannot close a product wave.
-- Typed definitions need bounded expressiveness. Insufficient expressiveness creates capability escapes; unrestricted scripts create a second platform. Code extension contracts address complex cases.
-- Result-based recovery is a substantial change to commit and runtime boundaries. Preserve tested capabilities and implement with explicit crash semantics; resetting old development logs does not remove future migration obligations.
-- A year's scope is constrained by staffing and user access. Reduce breadth before sacrificing the complete construction/operation loop or accepted safety guarantees.
+- 平台的产品范畴从“纯源码驱动的应用开发框架”，全面升维为“受严密治理的客户侧全生命周期应用构建平台”。这极大增加了团队在定义语言设计、可视化编辑工具、向下兼容性以及发布质量维度的工程责任。
+- 前端交互质感与交付部署实效自首日起即对后端抽象构成硬性约束。任何孤立的底层新原语或抽象数学证明，单独都绝对不足以宣布完成一个产品浪潮的交付。
+- 强类型定义必须具备受控的表达力边界。表达力不足会导致开发者不得不开辟架构逃生通道（Capability escapes）；而无限制的脚本支持又会退化为失控的第二套低质平台。强类型代码扩展契约正是化解极端复杂业务场景的标准解法。
+- 转向基于结果的状态恢复，是对底层提交机制与运行时边界的一次重大架构变革。必须在严格保护已验证能力的前提下以显式的崩溃语义稳步实施；在开发阶段重置旧测试日志绝不意味着可以逃避未来的生产数据版本迁移职责。
+- 年度的工程广度严格受限于实际研发人力与客户现场准入条件。宁可主动精简行业广度，也绝不牺牲“构建-发布-运营”的完整闭环，绝不在既定的核心安全护栏上做妥协让步。
 
-## As built
+## 实际构建（As built）
 
-2026-09-27: **documentation and direction only**. Intent, Platform architecture/audit/annual gates, WorkQueue, authoring/testing guidance and coding-agent procedures were reconciled. Prior ADRs carry amendment pointers. No runtime behavior, kernel contract, database, frontend implementation, dependency or deployment was changed; Lean and all new builder capabilities remain to be implemented. Existing runtime evidence is recorded in Platform.md §10.2, not reclassified as proof of this target.
+2026-09-27：**仅限架构文档与战略方向的确立**。[Intent.md](../Intent.md)、[Platform.md](../Platform.md)（包含核心架构图、审计矩阵、年度产品关卡）、[WorkQueue.md](../WorkQueue.md)、应用开发指南、测试指南以及代码辅助代理技能进行了全方位的系统性校准与对齐。早期各 ADR 均补充了前向修订指引。底层的运行时行为、内核契约、数据库物理结构、前端实现、外部依赖以及生产部署在此期间完全保持不变；Lean 工具链与所有规划中的全新构建器能力仍有待后续具体工程批次落地构建。现有的运行时测试证据完备记录于 Platform.md §10.2 中，绝不擅自将其重新归类或冒充为本目标愿景的已实现证据。
 
-Documentation verification: local Markdown targets and whitespace checks passed; changed skill YAML/metadata parsed successfully with the system Ruby YAML parser. The Python skill validator could not start because PyYAML is absent; no dependency was installed. Independent review reconciled current submission ordering, knowledge permissions and test guarantees with code. No new UI route or deployment rehearsal was executed for this documentation change.
+文档验证记录：本地 Markdown 链接目标与空白符排版检查全面通过；修改后的技能 YAML 元数据通过系统 Ruby YAML 解析器成功解析。Python 技能验证脚本因环境中缺失 PyYAML 依赖而未能启动；未擅自安装任何外部依赖。独立审计严密核对了当前的提议提交时序、知识库权限边界以及测试承诺与底层源码的一致性。本次纯文档架构校准不执行新的浏览器端 UI 路由走查或本地容器部署演练。

@@ -1,135 +1,133 @@
-# ADR-0018: One workspace — sign in once, open every app you may use
+# ADR-0018: 统一工作空间 —— 单点登录，打开所有有权使用的应用
 
-> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The workspace now also supports the planned layered builder product. Published page definitions compose registered components; runtime loading of arbitrary executable UI bundles is not implied. This note records the target; the historical decision and As built below remain evidence of their time.
+> **由 [ADR-0031](0031-ai-application-platform.md) 于 2026-09-27 修订。** 工作空间现在还支持计划中的分层应用构建器产品。已发布的页面定义负责组合已注册的组件；这并不意味着在运行时加载任意可执行的 UI 代码包。此说明记录了目标愿景；下文的历史决策与“实际构建”部分依然保留作为当时的实施证据。
 
-**Status:** Accepted (2026-09-25, #108). The owner raised it: a platform's apps should open like programs on an operating system, not as separate sites that each sign in. The owner accepted D1–D8 as recommended. What is built is under "As built".
+**状态：** 已采纳 (2026-09-25, #108)。由业务负责人提出：平台级应用应当像操作系统上的程序一样打开，而非作为各自需要独立登录的分散站点存在。业务负责人按推荐采纳了 D1–D8。实际构建内容见“实际构建（As built）”。
 
-## Context
+## 背景
 
-The server side is already a platform:
-- the host authenticates every request once, and resolves the caller to a member of a tenant through the tenant's directory (ADR-0007, ADR-0010);
-- apps receive a `platform.Member` and never see a token;
-- a member's roles are per app, and each tenant runs the apps it has (ADR-0010).
+服务端已经具备了成熟的平台化能力：
+- 宿主对每个请求统一认证一次，并通过租户目录将调用方解析为该租户的具体成员（[ADR-0007](0007-input-journal-and-oidc.md), [ADR-0010](0010-platform-host-and-apps.md)）；
+- 业务应用接收解析后的 `platform.Member`，自身永远接触不到认证 Token；
+- 成员的角色按应用独立划分，每个租户仅运行其实际挂载的应用（[ADR-0010](0010-platform-host-and-apps.md)）。
 
-The client side is not. There are four web products, each a separate site:
-- `apps/sales` (CRM, Hotel and HR, composed for the sales solution);
-- `apps/mes`;
-- `apps/settings`;
-- `apps/hotel-desk` (the Tauri desk client).
+但客户端此前并非如此。此前存在四个独立的 Web 产品，各自表现为独立的网站站点：
+- `apps/sales`（CRM、酒店与 HR，针对销售解决方案进行组合）；
+- `apps/mes`；
+- `apps/settings`；
+- `apps/hotel-desk`（Tauri 桌面工作台客户端）。
 
-Each has its own port, its own OIDC client (`sales-web`, `mes-web`, `platform-settings`) and its own token in its own origin's storage. Going from the CRM to Settings means another site and another sign-in round trip. The identity provider's session spares the password, but not the redirect or a second session. Navigation is written per product, and ADR-0010 deferred the app launcher (#93).
+每个站点拥有独立的端口、独立的 OIDC 客户端（`sales-web`, `mes-web`, `platform-settings`），并在各自域名的本地存储中维护独立的 Token。从 CRM 跳转到系统设置意味着切换到另一个网站并经历一整轮重新登录。虽然身份提供商的现有会话可以省去重复输入密码，但无法免去重定向往返或创建第二个会话。各产品的导航也是分别独立编写的，[ADR-0010](0010-platform-host-and-apps.md) 当时推迟了应用启动器的开发（#93）。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| Platform | One sign-in | Which apps a user sees | Moving between apps |
+| 平台 | 单点登录 | 用户能看到哪些应用 | 应用间跳转体验 |
 |---|---|---|---|
-| Odoo | One web client and one session per database | The home menu shows the installed modules whose menus the user's groups allow | Menus of every app in one client; a reference opens its form, whatever module owns it |
-| Salesforce | One session per org | The App Launcher shows apps granted by profile or permission set; an app is a named set of tabs and utilities | Switching apps keeps the session and open console tabs; a record link opens that object's page |
-| ServiceNow | One session per instance | The All menu and workspaces, filtered by roles | Records open in any workspace; one inbox and notifications |
-| SAP Fiori Launchpad | Single sign-on to the launchpad | Tiles from catalogs assigned through business roles | Intent-based navigation (semantic object and action), so one app opens another's object without knowing its URL |
-| Power Platform | One environment session | Model-driven apps shared through security roles; an app switcher | Records open in whichever app the user is in |
-| Oracle Fusion | One session | The Navigator and Springboard, by role | Deep links by object |
-| Palantir Foundry | One platform session | Applications and Workshop apps the user has permission on, from one launcher | Objects open in Object Explorer or the app registered for the type |
+| Odoo | 每个数据库拥有统一的 Web 客户端与单一会话 | 主菜单展示当前用户所属组被允许访问的已安装模块菜单 | 单一客户端中包含所有应用的菜单；引用字段可直接打开其对应表单，无论属于哪个模块 |
+| Salesforce | 每个组织（Org）拥有单一会话 | 应用启动器（App Launcher）展示由简档或权限集授予的应用；应用是标签页与实用工具的具名集合 | 切换应用保持原有会话与已打开的控制台标签页；记录链接直接打开对应对象的详情页 |
+| ServiceNow | 每个实例拥有单一会话 | 全部菜单（All）与工作空间，按角色过滤呈现 | 记录可在任何工作空间中直接打开；统一的收件箱与通知系统 |
+| SAP Fiori Launchpad | 单点登录进入 Launchpad 启动台 | 基于业务角色分配的目录磁贴（Tiles） | 基于意图的导航（语义化对象与操作），使一个应用可以在不知道 URL 的情况下打开另一应用的对象 |
+| Power Platform | 单一环境会话 | 通过安全角色共享的模型驱动应用；应用切换器 | 记录在用户当前所处的任意应用中直接打开 |
+| Oracle Fusion | 单一会话 | 导航器与 Springboard，按角色展示 | 按对象的深度链接（Deep links） |
+| Palantir Foundry | 单一平台会话 | 用户拥有权限的应用程序与 Workshop 应用，汇聚于单一启动器 | 对象可在对象浏览器（Object Explorer）或该类型注册的应用中直接打开 |
 
-They agree on four things:
-- the **session belongs to the platform**, not to an app;
-- an **app is a set of navigation and views**, shown when the tenant has it and the user has rights in it;
-- the **chrome is shared**: search, notifications, inbox, profile, tenant, help and the assistant;
-- one app **opens another's record by reference** (Fiori's intent), not by the other app's URL.
+上述平台在四项核心设计上高度一致：
+- **用户会话归属于平台**，而非归属于单个应用；
+- **应用表现为一组导航与视图**，仅当租户启用了该应用且当前用户拥有相应权限时才呈现；
+- **平台外框（Chrome）高度共享**：全局搜索、通知、收件箱、个人中心、租户切换、帮助中心以及后续的智能助手；
+- 一个应用**通过引用打开另一应用中的记录**（类似于 Fiori 的意图机制），而非通过对方应用的硬编码 URL 打开。
 
-## Design
+## 设计
 
-1. **One web workspace per deployment.**
-   - `web/apps/workspace` is the platform's client, with one OIDC client (`platform-web`).
-   - The host serves its build at `/`, from the same origin as the API: one token, no cross-origin calls.
-   - In development, Vite proxies the API.
-2. **The session is the platform's.**
-   - The member signs in once. The token goes only to the host, which resolves the member per tenant, as now.
-   - App UIs never read the token. They get a host client from the shell (`useHost()`), as server-side apps get a `Caller`.
-3. **App UIs contribute to the shell, in typed code.**
-   - Each app's UI package (`@pkg/<app>`, ADR-0010 point 2) exports one `defineApp({ id, title, icon, views, nav, commands, home })`.
-   - The workspace imports the UI packages of the platform's apps. Each loads lazily, when first opened.
-   - The shell composes these contributions. Nothing is driven by configuration (AGENTS.md rule 5).
-4. **Which apps a member sees.**
-   - Only the apps the tenant runs **and** in which the member holds a role.
-   - `GET /v1/me` returns those apps with their titles, from the manifest (`Manifest.Title`, `Manifest.Icon`).
-   - Inside an app, the navigation entries and actions follow the member's catalog, as now.
-   - A launcher (a grid, plus ⌘K) and an app switcher sit in the menu bar. The last app used is remembered.
-5. **One dock across apps.**
-   - Tabs from different apps stay open side by side.
-   - `open({ type, id })` opens a record in the view its owning app registers for that entity type, and otherwise in the kit's generic record page. Apps link to each other's records without importing each other, as protocols keep their server sides apart (ADR-0011).
-6. **Shared chrome.**
-   - Every app has the inbox, notifications, global search over records, the profile, the tenant switcher and, later, the assistant.
-   - Settings becomes the platform app's UI inside the workspace, shown to administrators.
-7. **Tenants and hosts.**
-   - A person who is a member of several tenants on one host switches tenant in the profile menu, without signing in again. The host decides membership, as it does for every request.
-   - Separate deployments stay separate sites, reached through the identity provider's single sign-on.
-8. **What becomes of today's clients.**
-   - `apps/sales`, `apps/mes` and `apps/settings` become app UI packages in the workspace, and their sites are deleted:
-     - `@pkg/crm` (its declarations only since #129: accounts, opportunities and their stays are the platform's record pages);
-     - `@pkg/hotel`, `@pkg/hr`, `@pkg/mes`;
-     - `@pkg/platform` for Settings.
-   - The work app's inbox and "my requests" are shell chrome.
-   - The Hotel Desk stays a separate Tauri client, because it works offline with the K5 outbox. It reuses `@pkg/hotel`.
-   - The gallery stays.
+1. **每次部署提供统一的 Web 工作空间。**
+   - `web/apps/workspace` 是平台的通用客户端，配置单一的 OIDC 客户端（`platform-web`）。
+   - 宿主直接在 `/` 根路径托管该工作空间的静态构建产物，与 API 保持完全相同的同源域名：单一 Token，彻底告别跨域请求。
+   - 在本地开发模式下，Vite 负责反向代理 API。
+2. **用户会话由平台统一持有。**
+   - 成员仅需登录一次。Token 仅直接发往宿主，由宿主按租户解析当前成员，与当前机制一致。
+   - 应用前端 UI 永远接触不到 Token。它们从平台外壳（Shell）中获取宿主客户端实例（`useHost()`），正如服务端应用获取 `Caller` 一样。
+3. **应用 UI 以类型化代码方式向外壳贡献能力。**
+   - 每个应用的 UI 包（`@pkg/<app>`，[ADR-0010](0010-platform-host-and-apps.md) 第 2 点）对外导出一个 `defineApp({ id, title, icon, views, nav, commands, home })` 定义。
+   - 工作空间静态引入各平台应用的 UI 包。各个应用在首次打开时按需懒加载。
+   - 平台外壳负责编排组合这些扩展贡献。没有任何页面完全由无逻辑的纯配置文件驱动（AGENTS.md 规则 5）。
+4. **成员能够看到哪些应用。**
+   - 严格限定为租户当前运行**且**该成员在其中持有角色的应用。
+   - `GET /v1/me` 基于应用清单（`Manifest.Title`, `Manifest.Icon`）返回该成员被授权的应用列表及其标题。
+   - 进入特定应用后，导航条目与可用操作严格遵循该成员的操作目录权限，与现有机制一致。
+   - 顶部菜单栏配备应用启动器（宫格视图以及 ⌘K 快捷面板）与快速切换器。系统自动记忆最近使用的应用。
+5. **跨应用统一 Dock 工作台。**
+   - 来自不同应用的标签页可以在同一个多标签工作台中并排保持打开。
+   - `open({ type, id })` 能够自动调用该实体类型所属应用注册的专有视图来打开记录；若无专有视图，则回退到 UI 套件的通用记录详情页。应用之间无需相互依赖即可互相链接彼此的记录，正如同服务端通过协议保持解耦一样（[ADR-0011](0011-apps-interoperate-through-protocols.md)）。
+6. **共享外框能力（Shared chrome）。**
+   - 每个应用都默认集成了收件箱、消息通知、跨记录的全局搜索、个人资料面板、租户切换器以及后续的智能助手。
+   - “系统设置”演进为工作空间内嵌的平台级应用 UI，仅对管理员展示。
+7. **多租户与多宿主。**
+   - 同一宿主上从属于多个租户的人员，可在个人菜单中直接无缝切换租户，无需重新登录。宿主针对每次请求独立判定租户成员身份。
+   - 相互独立的部署环境依然保持为独立站点，通过统一的身份提供商单点登录进行互通。
+8. **现有客户端的收敛去向。**
+   - `apps/sales`, `apps/mes` 与 `apps/settings` 重构收敛为工作空间内的各应用 UI 包，其独立站点全部彻底删除：
+     - `@pkg/crm`（自 #129 起仅保留声明：客户账户、销售机会及其住宿预订均直接复用平台的通用记录详情页）；
+     - `@pkg/hotel`, `@pkg/hr`, `@pkg/mes`；
+     - `@pkg/platform` 对应“设置”。
+   - 协作应用（`work`）的收件箱与“我的申请”成为平台外壳的固有组成部分。
+   - 酒店工作台（Hotel Desk）继续保持为独立的 Tauri 桌面端，因为它需要基于 K5 发件箱在离线状态下运行。它直接复用 `@pkg/hotel`。
+   - 组件库画廊（gallery）继续保留。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Where the workspace is served | (a) By the host at `/`, same origin as the API. (b) From a separate site or CDN, calling the API across origins | **(a)**: one origin, one token, no CORS; the host image carries the build |
-| D2 | How app UIs reach the workspace | (a) At build time: the workspace includes the UI packages of the platform's apps, loaded lazily; the host decides at run time who sees what. (b) At run time: each installed app serves its own UI bundle (module federation, import maps) | **(a)** now: typed end to end, one build to test. (b) belongs to stage 7, when other teams ship apps without rebuilding the workspace |
-| D3 | Where the token lives | (a) In the browser, for one origin and one OIDC client (as now, but one). (b) A backend-for-frontend: the host keeps the tokens and the browser holds only an http-only session cookie | **(a)** now, because it changes no server code. (b) is the current OAuth advice for browser apps: it keeps tokens out of reach of scripts. Queue it for the production-hardening stage (7) |
-| D4 | Who sees an app | (a) The tenant runs it and the member holds any role in it. (b) An explicit app assignment on top of roles | **(a)**: roles already grant rights per app (ADR-0010). A separate assignment would be a second grant to keep in step |
-| D5 | Cross-app navigation | (a) By entity reference: the shell finds the view registered for the type. (b) By each app's URLs | **(a)**, like Fiori's intents. An app never learns another's routes |
-| D6 | Today's sites | (a) Fold sales, MES and Settings into the workspace now and delete their sites. (b) Keep them beside the workspace for a while | **(a)**: no shims as an end state (AGENTS.md rule 4). The Hotel Desk stays, being an offline client |
-| D7 | Several tenants | (a) Switch tenant in the profile menu, on one host, without signing in again. (b) One tenant per site | **(a)**. Serving many tenants from one process at scale is stage 7 |
-| D8 | Demo mode | Without an identity provider (development and tests), the workspace offers the development identities in the profile menu, as today's sites do | As listed |
+| D1 | 工作空间静态资源由何处托管 | (a) 由宿主在 `/` 根路径直接托管，与 API 完全同源。(b) 由独立站点或 CDN 托管，跨域调用 API | **(a)**：单一域名源、单一 Token、零跨域问题；宿主容器镜像直接携带打包产物 |
+| D2 | 应用 UI 如何挂载到工作空间 | (a) 构建期引入：工作空间直接引入各应用的 UI 包并按需懒加载；宿主在运行时动态决定用户能看到什么。(b) 运行时动态加载：每个已安装应用各自托管并提供自己的 UI bundle（模块联邦、import maps） | 当前采用 **(a)**：全链路强类型检查，单次构建易于完整测试。(b) 属于第七阶段的工作，届时外部团队可在不重新构建工作空间的情况下交付独立应用 |
+| D3 | 认证 Token 保存在何处 | (a) 保存在浏览器中，针对单一源与单一 OIDC 客户端（与现状相同，但收敛为一个）。(b) 采用 BFF 模式：宿主维护 Token，浏览器端仅持有 HttpOnly 的会话 Cookie | 当前采用 **(a)**，因为其无需修改服务端代码。(b) 是当前针对浏览器端应用的官方 OAuth 最佳实践，能彻底避免脚本窃取 Token。将其排入第七阶段的生产环境强化任务中 |
+| D4 | 谁有权看到特定应用 | (a) 租户启用了该应用且该成员在其中持有任意角色。(b) 在现有角色之外建立显式的独立应用授权 | **(a)**：角色本身已经是按应用授予权限的（[ADR-0010](0010-platform-host-and-apps.md)）。独立的显式授权会变成需要同步维护的第二套权限模型 |
+| D5 | 跨应用导航模式 | (a) 基于实体引用：平台外壳自动查找该类型注册的对应视图。(b) 基于各应用内部的 URL 路由 | **(a)**，类似于 SAP Fiori 的意图机制。应用之间绝不感知彼此的私有路由路径 |
+| D6 | 现有独立站点的处置 | (a) 立即将 sales、MES 和 Settings 收敛到统一工作空间，并删除其独立站点。(b) 暂时让它们与统一工作空间并存一段时间 | **(a)**：绝不保留过渡性垫片作为最终状态（AGENTS.md 规则 4）。酒店桌面端因为需要支持离线而继续保留 |
+| D7 | 跨多个租户 | (a) 在单一宿主上，直接在个人菜单中切换租户，无需重新认证登录。(b) 每个租户对应一个独立站点 | **(a)**。后续在大规模场景下单进程服务海量租户的能力属于第七阶段 |
+| D8 | 本地演示模式（Demo mode） | 在脱离真实身份提供商时（本地开发与自动化测试），工作空间在个人菜单中提供预设的开发人员身份切换，正如现有各站点所做的那样 | 按照所列机制执行 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Item | Done when |
+| 事项 | 完成标志 |
 |---|---|
-| Host serves the workspace; `/v1/me` lists the member's apps | A member sees exactly the apps the tenant runs and they hold a role in; manifests give titles and icons |
-| The workspace shell with `defineApp` and a launcher | Sign in once as the manager, then open the CRM, Hotel, HR, Settings and the inbox without signing in again or leaving the page. Tabs from several apps stay open together |
-| Sales, MES and Settings folded in | Their sites and the OIDC clients `sales-web`, `mes-web` and `platform-settings` are gone. The browser checks in the test guide pass in the workspace |
-| Cross-app references | From an opportunity, a stay opens in the Hotel's view without CRM code knowing the Hotel. From an inbox task, the leave request opens |
+| 宿主托管工作空间；`/v1/me` 列出成员有权访问的应用 | 成员精准查看到租户启用了且自己拥有角色的应用；应用清单提供标题与图标 |
+| 配备 `defineApp` 与启动器的工作空间外壳 | 以经理身份登录一次，即可自由打开 CRM、酒店、HR、系统设置与收件箱，无需重新登录或刷新离开页面。来自不同应用的标签页可并排保持开启 |
+| 收敛 Sales、MES 与 Settings 站点 | 彻底删除其原有站点，并删除 `sales-web`, `mes-web` 与 `platform-settings` OIDC 客户端。测试指南中的所有浏览器端验证在统一工作空间中全部顺利通过 |
+| 跨应用实体引用跳转 | 从销售机会中，可直接在酒店应用的专属视图中打开住宿预订，且 CRM 源码完全不需要依赖酒店模块。从收件箱任务中，可直接打开请假申请单 |
 
-## Consequences
+## 影响
 
-- An app's UI becomes a contribution to one workspace, not a product with its own sign-in, chrome and inbox.
-- The workspace is where later stages attach: dashboards (stage 3), flows (stage 4), the assistant panel (stage 5), and the kit's families (stage 6).
-- Solutions (`solutions/sales`) compose apps on the server. They no longer need a site of their own.
+- 应用的前端 UI 演变为向统一工作空间提交的扩展贡献，而不再是一个自带独立登录、独立外框与独立收件箱的孤立产品。
+- 统一工作空间成为了后续能力接入的基座：仪表盘看板（第三阶段）、流程编排（第四阶段）、智能助手面板（第五阶段）以及组件族（第六阶段）。
+- 解决方案（如 `solutions/sales`）专注于在服务端组合各个应用，不再需要构建专属的前端站点。
 
-## As built (#108)
+## 实际构建（As built, #108）
 
-- **Host.**
-  - `GET /v1/me` adds `apps`, the apps the member may open (`Tenant.AppsOf`, titled by the new `Manifest.Title`), and `tenants`, the tenants on the host that know them.
-  - A request names its tenant with the `Platform-Tenant` header. Without it, the first tenant that knows the caller answers, as before.
-  - `GET /v1/sign-in` tells the workspace how to sign in: the issuer and the `platform-web` client, or, on development tokens, the development identities.
-  - `-web` serves the workspace's build at `/`; a path that is not a file is a route of the page.
-- **App API for UIs** (`@platform/app`, the browser's `platformserver/platform`):
-  - `defineApp` declares an app's UI: `{ id, title, icon, views, nav(host), home, opens, commands }`.
-  - `useHost` gives the host: `me`, `role`, `can`, `decide`, the outbox, entities and the record source.
-  - `useRead`, `useOpenRecord`, and the generated `Records`, `RecordDetail` and `GeneratedForm`.
-- **UI packages:** `@pkg/crm`, `@pkg/hotel/app`, `@pkg/hr`, `@pkg/mes` and `@pkg/platform` (Settings, for members with a role in the platform, the organisation or AI; each section only to those it concerns).
-  - The CRM no longer imports the Hotel. A stay is a `lodging.booking`, which opens in the view of the app the tenant binds as the lodging provider.
-  - The booking form takes the provider's room type as text, because the lodging protocol offers no room-type read yet.
-- **The workspace** (`web/apps/workspace`):
-  - It signs in once, loads the UI packages of the apps the member may open, and composes them in the kit's `Workspace`. The kit gained a launcher (the app menu, the palette's apps and a home page of tiles) and `onActiveRoute`, so the current app follows the active tab.
-  - The shared "You" section holds the apps, inbox, my requests, notifications, all records, and the outbox while something waits.
-  - The profile menu switches tenant, or development identity.
-- **Removed:**
-  - the sites `apps/sales`, `apps/mes` and `apps/settings`;
-  - the OIDC clients `sales-web`, `mes-web` and `platform-settings`, replaced by `platform-web`.
-- **Proven:**
-  - the host test `TestWorkspaceSurface`, and the rehearsal (the page, sign-in and a member's apps on both hosts);
-  - in the browser, on one page and without signing in again: the launcher; a CRM account, opportunity and stay; the stay opened in the Hotel's view; a leave request submitted as `sales-1`, and approved twice from the manager's inbox.
-- **Records open floating** (2026-09-27): a record opened from a list, a link or a notification opens in one floating window above the page (`useOpenRecord`, `open(route, { window: "float" })`); what opens next joins it as a tab, and it docks by dragging.
-- **Not yet:**
-  - the backend-for-frontend token (D3 (b), now stage 9);
-  - UI bundles loaded at run time (D2 (b), now stage 9).
-  - Global search across records was built with agents (ADR-0021 batch 2).
-- **After the owner's testing** (2026-09-27): dialogs, sheets, menus and the palette show above floating windows (dockview's floating layer set below them); ⌘K searches records the member may read, files by name included, besides pages, apps and commands; a record's page says whether the member follows it; a type has one list and one page — the CRM's accounts open on the record page with its opportunities and stays below (`opens`, `RecordDetail`).
-
-
+- **宿主改造：**
+  - `GET /v1/me` 增加了 `apps`（当前成员有权打开的应用列表，基于 `Tenant.AppsOf` 获取，显示名称使用新增的 `Manifest.Title`）以及 `tenants`（当前宿主上认识该用户的全部租户）。
+  - 请求通过 `Platform-Tenant` 头部指定目标租户。若未携带该头部，则与此前一致，默认由认识该调用方的第一个租户响应。
+  - `GET /v1/sign-in` 告知工作空间登录方式：认证颁发者地址与 `platform-web` 客户端 ID；若使用的是开发测试凭据，则返回预设的开发测试身份列表。
+  - `-web` 标识使宿主在 `/` 根路径直接托管工作空间的构建产物；任何非静态文件的路径均自动交由前端页面路由处理。
+- **UI 应用 API** (`@platform/app`，相当于浏览器端的 `platformserver/platform`)：
+  - `defineApp` 声明应用的 UI 规范：`{ id, title, icon, views, nav(host), home, opens, commands }`。
+  - `useHost` 向前端提供宿主能力：`me`, `role`, `can`, `decide`、发件箱状态、实体元数据以及记录数据源。
+  - `useRead`, `useOpenRecord` 以及自动生成的 `Records`, `RecordDetail` 和 `GeneratedForm` 通用组件。
+- **UI 代码包：** 包括 `@pkg/crm`, `@pkg/hotel/app`, `@pkg/hr`, `@pkg/mes` 以及 `@pkg/platform`（“设置”，仅面向在平台、组织或 AI 模块中持有角色的成员展示；各个配置小节仅向相关的责任角色展示）。
+  - CRM 不再直接引入酒店代码包。住宿预订作为通用的 `lodging.booking` 存在，并在租户所绑定的住宿提供商应用的专属视图中打开。
+  - 预订表单将提供商的房型作为纯文本输入，因为当前住宿协议尚未暴露通用的房型查询端点。
+- **统一工作空间** (`web/apps/workspace`)：
+  - 成员单点登录一次，动态加载其有权打开的应用 UI 代码包，并在 UI 套件的 `Workspace` 框架中完成组合呈现。UI 套件新增了启动器（应用菜单、命令面板中的应用列表以及磁贴首页）和 `onActiveRoute` 路由感知能力，使当前活动应用随当前激活的标签页自动同步。
+  - 共享的“个人中心（You）”区域统筹容纳各个应用入口、工作收件箱、我的申请、消息通知、全量记录浏览，以及在存在待发事务时的离线发件箱。
+  - 个人菜单支持无缝切换租户或切换本地开发测试身份。
+- **彻底移除的陈旧资产：**
+  - 原独立站点 `apps/sales`, `apps/mes` 与 `apps/settings`；
+  - 原独立 OIDC 客户端 `sales-web`, `mes-web` 与 `platform-settings`，全部收敛替换为单一的 `platform-web`。
+- **经过充分验证：**
+  - 通过了宿主测试 `TestWorkspaceSurface` 以及部署演练（两个宿主上的页面加载、单点登录与成员应用列表）；
+  - 在浏览器真实环境下验证，在单一页面中且无需重复登录：启动器正常弹出；无缝打开 CRM 客户账户、销售机会和住宿预订；住宿预订在酒店模块专属视图中顺畅呈现；以 `sales-1` 身份提交请假申请，并在经理收件箱中顺利完成两级审批。
+- **浮动窗口打开记录**（2026-09-27）：从列表、链接或通知打开的记录，统一在页面上方以浮动窗口的形式打开（`useOpenRecord`, `open(route, { window: "float" })`）；后续打开的记录作为标签页加入该浮窗，并支持拖拽停靠到工作台网格中。
+- **暂未构建：**
+  - BFF 架构下的 Token 托管（D3 (b)，已归入第九阶段）；
+  - 运行时的动态 UI Bundle 加载（D2 (b)，已归入第九阶段）。
+  - 跨记录的全局搜索已随智能代理一同构建（[ADR-0021](0021-agents.md) batch 2）。
+- **业务负责人测试后的优化改进**（2026-09-27）：对话框、抽屉、菜单与命令面板始终置于浮动窗口上方（dockview 浮动层层级明确调整为低于它们）；⌘K 快捷面板不仅支持搜索页面、应用与命令，还支持直接全文检索成员有权读取的实体记录以及文件名；记录详情页明确提示当前成员是否已关注该记录；统一规范每种类型仅提供一个通用列表与一个主详情页 —— CRM 客户详情页直接在其通用记录页下方内联展示其关联的销售机会与住宿预订（`opens`, `RecordDetail`）。

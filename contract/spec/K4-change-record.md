@@ -1,35 +1,35 @@
-# K4 Change record — semantics (contract v1alpha1)
+# K4 变更记录 — 语义规范 (契约 v1alpha1)
 
-Schema: `proto/platform/kernel/v1alpha1/change.proto`. Vectors: `vectors/k4-change-record.json`. Errors: `errors.md`.
+模式定义：`proto/platform/kernel/v1alpha1/change.proto`。一致性测试向量：`vectors/k4-change-record.json`。错误代码：`errors.md`。
 
-## Model
+## 概念模型
 
-- A **submission** is a proposed decision. The authority that accepts it (K5) turns it into a **change record** by assigning `change_id` and `recorded_time`, or rejects it with an error.
-- A tenant's accepted change records form an append-only **log**. Records are immutable; history is never rewritten.
-- `valid_time` is when the decision takes effect in the business; `recorded_time` is when the authority learned of it. They are different facts and MUST NOT be substituted for each other.
-- `payload` is domain data described by `schema`; the kernel does not interpret it.
+- **提交 (submission)** 是一项拟执行的决策提议。接受该提议的权威 (K5) 通过为其分配 `change_id` 与 `recorded_time` 将其转化为一条**变更记录 (change record)**，或返回错误予以拒绝。
+- 租户被接受的变更记录构成一个仅追加的**日志 (log)**。记录一旦生成不可篡改；历史事实绝不重写。
+- `valid_time` 是决策在实际业务中正式生效的时间；`recorded_time` 是权威获知该决策的时间。它们是不同的客观事实，严禁 (MUST NOT) 相互替代。
+- `payload` 是由 `schema` 描述的业务领域数据；内核不对其内部做业务层面的解读。
 
-## Rules
+## 语义规则
 
-| # | Rule | Error when violated |
+| 编号 | 规则描述 | 违规返回错误 |
 |---|---|---|
-| C1 | `tenant_id`, `principal_id`, `authority`, `idempotency_key`, `target.type`, `target.id` and `schema.name` are required. | `INVALID_ARGUMENT` |
-| C2 | The receiver must accept `schema` (K7 S1). | `UNKNOWN_SCHEMA` |
-| C3 | A non-empty `causation_id` must name an accepted change in the same tenant. | `INVALID_REFERENCE` |
-| C4 | Idempotency is scoped to (`tenant_id`, `idempotency_key`). Resubmitting an identical submission returns the originally accepted record (same `change_id` and times) and appends nothing. | — |
-| C5 | Resubmitting the same scoped key with any different field is rejected. | `IDEMPOTENCY_CONFLICT` |
-| C6 | `recorded_time` is assigned by the authority and never decreases within a tenant's log: it is the later of the authority clock and the previous record's `recorded_time`. | — |
-| C7 | An absent `valid_time` takes the value of `recorded_time`; a present one is kept as submitted, including times in the past. | — |
-| C8 | A correction or undo is a new change whose `causation_id` names the change it corrects. The corrected record stays unchanged. | — |
-| C9 | A rejected submission appends nothing. | — |
-| C10 | Domain rules are evaluated after C1–C5 and before the append: a replay (C4) returns the original record without evaluating them again; a domain refusal is returned with its own code and appends nothing. | the domain's code |
-| C12 | A target's **revision** is the number of accepted changes naming it (0 before the first); each record carries the revision it produced. A submission with `expected_revision` is accepted only if the target's current revision equals it, so a decision made on a stale view is refused instead of overwriting. A replay (C4) returns the original record regardless. | `CONFLICT` |
-| C11 | Every entry of `evidence_fact_ids` names a recorded fact (K2) of the same tenant: the observations and claims the decision is based on. | `INVALID_REFERENCE` |
+| C1 | `tenant_id`、`principal_id`、`authority`、`idempotency_key`、`target.type`、`target.id` 与 `schema.name` 均为必填字段。 | `INVALID_ARGUMENT` |
+| C2 | 接收方必须能够接受并解析该 `schema` (K7 S1)。 | `UNKNOWN_SCHEMA` |
+| C3 | 非空的 `causation_id` 必须指向同一租户内已接受的变更记录。 | `INVALID_REFERENCE` |
+| C4 | 幂等性作用域限定在 (`tenant_id`, `idempotency_key`)。重新提交完全相同的提交提议，必须返回原先已被接受的记录（相同的 `change_id` 与时间戳）且不追加任何新数据。 | — |
+| C5 | 在相同作用域的键下，提交带有任何相异字段的提议均予以拒绝。 | `IDEMPOTENCY_CONFLICT` |
+| C6 | `recorded_time` 由权威分配，且在同一租户日志内单调递增不减：其数值为权威物理时钟与上一条记录 `recorded_time` 之间的较大者。 | — |
+| C7 | 若缺失 `valid_time` 则自动取 `recorded_time` 的值；若显式提供则按提交原样保留，允许为过去的历史时间。 | — |
+| C8 | 更正或撤销操作是一条全新的变更记录，其 `causation_id` 指明所更正的原变更记录。被更正的原记录保持原状。 | — |
+| C9 | 被拒绝的提交不追加任何日志分录。 | — |
+| C10 | 领域业务规则在 C1–C5 之后且在日志追加之前进行评估：幂等重放 (C4) 直接返回原始记录，绝不重新评估业务规则；领域层拒绝则返回其自身的错误代码且不追加日志。 | 领域专属错误代码 |
+| C12 | 目标的**修订版本号 (revision)** 是指命名该目标的历史已被接受变更的总数（首次变更前为 0）；每条记录携带其所产生的最新修订号。带有 `expected_revision` 的提交仅在目标的当前修订号与其严格相等时方可被接受，从而使基于陈旧数据视图做出的决策被拒绝而不是静默覆盖。幂等重放 (C4) 无视此项直接返回原始记录。 | `CONFLICT` |
+| C11 | `evidence_fact_ids` 中的每个条目必须指向同一租户内部已记录的事实 (K2)：即该决策所依据的客观观察与断言。 | `INVALID_REFERENCE` |
 
-## Notes
+## 补充说明
 
-- Authorization and the full receiving order are K6 (`K6-tenancy-policy.md`).
-- A rejection is not remembered: the same key may be submitted again and succeed later (C9). Senders therefore retry a key only after no answer (K5 `UNKNOWN`), never after a rejection.
-- C12 replaces the preconditions two domain slices each carried in their payloads (friction F-20). Domain-specific conditions still belong to C10.
-- `correlation_id` groups related changes for tracing; v1alpha1 attaches no rule to it.
-- Several changes of one authority stand or fall together: a decision's rules return one application of all of them. Grouping changes of several authorities atomically is declined (ADR-0026): a decision changes one authority's data, and what it needs of another is that authority's own decision, requested once the first is accepted and answered back to it.
+- 鉴权授权与完整的请求接收处理顺序见 K6 (`K6-tenancy-policy.md`)。
+- 拒绝状态不被记忆：相同的幂等键可以再次提交并在后续成功执行 (C9)。因此发送方仅在未收到应答时（K5 `UNKNOWN`）重试相同的键，绝不在被明确拒绝后重试。
+- C12 取代了此前两个垂直切片在各自有效负载中私自携带的前置检查条件（摩擦项 F-20）。领域专属的业务条件依然归属于 C10。
+- `correlation_id` 用于将相关变更分组以便于链路追踪；v1alpha1 未对其绑定强制规则。
+- 同一权威下的多项变更同生共灭：决策规则一次性返回覆盖它们全部的单次应用。跨多个权威原子性分组变更的设计已被正式拒绝 (ADR-0026)：一项决策仅变更单一权威的数据，对其他权威的诉求在该决策被接受后由其发起请求并等待对方应答。

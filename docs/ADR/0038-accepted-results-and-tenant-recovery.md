@@ -1,75 +1,75 @@
-# ADR-0038: Accepted results and tenant recovery
+# ADR-0038: 已提交结果与租户恢复
 
-**Status:** Accepted (2026-09-28, #135). The owner accepted D1–D4 as recommended. ADR-0031 already accepts result-based recovery, PostgreSQL and a fresh disposable development baseline. This gate resolves the commit unit, state staging, failure boundary and format before implementation. Acceptance does not change the running journal.
+**状态：** 已接受 (2026-09-28, #135)。项目负责人按推荐方案接受了 D1–D4。ADR-0031 已经接受了基于结果的恢复、PostgreSQL 以及全新的一次性开发基准。本阶段准入关卡在实施前确定提交单元、状态暂存、故障边界和数据格式。接受本 ADR 并不直接改变当前运行的日志机制。
 
-## Context
+## 背景
 
-Today `Tenant.Submit` (`capabilities/server/host.go`) lets an app mutate the tenant and only then calls `journal`, whose `Record` callback appends an `Entry` to PostgreSQL (`deploy.go`, `journal.go`). `Entry` keeps the input, member and flow versions; `Tenant.Replay` invokes current app code again. `CheckReplay` proves same-code reconstruction and outbound silence, with snapshots bound to the code that wrote them (`snapshot.go`). An append failure terminates the process through `log.Fatalf`; it does not roll back in-memory changes. Approval, work, effects, sequence numbers, dynamic definitions and agent outcomes already cross the input path, so a single-record patch would not establish the target guarantee. Current code facts and target promises are separate in Platform §2.7–2.9 and §10.3 D.
+目前 `Tenant.Submit`（`capabilities/server/host.go`）允许应用修改租户状态，随后才调用 `journal`，其 `Record` 回调将 `Entry` 追加到 PostgreSQL（`deploy.go`，`journal.go`）。`Entry` 保存输入、成员和流转版本；`Tenant.Replay` 再次调用当前的应用代码。`CheckReplay` 验证同代码重构与出站静默，快照绑定到写入它们的代码（`snapshot.go`）。追加失败会通过 `log.Fatalf` 终止进程，而不会回滚内存中的更改。审批、工作任务、出站效果、序列号、动态定义和智能体执行结果目前已经跨越输入路径，因此单记录补丁无法建立目标保证。当前的代码事实与目标承诺在 Platform §2.7–2.9 与 §10.3 D 中作了区分。
 
-| Current reference evidence, consulted 2026-09-28 | What it contributes here |
+| 当前参考依据 (2026-09-28 调研) | 对此处的贡献 |
 |---|---|
-| [PostgreSQL transactions](https://www.postgresql.org/docs/current/tutorial-transactions.html) and [WAL](https://www.postgresql.org/docs/current/wal-intro.html) | Acknowledged durable writes and atomic visibility for data inside one database transaction. This does not roll back Go memory or an external call. |
-| [Datomic's transaction log](https://docs.datomic.com/datomic-overview.html) | Immutable, ordered evidence and as-of transaction views. We keep our typed records and PostgreSQL; a universal datom store is not proposed. |
-| [Temporal workflow execution](https://docs.temporal.io/workflow-execution) | Recorded progress and replay without repeating an external activity; long-lived work needs version-aware continuation. Its command-matching replay is a different guarantee from applying our saved business result. |
+| [PostgreSQL 事务](https://www.postgresql.org/docs/current/tutorial-transactions.html) 与 [WAL](https://www.postgresql.org/docs/current/wal-intro.html) | 单一数据库事务内数据的确认持久写入与原子可见性。这无法回滚 Go 内存或外部调用。 |
+| [Datomic 的事务日志](https://docs.datomic.com/datomic-overview.html) | 不可变、有序的事实依据与历史事务视图。我们保留具类型的记录和 PostgreSQL；不提议通用的 datom 存储。 |
+| [Temporal 工作流执行](https://docs.temporal.io/workflow-execution) | 记录执行进度并在重放时不重复调用外部活动；长生命周期工作需要具备版本感知的延续性。其命令匹配式重放与应用我们保存的业务结果属于不同的保证级别。 |
 
-The shared principle is to make a durable boundary explicit, then derive visible state and subsequent work from what crossed it. An input and an accepted result are different objects.
+共同的原则是明确持久化边界，然后从跨越该边界的数据中派生出可见状态与后续工作。输入与已提交结果是不同的对象。
 
-### Adversarial review of the current write paths (2026-09-28)
+### 当前写入路径的对抗性审查 (2026-09-28)
 
-`Tenant.Submit` defers `enqueue`, calls the app, then journals an accepted input. `runtime.Put` writes the record store immediately; `hostView.Submit` invokes another app without opening a separate journal entry. A nested decision can therefore change records, work or an installed definition before the outer append succeeds. `Tenant.Input`, agent/model outcomes, protocol answers and work deliveries also enter through paths other than the public submission method. In the PostgreSQL host, an append error terminates the process after those memory changes. `Tenant.Replay` currently invokes the app again for submissions and inputs. These are code facts, not covered by the existing same-code replay test.
+`Tenant.Submit` 延迟 `enqueue`，调用应用，然后记录接受的输入。`runtime.Put` 立即写入记录存储；`hostView.Submit` 调用另一个应用而无需打开单独的日志条目。因此，嵌套决策可能会在外层追加成功之前更改记录、工作状态或已安装的定义。`Tenant.Input`、智能体/模型产出、协议应答和工作分发也会通过公共提交方法以外的路径进入。在 PostgreSQL 宿主中，追加错误会在这些内存更改发生后终止进程。`Tenant.Replay` 目前会针对提交和输入再次调用应用。这些是客观代码事实，现有的同代码重放测试未涵盖这些边界。
 
-The first slice must inventory **every** entry point and mutable owner, including `recordStore`, the builder's `Install*`, work/process state, idempotency receipts, generated IDs, audit, model usage and outbound intent queues. An entry point outside the accepted-result boundary must be disabled or explicitly excluded from the guarantee; a partially migrated host must never report the full guarantee. A nested call contributes to its parent's staged result, while a later asynchronous answer, job or delivery is a new top-level input with its own result. A refused input leaves no staged state or dispatchable intent; a duplicate returns the durable prior receipt without re-running decision code. After the append commits, recovery applies the result exactly once in logical state even if the process dies before replying. These are testable conditions for D1–D3, not an assertion that staging exists today.
+第一批切片必须清查**每一个**入口点和可变归属主件，包括 `recordStore`、构建器的 `Install*`、工作/流程状态、幂等性收据、生成的 ID、审计、模型用量和出站意图队列。处于已提交结果边界之外的入口点必须被禁用或明确排除在此保证之外；部分迁移的宿主绝不能汇报拥有完整保证。嵌套调用贡献给其父级的暂存结果，而后期的异步响应、作业或分发则是带有自身结果的新顶级输入。被拒绝的输入不会留下任何暂存状态或可派发的意图；重复输入会返回持久的先前收据，而无需重新运行决策代码。追加提交之后，即使进程在回复前崩溃，恢复机制在逻辑状态下对结果执行且仅执行一次应用。这些是 D1–D3 的可测试条件，而非断言当前已存在暂存机制。
 
-**19a entry-point and mutation inventory, before changing the journal.** The first staged path must name its supported action family; all other rows retain their existing input-replay guarantee until migrated. A staged path may not silently fall through to a direct mutator after an accepted result has been formed.
+**19a 入口点与状态变更清单（修改日志机制之前）。** 第一个暂存路径必须指名其支持的动作族；在迁移之前，所有其他行均保留其现有的输入重放保证。在形成已提交结果之后，暂存路径不得静默回退到直接修改器。
 
-| Current entry point and owned state | 19a boundary | Required before its result path is enabled |
+| 当前入口点与所拥有的状态 | 19a 边界 | 在启用其结果路径前的前置要求 |
 |---|---|---|
-| `Tenant.Submit` → app `Ledger.Receive` → kernel `ChangeLog` → `runtime.Put` → `recordStore.put` → `runtime.Publish` (`host.go`, `platform/ledger.go`, `records.go`) | Stage one bounded generated create/edit family first | The same stage owns the kernel idempotency/revision record, record values/history and published event; append the result before exposing any of them. A duplicate returns the saved receipt. |
-| `hostView.Submit`, protocol invocation and approval request (`hostview.go`, `protocol.go`, `host.go`) | Nested in its top-level input, fenced from the first family until staged | A nested app decision cannot append or acknowledge independently; its changes and intents join the outer result. |
-| `Tenant.Input`, import, connector delivery (`host.go`, `transfer.go`, `runtime.go`) | 19b | Cursor, observation and resulting decisions become one result; an external delayed answer is a later input. |
-| Delivery/job execution, agent steps, model usage, effect outcome/answer (`operations.go`, `agent_engine.go`, `aicall.go`, `effects.go`) | 19b | Generation, retries, meter/step results and stable outbound intents are committed before workers act; recovery never calls a model or sends outside. |
-| `runtime.Notify`, `Emit`, `Request`, `Assign`, `Link`, `Deliver`, plus `hostView.Install*` (`runtime.go`, `hostview.go`, `installed.go`) | Fence in 19a's selected path; stage in 19b | No call may mutate an operational queue, relation, connector mark or installed schema before the result append. Publishing a builder asset is not enabled on 19a's draft edit path. |
-| Projection, knowledge index, snapshot, transcript cache and uploaded file bytes (`projection.go`, `knowledge.go`, `snapshot.go`, `files.go`) | Derived or external bytes, outside the authoritative result | Rebuildable indexes may lag; a result referring to file bytes verifies their immutable digest exists before commit. Snapshot position and format must identify the accepted-result sequence. |
+| `Tenant.Submit` → 应用 `Ledger.Receive` → 内核 `ChangeLog` → `runtime.Put` → `recordStore.put` → `runtime.Publish` (`host.go`, `platform/ledger.go`, `records.go`) | 首先暂存一个有界的生成创建/编辑族 | 同一暂存区拥有内核幂等性/修订版记录、记录值/历史和已发布事件；在向外暴露上述任何内容之前先追加结果。重复请求返回保存的收据。 |
+| `hostView.Submit`、协议调用与审批请求 (`hostview.go`, `protocol.go`, `host.go`) | 嵌套在其顶级输入中，在暂存前与第一族隔离 | 嵌套应用决策无法独立追加或确认；其变更和意图合并至外层结果。 |
+| `Tenant.Input`、导入、连接器投递 (`host.go`, `transfer.go`, `runtime.go`) | 19b | 游标、观察结果和产生的决策合并为一个结果；外部延迟应答属于后续输入。 |
+| 投递/作业执行、智能体步骤、模型使用、出站效果产出/应答 (`operations.go`, `agent_engine.go`, `aicall.go`, `effects.go`) | 19b | 在工作协程执行前提交生成批次、重试、计量/步骤结果以及稳定的出站意图；恢复过程绝不调用模型或向外部发送请求。 |
+| `runtime.Notify`、`Emit`、`Request`、`Assign`、`Link`、`Deliver`，以及 `hostView.Install*` (`runtime.go`, `hostview.go`, `installed.go`) | 在 19a 选定路径中隔离；在 19b 中暂存 | 在结果追加前，任何调用均不得修改操作队列、关联关系、连接器标记或已安装模式。在 19a 的草稿编辑路径上不启用构建器资产的发布。 |
+| 投影、知识索引、快照、对话记录缓存以及上传的文件字节 (`projection.go`, `knowledge.go`, `snapshot.go`, `files.go`) | 派生或外部字节，处于权威结果之外 | 可重建索引可以滞后；引用文件字节的结果在提交前验证其不可变摘要是否存在。快照位置和格式必须标识已提交结果序列。 |
 
-## Our constraints
+## 我们的约束
 
-- A replay or projection rebuild never calls outside, reauthorizes history or invokes current business decision code. The journal must stay bounded enough to replay; snapshots and projection rebuild are separate from business decisions.
-- Code and controlled, typed definitions share semantic validation, permissions and release controls (ADR-0031); no arbitrary tenant code execution or domain vocabulary in `contract/`.
-- PostgreSQL remains the transactional store. Current K5/idempotency and the one authority per tenant remain; an effect is at least once outside PostgreSQL, with a stable identity.
-- The owner permits a fresh **disposable development** baseline, not deletion of customer history. No service may acknowledge or dispatch an outcome that is not durable.
+- 重放或投影重建绝不向外部调用、不对历史进行重新鉴权，也不调用当前的业务决策代码。日志必须保持足够的有界性以便重放；快照和投影重建与业务决策彻底解耦。
+- 代码与受控的具类型定义共享语义校验、权限和发布控制（ADR-0031）；不存在任意租户代码执行，且 `contract/` 中不包含业务领域词汇。
+- PostgreSQL 保持为事务性存储。现有的 K5/幂等性和每租户单一权威机制保持不变；外部出站效果在 PostgreSQL 之外保证至少一次交付，并具备稳定身份标识。
+- 项目负责人允许采用全新**可丢弃的开发**基线，但不允许删除客户历史。任何服务不得确认或分发非持久化的结果。
 
-## Design
+## 设计
 
-1. **One accepted result per top-level tenant input.** Host owns a versioned result envelope: tenant and commit ID/sequence, scoped idempotency identity and request digest, actor/authority, accepted/rejected outcome, input and definition references for evidence, validated record/state changes, generated IDs and sequence allocations, and durable work/effect intents. Nested app and work decisions contribute to that result, rather than creating a second independently acknowledged result. Rejections have an explicit, small receipt; a validation failure never includes partial accepted changes.
-2. **Stage, append, apply.** The host gives decision code a tenant-local staged view. App API writes, ledger decisions, generated IDs, work, notifications, outbound intents and dynamic installations land there. It validates the complete result and appends it before changing visible state, publishing subscriptions, acknowledging a client or dispatching effects. After append, applying it is idempotent and does not call decision code; a crash between append and apply recovers by applying the saved result. A failed append discards the staged result. A production path that still mutates outside staging must be inventoried and fenced before the guarantee is claimed.
-3. **PostgreSQL commit.** A per-tenant ordered insert and idempotency uniqueness, plus any required durable cursor/outbox rows, commit in one PostgreSQL transaction. The saved envelope may hold intents directly at first; workers derive their queue from committed results. No SQL row is assumed to transactionally protect Go memory or another system. The result and schema have an explicit format version and size limit; large blobs are referenced by immutable digest and validated existence.
-4. **Recovery and time.** `recover(log ++ [c]) = apply(recover(log), c)` under supported result versions. Result application rebuilds authoritative state and work intents. Projections, search indexes and snapshots have their own version and rebuild path. Recorded/transaction time, source time and business-valid time have different fields only where needed; this gate does not promise a full bitemporal query model. `CheckReplay` gains result application and crash-point tests while the old input replay remains a temporary comparison tool, then is removed for accepted history.
-5. **Tenant supervision.** A result format error, broken dependency or unrecoverable tenant-local projection quarantines that tenant: writes and its workers stop, health reports the reason and an operator can retry recovery after correction. Other tenants continue when their shared process and PostgreSQL are healthy. A process panic, resource exhaustion and database-wide outage remain separate, documented failure boundaries; “restart” does not repair inconsistent accepted state.
-6. **Builder/operator proof.** A tenant-built object/action/page change, an approval, a connector input, a delayed effect and a flow wait survive forced crashes before append, after append and before apply, and after apply but before dispatch. A builder sees the exact accepted/refused outcome and a record's history after restore; another tenant continues when one tenant is quarantined. Hospitality and manufacturing supply the smallest distinct-industry probes; applications do not acquire private commit paths.
+1. **每个顶级租户输入对应一个已提交结果。** 宿主拥有版本化的结果封套：租户和提交 ID/序列号、具作用域的幂等性标识和请求摘要、操作者/权威、接受/拒绝产出、用于举证的输入和定义引用、经过校验的记录/状态变更、生成的 ID 和序列分配，以及持久化的工作/效果意图。嵌套的应用和工作决策合并到该结果中，而不是创建第二个独立确认的结果。拒绝具有明确小巧的收据；校验失败绝不包含部分接受的变更。
+2. **暂存、追加、应用 (Stage, append, apply)。** 宿主为决策代码提供租户本地暂存视图。应用 API 写入、账本决策、生成的 ID、工作、通知、出站意图和动态安装均落入其中。宿主校验完整结果并在更改可见状态、发布订阅、向客户端确认或分发效果之前将其追加。追加后，应用该结果具有幂等性且不调用决策代码；追加与应用之间的崩溃通过应用已保存的结果进行恢复。追加失败会丢弃暂存结果。在宣称满足保证之前，必须对仍在此暂存区外进行修改的生产路径进行清查和设防隔离。
+3. **PostgreSQL 提交。** 每租户有序插入和幂等唯一性，加上任何所需的持久游标/发件箱行，在单一 PostgreSQL 事务中提交。保存的封套起初可以直接保存意图；工作协程从已提交结果中派生其队列。不假设任何 SQL 行能够在事务上保护 Go 内存或其他系统。结果和模式具有明确的格式版本和大小限制；大对象通过不可变摘要和经验证的存在性进行引用。
+4. **恢复与时间。** 在受支持的结果版本下满足 `recover(log ++ [c]) = apply(recover(log), c)`。结果应用重建权威状态和工作意图。投影、搜索索引和快照具有各自的版本和重建路径。记录/事务时间、源时间和业务有效时间仅在需要时采用不同字段；本阶段门禁不承诺完整的双时态 (bitemporal) 查询模型。`CheckReplay` 获得结果应用和崩溃点测试，而旧的输入重放保留为临时对比工具，随后在已接受历史中移除。
+5. **租户监督。** 结果格式错误、依赖损坏或不可恢复的租户本地投影将隔离该租户：写入与其工作协程停止，健康检查汇报原因，操作员在纠正后可以重试恢复。其他租户在其共享进程和 PostgreSQL 正常时继续运行。进程崩溃 (panic)、资源耗尽和全库级故障仍然是独立的、有记录的故障边界；“重启”无法修复不一致的已接受状态。
+6. **构建者/操作者实证。** 租户构建的对象/动作/页面变更、审批、连接器输入、延迟效果和流转等待在追加前、追加后应用前，以及应用后分发前的强制崩溃中均能存活。构建者在恢复后看到完全一致的接受/拒绝产出以及记录的历史；当一个租户被隔离时，另一个租户继续运行。酒店业和制造业提供最小的跨行业实证；应用程序不获取私有提交路径。
 
-## Decision points for the owner
+## 负责人决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | What is the atomic accepted unit? | One top-level tenant input including nested decisions and intents; or each nested app action separately | One top-level input. The current approval/work chain can otherwise expose only half of a business result. |
-| D2 | How is pre-commit mutation prevented? | Staged host view with app API writes confined to it; or clone a whole tenant and diff it | Staged host view. Whole-tenant cloning couples the commit contract to caches, goroutines and app internals. Require an escape audit before claiming closure. |
-| D3 | What is the durable first format? | A typed, versioned result envelope with canonical record changes and durable intents; or input plus code/version pin | Saved result. Input plus pinned code still re-decides accepted history and cannot safely answer after arbitrary code changes. |
-| D4 | What does tenant failure isolation promise initially? | Logical quarantine within the shared host plus explicit shared-process limits; or process isolation per tenant immediately | Logical quarantine first, with separate fault tests and health. Do not claim process or resource isolation without process boundaries. |
+| D1 | 原子接受单元是什么？ | 包含嵌套决策和意图的一个顶级租户输入；或每个嵌套应用动作各自独立 | 一个顶级输入。否则当前的审批/工作链路可能会暴露出仅有一半的业务结果。 |
+| D2 | 如何防止提交前修改？ | 限制应用 API 写入的暂存宿主视图；或克隆整个租户并进行 diff 比较 | 暂存宿主视图。全租户克隆将提交契约与缓存、goroutine 及应用内部细节耦合在一起。在宣称闭环前要求进行逃逸审计。 |
+| D3 | 持久化的第一种格式是什么？ | 带有规范记录变更和持久意图的具类型版本化结果封套；或输入加上代码/版本固定 | 保存的结果。输入加固定代码依然是在重新决策已接受的历史，在任意代码变更后无法安全应答。 |
+| D4 | 租户故障隔离最初承诺什么？ | 共享宿主内的逻辑隔离加上明确的共享进程限制；或立即实现按租户的进程隔离 | 首先实现逻辑隔离，配备独立的故障测试与健康检查。在没有进程边界的情况下，不要声称具备进程或资源隔离。 |
 
-Declined: replacing PostgreSQL with Datomic, running all business rules as workflows, exactly-once external effects, and an automatic migration of disposable development logs. Corrections to accepted facts remain new decisions with provenance, never edits to old results.
+已拒绝的方案：用 Datomic 替换 PostgreSQL、将所有业务规则作为工作流运行、精确一次的外部效果，以及一次性开发日志的自动迁移。对已接受事实的修正依然是带有溯源的新决策，绝不是修改旧结果。
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 19a | Inventory every authoritative mutation and outbound intent, with each entry point marked staged, fenced or excluded; introduce result types, pure application and a staged record/ledger decision for one vertical path | A record create/edit, refusal, duplicate key and crash at each boundary yield the same durable answer and no partial visible state; nested decisions share the outer result; `CheckReplay` applies results; hospitality and manufacturing each exercise the path; `scripts/verify.sh ci capabilities composition` and `deploy/local/rehearse.sh` pass. |
-| 19b | Extend staging to work, approvals, effects, connector inputs, flow and agent choices, sequences and dynamic definitions; remove old input re-decision | The two industry probes complete builder and operator tasks through crash/restore with no lost intents, no external call on replay, and stable IDs; full `CheckReplay`, fault matrix, `scripts/verify.sh ci capabilities composition web` and rehearsal pass. |
-| 19c | Tenant quarantine, projection repair, format/version handling and restore diagnostics | A bad tenant stops safely and can be repaired while another makes progress; the UI explains the status and recovery action; `CheckReplay`, restore and upgrade rehearsals and applicable verification steps pass. Shared-process and PostgreSQL outages remain explicitly tested or excluded. |
+| 19a | 清查每项权威修改和出站意图，将每个入口点标记为暂存、隔离或排除；为单条垂直路径引入结果类型、纯应用以及暂存记录/账本决策 | 记录创建/编辑、拒绝、重复键以及各边界崩溃均产生相同的持久化答复且无部分可见状态；嵌套决策共享外层结果；`CheckReplay` 应用结果；酒店业和制造业各自执行该路径；`scripts/verify.sh ci capabilities composition` 和 `deploy/local/rehearse.sh` 通过。 |
+| 19b | 将暂存扩展至工作、审批、效果、连接器输入、流程与智能体决策、序列和动态定义；移除旧的输入重新决策 | 两个行业探针通过崩溃/恢复完成构建者和操作员任务，无丢失意图，重放无外部调用，ID 保持稳定；全量 `CheckReplay`、故障矩阵、`scripts/verify.sh ci capabilities composition web` 和排练通过。 |
+| 19c | 租户隔离、投影修复、格式/版本处理以及恢复诊断 | 异常租户安全停止并可被修复，而另一租户保持运行；UI 解释状态与恢复动作；`CheckReplay`、恢复和升级排练及适用的验证步骤通过。共享进程和 PostgreSQL 故障保持显式测试或排除。 |
 
-## Consequences
+## 后果
 
-This is a host/app API refactor with a durable format commitment. It enables #136's immutable release activation and later AI/work version binding. Until every supported path crosses the new boundary, Platform §2 must call the guarantee partial and the old journal a development baseline. The first batch should be narrow enough to reveal capability escapes before broad replacement.
+这是一次带有持久化格式承诺的宿主/应用 API 重构。它使得 #136 的不可变发布激活以及后续 AI/工作版本绑定成为可能。在每条受支持路径跨越新边界之前，Platform §2 必须将该保证称为部分满足，并将旧日志称为开发基准。第一批切片应足够狭窄，以便在广泛替换之前暴露能力逃逸。
 
-## As built (2026-09-28, #135 19a preparation)
+## 实施现状 (2026-09-28, #135 19a 筹备)
 
-The entry-point/mutation inventory above identifies which owners a first staged submission must enclose and which paths remain for 19b. The Go kernel change log can now make a private `Fork` for a decision and `ApplyAccepted` a saved change into its live log without policy or business-rule execution. Application ledgers expose the latter under their lock. A focused fault test proves discard-before-append leaves the live log untouched, applying the saved change yields the durable receipt, a duplicate does not apply twice, a reused key with other input conflicts, and a gap or altered receipt is refused. These are **staging primitives only**: no tenant submission uses them yet, the PostgreSQL journal still stores inputs, and no result-replay, record-store staging, durable-intent or tenant quarantine guarantee has been claimed. The next 19a increment must stage the host record write and event/work intent together with the ledger before wiring a live input to a result entry.
+上述入口点/变更清单指明了首个暂存提交必须涵盖哪些归属主件，以及哪些路径留待 19b 处理。Go 内核变更日志现在可以为决策创建私有 `Fork`，并在不执行策略或业务规则的情况下将已保存变更 `ApplyAccepted` 到其活动日志中。应用程序账本在其锁保护下暴露后者。针对性故障测试证明：追加前丢弃可使活动日志保持原样、应用已保存变更会产生持久收据、重复项不会应用两次、复用键与其他输入冲突、缺口或被篡改的收据会被拒绝。这些**仅为暂存原语**：目前尚无租户提交使用它们，PostgreSQL 日志仍存储输入，且未声称具备结果重放、记录存储暂存、持久意图或租户隔离保证。下一个 19a 增量必须在将活动输入连入结果条目之前，将宿主记录写入和事件/工作意图连同账本一同暂存。

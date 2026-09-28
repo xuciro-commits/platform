@@ -1,58 +1,58 @@
-# ADR-0030: Production progress — the plant's status reaches the ERP, confirmed lot by lot
+# ADR-0030: 制造进度协同 —— 车间现场状态实时回传 ERP 与按批次分批完工确认
 
-**Status:** Accepted, deferred (2026-09-27, the owner's testing of route 1, #125). The owner accepted D1 to D5 as recommended and set platform faults before app completeness (Intent.md): this is the ERP's and the MES's business process, built when app work resumes.
+**状态：** 已采纳，暂缓构建 (2026-09-27, 业务负责人走查第 1 条测试路由后的反馈，#125)。业务负责人按推荐方案采纳了 D1 至 D5，并明确战略排序：平台通用基础设施缺陷修复优先于具体业务应用的功能补全（[Intent.md](../Intent.md)）：此项属于 ERP 与 MES 的深度业务流程，在业务应用专项推进时再行构建。
 
-## Context
+## 背景
 
-The owner's testing (route 1, 2026-09-27):
-- A shop order's SFCs were in work while the ERP's production order still read "released": what happens downstream does not reach the order upstream until the very end.
-- An order of 10 against a planned order of 20 could not be confirmed, and the correction agent found no planned order to propose, because a confirmation is all or nothing: `production.orders/1#confirm` (`protocols/production`) confirms a planned order once, and the ERP app (`apps/erp/server/erp.go`) moves it from released to confirmed with one posting of the whole yield.
-- The owner asked whether plants and ERPs confirm in parts: an order of fifty million is not received only when the last unit is made.
+业务负责人走查测试发现的问题（测试路由 1，2026-09-27）：
+- 车间工单下的各个 SFC 已经在产线上热火朝天地开工加工，而上游 ERP 中的生产订单状态依然死死显示为“已下达（released）”：下游生产现场实际发生的进度完全无法实时穿透反馈到上游订单，直至最后完工。
+- 当针对一张 20 件的计划订单下达排产 10 件的工单时，该工单无法完成完工确认，且智能纠偏代理也无法检索出可用的计划订单进行推荐，因为此前的完工确认机制是“全有或全无”的粗暴一次性逻辑：`protocols/production` 中的 `production.orders/1#confirm` 假定一张计划订单只能被确认一次，随后 ERP 应用（`apps/erp/server/erp.go`）将该订单从“已下达”直接跃迁为“已确认”，并一次性将全部良品入库过账。
+- 业务负责人发问：现实中的制造工厂与 ERP 难道不是分批分期确认实绩的吗？五千万价值的庞大订单绝不可能等到最后一件产成品下线才统一入库。
 
-What exists: the protocol has one action, `confirm` (shop order, yield, scrap), one read (`orders`) and one event (`released`). The MES confirms when a shop order's last SFC ends (the `mes.erp-confirmation` flow, ADR-0026 9c). The ERP app posts the yield at standard cost and numbers it; the ERP adapter (7d) sends the confirmation to an ERP outside as an effect.
+当前已具备的状态：该协议目前仅暴露单项操作 `confirm`（接收车间工单、良品数、报废数）、单项读取接口 `orders` 以及单项协议事件 `released`。MES 仅在车间工单的最后一个 SFC 完工时触发确认（`mes.erp-confirmation` 业务流，[ADR-0026](0026-decisions-across-apps.md) 9c）。ERP 应用按标准成本核算良品入库并核发凭证编号；ERP 适配器（7d）将该确认作为外部效果异步推送给外部异构 ERP。
 
-What the reference platforms do now:
+业界参考平台的做法：
 
-| | Status up | Partial confirmation | Receipt |
+| | 状态向上传导 | 分批部分确认实绩 | 存货产成品入库 |
 |---|---|---|---|
-| SAP S/4HANA with SAP Digital Manufacturing | The MES sends each operation's and order's status; the ERP sets its order status from them ([Help Portal](https://help.sap.com/docs/sap-digital-manufacturing/integration-guide/automatic-confirmation-integration)) | A partial yield confirms the order partially (status PCNF) until the confirmed quantity reaches the target (CNF) ([Posting confirmations](https://learning.sap.com/courses/implementing-sap-s-4hana-cloud-public-edition-manufacturing/posting-confirmations-for-production-orders-1)) | Each confirmation may post the goods receipt of its yield at once |
-| ISA-95 (the protocol's model) | Production performance reported as it happens | Performance per segment and lot | — |
+| SAP S/4HANA 协同 SAP Digital Manufacturing | MES 实时回传各个工序与工单的执行状态；ERP 基于回传状态实时驱动其生产订单的状态跃迁（[SAP 官方帮助文档](https://help.sap.com/docs/sap-digital-manufacturing/integration-guide/automatic-confirmation-integration)） | 上报部分良品完工实绩时，生产订单转为“部分确认（PCNF）”状态，直至累计确认数量达到目标交货数量后转为“完全确认（CNF）”（[过账确认指南](https://learning.sap.com/courses/implementing-sap-s-4hana-cloud-public-edition-manufacturing/posting-confirmations-for-production-orders-1)） | 每一笔确认操作均支持实时自动过账生成产成品入库物料凭证 |
+| ISA-95 (本协议参考的制造标准) | 生产绩效实绩在发生时实时上报 | 按制造工段与批次（Lot）精细统计绩效 | — |
 
-They agree: the plant reports as it goes — started, each quantity made — and the ERP keeps the order's confirmed quantity, its status and the stock received, confirmation by confirmation, closing the order when the target is reached or the plant says it is final.
+业界核心共识：工厂现场随着生产节奏持续不断地向上反馈实绩 —— 开工动作、每一批完工的产成品数量 —— 而 ERP 在订单上动态维护已确认完工量、实时流转订单状态并按批次入库记录存货，直至达到目标总数或工厂明确标记完工终结。
 
-## Our constraints
+## 我们的架构约束
 
-- One decision changes one app (ADR-0026): the ERP's order moves by the ERP's own decisions on what the protocol carries; the MES never writes the ERP's records, nor reads them to decide.
-- Protocols are versioned (ADR-0011): an addition every provider can take stays `production.orders/1`; a change of meaning is `/2`.
-- Replay never calls outside; the adapter's calls stay effects.
-- No new dependency.
+- 单笔决策严格仅修改单应用（[ADR-0026](0026-decisions-across-apps.md)）：ERP 生产订单的状态只能由 ERP 自有的决策根据协议回传的数据进行跃迁；MES 绝不直接写入 ERP 的记录，也不在决策规则体内直接窥探 ERP 的数据。
+- 协议遵循版本化演进（[ADR-0011](0011-apps-interoperate-through-protocols.md)）：凡是所有提供方均能平滑向后兼容的增量扩展，保持在 `production.orders/1` 原地演进；涉及语义破坏性变更时才升级为 `/2`。
+- 系统重放绝不发起外部调用；适配器的跨系统调用继续严格保持为外部效果。
+- 零第三方新依赖。
 
-## Design
+## 设计
 
-1. **Started.** A new action, `production.orders/1#start` (shop order): the plant's first SFC to start on an order sends it; the ERP's order moves from released to in process. The adapter sends it to the outside ERP as an effect, like a confirmation.
-2. **Confirmation in parts.** `confirm` gains `final` (boolean, default false). The ERP keeps on the order its confirmed yield and scrap and each confirmation (number, shop order, yield, scrap, posting); a confirmation posts the receipt of its yield at standard cost at once; the order is partly confirmed until the confirmed yield reaches its quantity or a confirmation is final, then confirmed. A yield past the order's quantity is refused, with why (F-23).
-3. **The plant confirms per lot.** The MES confirms each SFC's quantity when it ends (an SFC now carries its quantity), final with the shop order's last SFC; a scrapped SFC confirms its quantity as scrap. The confirmation flow runs per lot; its correction and resend stay as they are.
-4. **Several shop orders on one planned order.** A shop order may name a planned order with open quantity (its quantity less what is confirmed) at least its own; the correction agent proposes those. The protocol's `orders` read carries the confirmed quantity.
-5. **The principle, for every app.** A document downstream moves the one upstream only through what the protocol between them carries, as each step happens — not once at the end. The CRM's stays (ADR-0026) already work so; purchasing and receipts are one app (the ERP) and move each other directly.
+1. **开工状态回传（Started）：** 扩充全新协议操作 `production.orders/1#start`（接收车间工单）：当车间针对某笔订单的首个 SFC 正式开工时发出；ERP 生产订单状态顺畅从“已下达”跃迁为“执行中（in process）”。ERP 适配器将该开工动作像完工确认一样作为外部效果同步推送给外部 ERP。
+2. **支持分批部分确认（Partial confirmation）：** `confirm` 操作扩展 `final` 标识（布尔值，默认为 false）。ERP 在生产订单上持久化维护累计确认的良品数、报废数以及每一次确认的历史明细（流水号、车间工单、良品数、报废数、对应记账凭证号）；每次确认时，系统立即按标准成本自动过账该批良品的入库凭证；订单在累计良品数未达标且非终态确认前，持续保持为“部分确认（partly confirmed）”状态，达标或标记终结后转为“已确认”。超额完工上报将被严正拒绝并明确告知原因（F-23）。
+3. **车间按生产批次（Lot）确认实绩：** MES 在每个 SFC 完工时实时上报该批次数量（SFC 扩展携带其所承载的批量数量），并在车间工单的最后一个 SFC 完工时标记 `final=true`；若 SFC 遭遇报废，则确认上报报废数量。完工确认流程按批次独立触发运行；其内部的纠偏提议与重发逻辑完全保持不变。
+4. **单笔计划订单支持对应多笔车间工单：** 车间工单所关联的计划订单，只要其未完工缺口数量（计划总数减去已确认总数）足以覆盖当前车间工单的需求即可排产；纠偏智能代理自动检索并推荐存在可用敞口的计划订单。协议的 `orders` 读取端点扩充返回已确认数量。
+5. **普遍适用的通用架构原则：** 下游执行单据对上游指导单据的状态驱动，只能严格通过二者之间的标准业务协议在每个业务环节发生时逐一传递驱动 —— 绝非等到最终完工时单向一次性孤注一掷。CRM 住宿预订（[ADR-0026](0026-decisions-across-apps.md)）此前已完全贯彻该原则；而 ERP 内部的采购与收货同属于单应用内部事务，直接就地协同推进。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Status up | (a) `start` when the first SFC starts; (b) also each operation's progress; (c) only confirmations | **(a)**: the ERP needs "in process"; operation detail stays the plant's |
-| D2 | When the plant confirms | (a) each SFC (lot) as it ends; (b) each shop order as it ends, as today; (c) a supervisor's choice | **(a)**: receipts follow production, as the owner asked, and a lot is the unit the plant tracks |
-| D3 | Over-confirmation | (a) refuse a yield past the order's quantity; (b) a tolerance per product | **(a)** now; (b) when a product needs it |
-| D4 | Version | (a) extend `production.orders/1` (a new action and an optional field); (b) `production.orders/2` | **(a)**: both providers are ours and take it; an outside ERP behind the adapter sees partial confirmations, which SAP accepts |
-| D5 | Receipt | (a) each confirmation posts its yield's receipt; (b) one receipt when the order closes | **(a)**: stock is there when it is made |
+| D1 | 车间状态向上传导的粒度 | (a) 当首个 SFC 开工时上报 `start` 开工状态。(b) 同时回传每个工序（Operation）的精细进度。(c) 仅在完工确认时回传 | **(a)**：ERP 最核心需要感知的是“已开工在制”；工序级的微观明细属于车间内部隐私 |
+| D2 | 车间发起完工确认的时机 | (a) 每个 SFC（即生产批次 Lot）完工时即刻确认。(b) 像现状一样等整个车间工单完工时才统一确认。(c) 由车间主管人工自由抉择 | **(a)**：存货入库必须紧随实际生产实绩，正如业务负责人指示，且批次本就是工厂追踪物料的核心单元 |
+| D3 | 超量上报完工处置 | (a) 严厉拒绝超过订单计划总量的完工上报。(b) 按物料产品维护允许上浮的公差比例 | 当前采用 **(a)**；后续在特定行业物料确实需要时再扩展 (b) |
+| D4 | 协议版本化演进策略 | (a) 原地向后兼容扩充 `production.orders/1`（新增一项操作与一个可选字段）。(b) 正式发布 `production.orders/2` | **(a)**：当前两个提供商实现皆受我们掌控且天然兼容；适配器背后的外部异构 ERP（如 SAP）天生支持分批部分确认 |
+| D5 | 产成品存货入库记账时机 | (a) 每次部分确认实绩时，立即为该批良品自动入库过账。(b) 订单完全终结关闭时一次性集中入库过账 | **(a)**：产成品一旦在现场被实际制造出来，在财务资产与可用物理库存层面就应立即可见 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 13a | `start`, partial confirmation, per-lot confirmation, open quantity | The manufacturing test: an order of 10 in two lots on a planned order of 20 reads in process when the first lot starts, partly confirmed with a receipt of 5 after the first lot, and a second shop order of 10 on the same planned order confirms it; with the ERP adapter the confirmations leave as effects; `CheckReplay`; the rehearsal; Playwright shows the ERP order's confirmed quantity |
+| 13a | 落地 `start` 开工操作、分批部分确认、按批次分批确认、计划订单未完工敞口计算 | 制造测试验证：针对 20 件的计划订单下达 10 件的车间工单（分两批加工），首批开工时 ERP 订单变为在制执行中，首批 5 件完工后订单呈现部分确认且自动生成 5 件入库过账，随后排产的第二张 10 件车间工单成功将其完全确认关闭；在 ERP 适配器模式下分批确认作为外部效果发出；`CheckReplay` 测试通过；部署演练通过；Playwright 界面测试直观展示 ERP 订单的累计已确认数量 |
 
-## Consequences
+## 影响
 
-- The ERP knows the order is in work and receives stock as lots finish.
-- A confirmation is smaller and more frequent; each has a posting and a number.
-- The correction agent finds planned orders with open quantity, so a shop order smaller than its planned order is no longer an error.
+- ERP 能够实时感知车间工单已在产线开工执行，并随着各个批次的完工即时自动入库增加产成品存货。
+- 单次确认变得更加高频而轻量；每一次实绩确认均拥有独立的记账凭证号与审计流水。
+- 智能纠偏代理能够敏锐推荐存在可用敞口的计划订单，车间工单批量小于计划订单的场景彻底不再被视为业务错误。

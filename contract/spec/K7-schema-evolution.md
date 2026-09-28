@@ -1,29 +1,29 @@
-# K7 Schema evolution — semantics (contract v1alpha1)
+# K7 模式版本演进 — 语义规范 (契约 v1alpha1)
 
-Schema: `proto/platform/kernel/v1alpha1/schema.proto`. Vectors: `vectors/k7-schema-evolution.json`. Errors: `errors.md`.
+模式定义：`proto/platform/kernel/v1alpha1/schema.proto`。一致性测试向量：`vectors/k7-schema-evolution.json`。错误代码：`errors.md`。
 
-## Model
+## 概念模型
 
-- Every payload is tagged with a `SchemaRef` (name, version). Compatible changes (adding optional fields) keep the version, and readers preserve unknown fields; an incompatible change is a new version.
-- A receiver's **registry** lists the versions it knows and the upgrade steps it has. An upgrade step turns version v into v+1 of the same name; the transformation is domain code, the kernel only defines when it applies.
-- Records keep the version they were submitted with: history is never rewritten by an upgrade. Readers upgrade on read.
-- Entity types split or merge through K1 redirects, not through schema versions.
-- Rolling out a version follows expand → migrate → contract: readers learn it (S1–S3), writers switch once every receiver accepts it (S4), and the old version is retired once nothing stored depends on it (S5).
+- 每个有效负载均标记有 `SchemaRef`（名称 name、版本 version）。向前兼容的变更（如增加可选字段）保持原有版本不变，读取端完整保留未知字段；不兼容的破坏性变更必须递增为全新版本。
+- 接收方的**注册表 (registry)** 列出其所认知的版本列表以及其持有的升级步骤链。一个升级步骤将相同名称的模式版本从 v 升级转换为 v+1；具体的转换逻辑由业务代码实现，内核仅负责规定何时应用该转换。
+- 记录始终保留其提交时所绑定的版本：历史事实绝不因升级操作而发生重写。读取端在执行读取时动态执行就地升级。
+- 实体类型的拆分或合并通过 K1 重定向实现，绝不通过模式版本号机制实现。
+- 版本的上线发布遵循“扩展 (expand) → 迁移 (migrate) → 收缩 (contract)”流程：读取端首先获知新模式 (S1–S3)，写入端在所有接收方均接纳新版本后切换写入 (S4)，当没有任何已存储数据依赖旧版本时方可彻底废除旧版本 (S5)。
 
-## Rules
+## 语义规则
 
-| # | Rule | Error when violated |
+| 编号 | 规则描述 | 违规返回错误 |
 |---|---|---|
-| S1 | A receiver accepts (name, v) if it knows v, or if a chain of its upgrade steps leads from v to a version it knows. K4 C2 and K2 F2 use this definition. | `UNKNOWN_SCHEMA` |
-| S2 | An upgrade step has a name and `from_version` ≥ 1; its target (`from_version + 1`) must be known when it is registered; a step is registered once. | `INVALID_ARGUMENT`, `INVALID_REFERENCE`, `CONFLICT` |
-| S3 | Reading a payload of version v at version t applies the steps v → v+1 → … → t. t must be known and not below v (no downgrades); every step must exist. | `UNKNOWN_SCHEMA` (t unknown or a step missing), `INVALID_ARGUMENT` (t < v) |
-| S4 | A writer that can produce several versions sends the highest one the receiver accepts. If the receiver accepts none, nothing is sent. | `UNKNOWN_SCHEMA` |
-| S5 | Retiring a known version is rejected if any stored payload would no longer be accepted afterwards. Retiring an unknown version fails. | `CONFLICT`, `NOT_FOUND` |
-| S6 | A rejected operation leaves the registry unchanged. | — |
-| S7 | A receiver may learn (name, v) at any time, not only when its registry is made: it becomes known. Learning a version already known changes nothing, and learning never drops a known version or an upgrade step. A name or a version below 1 is refused. | `INVALID_ARGUMENT` |
+| S1 | 接收方若认知版本 v，或存在一条由升级步骤组成的链条能够从 v 引导至其认知的某个版本，则接收方接纳 (name, v)。K4 C2 与 K2 F2 均基于此定义裁决。 | `UNKNOWN_SCHEMA` |
+| S2 | 一个升级步骤包含模式名称且其 `from_version` ≥ 1；其目标版本 (`from_version + 1`) 在注册该步骤时必须已被系统认知；一个升级步骤严禁重复注册。 | `INVALID_ARGUMENT`, `INVALID_REFERENCE`, `CONFLICT` |
+| S3 | 以版本 t 读取版本为 v 的有效负载，依次应用转换步骤：v → v+1 → … → t。目标版本 t 必须已被系统认知且不得低于 v（严禁版本降级）；转换链条中的每一步骤必须完备存在。 | `UNKNOWN_SCHEMA`（t 未知或中间步骤缺失）, `INVALID_ARGUMENT`（t < v） |
+| S4 | 能够产生多个版本的写入端，应当发送接收方能够接纳的最高版本。若接收方无法接纳其中任何版本，则严禁发送任何数据。 | `UNKNOWN_SCHEMA` |
+| S5 | 废除某个已知版本时，若会导致任何已持久化存储的有效负载在此之后无法被系统接纳，则该废除操作予以拒绝。废除未知版本报错失败。 | `CONFLICT`, `NOT_FOUND` |
+| S6 | 被拒绝的操作不改变注册表状态。 | — |
+| S7 | 接收方可以在任意运行时动态学习获知 (name, v)，而不局限于注册表初始化创建期：学习后该版本变为已知状态。学习已被认知的版本保持现状，且动态学习绝不剔除任何已知版本或既有升级步骤。模式名称非法或版本号小于 1 予以拒绝。 | `INVALID_ARGUMENT` |
 
-## Notes
+## 补充说明
 
-- A retired version stays acceptable while an upgrade step leads from it to a known version (S1); retiring therefore means "no longer written or read natively", not "unreadable".
-- Learning (S7) is how a receiver takes a schema that did not exist when it started: a new package installed while it runs, or a definition someone authored in a tenant. It states nothing about where the version came from or who may teach it; that is the receiver's own policy.
-- Negotiation (S4) is how old clients and new servers coexist: the server keeps writing the old version to a client that has not learned the new one.
+- 只要存在从已被废除的版本通向已知版本的有效升级链条，该废除版本依然保持可被接纳状态 (S1)；因此“废除”意味着“系统不再原生读写该版本”，而非“该版本数据彻底无法读取”。
+- 动态学习 (S7) 是接收方接纳其启动时根本不存在的全新模式的核心机制：例如系统运行时动态安装的新应用包，或者某个用户在租户中自主可视化创建的新对象定义。该机制不干预版本从何而来或谁有权传授它；那属于接收方自身的权限策略。
+- 版本协商机制 (S4) 是实现旧版客户端与新版服务端平稳共存的关键机制：服务端在面对尚未获知新版本的旧客户端时，持续向其输出旧版本数据。

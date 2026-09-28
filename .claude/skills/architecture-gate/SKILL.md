@@ -1,35 +1,35 @@
 ---
 name: architecture-gate
-description: Open a platform stage or a structural change with an ADR the owner decides. Use when a stage of docs/Platform.md §10.5 starts, when a work-queue item says "gate", or when a change has lasting cost (a new platform app, a journal entry kind, a kernel rule, a dependency, a public API).
+description: 开启平台演进阶段或由负责人决策的结构性变更 ADR。当 docs/Platform.md §10.5 的某个阶段启动、工作队列项标注有 "gate"、或某项变更具有持久成本（新增平台级应用、日志分录类别、内核规则、第三方依赖、公开 API）时使用。
 ---
 
-# Architecture gate
+# 架构门禁 (Architecture Gate)
 
-A gate turns the accepted direction into the remaining structural decisions before implementation. ADR-0031 establishes the next-stage product direction; Platform §10 owns its target design and annual roadmap. Existing owner authorization remains valid: do not reopen a settled decision merely because this skill is invoked.
+架构门禁用于在编码实现之前，将已接受的宏观方向转化为明确的结构性决策。ADR-0031 确立了下一阶段的产品战略方向；Platform §10 统揽其目标设计与年度路线图。负责人已有的授权持续有效：切勿仅仅因为调用了本技能就重新推翻已敲定的既成决策。
 
-## 1. Establish the facts
+## 1. 确立事实依据
 
-- Read `docs/Intent.md` → `docs/Platform.md` §10 → `docs/WorkQueue.md`, then §2 (the current product model) and the ADRs the change touches.
-- Check every implementation claim against the current code and tests. Distinguish the dated audit (§10.2), target architecture and builder journey (§10.3–10.4), roadmap (§10.5) and acceptance (§10.6). An accepted design does not prove its implementation.
-- Look up what the reference platforms (Intent.md and Platform §10.1) do **now**, from their own documentation or announcements. Cite the exact sources and distinguish current product claims from stable engineering principles. Say when a source could not be read.
+- 按序阅读 `docs/Intent.md` → `docs/Platform.md` §10 → `docs/WorkQueue.md`，随后阅读 §2（当前产品模型）以及该变更所触及的各项 ADR。
+- 对照当前代码与测试严格核实每一项实现断言。清晰区分历史审计（§10.2）、目标架构与构建者旅程（§10.3–10.4）、路线图（§10.5）以及验收标准（§10.6）。被接受的设计方案绝不等于其已经实现完毕。
+- 从官方文档或最新公告中查阅各标杆参考平台（Intent.md 与 Platform §10.1）**当前**的真实做法。精准引用一手来源，并将各家厂商当下的宣传宣称与稳定的基础工程原理严格区分开来。若某项资料无法查阅，需如实说明。
 
-## 2. Write `docs/ADR/00NN-<name>.md`
+## 2. 撰写 `docs/ADR/00NN-<name>.md`
 
-Sections, in this order:
-- **Status:** `Proposed (<date>, #<item>)` for undecided choices; when the owner has already authorized the concrete direction, record that acceptance and its scope instead of asking again.
-- **Context:** what exists (with code pointers), what is missing, what the reference platforms do (a table), and the few things they agree on.
-- **Our constraints:** replay never calls outside; the journal stays small enough to replay; code and controlled, typed definitions share semantic validation, permissions and release controls (ADR-0031); no arbitrary tenant code execution is promised; respect the owner's existing authorization for dependencies and downloads; no domain vocabulary in `contract/`.
-- **Design:** numbered points, each saying who owns what, which builder and operator task it enables, and how it replays or recovers. Frontend and application-building capabilities belong on the mainline; give them interaction and usability criteria as well as runtime criteria.
-- **Decision points for the owner:** a table `# | Question | Options | Recommendation`, one row per choice with lasting cost; say what is declined and why.
-- **Build items after the decisions:** a table `Batch | Item | Done when`. Every batch's done-when names applicable checks, `CheckReplay` and the rehearsal (`deploy/local/rehearse.sh`) for persistence changes, and the complete builder/operator journey proving it. Shared capabilities need proof on at least two reference apps from different industries; frontend work needs observed visual and interaction acceptance, not only generated screens.
-- **Consequences.**
+严格按以下顺序组织章节：
+- **状态 (Status)：** 针对未决选择标注 `Proposed (<date>, #<item>)`；当负责人已经授权了具体方向时，如实记录该认可及其授权范畴，无需重复请示。
+- **背景上下文 (Context)：** 当前已存在的内容（附带代码指针）、缺失的内容、业界标杆平台的做法（对比表格），以及它们达成的少数共识。
+- **我们的约束条件 (Our constraints)：** 重放过程绝不发起外部调用；日志体积必须足够小以确保重放高效；手写代码与受控的类型化定义共享语义校验、权限控制与发布治理 (ADR-0031)；平台不承诺支持任意租户代码的执行；严格尊重负责人针对第三方依赖与下载所设立的既有授权；`contract/` 中严禁出现任何领域专属词汇。
+- **设计方案 (Design)：** 编号要点，逐条说明谁归属什么、它赋能了构建者与操作员的哪项具体任务，以及它如何重放或故障自愈。前端与应用构建能力属于主线范围；为其确立交互与可用性验收标准，如同确立运行时标准一样。
+- **供负责人抉择的决策点 (Decision points for the owner)：** 格式为表格 `# | 抉择问题 | 备选选项 | 推荐建议`，每个具有持久成本的选择占用一行；明确说明拒绝了什么以及为何拒绝。
+- **决策后的构建任务批次 (Build items after the decisions)：** 格式为表格 `批次 | 任务项 | 完成标准 (Done when)`。每个批次的完成标准必须指明适用的检查项、针对持久化变更的 `CheckReplay` 与演练脚本 (`deploy/local/rehearse.sh`)，以及证明该能力的完整构建者/操作员用户旅程。共享通用能力必须在至少两个不同行业的参考应用中得到验证；前端工作必须包含经过实际观察的视觉与交互验收，绝不能仅靠自动生成的页面交差。
+- **影响与后果 (Consequences)。**
 
-## 3. Hand it to the owner
+## 3. 提交负责人审阅
 
-- For unresolved choices with lasting cost, add or update the work-queue item with status `gate, owner decision`. Explain which decision remains open and ask only for that decision before its dependent implementation.
-- When the owner has already accepted the choices, record that evidence and continue within the authorized scope. Authorization to establish a design document does not by itself authorize implementing all its future capabilities.
+- 对于具有持久成本的未决选择，在工作队列中新增或更新条目，状态置为 `gate, owner decision`。清晰解释哪项决策依然悬而未决，并在依赖其的具体实现展开前仅针对该决策请示裁决。
+- 当负责人已经认可了相关选择，记录该证据并在已获授权的范畴内继续推进。确立架构设计文档的授权本身，并不自动等于被授权实现其规划的所有未来能力。
 
-## 4. When accepted
+## 4. 决策获得接受后
 
-- Status becomes `Accepted (<date>, #<item>). The owner accepted D1–Dn as recommended` (or as amended, saying how).
-- Build batch by batch; close each with the `close-out` skill.
+- 状态变更为 `Accepted (<date>, #<item>). The owner accepted D1–Dn as recommended`（或注明经负责人修订后的具体内容）。
+- 按批次逐步构建；每个批次通过 `close-out` 技能完成收尾。

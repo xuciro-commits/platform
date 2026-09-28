@@ -1,78 +1,78 @@
-# ADR-0034: Objects a tenant defines run on the machinery that is already installed
+# ADR-0034: 租户定义的对象运行在已安装的基础设施上
 
-**Status:** Accepted (2026-09-27, #131/#132). The owner set the direction on 2026-09-27: build the trunk — what people actually use on the platform — before robustness and safety work ("first the engine and the wheels, not the airbag"). This ADR records the structural decisions that direction needs, and D1–D5 are accepted as recommended.
+**状态：** 已接受 (2026-09-27, #131/#132)。项目负责人在 2026-09-27 确定了方向：在进行稳健性与安全性工作之前，先构建主干——即人们在平台上实际使用的核心功能（“先造好发动机和轮子，而不是安全气囊”）。本 ADR 记录了该方向所需的结构性决策，D1–D5 按推荐方案接受。
 
-## Context
+## 背景
 
-A tenant cannot define anything today. Every entity, action and page is a Go declaration read at composition (`platform.Manifest`, `recordStore.declare`, `registerDefinitions`), and the workspace loads one UI package per installed app. ADR-0032 established the asset registry and a bounded code page; ADR-0031 accepted that customers and FDEs compose permitted models, pages, processes and AI logic. Nothing of that is reachable without a typed definition a tenant can author and publish, so the first builder journey — define an object, publish it, use it — does not exist.
+目前租户无法定义任何东西。每个实体、动作和页面都是在组合时读取的 Go 声明（`platform.Manifest`、`recordStore.declare`、`registerDefinitions`），且工作区为每个已安装应用加载一个 UI 包。ADR-0032 建立了资产注册表与受限代码页面；ADR-0031 接受了客户与 FDE 组合受准入控制的模型、页面、流程和 AI 逻辑。在没有租户可编写和发布的具类型定义的情况下，这一切都无法实现，因此第一个构建者旅程——定义对象、发布它、使用它——并不存在。
 
-What the platform already has is the whole operating half: the record store with scope and field security, generated create/edit/archive actions, generated forms, list/detail pages, search, aggregates, import and export, the journal with replay and snapshots, links, comments, files and agents. The question is not how to build a second runtime for tenant data; it is how a tenant's definition becomes an ordinary declaration of that runtime.
+平台目前已经具备了整个运行期的下半部分：带有范围与字段级安全的记录存储、生成的创建/编辑/归档动作、生成的表单、列表/详情页面、搜索、聚合、导入和导出、带有重放与快照的日志、链接、评论、文件和智能体。核心问题不是如何为租户数据构建第二套运行时；而是租户的定义如何成为该运行时的常规声明。
 
-| Current reference evidence | Design lesson |
+| 当前参考依据 | 设计启示 |
 |---|---|
-| Frappe: [a DocType is JSON that creates a database table](https://docs.frappe.io/framework/user/en/basics/doctypes), and a [Custom Field](https://docs.frappe.io/framework/user/en/basics/doctypes/customize) records site-specific fields; forms, lists and permissions come from the same meta. | One definition drives storage, forms and lists. The definition is data; the runtime derives everything else. |
-| Salesforce: custom objects and [custom metadata types](https://help.salesforce.com/s/articleView?id=platform.custommetadatatypes_overview.htm&language=en_US&type=5) are metadata with [explicit per-edition allocations](https://developer.salesforce.com/docs/atlas.en-us.salesforce_app_limits_cheatsheet.meta/salesforce_app_limits_cheatsheet/salesforce_app_limits_platform_metadata.htm) (the limits pages returned placeholders when fetched, so only their existence is cited). | Tenant definitions are bounded, counted resources, not unlimited schema. |
-| ServiceNow: [App Engine Studio](https://www.servicenow.com/docs/r/application-development/app-engine-studio/add-automation.html) builds tables, forms and automation for customer-authored applications inside one platform. | The builder is a first-class surface over the same platform, not an export to code. |
+| Frappe: [DocType 是创建数据库表的 JSON](https://docs.frappe.io/framework/user/en/basics/doctypes)，而 [Custom Field](https://docs.frappe.io/framework/user/en/basics/doctypes/customize) 记录站点特定字段；表单、列表和权限均来自相同的元数据。 | 一份定义驱动存储、表单和列表。定义即数据；运行时派生其他一切。 |
+| Salesforce: 自定义对象与[自定义元数据类型](https://help.salesforce.com/s/articleView?id=platform.custommetadatatypes_overview.htm&language=en_US&type=5)是具有[明确版本配额](https://developer.salesforce.com/docs/atlas.en-us.salesforce_app_limits_cheatsheet.meta/salesforce_app_limits_cheatsheet/salesforce_app_limits_platform_metadata.htm)的元数据（限制页面在获取时返回占位符，因此仅引用它们的存在）。 | 租户定义是有界的、受计量的资源，而非无限制的模式。 |
+| ServiceNow: [App Engine Studio](https://www.servicenow.com/docs/r/application-development/app-engine-studio/add-automation.html) 在单一平台内为客户编写的应用程序构建表格、表单和自动化。 | 构建器是同一平台上一等公民的表层，而非向代码的导出。 |
 
-They agree that a customer-authored object is metadata interpreted by the existing runtime, and that it is bounded and versioned.
+它们都认同：客户编写的对象是由现有运行时解释的元数据，并且它是有界且受版本控制的。
 
-## Our constraints
+## 我们的约束
 
-- No second runtime and no arbitrary tenant code (ADR-0031, AGENTS.md rule 11): a tenant object must be an ordinary entity of the record store, with the same reads, actions, forms, scope, field security and journal.
-- Replay never calls outside and must rebuild the same state: an object's definition is a decision in the journal, so replay installs it in the order it was installed.
-- A snapshot restores without replaying, so a restore must install the definitions before restoring the records of the types they define.
-- The kernel stays domain-free: a tenant's object is a data class declared by the app that owns the builder, not a kernel concept.
-- Robustness work is explicitly later (the owner's direction): the durable result journal, tenant supervision and release closure of #135/#136 are not preconditions of this slice. Development data stays disposable.
+- 不引入第二套运行时，不引入任意租户代码（ADR-0031，AGENTS.md 规则 11）：租户对象必须是记录存储的普通实体，具有相同的读取、动作、表单、范围、字段级安全和日志机制。
+- 重放绝不向外调用，且必须重建完全相同的状态：对象的定义是日志中的一项决策，因此重放按其安装顺序进行安装。
+- 快照在不重放的情况下进行恢复，因此恢复必须在恢复所定义类型的记录之前先安装这些定义。
+- 内核保持脱离业务领域：租户的对象是由拥有构建器的应用声明的数据类，而非内核概念。
+- 稳健性工作明确延后（负责人的指示）：#135/#136 的持久结果日志、租户监督和发布闭包不是本切片的前提条件。开发数据保持一次性/可丢弃。
 
-## Design
+## 设计
 
-1. **The builder is a platform app.** `build` (`capabilities/server/apps/build`) owns `build.object` records: a name, what people call it, a description and its fields (name, label, type, choices, reference, required, searchable). Authoring is ordinary decisions through generated actions, so drafts, history, audit and translations already work. A `builder` role authors; a `user` role uses what is published.
-2. **Publishing installs the definition into the running host.** The `publish` transition builds a Go struct type at runtime (`reflect.StructOf`, with `platform.Record` embedded first and the field tags a code author would write), describes it as a `platform.Entity` of the `build` app, and asks the host to install it: the record store declares the type, the app's ledger gains the data class and the generated `create`, `edit` and `archive` actions, the host routes those schemas to `build`, and the asset registry gains the object, its actions and a `list-detail` page. From that moment the type behaves like a coded one: `/v1/records`, `/v1/entities`, generated forms, search, aggregates, import and export, links, comments and files.
-3. **Publishing again evolves the object.** A published object may gain or change fields; installing it again rebuilds the type and carries existing records into it through their JSON, so records keep every value whose field still exists. A field that is gone loses its values, which is what removing it means. No migration language is introduced for this slice; nothing renames yet.
-4. **Replay and restore install in order.** A record of a tenant type only ever appears in the journal after the publish decision that installed it, so replay installs before it stores. A snapshot restores the apps, then the records of the types declared in code, then asks each app that installs definitions to install them again, then restores the records of the types that just appeared. A snapshot naming a type nobody installs is an error, as an unknown coded type already is.
-5. **What this slice does not do.** No per-object roles or scopes (every member with a role in `build` reads and writes what is published), no immutable published revision or release artifact (#131 13c, #136), no tenant-authored actions, flows, AI logic or page layouts beyond the generated `list-detail` page (#132, #133), no limits or quotas on how many objects a tenant defines, and no cross-tenant sharing of definitions. Each is named in the work queue rather than half-built here.
+1. **构建器是一个平台应用。** `build`（`capabilities/server/apps/build`）拥有 `build.object` 记录：名称、人类可读称谓、描述及其字段（名称、标签、类型、选项、引用、是否必填、是否可搜索）。编写是通过生成的动作进行的常规决策，因此草稿、历史记录、审计和翻译都已经可用。`builder` 角色负责编写；`user` 角色使用已发布的内容。
+2. **发布将定义安装到运行中的宿主中。** `publish` 转换在运行时构建一个 Go 结构体类型（`reflect.StructOf`，首先嵌入 `platform.Record` 并带有代码作者会编写的字段标签），将其描述为 `build` 应用的 `platform.Entity`，并请求宿主安装它：记录存储声明该类型，应用的账本获得数据类以及生成的 `create`、`edit` 和 `archive` 动作，宿主将这些架构路由到 `build`，资产注册表获得该对象、其动作和 `list-detail` 页面。从那一刻起，该类型的行为与代码编写的类型完全一致：`/v1/records`、`/v1/entities`、生成的表单、搜索、聚合、导入和导出、链接、评论和文件。
+3. **再次发布演进对象。** 已发布的对象可以增加或更改字段；再次安装它会重建类型，并通过 JSON 将现有记录载入其中，因此记录会保留其字段仍然存在的每个值。已消失的字段将丢失其值，这正是删除字段的含义。本切片不引入模式迁移语言；暂不支持重命名。
+4. **重放和恢复按序安装。** 租户类型的记录只会在安装它的发布决策之后出现在日志中，因此重放会在存储之前先安装。快照先恢复应用，然后恢复代码中声明的类型的记录，接着请求安装定义的每个应用再次安装它们，最后恢复刚刚出现的类型的记录。命名了无人安装的类型的快照将报错，正如未知代码类型已经报错一样。
+5. **本切片暂不实现的内容。** 没有按对象的角色或范围（在 `build` 中拥有角色的每个成员都可以读取和写入发布的内容），没有不可变的已发布修订版或发布工件（#131 13c, #136），没有生成的 `list-detail` 页面之外的租户编写动作、流程、AI 逻辑或页面布局（#132, #133），对租户定义的对象数量没有限制或配额，也没有定义的跨租户共享。每一项都在工作队列中指名，而不是在这里半成品化。
 
-## Decision points for the owner
+## 负责人决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | How is a tenant's object represented at runtime? | A Go struct built by `reflect.StructOf` and declared like any entity; or a generic record type carrying a map of values. | The built struct. Every existing capability — describe, scope, field security, forms, aggregates, import, snapshots — works unchanged, and no read path grows a second branch. |
-| D2 | Who owns tenant objects? | The `build` platform app as their authority, with types named `build.<name>`; or a new authority per object. | The `build` app. One authority keeps the kernel's declaration model intact and the journal readable. |
-| D3 | What does publishing do to existing records? | Rebuild the type and carry records through their JSON; or refuse to change a published object. | Carry them. A builder who cannot add a field to a live object cannot build anything real; the honest cost is that a removed field's values are gone. |
-| D4 | How do published objects reach the workspace? | The same page descriptors code pages use, rendered by `PageWorkspace`; or a separate dynamic-object screen. | The same descriptors. It is the convergence ADR-0032 promised, and the builder gets the shared list/detail frame, keyboard behavior and Chinese copy for free. |
-| D5 | What guards this before #135 and #136 land? | Development-grade: journal and snapshot as they are, disposable data, no release closure; or wait for the durable contract. | Development-grade now, with the limits written down. The loop has to exist before its durability is worth designing. |
+| D1 | 租户的对象在运行时如何表示？ | 由 `reflect.StructOf` 构建并像普通实体一样声明的 Go 结构体；或携带值映射的通用记录类型。 | 构建出的结构体。所有现有能力——描述、范围、字段级安全、表单、聚合、导入、快照——无需更改即可运行，且没有任何读取路径会增加第二条分支。 |
+| D2 | 谁拥有租户对象？ | 作为其权威的 `build` 平台应用，类型命名为 `build.<name>`；或每个对象一个新权威。 | `build` 应用。单一权威保持内核的声明模型完整，并保持日志易读。 |
+| D3 | 发布对现有记录做什么？ | 重建类型并通过 JSON 载入记录；或拒绝更改已发布的对象。 | 载入它们。无法向在线对象添加字段的构建者无法构建任何真实的东西；诚实的代价是被删除字段的值将消失。 |
+| D4 | 发布的对象如何到达工作区？ | 与代码页面使用的相同页面描述符，由 `PageWorkspace` 渲染；或单独的动态对象屏幕。 | 相同的描述符。这是 ADR-0032 承诺的收敛，构建器免费获得共享的列表/详情框架、键盘行为和中文文案。 |
+| D5 | 在 #135 和 #136 落地之前，如何对此进行防护？ | 开发级别：按现状使用日志和快照，一次性数据，无发布闭包；或等待持久化契约。 | 现在采用开发级别，写明限制。闭环必须先存在，其持久性才值得设计。 |
 
-Declined for this slice: a schema-migration language, tenant-authored Go or expressions, per-tenant table projections in PostgreSQL for dynamic types, and any promise that a published object survives an incompatible platform upgrade.
+本切片拒绝的方案：模式迁移语言、租户编写的 Go 或表达式、PostgreSQL 中针对动态类型的按租户表投影，以及发布对象在不兼容平台升级后仍能存活的任何承诺。
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 15a | The `build` app, runtime installation, evolution by re-publishing, replay and restore order, and the builder UI over the generated page | A member with the `builder` role defines an object with several field types in the workspace, publishes it, creates and edits records of it through the generated form, finds them in search, adds a field and keeps the existing values; `CheckReplay` and a snapshot/restore round trip hold; `scripts/verify.sh ci composition web` passes |
-| 15b | Tenant-authored pages over installed objects (#132) | Built: a page names its object, fields and actions, is checked when published and offered only to members who may read its object; the workspace navigates from the registry | 
-| 15c | Bounded actions a tenant authors, per-object roles and scope (#130's model applied to tenant objects), and the published revision and release binding (#131 13c, #136) | Each in its own batch; this ADR's slices are not extended in place |
+| 15a | `build` 应用、运行时安装、重新发布演进、重放与恢复顺序，以及生成页面上的构建器 UI | 拥有 `builder` 角色的成员在工作区中定义一个具有多种字段类型的对象，发布它，通过生成的表单创建和编辑其记录，在搜索中找到它们，添加一个字段并保留现有值；`CheckReplay` 与快照/恢复往返测试成立；`scripts/verify.sh ci composition web` 通过 |
+| 15b | 基于已安装对象的租户编写页面 (#132) | 已构建：页面指名其对象、字段和动作，发布时接受检查，且仅向可以读取其对象的成员提供；工作区从注册表导航 | 
+| 15c | 租户编写的有界动作、按对象角色与范围（应用于租户对象的 #130 模型），以及已发布修订版和发布绑定（#131 13c, #136） | 各自独立成批；不在此 ADR 的切片中就地扩展 |
 
-## Consequences
+## 后果
 
-A tenant can build something usable without touching code, on exactly the machinery the platform already proves. The cost is that a tenant's definition is now part of the state that replay and restore must reproduce, which is what D4 pins down; and that an object's authority, roles and scope are coarse until #130's declaration model is applied to tenant objects. Because the definition is data of one platform app, later work — versions, releases, per-object permissions, tenant pages — extends it rather than replacing it.
+租户可以在不触碰代码的情况下构建可用的东西，且完全运行在平台已经验证的同一套机制上。代价是租户的定义现在成为了重放与恢复必须重现的状态的一部分，这正是 D4 所锚定的；并且在将 #130 的声明模型应用于租户对象之前，对象的权威、角色和范围都是粗粒度的。由于定义是一个平台应用的数据，后续工作——版本、发布、按对象权限、租户页面——将对其进行扩展而非替换它。
 
-## As built (15a)
+## 实施现状 (15a)
 
-- **The builder app** (`capabilities/server/apps/build`): `build.object` records hold a name, what people call it, a description and its fields (name, label, type, choices, reference, required, searchable), with a draft → published lifecycle. A `builder` authors and publishes; a `user` works with what is published. What a payload carries is checked while it is still a draft — a name that is not a name, a type the platform has not, a choice without values, a reference to an object the tenant has not — and the reason is what the person reads.
-- **Publishing installs it** (`installed.go`, `Tenant.Install`): the transition builds the Go type (`reflect.StructOf` with `platform.Record` embedded and the tags a developer would write), the ledger learns its data class and generated schemas (`Ledger.Extend`, K7 S7), the record store declares the type, the host routes its actions to `build`, and the registry gains the object, its actions and a `list-detail` page. `Catalog.Add` and the catalog's own lock let a member's catalog grow while they are signed in.
-- **Published again, it evolves** (`recordStore.install`): the rows are carried into the new Go type through their JSON, so records keep the value of every field that remains.
-- **Replay and restore** (`snapshot.go`): a record of a tenant type only follows the publish decision that installed it, so replay installs in order; a restore loads the coded types' records, calls `Reinstall` on the apps that install definitions, then the rest. `CheckReplay` covers both in `TestTenantDefinedObject`.
-- **The kernel learned to learn** (K7 S7, `contract/spec/K7-schema-evolution.md`, `vectors/k7-schema-evolution.json`, `SchemaRegistry.Learn`): a receiver may take a schema that did not exist when it started. This was the one contract gap the slice found.
-- **The workspace** (`web/packages/build`, `@pkg/build`): the Builder app shows the objects page and one nav item per published object, both rendered by `PageWorkspace` — the component a code page uses. Two platform repairs came out of walking it: an app's home route kept its parameters, and a decision about a type the client has no declaration for refreshes declarations before it is refused (the K5 outbox had answered `NOT_FOUND`).
-- **Proven**: `TestTenantDefinedObject` (host: refusals, publish, records, search, page asset, a field added, replay and snapshot), `TestTheHotelDefinesItsOwnObject` (hospitality, beside the CRM and PMS), browser route 29 (define → publish → use, in the workspace), and the walk recorded in docs/Testing.md. `scripts/verify.sh contract capabilities composition web` passes.
-- **Not built in 15a**: per-object roles and scope, tenant-authored pages, actions and flows, published revisions and releases, limits per tenant, and a PostgreSQL projection for defined types.
+- **构建器应用**（`capabilities/server/apps/build`）：`build.object` 记录保存名称、人类可读称谓、描述及其字段（名称、标签、类型、选项、引用、是否必填、是否可搜索），具有草稿 → 已发布的生命周期。`builder` 编写并发布；`user` 使用已发布的内容。有效负载所携带的内容在仍为草稿时即被校验——不合规范的名称、平台不具备的类型、没有候选项的选择、对租户不具备的对象的引用——其原因正是用户所读到的提示信息。
+- **发布执行安装**（`installed.go`，`Tenant.Install`）：状态转换构建 Go 类型（`reflect.StructOf`，嵌入 `platform.Record` 并带有开发者会编写的标签），账本获知其数据类和生成的模式（`Ledger.Extend`，K7 S7），记录存储声明该类型，宿主将其动作路由到 `build`，注册表获得该对象、其动作和 `list-detail` 页面。`Catalog.Add` 和目录自身的锁允许成员的目录在其登录期间动态扩充。
+- **再次发布，实现演进**（`recordStore.install`）：通过 JSON 将行数据载入新的 Go 类型中，因此记录会保留所有仍然存在的字段的值。
+- **重放与恢复**（`snapshot.go`）：租户类型的记录仅出现在安装它的发布决策之后，因此重放按序安装；恢复会先加载代码类型的记录，在安装定义的应用上调用 `Reinstall`，然后恢复其余内容。`TestTenantDefinedObject` 中的 `CheckReplay` 覆盖了这两者。
+- **内核学会了学习**（K7 S7，`contract/spec/K7-schema-evolution.md`，`vectors/k7-schema-evolution.json`，`SchemaRegistry.Learn`）：接收方可以接受启动时不存在的模式。这是该切片发现的唯一一处契约缺口。
+- **工作区**（`web/packages/build`，`@pkg/build`）：构建器应用展示对象页面以及每个已发布对象的导航项，两者均由 `PageWorkspace` 渲染——与代码页面使用的组件完全一致。在实际走查中完成了两项平台修复：应用的主页路由保留了其参数，并且针对客户端没有声明的类型的决策会在被拒绝前刷新声明（K5 发件箱此前曾返回 `NOT_FOUND`）。
+- **验证通过**：`TestTenantDefinedObject`（宿主：拒绝、发布、记录、搜索、页面资产、字段添加、重放和快照）、`TestTheHotelDefinesItsOwnObject`（酒店业方案，与 CRM 和 PMS 并存）、浏览器路由 29（在工作区中定义 → 发布 → 使用），以及 docs/Testing.md 中记录的走查路径。`scripts/verify.sh contract capabilities composition web` 通过。
+- **15a 未构建内容**：按对象的角色与范围、租户编写的页面、动作与流程、已发布修订版与发布、按租户配额限制，以及针对已定义类型的 PostgreSQL 投影。
 
-## As built (15b: pages a tenant composes)
+## 实施现状 (15b: 租户组合的页面)
 
-- **`build.page` records** (`apps/build/page.go`): a name, what people call it, the object it shows (one this tenant defined or an app's own), the fields of its list and of its detail, and the actions it offers — with a draft → published lifecycle like an object's. What the payload carries is checked while it is a draft, and publishing checks the whole page: an object this tenant has not, a field it has not (the reason names the fields it does have), an action about something else.
-- **The host owns the check and the offer** (`Tenant.InstallPage`): a page is registered only when its object, fields and actions exist, so what the registry offers can always be opened. A page over an object the member may not read is not offered to them, because `Tenant.Definitions` already intersects with what they may see; the records and actions on it stay the member's own.
-- **What was published is what runs** (`Object.Published`, `Page.Published`): publishing keeps the definition as it was published on the record, and a restore installs that — a draft written afterwards stays a draft. This is the honest half of the revision model #131 13c will finish; it is not yet an immutable revision with a version.
-- **The workspace navigates from the registry** (`Host.definitions`, `@pkg/build`): an app's navigation can offer the pages it has, code or composed. The Builder shows Objects, Pages, and every page this organisation published.
-- **The UI kit grew the editor the composer needed** (`field.tags`, `packages/ui`): a tags field with no list to choose from is now words a person types — Enter or a comma adds one, a chip removes it, Backspace takes the last. Before this, such a field had no editor at all, in any app.
-- **Proven**: `TestTenantDefinedObject` (a page over a defined object, a refused composition leaving the running page alone, replay and snapshot), `TestTheHotelDefinesItsOwnObject` (a page over the CRM's opportunity with the CRM's close action; not offered to a member without the CRM), the kit's `tags` test, and browser route 30 (compose over `crm.opportunity` and act on a real record). `scripts/verify.sh ci capabilities web` passes.
-- **Not built**: tenant-authored actions, flows and AI logic; layouts beyond `list-detail`; picking fields from a list instead of typing their names; per-object roles and scope; immutable revisions and releases.
+- **`build.page` 记录**（`apps/build/page.go`）：名称、人类可读称谓、所展示的对象（该租户定义的或应用自有的）、其列表和详情字段，以及它所提供的动作——具有与对象类似的草稿 → 已发布生命周期。有效负载所携带的内容在草稿期间即受校验，发布时检查整个页面：该租户不具备的对象、它不具备的字段（错误原因会指明它确实具备的字段）、针对其他内容的动作。
+- **宿主负责校验与提供**（`Tenant.InstallPage`）：仅当页面所依赖的对象、字段和动作存在时才注册该页面，因此注册表提供的页面始终可以打开。对于成员无权读取的对象的页面，不会提供给该成员，因为 `Tenant.Definitions` 已经与他们有权查看的内容求交集；页面上的记录和动作依然归属于该成员自身。
+- **发布的内容即运行的内容**（`Object.Published`，`Page.Published`）：发布在记录上保留发布时的定义，恢复时安装该定义——此后编写的草稿仍保持为草稿。这是 #131 13c 将完成的修订模型的诚实起点；它尚不是带版本的不可变修订版。
+- **工作区从注册表导航**（`Host.definitions`，`@pkg/build`）：应用的导航可以提供其拥有的页面（无论是代码还是组合页面）。构建器展示对象、页面以及该组织发布的每个页面。
+- **UI 套件扩展了组合器所需的编辑器**（`field.tags`，`packages/ui`）：没有预设列表供选择的标签字段现在支持用户手动输入词语——Enter 或逗号添加一项，chip 标签移除一项，Backspace 移除最后一项。在此之前，任何应用中都没有此类字段的编辑器。
+- **验证通过**：`TestTenantDefinedObject`（已定义对象之上的页面、被拒绝的组合不会干扰运行中页面、重放与快照）、`TestTheHotelDefinesItsOwnObject`（CRM 商机之上的页面及 CRM 的关闭动作；不向没有 CRM 权限的成员提供）、UI 套件的 `tags` 测试，以及浏览器路由 30（在 `crm.opportunity` 上组合并对真实记录执行动作）。`scripts/verify.sh ci capabilities web` 通过。
+- **未构建内容**：租户编写的动作、流程与 AI 逻辑；除 `list-detail` 之外的布局；从列表中选取字段而非手动输入名称；按对象的角色与范围；不可变修订版与发布。

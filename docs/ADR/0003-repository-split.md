@@ -1,13 +1,13 @@
-# ADR-0003: Separate platform repository, after the boundary is real
+# ADR-0003: 在边界清晰之后独立拆分平台代码仓库
 
-**Status:** Accepted; executed 2026-09-24 (preconditions #75–#77 met)
+**状态：** 已接受；执行于 2026-09-24（前置条件 #75–#77 全部达成）
 
-**Context.** The platform (contracts, Go backend, conformance tests, platform Rust components) and the Music product have different release cycles and languages. Splitting before module boundaries are clean would only move coupling across repositories.
+**背景上下文。** 平台底座（契约、Go 后端、一致性测试套件、平台级 Rust 组件）与 Music 垂直业务产品在发布周期和编程语言栈上截然不同。在模块代码边界彻底清晰之前草率拆分，只会把耦合关系从单个仓库内部变成跨仓库的恶性纠缠。
 
-**Decision.** A dedicated platform repository will hold contracts, schemas, conformance tests, the Go backend and platform-level Rust components. This repository remains the Music product and the Apple/Swift client implementation (including AppFoundation until a second Apple product needs it elsewhere). The split happens when: AppFoundation has no domain dependencies (#75), Music code lives in domain packages (#76), and kernel contract v0 exists (#77). Until then, platform documents live here.
+**决策。** 建立一个专属的独立平台代码仓库，用于承载契约、模式、一致性测试、Go 后端以及平台级 Rust 组件。当前代码仓库继续承载 Music 业务产品以及 Apple/Swift 客户端实现（包含 AppFoundation，直至第二个 Apple 产品在其他地方需要它）。拆分执行的硬性条件：AppFoundation 彻底清除所有领域依赖 (#75)、Music 业务代码收敛至领域业务包内部 (#76)、以及内核契约 v0 规范落地 (#77)。在此之前，平台文档统一保留在此处。
 
-**Consequences.** Platform docs (`Platform.md`, kernel ADRs) move to the platform repository at split time and this repository keeps a link. Hotel and manufacturing code never land in this repository.
+**影响与后果。** 拆分时，平台文档 (`Platform.md`、内核相关 ADR) 完整迁移至平台仓库，原仓库保留引用链接。酒店管理与工业制造的代码绝不进入原代码仓库。
 
-**Execution.** `Contract/` moved here as `contract/` with its history; `Platform.md` and ADR-0001 to ADR-0003 moved to `docs/`. MSRU keeps a pinned copy of the vectors it conforms to (`Packages/MusicDomain/Tests/MusicLibraryTests/Vectors`) and refreshes it when the contract version changes. There is no remote yet; creating one is the owner's decision.
+**执行落实。** `Contract/` 目录连带其历史记录迁移至此并重命名为 `contract/`；`Platform.md` 与 ADR-0001 至 ADR-0003 迁移至 `docs/` 目录下。MSRU 仓库保留其通过的一致性测试向量的锁定副本 (`Packages/MusicDomain/Tests/MusicLibraryTests/Vectors`)，并在契约版本升级时主动同步刷新。当前尚未建立远端仓库；是否创建远端由负责人决策。
 
-**Revisit when** the preconditions are met, or if keeping platform work here starts to couple it to Swift/Xcode tooling.
+**重新评估时机：** 当上述前置条件达成时，或者将平台工作继续保留在此处开始与 Swift/Xcode 工具链产生不必要的相互纠缠时。

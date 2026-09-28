@@ -1,117 +1,117 @@
-# ADR-0029: The AI control plane — quotas, the agents overview, evaluation suites, traces and MCP sign-in
+# ADR-0029: AI 治理控制平面 —— 资源配额、代理全景大盘、测试用例评测集、因果调用链与 MCP 标准鉴权
 
-**Status:** Accepted (2026-09-27, stage 8 in Platform.md §10.5, #124). The owner accepted D1 to D8 as recommended.
+**状态：** 已采纳 (2026-09-27, [Platform.md](../Platform.md) §10.5 第八阶段，#124)。业务负责人按推荐采纳了 D1 至 D8。
 
-## Context
+## 背景
 
-What exists:
-- **One door for model calls** (ADR-0015): `POST /v1/ai/chat` and agents' turns go through `aicall.go`, which checks the model's access and journals one `usage` entry per call (who, model, tokens, cost, latency, outcome). Nothing bounds how much a member, an app or an agent may call: no quota and no rate limit. Answers come whole; nothing streams. ADR-0015 D7 (apps call models through effects) was never built: only agents call models.
-- **Agents** (ADR-0021, ADR-0022) are declared in apps' code with a per-run `Budget` (turns, tokens, actions). Runs, their steps, drafts and people's signals (confirmed, changed, rejected, discarded, undone) are records. There is no view across agents — how often each runs, what it costs, how often people accept what it does — and no switch an administrator turns to stop one: only a model can be disabled, which stops every agent on it.
-- **Evaluation** (ADR-0021 batch 3): a candidate model re-runs an agent's latest runs that people judged, dry (`agent_eval.go`). There are no declared cases, no repetitions to see variance, and nothing to run before an agent first meets people.
-- **Traces**: OpenTelemetry spans with the GenAI attributes (ADR-0027 D5) reach an outside collector. Inside the platform a flow instance, the agent runs its steps start, the A2A tasks they call and the effects they cause are separate records; nothing shows the chain as one.
-- **MCP** (ADR-0011): `POST /mcp` serves a member's catalog as tools to a client that brings a bearer token the host accepts. It does not answer as an OAuth protected resource, so a standard MCP client cannot discover where to sign in; records and reads are not offered as MCP resources.
-- **Outside agents** call in over MCP and A2A as members or service accounts; they are principals like any other, but no view shows them among the agents.
+当前已具备的状态：
+- **模型调用的统一大门**（[ADR-0015](0015-ai-providers.md)）：`POST /v1/ai/chat` 与智能代理的执行轮次统一收敛经由 `aicall.go`，集中校验模型访问权限并为每次调用持久化一条 `usage` 用量分录（记录调用人、模型、Token、资金成本、耗时延迟、调用结果）。但此前没有任何机制限制成员、应用或代理调用大模型的频次：缺乏配额配给与速率限流。大模型回复只能整包接收，缺乏流式传输。ADR-0015 D7（应用通过外部效果调用大模型）此前从未落地：全平台只有智能代理能够调用大模型。
+- **智能代理**（[ADR-0021](0021-agents.md), [ADR-0022](0022-knowledge-memory-a2a.md)）：在应用代码中声明，单次运行配备 `Budget` 预算（轮次、Token、操作次数）。单次运行、执行步骤、草稿提议以及人类反馈信号（确认、修改、驳回、废弃、撤销）均作为实体记录存储。但此前缺乏跨代理的宏观全景视图 —— 无法直观洞察各个代理的调用频次、资金开销、人类采纳其产出的真实转化率 —— 且管理员缺乏一键紧急切断某特定代理的刹车开关：此前只能粗暴地将底层模型整体禁用，从而殃及挂在该模型上的所有无辜代理。
+- **客观评测**（[ADR-0021](0021-agents.md) 批次 3）：候选模型能够对已沉淀有人类判定的历史真实运行进行离线无痕重跑（`agent_eval.go`）。但缺乏静态声明的标杆测试用例集，缺乏多次运行以排查大模型输出方差波动的机制，且无法在一个全新代理正式面对用户之前对其进行基线评测。
+- **调用追踪：** 携带 GenAI 语义属性的 OpenTelemetry Span（[ADR-0027](0027-one-runtime-for-durable-work.md) D5）能够导出至外部监控平台。但在平台内部，流程实例、其拉起的代理运行、代理发起的 A2A 任务以及派生的外部效果彼此孤立呈现；界面上无法将这一整条因果调用链融为一体直观呈现。
+- **MCP 协议支持**（[ADR-0011](0011-apps-interoperate-through-protocols.md)）：`POST /mcp` 将成员的操作目录暴露给携带有效 Bearer Token 的外部客户端。但由于未遵循标准的 OAuth 受保护资源契约，标准 MCP 客户端无法自发现应前往何处认证登录；且业务记录与具名读取接口此前未作为标准 MCP 资源（Resources）暴露。
+- **外部智能代理：** 通过 MCP 与 A2A 以成员或服务账号身份接入；它们与其它主体一样是合法的凭据主体，但在统一工作空间中缺乏将其与其他代理并列呈现的纳管视图。
 
-What the reference platforms do now:
+业界参考平台的做法：
 
-| | Inventory and off switch | Measure | Evaluate | Limits |
+| | 统一纳管台账与急停熔断 | 业务价值度量 | 自动化评估评测 | 访问与限额控制 |
 |---|---|---|---|---|
-| ServiceNow AI Control Tower | Discovers agents, models, MCP servers and datasets into one inventory, managed or unmanaged; a kill switch that stops a misbehaving agent in real time, also outside ServiceNow ([newsroom, 2026](https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-expands-AI-Control-Tower-to-discover-observe-govern-secure-and-measure-AI-deployed-across-any-system-in-the-enterprise/default.aspx), [The Register, May 2026](https://www.theregister.com/software/2026/05/05/servicenow-adds-agent-kill-switches-to-ai-control-tower/5228579)) | Value measurement per managed asset | Risk assessments before an asset is managed | — |
-| Salesforce Agentforce | Command Center: every agent's activity, health and outcomes in one view ([Command Center](https://www.salesforce.com/ap/blog/command-centre/)) | Agent Analytics and Optimization, GA April 2026 ([Observability](https://www.salesforce.com/agentforce/observability/)) | Testing Center in Agentforce Studio: test runs with logs of the topics and actions called ([Testing Center](https://www.devopsdigest.com/salesforce-introduces-agentforce-testing-center)) | — |
-| Palantir AIP | — | — | Evaluation suites: test cases of inputs and expected outputs, evaluation functions, run at least three times for LLM-backed functions ([AIP Evals](https://www.palantir.com/docs/foundry/aip-evals/overview)) | — |
-| Microsoft Copilot Studio / Agent 365 | Agent 365 blocks agents by real-time policy ([Learn](https://learn.microsoft.com/en-us/defender-xdr/security-for-ai/transition-agent-security-to-agent-365)) | — | — | Quotas on messages to an agent, configurable per agent ([Learn](https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/plan-agent-throughput-rate-limits)) |
-| MCP specification | — | — | — | A server is an OAuth 2.1 resource server: 401 with `WWW-Authenticate` naming its Protected Resource Metadata (RFC 9728), tokens checked for its audience (RFC 8707) ([Authorization](https://modelcontextprotocol.io/specification/draft/basic/authorization)) |
+| ServiceNow AI Control Tower | 将代理、模型、MCP 服务器与数据集纳管进统一资产大盘，无论托管或非托管；提供一键急停开关（Kill Switch），可毫秒级实时切断失控代理，同样覆盖外部代理（[新闻稿，2026](https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-expands-AI-Control-Tower-to-discover-observe-govern-secure-and-measure-AI-deployed-across-any-system-in-the-enterprise/default.aspx), [The Register 报道，2026年5月](https://www.theregister.com/software/2026/05/05/servicenow-adds-agent-kill-switches-to-ai-control-tower/5228579)） | 按纳管资产精细核算实际商业价值 | 资产纳管前的前置风险客观评估 | — |
+| Salesforce Agentforce | 指挥中心（Command Center）：在单一大盘中统筹监控所有代理的实时活动、健康度与达成结果（[Command Center 介绍](https://www.salesforce.com/ap/blog/command-centre/)） | Agent Analytics 与优化分析体系，2026年4月正式商用（[可观测性主页](https://www.salesforce.com/agentforce/observability/)） | Agentforce Studio 中的 Testing Center 测试中心：自动记录主题（Topics）与调用操作日志的测试运行（[Testing Center 报道](https://www.devopsdigest.com/salesforce-introduces-agentforce-testing-center)） | — |
+| Palantir AIP | — | — | 评测套件（Evaluation Suites）：由输入数据与预期输出组成的标杆用例集，内置评测判定函数，针对大模型调用强制至少重复执行 3 次以排查方差（[AIP Evals 官方文档](https://www.palantir.com/docs/foundry/aip-evals/overview)） | — |
+| Microsoft Copilot Studio / Agent 365 | Agent 365 依托实时安全策略阻断恶意或异常代理（[官方教程](https://learn.microsoft.com/en-us/defender-xdr/security-for-ai/transition-agent-security-to-agent-365)） | — | — | 针对发送给代理的消息施加配额配额，支持按代理精细配置（[官方限额指南](https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/plan-agent-throughput-rate-limits)） |
+| MCP 官方协议规范 | — | — | — | 服务器遵循 OAuth 2.1 资源服务器标准：未鉴权请求返回 401 并在 `WWW-Authenticate` 头中声明受保护资源元数据（RFC 9728），严格校验 Token 的目标受众 Audience（RFC 8707）（[MCP 授权规范](https://modelcontextprotocol.io/specification/draft/basic/authorization)） |
 
-ServiceNow's and Salesforce's rows are from their announcements and product pages, the Testing Center row from a trade press report; Palantir, Microsoft and MCP from their own documentation.
+上表 ServiceNow 与 Salesforce 内容来自其官方发布会与商业产品主页，Testing Center 引自行业媒体客观报道；Palantir、Microsoft 与 MCP 引自其官方权威手册。
 
-They agree:
-1. **One inventory of every agent, inside and outside, with an off switch** that an administrator turns without a deployment.
-2. **Measurement is of outcomes people accept**, not only of tokens.
-3. **Evaluation is a suite run before and after a change**, repeated because models vary.
-4. **Limits sit at the door**: per agent and per caller, configurable.
-5. **Outside clients sign in the standard way** (OAuth), and the server says where.
+业界核心共识：
+1. **无论内部还是外部代理，统一纳入统一资产台账，并配备管理员急停熔断开关，** 无需重启或重新部署即可瞬间生效。
+2. **度量指标聚焦于人类最终采纳认可的业务实绩，** 而不仅仅是机械统计 Token 消耗量。
+3. **评测套件作为版本变更前后的必经质检门禁，** 且鉴于大模型天生的概率方差必须强制多次重跑验证。
+4. **配额限额坚固镇守大门：** 按代理、按调用主体精细施加可配置的配额管控。
+5. **外部客户端采用工业级标准认证体系（OAuth），** 服务端标准自描述认证登录端点。
 
-## Our constraints
+## 我们的架构约束
 
-- Replay never calls outside; the journal stays small. Model answers are never replayed (ADR-0015); quotas are checked live against journaled usage, so a replay needs no quota.
-- Rules and models stay typed code (ADR-0008): evaluation cases are declared with the agent, in code; limits and the off switch are administrators' decisions, journaled.
-- No new dependency: streaming is server-sent events from the standard library; MCP sign-in reuses the host's OIDC token checks.
-- No domain vocabulary in `contract/`: nothing here changes the kernel; a quota refusal is the host's (HTTP 429), not a kernel error.
+- 系统重放绝不发起外部网络调用；业务日志必须保持轻巧。模型生成的具体答复文本绝不参与重放（[ADR-0015](0015-ai-providers.md)）；配额管控在实时运行期对照历史记账日志动态汇总计算，因此系统重放不需要校验配额。
+- 业务规则与模型严格保留在类型化代码中（[ADR-0008](0008-packages-customization-and-callers.md)）：评测用例集随智能代理一同在代码中声明；用量限额与急停开关属于记入日志的管理员特权决策。
+- 零第三方新依赖：流式传输基于 Go 原生标准库实现 Server-Sent Events（SSE）；MCP 标准鉴权直接复用宿主已有的 OIDC Token 校验管道。
+- 内核 `contract/` 绝不混入具体业务词汇：本 ADR 完全不改变底层内核；配额拦截由宿主直接返回标准 HTTP 429，而非内核错误。
 
-## Design
+## 设计
 
-1. **Quotas at the door.** The `ai` app's settings hold limits an administrator decides: tokens per day and calls per minute, per model, with a default per member and per agent, and an override per member, agent or app. `aicall.go` sums the caller's journaled usage in the window before each call and refuses past the limit (429 to a person's call; an agent's run stops with "quota" and tells whom it runs for). The window sums are volatile, rebuilt from usage on start-up; nothing new is journaled but the limits.
-2. **Streaming.** `POST /v1/ai/chat` with `stream: true` answers as server-sent events, token by token; the assistant and the playground read it. Usage is journaled once, when the call ends, as today. Agents' turns do not stream: a step is whole.
-3. **Apps call models through requests (ADR-0015 D7, ADR-0026).** `Caller.Request` gains a model target: an accepted decision asks a named model a question whose answer comes back to the app's reply action as an ordinary submission, journaled. Replay hands the app the recorded answer and calls nothing.
-4. **The agents overview and the off switch.** Settings → Agents lists every agent the apps declare and every outside principal that acts as one (service accounts marked agent, A2A and MCP clients), with runs, tokens and cost by day, actions taken, and what people made of its work (the share of drafts confirmed, changed, rejected, and effects discarded). An administrator suspends an agent as a decision (`agent.suspend`, `agent.resume`): new runs are refused, running ones stop at their next step, and an outside agent's calls are refused; the decision replays.
-5. **Evaluation suites.** An agent may declare cases in code (`platform.EvalCase`: a goal about a record set up by the case, and a check of the run — the action it drafted, its payload, its answer). A suite runs dry against a model, each case three times, and reports passes and variance per case; the existing evaluation from people's judgements stays beside it. A suite run is a record, like an evaluation today.
-6. **Traces across agents.** A run's page, a flow instance's page and an A2A task show the chain they belong to — the flow that started the run, the runs it started, the A2A tasks and effects they caused — drawn on the graph canvas (#122), from what the records already name (a run's flow and step, a flow's parent, an effect's run). OpenTelemetry stays the export for outside collectors.
-7. **MCP sign-in and resources.** `/mcp` answers 401 with `WWW-Authenticate` naming `/.well-known/oauth-protected-resource`, which names the tenant's OIDC issuer (Rauthy locally) as its authorization server; tokens are checked for the host's audience. Clients are registered with the issuer by an administrator; dynamic registration is not offered. Records the member may read and the app's named reads are MCP resources (`record://<type>/<id>`, `read://<name>`), read through the same scope and field security as the API.
+1. **统一门禁配额管控：** `ai` 应用的全局配置承载管理员设定的资源配额：每日最大 Token 消耗量以及每分钟最大调用频次，按模型细分，提供面向成员与代理的全局基准默认值，并支持按具体成员、具体代理或具体应用进行个性化配额覆盖覆盖。`aicall.go` 在每次发起物理调用前，自动在时间窗口内汇总该调用主体已持久化记录的用量，一旦超标直接拦截拒绝（面向人类的在线请求返回 429 报错；智能代理运行当场以“配额超标”为由挂起，并将目标转换为任务交还被代表人员）。时间窗口统计纯属内存易失状态，服务启动时从历史用量日志极速重建；除配额配置调整外，不向业务日志追加任何新分录。
+2. **打字机流式传输输出：** `POST /v1/ai/chat` 传入 `stream: true` 时，自动采用 Server-Sent Events（SSE）以 Token 为单位逐字打字机推流；智能助手面板与模型试验场（Playground）优先以此模式消费。用量在单次流式调用彻底结束时一次性记入日志，与现有逻辑无缝对齐。智能代理内部的思考执行轮次不采用流式传输：代理每一步的决策必须是完整自洽的原子闭环。
+3. **业务应用直接通过出站请求调用大模型（兑现 ADR-0015 D7 与 [ADR-0026](0026-decisions-across-apps.md)）：** `Caller.Request` 扩展支持模型目标：单笔已生效的决策可向指定大模型发起提问，大模型返回的答复随后作为标准提交提议回传给应用的 `Reply` 回执操作，确定性记入日志。系统重放时直接给应用喂入日志中已记录的答案，零模型调用产生。
+4. **代理全景大盘与一键急停开关：** “系统设置” → “智能代理”集中列出各应用声明的全部原生代理，以及所有作为代理行动的外部主体凭据（标记为代理的服务账号、A2A 外部客户端与 MCP 外部客户端）；全景呈现每日运行次数、Token 消耗量、资金成本、执行操作数，以及人类对其产出的真实态度（草稿被确认、被纠偏修改、被驳回，以及出站效果被废弃的转化占比）。管理员可通过特权决策随时暂停特定代理（`agent.suspend`, `agent.resume`）：被暂停的代理立即拒绝发起新运行，正在运行的实例在执行下一步骤时当场挂起终止，且外部代理的跨系统调用被严正拒绝；该控制决策确定性记入日志并支持重放。
+5. **基准测试评测用例集（Evaluation suites）：** 智能代理支持在类型化代码中声明静态标杆评测用例（`platform.EvalCase`：包含基于前置业务记录构造的业务目标，以及针对最终运行结果的断言校验 —— 校验其生成的草稿操作、载荷参数与结论）。评测套件在沙箱中对照候选模型进行无痕离线重跑，每个测试用例强制重复执行 3 次，精准输出通过率以及大模型推理的方差波动报告；与此前基于人类真实历史判定的客观评测并排共存。评测套件的执行记录作为标准实体记录持久化入库。
+6. **跨智能代理因果调用链路（Traces across agents）：** 代理运行详情页、流程实例详情页与 A2A 任务页面清晰展示其所归属的完整上下游因果树 —— 包括拉起本次运行的业务流、本次运行拉起的下游子流程、协同调用的外部 A2A 任务，以及引发的外部效果 —— 基于实体记录中已有的结构化关联动态提取（运行关联的流程与步骤、流程的父流程与主体记录、效果关联的运行）。统一在图形画布组件（#122）上直观绘制因果关系图。OpenTelemetry 继续作为面向外部监控平台的标准导出通道。
+7. **MCP 标准鉴权与资源开放：** `/mcp` 在缺乏有效凭据时返回 HTTP 401 并在 `WWW-Authenticate` 响应头中指向 `/.well-known/oauth-protected-resource` 元数据，明确指示当前租户的 OIDC 认证颁发者地址（本地对应 Rauthy）；Token 鉴权时严密校验 Audience 标识。外部客户端由管理员预先在认证中心注册登记；暂不提供开放式的动态客户端注册机制。成员有权查阅的业务实体记录以及应用声明的具名读取接口，全面开放为标准 MCP 资源（`record://<type>/<id>`, `read://<name>`），数据提取严格受当前成员的数据作用域与字段级安全过滤制约。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Which limits | (a) tokens per day and calls per minute, per model, defaults per member and per agent, overrides; (b) cost in money per month; (c) none | **(a)**: tokens and calls are what providers meter and every model reports; money needs prices per model, which not every provider gives. Declined for now: (b), until prices are reliable |
-| D2 | Streaming | (a) server-sent events for chat and the assistant; (b) WebSockets; (c) none | **(a)**: one direction is enough, no dependency, works through proxies |
-| D3 | Apps' own model calls | (a) through `Caller.Request` with a reply action, as protocols (ADR-0026); (b) effects as ADR-0015 D7 first said; (c) agents only | **(a)**: one mechanism for everything an accepted decision asks outside; (b) would be a second path to the same place |
-| D4 | The off switch | (a) a journaled decision per agent that stops new and running runs and refuses outside agents' calls; (b) a setting outside the journal; (c) disabling models only | **(a)**: who stopped which agent, when, is audit; it replays |
-| D5 | What "value" shows | (a) outcomes people judged (confirmed, changed, rejected, discarded) and actions taken, with cost; (b) an estimated money saving; (c) usage only | **(a)**: measured, not estimated. Declined: (b), a figure the platform cannot know |
-| D6 | Evaluation cases | (a) declared in code with the agent, three runs each; (b) cases entered in Settings; (c) only the existing evaluation from people's judgements | **(a)**: cases are part of the agent, reviewed with it (ADR-0008); Settings runs them |
-| D7 | MCP sign-in | (a) Protected Resource Metadata naming the tenant's issuer, pre-registered clients; (b) also dynamic client registration; (c) bearer tokens as today | **(a)**: the standard discovery without letting any client register itself; (b) when a customer needs it |
-| D8 | Order | 12a quotas and streaming, 12b apps' model requests, 12c the overview and the off switch, 12d evaluation suites, 12e traces across agents, 12f MCP sign-in and resources | **As listed**: limits first, as agents already call models without any |
+| D1 | 资源限额维度选型 | (a) 按模型限制每日 Token 配额与每分钟最大调用频次，提供成员与代理的默认基准值并支持个性化覆盖。(b) 按每月资金消耗金额限制。(c) 完全不设限 | **(a)**：Token 与调用频次是所有上游提供商底层计量与返回的绝对客观指标；金额需要为每个模型精准维护单价汇率，而并非所有提供商都能稳定提供。(b) 暂时推迟，待单价机制健全后再引入 |
+| D2 | 打字机流式传输方案 | (a) 针对对话问答与智能助手采用 Server-Sent Events (SSE)。(b) 采用全双工 WebSockets。(c) 暂不提供流式 | **(a)**：单向推流完全能满足打字机诉求，零外部依赖，天然兼容各类网关反向代理 |
+| D3 | 应用自有的模型调用通道 | (a) 依托 `Caller.Request` 配合回执操作实现，与跨应用协议完全对齐（[ADR-0026](0026-decisions-across-apps.md)）。(b) 像 ADR-0015 D7 最初提议的那样作为外部效果。(c) 仅允许智能代理调用大模型 | **(a)**：所有业务决策引发的异步外部协同采用唯一样式；(b) 属于在相同场景下重复建设第二条通道 |
+| D4 | 智能代理急停熔断开关 | (a) 作为持久化记入日志的标准决策，精准切断新建运行、实时阻断在途步骤并拦截外部代理接入。(b) 保存在日志之外的独立配置项中。(c) 仅保留全局模型禁用开关 | **(a)**：谁在何时基于何种原因紧急停用哪个代理，属于极高安全等级的审计事实；必须完整参与日志重放 |
+| D5 | 业务“价值转化”衡量指标 | (a) 统计人类裁决的最终结论转化率（确认率、修改率、驳回率、废弃率）、实际执行操作数与资金成本。(b) 预估折算节省的工时资金。(c) 仅展示纯资源用量消耗 | **(a)**：基于客观业务实证度量，杜绝弄虚作假。(b) 属于平台底层根本无法客观获知的臆测数字 |
+| D6 | 标杆评测用例集的组织形态 | (a) 随智能代理一同在代码中声明，每次评测重复跑 3 次排查方差。(b) 由管理员在系统设置界面中手工录入。(c) 仅保留此前基于人类历史判定的评测机制 | **(a)**：评测用例属于智能代理核心逻辑不可分割的一部分，必须随同源码一起经历严格的 Code Review（[ADR-0008](0008-packages-customization-and-callers.md)）；“系统设置”负责触发执行并查阅报告 |
+| D7 | MCP 标准认证发现机制 | (a) 输出受保护资源元数据（RFC 9728）指向租户专属颁发者，支持预注册客户端接入。(b) 同时支持动态客户端注册协议（DCR）。(c) 维持原有的手工粘贴 Bearer Token 模式 | **(a)**：遵循开放国际标准且不失可控安全性；动态客户端注册可在商业客户确实需要时再扩展 |
+| D8 | 构建与实施节奏 | 12a 配额与流式传输，12b 应用级模型请求，12c 代理全景大盘与急停开关，12d 评测用例集，12e 跨代理因果调用链，12f MCP 标准鉴权与资源开放 | **按照所列顺序推进**：配额门禁优先落地，解决当前大模型缺乏限额的燃眉之急 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 12a | Quotas and rate limits; streaming | A member past their daily tokens is refused with 429 and an agent past its limit stops and tells whom it runs for (CSM, MES); the playground and the assistant stream; `CheckReplay`; the rehearsal calls the local model past a limit |
-| 12b | Apps' model requests | An app's decision asks a model and its reply action records the answer (CSM: a ticket's summary; ERP: a supplier bill's description classified); replay calls nothing (`CheckReplay`) |
-| 12c | Agents overview and off switch | Settings → Agents shows runs, cost and people's judgements per agent, inside and outside; suspending the triage agent stops its running run and refuses new ones, and an MCP client marked agent is refused; `CheckReplay`; Playwright route |
-| 12d | Evaluation suites | The CSM triage agent and the MES assistant declare cases; a suite runs three times per case against the local model and reports variance; Playwright route |
-| 12e | Traces across agents | A ticket's service-level flow, the triage run and its held reply show as one chain on the run's and the instance's pages; the rehearsal's A2A lead-time question shows the supplier's task in the chain |
-| 12f | MCP sign-in and resources | An MCP client with no token gets 401 naming the metadata, signs in with Rauthy, and reads a record as a resource within its scope; the rehearsal does it |
+| 12a | 资源配额与频次限流；打字机流式传输 | 成员突破每日 Token 限额立即被 429 拦截，代理突破限额立即停机并交还任务（在 CSM 与 MES 验证）；模型试验场与助手实现流畅流式打字输出；`CheckReplay` 测试通过；本地部署演练中故意突破限额验证拦截 |
+| 12b | 业务应用直接调用大模型 | 应用决策发起模型请求，其回执操作成功持久化记录答案（CSM：工单内容智能总结提炼；ERP：供应商发票描述智能分类）；系统重放完全不发起模型调用（`CheckReplay`） |
+| 12c | 代理全景大盘与一键急停开关 | “系统设置” → “智能代理”详尽呈现所有内部与外部代理的运行频次、成本与人类采纳转化率；紧急暂停分诊代理后，正在运行的实例当场停机、新建运行被拒、标记为代理的 MCP 客户端调用被拒；`CheckReplay`；Playwright 自动化测试走通 |
+| 12d | 标杆评测用例集体系 | CSM 分诊代理与 MES 助手在代码中声明标杆测试用例；评测套件对照本地模型对每个用例重复运行 3 次并客观输出方差报告；Playwright 自动化测试走通 |
+| 12e | 跨智能代理因果调用链路 | 工单服务等级流程、分诊代理运行及其挂起的邮件回复在详情页上串联为单张因果拓扑图；本地演练中基于 A2A 跨系统查询供货交期的任务顺利展示在调用链路树中 |
+| 12f | MCP 标准鉴权与资源暴露 | 未携带 Token 的标准 MCP 客户端收到 401 响应并读取认证元数据，通过 Rauthy 完成认证登录，并在权限作用域内顺利读取实体记录与具名接口资源；部署演练验证通过 |
 
-## Consequences
+## 影响
 
-- Every model call has a limit as well as a meter; an administrator can stop any agent, inside or outside, and see what each is worth by what people accepted.
-- Agents are tested before they change, by cases that live with them.
-- Standard MCP clients connect without a hand-made token.
-- ADR-0015 D7 is replaced by D3: apps ask models the way they ask other apps.
+- 平台发出的每一笔大模型调用均受到严密的实时用量监控与配额护栏保护；管理员能够以企业级标准掌控任意内部或外部代理，并基于人类最终采纳转化率客观评判其真实业务价值。
+- 智能代理在经历系统指令或底层模型调整前，能够依托代码内置的标杆用例集完成严谨的多轮方差基线测试。
+- 标准 MCP 客户端（如各类 IDE 编程插件、桌面智能体）无需再繁琐手工生成与粘贴 Token，实现无缝单点登录互联。
+- ADR-0015 D7 遗留的技术路线正式被 D3 替代：应用调用大模型与应用调用跨业务协议完全对齐为唯一样式的请求-应答机制。
 
-## As built
+## 实际构建（As built）
 
-### 12a: limits and streaming
+### 12a: 门禁配额限流与打字机流式传输
 
-- **The door** (`aicall.go` `allowed`): every model call — a member's chat, an agent's turn, an evaluation's dry run, an embedding — is checked before it leaves: the model's tokens a day for the tenant (`ai.Model.DailyTokens`, set when the model is enabled), then the caller's tokens today and calls this minute, against the caller's own limit (`ai.limit.set`, `ai.limit.remove`) or the defaults (`ai` settings `daily-tokens` for people and `calls-per-minute`; the agents' `daily-tokens` for agents). Apps (`app:<id>`) take only their own limit. A refused call never reaches the model and is not metered; `POST /v1/ai/chat` answers 429 `QUOTA` with why, in the reader's language; an agent's run stops with why and its goal goes to whom it runs for.
-- **Counts** (`apps/ai`): tokens per day per member and per model and each caller's calls of the last minute are kept as usage is metered, live or replayed, and saved in snapshots; nothing new is journaled but the limits.
-- **Streaming**: `stream: true` answers as server-sent events (`delta`, then `done` or `error`), on the OpenAI wire with `stream_options.include_usage`; a server that does not stream, and the Anthropic wire, answer at once as one piece. Usage is journaled once. The playground streams (`EdgeClient.stream`); agents' turns do not.
-- **Proven:** `TestAILimits` (a person past the day, their own limit, calls a minute, a model's cap, a stream and a server that does not stream, `CheckReplay`), `TestCSM` (the triage agent past its own limit stops and the desk takes the ticket), the rehearsal (past the operator's limit refused; a call streams from the local model server).
+- **统一门禁严密校验** (`aicall.go` 中的 `allowed` 逻辑)：所有的模型调用 —— 包含普通成员在线对话、智能代理思考轮次、客观评测离线干跑、向量计算嵌入 —— 在正式发出前强制接受准入检查：首先校验该模型在租户级配置的每日 Token 上限（`ai.Model.DailyTokens`，在模型启用时配置），随后严密校验当前调用主体今日已消耗的累计 Token 以及本分钟内的已调用频次，对照调用主体自身的个性化配额（通过 `ai.limit.set` 与 `ai.limit.remove` 配置）或全局默认基准（`ai` 应用配置项中面向人类成员的 `daily-tokens` 与 `calls-per-minute`；面向代理的 `daily-tokens`）。业务应用身份（`app:<id>`）严格仅受其自身配置的限额制约。被拦截的调用绝对不发出物理网络请求，且不计入用量计量；`POST /v1/ai/chat` 立即返回 HTTP 429 `QUOTA` 并以阅读者的母语详尽告知超标原因；智能代理运行当场挂起停机并记录原因，其目标平滑交还被代表人员处理。
+- **内存极速用量统计** (`apps/ai`)：按成员、按模型统计的当日 Token 消耗量以及各调用方最近一分钟的调用频次，在每次用量计量入库时（无论实时运行还是日志重放）同步在内存中精准累加维护，并由快照机制持久化保护；除配额规则调整外，绝不向业务日志追加多余分录。
+- **打字机流式传输：** 传入 `stream: true` 时，服务端采用 Server-Sent Events（SSE）逐 Token 推流（先推送 `delta` 数据块，最终推送 `done` 或 `error`），在 OpenAI 协议链路上自动配置 `stream_options.include_usage` 捕获用量；针对不支持流式的模型服务器以及 Anthropic 协议链路，自动平滑退化为单包完整返回。全链路用量在推流彻底结束时集中记入日志一次。模型试验场（Playground）优先启用流式传输（基于 `EdgeClient.stream`）；智能代理执行轮次继续保持单步原子完整返回。
+- **经过全面验证：** `TestAILimits`（验证成员突破每日 Token 限额、突破个性化限额、突破每分钟频次上限、突破模型全局上限、流式推流以及针对非流式服务的优雅兼容、`CheckReplay` 确定性重放校验）、`TestCSM`（分诊代理在突破自身限额时立即安全停机，工单顺利回退人工服务台接管）、本地部署演练（故意突破操作工用量限额验证 429 精准拦截；验证本地桩模型流畅流式打字输出）。
 
-### 12b: apps ask models
+### 12b: 业务应用通过请求机制直接调用大模型
 
-- **A request without a protocol** (`platform.Request.Model`, `platform.Prompt`, `platform.Answer.Text`): an accepted decision asks a model — named, or the `ai` setting `app-model` (Model apps ask) — and its reply action takes the answer.
-- **Owned work, not a call in the decision** (`aicall.go` `askModel`, `sendModel`, `answerModel`): protocol requests are answered inside the input, under the tenant's lock; a model's answer takes seconds, so the request joins the outbound queue at the built-in `model` destination — kept in snapshots, rebuilt by a replay from the decision — and is sent on the I/O lane through the door (as `app:<id>`, within the app's limits, retried while the provider or a limit keeps it). The administrators chose the model for apps, so no member's access applies. Its answer is submitted to the reply action as the app and journaled; a replay takes it from the journal and asks nothing. Discarding the request answers refused.
-- **The helpdesk** summarises a ticket when it is opened (`csm.ticket.summary`, `Ticket.Summary`); a person may write the line too.
-- **Proven:** `TestCSMTriage` (the summary through the model for apps; no setting, no request; `CheckReplay`), the rehearsal (a ticket summarised by the local model).
-- **Not yet:** the ERP's classified bill description, the second proof the build table names — app depth waits (Intent.md, platform faults first).
+- **脱离跨应用协议的独立模型出站请求** (`platform.Request.Model`, `platform.Prompt`, `platform.Answer.Text`)：单笔已生效的决策可向指定大模型发起调用请求 —— 支持显式指定具体模型，或使用 `ai` 应用的全局配置 `app-model`（应用专用推荐模型）—— 模型返回的结论自动回传给该应用声明的 `Reply` 回执操作。
+- **基于自有机制作业驱动，而非内嵌于决策事务中** (`aicall.go` 中的 `askModel`, `sendModel`, `answerModel`)：跨应用协议请求由于是在宿主内部同步执行，因此直接在输入事务内、在租户锁保护下快速闭环；而大模型推理通常需要消耗数秒甚至数十秒，因此该模型请求作为自有机制作业排入专有的内置 `model` 目标队列 —— 在快照中持久化保护，系统重放时直接从决策中重建该队列 —— 并在外部 I/O 专用通道中脱离租户锁并发执行（以 `app:<id>` 身份执行，受应用配额保护，在遇到提供商故障或限流时自动重试）。由于该模型是管理员为业务应用统一选定的，因此不受单个人员的模型访问权限限制。模型的回复随后以该应用的系统身份提交给 `Reply` 回执操作并持久化记入日志；系统重放直接从日志中读取答案，绝不重新调用大模型。主动废弃该请求时自动向应用回传 refused 拒绝回执。
+- **服务台真实业务落地：** 服务台在每次创建工单时，自动调用大模型为工单生成简明摘要（`csm.ticket.summary`, `Ticket.Summary`）；人工后续同样有权手动修改该摘要。
+- **经过全面验证：** `TestCSMTriage`（验证应用通过配置的模型生成工单摘要；未配置模型时不生成请求的优雅回退；`CheckReplay` 确定性重放）、本地部署演练验证（工单由本地模型成功生成摘要）。
+- **暂未构建：** 规划表中的第二项验证载体（ERP 供应商发票描述自动智能分类）—— 优先保障平台底层通用能力，业务深度排在后续（遵循 [Intent.md](../Intent.md) 原则）。
 
-### 12c: the agents overview and the off switch
+### 12c: 智能代理全景大盘与一键急停开关
 
-- **The switch** (`agent_control.go`): `agent.suspend` and `agent.resume` on `agent.switch/<member>` — a declared agent's member (`agent:<app>.<name>`) or an outside principal marked agent — by the agent app's administrators, with a reason; a record, so it replays. A suspended agent's running runs stop at their next step ("suspended by …"), new runs are refused, and its decisions and model calls are refused with why at the host's doors (`Tenant.Submit`, `Chat`) — which covers MCP and A2A, as both come through them.
-- **The overview** (`agent-overview`, Settings → Agents): every declared agent and every outside agent member with runs, live runs, actions (its runs' actions; an outside agent's decisions from the audit), model calls, tokens and cost from the usage kept, and people's signals by kind — measured, not estimated (D5).
-- **Proven:** `TestAgents` (the overview's counts, an outside agent's decisions counted; only an administrator suspends; a running run stopped, a new one refused, an outside agent's decision and model call refused, resumed; `CheckReplay`), Playwright route 25.
+- **管理员一键急停开关** (`agent_control.go`)：由 agent 应用的管理员在 `agent.switch/<member>` 上执行 `agent.suspend`（暂停）与 `agent.resume`（恢复）特权操作 —— 操作对象涵盖声明的原生代理成员（`agent:<app>.<name>`）以及标记为代理的外部主体凭据 —— 必须附带明确的治理原因；作为实体记录持久化入库，完整支持日志重放。一旦代理被暂停，其正在运行的在途实例在流转至下一步骤时当场挂起终止（注明“已被 … 暂停”），新建运行直接被拒绝，且其提交的业务决策与发起的模型调用在宿主入口处（`Tenant.Submit`, `Chat`）直接被严厉拦截并明确告知已被停用 —— 该防护机制天然无死角覆盖了 MCP 与 A2A，因为二者皆以此通道接入。
+- **全景管理大盘** (`agent-overview`，“系统设置” → “智能代理”)：集中收拢全量已声明的原生代理以及外部代理主体，全方位直观呈现：历史总运行次数、当前活跃运行数、实际执行操作数（原生代理统计其步骤操作；外部代理从审计日志中提取其决策）、模型调用频次、Token 消耗量与资金成本，以及人类对其产出的各维度真实反馈信号（采纳确认、纠偏修改、驳回、废弃）—— 纯粹基于客观实证数据度量，杜绝主观臆测估算 (D5)。
+- **经过全面验证：** `TestAgents`（验证全景大盘统计精度、外部代理决策精准累计、严格仅限管理员执行暂停、在途运行立即终止、新建运行精准拦截、外部代理决策与模型调用当场被拒、恢复后功能立即复原；`CheckReplay`）、Playwright 路由 25 界面走查。
 
-### 12d: evaluation suites
+### 12d: 标杆测试评测用例集（Evaluation suites）
 
-- **Cases declared with the agent** (`platform.Agent.Cases`, `platform.Case`, `platform.CaseRun`): a goal, the record it is about, and a check of what a run comes to — the actions it would take and its result — reviewed with the agent's code.
-- **A suite** (`agent.evaluation.start` with `suite`): each case runs dry against the candidate model three times, through the dry run the evaluation of past runs uses (`dryRun`: reads read now, actions are probed and never taken, the guard applies); a case passes when every run does, varies when some do, fails when none does, with why per run; the score is the runs that pass. Settings → Evaluations offers "Declared cases".
-- **Proven:** `TestAgents` (a case passing 3/3 and one failing 0/3 with why, nothing changed, `CheckReplay`), `TestCSMTriage` (the triage agent's cases: it replies to an ordinary ticket and its guard keeps it from promising a refund, 3/3 each), Playwright route 26.
-- **Not yet:** the MES assistant's cases, the second app the build table names — app depth waits (Intent.md).
+- **评测用例随智能代理一同在代码中声明** (`platform.Agent.Cases`, `platform.Case`, `platform.CaseRun`)：声明包含业务目标、针对的前置实体记录数据，以及对代理最终产出结论的断言审查 —— 审查其起草的操作及参数，以及输出的最终结论 —— 随同代理的源码一起经历版本控制与审查。
+- **离线沙箱自动化重跑** (`agent.evaluation.start` 传入 `suite` 参数)：评测套件将每个测试用例对照候选模型重复无痕运行 3 次，底层复用客观评测的沙箱重跑引擎（`dryRun`：数据读取实时执行，业务操作严格以探查模式执行绝不产生实质写入，代码安全守卫实时生效）；只有当 3 次运行全部通过断言时该用例才判定为通过，若部分通过则标记为方差波动（Varies），全未通过则判定为失败，并详尽记录每次运行的具体失败归因；最终综合得分基于全量运行的实际通过率计算。“系统设置” → “客观评测”提供“声明的评测用例集”专属操作面板。
+- **经过全面验证：** `TestAgents`（验证 3/3 完美通过用例以及 0/3 失败用例精准呈现根因、系统零副作用产生、`CheckReplay` 确定性重放校验）、`TestCSMTriage`（服务台分诊代理的专属用例集：验证正常工单自动起草回复，以及安全守卫刚性拦截承诺赔偿退款的用例，各自稳定达到 3/3 通过）、Playwright 路由 26 走查。
+- **暂未构建：** 规划表中的第二项验证载体（MES 车间助手评测用例集）—— 遵循通用平台优先于业务应用深度原则（[Intent.md](../Intent.md)）。
 
-### 12e: traces across agents
+### 12e: 跨智能代理因果调用链路拓扑
 
-- **The chain** (`chain.go`, `GET /v1/chain/{type}/{id}`): from an agent run or a flow instance, up to the first flow and down again — the record the flow is about (its `Subject`), the flows it called, the runs its steps started, and the effects those runs caused (a held reply, a question to another agent over A2A) — from what the records already name: a run's flow, an instance's parent and subject, an effect's run. Only what the member may read; effects for the platform's administrators.
-- **Drawn** on the graph canvas (`ChainGraph` in `@platform/app`) on a run's page and a flow instance's page; a node opens its record. OpenTelemetry stays the export for outside collectors (ADR-0027 D5).
-- The CSM's service-level flow now declares its subject, the ticket.
-- **Proven:** `TestCSMTriage` (a ticket's chain: the ticket, its service level, the triage run and its reply's mail, the same from the run and from the flow), the rehearsal (the planner's question to the supplier's agent over A2A in its run's chain).
+- **全链路因果关系溯源** (`chain.go`, `GET /v1/chain/{type}/{id}`)：从任意一个代理运行实例或流程实例出发，向上溯源至最顶层的初始业务流，向下穿透至底层的全部分支 —— 涵盖业务流关联的主体业务记录（`Subject`）、其调用的子流程、流程步骤唤起的各个代理运行，以及代理运行引发的全部外部效果（挂起等待审批的邮件回复、通过 A2A 协议向异构代理发出的协同任务）—— 完全基于实体记录中已经自包含的结构化元数据动态拓扑拼接（运行绑定的流程及步骤、流程的父流程及主体关联、效果绑定的运行）。数据暴露严格受当前成员的数据作用域控制；外部效果信息仅面向平台管理员开放。
+- **前端因果拓扑图可视化呈现：** 在统一工作空间中依托图形画布组件（`@platform/app` 中的 `ChainGraph`），在代理运行详情页与业务流实例详情页中直观绘制因果链路拓扑图；点击图中的任意节点可无缝直接打开对应的实体记录。OpenTelemetry 继续作为面向外部第三方 APM 系统的标准数据导出通道（[ADR-0027](0027-one-runtime-for-durable-work.md) D5）。
+- CSM 服务台的服务等级协议业务流现已显式声明其关联主体，即具体的工单记录。
+- **经过全面验证：** `TestCSMTriage`（验证工单的完整因果拓扑链：工单本身、其服务等级流程、拉起的分诊代理运行、起草的回复邮件效果，在代理运行页与流程实例页中均能双向完全闭环呈现）、本地部署演练（工厂排程器通过 A2A 协议向供应商代理查询供货交期的任务，在因果拓扑链路中完美对齐呈现）。

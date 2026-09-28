@@ -1,60 +1,60 @@
-# ADR-0011: Apps interoperate through protocols; bridges are the exception
+# ADR-0011: 应用通过协议互操作；桥接包仅作为特例存在
 
-**Status:** Accepted (2026-09-24, owner direction; implemented in #95). Supersedes ADR-0009's bridges as the default; amends ADR-0010 point 3.
+**状态：** 已接受 (2026-09-24，负责人战略指示；在 #95 中实现)。取代 ADR-0009 将桥接包作为默认模式的做法；修订 ADR-0010 第 3 点。
 
-**Context.** ADR-0009 joined CRM and Hotel with a bridge package: one app per pair of apps. The owner observed that large software does not interoperate that way:
-- VS Code works with GitHub through its extension and authentication-provider interfaces.
-- GitHub accepts Google sign-in through OIDC.
-- Claude Code uses Figma through MCP, and any MCP client can use Figma.
+**背景上下文。** ADR-0009 曾通过专用的桥接包将 CRM 与酒店业务连接在一起：为每两个应用之间建立一个专属包。负责人深刻指出，大型成熟软件绝非以这种点对点模式互操作：
+- VS Code 通过扩展接口与身份认证提供商接口同 GitHub 协同。
+- GitHub 通过通用 OIDC 协议接纳 Google 账号单点登录。
+- Claude Code 通过 MCP 协议与 Figma 协同，且任何合规的 MCP 客户端均可直接接入 Figma。
 
-Interoperation comes from protocols that any app can implement or consume, not from pairwise bridges. With n apps, bridges grow toward n² and each needs its own grants, journal entries and upkeep. The platform already has most of a protocol:
-- declared actions with descriptions, like MCP tools;
-- reads, like MCP resources;
-- events;
-- routing through the host;
-- grants.
+真正的企业级互操作源于任何应用均可自主实现或消费的**标准化协议 (Protocols)**，绝非来自于成对的专属桥接包。在拥有 n 个应用的大系统中，桥接包数量将呈 n² 恶性爆炸增长，且每个桥接包都需要独立的权限授权、独立的日志分录与长期运维负担。平台目前已经具备了构成协议的大部分底层要素：
+- 带有详细说明文档的已声明动作（类似 MCP 工具）；
+- 命名读取接口（类似 MCP 资源）；
+- 业务事件通知；
+- 经由宿主的统筹路由调度；
+- 细粒度权限授权体系。
 
-What is missing is a way to depend on *a capability* rather than on *an app*.
+系统此前唯一缺失的，是一种依赖于**某项通用能力契约**，而非直接耦合硬编码**某个具体应用**的机制。
 
-**Decision.**
+**决策。**
 
-1. **Protocols.** A protocol is a named, versioned interface. It consists of:
-   - actions (payload fields and meaning);
-   - reads (result shape);
-   - events.
+1. **标准化协议 (Protocols)。** 协议是一个具备明确命名与版本号的接口契约。它由以下三部分组成：
+   - 动作集合（包含有效负载字段规范与业务含义说明）；
+   - 读取接口（包含返回结果的数据结构）；
+   - 业务事件。
 
-   Example: `lodging.booking/1`, with the action reserve, the read bookings, and the events changed and canceled. Protocols are declared in typed code with their own conformance tests, the way the kernel contract has vectors.
-2. **Apps provide and consume protocols.**
-   - A manifest says which protocols the app **provides**, each mapped onto its own actions, reads and events.
-   - A manifest says which protocols the app **consumes**, marking each as required or optional.
-   - Requirements name protocols, not apps. When the tenant starts, the host binds each consumed protocol to an enabled provider, and discovery lists providers by protocol.
-   - A tenant with two providers of one protocol chooses in Settings (#99): the choice is a decision of the platform app and decides where new calls go. Reads span every provider, each answer carrying the type of the entities it holds, so what the other provider holds stays visible and its events still reach linked entities.
-3. **Shared relations are platform capabilities, not bridge data.**
-   - **Links:** typed references between any two entities (K1 references, like Salesforce related records or Notion relations). An opportunity links to a booking without either app owning the link.
-   - **Timeline:** notes and activities about any entity, posted by people or by apps through events.
+   典型示例：`lodging.booking/1`，包含预订动作 reserve、读取接口 bookings、以及状态变更事件 changed 和退订事件 canceled。协议在强类型代码中完成声明，并配备形式化的一致性测试套件，如同内核契约拥有其测试向量一样。
+2. **应用对外提供与消费协议。**
+   - 应用清单显式声明该应用**提供 (provides)** 哪些协议，并将其分别映射至应用自身的动作、读取接口与业务事件上。
+   - 应用清单显式声明该应用**消费 (consumes)** 哪些协议，并将每项依赖标记为必选或可选。
+   - 外部依赖项直接命名协议，严禁直接命名具体应用。当租户启动时，宿主将每个被消费的协议动态绑定至当前已启用的协议提供者，且系统能力发现服务按协议对提供者进行分类归纳。
+   - 当租户同时启用了同一个协议的两个提供者时，管理员在系统设置中心进行显式裁决 (#99)：该选择作为平台管理应用的一项决策记录，决定新发起的调用具体路由至何方。数据读取跨越所有提供者执行，每个应答数据均如实携带其所持实体的类型信息，使另一个提供者名下的数据依然完全可见，且其事件依然能够顺畅触达关联实体。
+3. **共享关联关系属于平台级通用能力，绝非桥接私有数据。**
+   - **关联链接 (Links)：** 任意两个实体之间的强类型引用（基于 K1 引用机制，类似 Salesforce 的关联记录或 Notion 的 Relation 关联字段）。商机可以直接关联至客房预订，而无需任何一方应用私自拥有该链接。
+   - **动态时间线 (Timeline)：** 挂接在任意实体之上的工作备注与跟进动态，可由人类直接发布，或由应用通过业务事件自动写入。
 
-   These two capabilities replace what the crm-hotel bridge owned.
-4. **Consumers act through the protocol with the caller's grants.**
-   - A consumer calls the provider's mapped action.
-   - The provider's roles and rules decide the call (ADR-0008 unchanged).
-   - Events of a protocol reach every consumer that subscribed to it.
-5. **Where protocols come from.**
-   - **Cross-industry protocols** belong to the platform. Candidates: party (person or organisation), links, timeline, documents and files, notification, calendar and availability.
-   - **Industry protocols** belong to the industry package that defines them, and follow published standards where one exists: OpenTravel/HTNG for lodging, ISA-95/B2MML for manufacturing, FHIR for health, schema.org for parties.
-   - A protocol is extracted when a second provider or consumer appears, never ahead of one (inner-platform risk, Platform.md §9).
-6. **The same catalog faces outward.**
-   - The host can expose a caller's catalog as an MCP server, so external agents discover and call apps with the caller's grants.
-   - OIDC stays the identity protocol (ADR-0007).
-7. **Bridges remain only for real pair-specific logic.** A bridge is justified by a mapping rule that belongs to neither side and cannot be expressed as a protocol. It is then a small adapter that provides or consumes a protocol.
+   这两项平台通用能力彻底取代并消除了此前 crm-hotel 桥接包私自维系的内容。
+4. **消费者遵循调用者的权限通过协议发起交互。**
+   - 消费者发起针对提供者所映射动作的调用。
+   - 由提供者内部的角色体系与业务规则对本次调用实施鉴权裁决 (ADR-0008 保持不变)。
+   - 协议产生的业务事件自动精准触达所有订阅了该协议的消费者。
+5. **协议的来源归宿。**
+   - **跨行业通用协议**直接归属于平台底座。候选范围：主体主体（个人或企业组织）、关联链接、动态时间线、文档与文件管理、消息通知、业务日历与可用性排期。
+   - **行业垂直协议**归属于定义它们的垂直行业应用包，且在业界存在成熟公开标准时严格遵从标准：住宿行业遵循 OpenTravel/HTNG、制造业遵循 ISA-95/B2MML、医疗行业遵循 FHIR、主体信息遵循 schema.org。
+   - 协议唯有在出现第二个提供者或消费者时方可提炼抽取，绝不提前虚构设计（防范 Platform.md §9 中警告的内置虚构平台化风险）。
+6. **面向外部世界展现完全一致的动作目录。**
+   - 宿主能够将调用者的受权动作目录直接暴露为现代化 MCP 服务端点，使外部智能体能够以该调用者被赋予的相同权限发现并调用底层业务应用。
+   - OIDC 始终作为统一的身份认证协议基石 (ADR-0007)。
+7. **桥接包仅保留用于成对特定的真实业务映射。** 仅当存在两方均不适宜承载且无法抽象为通用协议的特殊映射逻辑时，设立桥接包才具备充分合理性。届时，桥接包演进为一个负责提供或消费标准化协议的轻量级胶水适配器。
 
-**Consequences.**
-- The crm-hotel bridge dissolves:
-  - Hotel provides `lodging.booking/1`.
-  - CRM consumes it, optionally.
-  - The opportunity-to-booking link is a platform link.
-  - Cancellation notes arrive through a timeline subscription to the protocol's `canceled` event.
-- Any other lodging app (serviced apartments, coworking) plugs in without new code in CRM.
-- Settings shows protocols with their providers and consumers instead of an app-to-app graph.
-- The kernel contract is unchanged; protocols live above it, at layer 2 for cross-industry protocols and in industry packages for industry protocols.
+**影响与后果。**
+- 原有的 crm-hotel 桥接包彻底消除解体：
+  - 酒店应用对外提供 `lodging.booking/1` 协议。
+  - CRM 应用可选消费该协议。
+  - 商机到客房预订的关联变更为平台原生关联链接。
+  - 退订通知动态通过订阅该协议的 `canceled` 事件直接自动流转至时间线上。
+- 接入任何其他住宿类应用（如服务式公寓、共享办公工位预订），CRM 端均无需改动一行代码即可无缝即插即用。
+- 系统设置中心直接呈现标准化协议及其背后的提供者与消费者全景，彻底取代了脆弱混乱的应用点对点网状拓扑图。
+- 内核底层契约保持稳定未改；协议立足于内核之上，跨行业通用协议位于第 2 层通用能力层，垂直行业协议位于各行业应用包内部。
 
-**Revisit when** two providers of one protocol need behaviour the protocol cannot express (then the protocol grows a version), or a protocol needs to cross deployments (then it needs a wire format and conformance vectors like the kernel's).
+**重新评估时机：** 当同一个协议的两个不同提供者需要协议本身无法表达的高级特性行为时（此时协议需要平滑升级递增版本）、或者当协议必须跨越不同的物理部署环境进行跨网通信时（此时协议需要定义类似内核契约的线缆网络传输协议与一致性测试向量）。

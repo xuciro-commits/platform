@@ -1,115 +1,112 @@
-# ADR-0017: Lifecycles, approvals and tasks
+# ADR-0017: 生命周期、审批与任务
 
-**Status:** Accepted (2026-09-25, #107). The owner accepted D1–D7 as recommended. What is built is under "As built".
+**状态：** 已采纳 (2026-09-25, #107)。业务负责人按推荐采纳了 D1–D7。实际构建内容见“实际构建（As built）”。
 
-## Context
+## 背景
 
-After the application model (ADR-0016), the most common shape of business software is a **document that moves through states**: an order is released, started, completed; a leave request is submitted, approved, taken; a ticket is opened, assigned, solved. Around it, people **approve** and **work on tasks** with due dates.
+在建立应用模型（[ADR-0016](0016-application-model.md)）之后，业务软件中最常见的形态就是**在各种状态之间流转的业务单据**：工单被下达、开工、完工；请假申请被提交、审批、休假；工单服务单被创建、分派、解决。围绕这些单据，人们需要进行**审批**并处理带有截止日期的**任务**。
 
-Today each app hand-codes this. The plant keeps an SFC's state in a string and checks transitions in a switch; the CRM does the same for an opportunity's stage. Nothing gives a status bar, an approval chain or an inbox. Approval exists only for held effects (ADR-0014 D6).
+当前各个应用都是手工硬编码实现这一点的。工厂车间将 SFC 的状态保存在字符串中，并在 switch 语句中检查状态迁移；CRM 对销售机会的阶段处理也是如出一辙。没有任何机制提供通用的状态流转进度条、审批链或个人工作收件箱。系统中的审批此前仅存在于挂起的出站外部效果中（[ADR-0014](0014-outbound-effects.md) D6）。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| Platform | Lifecycle | Approvals | Tasks and inbox |
+| 平台 | 生命周期 | 审批 | 任务与收件箱 |
 |---|---|---|---|
-| Odoo | A selection field with a status bar; transitions are methods (buttons) | The approvals module: approval types, approvers, minimum approvals | Activities (to-dos with due dates) on any record, a personal activity view |
-| ServiceNow | State models; business rules guard transitions | Approval engine: rules and approval groups, chained approvals | Task tables (`task` and its children), assignment groups, SLA definitions with timers and breach escalation, the agent workspace inbox |
-| Salesforce | Paths over a picklist, with guidance per stage | Approval processes: entry criteria, steps, approvers by hierarchy, field or queue | Tasks, queues, Omni-Channel routing |
-| SAP | Status management (system and user status) | Release strategies by document values (amount, plant), workflow approvals | Workflow inbox (My Inbox), deadline monitoring |
-| Oracle Fusion | Status fields with validations | Approval Management Engine: rules by attributes (amount, cost centre), supervisory or position hierarchy, parallel and serial | BPM worklist |
-| Palantir Foundry | Action types change a status property | Action validation and review | Inbox, notifications |
+| Odoo | 带有状态条的选择字段；状态迁移是方法（对应按钮） | 审批模块：审批类型、审批人、最低审批人数 | 任何记录上的活动（带有到期日的待办事项），个人活动视图 |
+| ServiceNow | 状态模型；业务规则守卫状态迁移 | 审批引擎：规则与审批组、链式审批 | 任务表（`task` 及其子表）、分派组、带有计时器和违约升级的 SLA 定义、座席工作空间收件箱 |
+| Salesforce | 下拉列表之上的路径（Paths），各阶段附带指导建议 | 审批流程：进入条件、步骤、按层级/字段/队列指定的审批人 | 任务、队列、全渠道路由（Omni-Channel） |
+| SAP | 状态管理（系统状态与用户状态） | 基于单据数值（金额、工厂）的下达策略，工作流审批 | 工作流收件箱（My Inbox），截止时间监控 |
+| Oracle Fusion | 带有校验的状态字段 | 审批管理引擎：基于属性（金额、成本中心）的规则、主管或职位层级、并行与串行审批 | BPM 工作清单（worklist） |
+| Palantir Foundry | 操作类型变更状态属性 | 操作校验与复核机制 | 收件箱、通知 |
 
-They agree on three separate things. We take them apart the same way:
-- a **lifecycle** says which states a record may be in and which transitions exist;
-- an **approval** says who must agree before a decision takes effect;
-- a **task** says who is expected to do something by when.
+上述平台在三项独立的概念上达成了一致。我们也以相同的方式对它们进行解耦：
+- **生命周期（lifecycle）** 规定记录允许处于哪些状态，以及存在哪些状态迁移路径；
+- **审批（approval）** 规定某项决策生效前必须由谁同意；
+- **任务（task）** 规定期望由谁在何时之前完成某项工作。
 
-## Design
+## 设计
 
-1. **Lifecycles are declared on an entity type.**
-   - The declaration names the status field (read-only), its states (with titles and tones for the UI) and its initial state.
-   - It lists the transitions: name, from, to, roles and fields to fill.
-   - Each transition becomes a catalog action `<type>.<transition>`, generated like ADR-0016's standard actions. The app may add a guard (a Go function refusing with a kernel error) and an apply hook (a Go function changing other fields or notifying).
-   - The status changes only through transitions, so a record's history is its lifecycle.
-   - The kit's record page shows a status bar with the transitions the member's catalog allows.
-2. **Approvals are declared on actions and held by the host.**
-   - An action may require approval, with levels. Each level names its approvers:
-     - members holding a role in a unit above the requester's, in a named structure (the line's supervisor, a department head);
-     - holders of an app role;
-     - a named member.
-   - A level may apply only above an amount or under a condition, like SAP's release strategies and Oracle's approval engine.
-   - Submitting such an action records an **approval request** instead of applying it. Each approver's approve or reject is a decision.
-   - When the last level approves, the host runs the held submission again, inside that input: rules decide at approval time, and a request that no longer holds is refused and reported.
-   - The requester cannot approve their own request. AI agents cannot approve anything (ADR-0014 D6).
-   - Replay rebuilds requests and outcomes from the journaled decisions.
-3. **Tasks are records of a platform app, with one inbox.**
-   - A task names:
-     - what it is about (a record reference);
-     - who should do it: a member, or a queue — holders of a role in a unit, or of an app role;
-     - a due time and an SLA with escalation.
-   - Apps create tasks through the caller (`Caller.Assign`), or the platform creates them: one per approval level. Members claim, complete or hand back tasks, as decisions.
-   - A host job watches due times and notifies escalation recipients when a task breaches.
-   - The kit gets an **Inbox**: my tasks, my queues' tasks, overdue first. Every workspace can show it.
-4. **Built on the application model.** Approval requests and tasks are entity types of a platform app (`work`). They get lists, record pages, history and scope for free, and replay like any records.
+1. **生命周期在实体类型上直接声明。**
+   - 声明指定状态字段（只读）、其各个状态（包含面向前端 UI 的标题与色调语气），以及初始状态。
+   - 列出状态迁移列表：名称、起始状态（from）、目标状态（to）、所需角色以及需要填写的载荷字段。
+   - 每个状态迁移均生成为一个目录操作 `<type>.<transition>`，生成方式类似于 ADR-0016 的标准操作。应用可附加守卫条件（guard，返回内核错误的 Go 函数）以及应用钩子（apply hook，用于修改其它字段或发送通知的 Go 函数）。
+   - 状态只能通过合法的状态迁移改变，因此记录的历史记录真实反映了其生命周期流转。
+   - UI 套件的记录详情页展示状态条，并显示当前成员目录权限允许执行的状态迁移操作。
+2. **审批直接声明在操作上，并由宿主挂起拦截。**
+   - 操作可以声明需要审批，并支持多层级（levels）。每个层级指定其审批人：
+     - 在指定组织结构中位于申请人上级部门持有某角色的成员（如产线主管、部门主管）；
+     - 某个应用角色的持有者；
+     - 指定的具体成员。
+   - 某个层级可以仅在超过特定金额或满足特定条件时才激活，类似于 SAP 的下达策略与 Oracle 的审批引擎。
+   - 提交此类受控操作时，系统会记录一条**审批申请（approval request）**而非立即应用变更。每位审批人的批准或驳回操作本身也是记入日志的决策。
+   - 当最后一个层级批准后，宿主在该输入日志内部重新运行此前挂起的提交内容：规则在最终审批时重新裁决，如果当时条件已不再满足，则予以拒绝并上报原因。
+   - 申请人不得批准自己发起的申请。AI 代理绝不允许批准任何事项（[ADR-0014](0014-outbound-effects.md) D6）。
+   - 重放能够从日志中记录的决策完美重建所有审批申请与流转结果。
+3. **任务是平台专属应用的记录，统一汇聚到一个收件箱。**
+   - 任务包含：
+     - 关联事项（对特定记录的引用）；
+     - 责任人：具体成员，或工作队列 —— 某部门中具有某角色的成员，或具有某应用角色的成员；
+     - 截止时间以及带有升级机制的 SLA。
+   - 应用通过调用方创建任务（`Caller.Assign`），平台自身也会自动创建：每个审批层级创建一个任务。成员认领、完成或退回任务，均作为记入日志的决策执行。
+   - 宿主后台作业监控截止时间，并在任务超时违约时向升级接收人发送通知。
+   - UI 套件获得**收件箱（Inbox）**组件：我的任务、我所属队列的任务，超时逾期者优先展示。所有工作空间均可直接嵌入显示。
+4. **构建于通用应用模型之上。** 审批申请与任务均作为平台应用（`work`）内部的实体类型。它们天生享有通用列表、记录详情页、变更历史与作用域控制，并像所有常规记录一样参与完整重放。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | How transitions become actions | (a) Generated from the lifecycle declaration, with Go guards and apply hooks. (b) The app writes the actions; the lifecycle only validates and displays | **(a)**: one declaration gives the catalog, the status bar and the history; the guard and hook keep the rules in code |
-| D2 | Where approvals live | (a) Generic, declared on actions and held by the host. (b) Each app models its own approval states | **(a)**: every reference platform treats approval as a platform service; one chain engine serves purchase, leave, release and posting |
-| D3 | When a held action is checked | (a) Only when requested. (b) Again when finally approved, inside the approval's input | **(b)**: stock, capacity or prices may have moved while approvers decided; the rules at approval time are the truth |
-| D4 | Approvers | Organisation-based (a role in a unit above the requester's), app role, named member, with amount or condition thresholds per level; serial levels; parallel approvers within a level, any one or all | As listed; delegation and substitutes wait for ADR-0012's deferred delegation |
-| D5 | Tasks and SLA | (a) Tasks with due times and escalation now; business calendars (working hours, holidays) later. (b) Calendars first | **(a)**: calendars are their own capability (Platform.md §10.4, application model) |
-| D6 | Where approval requests and tasks live | (a) Entity types of a new platform app, `work`. (b) Inside the console | **(a)**: the console administers the tenant; `work` is what every member uses daily, with its own roles |
-| D7 | Proof | Manufacturing's order and SFC lifecycles move onto it. A thin HR reference app has people and leave requests approved along the organisation (manager, then department head above five days). The helpdesk reference app (tickets with SLA) follows as stage 2's second proof | As listed |
+| D1 | 状态迁移如何转变为操作 | (a) 由生命周期声明自动生成，辅以 Go 守卫与应用钩子。(b) 应用手写所有操作；生命周期仅负责校验与前端展示 | **(a)**：一份声明直接派生操作目录、状态条与历史记录；守卫与钩子将规则牢牢保留在类型化代码中 |
+| D2 | 审批机制存在于何处 | (a) 通用化，直接声明在操作上并由宿主挂起拦截。(b) 每个应用各自建模自己的审批状态 | **(a)**：所有参考平台都将审批作为平台级通用服务；一套链式审批引擎可同时服务采购、请假、下达发布与记账过账 |
+| D3 | 何时对挂起的操作进行规则校验 | (a) 仅在申请提交时校验一次。(b) 最终审批通过时，在审批该输入的上下文内再次校验 | **(b)**：在审批人决定的过程中，库存、产能或价格可能已发生变动；最终审批时刻的规则才是业务真相 |
+| D4 | 审批人选定机制 | 基于组织（申请人上级部门中的角色）、应用角色、具体指定成员，每个层级可配置金额或条件阈值；支持串行多层级；同一层级内支持多名审批人，任意一人通过或全员通过 | 按照所列机制；委派与代理人机制等待 ADR-0012 的延迟委派能力 |
+| D5 | 任务与 SLA 的实施节奏 | (a) 现阶段实现带有到期时间和升级机制的任务；工作日历（工作时长、节假日）后续实现。(b) 优先实现工作日历 | **(a)**：日历是一项独立的通用能力（[Platform.md](../Platform.md) §10.4，应用模型） |
+| D6 | 审批申请与任务归属何处 | (a) 作为新平台应用 `work` 的实体类型。(b) 放在控制台内部 | **(a)**：控制台用于管理租户；`work` 是每位成员日常都要使用的核心能力，拥有独立角色 |
+| D7 | 验证载体（Proof） | 制造业的工单与 SFC 生命周期迁移至此。构建轻量的人力资源（HR）参考应用，包含员工与通过组织结构审批的请假申请（经理审批，超过五天则流转至部门主管）。服务台参考应用（带有 SLA 的工单）作为第二阶段的第二个验证载体 | 按照所列计划执行 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Item | Done when |
+| 事项 | 完成标志 |
 |---|---|
-| Lifecycles in the entity kit | The MES SFC and order lifecycles are declared; their hand-written state checks are gone; the record page shows a status bar; `CheckReplay` passes |
-| Approvals | A leave request over five days needs the manager and the department head, resolved from the organisation; a stale request is refused at approval; an agent cannot approve; replay rebuilds every request |
-| Tasks, inbox, SLA | Each approval level creates a task in the approver's inbox; an overdue task escalates by notification; the kit's inbox shows my tasks and my queues' |
-| HR reference app | People and leave requests declared in about a hundred lines of rules; its workspace is generated pages plus the inbox |
+| 实体套件中的生命周期机制 | MES 的 SFC 和生产工单生命周期完成声明；删除其手写的状态检查逻辑；记录详情页展示状态条；`CheckReplay` 测试通过 |
+| 审批系统 | 超过五天的请假申请需要经理和部门主管双重审批（通过组织结构动态解析）；最终执行时已失效的过期申请被严正拒绝；AI 代理无权审批；重放完整重建每笔申请 |
+| 任务、收件箱与 SLA | 每个审批层级在审批人的收件箱中生成任务；逾期任务触发通知升级；UI 套件收件箱展示我的任务及队列任务 |
+| HR 参考应用 | 仅需约一百行业务规则即可声明员工与请假申请；其工作空间由自动生成的页面加收件箱构成 |
 
-## Consequences
+## 影响
 
-- An app's document becomes a declaration (fields, lifecycle, approval rules) plus the rules only it knows.
-- Approval and assignment are no longer per-app features: every app gets the same chain, inbox and audit.
-- Stage 4's flows orchestrate these same lifecycles, approvals and tasks across apps.
+- 应用中的业务单据彻底精简为一份声明（字段、生命周期、审批规则）以及该领域特有的纯粹业务规则。
+- 审批流与任务分派不再是各个应用重复开发的孤岛特性：每个应用自动获得统一标准的审批链、收件箱和审计追踪。
+- 第四阶段的跨应用业务流（flows）将编排跨越多个应用的这同一套生命周期、审批与任务。
 
-## As built (#107)
+## 实际构建（As built, #107）
 
-- **Lifecycles** (`platform.Lifecycle` on an `Entity`): a status field, its states with tones, and transitions generated as actions `<type>.<transition>`.
-  - `Do` holds the rules and may choose the target among `To`. `After` runs once the record is stored, for what follows elsewhere.
-  - A new record starts in the initial state, and `Check` refuses a state the lifecycle does not have.
-  - `Ledger.Generated` decides standard actions and transitions alike; `platform.EntityActions` gives their catalog entries.
-- **Manufacturing:** SFCs and orders are records. The SFC's start, complete, nonconformance and two-person signed disposition are its transitions, with the same schemas, so journals replay.
-  - An order completes when its last SFC ends and is then confirmed to the ERP.
-  - The ERP's answer changes the order through `Caller.PutAt` (a change from an input that is not a decision).
-  - The kit gained child lines (slices of structs, such as NCs and signatures).
-  - A record's revision is the kernel's own (K4 C12).
-- **Approvals:** `platform.Approval` on an action or a transition, with levels.
-  - Each level names its approvers: a role in the requester's units or above in a structure, an app role, or a member. A level may ask all approvers, apply only under `When`, and give its task a due time.
-  - `Tenant.Submit` holds such a submission. It first probes its policy and rules as the requester, with nothing recorded (`Runtime.Probing`). Then the `work` app opens the request as a journaled decision.
-  - `work.approval.approve`, `.reject` and `.withdraw` are the request's own transitions. The last approval runs the held submission inside that input, as the requester, and a refusal marks the request refused with the reason.
-  - Requesters and AI agents cannot approve.
-- **Tasks:** `work.task` records. Approval levels open them; apps open them with `Caller.Assign`.
-  - The `inbox` read serves them overdue first; take and done are transitions.
-  - A job notifies the candidates of an overdue task once.
-- **HR reference app** (`apps/hr`): leave requests with a lifecycle and a two-level approval (the manager, and the department head above five days), in about 150 lines. It runs in the sales solution.
-  - The sales workspace has leave requests, the inbox and "my requests". The MES has the inbox.
-  - The kit's record page shows a status bar with the transitions the member may take.
-- **Proven** by the HR test and the rehearsal: approval along the organisation, a stale request refused when run, rejection, withdrawal, a refused probe, an agent refused, escalation of an overdue task, and replay. Checked in the browser: submit, the manager's inbox, two levels approved, the requester told.
-- **Pending and rejected states** (F-38, 2026-09-27): a transition's `Approval` may name `Pending`, the state the record waits in, and `Rejected`, where a rejection leaves it.
-  - They generate `<type>.<transition>.held`, `.rejected` and `.returned`, which no role holds (`Action.Automation`); the work app takes them as the app's automation inside the decision that opens, rejects, withdraws or refuses the request.
-  - The transition leaves the pending state when its approval runs it, and only then: a pending record is neither asked for again nor moved by its other transitions.
-  - A rejection keeps who rejected it and the note (`RejectedBy`, `Outcome`), told to the requester and to whoever approved an earlier level. A record's page lists its approvals (`RecordView.Approvals`).
-  - HCM's leave is pending while approvers decide, rejected with the note, and may be submitted again (`TestLeaveApprovals`, Playwright route 4).
-- **Not yet:** delegation of tasks outside approvals (delegation of approvals and business calendars are built, ADR-0028). The helpdesk reference app, stage 2's second proof, was built as the CSM (ADR-0021 batch 2).
-- **Tasks on their record's page** (2026-09-27): a record's page lists the open tasks about it that the member may take (`RecordView.Tasks`) with their answers as buttons, so a flow's question — the MES correction's "resend" or "correct myself" — is answered where its notification leads, not only in the inbox.
-- **A held submission runs by the rules of the moment** (2026-09-27): the revision the requester saw was checked when they asked; the approval then moves the record to its pending state, so the last approval runs the held submission without that revision (a page's submission had always ended "refused when run"). Tested with a revision in `TestLeaveApprovals`.
-
-
-
+- **生命周期**（`Entity` 上的 `platform.Lifecycle`）：包含状态字段、带有色调语气的状态列表，以及自动生成为 `<type>.<transition>` 操作的状态迁移。
+  - `Do` 承载业务规则，并可在 `To` 列表中选择实际目标状态。`After` 在记录持久化存储后执行，用于触发其他连锁响应。
+  - 新建记录始于初始状态，`Check` 会严厉拒绝生命周期中未定义的非法状态。
+  - `Ledger.Generated` 统一裁决标准操作与状态迁移操作；`platform.EntityActions` 提供其对应的目录清单。
+- **制造业（MES）：** SFC 和生产订单均作为实体记录实现。SFC 的开工、完工、不合格品报告以及双人签字处置均作为其状态迁移操作，并保持完全相同的 Schema，确保历史日志无缝重放。
+  - 当生产订单的最后一个 SFC 完工时，该工单自动完工并向 ERP 确认完工。
+  - ERP 的响应通过 `Caller.PutAt` 更新工单（属于非决策类输入所带来的变更）。
+  - UI 套件获得了子明细行支持（结构体切片，例如不合格品记录与电子签名）。
+  - 记录的版本号对齐内核原生的修订版本（K4 C12）。
+- **审批：** 在操作或状态迁移上声明 `platform.Approval`，支持多层级配置。
+  - 每个层级指定其审批人：申请人所属部门或上级结构中的某个角色、应用角色或指定成员。某一层级可要求所有审批人会签，支持通过 `When` 配置前置条件，并可为生成的任务指定截止时间。
+  - `Tenant.Submit` 拦截此类提交提议。它首先作为申请人探查其策略与规则，期间不产生任何持久化记录（`Runtime.Probing`）。随后由 `work` 应用以记入日志的决策形式开启正式的审批申请。
+  - `work.approval.approve`, `.reject` 和 `.withdraw` 是审批申请自身的状态迁移操作。最终的批准会在该输入内部以申请人身份重新执行此前挂起的提交内容；如果遭遇规则拒绝，则将申请标记为已拒绝并记录原因。
+  - 申请人与 AI 代理均无权审批。
+- **任务：** 表现为 `work.task` 记录。各审批层级自动生成任务；业务应用也可通过 `Caller.Assign` 主动生成任务。
+  - `inbox` 读取端点优先按逾期时间提供任务；认领（take）和完成（done）均作为状态迁移操作。
+  - 后台任务会对逾期任务的候选处理人发送一次告警通知。
+- **HR 参考应用** (`apps/hr`，现已演进为 HCM)：声明了带有生命周期与两级审批的请假申请（经理审批，五天以上加签部门主管），总共仅约 150 行代码。它运行于销售解决方案中。
+  - 销售工作空间配备了请假申请、收件箱与“我的申请”。MES 工作空间同样集成了收件箱。
+  - UI 套件的记录详情页显示状态条，动态呈现当前成员有权执行的状态迁移操作。
+  - **经过验证：** 通过 HR 测试和演练验证：基于组织的逐级审批、执行时规则失效被拒绝、驳回撤回、探查被拒、代理无权审批、逾期任务升级通知以及重放完整一致性。在浏览器中实际走通：提交申请、经理收件箱查收、两级审批通过、申请人收到完成通知。
+- **审批中与已驳回状态支持**（F-38, 2026-09-27）：状态迁移的 `Approval` 可显式指定 `Pending`（记录挂起等待审批时的中间状态）和 `Rejected`（审批被驳回时记录停留的状态）。
+  - 系统据此自动生成 `<type>.<transition>.held`, `.rejected` 和 `.returned` 操作，这些操作不赋予任何普通角色（`Action.Automation`）；由 `work` 应用在开启、驳回、撤回或拒绝审批申请的决策内部，以应用自动化身份调用。
+  - 只有当审批流最终执行时，状态迁移才会离开挂起状态：处于挂起中的记录既无法被重复提交申请，也无法被其它的状态迁移操作修改。
+  - 驳回记录中保留了驳回人身份与驳回批注（`RejectedBy`, `Outcome`），并通知申请人及之前层级已同意的审批人。记录详情页全面展示其审批历史（`RecordView.Approvals`）。
+  - HCM 的请假申请在审批期间处于挂起状态（pending），驳回时附带批注，并允许修改后重新提交（`TestLeaveApprovals`, Playwright 路由 4）。
+- **暂未构建：** 审批之外的通用任务委派（审批委派与业务日历现已构建完成，见 [ADR-0028](0028-the-application-half.md)）。服务台参考应用（第二阶段的第二个验证载体）已作为 CSM 完成构建（[ADR-0021](0021-agents.md) batch 2）。
+- **记录详情页直接展示关联任务**（2026-09-27）：记录详情页列出了当前成员有权领取的关于该记录的待办任务（`RecordView.Tasks`），并将任务选项直接呈现为操作按钮，因此业务流中的提问 —— 例如 MES 纠错中的“重新发送”或“自行更正” —— 可以直接在通知引导跳转的记录页面上作答，而不再局限于工作收件箱中。
+- **挂起的提议按执行当下的规则运行**（2026-09-27）：申请人提交时所看到的记录版本在发起时已被验证；随后审批流将记录转入挂起状态，因此最后的审批在执行挂起的提议时剥离了原先的版本号限制（此前页面的提交在最终执行时曾总是以“执行时被拒绝”告终）。已在 `TestLeaveApprovals` 中通过版本变更进行了验证。

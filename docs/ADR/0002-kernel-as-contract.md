@@ -1,13 +1,13 @@
-# ADR-0002: The kernel is a language-neutral contract
+# ADR-0002: 内核是语言中立的契约
 
-**Status:** Accepted (2026-09-24); format decided 2026-09-24. Amended by ADR-0025 D5: the Swift implementation is deleted; Go, Rust and TypeScript implement the contract.
+**状态：** 已接受 (2026-09-24)；格式敲定于 2026-09-24。由 ADR-0025 D5 修订：Swift 实现已被删除；由 Go、Rust 与 TypeScript 共同实现该契约。
 
-**Context.** Go (server), Rust (systems components, Tauri desktop) and Swift (Apple edge) will coexist. A kernel defined as one language's library would make that language the platform and let semantics drift in the others.
+**背景上下文。** Go（服务端）、Rust（系统级组件、Tauri 桌面端）与 Swift（Apple 边缘端）将长期共存。若将内核定义为单一语言的代码库，势必会将该语言绑定为平台本身，并导致其他语言中的语义逐渐分化漂移。
 
-**Decision.** The kernel is its schemas, semantic rules and conformance test vectors. Go is the reference implementation. Other runtimes implement the contract and pass the same vectors, or map to it at their boundary. Cross-language boundaries are introduced only where justified; no default "implement everything in every language". Whether Swift and Tauri share a Rust edge core: not yet (ADR-0005).
+**决策。** 内核本质上是由其模式定义、语义规则与一致性测试向量共同构成的契约。Go 是参考实现。其他运行时要么原生实现该契约并通过完全相同的测试向量，要么在其边界处向其映射。跨语言边界仅在确有充分理由时才设立；坚决不默认“在所有语言中重复实现一切”。关于 Swift 与 Tauri 是否共享一个 Rust 边缘核心库：暂不共享 (ADR-0005)。
 
-**Format.** Protobuf describes the data contract only; semantics are numbered rules in prose with an error per violation; conformance is language-neutral JSON vectors run unchanged by every implementation; errors are one shared code set. Protobuf was chosen for field-number evolution rules, `buf breaking` enforcement and generators for Go, Rust, Swift and TypeScript; it must not become the definition of kernel semantics. The contract lives in `contract/` until the platform repository split (ADR-0003). Details: `docs/Platform.md`, Kernel Contract.
+**契约表现形式。** Protobuf 仅用于描述数据契约本身；语义是带有编号条款的文字规则，每项违规对应精确的错误代码；一致性是语言中立的 JSON 测试向量，各语言实现均原样运行这套向量；错误是一套统一共享的错误代码集合。选择 Protobuf 是看中其字段编号演进规则、`buf breaking` 的强检查能力以及面向 Go、Rust、Swift 与 TypeScript 的自动化代码生成工具；它绝不能僭越成为内核语义本身的定义者。该契约存放在 `contract/` 目录下，直至平台仓库正式拆分 (ADR-0003)。细节详见 `docs/Platform.md` 内核契约一节。
 
-**Consequences.** Kernel changes are contract changes: they update schemas and vectors first, and every implementation must pass. The server is not the kernel.
+**影响与后果。** 内核的变更即为契约的变更：必须首先更新模式与测试向量，且每项实现均必须全部通过测试。服务端不等于内核本身。
 
-**Revisit when** maintaining conformance across runtimes costs more than a shared implementation would.
+**重新评估时机：** 当跨多个运行时维护一致性契约的成本，高于直接维护一套共享跨语言实现的代价时。

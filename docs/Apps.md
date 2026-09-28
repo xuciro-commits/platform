@@ -1,97 +1,97 @@
-# Building an app
+# 构建应用
 
-How a person, or a coding agent, builds an app with the capabilities available today (ADR-0023 D8). Read [Intent.md](Intent.md), [Platform.md §10](Platform.md) and [WorkQueue.md](WorkQueue.md) before choosing work. ADR-0031 sets the next-stage direction; Platform §10.4 owns the target application-building journey. This guide documents the current executable path: typed Go code composed into a tenant (ADR-0010), and optionally a UI package compiled into the workspace (ADR-0018). The path has six steps; the scaffold writes a working starting point, so each step changes code that can be checked by tests.
+人或编程智能体（Coding Agent）如何利用平台当前已具备的能力构建一个应用（ADR-0023 D8）。在选择任务前，请先阅读 [Intent.md](Intent.md)、[Platform.md §10](Platform.md) 和 [WorkQueue.md](WorkQueue.md)。ADR-0031 确立了下一阶段的发展方向；Platform §10.4 规定了目标应用构建旅程。本指南记录当前可执行的构建路径：通过类型化 Go 代码组合进租户（ADR-0010），并可选地将 UI 前端包编译进统一工作区（ADR-0018）。该路径包含六个步骤；脚手架工具会生成一个开箱即用的起点，因此每一步都在修改可由测试检验的有效代码。
 
 ```
-create app → declare entities → declare actions → declare flows → add translations → run
+创建应用 → 声明实体 → 声明动作 → 声明流程 → 添加翻译 → 运行
 ```
 
-The app API is `platformserver/platform` (`capabilities/server/platform`); an app never imports the host runtime `platformserver` except in its tests and its `cmd/` binaries, and never another app (`scripts/boundaries.sh`). Apps meet through protocols (ADR-0011). A decision changes only its own app: its rules may probe a provider (`Caller.Probe`), and once it is accepted it requests what it needs (`Caller.Request`); the provider's answer comes back to one of the app's own actions, which a person takes when no provider is bound (ADR-0026).
+应用所面向的平台 API 是 `platformserver/platform`（`capabilities/server/platform`）；应用除了在自身测试和 `cmd/` 入口二进制中以外，绝不直接引用宿主运行时 `platformserver`，也绝不直接引用其他业务应用（由 `scripts/boundaries.sh` 严格校验）。应用之间通过协议（Protocol）相互协作（ADR-0011）。一次业务决策仅能修改其所属的应用自身：其规则可以探测提供方（`Caller.Probe`），一旦决策被系统接纳入账，它便发起所需的外部请求（`Caller.Request`）；提供方的答复随后回调到该应用自身声明的某个处理动作上；在未绑定外部提供方时，则由人工录入答复（ADR-0026）。
 
-## Builder paths and current limits
+## 构建者路径与当前边界
 
-| Builder | Next-stage responsibility | Available path today |
+| 构建者角色 | 下一阶段目标职责 | 今日实际可用路径 |
 |---|---|---|
-| Platform developer | Own shared semantics, runtime guarantees, UI components and extension contracts | Typed Go/TypeScript capabilities and the checks below |
-| FDE or customer developer | Model the industry, bind data and systems, compose business and AI logic and a usable workspace; test, deliver and upgrade it | Repository scaffold, typed declarations, app API, UI kit and deployment composition |
-| Customer business builder | Configure and compose permitted objects, pages, workflows and AI logic within the published capabilities and grants | **Objects**: with the `builder` role, define an object and its fields in the workspace's Application Studio and publish it; the host installs it and it works like any app's type, with its own list/detail page (ADR-0034). Saved record views and workspace layouts; administrative values through existing settings. Tenant-authored objects, pages, applications, states, actions, per-object access and action approvals are available; workflow and AI logic editors and immutable published revisions are not yet available |
-| AI assisting any builder | Propose changes, show their impact, generate tests and previews, and follow the same publication controls | A coding agent can edit and test the repository. The in-product assistant operates declared business agents; it does not yet author and publish applications |
+| 平台开发者 | 负责共享语义、运行时保证、UI 组件库及扩展契约 | 类型化 Go/TypeScript 能力实现与下方列出的校验检查 |
+| FDE 或客户开发者 | 负责行业建模、数据与系统对接、编排业务与 AI 逻辑以及可用工作区；测试、交付与升级 | 仓库内置脚手架、类型化声明、应用 API、UI Kit 与解决方案部署编排 |
+| 客户业务构建者 | 在已发布的平台能力与授权范围内配置并编排允许的对象、页面、工作流与 AI 逻辑 | **自定义对象**：拥有 `builder` 角色的成员在工作区的“应用设计台”中定义对象及其字段并发布；宿主在运行时安装该对象，其行为与代码应用中声明的类型完全一致，自动生成列表/详情页（ADR-0034）。已支持已保存视图与工作区布局配置；通过现有设置项配置管理值。租户自定义的对象、页面、交付应用、状态、动作、按对象的行列权限以及动作审批均已可用；工作流与 AI 逻辑的可视化编辑器以及不可变发布版本锁定尚待实现 |
+| 辅助构建者的 AI | 提议变更、展示变更影响、生成测试用例与预览，并遵循相同的发布管控流程 | 编程智能体可以直接编辑并测试本仓库代码。产品内嵌助手可操作已声明的业务智能体；尚不具备直接设计并发布完整应用的能力 |
 
-Controlled, typed definitions and visual composition are approved directions (ADR-0031), replacing the old blanket ban on configuration-driven composition. They must reuse the same semantic contracts, permissions and component owners as code. Until their canonical runtime is built, do not create a private per-app interpreter or describe planned tools as usable commands. This direction does not promise arbitrary tenant code execution.
+受治理的类型化定义与可视化编排是已获批的方向（ADR-0031），它取代了过去对配置驱动组合的一刀切禁止。这些配置必须与代码复用同一套语义契约、权限模型与组件主人。在规范的通用运行时构建完成之前，严禁为某个应用单独搞私有的配置解释器，也不得将规划中的工具当作已存在的可用命令来宣传。该方向绝不承诺允许租户在运行时执行任意脚本代码。
 
-Installed code objects, actions and bounded pages can now be inspected through `GET /v1/definitions` or `@platform/app`'s `useDefinitions()` hook (ADR-0032 13a–13b). `AssetRef{App, Kind, Name}` is their qualified reference; `assetKey` and `findDefinition` use the same identity in UI code. A `platform.Page` in `Manifest.Pages` binds one object, a `list-detail` layout, explicit list/detail field names and action references. The host checks those references when it composes a tenant, and the read intersects fields/actions with the caller's current grants. The workspace's **Definitions** view opens a code page through `PageWorkspace` or a local sample-data `PagePreview`; both reuse `@platform/ui`'s `RecordWorkspace`. Preview action forms have no submit path. CRM, MES and HCM contain small examples. These APIs do not themselves author tenant pages; Application Studio publishes pages and their live views use the same action and record APIs.
+代码声明的已安装对象、动作和有界页面，现已可通过 `GET /v1/definitions` 或 `@platform/app` 的 `useDefinitions()` Hook 进行检索与发现（ADR-0032 13a–13b）。`AssetRef{App, Kind, Name}` 是它们的全局限定引用；UI 代码中的 `assetKey` 与 `findDefinition` 采用相同的唯一标识。`Manifest.Pages` 中的 `platform.Page` 绑定单个对象、采用 `list-detail` 布局、显式指定列表/详情字段列表以及动作引用。宿主在组装租户时会校验这些引用的有效性，并且在读取时会将可见字段与可用动作与调用者当前的实际角色权限求交集。工作区的**定义目录（Definitions）**视图可通过 `PageWorkspace` 打开代码页面，或通过 `PagePreview` 打开本地样例数据预览；两者均复用 `@platform/ui` 的 `RecordWorkspace`。预览模式下的动作表单不提供提交接口。CRM、MES 和 HCM 中包含了相关的示例代码。这些 API 本身并不直接生成租户页面；应用设计台（Application Studio）负责发布页面，其实时运行视图复用相同的动作与记录 API。
 
-**An object a tenant defines** (ADR-0034, ADR-0040 21a) is authored in the workspace, not in this repository: Application Studio → Objects → create, give it a name (lower-case letters and digits), what people call it, and its fields (text, longtext, integer, decimal, money, date, datetime, boolean, choice with values, reference to another object); then **Publish**. The host builds its type, declares it, generates its create/edit/archive actions and a `list-detail` page, and it appears in the navigation. Publishing again after adding a field keeps existing records' values. Opening the object now presents its fields, states/actions and access in one editor; Application Studio → Process and access opens the object picker for the same editor. Its controlled node canvas draws states and actions; connecting them edits the same `from`/`to` declarations as the inspector. The upper-right canvas control expands it, and the lower-right corner changes its height. A node graph is not a second executor. Access configures roles per object: all records, created records or none; create, edit and archive; action takers; and field readers/setters. The builder always has full access. Settings → Members assigns the named roles of the `build` app. In code, `build.New(tenant)` composes the app into a solution, and `build.TypeOf("visit")` is the type its records are kept as.
+**租户自定义对象**（ADR-0034，ADR-0040 21a）是在工作区界面中创建的，而非在本代码仓库中手写：进入“应用设计台 → 对象 → 新建”，输入系统标识名称（由小写字母和数字组成）、人们对它的称呼以及它的字段清单（文本、长文本、整数、小数、金额、日期、日期时间、布尔、选项列表、对其他对象的关联引用）；随后点击 **发布（Publish）**。宿主会动态构建其数据类型、向系统声明该类型、自动生成新建/编辑/归档动作以及一张标准的 `list-detail` 页面，并在工作区导航中立即呈现。追加字段后再次发布，已有历史记录的字段值会完好保留。此时打开该对象，可在同一个编辑器中同时查看其字段、状态/动作以及权限设置；亦可通过“应用设计台 → 流程与权限”打开对象选择器进入该编辑器。其内置的受控节点画布会绘制状态与动作节点；连线操作实际上是在修改与右侧检查器完全一致的 `from`/`to` 转移声明。右上角按钮可展开画布，右下角可拖动调整高度。节点图绝非第二套执行引擎。权限配置按对象划分角色：所有记录、仅自己创建的记录或完全不可见；新建、编辑和归档权限；动作执行人；以及字段维度的只读/可编辑限定。构建者角色（`builder`）始终拥有全量读写权限。“设置 → 成员”负责为成员分配 `build` 应用的角色。在代码层面，`build.New(tenant)` 将构建器应用编排进解决方案，而 `build.TypeOf("visit")` 则是其记录在底层存储中的真实数据类标识。
 
-**A tenant action with approval** (ADR-0037 18c) is configured under Application Studio → Objects → open object → action → Approval settings. Give the object states, make an action from one starting state to its successful result, check **Wait for approval**, choose a separate pending state and optionally a rejection state, then add approver levels in order. Each level names a role of the `build` app that reads all records of the object, or `builder`; Settings → Members assigns these roles. Publishing checks the definition. A member taking the action sees the record wait, an approver decides in the existing work inbox, and the last approval executes the held action; rejection moves to the chosen state or returns to the start. The center pane previews the wait and levels without taking the action. Re-publishing still replaces the running definition; immutable revision binding remains #135/#136 work.
+**带审批的租户自定义动作**（ADR-0037 18c）可在“应用设计台 → 对象 → 打开对象 → 动作 → 审批设置”中进行配置。为对象定义若干状态，创建一条从起始状态指向目标结果状态的动作，勾选**等待审批**，选择一个独立的待审批过渡状态以及可选的驳回状态，随后按顺序列出审批层级。每个层级指定 `build` 应用中拥有该对象全量记录读取权的角色，或指定 `builder`；“设置 → 成员”负责分配这些角色。点击发布时系统会严格校验审批定义的合法性。普通成员在页面上触发该动作时，记录会停留在待审批状态，审批人会在通用的工作收件箱中收到待办并作出决断，最后一级审批通过后才会正式执行原动作；若被驳回则扭转至指定的驳回状态或退回初始状态。中间画布面板可预览审批等待状态与各审批层级，在此模式下不会真正执行动作。再次发布仍会直接替换运行中的定义；不可变版本绑定的落地属于 #135/#136 的工作范畴。
 
-**An application** (ADR-0036) is how what was built reaches the people it was built for: Application Studio → Applications → create, give it a name, a title and an icon, list the published pages it holds, then **Hand it over**. It appears in the launcher of every member who may open at least one of its pages — it grants nothing of its own — and its pages open there as they do anywhere else.
+**交付应用（Application）**（ADR-0036）是将搭建好的功能打包交付给目标用户的载体：进入“应用设计台 → 应用 → 新建”，输入应用标识名、显示名称并选择一枚图标，添加其包含的已发布页面，随后点击**交付**。该应用会立刻出现在所有有权打开其中至少一个页面的成员的应用启动器中——应用本身不赋予任何额外特权——其中的页面打开后与在其他地方打开的行为完全一致。
 
-**A page laid out from widgets** (ADR-0035) is composed in the editor: Application Studio → Pages → open one → add a table, a detail, the actions, a chart, a metric or words; configure the widget in hand on the right (its fields, its actions, what it measures); watch the canvas fill with real records; Save, then Publish. The table decides which record is selected, and the detail and the actions read it. The host refuses a section that names a widget, object, field, action or measure that is not there, and says which section is wrong. A field a purpose-built editor owns — like a page's sections — is declared `field:"aside"`: its actions still take it, but generated forms do not ask for it.
+**基于组件区块排版的自定义页面**（ADR-0035）可在可视化编辑器中进行自由排版：进入“应用设计台 → 页面 → 打开页面”，依次添加表格、详情、动作、图表、指标卡或富文本区块；在右侧属性面板中配置当前选中的组件（要展示的字段、关联的动作、统计度量维度等）；中间画布会立刻以真实业务记录渲染预览效果；点击保存，随后点击发布。页面上的表格负责决定当前“选中了哪条记录”，右侧的详情与操作按钮则基于该选中记录展示与操作。如果页面区块引用了不存在的组件、对象、字段、动作或度量，宿主在发布时会予以拒绝并明确告知哪一块配置有误。专门编辑器专属拥有的字段（例如页面本身的区块配置）被声明为 `field:"aside"`：其动作依然会接收该字段，但通用生成的动态表单不会要求用户手工填写它。
 
-**A page a tenant composes** (ADR-0034 15b) is authored the same way: Application Studio → Pages → create, name it, say which object it shows (`crm.opportunity` as readily as an object this tenant defined), type the field names its list and its detail carry and the actions it offers, then **Publish**. The host refuses a page whose object, field or action is not there, and names what it does have. A published page appears in the Application Studio's navigation for the members who may read its object; what they see and may do on it is still decided by their own record scope and catalog. The record keeps the definition as it was published, so a draft written afterwards changes nothing until it is published too.
+**租户组装的组合页面**（ADR-0034 15b）采用相同方式编排：进入“应用设计台 → 页面 → 新建”，输入名称，指定其绑定的数据对象（既可以是租户自己定义的自定义对象，也可以是平台内置的 `crm.opportunity` 等原生对象），配置列表与详情所携带的字段以及所提供的可用操作按钮，随后点击**发布**。若页面引用的对象、字段或动作不存在，宿主会拒绝发布并列出当前实际可用的选项。已发布的组合页面会显示在应用设计台的导航栏中，供有权读取该对象的成员使用；成员在页面上能看到什么、能执行什么动作，依然完全由其自身的记录数据范围与动作目录权限决定。记录上会保留“已发布那一版”的定义快照，因此在发布之后新起草的草稿在未正式发布前绝不会影响线上已运行的页面。
 
-Before scaffolding, name the builder, the operator's complete task, the shared capabilities being exercised and each capability's owner. Include the required data/AI integration and customer variation. A reference app is sufficient only when the intended task can be built, used and changed; frontend quality and FDE effort are part of the proof. Additional industry detail must justify the platform capability it proves.
+在运行脚手架之前，必须明确回答：构建者是谁、操作人员的完整业务任务是什么、正在检验哪些共享平台能力、以及每项能力的唯一主人是谁。必须涵盖所需的数据/AI 集成以及客户化定制差异。仅当预期的业务任务能够被完整构建、日常操作并持续变更时，一个参考应用才算充分达标；前端体验品质与 FDE 交付能效本身就是验收证据的关键组成部分。新增的行业细节必须能够证明其背后所支撑的平台核心能力。
 
-## 1. Create app
+## 1. 创建应用
 
 ```sh
 cd capabilities/server
 go run ./cmd/new-app -id purchasing -entity request -title "Purchase request" -zh 采购申请 -app-title Purchasing -app-zh 采购
 ```
 
-It writes:
+该命令会生成以下标准结构：
 
-| Path | Contents |
+| 相对路径 | 文件内容与用途 |
 |---|---|
-| `apps/<id>/server/<id>.go` | The app: its ID, roles, entity type, lifecycle, a review flow and its `Manifest`, each step marked in comments |
-| `apps/<id>/server/<id>_test.go` | `TestApp` (create, a refused finish, the flow's task, its answer, `CheckReplay`) and `TestChinese` |
-| `apps/<id>/server/i18n/zh-CN.json` | The app's Simplified Chinese |
-| `apps/<id>/server/cmd/<id>-server` | A development host with the tokens `manager` and `member` |
-| `web/packages/<id>` | `@pkg/<id>`: the UI, registered in the workspace (`-web=false` skips it) |
+| `apps/<id>/server/<id>.go` | 核心应用逻辑：应用 ID、角色常量、实体类型定义、生命周期模型、审核流程以及 `Manifest` 声明清单，每一步均有清晰注释 |
+| `apps/<id>/server/<id>_test.go` | 自动化测试：`TestApp`（包含创建、被拒绝的完结、流程生成任务、任务处理回复及 `CheckReplay` 状态重放验证）与 `TestChinese` 多语言检查 |
+| `apps/<id>/server/i18n/zh-CN.json` | 应用的简体中文翻译词典 |
+| `apps/<id>/server/cmd/<id>-server` | 独立开发调试用宿主服务器，内置 `manager` 与 `member` 调试令牌 |
+| `web/packages/<id>` | `@pkg/<id>`：前端 UI 包，自动注册到统一工作区依赖中（`-web=false` 可跳过生成） |
 
-The generated app is intended to pass `cd apps/<id>/server && go test ./...`; run it and report the result on the current tree. `scripts/verify.sh composition` checks every app under `apps/` and its boundaries without being told about it. `scripts/verify.sh capabilities` scaffolds a server-only app (`-web=false`) in `.build/scaffold` and runs its tests; this does not by itself verify the generated frontend or the full builder journey.
+生成的代码应确保能直接通过 `cd apps/<id>/server && go test ./...` 检查；运行该测试并报告当前代码树的结果。`scripts/verify.sh composition` 会自动发现并校验 `apps/` 目录下的每一个应用及其架构依赖边界。`scripts/verify.sh capabilities` 则会在 `.build/scaffold` 临时目录中生成一个纯服务端应用（`-web=false`）并执行其测试，以确保脚手架生成工具自身始终可用；这本身并不代表已验证了前端界面或完整的构建者旅程。
 
-An app is a `platform.App`: `Manifest` (what it declares), `Submit` (deciding its actions), `Read` and `Input` (its own reads and inbound data, if any), `Declarations`, `Snapshot` and `Restore`. The host keeps its records (ADR-0016); a `platform.Ledger` keeps its decisions.
+一个合法的平台应用必须实现 `platform.App` 接口：包括 `Manifest`（元数据声明）、`Submit`（执行业务动作决策）、`Read` 与 `Input`（业务读取与外部入账接入，若有）、`Declarations`（Schema 声明）、`Snapshot`（快照）与 `Restore`（快照恢复）。宿主统一管理其数据记录（ADR-0016）；由 `platform.Ledger` 维护其不可篡改的业务决策账本。
 
-## 2. Declare entities
+## 2. 声明实体
 
-An entity type is a Go struct embedding `platform.Record`, declared by a `platform.Entity` (`platform/entity.go`):
+实体类型是一个内嵌了 `platform.Record` 的 Go 结构体，由 `platform.Entity` 进行元数据声明（位于 `platform/entity.go`）：
 
-- **Child lines** are a slice of a struct (`Lines []Line`): each line's fields are columns, edited as rows in generated forms (a journal entry's debits and credits, `apps/erp`).
-- **Fields** by Go types and struct tags: `field:"required,search,readonly"`, `title:"…"`, `choices:"open,done"`, `type:"date"` or `type:"longtext"` on a string; `time.Time` is a date and time, `platform.Money` money, `platform.Ref[T]` a reference to another type. What they mean: `help:"…"`, `synonyms:"…"`, `example:"…"`.
-- **Meaning**: `Title`, `Plural`, `Description`, `Synonyms`; states have `Description` too. Agents read it in their prompts, tool schemas and forms show it, and search finds a type by its names. Declare what a word means in the app; a tenant's glossary may explain it further but never redefines it (ADR-0023 D1).
-- **Who sees what**: `Scope` (an owner field and each role's level: own, unit, below, tenant).
-- **Content taken from other records**: when a record keeps something read from elsewhere — a summary of another record, a citation, a payload an agent drafted — keep the records it came from in a field of your own (`"<type>/<id>"`, `"<type>/<id>#<field>"` for one field, or `"read:<name>"` when a named read answered with its own shapes) and declare it: `Derived: []platform.Derivation{{From: "sources", Fields: []string{"summary"}}}` with `Withheld: "withheld"`, a boolean field the host sets. The host then withholds that content from a reader who may no longer read the source, at every read, and tells them (ADR-0033). Declaring nothing means the content stays as visible as its own record, which is a capability escape when it was taken from another one.
-- **Views and lists** are generated from the declaration (`@platform/app` `Records`, `GeneratedForm`).
+- **明细行（Child lines）**：由子结构体切片表示（如 `Lines []Line`）：明细行的每个字段对应一列，在动态生成的表单中以表格行形式进行增删编辑（例如凭证的分录借贷明细，参见 `apps/erp`）。
+- **字段类型与 Struct Tag**：由 Go 语言类型配合 Tag 声明：`field:"required,search,readonly"`、`title:"…"`、`choices:"open,done"`，字符串字段可指定 `type:"date"` 或 `type:"longtext"`；`time.Time` 代表精确日期时间，`platform.Money` 代表金额，`platform.Ref[T]` 代表对其他类型的强类型引用。语义提示信息通过 Tag 丰富：`help:"…"`、`synonyms:"…"`、`example:"…"`。
+- **语义信息（Meaning）**：在 Entity 上声明 `Title`（单数称呼）、`Plural`（复数称呼）、`Description`（详细描述）、`Synonyms`（同义词）；业务状态亦带有 `Description`。AI 智能体会在其 Prompt 提示词中读取这些元数据，工具 Schema 和页面表单会显示它们，全局搜索通过这些名称与同义词定位类型。在应用内明确声明词汇的真实含义；租户层面的词汇表可进行补充阐述，但绝不可篡改其核心定义（ADR-0023 D1）。
+- **数据行范围与权限（Who sees what）**：通过 `Scope` 声明（包含所有者字段以及各角色的数据可见级别：仅自己 `own`、所在部门 `unit`、包含下级部门 `below`、全租户 `tenant`）。
+- **派生自其他记录的内容（Content taken from other records）**：当一条记录中包含了读取自其他记录的内容时——例如另一条记录的 AI 摘要、引文片段、智能体起草的业务载荷等——必须在当前记录的独立字段中保存其来源记录标识（形如 `"<type>/<id>"`、`"<type>/<id>#<field>"` 指定单字段，或 `"read:<name>"` 指定命名读取的权限），并在实体上显式声明：`Derived: []platform.Derivation{{From: "sources", Fields: []string{"summary"}}}`，同时声明布尔标识字段 `Withheld: "withheld"`（由宿主在运行时动态置位）。宿主在面向成员的每一次读取请求中，如果发现读者当前已无权访问原始数据来源，便会自动对该派生字段进行屏蔽置空，并明确告知读者（ADR-0033）。若不进行此项声明，派生内容就会像普通字段一样始终可见，这在从其他记录提取敏感信息时构成能力安全逃逸。
+- **视图与通用列表**：全部由实体声明自动生成（`@platform/app` 中的 `Records` 与 `GeneratedForm`）。
 
-## 3. Declare actions
+## 3. 声明动作
 
-Every change is an action: a schema, the roles that may call it, a title, a description and a payload. The platform generates most of them:
+系统中的一切业务状态变更均表现为动作（Action）：包含操作 Schema、有权调用的角色列表、标题名称、说明以及输入 Payload 结构。平台会自动生成绝大部分标准动作：
 
-- `Standard{Create, Edit, Archive, Roles}` generates `<type>.create`, `.edit` and `.archive`.
-- A `Lifecycle` generates one action per `Transition`, with its roles, the states it leaves and enters, and an optional `Do` for its own rule.
-- An action with rules of its own is a `platform.Action` in the catalog (`apps/hcm/server/hcm.go` `Actions`) decided in `Submit` after `ledger.Generated`, through `ledger.Receive`: validate the payload, refuse with a kernel error, return what to put.
+- `Standard{Create, Edit, Archive, Roles}` 会自动生成 `<type>.create`、`<type>.edit` 和 `<type>.archive`。
+- `Lifecycle` 状态机模型会为每一次状态转移（`Transition`）生成一个专用动作，包含其执行角色、起始状态、目标状态，以及可选绑定的自身校验规则函数 `Do`。
+- 具备复杂业务规则的动作表现为动作目录中的 `platform.Action`（参见 `apps/hcm/server/hcm.go` 中的 `Actions`），在 `Submit` 流程中紧随 `ledger.Generated` 之后通过 `ledger.Receive` 进行决断：校验输入载荷，不合法时返回内核错误拒绝，校验通过后返回最终持久化的数据内容。
 
-Roles are checked by the catalog before the app's rules run; a refused action is recorded nowhere. A document that needs a number without gaps declares a `platform.Sequence` in its manifest and takes it with `Caller.Next` in the function the decision applies, never in its rules, so a refusal takes none (`apps/erp` numbers journal entries, `apps/csm` tickets). Agents, MCP clients and forms call the same actions.
+在应用的业务规则执行之前，目录层会首先对调用者角色进行权限拦截；被拒绝的动作绝不会在系统中留下半截脏状态。需要生成不跳号连号单据的业务模型，可在其 Manifest 清单中声明 `platform.Sequence`，并在决策应用的提交函数中通过 `Caller.Next` 申请流水号，严禁在预检规则中提前取号，从而保证被拒绝的请求绝对不消耗连号配额（例如 `apps/erp` 的会计凭证号、`apps/csm` 的工单号）。AI 智能体、MCP 客户端与前端交互表单调用的是完全相同的动作入口。
 
-## 4. Declare flows
+## 4. 声明流程
 
-A `platform.Flow` (ADR-0020) is a long-running process started by an action: steps that `Ask` people (a task in their inbox, with answers), `Act` (take one of the app's actions, or a protocol's, as the flow), `Wait` for an event or a time, `Call` another of the app's flows, run an `Agent`, branch (`All`, `Any`), or choose the next step with a reason. Instances are journaled and replayed; `platformserver.CheckReplay` in the app's test proves it. Agents (`platform.Agent`, ADR-0021) are declared the same way when the app needs one.
+`platform.Flow`（ADR-0020）是由特定动作或状态触发的长周期运行业务流程：包含要求人处理的审批任务节点 `Ask`（进入成员工作收件箱，附带处理选项）、由流程代为执行的动作节点 `Act`（以流程本身为主体执行当前应用或跨协议动作）、等待特定事件或时间的挂起节点 `Wait`、调用当前应用另一个子流程的嵌套节点 `Call`、调度执行指定智能体的 `Agent` 节点、并行分支汇聚（`All`、`Any`），以及附带明确理由的分支路由选择节点。流程实例全程记录入账并支持确定性重放；应用测试中的 `platformserver.CheckReplay` 对此予以严格验证。智能体（`platform.Agent`，ADR-0021）在应用需要具备专属 AI 代理时以相同规范进行声明。
 
-## 5. Add translations
+## 5. 添加多语言翻译
 
-Every text people read has Simplified Chinese (AGENTS.md rule 10): the app's titles, descriptions, help, choices, flows' steps and answers in `i18n/zh-CN.json`, keyed by the English text (ADR-0023). Generated actions ("Create purchase request") are said from the app's own words by the platform's patterns, and so are texts the app writes with `fmt` if its dictionary has the pattern (`"Review {id}": "审核 {id}"`). `TestChinese` lists what is missing. The UI package's words go to its `src/i18n.ts`; the kit's test fails on a `t()` text without Chinese.
+所有供人阅读的界面文字均必须具备简体中文翻译（AGENTS.md 规则 10）：应用的标题、说明、字段帮助文本、下拉选项值、流程各步骤以及处理答复均存放在 `i18n/zh-CN.json` 中，以英文原文作为 Key（ADR-0023）。系统动态生成的动作名称（例如“创建采购申请”）会通过平台的通用翻译模式自动拼装，应用通过 `fmt` 格式化生成的带参文本若在词典中配置了模板模式亦可自动翻译（如 `"Review {id}": "审核 {id}"`）。`TestChinese` 会自动扫描出所有缺失的中文词条。前端 UI 包特有的界面文本则注册在各自的 `src/i18n.ts` 中；UI Kit 的自动化测试会严防没有中文配对的 `t()` 调用。
 
-## 6. Run
+## 6. 运行
 
 ```sh
-cd apps/<id>/server && go run ./cmd/<id>-server           # the API on 127.0.0.1:8499, token manager or member
+cd apps/<id>/server && go run ./cmd/<id>-server           # API 监听在 127.0.0.1:8499，提供 manager 或 member 令牌
 pnpm --dir web/apps/workspace build && go run ./cmd/<id>-server -web ../../../web/apps/workspace/dist
 ```
 
-The workspace signs in with a development token, opens the app, lists its records and forms, and shows the flow's task in the manager's inbox; the profile menu switches to 简体中文. `/v1/openapi.json` describes every route, and every entity type and action the caller may use.
+工作区支持通过开发测试 Token 登录，自动呈现应用卡片，列出其业务数据列表与表单，并在经理的收件箱中展示等待处理的流程任务；点击头像菜单可自由切换至简体中文。`/v1/openapi.json` 完整描述了所有端点路由，以及当前调用方有权访问操作的每一个实体类型与动作定义。
 
-To ship the app, compose it into a solution (`solutions/hospitality/cmd/hospitality-server`) or a deployment of its own, and add its route to `docs/Testing.md`, walked in the UI first.
+若要将该应用打包交付，可将其组合进某个行业解决方案中（例如 `solutions/hospitality/cmd/hospitality-server`）或作为独立服务部署，并将其操作路线录入 [docs/Testing.md](Testing.md) 中，录入前须先在真实浏览器界面中完整走通一遍。
 
-The current scaffold registers a UI package in the workspace source and dependencies; server and UI changes require a build and deployment. Run `scripts/verify.sh composition` and `scripts/verify.sh web` for the paths touched. Walk the full operator task with realistic data, including loading, empty, refusal, conflict and recovery states. Shared frontend changes also need gallery examples and visual/keyboard checks; functional tests alone do not establish visual quality. The future definition preview, publication and upgrade path is specified in Platform §10.4–10.6 and becomes part of this executable guide only as it is built and verified.
+当前的脚手架工具会将前端 UI 包注册进统一工作区的源代码依赖中；服务端与 UI 的变更均需要经历构建与部署流程。针对修改的代码路径运行 `scripts/verify.sh composition` 与 `scripts/verify.sh web`。使用真实规模的数据完整走查操作人员的端到端任务链路，必须覆盖加载中、空状态、校验拒绝、版本冲突以及异常恢复等全状态。共享前端的改动还必须补充组件画廊（Gallery）示例并完成视觉与键盘交互走查；纯功能性单元测试通过并不能证明视觉体验达到交付品质。未来的定义预览、正式发布与平滑升级路径已在 Platform §10.4–10.6 中进行了顶层设计，只有在它们被实际构建并验证之后，才会正式并入本指南的可执行操作环节。

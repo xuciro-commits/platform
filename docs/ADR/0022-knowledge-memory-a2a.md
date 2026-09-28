@@ -1,146 +1,145 @@
-# ADR-0022: Knowledge, memory and agent-to-agent
+# ADR-0022: 业务知识、代理记忆与代理间通信（A2A）
 
-> **Current audit qualification (2026-09-27):** knowledge retrieval originally enforced app access without record-level scope; #130 has repaired this first path and is still auditing the other derived reads. See Platform.md §2.4 and WorkQueue #130. [ADR-0031](0031-ai-application-platform.md) extends these capabilities into the governed AI construction lifecycle. The historical decision and implementation account below do not establish the missing permission guarantee.
+> **当前审计保留说明 (2026-09-27)：** 知识检索最初仅强制校验了应用级访问权限，而未施加记录级范围作用域控制；#130 已经修复了这一首要访问路径，且目前仍在对其它派生读取接口进行深度安全审计。详见 [Platform.md](../Platform.md) §2.4 与 [WorkQueue.md](../WorkQueue.md) #130。[ADR-0031](0031-ai-application-platform.md) 将这些能力进一步拓展至受控的 AI 构建全生命周期。下文的历史决策与工程实现描述不代表已完全解决所有缺失的权限保障。
 
-**Status:** Accepted (2026-09-25, #111, stage 5 batch 3; ADR-0021 D5, D7 and D9 left these for later). The owner accepted D1–D9 as recommended; pgvector waits until a tenant outgrows D2 (a). Built in batches 3a to 3c; see "As built".
+**状态：** 已采纳 (2026-09-25, #111，第五阶段批次 3；[ADR-0021](0021-agents.md) D5, D7 与 D9 延后至此实现)。业务负责人按推荐采纳了 D1–D9；pgvector 等待租户业务规模超越 D2 (a) 承载上限后再行引入。已分 3a 至 3c 批次构建完成；详见“实际构建（As built）”。
 
-## Context
+## 背景
 
-What exists (ADR-0021, batches 1 and 2):
-- Agents are declared principals. Each step the model chose is journaled with its rationale, and replay never calls a model.
-- Agents ground themselves in the **context graph** and in text **search** over records.
-- People confirm drafts, and their answers are kept as signals that evaluations compare against.
+当前已具备的能力（[ADR-0021](0021-agents.md)，批次 1 与批次 2）：
+- 智能代理作为已声明的受控主体存在。模型做出的每个推理步骤连同其判定理由均持久化记入日志，系统重放绝不发起大模型调用。
+- 代理深度锚定于**上下文图谱（Context Graph）**以及实体记录的全文**检索**能力。
+- 人类对草稿提议进行核验确认，人类的交互答复作为反馈信号妥善保存，供客观评测系统比对。
 
-What is missing:
-- **Knowledge that is not a record:** house rules, product manuals, FAQs, contracts. An agent cannot read them or cite them.
-- **Memory across runs:** each run starts from nothing, so what a person corrected once is corrected again.
-- **Agent-to-agent (A2A):** our agents can be reached only through MCP, one tool at a time, and they cannot call agents outside.
-- **Full transcripts:** kept nowhere, while ADR-0021 D4 asked for an observability store with retention.
-- **Two more signals:** a held effect discarded by a person, and a decision undone after an agent made it.
+此前欠缺的核心拼图：
+- **非实体记录形态的业务知识：** 管理规章、产品手册、常见问答（FAQ）、商务合同。代理此前无法直接查阅或引用它们。
+- **跨运行的长期记忆：** 每次代理运行均始于白纸，导致人类纠正过一次的错误在后续运行中屡屡重犯。
+- **代理间通信协议（A2A）：** 我们的代理此前只能通过 MCP 协议被单步工具化调用，且自身无法直接协同调度外部代理。
+- **完整交互会话记录：** 没有任何地方完整存储会话上下文，而 ADR-0021 D4 明确要求配备带有淘汰周期的可观测性存储。
+- **两类遗漏的反馈信号：** 被人类主动废弃的挂起外部效果，以及在代理执行后被人为撤销的业务决策。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| Platform | Knowledge | Memory | Agent-to-agent |
+| 平台 | 业务知识检索 | 代理记忆机制 | 代理间通信（A2A） |
 |---|---|---|---|
-| SAP (Joule) | Document grounding over the customer's documents, with embeddings in HANA Cloud's vector engine | Conversation context; agent memory in Joule Studio | A2A as a founding member; Joule agents published to and calling others |
-| Salesforce Agentforce | Data Cloud: unstructured data chunked and vectorised, hybrid search, citations | Session memory; memory of the user in preview | A2A support announced; MCP |
-| ServiceNow | Knowledge bases searched by AI Search (hybrid), with citations | Short and long-term memory for AI agents, which administrators can view | A2A and MCP in AI Agent Fabric |
-| Microsoft Copilot Studio | Knowledge sources (SharePoint, files, websites) with citations | Conversation memory; user facts in preview | A2A with Azure AI Foundry agents |
-| Palantir AIP | Documents as ontology objects, semantic search | Object state rather than chat memory | Through the ontology's actions |
+| SAP (Joule) | 基于客户文档的文档事实锚定，向量嵌入依托 HANA Cloud 向量引擎 | 对话上下文；Joule Studio 中的代理记忆 | 作为发起成员全面支持 A2A；Joule 代理可对外发布并支持跨系统调用 |
+| Salesforce Agentforce | Data Cloud：非结构化数据分块与向量化、混合检索、溯源引用 | 会话记忆；预览版中提供对具体用户的个性化记忆 | 已宣布支持 A2A 协议；支持 MCP 互联 |
+| ServiceNow | 通过 AI Search（混合检索）检索知识库，附带溯源引用 | 面向 AI 代理的短期与长期记忆，管理员可直观查阅治理 | AI Agent Fabric 全面集成 A2A 与 MCP |
+| Microsoft Copilot Studio | 多元知识源（SharePoint、本地文件、公共网站）并附带溯源引用 | 对话记忆；预览版中提供用户事实记忆库 | 与 Azure AI Foundry 代理实现 A2A 互联互通 |
+| Palantir AIP | 文档作为本体中的一等对象，支持语义检索 | 依赖本体对象状态，而非单纯聊天会话记忆 | 通过本体操作直接实现跨代理协同 |
 
-They agree on four things:
-- **Knowledge is uploaded or connected, chunked, embedded and cited.**
-- **Search is hybrid** (words and vectors), and it respects who may read what.
-- **Memory is inspectable and deletable by people.**
-- **A2A publishes agent cards and calls other agents under the platform's identity.**
+上述平台在四项核心设计上高度契合：
+- **知识经由上传或外部连接，进行分块、向量化嵌入并在回答中精准引用溯源；**
+- **检索采用混合检索模式**（关键词 + 稠密向量），且严格遵循用户的数据访问权限；
+- **记忆机制对人类透明可见且支持随时删除；**
+- **A2A 对外发布标准代理名片（Agent Cards），并在平台统一身份体系下调用其它代理。**
 
-A2A 1.0 (a2a-protocol.org, Linux Foundation):
-- An agent publishes an **agent card**: its skills, endpoint and security schemes.
-- The JSON-RPC binding has the methods `SendMessage`, `GetTask`, `CancelTask` and `ListTasks`; streaming is optional.
-- A task moves through `TASK_STATE_SUBMITTED`, `_WORKING`, `_INPUT_REQUIRED`, `_COMPLETED`, `_FAILED`, `_CANCELED` and `_REJECTED`.
-- Clients send the `A2A-Version` header.
+Linux 基金会主导的 A2A 1.0 规范 (a2a-protocol.org)：
+- 代理对外发布 **Agent Card（代理名片）**：声明其技能集、访问端点与安全认证方案。
+- JSON-RPC 绑定协议提供核心方法：`SendMessage`, `GetTask`, `CancelTask` 与 `ListTasks`；流式传输可选。
+- 任务生命周期流转状态：`TASK_STATE_SUBMITTED`, `_WORKING`, `_INPUT_REQUIRED`, `_COMPLETED`, `_FAILED`, `_CANCELED` 以及 `_REJECTED`。
+- 客户端在请求头中携带 `A2A-Version`。
 
-Our constraints:
-- **Replay never calls a model**, and embedding is a model call.
-- **The journal is the truth and must stay small enough to replay.** A vector per chunk does not belong in it.
-- **The local stack runs `postgres:18-alpine`, which has no pgvector.** Using pgvector means another image (`pgvector/pgvector:pg18`), and downloads need the owner's approval.
+我们面临的核心技术约束：
+- **重放绝不调用大模型**，而向量嵌入本身属于模型推理调用。
+- **业务日志是核心真相且必须保持轻量以确保重放极速。** 每个文本块庞大的浮点数向量绝对不属于业务日志。
+- **本地技术栈当前运行 `postgres:18-alpine` 镜像，原生不包含 pgvector 扩展。** 引入 pgvector 意味着更换镜像（`pgvector/pgvector:pg18`，产生镜像下载），且下载镜像需要业务负责人明确批准。
 
-## Design
+## 设计
 
-1. **Knowledge is a platform app, `knowledge`.**
-   - Documents are records (`knowledge.document`): title, text (plain or Markdown; PDF text extraction later), source, and the apps whose members may read it. Uploading, editing and archiving are decisions.
-   - Apps may also declare entity fields as knowledge (a product's manual, a room type's description), so records need not be copied.
-   - The host chunks each document (headings, then about 800 tokens with overlap).
-2. **Embeddings are derived, never journaled.**
-   - An embedding model is chosen by a setting, among enabled models that embed (OpenAI-wire `/v1/embeddings`).
-   - Chunks are embedded as owned work outside the lock. Vectors are kept by chunk hash and model in PostgreSQL (`embeddings`), and in memory without a database. Usage is metered like any call.
-   - Losing the table only costs re-embedding.
-3. **Retrieval is hybrid and scoped.**
-   - A `knowledge` tool, and a read for people, rank chunks by words (BM25) and, when an embedding model is set, by vectors, fused by rank.
-   - Only documents the reader may read are searched: the person an agent runs for, or the agent's app.
-   - Without an embedding model, search by words still works; the local stand-in can make embeddings (hashed words) for tests.
-4. **What an agent read is journaled with its step.**
-   - A knowledge search depends on derived vectors, so the host runs it outside the lock, like the model call. Its result, the chunks with their document IDs, goes into the agent entry as the step's observation.
-   - Replay applies the journaled observation; it neither embeds nor searches.
-   - The run keeps citations (document and chunk), and the run page and drafts show them.
-5. **Memory is records people can see.**
-   - A `remember` tool writes `agent.memory` records: a short fact, the agent, its scope (the tenant, or the person the run is for), and the run it came from. Writing one is a decision.
-   - The latest and most relevant memories are put in the prompt.
-   - Agent administrators, and the person for their own, see, edit and delete them. Memories expire unless kept.
-   - A correction signal can propose a memory ("people changed the reply's tone"), and a person keeps it or not.
-6. **A2A, publishing:**
-   - Each declared agent can be published per tenant, by an administrator's decision.
-   - The host serves its agent card at `/a2a/<tenant>/<agent>/.well-known/agent-card.json`, with the JSON-RPC binding at `/a2a/<tenant>/<agent>`. The security scheme is the host's OpenID issuer, so the caller is a member, often a service account.
-   - `SendMessage` starts a run for that member. With no person there to confirm drafts, it acts within the member's grants (their intersection with the agent's tools), and D6 holds irreversible effects.
-   - `ask` becomes `TASK_STATE_INPUT_REQUIRED`, and the caller answers with another message on the task. `GetTask` and `CancelTask` read and stop the run. Streaming comes later.
-7. **A2A, calling:**
-   - An endpoint of kind `a2a` names an external agent card, with a secret and whether its tasks are irreversible.
-   - Apps and flows call it with a new effect: the message is the effect's body, and the task's result comes back journaled, like the ERP's answer.
-   - An agent may be given an external agent as a tool. The call is held when irreversible, or when an agent causes it and the endpoint says so.
-8. **Transcripts** (ADR-0021 D4): each model call's full request and answer go to a `transcripts` table outside the journal. Retention is a setting, 30 days by default. Agent administrators see them from the run page; without a database, transcripts are kept in memory and bounded.
-9. **Two more signals:**
-   - A held effect that a person discards, when an agent's run caused it, becomes a `discarded` signal on the run.
-   - An undone decision that an agent made becomes an `undone` signal.
+1. **知识库作为平台应用 `knowledge` 独立运作。**
+   - 文档表现为实体记录（`knowledge.document`）：包含标题、正文文本（纯文本或 Markdown；PDF 文本解析后续引入）、知识来源，以及被授权阅读的业务应用列表。上传、编辑与归档均作为记入日志的标准决策。
+   - 各业务应用同样可将自身实体的特定字段声明为知识（如产品说明书、房型详细描述），避免重复拷贝数据。
+   - 宿主统一对文档进行分块切分（优先按标题分段，随后按约 800 Token 配合滑动重叠窗口切块）。
+2. **向量数据纯属派生内容，绝不进入业务日志。**
+   - 租户配置指定所选用的向量嵌入模型（通过支持嵌入的 OpenAI 规范端点 `/v1/embeddings`）。
+   - 文本块的向量化计算在锁外作为自有机制作业异步执行。向量数据按文本块哈希与模型名称在 PostgreSQL 独立表（`embeddings`）中持久化，无数据库环境时缓存在内存中。计算开销计入标准模型用量。
+   - 该物理表即便丢失损坏，也仅产生重新计算嵌入的算力开销，业务真相毫无损失。
+3. **混合检索且严格遵循权限作用域。**
+   - 提供 `knowledge` 工具与面向人类的读取接口，基于文本关键词（BM25）以及向量语义距离进行排序，通过倒数排名融合（RRF）算法计算最终得分。
+   - 严格仅检索查阅者有权访问的文档：无论是代表具体人员运行的代理，还是代理所属的业务应用。
+   - 在未配置向量模型时，关键词检索依然完全可用；本地桩服务可在测试中基于词频哈希快速生成模拟向量。
+4. **代理所查阅的知识内容随步骤完整记入日志。**
+   - 知识检索依赖于动态派生的向量，因此宿主像调用大模型一样，将检索逻辑完全置于互斥锁外执行。检索命中的结果（包含切块内容及其文档 ID）作为该步骤的观测结果（observation）直接存入 `agent` 日志分录。
+   - 系统重放时直接读取并应用日志中记录的观测快照，既不重新计算向量，也不重新发起检索。
+   - 运行上下文保留引用溯源条目（文档与文本块），并在运行详情页与生成草稿中直观标注引用。
+5. **记忆表现为人类直观可见的实体记录。**
+   - 提供 `remember` 工具写入 `agent.memory` 记录：一条简短的事实陈述、关联代理、可见作用域（全租户可见，或仅对被服务的人员可见），以及提炼出该记忆的源运行记录。写入记忆本身是一笔记入日志的决策。
+   - 系统自动挑选最新且最相关的记忆注入到大模型的提示词上下文中。
+   - 代理管理员以及人员本人（针对归属于自己的记忆）可以清晰查看、编辑或主动遗忘删除记忆。记忆默认具备过期淘汰周期，除非人工标记永久保留。
+   - 人工纠偏信号可以主动建议生成一条记忆（例如“用户修改了回复语气风格”），由人工决定是否正式保留。
+6. **A2A 代理对外发布服务：**
+   - 租户管理员可通过特权决策将已声明的代理对外发布。
+   - 宿主在 `/a2a/<tenant>/<agent>/.well-known/agent-card.json` 托管标准代理名片，并在 `/a2a/<tenant>/<agent>` 暴露 JSON-RPC 协议服务。安全方案绑定宿主的 OpenID 颁发者，因此外部调用方被统一解析为租户成员（通常为服务账号）。
+   - `SendMessage` 以该调用成员身份启动代理运行。由于现场没有人类进行草稿二次确认，代理直接在其被授权的交集权限内执行操作，且不可逆影响严格受 D6 规则挂起拦截。
+   - `ask` 工具对应转换为 A2A 规范的 `TASK_STATE_INPUT_REQUIRED` 状态，外部调用方通过在该任务上追加新消息作答。`GetTask` 与 `CancelTask` 用于查询状态与中断运行。流式传输后续引入。
+7. **A2A 跨系统调用外部代理：**
+   - 注册 `a2a` 类型的端点，配置外部代理名片地址、鉴权密钥以及该代理执行的任务是否属于不可逆操作。
+   - 业务应用与流程通过全新的出站效果调用外部代理：消息作为效果载荷发出，外部任务的执行结果作为日志分录回传记录，机制如同接收 ERP 系统的异步回执。
+   - 本地代理可将外部代理作为常规工具调用。若涉及不可逆操作，或由代理触发且端点标记为高危，调用强制挂起等待人工裁决。
+8. **交互会话记录 (ADR-0021 D4)：** 每次大模型调用的完整请求与回复报文持久化写入日志之外的独立 `transcripts` 数据表中。默认保留 30 天淘汰。代理管理员可在运行详情页直接调阅；无数据库环境时在内存中设定上限循环覆盖存储。
+9. **补齐两类纠偏反馈信号：**
+   - 由代理运行引发且最终被人工废弃删除的挂起外部效果，作为 `discarded` 反馈信号回记到该次运行上；
+   - 由代理执行且后续被人为撤销的业务决策，作为 `undone` 反馈信号回记到该次运行上。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Decision | Options | Recommendation |
+| # | 决策项 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Where documents come from | (a) Uploaded to a `knowledge` app, with app fields declared as knowledge. (b) Connectors to SharePoint or Drive first | **(a)**. Connectors come later, as inputs that write documents |
-| D2 | Where vectors live | (a) Derived, kept by chunk hash in a plain PostgreSQL table, searched in the host's memory, with pgvector when a tenant outgrows it. (b) pgvector now, which means the image `pgvector/pgvector:pg18` (a download) and an extension in the schema | **(a)** now: no new dependency, and fine to about 50 000 chunks per tenant. Switch to (b) with your approval when a tenant needs it |
-| D3 | Search | (a) Hybrid (BM25 and vectors), scoped to the reader, words alone without an embedding model. (b) Vectors only | **(a)** |
-| D4 | Replay | (a) The retrieval's result is journaled with the agent's step, and replay never embeds. (b) Re-run retrieval on replay | **(a)**: it is the same rule as the model call |
-| D5 | Memory | (a) Explicit `remember`, as records people see and delete, scoped to the tenant or a person, expiring unless kept; corrections may propose memories. (b) Automatic summaries of every run | **(a)**: memory that people cannot see is not governed |
-| D6 | Publishing agents over A2A | (a) A2A 1.0 JSON-RPC per tenant and agent, published by an administrator, callers authenticated by the host's issuer, runs for the calling member acting within their grants. (b) Also HTTP+JSON and streaming now | **(a)**, with streaming and HTTP+JSON later |
-| D7 | Calling external agents | (a) An `a2a` endpoint kind; calls are effects with journaled answers, held when irreversible; an agent may use one as a tool. (b) Only from apps' code | **(a)** |
-| D8 | Transcripts | (a) A PostgreSQL table outside the journal, 30 days by default, visible to agent administrators. (b) Not kept | **(a)**, as ADR-0021 D4 decided |
-| D9 | Proof | (1) The helpdesk's triage agent cites the hotel's house rules in its reply, and the reply shows the citation. (2) A client outside calls the helpdesk's agent over A2A and gets its task back. (3) The plant asks an external agent (the sink as a stand-in) for a supplier's lead time as an effect, and the answer comes back journaled. (4) A memory proposed from a correction, kept by a person, changes the next run | As listed |
+| D1 | 业务文档的输入来源 | (a) 上传至平台专有的 `knowledge` 应用，同时支持将应用已有字段声明为知识源。(b) 优先开发 SharePoint 或 Google Drive 外部连接器 | **(a)**。连接器后续以写入文档的外部输入管道形式引入 |
+| D2 | 向量数据的存储介质 | (a) 作为派生数据按文本块哈希保存在普通 PostgreSQL 表中，在宿主内存中执行相似度计算；业务规模膨胀时再引入 pgvector。(b) 立即引入 pgvector，这意味着拉取 `pgvector/pgvector:pg18` 镜像并在数据库中开启扩展插件 | 当前采用 **(a)**：不增加任何新外部依赖，且足以轻快承载每个租户 50,000 个文本块的检索需求。后续根据租户实际体量在您明确批准后平滑升级至 (b) |
+| D3 | 检索算法选型 | (a) 混合检索（BM25 关键词 + 向量余弦），受查阅者权限严格过滤，在未配置向量模型时回退纯关键词检索。(b) 仅支持纯向量检索 | **(a)** |
+| D4 | 确定性重放保障 | (a) 知识检索的匹配结果快照随代理步骤一同持久化记入日志，系统重放绝不重新执行向量计算与检索。(b) 重放时重新执行检索 | **(a)**：与大模型调用的治理哲学完全一致 |
+| D5 | 代理记忆管理哲学 | (a) 显式调用 `remember`，作为人类可直观查阅与主动删除的标准实体记录，按租户或个人划分作用域，具备过期淘汰机制；人工纠偏可自动提议记忆。(b) 对每次运行进行无脑全自动汇总存储 | **(a)**：人类无法直观查阅与治理的记忆机制不具备任何安全性可言 |
+| D6 | 基于 A2A 协议发布代理 | (a) 针对每个租户及代理对外暴露 A2A 1.0 JSON-RPC 接口，由管理员显式发布，外部调用方基于宿主颁发者认证，在调用成员权限交集内自主执行。(b) 同时立即支持 HTTP+JSON 与流式传输 | 当前采用 **(a)**，流式传输与 HTTP+JSON 排在后续 |
+| D7 | 协同调用外部代理 | (a) 建立 `a2a` 类型端点；跨系统调用作为带有日志分录回执的外部效果，不可逆影响强制挂起；允许本地代理将其作为工具调用。(b) 仅允许应用在后端源码中手写调用 | **(a)** |
+| D8 | 完整会话记录 | (a) 保存在业务日志之外的独立 PostgreSQL 表中，默认保留 30 天，仅对代理管理员可见。(b) 彻底不予保留 | **(a)**，落实 ADR-0021 D4 决议 |
+| D9 | 验证载体（Proof） | (1) 服务台分诊代理在回复工单时精准引用酒店管理公约，并在回复草稿中清晰显示引用出处。(2) 外部客户端通过 A2A 协议调用服务台代理并顺利取回任务结论。(3) 工厂车间通过外部效果向外部代理（以本地桩服务模拟）查询供应商供货交期，回执确定性记入日志。(4) 由人工纠偏提议并被人类采纳保留的记忆，成功纠正下一次代理运行的行为 | 按照所列计划执行 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 3a | Knowledge app, chunking, embeddings as owned work, hybrid scoped search, the `knowledge` tool with journaled observations and citations, transcripts | The helpdesk agent cites a house rule; replay embeds nothing; a member without the app's role finds nothing |
-| 3b | Agent memory with scope, expiry and deletion; memories proposed from corrections; signals from discarded effects and undone decisions | A kept memory changes the next run; a discarded reply is a signal |
-| 3c | A2A publishing (card, `SendMessage`, `GetTask`, `CancelTask`) and calling (`a2a` endpoints as effects, as agents' tools) | An outside client gets a task answered; the plant's call to an external agent is journaled and replays without calling it |
+| 3a | 知识应用、文本分块切片、作为自有机制作业的向量计算、受权限作用域约束的混合检索、带有日志观测快照与溯源引用的 `knowledge` 工具、完整会话存储 | 服务台代理成功引用管理规约；系统重放完全不进行向量计算；无权限角色完全查不到保密文档 |
+| 3b | 具备作用域、过期与删除机制的代理记忆；由纠偏自动提议记忆；接入来自被废弃效果与撤销决策的反馈信号 | 被保留的记忆成功改变下一次代理决策；被废弃的邮件回复忠实记录为信号 |
+| 3c | A2A 对外发布服务（代理名片、`SendMessage`, `GetTask`, `CancelTask`）与对外部代理调用（作为出站效果的 `a2a` 端点，作为代理工具） | 外部客户端成功获取任务答复；工厂对外部代理的调用结果记入日志，重放时不重新调用外部服务 |
 
-## Consequences
+## 影响
 
-- Agents gain knowledge that is not records, and every passage they used is cited and journaled, so a run can be explained after the documents have changed.
-- What makes knowledge fast (vectors) stays outside the truth (the journal), like projections (ADR-0019).
-- Our agents join other platforms' agents through the protocol the reference platforms chose, under the same identity, grants and D6 as everything else.
+- 智能代理获得了超越结构化实体记录的广袤业务知识，且引用的每一个段落均在日志中完整存证并精准引用溯源，即便底层文档后续被修改删除，历史运行依然可被完美解释。
+- 支撑知识极速检索的关键技术（向量数据）始终定位于业务真相日志之外的衍生计算层，正如物理数据库投影一样可随时丢弃重建（[ADR-0019](0019-read-models-analytics-snapshots.md)）。
+- 我们的代理通过业界参考平台共同拥抱的开放标准协议，同外部异构代理无缝互联，且始终保持在完全相同的身份、授权边界与 D6 安全护栏管控之下。
 
-## As built (#111, batch 3)
+## 实际构建（As built, #111 批次 3）
 
-### 3a: knowledge and transcripts
+### 3a: 业务知识与完整会话存储
 
-- **The knowledge app** (`knowledge.go`): `knowledge.document` records name the apps whose members may read them. Apps mark text fields `knowledge:"true"` (`platform/entity.go`), so their records are found without copying.
-- **Passages** are cut at headings and about 800 tokens. Search ranks them by words (BM25) and, when the setting `knowledge/embedding-model` names an enabled model, by meaning; the two are fused by rank, only among what the reader may read. `GET /v1/knowledge?q=` serves people.
-- **Vectors are derived:** embedded as owned work outside the lock, kept by passage hash and model in PostgreSQL (in memory without it), and metered to the knowledge app.
-- **An agent's `knowledge` tool** runs outside the lock like the model call. What it found is journaled with the step and kept on the run as citations, so replay neither searches nor embeds.
-- **Transcripts** (`transcripts.go`): every model call's full request and answer, kept outside the journal for the agent app's `transcript-days` (30), shown on the run page (`GET /v1/transcripts`) to an administrator of the agent or AI app who may also read the records the run read (`Tenant.TranscriptsFor`, #130, 2026-09-27; the role alone was enough before).
-- **Citations and kept facts are narrowed per reader** (#130, 2026-09-27): a citation names its record and field, a step keeps the records it read, and a fact keeps the sources it came from, so the host withholds any of them from a reader who may no longer read the source (ADR-0033). D4's journaled observation is unchanged; what is read from it now depends on present authority.
-- **Proof:** the helpdesk's triage agent reads the house rules and cites them; Settings gains Knowledge; Search shows passages. The sink embeds hashed words. `TestKnowledge` checks scope, citations and a replay that calls no model.
+- **知识库应用** (`knowledge.go`)：`knowledge.document` 实体记录明确声明哪些业务应用的成员有权阅读该文档。业务应用同样可在实体文本字段上标注 `knowledge:"true"` 标签（`platform/entity.go`），实现业务数据无需二次搬迁即可直接参与检索。
+- **文本切片分块：** 严格在文档各级标题处以及约 800 Token 处断句切分。检索算法综合文本关键词（BM25）与语义向量距离（当配置项 `knowledge/embedding-model` 启用了可用模型时）进行倒数排名融合计算，计算范围严格限制在查阅者有权访问的数据范围内。`GET /v1/knowledge?q=` 面向人类用户提供知识检索端点。
+- **向量作为派生内容：** 向量嵌入作为自有机制作业在租户互斥锁外异步计算，按文本切片哈希与模型名称持久化在 PostgreSQL 专属表中（无数据库时驻留内存），算力消耗计入知识应用。
+- **代理专属 `knowledge` 工具：** 检索计算如同模型推理一样在互斥锁外执行。检索命中的图谱结果与步骤一同持久化记入日志，并在单次运行上作为溯源引用保留，因此重放既不重复检索也不重新计算向量。
+- **完整会话记录** (`transcripts.go`)：每次模型调用的完整请求报文与模型回复报文保存在业务日志之外，保存天数遵循 agent 应用的 `transcript-days` 配置（默认 30 天）。仅面向兼具 agent 或 AI 应用管理员角色、且**同时**有权查阅该次运行所读实体记录的人员开放查阅（`GET /v1/transcripts`，落实 `Tenant.TranscriptsFor`，#130，2026-09-27；此前仅凭管理员角色即可直接查阅）。
+- **按查阅者身份实时动态裁切溯源引用与保留事实** (#130, 2026-09-27)：引用溯源项指明其源记录与具体字段，步骤记录其查阅过的记录，事实记忆记录其提炼的原始出处，宿主会向当前已无权访问原始数据源的查阅者隐藏相关内容（遵循 [ADR-0033](0033-derived-content-and-security.md)）。D4 要求的日志观测快照原样持久化，而外界从中实际能读出什么完全取决于当前时刻的实时权限。
+- **业务验证：** 服务台分诊代理精准读取并引用了酒店规约；“系统设置”获得知识管理界面；全局搜索可直接检索文档切片。本地桩服务使用词频哈希模拟向量。`TestKnowledge` 严格验证了权限作用域、引用溯源以及重放零模型调用的强一致性。
 
-### 3b: memory and the remaining signals
+### 3b: 代理记忆与长效纠偏反馈
 
-- **Memory** (`agent_memory.go`): the `remember` tool keeps a fact for 90 days, with the records the run had read (`Memory.Sources`, #130), about the person the run is for or for every run. Keep and forget are the memory's lifecycle: agent administrators any, a person those about them. The most relevant active memories go into the prompt; `GET /v1/memories` serves them.
-- **Proposed memories:** a changed or rejected draft, a corrected proposal and a discarded effect propose one, which counts once a person keeps it (14 days otherwise).
-- **Signals:** effects an agent caused name its run, so approving one is an `approved` signal and discarding it a `discarded` one; a flow that compensates marks its agents' finished runs `undone`. A run is stored before its flow goes on, so the flow's signal is kept.
-- **UI:** the assistant shows what agents remember about you; Settings lists every memory.
-- **Found:** an app does not hear that its effect was discarded (F-24).
+- **长期记忆** (`agent_memory.go`)：`remember` 工具持久化一条最长保留 90 天的事实陈述，并关联该次运行查阅过的源记录（`Memory.Sources`，#130），可标记为仅归属于被代表的人员或对该代理的每次运行全量可见。保持保留（Keep）与遗忘删除（Forget）构成记忆的标准生命周期：代理管理员可治理所有记忆，普通人员可治理归属于自己的记忆。最相关的活跃记忆自动注入大模型提示词；`GET /v1/memories` 提供查询端点。
+- **纠偏自动提议记忆：** 当用户修改草稿、驳回草稿、人工纠偏提议或废弃挂起效果时，系统自动生成一条提议记忆，只有在人工确认保留后才正式永久生效（未确认则在 14 天后自动丢弃）。
+- **全链路反馈信号：** 由代理触发的外部效果指明其关联的代理运行，因此批准效果产生 `approved` 信号，废弃效果产生 `discarded` 信号；发生补偿撤销的业务流自动将其代理已完成的运行标记为 `undone`。运行在业务流继续推进前即刻持久化入库，确保业务流的信号绝对不丢失。
+- **前端交互：** 智能助手面板直观呈现“代理关于您的记忆清单”；“系统设置”完整展示租户下的全量记忆。
+- **排查发现：** 应用此前无法获知其出站外部效果何时被人工废弃（F-24）。
 
-### 3c: agent-to-agent
+### 3c: 代理间通信（A2A）
 
-- **Publishing** (`a2a.go`): the agent app's setting `published` lists agents other systems may call. Each has an agent card at `/a2a/<tenant>/<agent>/.well-known/agent-card.json`, with the host's OpenID issuer as its security scheme, and the JSON-RPC binding at `/a2a/<tenant>/<agent>` (`SendMessage`, `GetTask`, `CancelTask`). A caller's run acts within the caller's grants without drafts (`Acts`); `ask` becomes `TASK_STATE_INPUT_REQUIRED`. `SendMessage` waits up to 60 s unless told to return at once.
-- **Calling:** an endpoint of kind `a2a` names an external agent, with its bearer token as the secret. An effect bound to it is sent as `SendMessage`, and the task's result is the journaled answer. An agent's tool `emit:<kind>` sends such an effect and waits for its answer, held when irreversible.
-- **Proof:** the plant's planner (`mes.planner`) asks a supplier's agent for a lead time through `mes/lead-time`; the helpdesk's triage agent answers a client outside once published. `TestA2A` and the rehearsal, which replay without calling the partner.
-- **Not yet:** streaming, the HTTP+JSON binding, `ListTasks`.
+- **代理对外发布** (`a2a.go`)：agent 应用的 `published` 配置项列出允许外部系统调用的代理名单。每个对外发布的代理在 `/a2a/<tenant>/<agent>/.well-known/agent-card.json` 暴露标准代理名片，安全方案绑定宿主的 OpenID 颁发者，并在 `/a2a/<tenant>/<agent>` 提供完整的 JSON-RPC 规范绑定（实现 `SendMessage`, `GetTask`, `CancelTask`）。外部调用方发起的运行直接在调用方的授权边界内自主执行，不生成二次人工草稿（`Acts`）；`ask` 步骤精准映射为 `TASK_STATE_INPUT_REQUIRED` 规范状态。`SendMessage` 默认长轮询等待最长 60 秒，除非显式指定立即异步返回。
+- **跨系统调用外部代理：** 注册类型为 `a2a` 的端点，配置外部代理地址与 Bearer Token 访问密钥。绑定至该端点的外部效果通过 `SendMessage` 协议报文发出，外部任务的执行结果作为标准日志分录回写入库。本地代理可使用 `emit:<kind>` 工具发出此类效果并同步等待回执，若操作标记为不可逆则强制挂起等待确认。
+- **业务验证：** 工厂车间排程器（`mes.planner`）通过 `mes/lead-time` 效果向外部供应商代理成功查询供货交期；对外发布后的服务台分诊代理顺利响应外部客户端调用。`TestA2A` 结合部署演练验证，系统在重放时完全不重新发起跨系统调用。
+- **暂未构建：** 流式传输响应、HTTP+JSON 纯 REST 风格绑定、`ListTasks` 任务批量查询。
 
+### #130 首个代码切片：源记录作用域闭环 (2026-09-27)
 
-### #130 first slice: source-scope closure (2026-09-27)
-
-- `knowledge.go` retains an app/public grant on each passage and adds its source-record reference. Retrieval calls the host's canonical `Readable` with the current reader and time before ranking or embedding a query. Text attached to an app record inherits that record's scope; files on a knowledge document retain that document's `Apps` grant. Restricted fields and restricted display titles are not put in the index. A foreign tenant's direct search is refused.
-- `context.go` now reads related flow and task records as the member, and checks each linked record; foreign-tenant Context/Search calls return no content. The host's app automation still reads its own app's knowledge when no person is the reader.
-- `TestKnowledgeAndContextScope` first failed on owner, unit, foreign-tenant and task/flow cases, then passed with these changes; existing knowledge, file and record tests also pass. This is a partial #130 close-out: review of every derived surface, revocation/cache behavior and realistic scale remains in WorkQueue.md. No journal kind, action schema or public API changed.
-- `TestKnowledgeIndexesPastFirstPage` reproduced the host read's 500-record page cap. Knowledge-field indexing now walks ID-sorted pages, so the 501st source can be found. The index still rescans sources on queries and needs a realistic scale/latency design before claiming large-tenant performance.
+- `knowledge.go` 在每个文本切片上保留应用级/公开级授权标记，并强制关联其源记录引用。检索模块在执行评分计算或向量嵌入前，首先调用宿主权威的 `Readable` 接口，结合查阅者身份和当前时间点进行严格的权限前置过滤。挂载到业务实体记录上的文本直接继承该记录的作用域范围；知识文档上挂载的文件保留该文档的 `Apps` 授权配置。受限字段与受限显示标题完全不会被编入检索索引。跨租户直接检索被严正拒绝。
+- `context.go` 严格以当前成员身份读取关联的流程与待办任务记录，并细致核验每个跨应用关联记录；跨租户调用上下文图谱/检索接口直接返回空内容。当没有具体人类作为查阅者时，宿主的应用自动化进程仅被允许查阅本应用内部的业务知识。
+- `TestKnowledgeAndContextScope` 在修改前准确复现了在负责人所属、部门级、跨租户以及任务/流程维度的越权缺陷，修复后测试全面通过；现有的知识、文件与实体记录测试同样全部稳定通过。这属于 #130 的阶段性局部收尾：对所有派生数据暴露面的系统性复核、权限吊销/缓存行为一致性以及真实大规模压测仍保留在 [WorkQueue.md](../WorkQueue.md) 中推进。此项改动不改变任何日志分录类型、操作 Schema 或公有对外 API。
+- `TestKnowledgeIndexesPastFirstPage` 复现了宿主读取接口原先 500 条记录的分页上限截断问题。知识字段索引现已改为基于主键排序进行全量分页遍历扫描，确保第 501 条及后续数据源均可被精准检出。但该索引机制目前在每次查询时仍需重新扫描数据源，在向大型租户宣称高性能前，仍需进一步优化大规模/低时延架构设计。

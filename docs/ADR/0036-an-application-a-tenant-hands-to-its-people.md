@@ -1,67 +1,67 @@
-# ADR-0036: An application a tenant hands to its people
+# ADR-0036: 租户交付给其成员的应用
 
-**Status:** Accepted (2026-09-27, #132). The owner walked the first composed page end to end — a table, a detail and a create action over the CRM's records — and asked what comes next. What is missing is not polish: what someone builds still lives in the builder's corner. D1–D4 are accepted as recommended.
+**状态：** 已接受 (2026-09-27, #132)。项目负责人端到端走查了第一个组合页面——基于 CRM 记录的表格、详情和创建动作——并询问接下来的工作。当前所缺失的并不是润色打磨：构建者所构建的内容仍然停留在构建器的角落里。D1–D4 按推荐方案接受。
 
-## Context
+## 背景
 
-A tenant can define objects (ADR-0034) and compose pages of widgets over anything it may read (ADR-0035). Both appear under **Builder**, beside the tools that made them. The people the page was built for do not open the builder; they open their app from the launcher. Until what is built can be handed over as an application — a name, an icon, its pages, for the members it is meant for — the loop stops one step short of the person who needs it.
+租户可以定义对象（ADR-0034），并在其有权读取的任何内容之上组合部件页面（ADR-0035）。两者都出现在**构建器 (Builder)** 下，与制造它们的工具并列。然而，页面所服务的人员不会打开构建器；他们会从应用启动器中打开自己的应用程序。在构建出的成果能够作为应用程序交付——拥有名称、图标、页面，并面向预定成员提供——之前，闭环在离真正需要它的人员一步之遥的地方停住了。
 
-What exists to build on: the launcher and navigation of the workspace (ADR-0018) built from the apps a member holds a role in and each app's `AppUI`; the definition registry, already filtered per member, that carries objects, actions and pages; and the composed page renderer.
+已有可供构建的基础：基于成员拥有角色的应用以及各应用的 `AppUI` 构建的工作区启动器与导航（ADR-0018）；已按成员过滤的定义注册表（承载对象、动作和页面）；以及组合页面渲染器。
 
-| Current reference evidence | What we take |
+| 当前参考依据 | 我们借鉴的内容 |
 |---|---|
-| [Retool's app IDE](https://docs.retool.com/apps/concepts/ide): what a builder makes is an app with a name, released to the people who use it, edited elsewhere. | The artifact is an application, not a page in the builder. |
-| [Palantir Workshop modules](https://www.palantir.com/docs/foundry/workshop/concepts-layouts): a module has a header, several pages and its own navigation; builders edit it, users open it. | Several pages under one name, in the order the builder chose. |
-| [Appsmith apps](https://docs.appsmith.com/build-apps/overview): an app groups pages and is shared with users by role. | Who sees it follows from what they may already read, not from a new grant. |
+| [Retool 的应用 IDE](https://docs.retool.com/apps/concepts/ide)：构建者制作的是带有名称的应用，发布给使用它的人员，在其他地方进行编辑。 | 最终工件是一个应用程序，而不是构建器中的一个页面。 |
+| [Palantir Workshop 模块](https://www.palantir.com/docs/foundry/workshop/concepts-layouts)：模块拥有页眉、多个页面和自己的导航；构建者对其进行编辑，用户打开它。 | 单一名称下的多个页面，按构建者选择的顺序排列。 |
+| [Appsmith 应用](https://docs.appsmith.com/build-apps/overview)：应用对页面进行分组，并按角色与用户共享。 | 谁能看到它遵循他们已具备的读取权限，而不是通过新的权限授予。 |
 
-## Our constraints
+## 我们的约束
 
-- A tenant's application grants nothing. It is a name over pages, and every read and action inside it stays the member's own; a page is offered only to members who may read its object (ADR-0034 15b).
-- The workspace's launcher and navigation keep one owner. A tenant application becomes an `AppUI` like any other, built from the registry — no second navigation system.
-- No new runtime: an application is data in the same registry, validated at publication like an object or a page.
-- It is not a release. Versions, environments and promotion remain #136's; this is one tenant handing its own people a name they can open.
+- 租户的应用不赋予任何权限。它只是页面之上的一个名称，其内部的每一次读取和动作仍然归成员自身所有；页面仅提供给有权读取其对象的成员（ADR-0034 15b）。
+- 工作区的启动器与导航保持单一所属主件。租户应用与其它应用一样成为基于注册表构建的 `AppUI`——不引入第二套导航系统。
+- 不引入新运行时：应用是同一注册表中的数据，在发布时像对象或页面一样接受校验。
+- 它尚不是发布版本 (release)。版本、环境与晋级仍然属于 #136 的范围；这只是一个租户向其自己的人员交付一个他们可以打开的名称。
 
-## Design
+## 设计
 
-1. **`build.app`**: a name, what people call it, an icon from a fixed set, a description, and the pages it holds in the order they appear. Draft and published, like everything else a tenant defines, with what was published kept on the record.
-2. **Publishing installs it** as an asset of kind `app` in the registry, after the host checks that every page it names exists. The pages themselves keep their own rules: a member is offered the app when at least one of its pages is theirs to open.
-3. **The workspace builds an `AppUI` from it**: it appears in the launcher with its icon and in the navigation with its pages, beside the apps that came as code. Its pages render exactly as they do today.
-4. **The builder stays where builders are.** A published application does not hide the Builder; it is simply the thing a person who is not a builder opens.
+1. **`build.app`**：名称、人类可读称谓、来自固定集合的图标、描述，以及它所容纳的页面（按展示顺序）。具备草稿与已发布状态，如同租户定义的其他一切内容一样，已发布的内容保留在记录上。
+2. **发布将其安装**为注册表中类型为 `app` 的资产，前提是宿主检查确认其命名的每个页面均存在。页面自身保留各自的规则：当至少有一个页面可供打开时，成员即会看到该应用。
+3. **工作区基于它构建 `AppUI`**：它带着图标出现在启动器中，带着页面出现在导航中，与以代码形式交付的应用并列。其页面渲染与目前的表现完全一致。
+4. **构建器留在构建者所在的地方。** 发布的应用程序不会隐藏构建器；它只是非构建者人员打开的内容。
 
-## Decision points for the owner
+## 负责人决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Is a tenant application a new asset kind, or a folder on a page? | A registry asset (`app`) that the workspace turns into an `AppUI`; or a tag on each page. | An asset. It carries a name, an icon and an order, and later a version and a release; a tag carries nothing. |
-| D2 | Who sees it? | Whoever may open one of its pages; or a new grant per application. | What they may already read. A name must not become a way to widen or narrow what someone sees; per-object permissions are #130's model, applied in 15c. |
-| D3 | What icons may a tenant choose? | A fixed set the kit ships; or any icon or an upload. | A fixed set. An icon is part of the platform's visual language, and an upload is a file, a size and a theme problem for a later batch. |
-| D4 | Does an application own its pages? | A page belongs to one application at a time, named by the application; or pages are free and applications point at them. | Applications point at pages. A page stays usable while it is being built, and the same page may later appear in two applications. |
+| D1 | 租户应用是一种新的资产类型，还是页面上的文件夹？ | 注册表资产（`app`），由工作区将其转换为 `AppUI`；或每个页面上的标签。 | 资产。它承载名称、图标和顺序，并在后续承载版本和发布；标签什么都不承载。 |
+| D2 | 谁能看到它？ | 任何可以打开其页面之一的人；或按应用进行新的权限授予。 | 他们已有权读取的内容。名称绝不能成为扩大或收窄他人可见范围的手段；按对象的权限是 #130 的模型，在 15c 中应用。 |
+| D3 | 租户可以选择哪些图标？ | UI 套件提供的固定集合；或任意图标/上传文件。 | 固定集合。图标是平台视觉语言的一部分，上传涉及文件、大小和主题问题，留给后续批次处理。 |
+| D4 | 应用是否拥有其页面？ | 页面一次属于一个应用，由应用命名；或页面是独立的，应用指向它们。 | 应用指向页面。页面在构建期间保持可用，且同一页面后续可以出现在两个应用中。 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 17a | `build.app`, publication checks, the registry's `app` asset, and the workspace's launcher and navigation built from it | A builder groups pages under a name and an icon, publishes it, and a member who is not a builder opens it from the launcher and works in it. `scripts/verify.sh ci web` passes, with a browser route |
-| 17b | Order and grouping within an application (sections of navigation), a page's own settings in the editor, and what an application shows when a member may open none of its pages | Each with its own acceptance |
+| 17a | `build.app`、发布检查、注册表的 `app` 资产，以及基于它构建的工作区启动器和导航 | 构建者将页面分组于一个名称和图标之下并发布，非构建者的成员从启动器中打开它并在其中开展工作。`scripts/verify.sh ci web` 通过，并包含浏览器路由测试 |
+| 17b | 应用内部的顺序与分组（导航的分组区块）、编辑器中页面自身的设置，以及当成员无法打开其任何页面时应用展示的内容 | 各项均具备各自的验收测试 |
 
-## Consequences
+## 后果
 
-What a tenant builds can be handed to the people it was built for, which is the point of the loop. The cost is a third asset kind to validate and, later, to version: an application, its pages and their objects must be released together (#136), and the workspace now has a navigation whose shape a tenant decides — so its grammar has to hold up with a name and icon someone else chose.
+租户构建的内容可以交付给为其而构建的人员，这正是闭环的意义所在。代价是增加了第三种需要校验并在后续需要版本控制的资产类型：应用程序、其页面及其对象必须一同发布（#136），并且工作区现在拥有了由租户决定形态的导航——因此其语法必须在面对他人选择的名称和图标时依然保持健壮。
 
-## As built (17a)
+## 实施现状 (17a)
 
-- **`build.app` records** (`apps/build/application.go`): a name, what people call it, an icon from the platform's set (a choice field, so an icon outside it is refused where it is written), a description and the pages it holds in order, with the same draft → published lifecycle and the same "what was published" kept on the record as an object or a page. The transition is called **Hand it over**.
-- **The registry carries it** (`platform.AssetApp`, `Tenant.InstallApplication`): the host checks that every page it names is installed before it offers the application, and `Tenant.Definitions` offers it only to a member who may open at least one of its pages — with the pages they may not open already left out. An application grants nothing.
-- **A composed page's widgets are trimmed per member too** (`Tenant.Definitions`): a section's fields and actions are intersected with what that member may read and call, as the list and detail fields already were (ADR-0035).
-- **The workspace turns it into an ordinary app** (`apps/workspace/src/tenantApps.tsx`): an `AppUI` with the tenant's title and icon, whose navigation is its pages in order and whose home is the first. It sits in the launcher beside the apps that came as code, and its pages render through the same page view.
-- **One shell repair it needed**: the launcher grid was drawn inside a panel that outlives the render that created it, so it only ever showed the apps loaded before the first paint. It now reads the apps through a live reference, which is also what lets an application handed over while the workspace is open appear without a reload.
-- **Proven**: `TestTenantDefinedObject` (an application handed over, offered to a member who may open its page, not offered to one who may not, a page that is not there and an empty application refused with their reasons, the previous hand-over left alone, replay and snapshot), and browser route 31 (compose a page, hand over an application holding it, find it in the launcher and open its page). `scripts/verify.sh ci capabilities composition web` passes.
-- **Not built after 17a**: see 17b below.
+- **`build.app` 记录**（`apps/build/application.go`）：名称、人类可读称谓、来自平台集合的图标（choice 字段，因此超出范围的图标在输入时即被拒绝）、描述及其按序容纳的页面，具有相同的草稿 → 已发布生命周期，并在记录上保留与对象或页面相同的“发布时的内容”。该状态转换被称为**交付 (Hand it over)**。
+- **注册表承载它**（`platform.AssetApp`，`Tenant.InstallApplication`）：宿主在提供应用前检查其命名的每个页面是否已安装，并且 `Tenant.Definitions` 仅向有权打开至少一个页面的成员提供它——无权打开的页面已经预先排除。应用不赋予任何权限。
+- **组合页面的部件也按成员进行裁切**（`Tenant.Definitions`）：区块的字段和动作与其成员有权读取和调用的内容求交集，正如列表和详情字段已有的处理方式一样（ADR-0035）。
+- **工作区将其转换为普通应用**（`apps/workspace/src/tenantApps.tsx`）：带有租户标题和图标的 `AppUI`，其导航为按序排列的页面，其主页为第一页。它在启动器中与代码交付的应用并列，其页面通过相同的页面视图进行渲染。
+- **所需的一项外壳修复**：启动器网格此前绘制在一个生命周期长于创建它的渲染操作的面板内，因此它只能展示首次绘制前加载的应用。它现在通过动态引用读取应用，这也使得在工作区打开期间交付的应用无需刷新即可出现。
+- **验证通过**：`TestTenantDefinedObject`（应用交付、向有权打开其页面的成员提供、不向无权成员提供、不存在的页面与空应用均被拒绝并提示原因、先前交付保持不变、重放与快照），以及浏览器路由 31（组合页面、交付容纳该页面的应用、在启动器中找到它并打开其页面）。`scripts/verify.sh ci capabilities composition web` 通过。
+- **17a 之后未构建内容**：参见下方 17b。
 
-## As built (17b)
+## 实施现状 (17b)
 
-- **Headings in an application's navigation** (`build.Group`, `platform.AppGroup`): an application may carry groups, each a title over some of its pages in their order. Pages in no group sit first, under the application's name; the application opens on the first page of its navigation. The host refuses a heading with no title or no page, a page the application does not hold and a page under two headings — at hand-over and again at installation — and `Tenant.Definitions` drops, per member, the pages they may not open from each heading and a heading left with none. Order within the application stays the order of `pages` (D4 unchanged: applications point at pages).
-- **A page's own settings in the editor** (`PageEditor`): the layout panel starts with **Page settings**, chosen like a section; the right panel then edits what people call the page and what it is for, and the canvas and header follow at once. Saving writes them through the page's own edit action with its sections. Its name and object stay as they are, because applications and links name them.
-- **What a member sees of an application with nothing for them**: an application whose pages are none of theirs is still not offered (17a), and a heading is not shown either. A link or remembered place at a page they may not open — withdrawn, or over records they may not read — now answers "This page is not open to you." with a way back to their apps, without saying what the page holds or whether it exists.
-- **Proven**: `TestTenantDefinedObject` (groups handed over; a group over a page the application does not hold, a page under two headings and an empty heading refused, each with its reason), and browser route 32 (rename a page in its settings, hand over an application with a heading; the builder sees both sections, the front desk only the page it may read and no heading, and a link to the other page answers plainly). `scripts/verify.sh format capabilities composition web` passes.
-- **Not built**: reordering pages and groups by dragging in a purpose-built application editor — today they are edited as fields of the application's record.
+- **应用导航中的分组标题**（`build.Group`，`platform.AppGroup`）：应用可以包含分组，每个分组为其按序排列的若干页面提供一个标题。不属于任何分组的页面排在最前，位于应用名称下方；应用打开其导航的第一页。宿主拒绝没有标题或没有页面的分组标题、应用未容纳的页面，以及位于两个分组标题之下的页面——在交付和安装时均执行检查——且 `Tenant.Definitions` 会按成员从每个标题中剔除他们无权打开的页面，并剔除变空的分组标题。应用内的顺序保持 `pages` 的顺序（D4 保持不变：应用指向页面）。
+- **编辑器中页面自身的设置**（`PageEditor`）：布局面板以**页面设置 (Page settings)** 开头（像选择区块一样选择）；右侧面板随即编辑人们如何称呼该页面及其用途，画布和页眉即时跟随联动。保存通过页面自身的编辑动作连同其区块一同写入。其名称和对象保持不变，因为应用和链接均按名引用它们。
+- **成员面对没有其可用内容的应用时看到的效果**：其页面均不可用的应用依然不会提供给该成员（17a），分组标题也不会显示。指向他们无权打开的页面的链接或历史地址（已撤回，或基于他们无权读取的记录）现在明确响应“此页面未向您开放。”并提供返回其应用的路径，而不透露页面包含什么或它是否存在。
+- **验证通过**：`TestTenantDefinedObject`（分组交付；包含应用未容纳页面的分组、页面处于两个标题之下以及空标题均被拒绝并提示原因），以及浏览器路由 32（在设置中重命名页面，交付带有分组标题的应用；构建者看到两个区块，前台人员仅看到其有权读取的页面且无多余标题，且指向另一个页面的链接给出清晰提示）。`scripts/verify.sh format capabilities composition web` 通过。
+- **未构建内容**：在专用应用编辑器中通过拖拽重新排列页面和分组——目前它们作为应用记录的字段进行编辑。

@@ -1,66 +1,66 @@
-# ADR-0032: One definition registry for code, builders and application releases
+# ADR-0032: 统一元数据注册表 —— 贯通代码、可视化构建器与应用版本发布
 
-**Status:** Accepted (2026-09-27, #131). Batches 13a and 13b have implementation and automated evidence. The 13b owner visual/interaction acceptance remains open. Publication and activation remain later batches with their durability gates.
+**状态：** 已采纳 (2026-09-27, #131)。批次 13a 与 13b 已具备工程实现与自动化测试实证。13b 的业务负责人视觉质感/交互走查验收仍保持开放。正式发布与激活流转属于后续批次，受其底层持久化关卡的制约。
 
-## Context
+## 背景
 
-The server's `platform.Manifest` declares entities, actions, flows and agents in Go. `platform.Entity` describes a Go model and `platform.Action` describes an executable submission. The host exposes entity and action metadata, while `@platform/app` contributes `defineApp` views and bindings to a workspace that statically imports each UI package. These are useful typed seams, but there is no common identity/version registry for server and UI assets, dependency validation, tenant draft, publication or release binding. A customer cannot construct and publish the same app that a developer can extend in code. `docs/Platform.md` §2.4 and §10.2 own the full current-state audit.
+服务端应用 API 的 `platform.Manifest` 目前在 Go 代码中声明实体、操作、业务流与智能代理。`platform.Entity` 描述一个 Go 数据模型，`platform.Action` 描述一个可执行的提交提议。宿主对外暴露实体与操作的元数据，而 `@platform/app` 向静态引入各 UI 代码包的工作空间提供 `defineApp` 视图与数据绑定。这些都是极具价值的强类型分界线，但服务端与前端 UI 资产之间缺乏全局统一的唯一身份标识/版本注册表，缺乏依赖拓扑校验、租户级草稿暂存、正式发布或发布版本绑定的机制。客户无法像开发者在代码中扩展那样，在界面上构建并发布同一个应用。[docs/Platform.md §2.4 与 §10.2](../Platform.md#102-能力审计矩阵与健壮性状态) 完整承载了当前工程现状审计。
 
-The reference products agree on three relevant needs, without implying their implementation is our target:
+业界参考产品在三项核心诉求上高度一致，这并不意味着直接复刻其具体工程实现：
 
-| Current reference evidence | Design lesson for this platform |
+| 行业参考标杆证据 | 对本平台架构的启示 |
 |---|---|
-| [Palantir Ontology SDK](https://www.palantir.com/docs/foundry/dev-toolchain/overview) exposes object types, actions, functions and AIP Logic through a developer toolchain; [AIP Logic](https://www.palantir.com/docs/foundry/logic/core-concepts) connects typed inputs and outputs to Workshop use. | Code and builder surfaces should discover and reference the same semantic assets. |
-| [ServiceNow Studio's publication flow](https://www.servicenow.com/docs/r/application-development/servicenow-studio-classic/qs-publish-changes-to-app-using-app-repo.html) publishes an application version for other instances. | A draft needs a distinct release event and version; editing a live definition in place is insufficient. |
-| [Microsoft Power Platform solutions](https://learn.microsoft.com/en-us/power-platform/alm/solution-concepts-alm) track publishers, components, dependencies and managed layers. | Identity, ownership, dependency closure and customer extension order must be defined before promotion. |
+| [Palantir Ontology SDK](https://www.palantir.com/docs/foundry/dev-toolchain/overview) 通过开发者工具链暴露对象类型、操作、函数与 AIP Logic；[AIP Logic](https://www.palantir.com/docs/foundry/logic/core-concepts) 将强类型的输入输出无缝连接至 Workshop 组件。 | 纯代码与可视化构建器表面必须自发现并引用完全相同的底层语义资产。 |
+| [ServiceNow Studio 应用发布流](https://www.servicenow.com/docs/r/application-development/servicenow-studio-classic/qs-publish-changes-to-app-using-app-repo.html) 为其它实例发布独立的应用版本。 | 草稿必须拥有独立的发布事件与版本号；直接就地修改正在运行的生产元数据是绝对不可接受的。 |
+| [Microsoft Power Platform 解决方案体系](https://learn.microsoft.com/en-us/power-platform/alm/solution-concepts-alm) 精细追踪发布者、组件、依赖拓扑与托管分层。 | 跨环境晋阶前，必须显式定义身份凭据、所有权属主、闭包依赖完整性以及客户定制扩展顺序。 |
 
-## Our constraints
+## 我们的架构约束
 
-- The kernel stays language-neutral and domain-free. Existing record, action, flow, agent and UI owners remain the execution paths; definitions describe and bind them, rather than introducing a second business runtime.
-- Replay and future result recovery never call outside. Published definitions and active release references must be durable evidence; preview and validation do not mutate production state or dispatch effects.
-- Go code may implement industry rules; controlled tenant definitions are typed data and cannot execute arbitrary Go, JavaScript, SQL or model-generated scripts.
-- Authorization is checked at authoring, publication and execution. A published asset cannot enlarge a user's runtime record or action grant. Credentials remain environment bindings, outside reusable definitions.
-- Existing code manifests and UI packages continue to work during migration. A new registry cannot imply that a code implementation is installed or that its UI bundle can be loaded when it is absent.
+- 内核保持语言中立且与具体业务领域解耦。现有的实体记录、操作目录、业务流、智能代理以及 UI 属主牢固作为底层的执行路径；元数据注册表负责描述并绑定它们，绝不引入第二套冗余的业务执行运行时。
+- 系统重放与未来的结果恢复绝不发起外部调用。已发布的定义与处于激活状态的发布版本引用必须作为持久化的确定性证据存在；在线预览与静态校验绝不能意外污染生产环境状态或派发出站效果。
+- 业务领域的复杂硬规则由 Go 源码实现；受控的租户元数据定义纯属强类型结构化数据，严禁在生产环境执行任意 Go 代码、JavaScript、原生 SQL 或由大模型自由生成的脚本。
+- 鉴权校验必须贯穿资产构建、正式发布与运行时执行三个阶段。发布的资产绝对不允许变相越权放大用户在运行时的实体记录或操作权限。外部机密密钥属于具体的环境绑定配置，严禁硬编码进可复用的元数据定义中。
+- 在平滑迁移演进期间，现有的代码清单与前端 UI 包必须保持百分之百正常工作。全新的注册表绝不能假设所有代码实现都已被物理安装，也不能在 UI 代码包缺失时假设其能被动态加载。
 
-## Design
+## 设计
 
-1. **Identity and owner.** The app API owns a stable, qualified asset reference with an asset kind, namespace/owning app and local key. A definition has a schema version and immutable published revision. Code-defined entities, actions, flows, agents and UI views register descriptors under these references; the registry rejects collisions and missing dependencies at host composition. It returns an explicit capability status for references whose executor or UI bundle is unavailable. This enables an FDE to discover one catalog without copying manifests into a second source of truth.
-2. **Minimum semantic envelope.** A descriptor states its kind, type contract, owner, dependencies, required capabilities and code implementation binding where applicable. The first vertical slice indexes existing entity/action metadata and a bounded page descriptor using existing `@platform/app` views and `@platform/ui` components. It does not serialize Go functions or arbitrary React trees. Code-authored complex pages may expose declared slots/actions for later builder extension; their internal implementation stays in code. This enables code and composer to refer to an identical object/action/page contract while keeping full industry rules typed.
-3. **Validation before publication.** The host validates identities, types, reference cycles, dependency closure, enabled capabilities, required translations and the target environment's installed code/UI versions. Validation reports source locations and dependency paths. The builder may save drafts, but only an authorized publication creates an immutable release containing the validated asset set, hashes and dependencies. Activation of a release for a tenant is a separate decision, with a preflight of installed capabilities and migration requirements. Existing running flows and agent runs keep the versions they began with. This enables safe preview and explicit handoff to operators.
-4. **One execution and permission path.** A page or AI function invokes existing actions through the catalog and reads through record/query APIs as its effective principal. It cannot substitute metadata approval for runtime authorization. Author, reviewer/publisher and operator grants are separate. Preview uses a disposable tenant or isolated state with effects disabled and clearly labeled data. Audit links drafts, publications and activations to their authors, evidence and resulting runtime versions.
-5. **Release and recovery boundary.** Publication and activation need atomic accepted-result storage from #135 before production use. The W1 registry can be read-only over installed code descriptors; draft validation can run without publication. The first durable release slice arrives only with specified crash behavior, `CheckReplay` or its result-recovery successor, and a restore rehearsal. The release contains dependency versions and environment requirements, while secrets and live endpoints remain separate bindings (#136).
-6. **Frontend contract.** `@platform/app` owns typed bindings from descriptors to host reads/actions; `@platform/ui` owns rendered controls and their loading, empty, error, conflict and readonly states. The initial list → detail → form → approval slice from #123 is observed in desktop and narrow layouts, keyboard use and Chinese copy before it becomes the builder's component catalog. A generated page can be extended through supported slots; an unexpressible industry task remains a code view with a declared contract.
+1. **唯一身份标识与权威属主：** 应用 API 统筹持有全局稳定、全限定命名的资产引用标识（Asset Reference），包含资产类别（Asset Kind）、命名空间/所属应用（Namespace）以及局部唯一键（Local Key）。元数据定义具备 Schema 版本号与不可变的已发布修订版本号（Revision）。在代码中定义的实体、操作、流程、代理与 UI 视图均在该引用标识下注册其自描述描述符；注册表在宿主组合编排时对命名冲突与缺失依赖执行严格的静态拓扑校验。对于底层执行器或 UI 代码包尚未就绪的资产引用，注册表显式返回明确的能力缺失状态。这使 FDE 能够统一检视单一大盘，而无需把元数据清单拷贝进第二套割裂的真理源中。
+2. **最小语义包络模型（Minimum semantic envelope）：** 描述符明确声明其资产类别、强类型契约、所属属主、依赖项、所需的能力特征，以及适用的底层代码实现绑定。首个垂直切片通过索引现有的实体/操作元数据，并利用现有的 `@platform/app` 视图与 `@platform/ui` 通用组件构建受控的页面描述符。它坚决不序列化存储 Go 函数闭包或任意 React 虚拟 DOM 树。由源码编写的复杂行业页面可暴露显式声明的插槽（Slots）与操作，供后续构建器进行可视化扩展；其内部深层实现牢牢保留在类型化代码中。这使纯代码开发与可视化编排器能够面对完全一致的对象/操作/页面契约，同时确保严苛的行业业务规则保持强类型。
+3. **发布前刚性静态拓扑校验：** 宿主全面校验身份合法性、数据类型兼容性、循环引用依赖、闭包依赖完整性、依赖能力启用状态、多语言翻译完备性，以及目标环境已安装的代码/UI 版本。校验失败时精准定位源码位置与完整依赖调用链。构建器允许保存临时草稿，但只有经过严格授权的正式发布动作，才能固化生成一份包含经校验的资产集合、数字哈希与依赖闭包的不可变发布包（Release）。为特定租户激活某发布版本属于独立的治理决策，执行前强制对已安装能力与数据迁移前置条件执行全面自检。正在运行的存量业务流与代理运行严格锁定在其启动时的版本。以此确保绝对安全的沙箱隔离预览，并向运维人员提供显式受控的交接控制。
+4. **单一执行中枢与统一权限闭环：** 页面或 AI 函数统一通过操作目录调用既有操作，并以其有效主体身份通过标准记录/查询 API 读取业务数据。任何元数据层面的审批配置绝对不允许替代运行时的服务端鉴权。资产创建人、复核人/发布人以及运维操作人的权限彼此严格物理隔离。在线预览环境强制使用一次性临时租户或带有显式沙箱标记的隔离状态，期间物理禁用所有外部出站效果。企业审计完整串联起草稿草案、发布记录、激活决策、操作责任人、支撑证据以及最终生效的运行时版本。
+5. **发布管理与数据恢复边界：** 正式发布与版本激活强依赖于 #135 所规划的原子化已提交结果恢复机制，才能正式投入生产使用。第一浪潮（W1）的注册表可先针对已安装的代码描述符提供只读能力；草稿校验可独立运行而不强制触发发布。首个持久化的发布切片必须伴随明确的崩溃异常语义、`CheckReplay`（或其基于结果恢复的演进方案）以及灾备恢复演练一同交付。发布包自包含版本依赖与环境前置要求，而机密密钥与生产端点保持为相互独立的环境绑定（#136）。
+6. **前端交互契约规范：** `@platform/app` 掌控从描述符到宿主读取/操作的强类型数据绑定；`@platform/ui` 掌控渲染控件及其加载中、空状态、报错、冲突与只读等全生命周期状态。#123 交付的首个垂直切片（列表 → 详情 → 表单 → 审批）必须在桌面端与窄屏移动端、全键盘操作以及纯正中文环境下完成全方位走查，经业务负责人视觉验收通过后方可正式沉淀为构建器的通用组件库。自动生成的通用页面支持通过插槽扩展；极端复杂的特定行业界面继续作为声明了标准契约的专用代码视图存在。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | How do assets keep identity across code, builder and customer extensions? | Qualified stable reference plus immutable revision; or reuse only current entity/action/view strings. | Qualified reference, retaining current strings as aliases during migration. Current strings do not name every new asset kind or its owner. |
-| D2 | What can a tenant definition execute? | References to installed typed implementations and bounded declarative bindings; or arbitrary tenant scripts. | Installed implementations and bounded bindings. Arbitrary scripts would create a second runtime and security boundary. |
-| D3 | When can a definition affect production? | Separate draft, publication and activation with immutable release; or edit live metadata in place. | Separate decisions and immutable release, with durable publication gated on #135. |
-| D4 | How do code and visual pages share a model? | Typed descriptor and extension slots over `@platform/app`/`@platform/ui`; or require full React round-trip through the visual editor. | Descriptor and slots. Full round-trip would make complex industry UI less maintainable and would force arbitrary code into the builder. |
+| D1 | 资产如何在纯代码、可视化构建器与客户定制扩展间保持稳定身份 | 全限定命名的稳定资产引用标识（Qualified Reference）叠加不可变修订版本；或仅复用现有的实体/操作/视图字符串标识 | **采用全限定命名资产引用标识**，在平滑迁移期间保留现有字符串作为别名兼容。现有的简单字符串无法涵盖所有全新的资产类别及其所属权归属 |
+| D2 | 租户元数据定义允许执行什么 | 仅限对已安装的强类型代码实现的引用绑定，以及受控的声明式数据绑定；或允许租户编写任意脚本 | **仅限已安装的类型化代码实现与受控声明绑定**。允许自由编写任意脚本会制造失控的第二套运行时与安全灾难 |
+| D3 | 元数据定义何时能够影响生产环境 | 严格解耦 草稿暂存、正式发布 与 动态激活 三个阶段并生成不可变发布包；或允许就地热编辑生产元数据 | **解耦独立决策并固化不可变发布包**，持久化发布能力严格受 #135 架构关卡制约 |
+| D4 | 纯代码与可视化页面如何共享统一数据模型 | 基于 `@platform/app` 与 `@platform/ui` 抽象强类型描述符与扩展插槽；或要求所有页面均能在可视化编辑器中百分之百双向无损反向解析为 React 树 | **采用描述符与扩展插槽方案**。追求绝对的双向无损反向解析会导致高度复杂的行业级 UI 变得极其脆弱不可维护，且会逼迫系统在构建器中引入任意不可控代码 |
 
-The recommendation is to accept D1–D4 together as the minimum contract. The exact wire schema, storage tables and endpoint names are subsequent batch details and must be tested before publication. Declined for this stage: a marketplace, remote executable plugins, universal visual editing of code, and a second action/flow executor.
+推荐将 D1 至 D4 作为整体最小契约共同采纳。具体的底层传输 Schema、物理持久化表结构与 API 端点命名属于后续具体实施批次的细节，必须在正式发布前完成充分测试。本阶段明确暂缓引入（Declined）：公有应用市场、远程动态可执行插件、纯代码的万能可视化拖拽互转、第二套操作/工作流执行引擎。
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 13a | Read-only registry of installed typed descriptors, identity and dependency validator; expose one SDK discovery path | Existing code apps compose unchanged; duplicate/missing/incompatible references give useful diagnostics. CRM and MES descriptors prove two industries, and a code/visual sample references the same entity/action. Host/API/web and composition checks pass. |
-| 13b | Bounded page descriptor and first frontend task slice (#123) | A desktop and narrow-screen list → detail → complex form → approval journey uses `@platform/ui` and `@platform/app`, with keyboard/Chinese and observed owner visual/interaction acceptance. The builder preview references the same descriptor and cannot reach live effects. Web and browser routes pass. |
-| 13c | Durable draft, validate, publish and activate with a minimum closed release (#132/#135/#136) | FDE and delegated customer each change a permitted page/object/action binding; invalid dependencies and permission escalation refuse. Published release and active pointer survive crash/restart/restore without re-running outside calls. `CheckReplay` or result-recovery successor, `deploy/local/rehearse.sh`, permission tests and two-industry builder/operator journeys pass. |
+| 13a | 已安装强类型描述符的只读注册表、身份标识与依赖拓扑静态校验器；暴露统一的 SDK 资产发现端点 | 现有的纯代码应用完全无损组合运行；重复/缺失/不兼容的资产引用能够输出精准的诊断定位信息。CRM 与 MES 描述符跨两个行业完成实证，纯代码与可视化范例面向同一实体/操作完成绑定。宿主/API/前端及边界检查全面通过 |
+| 13b | 受控页面描述符与首个前端业务任务垂直切片 (#123) | 桌面端与窄屏环境下的 列表 → 详情 → 复合表单 → 审批 业务旅程深度复用 `@platform/ui` 与 `@platform/app`，全键盘操作顺畅、纯正中文呈现，并经过业务负责人视觉与交互走查验收。构建器预览面对完全相同的页面描述符且物理隔绝外部真实出站效果。前端编译与浏览器路由走查全面通过 |
+| 13c | 持久化草稿暂存、静态校验、正式发布与动态激活，交付最小闭合发布包 (#132/#135/#136) | FDE 与被授权客户分别在授权边界内调整合法的页面/对象/操作绑定；非法依赖与越权提权操作被严正拦截。已发布的版本包与激活指针在崩溃重启与灾备恢复后完好复原，且不重复发起外部调用。`CheckReplay` 或其演进方案、本地部署演练、权限校验测试以及跨两行业的构建者/操作者全流程实走全面通过 |
 
-## Consequences
+## 影响
 
-- The registry adds stable contracts, validation and migration work, but keeps each existing executor and UI owner singular.
-- Publication must wait for #135's atomic result/recovery semantics. Read-only discovery and isolated preview can progress independently.
-- Extension limits will create legitimate code-view cases. Those must remain explicit, discoverable references instead of hidden builder escape hatches.
-- The first implementation must measure FDE construction time and error rate against the W1 baseline in Platform §10.6; type checks alone do not establish usable application building.
+- 统一元数据注册表确立了稳定的架构契约、拓扑校验与数据版本迁移机制，同时牢固捍卫了现有执行器与 UI 属主的唯一性。
+- 正式发布能力必须等待 #135 交付的原子化结果恢复语义。只读资产发现与沙箱隔离预览可先行独立推进。
+- 受控的扩展边界必然会保留部分纯代码定制视图的合理场景。必须将它们作为显式、自描述的公开引用暴露，坚决杜绝在构建器中偷偷开设私有逃生后门。
+- 首个具体实现必须对照 [Platform.md §10.6](../Platform.md#106-验收标准与基线) 中设立的 W1 基线，严密测量 FDE 交付效率与错误率；仅凭纯静态类型检查通过绝对不足以证明平台具备了成熟的应用构建能力。
 
-## As built
+## 实际构建（As built）
 
-Batch 13a (2026-09-27, #131): `platform.AssetRef` qualifies an installed code asset by app, kind and name. At tenant composition, `registerDefinitions` indexes the existing record/entity and action declarations, rejects duplicate references, missing object/data-class targets or record-field references, and incompatible reference field types, and records object dependencies. The registry does not execute actions: `Tenant.Definitions` reuses the live `Entities` field mask and `Catalog` role/protocol grant before `GET /v1/definitions` translates and returns descriptors. `@platform/app` exposes `useDefinitions`, `assetKey` and `findDefinition`; the workspace's read-only Definitions view inspects the same object/action metadata and opens the existing generic records view. CRM and MES composition tests bind their own objects and actions through the registry; the workspace browser route exercises the CRM action.
+**批次 13a (2026-09-27, #131)：** `platform.AssetRef` 规范了全限定命名的已安装代码资产标识，包含应用、资产类别与本地名称。在租户组合编排时，`registerDefinitions` 集中对现有的实体记录与操作声明建立全局索引，严正拦截重复的资产引用、缺失的目标对象/数据类别引用、缺失的记录字段引用以及不兼容的字段引用类型，并忠实记录对象间的依赖图谱。注册表自身不负责执行具体操作：`Tenant.Definitions` 统一在应用实时的数据字段掩码（`Entities`）以及角色/协议授权（`Catalog`）后，通过 `GET /v1/definitions` 端点以当前语言对外输出资产描述符。`@platform/app` 提供了 `useDefinitions`, `assetKey` 与 `findDefinition` 前端能力；统一工作空间新增了只读的元数据定义大盘视图（Definitions），直观检视对象与操作元数据，并支持直接打开现有的通用记录视图。CRM 与 MES 在组合编排测试中通过注册表成功完成对自有对象与操作的绑定与自检；工作空间的浏览器路由测试成功走查了 CRM 资产操作。
 
-Batch 13b (2026-09-27, #131/#123): `Manifest.Pages` declares a bounded `list-detail` page over one installed object and explicit actions. Tenant composition rejects invalid layout, missing/duplicate fields, missing actions and action targets from another object. The caller's definition read intersects page fields and actions with the current entity field mask and action catalog; the page never grants data or execution rights. CRM, MES and HCM declare small probes. The Definitions catalog opens the same descriptor as a live `PageWorkspace` or a local sample-data `PagePreview`; the latter uses no live record reads or write path, and renders action payloads with a disabled submit. `@platform/ui` owns the responsive list/detail frame, a narrow-screen navigation drawer, keyboard-operable rows and a scoped, searched, paged reference selector in generated forms. HCM's creation action now declares `New`, so both its existing view and the declared page use the platform form; its duplicate app-owned form was removed. Its approval graph now gives React Flow the fixed node dimensions so nodes appear when approval arrives on an already-open page. Browser routes 4, 21 and 28 cover a UI create → submit → manager approval journey on the HCM page, reference selection, desktop/narrow-screen navigation, Chinese copy and preview isolation; routes 4 and 28 capture layout images. The first image review caught the shell's fixed 220px sidebar squeezing a 390px viewport and Dockview's retained desktop width causing document overflow; the drawer, clipping boundary and usable-width/overflow assertions corrected these. The owner has not yet accepted visual quality or the complete task experience under #123/N4.
+**批次 13b (2026-09-27, #131/#123)：** `Manifest.Pages` 声明了针对单个已安装对象与明确操作的受控 `list-detail` 复合页面。租户组合编排时严厉拦截非法布局、缺失/重复的字段声明、缺失的操作声明以及指向其它对象的越权操作。调用方在读取页面定义时，页面声明的字段与操作自动与当前实体字段掩码及操作目录权限取交集；页面元数据本身绝对不具有凭空放大数据访问或操作执行权限的能力。CRM、MES 与 HCM 分别声明了小巧的业务探针。元数据目录大盘支持将同一页面描述符作为生产态的 `PageWorkspace` 或纯前端本地模拟数据的 `PagePreview` 打开；后者完全不发起任何服务端真实记录读写请求，并将操作表单的提交按钮强制置灰禁用。`@platform/ui` 实现了响应式的主从列表/详情框架、窄屏导航抽屉、全键盘可导航的行级交互，以及自动生成表单中支持按权限过滤、搜索与分页的实体引用选择器组件。HCM 的创建操作现已标准化声明 `New` 标识，因此其现有的专属视图与声明的通用页面无缝共享完全相同的平台表单；原先 HCM 私有重复编写的前端表单被彻底删除。HCM 的审批拓扑图为 React Flow 组件赋予了确定性的节点物理尺寸，彻底修复了此前在已打开的页面上突发收到审批时节点偶发无法渲染的布局缺陷。Playwright 浏览器路由 4、21 与 28 完整走查了在 HCM 页面上 创建记录 → 提交申请 → 经理审批 的全闭环业务旅程，覆盖了引用选择器交互、桌面端/窄屏自适应响应、纯正中文文案以及预览沙箱隔离；路由 4 与 28 留存了屏幕走查快照。在首轮快照走查中，排查发现外框固定的 220px 侧边栏严重挤压了 390px 窄屏视口，且 Dockview 组件保留的桌面宽度导致了页面横向溢出；通过引入自适应抽屉、裁剪边界以及可用宽度/防溢出断言彻底解决了该问题。业务负责人针对视觉质感与完整业务旅程的走查验收目前仍根据 #123/N4 保持开放。
 
-The asset reference is stable only for the currently installed code declaration. `Version` is the app manifest's version, **not** an immutable published asset revision. The registry does not yet model links, other page layouts/components, flows, agents, reusable AI functions, tenant-authored drafts, publication, activation or compatibility across releases. Its dependency list covers object/action/page references, record fields and action targets/payload record references, not the complete protocol, flow or code dependency closure. D3's durable publication and activation remain gated by #135/#136; the visual editor and its authoring permissions remain #132/#130.
+当前确立的资产引用标识严格针对当前已安装的代码声明保持稳定。其中的 `Version` 字段体现的是应用清单自身的大版本，**绝非**不可变的已发布资产修订版本号。当前注册表尚未对实体链接（Links）、其它复杂的页面布局与高级组件、业务流、智能代理、可复用 AI 函数、租户自建草稿、正式发布、动态激活以及跨发布包兼容性进行建模。其当前维护的依赖拓扑清单覆盖了 对象/操作/页面 引用、记录字段引用以及操作载荷中的记录引用，尚未形成包含完整业务协议、业务流或代码依赖项的自包含闭包。D3 规划的持久化发布与动态激活仍严格受 #135/#136 架构关卡制约；可视化编辑器及其配套的构建权限治理收敛于 #132/#130 推进。

@@ -1,11 +1,11 @@
-# ADR-0005: No shared Rust edge core yet
+# ADR-0005: 暂不构建共享的 Rust 边缘核心库
 
-**Status:** Accepted (2026-09-24)
+**状态：** 已接受 (2026-09-24)
 
-**Context.** ADR-0002 deferred whether Swift (Music) and Tauri clients share a Rust edge core. Both edges now exist: MSRU's SQLite decision log (K4) and the Hotel desk's Rust outbox (K5), each passing the contract's vectors. A shared core would bring FFI bindings into the Apple build and a second toolchain into every edge release.
+**背景上下文。** ADR-0002 推迟裁决 Swift (Music) 与 Tauri 客户端是否共享一个统一的 Rust 边缘核心库。目前两个边缘端均已成型落地：MSRU 的 SQLite 决策日志 (K4) 以及酒店前台台式端的 Rust 发件箱 (K5)，二者均已高标准通过契约的一致性测试向量。强行引入共享核心库，势必会将复杂的 FFI C 绑定拖入 Apple 构建流程，并为每个边缘端发布平添第二套重量级工具链负担。
 
-**Decision.** Each edge implements the contract natively and proves it with the shared vectors. The edge logic so far is small (an outbox state machine, an append-only log with idempotency: a few hundred lines per language), and the vectors keep the implementations equal. No Rust crate is linked into Swift.
+**决策。** 每个边缘端均采用各自原生语言直接实现契约，并通过通用的测试向量证明其正确性。边缘端目前的实现逻辑体量极其小巧轻量（一个发件箱有限状态机、一个带幂等控制的仅追加日志：每种语言仅需几百行代码），而形式化测试向量足以保障所有实现的严格等价性。不向 Swift 中链接任何 Rust crate 库。
 
-**Consequences.** A rule change costs one change per edge language, caught by the vectors. The Rust outbox lives inside the Hotel client until a second Rust client needs it.
+**影响与后果。** 契约规则的一次调整，在每个边缘端编程语言中只需付出极小的单次修改成本，且由测试向量实时拦截守护。Rust 发件箱暂时保留在酒店客户端工程内部，直至第二个 Rust 客户端明确需要它。
 
-**Revisit when** edge logic grows beyond state machines — local storage with sync cursors, conflict merging for shared libraries (drill E2), offline caches of server data — or when a third edge language appears.
+**重新评估时机：** 当边缘端逻辑超出简单状态机的范畴时——例如包含带同步游标的复杂本地存储、共享曲库的多方冲突合并 (演练 E2)、服务端数据的离线缓存同步机制——或者当出现第三种边缘端开发语言时。

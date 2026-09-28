@@ -1,36 +1,36 @@
 ---
 name: new-app
-description: Build a new app on the platform, or add entities, actions, flows or translations to one. Use when asked to create an app (an ERP module, a tracker, any business domain) or to extend an app under apps/.
+description: 在平台上构建一个全新应用，或向已有应用增补实体、动作、流程或翻译。当被要求创建应用（ERP 模块、跟踪器、任意业务领域）或扩展 apps/ 目录下的应用时使用。
 ---
 
-# Build an app
+# 构建应用 (Build an app)
 
-Read `docs/Intent.md` → `docs/Platform.md` §10 → `docs/WorkQueue.md`, then `docs/Apps.md`. The executable path today is create app → declare entities → declare actions → declare flows → add translations → run (ADR-0023 D8). ADR-0031's code, visual and AI building paths are a target; use a builder feature only when current code and the guide establish that it exists. The reference apps show the current steps at larger size (`apps/hcm` a lifecycle with approvals, `apps/csm` a flow and an agent, `apps/crm` a protocol consumer, `apps/mes` connectors and a protocol consumed from an ERP).
+按序阅读 `docs/Intent.md` → `docs/Platform.md` §10 → `docs/WorkQueue.md`，随后阅读 `docs/Apps.md`。当前可执行的开发路径是：创建应用脚手架 → 声明实体 → 声明动作 → 声明工作流 → 增补翻译 → 运行验证 (ADR-0023 D8)。ADR-0031 规划的代码、可视化与 AI 构建路径属于目标体系；唯有当现有代码与开发指南确立其已真实存在时，方可使用对应的构建器能力。参考应用以更大体量展示了当前的各开发步骤（`apps/hcm` 展示带审批的生命周期，`apps/csm` 展示工作流与智能体，`apps/crm` 展示协议消费方，`apps/mes` 展示连接器以及从 ERP 消费的协议）。
 
-## 1. Scaffold, then change working code
+## 1. 生成脚手架，随后修改可运行代码
 
 ```sh
 cd capabilities/server && go run ./cmd/new-app -id <id> -entity <entity> -title "<Title>" -zh <中文> -app-title "<App>" -app-zh <中文>
 cd ../../apps/<id>/server && go test ./...
 ```
 
-Keep the tests green after every step; extend `TestApp` with each rule you add, and keep `platformserver.CheckReplay` at its end.
+在每一步骤后保持自动化测试全部通过；为新增的每条规则扩展 `TestApp`，并在测试尾部始终保留 `platformserver.CheckReplay`。
 
-## 2. Rules that keep an app an app
+## 2. 规范应用的架构法则
 
-- Before each piece of code, name the capability it is, its owner and its canonical path (AGENTS.md rule 11). If the platform has it, use it; if the platform lacks it and a second app would need it too, it belongs to the platform: record it in `docs/WorkQueue.md` and build it there, not in the app. `scripts/escapes.sh` fails on a new escape.
-- An app is a probe (AGENTS.md rule 12): name the builder and the operator's complete task before choosing its depth. Prove the journey through modeling, UI, integration/AI where needed, testing, delivery and change. Shared frontend quality and FDE efficiency are platform concerns; unrelated industry feature depth waits in the work queue.
+- 在编写每段代码前，明确其所属的能力、归属方以及规范路径（AGENTS.md 规则 11）。若平台已有该能力，直接使用；若平台缺失该能力且第二个应用同样会需要它，则该能力属于平台：将其记录在 `docs/WorkQueue.md` 并在平台层构建，绝不在应用内自建。`scripts/escapes.sh` 在出现新逃逸时报错。
+- 应用是验证探针（AGENTS.md 规则 12）：在选择业务深度前，首先明确构建者与操作员的完整任务。通过建模、UI、必要时的集成/AI、测试、交付与演进变更来证明全链路旅程。共享前端品质与 FDE 交付效率是平台关注点；无关的垂直行业特性深度在工作队列中等待。
 
-- Import `platformserver/platform` only; `platformserver` only in `_test.go` and `cmd/` (`scripts/boundaries.sh`). Never another app: meet it through a protocol (`protocols/`, ADR-0011).
-- Declare, don't hand-write: entity types, fields' meaning (`help`, `synonyms`, `example`), lifecycles, standard actions, flows and agents; the host generates lists, forms, tool schemas, OpenAPI and the catalog from them.
-- Every change is an action decided in `Submit`: `ledger.Generated` first, then `ledger.Receive` for the app's own rules. No state outside records and the ledger; what replay cannot rebuild is a bug.
-- Every text has Simplified Chinese in `i18n/zh-CN.json` (`TestChinese`) and the UI package's `src/i18n.ts` (AGENTS.md rule 10). Texts the app writes with `fmt` get a pattern: `"Review {id}": "审核 {id}"`.
-- The UI composes `@platform/ui` and `@platform/app` (`Records`, `GeneratedForm`, `useHost`); no app-private replacement of shared components (AGENTS.md rule 5). Controlled, typed definitions and visual composition may use the same owners and bindings as code when their canonical runtime exists. Extend that owner when needed; do not build a per-app interpreter or assume arbitrary tenant code execution.
-- An app may not change the kernel or the host to fit itself: record the friction in `docs/WorkQueue.md` (AGENTS.md rule 2).
+- 仅允许导入 `platformserver/platform`；仅在 `_test.go` 与 `cmd/` 中允许导入 `platformserver`（由 `scripts/boundaries.sh` 强校验）。严禁导入另一个应用：通过协议相遇 (`protocols/`, ADR-0011)。
+- 声明式优于手写代码：声明实体类型、字段含义（`help`、`synonyms`、`example`）、生命周期、标准动作、工作流与智能体；宿主基于声明自动生成列表、表单、工具模式、OpenAPI 与动作目录。
+- 每次业务变更都是在 `Submit` 中裁决的动作：先调用 `ledger.Generated`，随后通过 `ledger.Receive` 执行应用专属规则。记录与账本之外不留存任何隐匿状态；重放机制无法重建的内容均属于缺陷。
+- 所有文本在 `i18n/zh-CN.json`（由 `TestChinese` 校验）与 UI 包的 `src/i18n.ts` 中均必须包含简体中文（AGENTS.md 规则 10）。应用通过 `fmt` 拼接的动态文本需配置模板模式：`"Review {id}": "审核 {id}"`。
+- 前端 UI 组装 `@platform/ui` 与 `@platform/app`（`Records`、`GeneratedForm`、`useHost`）；严禁应用私自替换共享组件（AGENTS.md 规则 5）。在规范运行时就绪后，受控的类型化定义与可视化编排可以像代码一样复用相同的归属方与绑定体系。按需扩展该归属方；切勿为每个应用自建配置解释器，亦不假设支持任意租户代码的执行。
+- 应用不可为了迎合自身而修改内核或宿主：在 `docs/WorkQueue.md` 中记录摩擦力（AGENTS.md 规则 2）。
 
-## 3. Run and check
+## 3. 运行与验证
 
-- `go run ./cmd/<id>-server` (tokens `manager`, `member`); with the workspace: `pnpm --dir web/apps/workspace build`, then `-web ../../../web/apps/workspace/dist`.
-- `scripts/verify.sh composition` (the app's tests and boundaries) and `scripts/verify.sh web` (UI tests, typechecks, builds, translations and the existing browser routes). The server-only scaffold check does not prove a newly generated UI.
-- Walk the intended operator task with realistic data and permissions, including refusal and recovery states. For shared frontend changes, add representative gallery states and verify visual/keyboard behavior. Record exactly what was observed; test passes alone do not prove visual quality or FDE delivery speed.
-- Then the close-out skill.
+- `go run ./cmd/<id>-server`（开发令牌 `manager`、`member`）；配合工作区运行：`pnpm --dir web/apps/workspace build`，随后执行 `-web ../../../web/apps/workspace/dist`。
+- 执行 `scripts/verify.sh composition`（校验应用的测试与边界）以及 `scripts/verify.sh web`（UI 测试、类型检查、构建、翻译及既有浏览器端到端路由）。纯服务端脚手架检查无法证明新生成的 UI。
+- 使用真实业务数据与角色权限，人工实际走通拟定的操作员任务，涵盖拒绝与故障恢复状态。针对共享前端变更，增补代表性的陈列室状态并验证视觉与全键盘操作行为。如实记录观察到的成果；单纯的测试通过无法证明视觉质感或 FDE 交付效率。
+- 随后执行 close-out 技能完成批次收尾。

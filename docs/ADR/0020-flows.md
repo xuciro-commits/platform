@@ -1,156 +1,155 @@
-# ADR-0020: Flows — long-running processes across apps
+# ADR-0020: 业务流 —— 跨应用的长时间运行流程
 
-> **Amended by [ADR-0031](0031-ai-application-platform.md), 2026-09-27.** The code-only authoring restriction is amended: a typed flow composer will reuse the flow runtime, with published definitions and explicit instance-version semantics. The existing graph remains read-only until implemented. This note records the target; the historical decision and As built below remain evidence of their time.
+> **由 [ADR-0031](0031-ai-application-platform.md) 于 2026-09-27 修订。** 仅限纯代码编写的限制已被修订：后续将构建强类型的可视化流程编排器（flow composer），复用现有的流程运行时，具备已发布定义与显式实例版本语义。在正式实现前，现有的流程图展示继续保持只读。此说明记录了目标愿景；下文的历史决策与“实际构建”部分依然保留作为当时的实施证据。
 
-**Status:** Accepted (2026-09-25, #110, the architecture gate of stage 4 in Platform.md §10.5). The owner accepted D1–D9 as recommended. What is built is under "As built".
+**状态：** 已采纳 (2026-09-25, #110，[Platform.md](../Platform.md) §10.5 第四阶段的架构关卡)。业务负责人按推荐采纳了 D1–D9。实际构建内容见“实际构建（As built）”。
 
-## Context
+## 背景
 
-The platform already has the parts of a process, but nothing that holds them together over time:
+平台虽然已经具备了构成业务流程的各个独立部件，但此前缺乏能够在时间跨度上将它们紧密串联起来的统一机制：
 
-- **Lifecycles** move one record through its states (ADR-0017).
-- **Approvals and tasks** wait for people (ADR-0017).
-- **Subscriptions** react to a decision after commit, with retries (ADR-0013).
-- **Jobs** run on a schedule (ADR-0013).
-- **Effects** reach systems outside, held for approval when an agent caused them (ADR-0014).
-- **Protocols** let apps call each other and hear each other's events without knowing each other (ADR-0011).
+- **生命周期** 驱动单个实体记录在其状态之间流转（[ADR-0017](0017-lifecycles-approvals-tasks.md)）。
+- **审批与任务** 等待人员介入处置（[ADR-0017](0017-lifecycles-approvals-tasks.md)）。
+- **事件订阅** 在决策提交后异步触发响应并具备重试能力（[ADR-0013](0013-platform-operations.md)）。
+- **定时作业** 按计划排期周期性执行（[ADR-0013](0013-platform-operations.md)）。
+- **出站效果** 触达外部系统，并在由智能代理发起时挂起等待审批（[ADR-0014](0014-outbound-effects.md)）。
+- **协议** 使各应用在彼此互不感知的前提下互相调用并监听对方的事件（[ADR-0011](0011-apps-interoperate-through-protocols.md)）。
 
-A real process spans these and outlives any one input. For example: an order is released; the process waits until its last SFC ends, confirms it to the ERP, and if the ERP refuses, asks a person to correct it and sends it again.
+现实世界的真实业务流程跨越上述诸多环节，且其生命周期远远超越任意单次用户输入。例如：生产订单下达发布；流程等待直至其最后一个 SFC 完工，随后向 ERP 系统确认完工；若 ERP 系统拒绝接收，流程则请求人工核对更正并再次重发。
 
-Today such chains are hand-written inside apps. The plant's ERP confirmation is an `After` hook, a stored state field and a separate reconfirm action. Nobody can see where one instance of the chain stands, or why it took the path it did. Nothing times out, and nothing undoes the steps already taken when a later one fails.
+此前这类长链路完全依靠各应用内部手工编写。工厂向 ERP 的确认逻辑由一个 `After` 钩子、一个持久化状态字段以及一个单独的手工重新确认操作拼接而成。外界无人能直观洞察一个流程实例当前停留在哪个环节，也无从获知它为何走入特定分支。没有超时机制，且当后续步骤遭遇失败时，此前已经执行的步骤也无法自动冲正回滚。
 
-SAP's AI-native North Star (June 2026) adds a second reason to build this now. In an AI-native platform, agents are orchestrated: a goal is decomposed, delegated to steps, and the exceptions go to people. Flows are that orchestration. The decision traces SAP calls the moat of the next decade are the record of which path a process took and why (Platform.md §10.4, AI).
+SAP 在 2026 年 6 月提出的“AI 原生北极星（AI-native North Star）”为我们现在构建此能力提供了第二大战略动因。在 AI 原生平台中，智能代理必须被有序编排：目标被拆解分解，委派至各个步骤，而异常情况交由人类兜底裁决。业务流正是这种编排的骨架。SAP 称为“未来十年护城河”的**决策追踪痕迹（decision traces）**，正是对一个流程究竟走了哪条分支以及为何走该分支的完整记录（[Platform.md](../Platform.md) §10.4，AI 部分）。
 
-What the reference platforms do:
+业界参考平台的做法：
 
-| Platform | How a process is defined | Waiting and time | People | Failure | Running instances when the definition changes |
+| 平台 | 流程如何定义 | 等待与时间处理 | 人员协同机制 | 失败异常处理 | 流程定义变更时正在运行的实例 |
 |---|---|---|---|---|---|
-| ServiceNow Flow Designer | Flows of actions and subflows, built in a designer; triggers on records, schedules and events | Wait for condition, wait for duration | Ask for approval, tasks | Error handlers per flow | New version for new runs; runs continue on theirs |
-| Salesforce Flow and Orchestration | Record-triggered, scheduled and autolaunched flows; orchestrations of stages and steps | Pause elements, scheduled paths | Work items assigned to users and queues | Fault paths | Active version for new runs |
-| Power Automate | Triggers and actions; approvals connector | Delays, "until" loops | Approvals, adaptive cards | Retry policies, "run after" failure branches | Runs keep their definition |
-| Odoo | Automated actions on record events, scheduled actions | Scheduled actions only | Activities | None beyond the transaction | — (no long-running process) |
-| SAP Build Process Automation | Workflows, decisions and automations, and now agents | Timers, waits for events | Forms and approvals in My Inbox | Boundary events | Versions per deployment |
-| Oracle Integration | Orchestrated integrations; Process Automation for human steps | Waits, schedules | Human tasks in the worklist | Fault handlers, compensation | Activated versions |
-| Camunda (BPMN) | BPMN diagrams, executed as models | Timer and message events, with correlation | User tasks | Error events and compensation | Instances pinned to their version, migration by mapping |
-| Temporal | Workflows written as code, replayed from their event history | Durable timers and signals | Signals from people | Retries per activity; sagas in code | Code versioning (patches, worker versions) |
+| ServiceNow Flow Designer | 在设计器中编排操作与子流；基于记录变更、定时计划与事件触发 | 等待条件满足，等待指定时长 | 请求审批，生成任务工单 | 每条流配备专属错误处理分支 | 新版本仅对新建实例生效；存量运行实例按启动时的旧版本继续推进 |
+| Salesforce Flow 与 Orchestration | 记录触发流、定时触发流、自动启动流；跨阶段与步骤的流程编排 | 暂停组件（Pause），排期路径（Scheduled paths） | 分派给用户或工作队列的工作项（Work items） | 故障路径（Fault paths） | 激活的版本对新发起的运行生效 |
+| Power Automate | 触发器与操作；审批连接器 | 延时组件，"until" 循环 | 审批、自适应卡片 | 重试策略，基于失败分支的“在之后运行（run after）” | 运行中的实例严格保持启动时的定义 |
+| Odoo | 基于记录事件的自动化动作，定时计划动作 | 仅支持定时计划动作 | 活动待办（Activities） | 仅限于事务内部回滚 | —（不支持长时间运行的通用业务流） |
+| SAP Build Process Automation | 工作流、业务规则决策、自动化，以及当前融入的智能代理 | 计时器，等待事件驱动 | 我的收件箱（My Inbox）中的表单与审批 | 边界事件（Boundary events） | 按部署交付独立版本 |
+| Oracle Integration | 编排式集成；针对人工步骤的过程自动化（Process Automation） | 等待组件，定时排期 | 工作清单中的人工任务（Human tasks） | 故障处理程序，补偿机制（Compensation） | 按激活版本运行 |
+| Camunda (BPMN) | BPMN 图表，作为执行模型执行 | 定时器与消息事件，具备关联标识（Correlation） | 用户任务（User tasks） | 错误事件与补偿事务机制 | 实例严格绑定其版本，跨版本迁移通过映射完成 |
+| Temporal | 纯代码编写的工作流，基于事件历史严格重放 | 持久化计时器与信号（Signals） | 接收来自人员的人工信号 | 每个活动配置独立重试；在代码中实现 Saga 补偿 | 代码级版本控制（补丁分支、Worker 版本） |
 
-They agree on five things:
-- **A trigger** starts an instance.
-- **Steps** act, wait (for an event, a condition or a time) and ask people.
-- **Every running instance is visible**, with its history.
-- **A failure has a declared path:** retry, a fault branch, or compensation.
-- **Running instances keep the version they started with.**
+上述系统在五项关键设计上达成了一致：
+- **触发器（Trigger）** 开启一个新实例；
+- **步骤（Steps）** 执行操作、进入等待（等待事件、等待条件或等待时间）以及向人类提问；
+- **每个正在运行的实例均清晰可见**，且附带完整流转历史；
+- **失败具备明确声明的处理路径：** 重试、故障分支或补偿撤销；
+- **正在运行的实例严格保持其启动时的原始版本。**
 
-They split on how a process is defined, and there are three ways:
-- **Diagrams edited as data:** BPMN, and the flow designers.
-- **Code that is replayed:** Temporal.
-- **Declared steps with code for the logic.**
+但在流程如何定义这一核心分歧上，业界存在三种主要流派：
+- **作为数据编辑的可视化图表：** 如 BPMN 以及各类流程设计器；
+- **纯代码编写并通过日志重放：** 如 Temporal；
+- **声明式步骤骨架 + 代码实现分支逻辑。**
 
-## Design
+## 设计
 
-1. **A flow is declared in typed code, like a lifecycle.**
-   - An app's manifest lists flows. Each flow has a trigger (an action or protocol event, a record entering a state, a schedule, or a start action), then named steps and transitions, with Go functions for the logic: a condition, a payload, a branch.
-   - The declaration is data the host can draw and check. The logic is code the host replays.
-   - No diagram editor: rules stay in code (AGENTS.md rule 5, ADR-0008).
-2. **Steps.**
-   - **act:** submit a catalog action, the app's own or a protocol's.
-   - **wait:** for an event correlated to this instance (for example a protocol event whose target is the instance's booking), for a record condition (a lifecycle state), or until a time. Every wait has a timeout with its own path.
-   - **ask:** a task or an approval for people, through the work app (ADR-0017); its outcome chooses the path.
-   - **call:** a sub-flow.
-   - **all / any:** parallel branches.
-   - **agent:** declared now, run in stage 5. A goal, the actions it may take (a subset of the flow's), a budget, and a person's task when it cannot finish.
-3. **Instances are records, and each step is journaled.**
-   - A flow instance is a record of the new platform app `flow`: its definition and version, its state, the current steps, their outcomes, and the correlation keys it waits on.
-   - A step's outcome is journaled when it happens, like a delivery (entry kind `flow`). Replay runs the same step code and must reach the same outcome (ADR-0007).
-   - Timers and waits are owned work (ADR-0013), so a restart continues where the instance stood.
-   - Snapshots cover instances like any record (ADR-0019).
-4. **Who acts.** A flow acts as its app's automation principal, with that app's grants, never with more.
-   - The member or event that started it is recorded on every decision it makes, as "on behalf of".
-   - People act only in ask steps, in their own name.
-   - Flows that cross apps are declared by solution or bridge apps and go through protocols (ADR-0010, ADR-0011).
-5. **Failure.**
-   - A failing step is retried with backoff, like a delivery.
-   - After the retries, the flow takes its declared fault path. Without one, it compensates.
-   - To compensate, every completed act step that declared an undo action has it run, newest first, and the instance ends as compensated.
-   - If compensating fails too, a task goes to the flow's owners, and the instance waits for them.
-   - An administrator can retry, skip or cancel a stuck instance, each as a decision.
-6. **Decision traces.** Every step records why it went where it went: the condition and its inputs, the event that ended a wait, the person who answered an ask, the timeout that fired.
-   - The instance page shows the definition drawn with the path taken, and each step's trace. Stage 5 agents read these traces as context.
-7. **Versions.**
-   - A new version of a flow applies to new instances.
-   - Running instances keep the version they started with. An old version stays declared in code until none of its instances runs; the host refuses to start if the journal has running instances of a version the code no longer declares.
-   - A version may declare a mapping that moves its running instances to the next version, step by step, as a decision.
-8. **UI.**
-   - Flow instances appear in the workspace as records, with their definition drawn: the kit gains a flow view, one family used by every app.
-   - Ask steps appear in the inbox.
-   - The Settings workspace lists the flows of the tenant's apps, with their running, stuck and failed instances.
+1. **业务流以类型化代码声明，正如生命周期一样。**
+   - 应用的清单中列出 flows。每个流程具备一个触发器（目录操作或协议事件、记录进入特定状态、定时排期或显式启动操作），随后连接具名步骤与状态迁移，并使用 Go 函数表达具体业务逻辑：守卫条件、请求载荷、分支选择。
+   - 流程声明本身是结构化数据，宿主可以直观绘制图表并进行静态拓扑检查。业务逻辑则是纯正代码，宿主通过日志确定性重放。
+   - 彻底摒弃可视化拖拽图表编辑器：核心业务规则牢牢保留在类型化代码中（AGENTS.md 规则 5，[ADR-0008](0008-packages-customization-and-callers.md)）。
+2. **丰富的步骤类型（Steps）。**
+   - **act（执行）：** 提交一个目录操作，可以是应用自身的操作或协议操作。
+   - **wait（等待）：** 等待与当前实例关联的特定事件（例如目标指向当前实例预订 ID 的协议事件）、等待记录满足特定条件（如进入某个生命周期状态），或等待时间到达。每次等待都强制配置超时时间及其超时专用分支。
+   - **ask（提问）：** 通过协作应用向人员派发待办任务或审批申请（[ADR-0017](0017-lifecycles-approvals-tasks.md)）；人员的决策答复决定后续分支路径。
+   - **call（调用）：** 调用执行一个子流程。
+   - **all / any（并行）：** 支持多分支并行流转。
+   - **agent（代理）：** 现阶段完成定义声明，在第五阶段正式运行。包含业务目标、允许调用的操作集合（流程权限的子集）、调用额度预算，以及在无法独立完成时退回给人类的人工待办任务。
+3. **流程实例表现为标准记录，每个步骤均记入日志。**
+   - 流程实例是新平台应用 `flow` 中的标准实体记录：包含其流程定义与版本号、当前状态、正在执行的步骤、各个步骤的执行结果，以及当前正在等待的关联键（correlation keys）。
+   - 步骤的执行结果在发生时被持久化记入日志，就像自有机制作业交付一样（日志分录类型 `flow`）。重放时执行相同的步骤代码，并必须严格重现完全相同的结果（[ADR-0007](0007-input-journal-and-oidc.md)）。
+   - 定时器与等待机制依托平台自有机制作业（[ADR-0013](0013-platform-operations.md)）实现，因此服务重启后能够丝毫不爽地在实例停留的位置继续推进。
+   - 快照机制像覆盖普通实体记录一样完整覆盖流程实例（[ADR-0019](0019-read-models-analytics-snapshots.md)）。
+4. **谁在以何种权限执行。** 流程以其所属应用的自动化主体（automation principal）身份执行，严格继承该应用的已有授权，绝不擅自越权。
+   - 启动该流程的成员或触发事件被忠实记录在流程所产生的每次决策上，标记为“代表某人（on behalf of）”。
+   - 人类仅在 ask 步骤中以各自的真实身份签署决策。
+   - 跨越多个应用的流程统一由解决方案或桥接应用声明，且必须通过标准协议进行通信调用（[ADR-0010](0010-platform-host-and-apps.md), [ADR-0011](0011-apps-interoperate-through-protocols.md)）。
+5. **故障与失败处理。**
+   - 失败的步骤会像消息交付一样按照指数退避策略自动重试。
+   - 达到重试上限后，流程转向其声明的故障分支（fault path）。若未声明故障分支，则触发自动补偿撤销（compensation）。
+   - 执行补偿时，该实例此前已成功执行且声明了撤销操作（undo action）的全部 act 步骤，均按倒序（最新执行者优先）自动执行撤销操作，实例最终状态标记为已补偿（compensated）。
+   - 若撤销补偿过程中再次遭遇失败，系统自动向流程负责人派发紧急任务，流程实例挂起等待人工干预。
+   - 管理员可通过记入日志的特权决策对卡住的实例执行重试（retry）、跳过（skip）或取消（cancel）。
+6. **决策追踪痕迹（Decision traces）。** 每个步骤都详尽记录其走向特定分支的根因：判断条件及其入参快照、唤醒等待的特定事件、回答提问的人员身份、触发唤醒的超时计时器。
+   - 实例详情页绘制流程拓扑图，高亮显示实际流转路径，并展示每个步骤的决策追踪痕迹。第五阶段的智能代理将把这些追踪痕迹作为关键上下文直接读取。
+7. **多版本管理机制。**
+   - 流程定义的新版本仅对新建实例生效。
+   - 正在运行的存量实例严格保持启动时的旧版本。代码中必须保留旧版本定义，直至该版本的所有存量实例彻底终结；若日志中存在代码中已彻底删除的版本的未完结实例，宿主启动时将严厉拒绝启动。
+   - 新版本可显式声明版本迁移映射（mapping），通过记入日志的决策逐个步骤地将运行中的存量实例迁移至新版本。
+8. **前端 UI 呈现。**
+   - 流程实例作为实体记录在工作空间中统一呈现，并绘制其拓扑定义：UI 套件获得流程视图组件（`FlowView`），由所有应用统一复用。
+   - ask 步骤自动呈现于工作收件箱中。
+   - “系统设置”工作空间集中列出租户已安装应用的全部业务流定义，以及正在运行、卡住受阻和执行失败的实例列表。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | How a flow is defined | (a) Declared steps and transitions in typed Go, with Go functions for conditions, payloads and branches. (b) Workflow as code, replayed (Temporal's model). (c) Diagrams (BPMN) edited as data | **(a)**: the host can draw, check and trace a declaration. Code alone (b) is a black box to people and to agents. Diagrams (c) make configuration the programming language (ADR-0008) |
-| D2 | Where flows live | (a) Apps declare flows in their manifests; flows across apps are declared by solution or bridge apps and use protocols. (b) One central flow app that may call any app's actions | **(a)**: the same boundaries as everything else (ADR-0010, ADR-0011); (b) would bypass them |
-| D3 | Whose authority a flow uses | (a) Its app's automation principal, with the starter recorded as "on behalf of". (b) The starter's own identity for the whole run | **(a)**: a long-running flow must not act with a person's grants after the person has left or lost the role. People act in ask steps |
-| D4 | Durability | Instances as records of a `flow` platform app; step outcomes journaled as `flow` entries; timers and waits as owned work | As listed: replay stays the truth test |
-| D5 | Failure | Retries with backoff, then the declared fault path, else compensation through declared undo actions (a saga), else a task to the flow's owners | As listed |
-| D6 | Running instances across a new version | (a) Pinned to their version; old versions stay in code until drained, checked at start-up; optional mapping to move them. (b) Always migrate to the latest | **(a)**: like Camunda and ServiceNow; a process never changes under someone's feet unless a mapping says how |
-| D7 | Steps in this stage | act, wait (event with correlation, condition, time; each with a timeout), ask, call, all/any, and agent declared for stage 5 | As listed |
-| D8 | Decision traces | Each step's reason, inputs and evidence kept on the instance, shown on its page and readable by stage 5's agents | As listed: the first part of the context graph (Platform.md §10.4, AI) |
-| D9 | Proof | (1) The plant's order confirmation becomes a flow: wait for the last SFC, confirm to the ERP, on refusal ask the supervisor to correct, send again, time out to a task; its hand-written state and actions go. (2) A sales flow across apps: a won opportunity books its group's stays through the lodging protocol, waits for the provider's confirmation with a timeout, and on a later cancellation undoes the bookings | As listed |
+| D1 | 流程如何定义 | (a) 在强类型 Go 代码中声明步骤与状态迁移，使用 Go 函数表达条件判断、载荷构造与分支跳转。(b) 纯代码工作流并通过日志重放（Temporal 模式）。(c) 作为数据存储编辑的图表模型（BPMN） | **(a)**：宿主能够对声明进行拓扑绘制、静态校验与追踪。纯代码模式 (b) 对人类和智能代理而言纯属不可探查的黑盒。图表模式 (c) 则将配置文件沦为了不可控的编程语言（[ADR-0008](0008-packages-customization-and-callers.md)） |
+| D2 | 业务流驻留何处 | (a) 各应用在其清单中声明自有的流程；跨应用流程由解决方案或桥接应用声明并走标准协议。(b) 建立一个中央集权的流程应用，可肆意调用任意应用的操作 | **(a)**：严格遵循与整个平台一致的架构隔离边界（[ADR-0010](0010-platform-host-and-apps.md), [ADR-0011](0011-apps-interoperate-through-protocols.md)）；(b) 会彻底破坏模块边界 |
+| D3 | 流程借用谁的权威凭据执行 | (a) 使用其所属应用的自动化主体凭据，启动者身份作为“代表某人”记录保留。(b) 整个运行生命周期完全沿用启动者的个人凭据 | **(a)**：长时间运行的业务流绝不能在员工离职或角色被剥夺后，继续擅自使用该员工的个人权限行动。人类仅在 ask 步骤中以个人身份裁决 |
+| D4 | 持久化与可靠性 | 实例表现为平台应用 `flow` 的标准记录；步骤执行结果记入日志作为 `flow` 类型分录；计时器与等待机制依托平台自有机制作业 | 按照所列机制：日志重放始终作为检验真理的试金石 |
+| D5 | 故障恢复策略 | 指数退避重试，随后流向声明的故障分支，否则通过声明的撤销操作执行反向补偿（Saga 模式），补偿失败则向流程负责人派发人工任务 | 按照所列机制执行 |
+| D6 | 新版本发布时运行中的存量实例 | (a) 严格锁定在其启动版本；旧版本在代码中保留直至存量实例排空，启动时强制校验；支持声明可选的映射规则进行主动迁移。(b) 总是强制迁移至最新版本 | **(a)**：对标 Camunda 和 ServiceNow；绝不允许在用户不知情的情况下擅自突变底层执行逻辑，除非有明确映射脚本指定流转规则 |
+| D7 | 本阶段支持的步骤类型 | act（执行）、wait（关联事件、记录条件、时间；均附带超时）、ask（提问协同）、call（调用子流）、all/any（并行），以及为第五阶段预先定义的 agent 声明 | 按照所列机制执行 |
+| D8 | 决策追踪痕迹 | 每个步骤的判断根因、输入快照与关键证据保存在实例上，在详情页直观展示，并向第五阶段的智能代理提供结构化读取接口 | 按照所列机制：构成上下文图谱（Context Graph，[Platform.md](../Platform.md) §10.4 AI 部分）的第一块核心拼图 |
+| D9 | 验证载体（Proof） | (1) 工厂向 ERP 确认完工演进为正式流程：等待最后一个 SFC 完工，向 ERP 确认，若遭拒绝则通知车间主管更正并重发，超时自动升级为工单任务；删除此前散落的手写状态与操作。(2) 跨应用的销售业务流：赢得销售机会后通过住宿协议为团队逐一预订房间，等待提供商确认并配备超时控制，若后续遭遇客户取消则逐个反向撤销预订 | 按照所列计划执行 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Item | Done when |
+| 事项 | 完成标志 |
 |---|---|
-| Flow declarations and the `flow` app | A flow declared in a manifest is checked at composition (steps, transitions, versions); instances are records with their steps; `CheckReplay` and snapshots pass for a flow app |
-| Steps: act, wait, ask, call, all/any | Each step kind has a host test, including timeouts, correlation of protocol events, and restart in the middle of a wait |
-| Failure, compensation, administration | A failing step retries, then compensates newest first; a failed compensation asks the owners; retry, skip and cancel are decisions |
-| Versions | A running instance finishes on its old version after a new one ships; start-up refuses a journal whose running version was removed; a mapping moves instances |
-| Decision traces and the flow view | The instance page draws the definition with the path taken and each step's reason; the inbox shows ask steps |
-| Proofs | The plant's ERP confirmation and the sales group booking run as flows, with the rehearsal covering a restart mid-flow |
+| 流程声明机制与 `flow` 应用 | 在清单中声明的流程在租户组合编排时完成静态拓扑检查（步骤、迁移、版本）；实例作为实体记录并附带完整步骤；`CheckReplay` 与快照测试在 flow 应用中全部通过 |
+| 步骤类型：act, wait, ask, call, all/any | 每种步骤类型均配备宿主单元测试，涵盖超时处理、协议事件关联匹配，以及在等待期间强行重启服务的场景 |
+| 故障恢复、补偿事务与人工管理 | 失败步骤自动重试，随后按倒序依次执行撤销补偿；补偿失败向流程负责人派发任务；管理员的重试、跳过与取消均作为记入日志的标准决策 |
+| 多版本管理机制 | 新版本发布后，存量实例在其旧版本中平稳运行完毕；启动时若发现存在代码中已删除版本的运行实例则拒绝启动；通过版本映射成功平滑迁移存量实例 |
+| 决策追踪痕迹与流程拓扑视图 | 实例详情页绘制流程拓扑图，高亮显示实际执行路径并呈现各步骤根因痕迹；收件箱中清晰呈现 ask 步骤的任务 |
+| 业务场景验证 | 工厂 ERP 确认流程与销售团队预订流程平稳运行，部署演练严格覆盖在流程流转中途强行重启服务的极端场景 |
 
-## Consequences
+## 影响
 
-- A process becomes a declaration people can read and a trace they can follow, instead of state fields and hooks spread through an app.
-- Agents (stage 5) get a governed place to act: a step with a goal, a budget and a person behind it, inside a traced process.
-- Flows add a fourth journaled kind of owned work beside deliveries, jobs and effects. Replay and snapshots cover it with the same checks.
+- 业务流程彻底转变为人员可直观查阅的清晰声明与可全程追溯的真实痕迹，不再是散落在应用各个角落的私有状态字段和代码钩子。
+- 智能代理（第五阶段）获得了受控治理的行动场域：表现为流程内部带有明确目标、资源预算并在背后有人类托底把关的一个标准步骤。
+- 业务流在消息交付、定时作业与出站效果之外，为平台增加了第四种记入日志的自有机制作业形态。重放与快照机制以完全相同的安全标准将其全量覆盖。
 
-## As built (#110)
+## 实际构建（As built, #110）
 
-- **Declaration** (`platform/flow.go`):
-  - `Manifest.Flows` lists `platform.Flow` values: `Name`, `Title`, `Version`, `Start` (events it starts on, and `Begin`, which gives the key and the data), `Steps`, `Owners` (app roles asked when an instance is stuck), and `From` (the mapping from the previous version).
-  - A `Step` is one of `Act`, `Wait`, `Ask`, `Call`, `All`, `Any` or `Agent`. It carries `Next` or `Choose` (the next step and the reason), a `Timeout` with `OnTimeout`, a `Fault` path and an `Undo` act.
-  - `platform.Compensate` is a next step that undoes the flow's acts.
-  - Step functions get a `platform.Run`: the key, the instance's data (`DataOf`, `Set`), the last answer and the event that ended the wait.
-  - `NewTenant` checks every declaration: one kind per step, steps that exist, waits that match, timeouts that go somewhere, ascending versions, start events that are the app's own actions or events of a protocol it consumes, and a flow app composed.
-- **The flow app** (`capabilities/server/flow.go`, `flow_engine.go`):
-  - `flow.instance` records hold the tokens (paths, as in BPMN, one per parallel branch), the undo stack and the trace.
-  - Every move of an instance is one decision of the flow app (`flow.instance.start`, `flow.instance.step`), taken inside the owned work that caused it. That is a delivery of an event: the host gives the flow app the events flows start or wait on, and the completion of their tasks. Or it is the flow app's `timers` job every second, for retries, timeouts, times and conditions. Replay takes each again.
-  - Acts are the declaring app's own actions, or protocol actions through the host, submitted as its automation principal with keys made from the instance. The starter is kept on the instance as "on behalf of", not on each act's submission.
-  - Ask steps are tasks the declaring app assigns. Tasks gain answers (`WorkTask.Answers`, and the answer in `work.task.complete`). An event can close an ask instead.
-  - Parallel branches join on All, or on the first under Any; Call runs a sub-flow, and its end state is the answer. An agent step is, until stage 5, a person's task.
-  - A failing act retries five times with backoff, then takes its fault path, then compensates. Compensating runs the undo acts newest first, and an undo that keeps failing makes the instance stuck and asks the owners.
-  - `flow.instance.retry`, `.skip`, `.cancel` and `.move` are administrators' decisions.
-- **Versions** (D6): new instances take the highest version.
-  - The journal records the version each started with: `Entry.Versions`, the column `versions`, added forward-only. So replay through newer code starts them on the same one.
-  - Start-up refuses a journal whose running instance needs a version the code dropped (`Flows.Check`).
-- **Proofs:**
-  - **The plant:** the order's confirmation to the ERP is the flow `mes.erp-confirmation`. It starts when the last SFC completes or is signed off, acts `mes.order.confirm` (new; completing an order no longer confirms it by hand), waits until the ERP answers, and on a refusal asks the line's supervisors to correct and resend. The resend closes their task; an hour of silence tells them. The refusal notice stays, and is still mailed.
-  - **The CRM** (superseded by ADR-0026 9b: the group's rooms are now held at the provider until a cutoff and the flow is deleted): `crm.opportunity.plan` plans a group's rooms. The flow `crm.group-stay` books them one by one through the lodging protocol when the opportunity is won, then asks the owner to confirm them with the customer within two days. Released, unanswered, or refused by the provider, the bookings are canceled again through the protocol, newest first. The ADR's "provider's confirmation" became the customer's, because the lodging protocol confirms synchronously.
-- **UI:**
-  - The kit's `FlowView` draws a flow's steps with the path taken and where each path stands, and lists the trace as "why it moved".
-  - Settings has Flows (definitions and instances) and the instance page with retry, skip, cancel and move.
-  - The inbox shows a question's answers as buttons.
-  - The CRM plans group stays.
-- **Proven:**
-  - `TestFlows` in the host: every step kind, timeouts, answers, retries, compensation, stuck and skip, cancel, pinned versions and moving, a parallel pack with a timed sub-flow, the check of dropped versions and of declarations, and replay with snapshots.
-  - The plant's ERP test, and the sales group-stay test: refused by the provider, confirmed, released, and unanswered.
-  - The rehearsal: a flow waits across a restart, then ends on the owner's answer.
-  - The browser: the question answered "release" undid both bookings, and the instance page showed each step's reason.
-- **Not yet:**
-  - record-state triggers (a flow starts on events only);
-  - business calendars for timeouts;
-  - a drawn graph beyond the step list.
-  - Agent steps run by agents were built in stage 5 (ADR-0021).
-
+- **流程声明** (`platform/flow.go`)：
+  - `Manifest.Flows` 包含 `platform.Flow` 列表：`Name`, `Title`, `Version`, `Start`（触发该流程启动的事件，以及计算业务主键和初始数据的 `Begin` 钩子）、`Steps`, `Owners`（当流程受阻卡死时负责人工介入的应用角色），以及 `From`（从上一版本迁移的映射定义）。
+  - 一个 `Step` 属于以下类型之一：`Act`, `Wait`, `Ask`, `Call`, `All`, `Any` 或 `Agent`。包含 `Next` 或 `Choose`（计算下一步骤与选择理由）、带有 `OnTimeout` 的 `Timeout` 配置、`Fault` 故障分支以及 `Undo` 撤销操作。
+  - `platform.Compensate` 是一个特殊的后续步骤指令，指示自动倒序撤销该流程已执行的全部操作。
+  - 步骤处理函数接收一个 `platform.Run` 上下文：业务主键、实例数据（`DataOf`, `Set`）、上一环节的答复内容，以及唤醒当前等待的特定事件对象。
+  - `NewTenant` 启动时严密校验每项声明：每个步骤仅限单一类型、引用的步骤必须真实存在、等待事件必须精确匹配、超时跳转必须有明确落点、版本号必须单调递增、触发启动的事件必须是应用自身的操作或已订阅协议的合法事件，且必须已编排 flow 平台应用。
+- **流程引擎应用** (`capabilities/server/flow.go`, `flow_engine.go`)：
+  - `flow.instance` 记录维护流转令牌（Tokens，类似于 BPMN 中的 Token，每个并行分支分配一个独立的令牌）、撤销操作栈以及决策追踪痕迹。
+  - 流程实例的每一次状态跃迁，均作为 `flow` 应用内部记入日志的独立决策（`flow.instance.start`, `flow.instance.step`），并在触发该跃迁的自有机制作业内执行。触发源可以是事件交付：宿主向 flow 应用派发流程所监听的启动事件、等待事件，或关联任务的完工事件；也可以是 flow 应用每秒执行的 `timers` 后台作业，用于处理重试、超时、定时唤醒与条件轮询。系统重放时会精确无误地重走每一步。
+  - act 步骤调用声明应用自身的操作，或通过宿主调用协议操作，操作以该应用的自动化主体凭据提交，防重调用键基于流程实例动态生成。启动者身份作为“代表某人”记录在实例上，而不直接篡改单次操作的提交者身份。
+  - ask 步骤由声明应用派发标准工作任务。任务扩充了选项答复能力（`WorkTask.Answers`，并在 `work.task.complete` 中回传选择的答复）。外部事件同样可以直接关闭 ask 步骤。
+  - 并行分支在 All 节点全员汇合，或在 Any 节点命中首个分支时立即推进；Call 步骤执行子流程，子流程的终态直接作为上级的答复结果。在第五阶段前，Agent 步骤暂时回退为标准的人工待办任务。
+  - 执行失败的 act 步骤按照指数退避策略自动重试 5 次，重试耗尽后流向 fault 故障路径，若未配置则触发自动补偿。补偿按倒序执行撤销操作，若某个撤销操作持续失败，实例标记为受阻（stuck）并向流程负责人发出人工任务报警。
+  - `flow.instance.retry`, `.skip`, `.cancel` 和 `.move` 属于管理员专有的治理决策。
+- **多版本管理落地** (D6)：新建实例始终采纳最高版本。
+  - 日志中明确记录每个实例启动时所依附的版本：`Entry.Versions`，数据库新增了只向前追加的 `versions` 物理列。因此即使用最新代码重放历史日志，存量实例也严格在其原始版本中执行。
+  - 宿主启动时执行 `Flows.Check`，若发现存量未完结实例依赖的代码版本已被开发人员擅自删除，立即严厉报错并拒绝启动。
+- **业务场景验证：**
+  - **工厂车间：** 工单向 ERP 系统的完工确认已彻底改造为标准业务流 `mes.erp-confirmation`。当最后一个 SFC 完工或签字处置完成后自动触发启动，执行 `mes.order.confirm` 操作（新增；完工工单不再手工确认），等待 ERP 系统响应；若遭遇 ERP 拒绝，流程向产线主管派发更正并重新发送的任务。产线主管点击“重新发送”自动完成任务；若一小时内无人理睬则触发告警通知。原有的拒绝通知机制继续保留，并继续发送邮件。
+  - **CRM 销售流程**（已被 [ADR-0026](0026-decisions-across-apps.md) 9b 替代：团队房间现在直接在提供商处保留至截止日期，该临时流已被删除）：`crm.opportunity.plan` 用于规划团队用房。业务流 `crm.group-stay` 在销售机会赢单时通过住宿协议逐个预订房间，随后要求销售负责人在两天内与客户最终确认。若主动释放、逾期未答或被提供商拒绝，系统通过协议按倒序依次自动取消预订。原 ADR 中的“等待提供商确认”调整为等待客户确认，因为住宿协议本身是同步返回预订确认结果的。
+- **前端 UI 呈现：**
+  - UI 套件的 `FlowView` 绘制流程步骤图，直观高亮展示实际流转路径以及各路径当前停留在何处，并将执行痕迹清晰罗列为“跃迁动因”。
+  - “系统设置”配备了业务流视图（定义浏览与实例清单），以及支持执行重试、跳过、取消与版本迁移的实例详情页。
+  - 工作收件箱将提问任务的各个选项直接渲染为操作按钮。
+  - CRM 模块集成了团队住宿规划界面。
+- **经过全面验证：**
+  - 宿主核心测试 `TestFlows`：覆盖全部步骤类型、超时机制、选项答复、自动重试、反向补偿、卡住受阻与跳过、主动取消、版本锁定与版本迁移、包含计时子流的并行包执行、代码删除版本拦截校验、静态声明有效性校验，以及结合快照的日志重放测试。
+  - 工厂 ERP 完工确认测试，以及销售团队预订测试：覆盖被提供商拒绝、正常确认、主动释放以及逾期未答等各种边界场景。
+  - 部署演练验证：业务流在服务中途强行重启后依然稳健等待，并在负责人给出答复后平稳走到终态。
+  - 真实浏览器交互验证：在收件箱中对提问点击“释放（release）”，系统瞬间自动撤销两笔预订，且实例详情页精准展示每个步骤的判定动因。
+- **暂未构建：**
+  - 基于实体记录状态变更直接触发流程（目前流程仅支持基于显式事件触发）；
+  - 针对超时机制引入业务工作日历；
+  - 超越目前步骤拓扑列表的自由拖拽关系图。
+  - 由真正的 AI 智能代理自主执行的 Agent 步骤已在第五阶段正式构建（[ADR-0021](0021-agents.md)）。

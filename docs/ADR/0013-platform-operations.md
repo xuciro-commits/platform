@@ -1,59 +1,59 @@
-# ADR-0013: Platform operations — owned work, connectors, notifications and app settings
+# ADR-0013: 平台运维工程 — 受属工作、连接器治理、通知中心与应用配置
 
-**Status:** Accepted (2026-09-24, #97; ADR-0010 part 2 rows "scheduled work", "notifications", "app settings", "connectors managed" and "health")
+**状态：** 已接受 (2026-09-24, #97；落地 ADR-0010 第二部分中关于“计划作业”、“消息通知”、“应用设置”、“托管连接器”与“健康状态监控”等规划行)
 
-**Context.** Until #97 the host did everything inside the input that caused it:
-- event handlers ran synchronously after commit, and a failed handler was only a line in a list;
-- nothing ran on a schedule;
-- each app kept its own K8 connector registry, so no one could see or switch off a connector without the app;
-- apps had no way to tell a person anything;
-- every tunable number was a constant in code.
+**背景上下文。** 在 #97 任务落地之前，宿主的所有操作完全内嵌在引发该操作的那个即时请求上下文内部：
+- 事件处理函数在事务提交后被完全同步执行，处理函数的失败仅仅是数组列表中的一行错误日志；
+- 系统没有任何支持按定时周期执行的后台计划作业调度机制；
+- 每个业务应用都在其自身代码内部私自维护 K8 连接器注册表，导致脱离了该应用，没有任何人能够集中监控或一键切断某个异常连接器；
+- 业务应用缺乏任何标准化的通用途径向真实人类操作员发送系统业务通知；
+- 系统中所有本应支持业务可调的参数数值，全都被硬编码写死在 Go 源码常量中。
 
-Business platforms put these in the host:
-- ServiceNow async business rules and scheduled jobs, Odoo `ir.cron` and automated actions, SAP background jobs;
-- ServiceNow IntegrationHub and SAP Cloud Integration monitor connections;
-- Odoo `mail.activity`, ServiceNow notifications;
-- Odoo `res.config.settings`.
+业界成熟的企业级业务平台无一例外将这些能力统一收敛在底层宿主平台中：
+- ServiceNow 的异步业务规则与计划作业、Odoo 的 `ir.cron` 与自动化动作机制、SAP 的后台作业管理；
+- ServiceNow IntegrationHub 与 SAP Cloud Integration 统一集中监控所有外部系统集成连接；
+- Odoo 的 `mail.activity` 待办通知、ServiceNow 的企业通知中心；
+- Odoo 的 `res.config.settings` 统一应用配置体系。
 
-The constraint is ADR-0007: state is rebuilt by replaying the journal of accepted inputs through the same code. Anything the host runs on its own must therefore be an input too.
+全系统必须绝对遵循的核心架构约束源自 ADR-0007：系统运行时的内存状态，必须能够完全通过向相同业务代码重放已持久化接受的输入日志来实现确定性重建。因此，宿主自身在后台自主发起的任何异步动作，本质上也必须被严格规范为一条合法的顶级输入。
 
-**Decision.**
+**决策。**
 
-1. **Owned work (K9 on the server).** The host runs two kinds of work for each tenant, both kept in the kernel's `Works` (generation = attempt):
-   - **Event deliveries.** An accepted decision is queued for each subscriber instead of being handled inside the input. Each subscriber has its own ordered queue; the host attempts the head.
-     - A failed attempt is retried after 2 s, 4 s, 8 s, 16 s. After 5 attempts the delivery is failed, and the queue moves on.
-     - An administrator can retry a failed delivery (`platform.work.retry`).
-     - Events caused by a handler carry one more hop. Past 100 hops the chain is stopped visibly (a subscription cycle).
-   - **Scheduled jobs.** An app declares jobs in its manifest (name, title, interval) and implements `Run`. The job runs as `app:<id>`, like a handler.
-2. **Work is journaled.**
-   - Every delivery attempt is a journal entry: subscriber, event, outcome. A replay re-runs the attempt and must reach the same outcome; a different outcome means the record and the code disagree. Handlers are therefore deterministic functions of tenant state. A call to the outside world is a connector or outbound work, not a handler.
-   - A job run is journaled only when it did something: decisions or notifications. A run that did nothing needs no replay.
-   - Deliveries queued but not yet attempted are rebuilt by the replay itself: replayed decisions queue events, and replayed attempts take them off. The runner continues where the process stopped.
-3. **Connectors belong to the host (K8).**
-   - The deployment connects descriptors to a tenant. Apps deliver through `Caller.Deliver`, with the caller as the connector.
-   - Heartbeats are a platform input.
-   - The host keeps each connector's cursor, last delivery and last refused input (volatile, like heartbeats).
-   - Enabling and disabling a connector is a decision of the platform app, so it is journaled and survives restarts.
-   - Settings shows the connectors under Integrations.
-4. **Notifications are a platform capability.** An app notifies from any input (`Caller.Notify`):
-   - **Recipients:** members; everyone holding a membership with a role in a unit or above it in a named structure (ADR-0012); or everyone holding a role in the notifying app (added in #98 for the hotel). They are resolved on the day of the input and kept as resolved.
-   - **Deduplication:** a key per recipient.
+1. **受属工作体系 (在服务端践行内核 K9 契约)。** 宿主为每个租户统筹运行两类后台异步工作，二者均严格由内核的 `Works` 状态机实施全生命周期治理 (以世代标识 generation 代表重试尝试序号)：
+   - **业务事件分发 (Event deliveries)。** 一项已被接受的决策所引发的事件，不再在当前即时请求上下文内被同步执行，而是被可靠排队推入每个事件订阅者的独立待办队列中。每个订阅者拥有自身严格保序的独立队列；宿主按序尝试执行队列头部的事件分发。
+     - 分发尝试若遭遇失败，系统按指数退避算法自动发起重试：间隔分别为 2 秒、4 秒、8 秒、16 秒。在连续经历 5 次失败重试后，该次事件分发正式标记为失败，队列继续向前推进处理后续事件。
+     - 企业管理员拥有在管理控制台一键对失败分发进行人工重试干预的决策权限 (`platform.work.retry`)。
+     - 由事件处理函数内部再次衍生触发的二级事件，其调用链路跨度计数器加 1。一旦跨度深度超过 100 跳，系统立即显式熔断阻断该事件链条，防止出现死循环订阅。
+   - **计划定时作业 (Scheduled jobs)。** 业务应用在其清单中声明其定时作业（作业名称、展示标题、执行周期时间间隔），并在代码中实现 `Run` 接口。定时作业在执行时以 `app:<id>` 的专属服务主体身份运行，其调度机制与事件处理函数完全同构。
+2. **所有后台工作均严格记入持久化日志。**
+   - 每一次事件分发尝试本身均作为一条独立的顶级日志分录记入日志：包含目标订阅者、事件内容以及执行结果。重放过程会使用相同的代码重新执行该次尝试，且必须达成完全相同的执行结果；若出现不同结果，表明持久化记录与当前代码逻辑发生了严重分化。因此，事件处理函数必须是基于租户业务状态的确定性纯函数。对外部真实世界的网络调用，属于连接器或出站异步效果的职责，严禁直接塞入事件处理函数内部。
+   - 计划定时作业仅在其执行过程中真正产生了业务决策或向外发出了业务通知时，才将该次执行结果记入日志。未产生任何实质性状态变更的空跑作业，无需记入日志亦无需在系统重启时进行无意义重放。
+   - 已经进入排队但尚未正式发起执行的事件分发，直接在日志重放过程中自然被重新推导构建出来：重放历史决策会重新向队列中灌入事件，而重放历史分发尝试会将其依序移出队列。系统重启后的作业运行器，将在上次进程意外终止的地方精准无缝继续推进。
+3. **连接器归属于底层宿主统领 (K8)。**
+   - 具体的部署环境代码负责将外部连接器描述符接入并绑定至特定租户。业务应用通过调用 `Caller.Deliver` 向上分发数据，且将调用者身份明确绑定为该连接器对应的服务主体。
+   - 连接器的心跳信号作为平台级标准化顶级输入进行处理。
+   - 宿主统一维护每个连接器的增量同步游标、最近一次成功分发记录、以及最近一次被拒绝的非法输入（属于易失性诊断数据，同心跳信号一样不记入重放日志）。
+   - 启用或停用某个连接器属于平台管理应用的一项正式受审决策，因此其状态变更被完整记入日志并在系统重启后完好存活。
+   - 系统设置中心在“系统集成”模块下全景展示所有连接器的实时运行状态。
+4. **消息通知被确立为平台级通用能力。** 业务应用可以在任意请求输入处理流程中随时向外发起系统通知 (`Caller.Notify`)：
+   - **目标受众解析：** 可以是具体成员；亦可以是某个组织单元或其在指定拓扑结构中名下所有子单元中担任特定职务的所有人员 (依据 ADR-0012 架构动态解析)；或者持有该发起通知应用内部特定角色的全员 (在 #98 任务中专为酒店业务场景扩充)。目标受众在输入发生的当下时间点被一次性解析完毕，并作为确定性事实保留。
+   - **智能消息去重：** 为每个具体受众计算唯一的去重键，防止高频重复通知轰炸。
 
-   Each member reads their own notifications (a read open to every member) and marks them read, as a decision. Email and push come later, over the same records.
-5. **App settings are typed and declared.**
-   - An app declares settings in its manifest: name, title, type (boolean, integer, text, choice), default and description.
-   - Administrators change them in Settings. Each change is a decision of the platform app, checked against the type.
-   - Apps read the current value with `Caller.Setting`. Settings are values within rules the app's code defines (ADR-0008 point 2), never code.
-6. **Reads open to every member.** A manifest names reads any member may use (`Everyone`); the app then filters by the caller. This replaces the special case for links and timeline and serves notifications.
+   每位成员可以在工作区直接查阅其名下的通知列表 (属于对全员开放的通用读取接口)，并可通过发起一项受审决策将通知标记为已读。邮件外发与移动端推送通知后续将直接复用同一套底层通知记录平滑扩充。
+5. **应用配置项强类型化且显式声明。**
+   - 业务应用在其清单中规范声明其支持的所有配置项：配置项名称、展示标题、数据类型 (布尔值、整型、单行文本、下拉选项枚举)、默认值以及说明文档。
+   - 企业系统管理员在系统设置中心对其进行可视化配置。每次配置修改均为平台管理应用的一项正式决策，且严格通过对应数据类型的合法性强校验。
+   - 业务应用在运行时通过调用 `Caller.Setting` 读取当前生效的配置数值。配置项始终代表应用代码内部已定义业务规则范围内的具体数值参数 (严格遵从 ADR-0008 第 2 点)，绝不允许将配置项异化为无约束的动态代码。
+6. **面向全员开放的通用读取接口。** 应用清单可以显式声明某些读取接口允许向租户名下的任意合法成员开放 (`Everyone`)；应用随后在具体实现中基于当前调用者的身份对返回的数据范围实施安全过滤。这彻底取代了先前为关联链接与动态时间线单独开辟的底层特例通道，并优雅支撑了全员通知中心的高效读取。
 
-**Consequences.**
-- Manufacturing:
-  - its connectors move to the host; the MES client drops its connector page, and Settings manages them;
-  - a new downtime notifies the supervisors of its line, if the plant's setting allows it;
-  - a scheduled job reminds them of downtime still without a reason after the configured minutes.
-- Settings gains Integrations, app settings forms and owned work (queued, retrying, failed, with retry).
-- The MES client gains an inbox.
-- The kernel contract is unchanged: K8 and K9 are used as specified, now on the server.
-- Not yet: registering new connectors in Settings, outbound webhooks, email, per-member preferences for notifications, and parallel workers (one runner per process, which the single-writer journal already implies).
+**影响与后果。**
+- 离散制造领域切片全面受益：
+  - 其私有的外部连接器彻底移交底层宿主统管；MES 客户端彻底删除了自建的连接器管理页面，全面改由平台设置中心集中治理；
+  - 一旦发生新的设备停机事件，在工厂系统配置允许的前提下，系统会自动精准向该产线的所有车间主管推送即时业务通知；
+  - 注册的计划定时作业会在设备发生停机超出指定时间阈值但依然未录入停机原因时，自动向管理人员发起催办提醒。
+- 系统设置中心全面上线第三方集成管理面板、应用级配置表单系统、以及受属工作监控中心 (清晰呈现排队中、重试中、已失败等状态，并支持一键手动重试干预)。
+- MES 客户端原生获得标准化的业务通知收件箱功能。
+- 内核底层契约保持稳定未改：K8 连接器契约与 K9 工作所有权契约完全按照既定规范执行，如今在服务端被充分激活运转。
+- 暂未引入的高阶特性：在设置中心内部直接可视化动态注册全新连接器、出站 Webhook 网关、SMTP 邮件服务打通、针对单成员的通知偏好定制设置、以及多工作节点的大规模并发并行执行 (目前每个宿主进程维持单执行器架构，与当前每个租户单一写入者的保序日志机制高度自洽吻合)。
 
-**Revisit when** a handler must call an external system (outbound work with its own journal entry), a tenant needs deliveries in parallel, or notifications need channels beyond the inbox.
+**重新评估时机：** 当事件处理函数因业务深度诉求必须向外部第三方异构系统发起即时外部调用时（需要将其形式化升级为拥有专属独立日志分录的出站外部工作）、当单个租户的事件分发吞吐量必须依赖多线程并发并行执行时、或者当消息通知渠道必须突破站内收件箱向短信/移动推送等多元渠道延伸时。

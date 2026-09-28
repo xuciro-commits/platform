@@ -1,49 +1,49 @@
-# ADR-0015: AI providers — models as a platform capability
+# ADR-0015: AI 提供商网关 — 将大语言模型确立为平台级通用能力
 
-**Status:** Accepted (2026-09-25, owner direction: "first the whole provider set-up, then agents"). Built in #105 and after it (the Anthropic adapter); quotas, app-side calls and streaming follow (see "Batches").
+**状态：** 已接受 (2026-09-25，负责人战略指导原则：“首先把一整套模型提供商底座彻底打通，随后再推进智能体建设”)。已在 #105 任务及后续工作中落地构建（包含 Anthropic 官方适配器）；调用配额管控、应用级效果调用与 SSE 流式响应紧随其后落地（详见“分批推进规划”）。
 
-## Context
+## 背景上下文
 
-AI agents are already members (ADR-0008, ADR-0014 D6), but the platform gives nobody a model. Every app that wants one would otherwise bring its own vendor client, key handling and bill. Mature gateways converge on the same shape:
-- **LiteLLM, OpenRouter, Portkey:** one API over many vendors, keys held by the gateway, usage metered per caller.
-- **Dify, Open WebUI:** an administrator adds providers (vendor, third-party, local), enables models, and grants them to users.
-- **The OpenAI Chat Completions wire** is the common protocol. OpenRouter, Gemini (its OpenAI-compatible endpoint), Moonshot, DeepSeek, Qwen (DashScope compatible mode), Zhipu, LM Studio, Ollama and llama.cpp all speak it. Anthropic's native Messages API does not; it has an official SDK.
+AI 智能体此前已经被正式确立为平台的合法操作主体 (ADR-0008, ADR-0014 D6)，但此时平台底座尚未向任何业务主体开放基础大模型的访问能力。若每个需要接入 AI 能力的业务应用各自私自引入外部模型厂商的 SDK 客户端、各自在代码中处理明文 API 密钥并各自向财务报销账单，系统势必陷入混乱。业界最成熟的 AI 网关体系高度收敛于相同的架构形态：
+- **LiteLLM、OpenRouter、Portkey：** 对上提供跨越几十家主流模型厂商的统一 API 抽象，API 密钥完全由网关统一安全托管，全量用量按调用者精确计量记账。
+- **Dify、Open WebUI：** 企业管理员在后台统一添加配置提供商（官方厂商、第三方聚合接口、本地私有部署模型），启用指定的大模型，并将模型按需授权给具体人员或业务角色使用。
+- **OpenAI Chat Completions 协议格式** 已经成为事实上的行业通用线缆协议。OpenRouter、Gemini (其 OpenAI 兼容模式端点)、Moonshot 月之暗面、DeepSeek、阿里通义千问 Qwen (DashScope 兼容模式)、智谱清言 Zhipu、以及本地运行的 LM Studio、Ollama、llama.cpp 全部原生支持该协议。Anthropic 原生的 Messages API 不兼容该格式，但官方提供了成熟的 SDK 支持。
 
-## Decision
+## 决策条款
 
-1. **Layer: platform capability, not kernel.**
-   - The kernel holds invariants every runtime must share (K1–K9). Which model answers is a replaceable mechanism, and a model's answer is an external answer, like an ERP's (ADR-0014 D4).
-   - The capability is a platform app, `ai`, like `org` and `relations`: providers and models are its decisions, and its roles say who administers and who may use models.
-   - The calls are made by the host runtime.
-   - It joins the kernel contract only if a second runtime (a Rust edge, a Swift client) must call models under the same rules.
-2. **Providers are of three kinds.**
-   - **Vendor:** a fixed base URL and wire. Anthropic, OpenAI, Gemini, Moonshot, DeepSeek, Qwen, Zhipu, OpenRouter.
-   - **Compatible:** any third-party OpenAI-compatible API at an https URL.
-   - **Local:** a model server inside the deployment (LM Studio, Ollama, llama.cpp). Private addresses and plain http are allowed, and a key is optional.
-3. **One wire, adapters only where a vendor needs one.** OpenAI Chat Completions is the platform's wire. The Anthropic Messages adapter uses Anthropic's official Go SDK (approved by the owner 2026-09-25): no SDK retries, so one call is one metered attempt, and the host's guarded HTTP client. Server-side model fallbacks are not enabled: the administrator enabled a specific model, and another one answering would bypass that decision.
-4. **Keys by name in the secret store (ADR-0014 D5).** A provider names its key; the key never enters the journal, a decision or Settings. Entering keys in Settings waits for an encrypted secret store.
-5. **Models are enabled, not assumed.**
-   - The catalog is read live from the provider (`GET /models`). It is volatile and cached, never journaled.
-   - An administrator enables a model as a decision, with its access:
-     - **everyone:** any member of the tenant, people and agents;
-     - **users:** members holding a role in the `ai` app.
-   - A model not enabled cannot be called. Validation uses journaled state only, so replay does not depend on the provider's catalog.
-6. **Calls happen outside the journal; usage is journaled.**
-   - A member (a screen, an agent through the API) calls `POST /v1/ai/chat`. The host checks access, calls the provider outside the tenant's lock, and journals one `usage` entry: who, which model, tokens in and out, cost when the provider reports it, latency and outcome.
-   - Replay applies usage and never calls a model.
-   - Prompts and answers are not journaled: they may carry personal data, and they are the caller's.
-7. **Apps call models through effects (batch 2).** A model call from an app's rules would break replay if made inside an input. It will be an outbound effect whose answer comes back to the app (ADR-0014 point 4), so replay hands the app the recorded answer.
-8. **MCP stays the host's.** Apps register through their manifests; the host serves every member's catalog as MCP tools (ADR-0011). The `ai` app's actions join that catalog like any app's. Serving models over MCP is not needed: MCP clients bring their own models.
+1. **架构层级归属：确立为平台级通用能力，绝非内核底层概念。**
+   - 内核仅承载所有跨语言运行时所必须共享的数学级强不变式 (K1–K9)。具体由哪家外部基础大模型提供回答，属于一种具备高度可替换性的实现机制，且大模型的生成应答本质上属于外部异步应答，与外部 ERP 系统的应答完全处于同一范畴 (ADR-0014 D4)。
+   - 该能力被形式化定义为标准平台应用 `ai`，地位与 `org`（组织架构）及 `relations`（关联关系）完全并列：大模型提供商配置与具体模型的启用，均作为该应用内部的合法受审决策存在，其内置角色模型清晰界定谁有权担任系统管理员、谁被允许调用大模型。
+   - 真实的物理网络调用由底层宿主运行时统一发起。
+   - 唯有当存在第二个独立的跨语言运行时（如独立的 Rust 边缘端设备、或 Swift 客户端）必须在完全相同的规则下直接调用大模型时，该能力方可考虑晋升为内核契约的一部分。
+2. **提供商被清晰归纳为三大类型。**
+   - **厂商官方直连 (Vendor)：** 拥有固定官方基准 URL 与协议规范。涵盖 Anthropic、OpenAI、Gemini、Moonshot、DeepSeek、Qwen、智谱以及 OpenRouter。
+   - **第三方标准兼容网关 (Compatible)：** 部署在指定 HTTPS 终端地址上的任何第三方 OpenAI 兼容 API。
+   - **本地私有化部署模型 (Local)：** 运行在当前局域网或私有集群内部的开源模型推理服务器（如 LM Studio、Ollama、llama.cpp）。特许支持私有局域网地址与普通 HTTP 协议，且允许不配置 API 密钥。
+3. **统一线缆协议，仅在厂商确有特殊需求时引入专属适配器。** OpenAI Chat Completions 格式被确立为平台的统一线缆标准。针对 Anthropic Messages 协议，引入基于 Anthropic 官方 Go SDK 的专属轻量适配器 (由平台负责人在 2026-09-25 批准采纳)：关闭 SDK 自带的无控重试逻辑，确保单次调用严格对应一次被计量的物理网络尝试，并统一接入宿主受管的受保护 HTTP 客户端。坚决不开启服务端盲目的模型自动降级兜底切换逻辑：管理员启用了特定的某个模型，若由另一个不同模型越俎代庖返回应答，将公然架空破坏管理员的原始决策意图。
+4. **敏感密钥在机密存储库中按逻辑名称进行安全引用 (ADR-0014 D5)。** 提供商实体仅声明其所引用的密钥逻辑名称；真实的明文 API 密钥绝不进入持久化日志、绝不出现在决策记录中、亦绝不在系统设置界面向外展示。直接在设置界面录入明文密钥的能力，必须严格等待端到端加密的密钥存储库就绪后再行开放。
+5. **模型必须经过管理员显式审核启用，绝不默认开放。**
+   - 可用模型目录直接从提供商处实时读取获取 (`GET /models`)。该目录属于易失性临时数据并在内存中缓存，绝不写入持久化重放日志。
+   - 租户系统管理员通过发起一项受审决策，正式启用某个特定模型，并为其明确配置访问授权范围：
+     - **全员开放 (everyone)：** 租户名下的任意合法成员，涵盖自然人与 AI 智能体；
+     - **业务受限用户 (users)：** 仅限持有 `ai` 应用特定角色的成员方可调用。
+   - 未被管理员显式启用的模型，一律严禁被任何人或系统调用。鉴权校验严格仅基于已持久化记入日志的确定性状态，确保系统日志重放绝不依赖外部厂商实时接口的可用性。
+6. **推理网络调用发生在日志之外；全量 Token 用量严格记入持久化日志。**
+   - 合法成员（屏幕前的自然人、或通过 API 调用的 AI 智能体）发起针对 `POST /v1/ai/chat` 的请求。宿主首先校验调用者的访问权限，在**租户排他锁之外**向提供商发起异步网络通信，随后向租户日志中追加写入一条类别为 `usage` 的专用日志分录：详细记录操作者凭据、调用的模型名称、输入/输出 Token 消耗、厂商返回的美元账单成本、网络耗时延迟以及最终调用结果。
+   - 系统日志重放过程中，直接应用这些已被记录在案的用量数据以恢复账簿，**绝对不向大模型发起重复调用**。
+   - 提示词文本与模型生成的应答文本绝不写入持久化业务日志：提示词与回答中可能包含大量用户隐私数据，且其所有权完全归属于调用者自身。
+7. **业务应用通过出站效果安全调用大模型 (第二批次落地)。** 若允许业务应用在其内部决策规则中直接同步调用大语言模型，势必会导致系统在重放历史日志时彻底摧毁确定性。应用调用大模型被严格规范为一项异步的出站外部效果，大模型的回答作为外部系统的应答回传给业务应用 (严格遵循 ADR-0014 第 4 点)，使系统在日志重放时能够百分之百确定性地直接向业务应用移交历史记录在案的真实应答。
+8. **MCP 服务端接口始终收敛由宿主统领。** 各业务应用仅需在清单中自声明其动作；宿主自动将每个成员的受权动作目录无缝暴露为标准 MCP 工具集 (ADR-0011)。`ai` 应用自身的动作与全系统所有普通应用完全一样，平等地汇入该目录中。系统无需多此一举地通过 MCP 对外倒灌暴露基础模型：MCP 外部客户端天然自带其自身的大模型调用能力。
 
-## Batches
+## 分批推进规划
 
-| Batch | Contents |
+| 交付批次 | 涵盖的核心业务能力 |
 |---|---|
-| 1 (#105) | The `ai` app; vendor, compatible and local providers; live catalogs; enabling models with access; chat calls with journaled usage; Settings (providers, models, a playground, usage); the rehearsal against a local stand-in |
-| 2 | The Anthropic adapter (built: official Go SDK, `anthropic.go`); quotas and rate limits per member, app and model; app calls as effects; streaming |
-| 3 | Agents: orchestration, tools over the caller's catalog, D6 approvals in the loop |
+| 第一批次 (#105) | 交付底层 `ai` 应用；支持厂商官方直连、第三方兼容接口与本地私有部署三类提供商；实时读取模型目录；支持模型显式启用与角色授权绑定；打通聊天补全调用并将用量精确记入日志；在设置中心上线提供商管理、模型配置、交互演练场 (Playground) 与用量总览大盘；通过本地模拟替身服务打通全流程灾备自动化演练 |
+| 第二批次 | 交付 Anthropic 专属协议适配器 (基于官方 Go SDK 构建 `anthropic.go`)；落地面向单成员、单应用及单模型的调用配额上限与并发速率限制；支持业务应用通过出站效果异步调用大模型；支持 SSE 服务端流式事件推送 |
+| 第三批次 | 全面激活 AI 智能体编排底座：复杂工作流协调调度、基于调用者动态目录的工具调用能力网格、以及将 ADR-0014 D6 针对不可逆操作的人工介入审批机制无缝嵌入智能体闭环中 |
 
-## Consequences
+## 影响与后果
 
-- Every model call has one door, one access rule and one meter per tenant.
-- Model output is never replayed. Anything durable an app or agent derives from it enters as a decision or an observation, like every other input.
+- 每个租户内部的所有外部大模型调用，从此拥有**统一的安全管控大门、统一的授权准入规则、以及统一的精确计量账簿**。
+- 大模型生成的即时内容绝不在系统重放时被重新生成。业务应用或 AI 智能体从大模型生成内容中提炼萃取出的任何需要持久化保留的业务结论，必须同系统中的所有其他正常业务输入一样，作为一项正式的受审决策或客观观察事实规范录入系统。

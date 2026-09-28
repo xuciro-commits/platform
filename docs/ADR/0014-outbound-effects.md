@@ -1,141 +1,141 @@
-# ADR-0014: Outbound effects — how a decision reaches the world outside
+# ADR-0014: 外部效果机制 — 系统决策如何安全触达外部真实世界
 
-**Status:** Accepted (2026-09-24, #100). The owner accepted D1–D8 as recommended after the architecture gate; webhooks (D7) were built first. Point 6 amended in #104.
+**状态：** 已接受 (2026-09-24, #100)。平台负责人在通过架构门禁后，全盘批准采纳推荐的 D1–D8 决策项；Webhook 机制 (D7) 率先构建落地。第 6 点在 #104 任务中根据收敛审计进行了修订。
 
-## Context
+## 背景上下文
 
-Every effect of the platform so far stays inside the process. Replay rebuilds all state by running the journal's inputs again through the same code (ADR-0007), and owned work is journaled with its outcome (ADR-0013). ADR-0013 therefore forbids a handler to call the outside world.
+在此之前，平台所产生的所有业务效果完全收敛在操作系统进程内部。系统启动时的故障自愈完全依托向相同业务代码重放日志中的历史输入来重构全部内存状态 (ADR-0007)，且所有受属异步工作的执行与其最终结果均作为确定性分录严格记录在日志中 (ADR-0013)。正因如此，ADR-0013 铁律般地严禁任何内部事件处理函数直接向外部真实网络发起即时调用。
 
-Real software must reach outside:
-- a webhook to a customer's system when a booking is canceled;
-- an order confirmation written back to SAP;
-- availability pushed to a channel manager;
-- an email to a guest or a supervisor;
-- a payment capture.
+然而，真实的工业级企业软件必须具备与外部真实世界互通互联的能力：
+- 当客房预订被取消时，向客户自建的外部系统推送一条 Webhook 事件通知；
+- 将车间完工的生产确认数据实时反写回外部 SAP ERP 系统；
+- 将客房最新可用房态实时推送到外部渠道直连管理器；
+- 向住客个人邮箱或车间主任发送一封包含业务凭证的电子邮件；
+- 调用外部第三方支付网关完成资金划扣扣款。
 
-Such an effect differs from anything the platform does today in five ways:
+这一类向外发起的操作效果（外部效果 Outbound Effects），与平台目前在内部处理的所有事务在五个本质维度上存在天壤之别：
 
-| Property | Inside effects | Outbound effects |
+| 关键系统属性 | 内部自闭合业务效果 | 外部出站网络效果 |
 |---|---|---|
-| Replay | Runs again, harmlessly | Must **never** run again: a replay that resends emails or captures payments twice is a defect |
-| Outcome | Deterministic from tenant state | Depends on another system: timeouts, refusals, partial success, answers arriving later |
-| Exactly once | Given by the journal | Impossible across a network. At best: at least once, plus deduplication by the receiver |
-| Reversibility | A later decision corrects an earlier one | An email sent or money moved cannot be recalled |
-| Trust | Inside the tenant | Credentials, signing, destinations an attacker could steer (SSRF), data leaving the tenant |
+| 日志重放行为 | 可以且必须能够安全、无害地重复重新执行 | **绝对严禁**重复执行：在重放日志时若将扣款调用或催办邮件对外重复发送两次，属于灾难级严重系统缺陷 |
+| 执行结果确定性 | 完全由租户当前内存状态纯函数确定 | 强依赖外部不可控系统的实时状态：网络超时、下游明确拒绝、部分成功、或者应答在几天后延迟返回 |
+| “恰好一次”保证 | 由确定性的内部持久化日志天然给予绝对保证 | 在不可靠的物理网络跨度上**物理上绝无可能**实现。业界所能达到的极限是：至少一次分发 (at-least-once)，外加接收端基于幂等键实施去重 |
+| 业务行为可逆性 | 早期发生的不当决策可由后续的新决策通过冲销优雅纠正 | 已经正式发送出去的电子邮件或已经完成清算的资金划扣**绝对无法静默撤销收回** |
+| 系统安全与信任边界 | 完全位于受信任的租户安全沙箱内部 | 涉及外部敏感凭据托管、消息数字签名、防范攻击者恶意诱导针对内网的请求伪造 (SSRF)、以及核心业务数据出境泄漏风险 |
 
-How mature systems handle this:
-- **Transactional outbox:** record the intent with the state change, send afterwards.
-- **Stripe:** idempotency keys, retries of webhooks over three days, and signed payloads.
-- **Standard Webhooks:** `webhook-id`, `webhook-timestamp` and `webhook-signature` headers.
-- **Svix and Hookdeck:** an endpoint per subscriber with health and a replay button.
-- **Temporal:** activities with retries, kept outside deterministic workflow code.
-- **ServiceNow IntegrationHub:** spokes, credential aliases, outbound REST with retry policies.
+业界顶尖系统在解决这一经典难题时的成熟范式：
+- **事务性发件箱模式 (Transactional Outbox)：** 将向外发送的操作意图随底层业务状态变更在同一个事务中原子落盘，随后异步发起真实网络投递。
+- **Stripe：** 统一的全局幂等键设计、长达三天的 Webhook 指数退避自动重试机制、以及标准化的载荷签名校验。
+- **Standard Webhooks 国际规范：** 强制要求提供标准的 `webhook-id`、`webhook-timestamp` 以及 `webhook-signature` HTTP 报文头。
+- **Svix 与 Hookdeck：** 为每个事件订阅者维护独立的端点实体，呈现实时连通健康度并提供可视化的一键手动重放按钮。
+- **Temporal：** 将可能产生副作用的活动任务 (Activities) 及其重试机制，与必须具备绝对确定性的工作流编排代码彻底进行物理隔离。
+- **ServiceNow IntegrationHub：** 标准化集成分支 Spoke、企业级外部凭据别名机制、以及自带容错重试策略的出站 REST 管道。
 
-## The key observation
+## 最关键的架构洞察
 
-The platform already has the state machine for "I asked an authority I do not control, and I may not know whether it happened": the **K5 edge outbox**.
-- Its states are pending, sent, confirmed, rejected and unknown.
-- It resends an unknown entry with the same idempotency key.
-- It is specified with vectors, and implemented in Go, Swift, Rust and TypeScript.
+平台实际上早已经为*“我已经向一个我无法掌控的外部权威发起了调用，且我此时无法确知该操作是否已经在对方系统真实发生”*这一棘手场景，设计并验证了最完美的有限状态机：**内核 K5 边缘端发件箱 (K5 Edge Outbox)**。
+- 其状态机包含：待处理 (pending)、发送中 (sent)、已确认 (confirmed)、已拒绝 (rejected) 以及状态未知 (unknown)。
+- 面对网络超时引起的 `unknown` 状态，它使用完全相同的原始幂等键与参数发起安全重试。
+- 它已经通过形式化测试向量进行了数学级严密定义，并在 Go、Swift、Rust 与 TypeScript 中全部高标准通过验证。
 
-An outbound effect is the server playing the edge toward an external authority. The design below reuses that semantics rather than inventing a second one.
+出站外部效果在架构本质上，正是**服务端在面对外部第三方权威时，主动扮演边缘端发件箱的角色**。下述设计方案直接全盘复用这一成熟语义，绝不另起炉灶凭空发明第二套状态机。
 
-## Decision
+## 决策条款
 
-1. **Intent, attempt and outcome are separate.**
-   - **Intent:** created by an app inside an input (`Caller.Emit`), such as "tell endpoint E that booking B was canceled". It is part of the input's deterministic result, so replay recreates it. Replay never sends it.
-   - **Attempt:** made by the host's dispatcher, as owned work (K9), outside the tenant lock. It is never made during replay.
-   - **Outcome:** journaled as its own input: confirmed, rejected with the answer, or unknown after a timeout. Replay reads the recorded outcome and never calls out. A tenant restored from backup therefore knows exactly which effects are settled.
-2. **At least once, with a stable idempotency key.**
-   - **The key:** each effect gets `<tenant>:<change id>:<n>`. It is sent on every attempt (`Idempotency-Key`, or `webhook-id` for webhooks), and receivers deduplicate by it.
-   - **Crashes:** a crash between sending and journaling the outcome leads to a resend with the same key. This is the K5 "unknown → retry with the same key" rule, and the only honest guarantee over a network.
-3. **Retry policy per kind of effect.** Exponential backoff with jitter, over a long horizon: hours for webhooks (Stripe: 3 days), minutes for email.
-   - After the horizon the effect is **failed**, visible in Settings, and can be retried or discarded as a decision.
-   - Each destination has a breaker: repeated failures pause it and mark it unhealthy, as connectors are.
-4. **Answers come back as facts.**
-   - An external answer that matters to the business becomes an observation (K2/K3) with the endpoint as provenance: an SAP order number, a payment reference, a bounce.
-   - Apps subscribe to these observations and decide (K4). An answer never changes state directly.
-   - The kernel needs no new concept.
-5. **Endpoints are host capabilities, not kernel.**
-   - An *endpoint* is a destination the tenant's administrator configures in Settings → Integrations, as a decision. It has:
-     - a URL or address;
-     - its kind (webhook, email, REST call);
-     - a reference to a credential (never the secret);
-     - its limits (rate, timeout, payload size);
-     - its health.
-   - Apps name the effect kinds they emit in their manifest (`Emits`). They can only emit those, only to endpoints bound to them, and never to a URL of their own choosing.
-   - K8 stays inbound. Outbound joins the kernel contract only if a second runtime (a Rust edge, for example) must emit effects.
-6. **Webhooks need no app code.**
-   - A tenant subscribes an endpoint to events (actions or protocol events). *Amended in #104:* an endpoint is configured by an administrator, so it has the administrator's view: any event the tenant declares, and an undeclared event is refused. Filtering by another member's catalog waits for endpoints that members other than administrators may configure.
-   - The platform app turns each matching event into an effect.
-   - Payloads are signed under Standard Webhooks and carry the event's schema version (K7).
-7. **Secrets never enter the journal.**
-   - Credentials live in a secret store, referenced by name. The first version is mounted files or environment variables; Vault or a cloud KMS comes later.
-   - Journal entries hold the intent's reference and a digest of the body sent, not tokens.
-8. **Destinations are constrained.**
-   - Only endpoints an administrator configured.
-   - No private or link-local addresses unless the endpoint allows them.
-   - HTTPS outside development.
-   - DNS is resolved at attempt time and checked again.
+1. **操作意图 (Intent)、物理尝试 (Attempt) 与最终结果 (Outcome) 彻底三权分立。**
+   - **操作意图 (Intent)：** 在某个顶级输入被接受处理的内部由业务应用发起声明 (`Caller.Emit`)，例如“向端点 E 发送客房预订 B 已取消的通知”。它是该输入处理过程中具备绝对确定性的派生产物，因此系统重启日志重放时会完全确定性地重新生成该意图。**但在日志重放期间，系统绝对不向外发起任何真实的网络请求**。
+   - **物理尝试 (Attempt)：** 由宿主内部的出站分发器驱动，作为受管的受属工作 (K9) **在租户排他锁之外**独立异步发起。日志重放期间严禁触发任何尝试。
+   - **最终结果 (Outcome)：** 外部调用的尝试结果，作为一条完全独立的顶级日志分录记入租户持久化日志：包含已成功确认 (confirmed)、携带下游应答报文的已拒绝 (rejected)、或超时引发的状态未知 (unknown)。系统启动重放日志时，直接读取该条已被记录在案的客观历史结果，绝不再向外部发起实际调用。因此，从历史灾备备份中恢复出来的租户，能够精确无误地知晓哪些外部效果已经完结、哪些尚处于未决状态。
+2. **基于稳定的全局幂等键实现“至少一次”交付。**
+   - **唯一幂等键设计：** 每个外部效果均被分配全局唯一键 `<tenant>:<change id>:<n>`。该键在每一次网络尝试中均强制携带对外发送（作为 HTTP 头的 `Idempotency-Key`，对于 Webhook 则同时作为 `webhook-id`），外部接收方统一基于该键实施精确去重。
+   - **系统意外崩溃容错：** 若系统在向外发送请求与将调用结果记入日志之间的极窄时间窗口内突发断电崩溃，重启后系统会使用完全相同的原始幂等键重新发起补发。这完全遵从内核 K5 “状态未知 → 使用原键安全重试”的核心铁律，这也是在不可靠网络环境下唯一诚实守信的工程保证。
+3. **按效果类别定制专属的指数退避重试策略。** 结合抖动算法在长达数小时或数天的宽广时间跨度上进行平滑重试：针对 Webhook 跨越数小时（Stripe 规范支持长达 3 天），针对邮件外发跨越数分钟。
+   - 一旦超出重试时间跨度上限，该外部效果被系统正式标记为**已失败 (failed)**，清晰呈现在系统设置中心，管理员可以通过发起一项受审决策一键重新重试或彻底废弃丢弃该效果。
+   - 为每个外部目标目的地配备熔断器机制：高频连续失败将自动触发熔断暂停，并将其标记为不健康状态，与连接器的治理方式保持一致。
+4. **外部系统的应答数据作为客观事实 (Facts) 接入。**
+   - 对业务具有重要业务价值的外部系统应答，自动转化为带有来源出处的一项客观观察 (K2/K3)，将该目标端点记录为事实出处：例如 SAP 返回的正式工单编号、第三方支付平台返回的交易流水号、或邮件服务器返回的退信跳票通知。
+   - 内部业务应用通过订阅这些客观观察事实并进而发起新的业务决策 (K4)。外部系统的应答绝不能直接、越权绕过业务规则去修改系统状态。
+   - 内核契约本身无需为此引入任何新概念。
+5. **端点 (Endpoints) 是宿主通用能力，绝非内核概念。**
+   - **端点**是企业租户管理员在系统设置中心“系统集成”模块下，通过发起一项受审决策进行配置维护的外部目的地实体。它涵盖：
+     - 目标 URL 统一资源定位符或服务网络地址；
+     - 端点类型类别（Webhook、SMTP 邮件服务器、标准出站 REST 调用）；
+     - 对企业安全凭据的引用命名（绝不直接存储明文机密密钥）；
+     - 各项安全与性能硬限制（每分钟调用频率上限、超时阈值、单次有效负载体积上限）；
+     - 实时连通健康度状态。
+   - 业务应用在其清单中必须显式声明其能够对外发出的效果类别 (`Emits`)。应用仅能向外发出其清单中已合法声明的类别，且只能投递给管理员明确绑定至该类别的合法端点，严禁应用随心所欲向任意自行拼接的 URL 乱发网络请求。
+   - 内核 K8 连接器概念严格限制在入站数据集成范畴。出站通信唯有在存在第二个独立运行时（例如独立的 Rust 边缘端设备）明确需要遵循相同规范向外发射效果时，方可考虑升级晋升为内核契约的一部分。
+6. **Webhook 对外分发无需应用编写任何专用代码。**
+   - 租户管理员可以将某个 Webhook 端点直接订阅至特定的业务事件（某项具体动作的成功执行，或某个协议层业务事件）。*在 #104 任务中正式修订：* 端点完全由企业系统管理员负责配置，因此端点天然拥有管理员级别的全局视野：能够自由订阅租户名下声明的任意业务事件，订阅未声明的非法事件则予以拦截拒绝。针对更细粒度成员目录的事件过滤，推迟至后续系统正式支持普通非管理员成员亦可自主配置专属端点时再行引入。
+   - 平台管理应用负责在底层自动将每一个命中的业务事件无缝转换为对应的出站外部效果。
+   - 对外发送的有效负载严格遵循国际 Standard Webhooks 规范实施数字签名，并强制携带该事件对应的模式版本号 (K7)。
+7. **敏感机密密钥绝不进入持久化日志。**
+   - 访问凭据统一保存在专门的企业密钥存储库中，系统内部仅通过逻辑名称进行安全引用。首期版本通过安全挂载的物理文件或环境变量注入实现；后续平滑扩展支持 HashiCorp Vault 或云厂商托管的 KMS 服务。
+   - 写入持久化日志的分录，仅包含对应操作意图的全局引用标识以及实际对外发送报文主体的 SHA-256 摘要哈希值，严禁在日志中记录任何明文 Token 或签名密钥。
+8. **对外部通信目标实施严苛的安全沙箱边界约束。**
+   - 仅允许向企业管理员已经显式审核并配置好的合法端点发送数据。
+   - 严格拦截拒绝任何私有局域网地址 (RFC 1918) 或链路本地地址 (Link-local)，坚决防范内网 SSRF 探测攻击，除非管理员在配置该端点时显式开启了特许豁免开关。
+   - 在生产正式运行环境中，强制要求采用 HTTPS 安全加密传输。
+   - 目标域名的 DNS 解析在发起网络连接的当下实时执行，并在握手建立前对解析出的底层 IP 进行二次强校验。
 
-## Alternatives considered
+## 备选架构方案评估对比
 
-| Option | Verdict |
+| 备选方案 | 架构评估裁决 |
 |---|---|
-| Handlers call HTTP directly | Rejected: replay would resend, and outcomes would not be deterministic (ADR-0013 point 2) |
-| A message broker (Kafka, NATS) with a separate worker service | Deferred: the journal is already the durable log; revisit with many tenants per process or high fan-out |
-| A workflow engine (Temporal) | Deferred: strong but heavy; revisit when effects form long multi-step sagas with compensation |
-| CDC from the PostgreSQL journal (Debezium) | Deferred: useful for analytics exports (ADR-0008 point 2), not for governed effects |
-| Extend K8 connectors with an outbound direction now | Deferred (point 5): no second runtime needs it yet |
+| 由事件处理函数内部直接调用 HTTP 发起网络请求 | **坚决否决：** 日志重放过程会导致请求对外被灾难性重复发送，且执行结果将彻底失去确定性保障 (严重违背 ADR-0013 第 2 点) |
+| 引入独立的分布式消息中间件 (Kafka, NATS) 配合外部独立的 Worker 工作节点集群 | **暂缓推迟：** 平台底层的保序日志本身已经是一个天然、高度可靠的持久化流日志系统；待后续单个进程承载超大规模多租户或出现极端超高并发事件广播需求时再行引入 |
+| 引入专业的分布式长流程编排引擎 (Temporal) | **暂缓推迟：** 机制高度健壮但架构极为沉重复杂；待后续外部效果演化为需要包含多步骤长时间跨度补偿回滚的复杂 Saga 分布式事务模式时再行评估引入 |
+| 基于 PostgreSQL 底层日志的变更数据捕获机制 (CDC, 如 Debezium) | **暂缓推迟：** 极其适合用于面向大数据分析平台的离线数据同步导出 (ADR-0008 第 2 点)，但无法胜任需要经过严密权限治理与状态机闭环控制的主动业务效果分发 |
+| 立即将内核 K8 连接器契约扩充支持出站方向 | **暂缓推迟 (遵循第 5 点)：** 目前尚未有第二个跨语言独立运行时提出在边缘端直接向外发射外部效果的刚性需求 |
 
-## Risks
+## 潜在风险与应对防范
 
-- **Code changes between intent and attempt.** An intent recreated by replay after an upgrade may render a different body than a first attempt made before the upgrade. The key stays the same, so receivers still deduplicate. The outcome entry records the digest of what was actually sent.
-- **Head-of-line blocking** if effects to one endpoint are ordered: one poison effect delays the rest until it fails. ADR-0013 has the same trade-off.
-- **Personal data leaving the tenant.** Payloads must be minimal and scoped to what the subscribing endpoint may see. Retention of effect bodies ties into the open "retention and privacy" capability.
-- **AI agents.** An agent's action could cause an irreversible external effect. See D6.
+- **从生成意图到真正发起尝试之间业务代码发生发版演进的风险。** 在系统版本升级后由重放重新生成的意图，其最终渲染出的报文主体可能与升级前首次尝试时生成的报文产生微小差异。但由于其全局幂等键保持绝对不变，外部接收端依然能够百分之百准确识别并执行幂等去重。最终的执行结果日志分录中，如实记录了当时真正实际对外发射的报文主体的唯一数字摘要。
+- **目标端点保序队列可能引发的队头阻塞 (Head-of-Line Blocking) 风险。** 若投递至同一个端点的外部效果被严格要求保序分发，一旦排在队头的某条恶意或异常效果持续失败重试，将导致后续效果被长时间顺延阻塞，直至其最终达到最大重试次数失败退出。这与 ADR-0013 在事件分发中权衡选取的折角保持完全一致。
+- **个人敏感隐私数据意外流出租户边界的合规风险。** 对外发射的有效负载必须保持最小化原则，严格限制在订阅该事件的端点依法有权知晓的范畴之内。外部效果报文主体的归档保留周期策略，紧密收敛挂接进系统正在推进的“数据保留与隐私合规”治理能力中。
+- **AI 智能体失控引发的不可逆灾难风险。** AI 智能体在自主决策时可能意外触发具备不可逆毁灭性后果的外部操作。防范机制详见下文决策点 D6。
 
-## Decision points for the owner
+## 供平台负责人决策的核心裁决项
 
-| # | Question | Recommendation |
+| # | 核心抉择议题 | 权威推荐建议方案 |
 |---|---|---|
-| D1 | Guarantee | At least once with a stable idempotency key, for every kind (email included: providers deduplicate by message ID) |
-| D2 | Ordering | Ordered per endpoint (predictable for receivers); unordered is an endpoint option later |
-| D3 | Where endpoints live | Host capability administered in Settings; not the kernel yet |
-| D4 | External answers | Enter as K2 observations; apps decide on them |
-| D5 | Secret store | Mounted secrets referenced by name now; Vault or KMS when a customer requires it |
-| D6 | Irreversible effects caused by AI agents | Effect kinds marked irreversible (payment, email to external people) wait for a person's approval when the causing input came from an agent |
-| D7 | First use | Outbound webhooks for events: generic, no app code, and they prove the mechanism. Then email for notifications, then an industry write-back (MES order confirmation to ERP) |
-| D8 | Retention of effect bodies | Keep digests in the journal; bodies kept for 30 days for support, then only digests |
+| D1 | 底层可靠性交付保证等级 | 针对所有类别的外部效果，一律采用**基于稳定幂等键的至少一次交付保证**（包含邮件外发场景：现代主流邮件服务商均原生支持基于 Message-ID 实施严格去重） |
+| D2 | 消息分发保序规则 | **在单端点粒度上实施严格保序分发**（为外部接收方提供极其可靠的因果时序预期）；无序并发投递作为后续高级选项按需开放 |
+| D3 | 端点实体的架构层级归属 | 定位为由宿主统领、并在系统设置中心集中治理的**平台级高级通用能力**；暂不上浮至内核底层契约范畴 |
+| D4 | 外部系统的业务应答如何闭环吸收 | 外部应答统一作为 **K2 客观观察事实** 录入系统；应用通过标准规则对该事实发起新的决策裁决 |
+| D5 | 企业级机密密钥存储底座 | 当前阶段采用**基于安全挂载文件或逻辑环境变量的按名称安全引用**机制；待大型商业客户提出合规硬指标时平滑平移接入 Vault 或云端 KMS |
+| D6 | AI 智能体引发不可逆效果的防线机制 | 凡被显式标记为**不可逆 (Irreversible)** 的效果类别（如实际对外转账划款、向外部社会公众或客户个人发送正式邮件），一旦其触发源头追溯为 AI 智能体，**该效果必须强制自动挂起暂留 (held)**，直至具备合法权限的真实人类操作员在后台人工审核通过后方可正式向外发射 |
+| D7 | 首期落地的示范性业务场景 | 率先落地针对业务事件的**出站 Webhook 网关**：最具通用性、无需应用编写任何专属胶水代码、且能直接验证整套状态机机制。随后落地面向系统通知的**邮件自动化外发服务**，最后落地制造领域的垂直行业数据反写回传（MES 车间完工生产订单向外部 ERP 反写确认） |
+| D8 | 外部效果报文主体的归档生命周期 | 在持久化日志中永久保留其数字摘要哈希值；完整的报文请求与应答明文主体在系统中默认保留 30 天以供技术支持与排障钻取，过期后自动物理销毁仅保留摘要备查 |
 
-## As built (#100)
+## 实际构建成果 (As built, #100)
 
-- `platformserver` `effects.go`: endpoints and effects are platform decisions (`platform.endpoint.add|remove`, `platform.effect.retry|discard`). Intents come from events as they are queued, so replay rebuilds them. `Tenant.Dispatch` attempts outside the tenant's lock, and each outcome is a journal entry of kind `effect` that replay applies without sending.
-- Keys are `<tenant>:<app>:<change id>:<endpoint>`. The backoff runs from 5 s to 1 h over 12 attempts, with jitter derived from the key so replay computes the same due time.
-- Secrets are resolved by name from `PLATFORM_SECRETS_DIR` or `PLATFORM_SECRET_<NAME>`. A dialer refuses private addresses at connect time unless the endpoint allows them.
-- `cmd/webhook-sink` is a receiver that checks signatures and keeps one copy per key, for the local stack and the rehearsal.
-- The per-destination breaker is, for now, the endpoint's ordered queue: its head retries with backoff and holds the rest, and the endpoint shows as failing. A pause of its own comes when an endpoint serves several kinds.
-- #101, the MES write-back:
-  - Apps emit their own effects: `Manifest.Emits` declares the kinds, and `Caller.Emit(kind, key, …)` sends to the endpoints an administrator bound to `<app>/<kind>`. The key is the app's, such as the order, so the same business fact is sent once.
-  - The receiver's JSON answer is journaled with the outcome and handed to the app (`Answerer`), in replay too. The plant records it as an observation on the order, with the endpoint as provenance (D4), and tells the line's supervisors when the ERP refuses.
-- Approval of irreversible effects caused by agents (D6):
-  - A member may be an AI agent (`Member.Agent`), and an effect kind may be irreversible (`EffectKind.Irreversible`).
-  - When an agent's input emits an irreversible kind, the effect is **held**. It waits outside its endpoint's order, the tenant's administrators are notified, and only a person may approve it (`platform.effect.approve`); either may discard it.
-  - First use: the plant's ERP confirmation is irreversible, so a correction the line's AI assistant resends waits for the supervisor.
-  - What an agent's input causes through automation (a subscriber, a job) is caused by the app, not the agent, and is not held.
-- Email (D7, second use): an endpoint of kind `email` is an SMTP server with a sender and the apps whose notifications it mails.
-  - Each notification to a member who signs in as `user:<email>` becomes an effect inside the input that notified. Its ID is the Message-ID; the receiver deduplicates by it.
-  - A 4xx answer is retried, a 5xx answer rejects the effect.
-  - These mails go to members only. Mail to people outside the tenant would be an irreversible kind.
-- **A discarded effect is answered** (F-24, 2026-09-27): discarding an effect, or removing its endpoint, tells the app that emitted it through `Answerer` with the result `discarded`, inside that decision; the CSM puts a ticket whose reply was never sent back to triaged and tells the desk (`TestCSM`). The console's lock now guards only its directory, so a decision about effects may notify members by role as it applies.
+- 在 `platformserver` 内部落地 `effects.go`：端点管理与外部效果被形式化定义为标准平台管理决策（`platform.endpoint.add|remove`、`platform.effect.retry|discard`）。操作意图随事件排队时实时确定性生成，确保系统重放日志时能够无损重新推导构建。`Tenant.Dispatch` 在租户锁之外异步发起物理网络尝试，每一次最终执行结果均作为类别为 `effect` 的独立日志分录记入日志，系统启动重放时直接应用该结果而绝对不发起任何外部网络通信。
+- 全局唯一键规范格式为 `<tenant>:<app>:<change id>:<endpoint>`。指数退避策略覆盖 12 次重试尝试，间隔从 5 秒倍增至 1 小时，且退避时间计算中混入由幂等键哈希推导出的确定性抖动，确保系统日志重放时能够计算出完全相同的下次执行时间。
+- 敏感机密密钥统一基于逻辑名称从安全目录 `PLATFORM_SECRETS_DIR` 或环境变量 `PLATFORM_SECRET_<NAME>` 中动态解析。底层网络拨号器在建立网络连接的瞬间，强制对目标地址进行安全校验，坚决拒绝任何内网私有地址，除非管理员在配置该端点时显式开启了特许通道。
+- 交付了专属的本地外部系统替身工具 `cmd/webhook-sink`，能够自动化验证 Standard Webhooks 规范的数字签名校验，并基于全局幂等键严格确保一份数据仅接收保留一份，全面服务于本地开发栈以及部署灾备演练全链路。
+- 单端点熔断机制：在当前阶段直接利用端点独立的保序队列实现——队头阻塞的失败效果按指数退避持续重试并安全挂起后续待发效果，端点在监控面板中实时呈现为故障报警状态。当单个端点需要同时服务于多种不同优先级效果时，将进一步引入专属的熔断断路器。
+- #101 任务，实现 MES 向外部 ERP 的生产确认反写回传：
+  - 业务应用支持自主定义并向外发射专属效果：通过 `Manifest.Emits` 显式声明支持发出的效果类别，并在业务代码中通过 `Caller.Emit(kind, key, …)` 向系统管理员事先绑定至 `<app>/<kind>` 的外部端点定向发射。幂等键采用业务应用自身的业务主键（例如生产工单编号），确保同一项业务事实在物理网络上绝对仅对外发射一次。
+  - 外部系统返回的 JSON 应答报文，随最终结果一同完整记入日志分录，并在运行时及系统日志重放时均精确无误地原样回传给应用的应答接收器 (`Answerer`)。工厂业务模型将该应答作为挂接在工单之上的客观观察事实录入系统，并以该端点作为客观事实出处 (严格遵循决策项 D4)；当遭遇外部 ERP 系统显式驳回拒绝时，自动向对应车间产线的主管推送即时预警通知。
+- 针对 AI 智能体引发不可逆效果的强制人工介入审批防线 (决策项 D6)：
+  - 组织成员身份正式支持标识为 AI 智能体 (`Member.Agent`)，且效果类别支持显式声明为具备不可逆属性 (`EffectKind.Irreversible`)。
+  - 一旦监测到某个由 AI 智能体发起的输入试图发射不可逆效果，该效果**立即强制自动挂起暂留 (held)**。该效果被安全剥离出端点的常规保序待发队列，租户名下的系统管理员立即收到高优先级待办审批通知，且**唯有具备合法权限的真实人类操作员**方可执行最终批准操作 (`platform.effect.approve`)；人类操作员与智能体自身均被赋予一键废弃丢弃该操作的权限。
+  - 首期业务落地闭环：工厂向外部 ERP 回传生产确认属于不可逆操作，因此车间产线 AI 智能助手生成的完工更正请求，必须在暂留队列中安全等待车间主任的人工复核批准方可正式回传。
+  - 若 AI 智能体的操作输入通过后台定时触发的自动化任务（如事件订阅者、计划定时作业）间接衍生触发效果，该衍生效果被系统判定为属于应用自身的既定业务逻辑，而非智能体当下的直接操作，因此不予挂起暂留。
+- 邮件外发自动化集成 (决策项 D7 第二期成果)：引入 `email` 类型的外部端点，代表标准 SMTP 邮件服务器，并包含发件人邮箱配置以及允许发送哪些业务应用通知的权限绑定。
+  - 发送给以 `user:<email>` 形式登录的合法成员的业务通知，直接在该通知产生的同一个输入上下文内部，自动化转换为出站邮件效果。其唯一效果 ID 直接作为邮件报文的 Message-ID，外部接收邮件服务器统一基于此标准头实施去重。
+  - 收到外部 SMTP 服务器返回的 4xx 临时错误自动纳入退避重试，收到 5xx 明确拒绝错误则立即将该效果标记为最终失败。
+  - 此类邮件服务严格限于向租户内部的合法成员外发通知。面向企业租户外部第三方的外发邮件，必须严格作为不可逆效果类别进行严密管控。
+- **被废弃丢弃的外部效果必须具备明确应答机制** (摩擦项 F-24，2026-09-27)：当某项外部效果被人工或系统显式废弃丢弃、或者其对应的目标端点被管理员彻底删除时，宿主必须在该决策生效的当下，通过 `Answerer` 接口向最初发射该效果的业务应用回传结果为 `discarded`（已废弃）的明确通知；例如客户服务应用 CSM 据此能够将被丢弃外发回复的工单自动平滑退回到待分诊状态，并及时向客服前台抛出告警提示 (`TestCSM`)。平台控制台排他锁当前仅严密守护人员组织目录，因此在外部效果决策生效的同时，允许直接依据角色定义并发向目标成员安全推送业务通知。
 
-## Done-when, for the implementation item that follows acceptance
+## 验收完成标准 (Done-when，指导本决策通过后的具体实现验收)
 
-A tenant administrator subscribes a webhook endpoint to the hotel's cancellation in Settings, and a cancellation reaches a test receiver signed and with its key.
+租户系统管理员在系统设置中心，将一个 Webhook 端点成功订阅至酒店管理应用的客房退订业务事件，随后发起一次退订操作，外部测试接收端必须成功收到包含合法数字签名与正确全局幂等键的 Webhook 报文。
 
-When the receiver fails:
-- the effect retries with backoff and shows its state;
-- after a restart it resends with the same key, and the receiver keeps one copy;
-- a replay of the journal makes no network call. A test's dialer fails the test if called during replay.
+当外部测试接收端人为模拟网络故障报错时：
+- 该外部效果能够严格遵循指数退避策略自动重试，并在系统管理控制台实时呈现其当前重试状态；
+- 在经历物理容器强行重启后，系统能够自动使用完全相同的原始幂等键继续发起重试，且外部接收端确保仅保留一份唯一记录；
+- 对租户历史日志执行确定性重放期间，系统**绝对不发起任何外部网络调用**。测试环境下的网络拨号器若在日志重放期间检测到任何外部连接请求，必须直接抛出异常导致自动化测试失败。
 
-A backup restore followed by a resend is deduplicated by the receiver.
+将灾备备份文件恢复至全新数据卷并随后触发系统网络补发时，外部测试接收端必须能够基于幂等键完美实现去重，不产生任何脏数据。

@@ -1,113 +1,112 @@
-# ADR-0027: One runtime for durable work
+# ADR-0027: 持久化作业统一运行时 —— 调度循环、并发通道与全链路可观测性
 
-**Status:** Accepted (2026-09-26, #120). The owner accepted D1–D7 as recommended ("同意"), including D5: the OpenTelemetry Go SDK and its OTLP exporters may be added.
+**状态：** 已采纳 (2026-09-26, #120)。业务负责人按推荐采纳了 D1–D7（“同意”），包含明确批准 D5：引入 OpenTelemetry Go SDK 及其官方 OTLP 导出器依赖。
 
-## Context
+## 背景
 
-What exists (`capabilities/server`):
-- **Five loops, five sets of rules.** `RunWork` (`deploy.go`) starts one goroutine that calls every tenant's `Work` (event deliveries and scheduled jobs, ADR-0013) and then `Dispatch` (outbound effects, ADR-0014) each second; a second one calls `Think` (agents' model calls, ADR-0021); a third calls `Evaluate`, `Embed` and `PurgeTranscripts` every five seconds. Flows take their timers through a job of the flow app every second (ADR-0020). ADR-0026's requests run inside the input and are not part of this.
-- **Retries differ by kind.** Deliveries retry four times with doubling backoff, then fail and wait for a person (`operations.go`, `maxAttempts`); effects retry by their own schedule until settled (`effects.go`); a flow's act retries by its token (`stepAttempts`); an agent's failed model call stops its run; embeddings and evaluations try again on the next tick.
-- **One slow destination holds everyone back.** `Dispatch` sends each tenant's due effects one after another, and tenants one after another, in one goroutine: an endpoint that takes the full 10-second timeout delays every other endpoint of every tenant in the process. `Think` does the same with model calls. Deliveries are ordered per subscribing app, so a failing head holds the app's whole queue for its retries (ADR-0014's open promise: "the ordered queue holds the rest behind a failing head").
-- **No fairness, few limits.** Tenants are served in a fixed order; a tenant with a burst of work takes the tick. The only quota is an agent's daily tokens (ADR-0015 batch 2 left quotas and rate limits open). `Journal.Append` holds one lock across every tenant (F-34).
-- **K9 is half used.** `Works` gives each attempt a generation (W1, W2); checkpoints (W1) are unused, so an embedding pass or an evaluation starts over after a restart.
-- **Little is observable.** Correlation IDs pass through protocol calls, requests and runs; connectors and endpoints have health. There are no traces, no metrics, and no health for apps, queues or the journal (ADR-0010's open promise). Logs are `log.Printf`.
+当前已具备的状态 (`capabilities/server`)：
+- **5 个独立的调度循环，各自为政维护 5 套调度规则：** `RunWork`（`deploy.go`）启动一个 Goroutine 每秒依次轮询调用各个租户的 `Work`（事件交付与定时作业，[ADR-0013](0013-platform-operations.md)）以及 `Dispatch`（出站外部效果，[ADR-0014](0014-outbound-effects.md)）；第二个 Goroutine 每秒调用 `Think`（智能代理大模型推理调度，[ADR-0021](0021-agents.md)）；第三个 Goroutine 每 5 秒轮询调用 `Evaluate`（客观评测）、`Embed`（向量嵌入）与 `PurgeTranscripts`（过期会话清理）。业务流则通过流程应用自有的定时作业每秒扫描推进计时器（[ADR-0020](0020-flows.md)）。[ADR-0026](0026-decisions-across-apps.md) 的出站请求在输入事务体内同步执行，不属于此类异步作业。
+- **重试机制按类型各自割裂：** 事件交付按指数退避策略重试 4 次，随后标记失败挂起等待人工干预（`operations.go` 中的 `maxAttempts`）；外部效果按其私有时间表持续重试直至终态（`effects.go`）；流程中的操作步骤按其令牌计数重试（`stepAttempts`）；代理大模型推理失败直接终止本次运行；向量计算与客观评测则在下一个 5 秒周期简单粗暴地重新尝试。
+- **单个缓慢的外部目的地拖垮全局：** `Dispatch` 在单个 Goroutine 中逐一串行发送各租户到期的外部效果，且各租户之间也是逐一串行处理：一旦某个外部端点耗尽 10 秒超时时间，将直接卡死进程中所有租户的全部外部通信。`Think` 在调用大模型时同样存在该串行瓶颈。事件交付按订阅应用强制保序，导致队列头部的单笔失败事件会将整个应用的后续事件队列全部死死堵死（[ADR-0014](0014-outbound-effects.md) 遗留的已知问题：“严格保序队列在头部失败时会导致后续积压”）。
+- **缺乏多租户公平调度，限流机制极其简陋：** 租户按固定硬编码顺序被调度；瞬间产生突发作业的租户会霸占整个周期的算力。全系统唯一的限额仅为代理的每日 Token 配额上限（[ADR-0015](0015-ai-providers.md) 第二批次遗留了配额与速率限制）。`Journal.Append` 在全局所有租户之间共享单一互斥锁（F-34）。
+- **内核 K9 规范仅被利用了一半：** `Works` 为每次作业尝试分配了世代标识（Generation，W1 与 W2 规范）；但检查点机制（Checkpoint，W1 规范）完全空置未用，导致向量嵌入或客观评测一旦遭遇服务重启只能从头重来。
+- **系统近乎处于可观测性盲盒状态：** 关联 ID（Correlation ID）虽然穿透了协议调用、出站请求与代理运行；连接器与外部端点具备简易健康状态检查。但全系统缺乏统一分布式追踪（Traces）、缺乏核心指标度量（Metrics），且业务应用、排队队列与核心日志缺少健康检查（[ADR-0010](0010-platform-host-and-apps.md) 遗留承诺）。日志依然停留在原始的 `log.Printf`。
 
-What the reference platforms do now:
+业界参考平台的做法：
 
-| | Work model | Retries and failure | Fairness and limits | Observability |
+| | 作业执行模型 | 重试与故障隔离 | 公平调度与资源限额 | 可观测性监控 |
 |---|---|---|---|---|
-| Temporal | Durable workflows and activities on task queues; timers and schedules are part of the history | Retry policy per activity (initial interval, backoff, maximum attempts); a failed workflow is visible and can be reset | Task queue priority (1–5) and fairness keys with weights, rate limits per queue and per fairness key, generally available since May 2026 ([changelog](https://temporal.io/changelog/priority-fairness-generally-available), [fairness](https://docs.temporal.io/develop/task-queue-priority-fairness)) | OpenTelemetry interceptors; per-queue metrics |
-| SAP (ABAP Cloud, BTP) | Background processing framework (bgPF) on bgRFC: transactional and queued background units, started after the LUW commits — SAP's transactional outbox ([bgPF](https://github.com/SAP-docs/btp-cloud-platform/blob/main/docs/30-development/background-processing-framework-0ad13bd.md), [outbox sample](https://github.com/SAP-samples/abap-platform-rap-transactional-outbox-with-bgpf)); application jobs from a job catalog | Automatic retries (bgPF up to three); failed units stay for monitoring | Queues serialise per queue name; system-wide limits | Cloud ALM, OpenTelemetry-based on BTP |
-| Salesforce Platform | Queueable, batch, scheduled and future Apex, platform events, Flow | Transaction finalizers on queueables; failed jobs in Apex Jobs | Per-org limits shared across all async kinds, 250,000 async executions per 24 hours ([Queueable Apex](https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_queueing_jobs.htm)) | Event Monitoring |
-| ServiceNow | Scheduled jobs, event queues, Flow Designer steps | Per-step error handling in flows | Semaphores and worker pools per node | Instance observability |
-| Odoo | `ir.cron` with triggers; OCA `queue_job` channels | Retry with delays on `queue_job` | Channel capacities | Logs |
-| OpenTelemetry | — | — | — | Traces, metrics and logs with a stable Go SDK; the GenAI conventions (model calls, agents, tools) are still "Development" in 2026 ([OpenTelemetry blog](https://opentelemetry.io/blog/2026/genai-observability/)) |
+| Temporal | 任务队列之上的持久化工作流与活动（Activities）；计时器与排期作为历史事件严格持久化 | 每个活动配置独立重试策略（初始间隔、退避倍数、最大重试次数）；失败工作流清晰可见且支持重置 | 任务队列优先级（1–5）与基于权重的公平调度键（Fairness keys），支持针对队列与公平键配置速率限额，2026年5月正式商用发布（[更新日志](https://temporal.io/changelog/priority-fairness-generally-available), [公平性机制文档](https://docs.temporal.io/develop/task-queue-priority-fairness)） | OpenTelemetry 拦截器深度集成；按队列输出细粒度监控指标 |
+| SAP (ABAP Cloud, BTP) | 基于 bgRFC 的后台处理框架（bgPF）：事务性与排队型后台单元，在 LUW 提交后正式启动 —— 即 SAP 的事务性发件箱（Transactional Outbox，[bgPF 文档](https://github.com/SAP-docs/btp-cloud-platform/blob/main/docs/30-development/background-processing-framework-0ad13bd.md), [发件箱范例](https://github.com/SAP-samples/abap-platform-rap-transactional-outbox-with-bgpf)）；基于作业目录管理应用作业 | 自动重试机制（bgPF 默认重试最多 3 次）；失败单元持久化保留供运维监控 | 队列按具名队列标识严格串行化；施加系统级资源配额上限 | Cloud ALM 平台监控，在 BTP 上深度对齐 OpenTelemetry 标准 |
+| Salesforce Platform | Queueable, Batch, Scheduled 以及 Future Apex 异步任务，平台事件，Flow | Queueable 支持事务终结器（Finalizers）；失败任务集中呈现于 Apex Jobs 管理台 | 全组织多租户共享全量异步资源限额，每 24 小时配额上限 250,000 次异步执行（[Queueable Apex 规范](https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_queueing_jobs.htm)） | 统一事件监控平台（Event Monitoring） |
+| ServiceNow | 定时作业、事件队列、Flow Designer 步骤 | 流程支持精细的单步错误异常处理分支 | 基于节点的信号量控制与 Worker 线程池隔离 | 实例级全方位可观测性监控 |
+| Odoo | 带有触发器的 `ir.cron`；社区 OCA `queue_job` 通道体系 | `queue_job` 支持带延时的优雅重试 | 按业务通道划分并发容量上限 | 基础日志监控 |
+| OpenTelemetry | — | — | — | 提供跨语言工业级标准的 Traces、Metrics 与 Logs Go SDK；其 GenAI 语义规范（大模型调用、智能代理、工具调用）在 2026 年处于“演进开发”阶段（[OpenTelemetry 官方博客](https://opentelemetry.io/blog/2026/genai-observability/)） |
 
-The OpenTelemetry GenAI status and the Salesforce limit are cited from search results; the other rows from each vendor's own pages.
+上表 OpenTelemetry GenAI 规范状态与 Salesforce 配额引自最新检索结果；其余各行均引自各厂商官方最新技术文档。
 
-They agree:
-1. **One kind of durable work with one retry policy type**, declared per kind of work; a failure is visible and retried by a person, never lost.
-2. **Order only where it matters**, by key (a workflow, a queue name, a partition), so one failing item holds back only what must come after it.
-3. **Fairness is explicit**: priorities, weights per customer, and rate limits per queue and per key. A shared platform limits every tenant, not only the biggest.
-4. **The outbox pattern**: work a decision causes starts after it commits, and runs apart from the request.
-5. **OpenTelemetry is the common way to see it**: traces across the steps a request causes, metrics for queues, and health.
+业界核心共识：
+1. **单一统一的持久化作业模型，搭配统一的重试策略类型：** 按作业类别进行声明式配置；失败任务清晰直观暴露，支持人工一键重试，绝不无声无息丢弃。
+2. **仅在有业务必要之处精准保序：** 基于业务键（工作流实例、队列名称、数据分区）精细保序，确保单笔失败作业仅阻塞与其直接依赖的后续作业，不蔓延干扰无关作业。
+3. **显式严密的公平调度机制：** 支持优先级调度、按客户分配计算权重，以及按队列和业务键实施速率配额限制。多租户平台必须保障所有租户的公平性，绝不偏袒大户。
+4. **事务性发件箱模式（Transactional Outbox）：** 决策引发的异步作业必须在决策正式提交后才允许启动，且生命周期与网络请求严格解耦。
+5. **OpenTelemetry 成为事实上的可观测性统一标准：** 跨越网络请求引发的全生命周期分布式追踪、队列深度监控指标以及健康检查。
 
-## Our constraints
+## 我们的架构约束
 
-- Replay never calls outside; the journal stays small enough to replay. Outcomes stay journaled as they are now (`delivery`, `job`, `effect`, `usage`, `agent` entries); a scheduler's timing is never part of the truth.
-- Decisions run under their tenant's lock and are short; slow I/O (effects, model calls, embeddings) runs outside it (ADR-0014, ADR-0021).
-- Rules and models stay typed code (ADR-0008); retry policies and weights are declarations, not configuration scripts.
-- No new dependency or download without the owner's approval.
-- No domain vocabulary in `contract/`; K9 stays the contract of work ownership.
+- 系统重放绝不发起外部网络调用；业务日志保持轻巧以确保重放极速。异步作业的执行结论继续原样持久化记入日志（`delivery`, `job`, `effect`, `usage`, `agent` 分录）；调度器的物理执行时序绝不属于核心真相的一部分。
+- 业务决策在租户互斥锁保护下快速执行并立即释放锁；耗时较长的外部 I/O 操作（外部效果、大模型调用、向量计算）严格置于互斥锁之外运行（[ADR-0014](0014-outbound-effects.md), [ADR-0021](0021-agents.md)）。
+- 业务规则与模型严格保留在类型化代码中（[ADR-0008](0008-packages-customization-and-callers.md)）；重试策略与调度权重属于静态声明，绝非运行时脚本。
+- 未经业务负责人批准，严禁引入任何新的外部依赖或下载。
+- 内核 `contract/` 绝不混入具体业务词汇；K9 牢固作为作业所有权（Work Ownership）的底层契约。
 
-## Design
+## 设计
 
-1. **One scheduler per host process.** Every piece of durable work is a work item: tenant, app, kind (delivery, job, effect, model call, agent turn, flow timer, embedding, evaluation, transcript purge), an ordering key, when it is due, its attempts, and its K9 generation. The five loops become kinds on it. The scheduler owns time (due items, timers, backoff); the host's code for each kind stays where it is and runs when the scheduler hands it an item.
-2. **Two lanes.** Items that decide something (deliveries, jobs, flow timers, agent steps once the model answered) take the tenant's lock briefly; items that wait on the outside (effects, model calls, embeddings) run on a bounded pool outside every lock, with a concurrency limit per destination. A slow endpoint then holds one worker, not the process.
-3. **Ordering by key.** A delivery is ordered per subscriber and record it concerns (the event's target); an effect per endpoint, as its receiver expects (ADR-0014 D2); a flow instance's timers per instance; an agent's turns per run. Items with different keys pass each other; a failing head holds only its key.
-4. **Fairness and quotas.** Due items are taken by weighted round robin: tenants first, then apps within a tenant, with equal weights unless a deployment sets them. Quotas per tenant and app — attempts per minute for each kind, and model tokens per day (ADR-0015 batch 2 joins here) — defer an item past its quota instead of failing it; the deferral is visible.
-5. **One retry policy type.** `platform.Retry{Initial, Max, Attempts, Age}` declared per kind by the host and per job or subscription by an app; after the last attempt the item fails, shows in Automation with why, and its app's owners get a task (as a failed flow step does, #118). A person retries it; a retried item starts a new generation (K9 W1).
-6. **Breakers per destination.** Each endpoint and each AI provider has a breaker: open after consecutive failures, half-open to probe, closed on success. While open, its items wait rather than burn attempts; Settings shows its state.
-7. **Checkpoints.** Long items (an embedding pass, an evaluation) save a K9 checkpoint in the derived store and resume from it after a restart (W1's resume point, unused until now).
-8. **The journal locks per tenant** (F-34): order is per tenant, so tenants append side by side.
-9. **Observability.** A trace follows a submission through its decision, its requests (ADR-0026), the deliveries it causes, the flow steps they take, and the effects and model calls they send; model calls carry the GenAI attributes. Metrics: queue depth and oldest item's age per tenant, app and kind; attempts, failures and deferrals; breaker states; journal append and replay latency. Health: `/healthz` for the process, and a tenant's health for administrators (apps, journal, queues, breakers, connectors, endpoints).
+1. **宿主进程级统一作业调度器（One scheduler）：** 每一项持久化作业统一抽象为标准作业项（Work Item）：包含租户 ID、所属应用、作业类型（事件交付、定时作业、外部效果、模型调用、代理轮次、流程计时器、向量嵌入、客观评测、会话清理）、保序业务键（Ordering Key）、到期执行时间、已重试次数以及内核 K9 世代标识。原先散落的 5 个调度循环统一收敛为该调度器下的不同作业类型。调度器统筹时间维度（到期计算、定时唤醒、退避间隔）；各业务类型的底层执行代码保留在原有领域内，在调度器派发作业项时触发执行。
+2. **双通道并发设计（Two lanes）：** 产生业务决策的作业项（事件交付、定时作业、流程计时器、以及模型返回后的代理推进步骤）短暂获取租户互斥锁快速执行；需要等待外部网络 I/O 的作业项（外部效果、大模型推理、向量嵌入）在容量受限的并发 Worker 线程池中彻底在锁外执行，并对每个外部目的地施加并发上限控制。单个缓慢的外部端点只会占用单个 Worker，绝不会卡死全局主进程。
+3. **基于业务键的精细保序：** 事件交付按订阅方与所关联的实体记录（事件的目标对象）联合保序；外部效果按目标端点保序，契合接收方的串行预期（[ADR-0014](0014-outbound-effects.md) D2）；流程计时器按流程实例保序；智能代理推进按运行实例保序。业务键不同的作业项相互并行飞越；某个键上的单笔失败仅挂起阻塞该业务键自身的后续任务。
+4. **公平调度与用量配额：** 到期作业项采用加权轮询算法（Weighted Round Robin）进行调度：先在租户维度轮询，随后在同一租户内的各应用间轮询，默认权重完全均等，除非部署配置显式调整。按租户及应用施加细粒度用量配额 —— 针对每种作业类别限制每分钟最大尝试次数，以及每日大模型 Token 配额（[ADR-0015](0015-ai-providers.md) 第二批次在此汇合）—— 突破配额的作业项自动平滑延期至下一分钟执行，而非简单报错丢弃；延期状态对管理员清晰可见。
+5. **统一规范的重试策略类型：** 提供强类型的 `platform.Retry{Initial, Max, Attempts, Age}` 结构体，由宿主按作业类别声明基准策略，由业务应用按作业或订阅声明覆盖策略；耗尽最后一次重试上限的作业项正式判定失败，在“自动化管理”界面中详尽呈现失败根因，并向所属应用的负责人派发待办任务（对标流程步骤失败的处置规范，#118）。人工可介入一键重试；被人工重试的作业项自动开启全新的 K9 世代（K9 W1 规范）。
+6. **面向外部目的地的智能熔断器（Breakers）：** 每个外部端点与每个 AI 提供商均配备专属熔断器：连续多次失败自动开启熔断并进入冷却（Open），冷却结束后允许单笔探查流量通过（Half-open），探查成功后自动恢复闭合（Closed）。在熔断开启期间，后续作业自动挂起等待而非盲目消耗宝贵的重试次数；系统设置直观展示熔断器当前状态。
+7. **长作业检查点机制（Checkpoints）：** 针对耗时较长的批处理作业（如全量向量重算、长序列客观评测），在派生存储中定期保存内核 K9 检查点，服务重启后直接从检查点断点续传（兑现此前一直闲置的 W1 断点恢复能力）。
+8. **按租户独立细粒度日志锁（F-34）：** 写入顺序严格在租户内部单调保序，因此不同租户之间的 `Journal.Append` 并发写入彻底解耦并行。
+9. **全方位立体可观测性体系：** 分布式追踪串联起业务提交提议、其派生的业务决策、出站请求（[ADR-0026](0026-decisions-across-apps.md)）、触发的事件交付、交付引发的流程流转，直至最终发出的外部效果与大模型调用；大模型调用精确携带官方 GenAI 语义属性。核心度量指标：按租户、应用与作业类别统计的队列深度与最老作业存活时长；作业尝试次数、失败次数与延期次数；熔断器实时状态；日志追加时延与重放时延。健康检查：面向进程的通用 `/healthz` 存活探针，以及面向租户管理员的深度业务健康诊断（覆盖业务应用、日志、作业队列、熔断器、连接器与外部端点）。
 
-## Decision points for the owner
+## 业务负责人的决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | The scheduler | (a) One scheduler in the host process, work items of every kind. (b) Temporal as an external engine. (c) Keep the loops and add fairness to each | **(a)**: our journal already is the history Temporal would keep, and replay depends on it; Temporal adds a service and a second source of truth. (c) keeps five sets of rules |
-| D2 | Ordering | (a) By key: subscriber and record, endpoint, instance, run. (b) Per subscriber and endpoint, as now | **(a)**: a failing item holds back only what depends on it, as every reference does |
-| D3 | Fairness and quotas | (a) Weighted round robin, tenants then apps, and quotas per tenant and app that defer. (b) Priorities only. (c) Limits only for AI | **(a)**: a shared host must be fair before it is fast (Temporal fairness keys, Salesforce per-org limits) |
-| D4 | Failure | (a) One retry policy type, breakers per destination, a failed item visible with a task to its app's owners. (b) Per-kind rules as now | **(a)** |
-| D5 | Observability library | (a) The OpenTelemetry Go SDK with the OTLP exporter (new dependencies: `go.opentelemetry.io/otel`, its SDK and OTLP exporters). (b) The host's own spans and counters in a JSON endpoint. (c) Logs only | **(a)**, **needs the owner's approval** of the dependency: it is the standard every reference and collector speaks; (b) would be an in-house format no tool reads |
-| D6 | Health | (a) `/healthz` for the process and a tenant's health for administrators. (b) Process only | **(a)** |
-| D7 | The journal's lock (F-34) | (a) Per tenant, in this gate. (b) Later | **(a)**: fairness between tenants stops at a global lock |
+| D1 | 调度器架构定位 | (a) 宿主进程内部实现统筹全类型作业的单一调度器。(b) 引入外部 Temporal 引擎。(c) 继续保留 5 个独立循环并各自打补丁增加公平调度 | **(a)**：我们的日志本身就是完备的真相历史，且日志重放强依赖于此；引入 Temporal 会增加沉重的外部服务组件与第二真相源。(c) 则使 5 套割裂的规则继续混乱共存 |
+| D2 | 异步作业保序机制 | (a) 基于细粒度业务键保序：订阅者+记录目标、端点、流程实例、代理运行。(b) 像现状一样按订阅者与端点粗粒度保序 | **(a)**：单笔失败作业仅阻塞有强依赖的后续任务，对标所有行业顶尖平台的标准做法 |
+| D3 | 公平调度与配额管理 | (a) 加权轮询调度（租户优先，随后应用），辅以支持优雅延期的租户与应用级细粒度配额。(b) 仅支持粗糙的优先级划分。(c) 仅针对 AI 模型调用施加限流 | **(a)**：多租户共享底座必须把公平性置于速度之前（对标 Temporal 公平调度键、Salesforce 单租户配额） |
+| D4 | 失败容灾与重试体系 | (a) 统一强类型的重试策略模型、面向外部目的地的智能熔断器、失败作业直观呈现并向应用负责人派发处理任务。(b) 维持按作业类别各行其是的现状 | **(a)** |
+| D5 | 可观测性类库选型 | (a) 引入官方 OpenTelemetry Go SDK 搭配 OTLP 导出器（引入新依赖：`go.opentelemetry.io/otel` 及其 SDK 和 OTLP 导出器）。(b) 宿主自行在内存中维护 Span 与计数器并通过 JSON 端点输出。(c) 仅输出文本日志 | **(a)**，**需要业务负责人批准引入依赖**：它是业界所有监控系统与采集器共同拥抱的唯一通用标准；(b) 则是没有任何外部工具能识别的封闭私有格式 |
+| D6 | 健康检查粒度 | (a) 面向容器进程的 `/healthz` 探针，搭配面向租户管理员的细粒度健康诊断。(b) 仅提供基础进程存活探针 | **(a)** |
+| D7 | 底层日志锁解耦 (F-34) | (a) 在本架构关卡中改造为按租户细粒度锁。(b) 后续再处理 | **(a)**：多租户之间的公平调度绝不能被一个粗暴的全局大锁彻底卡死 |
 
-Declined: a message broker (Kafka, NATS) for work between apps in one host — the journal and the scheduler are enough until tenants spread over processes (stage 9); distributed workers across processes (stage 9).
+明确暂缓实现（Declined）：在单宿主内为应用间通信引入 Kafka 或 NATS 等重型外部消息中间件 —— 在租户跨多进程分布式集群化部署（第九阶段）之前，现有日志与内置调度器已足够轻快强悍；跨进程分布式 Worker 同样归入第九阶段。
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 10a | The scheduler: work items, two lanes, ordering by key, fairness and quotas; deliveries, jobs and flow timers move onto it; the journal's lock per tenant | Tests: a failing subscriber holds only its key; a tenant flooding work does not delay another's due item beyond one round; quotas defer and show; `CheckReplay` of every composition; the rehearsal |
-| 10b | Effects, model calls, agent turns, embeddings and evaluations on the scheduler; the retry policy type; breakers per endpoint and provider; checkpoints for embeddings and evaluations; failed items give their owners a task | Tests: a failing endpoint no longer blocks another endpoint or tenant; an open breaker holds its items without burning attempts; an embedding pass resumes after a restart; proof in hospitality (webhooks, mail, CSM's agent) and manufacturing (the ERP adapter's effects, the plant's agent) |
-| 10c | OpenTelemetry traces and metrics (after D5), health endpoints, Settings showing queues and breakers | A trace follows a submission through a flow and an effect in a test exporter; metrics for queues and breakers; `/healthz`; the rehearsal checks health; the test routes walked |
+| 10a | 核心调度器落地：作业项统一建模、双通道架构、基于业务键保序、公平轮询与优雅延期配额；事件交付、定时作业与流程计时器全面接入；日志锁改造为按租户细粒度隔离 | 单元测试验证：失败的订阅者仅阻塞关联自身业务键的任务；遭遇海量突发作业洪峰的租户无法阻塞邻居租户作业跨轮次执行；超额配额自动延期并直观呈现；全量解决方案 `CheckReplay` 与部署演练稳定通过 |
+| 10b | 外部效果、模型调用、代理轮次、向量嵌入与客观评测接入统一调度器；落地统一重试策略规范；为外部端点与 AI 提供商引入智能熔断器；为向量与评测引入检查点机制；失败作业向负责人派发任务 | 单元测试验证：缓慢失败的端点不再卡死其它端点或其它租户；熔断器开启后自动挂起作业而不白白浪费重试次数；向量计算在服务重启后平稳断点续传；在酒旅（Webhook、邮件、CSM 代理）与制造（ERP 适配器效果、车间代理）两大场景完成端到端实证 |
+| 10c | OpenTelemetry 分布式追踪与监控指标（落实 D5）；健康检查端点；“系统设置”直观展示队列深度与熔断器状态 | 自动化测试验证单个 Trace 完整穿透提议提交、流程流转及最终触发的外部效果；队列与熔断器指标采集正常；`/healthz` 正常响应；部署演练健康自检通过；浏览器全路由走查通过 |
 
-## Consequences
+## 影响
 
-- One place decides when work runs, how often it retries and who goes next; kinds of work keep their own code.
-- A slow or failing destination costs its own items, not the process; one tenant cannot starve another.
-- Outcomes stay in the journal as today, so replay is unchanged; timing, breakers and quotas are volatile.
-- With D5, the platform speaks the observability standard; without it, 10c shrinks to health and counters.
+- 整个平台拥有了单一的权威中枢决定何时执行作业、重试几次以及谁优先执行；各业务领域继续保持各自原有的纯粹业务实现。
+- 缓慢或故障的外部目的地仅消耗其自身 Worker 槽位，绝不连累整体进程；任何单个租户绝无可能恶意饿死其它租户。
+- 业务执行结果像今天一样原样记入日志，系统重放逻辑保持百分之百不变；调度时序、熔断状态与瞬时配额纯属内存易失状态。
+- 采纳 D5 后，平台直接融入了国际工业级可观测性生态；若未采纳，10c 将回退为简易的自制计数器。
 
-## As built
+## 实际构建（As built）
 
-### 10a: rounds, ordering by key, quotas, the journal per tenant
+### 10a: 调度轮次、基于键保序、配额延期与租户日志锁解耦
 
-- **Rounds** (`operations.go`): `Tenant.Round(now, budget)` takes up to `budget` due items under the tenant's lock, one app after another from where the last round stopped — each app's first ready delivery, then due jobs (flow timers among them) — and says whether ready work remains. `Schedule(tenants, now, size, within)` (`deploy.go`) runs rounds of every tenant in turn, ten items each, until none has ready work or 900 ms are spent; `RunWork` calls it each second. `Tenant.Work` is rounds of one tenant, for tests.
-- **Ordering by key** (D2): `ready` is a subscriber's first due delivery that no earlier delivery about the same event target holds back. A failing delivery now holds back only its own target; replay finds a journaled attempt anywhere in the queue.
-- **Quotas** (D3): `Tenant.Quota` is the attempts each app may make in a minute; past it, the app's ready work waits for the next minute and `Tenant.Deferred` names it. Quotas and turns are volatile: replay runs what was recorded.
-- **The journal** (D7, F-34): `Journal.Append` holds a lock per tenant, so tenants append side by side.
-- **Proven:** `TestScheduler` (a failing delivery holds back only its target; a quiet tenant's delivery runs within the first round beside a burst of fifty; a quota of three defers the rest to the next minute; `CheckReplay`), `TestEventsAreOwnedWork` updated to the keyed order, every composition's tests, the rehearsal.
-- **Not yet (10b):** see 10b below. Deferral shows in Settings with 10c.
+- **公平调度轮次机制** (`operations.go`)：`Tenant.Round(now, budget)` 在租户互斥锁保护下最多摄取 `budget` 个到期作业项，从上一轮次停止的位置开始在各应用间公平轮转 —— 依次取出各应用的就绪事件交付，随后处理到期作业（含流程计时器）—— 并明确反馈当前是否仍有待处理积压。`Schedule(tenants, now, size, within)`（`deploy.go`）负责在所有租户之间依次轮转推进轮次，每批次摄取 10 个作业项，循环往复直至所有租户均无待处理任务或单次总耗时达到 900 毫秒上限；由 `RunWork` 负责每秒周期唤醒。`Tenant.Work` 封装单租户的调度轮次，专供自动化测试调用。
+- **基于业务键的精细保序 (D2)：** `ready` 状态精准定义为某订阅方首个到期、且前面没有任何针对**相同目标对象**的更早事件正在阻塞的交付任务。单笔失败的事件交付现在仅挂起阻塞针对该特定目标对象的后续事件；系统重放在队列的任意位置均能精准匹配并应用已持久化记录的执行尝试。
+- **配额与优雅延期 (D3)：** `Tenant.Quota` 定义每个应用每分钟允许执行的最大尝试次数上限；一旦突破限额，该应用已就绪的作业自动挂起等待进入下一分钟，并通过 `Tenant.Deferred` 明确标记。配额与调度轮次属于内存易失状态：系统重放严格重现历史日志中已发生的既定事实。
+- **租户独立日志锁 (D7, F-34)：** `Journal.Append` 彻底重构为按租户独立持有互斥锁，多租户之间的日志追加写入彻底实现无锁并发。
+- **经过全面验证：** `TestScheduler`（验证失败事件仅阻塞自身目标对象、在 50 笔并发洪峰冲击下安静租户的作业依然能在首轮立即得到调度、每分钟 3 次的配额限制成功将剩余任务平滑延期至下一分钟、`CheckReplay` 确定性重放校验）、`TestEventsAreOwnedWork` 适配全新的基于键保序逻辑、全量行业解决方案测试、本地部署演练一次性全绿。
+- **交由 10b 阶段构建的内容：** 见下文 10b。延期状态的界面呈现排在 10c 落地。
 
-### 10b: the I/O lane, breakers, one retry policy
+### 10b: 外部 I/O 独立通道、智能熔断器与统一重试规范
 
-- **The I/O lane** (`breakers.go`): work that waits on the outside runs on one bounded lane per process (sixteen at once), outside every tenant's lock. `Tenant.dispatches` gives each endpoint's due effect as a job, so endpoints are sent side by side and each keeps its order; `Tenant.turns` gives each agent's due turn as a job. `RunWork` hands every tenant's jobs to the lane each second and does not wait for them; the flags that kept an effect or a run from being taken twice (`sending`, `busy`) keep doing so. `Dispatch` and `Think` still run a tenant's jobs and wait, for tests.
-- **Breakers** (D4): one per endpoint (`endpoint:<id>`) and per AI provider (`ai:<provider>`). Five failures in a row open it for 30 seconds; then one probe goes through; a failed probe doubles the pause up to ten minutes; a success closes it. While it is open, an endpoint's effects wait without spending attempts, agents' runs on that provider wait, a member's chat is answered 503 at once, and embedding waits. For a model, only no answer, a rate limit or a server error counts as a failure. `Tenant.Breakers` lists them; breakers are volatile.
-- **One retry policy type** (`platform.Retry{Initial, Max, Attempts}`, `After`): deliveries use the host's (2 s doubling, five attempts) unless the subscriber declares `Manifest.Retry`; effects use theirs (5 s to an hour, twelve attempts, with jitter from the key). Flows keep retrying their acts by token (ADR-0020).
-- **What gives up is told**: a delivery or an effect that fails for good notifies the platform's administrators, keyed by the item, with where to retry it. A notification, not the task D4 named: a task needs a decision to belong to, and a failed attempt is not one; it replays the same way.
-- **Proven:** `TestIOLane` (a breaker's opening, probe, doubling and closing; a slow endpoint beside a fast one, sent side by side; the slow one's breaker and its failed effect told to the administrator), every composition's tests, the rehearsal.
-- **Not yet:** checkpoints — an embedding pass resumes by the vectors already stored, which serves; an evaluation starts over after a restart. Evaluations and embeddings keep their own five-second loop, now behind the breakers. Settings shows breakers and deferral with 10c.
+- **外部 I/O 专用通道** (`breakers.go`)：需要等待外部网络 I/O 的作业项统一运行在单进程共享的受限并发池中（容量上限为 16 个并发 Worker），彻底在所有租户的互斥锁之外运行。`Tenant.dispatches` 将各个端点到期的外部效果打包为异步 Job，使不同端点之间并发发送，而同一端点内部保持严格时序；`Tenant.turns` 将各个代理到期的执行轮次打包为异步 Job。`RunWork` 每秒将各租户的此类 Job 派发给 Worker 通道且不阻塞主线程；底层防止任务被重复拉取的原子标记（`sending`, `busy`）继续坚挺护航。`Dispatch` 与 `Think` 依然保留同步等待机制，专供自动化测试精准断言。
+- **智能熔断器体系 (D4)：** 每个外部端点（`endpoint:<id>`）与每个 AI 提供商（`ai:<provider>`）均配备专属熔断器。连续遭遇 5 次失败自动触发熔断并冷却暂停 30 秒；冷却结束后放行单笔探查流量；若探查再次失败，冷却时间按指数翻倍递增直至最长 10 分钟；一旦成功则立即恢复闭合。在熔断器开启期间，归属于该端点的外部效果平稳挂起而不白白消耗重试次数，依赖该提供商的代理运行平稳等待，普通成员发起的在线对话即刻返回 503 明确告知原因，向量嵌入任务同样平稳排队。针对 AI 模型，只有超时无响应、命中速率限流或服务报错才计入熔断失败。`Tenant.Breakers` 提供熔断器状态查询；熔断器纯属内存易失状态。
+- **统一规范的重试策略类型：** 引入 `platform.Retry{Initial, Max, Attempts}` 与 `After` 计算逻辑：事件交付默认采用宿主基准策略（2 秒起步、指数翻倍、最多 5 次），除非订阅方在 `Manifest.Retry` 中显式声明自定义策略；外部效果采用专属策略（5 秒至 1 小时、最多 12 次、基于业务键计算抖动 Jitter）。业务流继续基于令牌机制推进其内部步骤重试（[ADR-0020](0020-flows.md)）。
+- **终态失败告警通知：** 彻底耗尽重试次数最终放弃的事件交付或外部效果，自动向平台管理员发送系统告警通知，通知绑定该失败项并提供人工一键重试入口。此处最终采用系统通知而非 D4 最初提议的人工任务：因为工单任务在平台模型中必须依附于某项具体的业务决策，而单次底层的重试尝试并不属于业务决策；且采用通知机制能使日志重放保持百分之百吻合。
+- **经过全面验证：** `TestIOLane`（熔断器触发开启、探查放行、失败翻倍惩罚以及最终成功闭合的全生命周期流转；缓慢外部端点与极速外部端点并发分发且互不干扰；缓慢端点触发熔断及其彻底失败后的管理员告警通知）、全量行业解决方案测试、本地部署演练平稳通过。
+- **暂未构建：** 检查点断点续传 —— 向量重算目前依赖数据库中已持久化的向量记录即可实现天然幂等跳过，已完全满足生产需求；客观评测在服务重启后暂时从头重跑。客观评测与向量嵌入继续保留其专属的 5 秒调度循环，统一置于熔断器保护之下。“系统设置”中的熔断器与延期状态展示排在 10c 落地。
 
-### 10c: OpenTelemetry and health
+### 10c: OpenTelemetry 全链路追踪与立体健康监控
 
-- **Traces** (`telemetry.go`, the OpenTelemetry Go SDK the owner approved): a submission and a connector input start a span; the requests they cause (ADR-0026), the deliveries of their events (which continue the input's trace from the span kept on the queued event), the flow steps and decisions inside a delivery, and the attempts of the effects they cause (from the span kept on the effect) are its descendants. A model call is a span with the GenAI attributes (`gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, token usage). Replay makes no spans; jobs make none either, as the flow timers run every second.
-- **Metrics**: attempts and failures of owned work per tenant, app and kind; journal append latency; gauges of queue depth and the oldest item's age per tenant and app, work that gave up, and open breakers.
-- **Export**: with `OTEL_EXPORTER_OTLP_ENDPOINT` (or the traces one) set, a host exports both over OTLP/HTTP with its binary's name as `service.name`, and flushes at shutdown; without it OpenTelemetry's no-ops cost nothing.
-- **Health** (D6, `health.go`): `GET /healthz` says the process is alive and how many tenants it holds; the administrators' read `/v1/health` (`TenantHealth`) gives queues, work that gave up, apps past their quota, breakers, and failing connectors and endpoints, and is `degraded` when any needs attention. Settings → Automation shows it.
-- **Proven:** `TestTraceFollowsWork` (a submission, the delivery that starts a flow, and the attempt of the effect its step causes are one trace, each the child of the one before, with tenant and outcome), `TestIOLane` (health degraded by an open breaker), the rehearsal (`/healthz` of both hosts, the plant's tenant health), every Settings area built.
-- **A correction:** `scripts/verify.sh` ran only its first argument, so `verify.sh ci deploy` skipped the rehearsal after the #113 close, 10a and 10b, though they were reported as rehearsed. It now runs every step it is given; the rehearsal ran after 10c, with all of them in, and passed.
-- **Not yet:** spans for jobs that act, and for a member's HTTP request as a whole; the GenAI conventions are still "Development" upstream and may rename attributes.
-
+- **分布式追踪（Traces）：** 在 `telemetry.go` 中完整集成了业务负责人批准的 OpenTelemetry Go SDK：业务提议提交与连接器输入开启顶级根 Span；随后引发的跨应用请求（[ADR-0026](0026-decisions-across-apps.md)）、事件交付（通过队列事件上携带的 Span 上下文无缝向下透传延续）、事件内部驱动的流程流转与业务决策，以及由此引发的外部效果发送尝试（通过效果上携带的 Span 上下文无缝透传）均作为严格的子代 Span 挂载。大模型调用生成专属 Span 并精准携带官方 GenAI 语义属性（`gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, Token 消耗统计）。系统重放期间完全不产生任何 Span；定时作业由于每秒高频扫描，同样不产生多余 Span。
+- **核心度量指标（Metrics）：** 按租户、应用与作业类别统计持久化作业的尝试次数与失败次数；统计核心日志追加写入时延；以 Gauge 指标暴露各租户及应用的队列排队深度、最老作业存活时长、彻底放弃的作业数量以及当前处于开启状态的熔断器数量。
+- **标准化数据导出：** 只要配置了环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT`（或追踪专属端点配置），宿主自动通过 OTLP/HTTP 协议向外部采集器批量推送监控数据，将二进制进程名作为 `service.name` 注册，并在服务正常停机时执行安全 Flush 刷盘；在未配置环境变量时，OpenTelemetry 原生 No-op 空实现带来绝对零性能损耗。
+- **立体健康诊断体系 (D6, `health.go`)：** 暴露面向容器存活探针的 `GET /healthz`，直观返回进程存活状态以及当前承载的租户总数；面向管理员暴露深度诊断端点 `/v1/health`（`TenantHealth`），详尽反馈作业队列状态、彻底放弃的作业列表、突破限额的应用清单、熔断器实时状态以及发生故障的连接器与外部端点，一旦发现任何异常立即判定为 `degraded` 亚健康状态。统一工作空间在“系统设置” → “自动化管理”中提供专属可视化健康大盘。
+- **经过全面验证：** `TestTraceFollowsWork`（单笔提交、触发流程的事件交付、以及流程步骤引发的外部效果尝试成功串联为单条完整的 Trace 树，父子关系丝毫不差，精准记录租户与执行结果）、`TestIOLane`（验证熔断器开启准确使健康状态降级为 degraded）、本地部署演练（全面检查两个宿主的 `/healthz` 以及工厂租户的深度健康状态）、“系统设置”所有新增管理视图在浏览器中验证无误。
+- **自动化测试脚本修正：** 排查发现 `scripts/verify.sh` 此前仅执行其传入的第一个参数，导致 `verify.sh ci deploy` 曾在 #113、10a 与 10b 阶段跳过了部署演练，尽管此前曾误报为已演练通过。现已修复脚本确保传入的每个指令均严格按序执行；10c 构建完成后全套部署演练完整执行并稳定通过。
+- **暂未构建：** 针对包含实质动作的定时作业生成 Span、针对普通成员的整笔 HTTP 请求生命周期生成顶级 Span；上游 OpenTelemetry 社区的 GenAI 语义规范目前仍处于“演进开发”阶段，后续可能微调属性名称。

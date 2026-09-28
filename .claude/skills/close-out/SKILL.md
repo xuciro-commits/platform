@@ -1,47 +1,47 @@
 ---
 name: close-out
-description: Finish a batch of platform work — checks, documents and commit together. Use before committing any change that adds or changes a capability, a journal entry kind, an endpoint, a platform app, a reference app or a test route (AGENTS.md rule 8).
+description: 完成一个平台工作批次——检查、文档与提交合一。在提交任何新增或修改能力、日志分录类别、服务端点、平台应用、参考应用或测试路由的变更前使用 (AGENTS.md 规则 8)。
 ---
 
-# Close out a batch
+# 完成工作批次 (Close out a batch)
 
-A batch is done when its checks pass and its documents say what now exists, in the same commit.
+在同一个提交中，当所有自动化检查通过且文档完整说明当前存在的内容时，一个工作批次才宣告完成。
 
-Read the batch against `docs/Intent.md` → `docs/Platform.md` §10 → `docs/WorkQueue.md`. Keep current capability evidence separate from the target architecture, builder journey and roadmap. A design-only batch may establish an accepted direction; it must not report future runtime or builder capabilities as built.
+对照 `docs/Intent.md` → `docs/Platform.md` §10 → `docs/WorkQueue.md` 审查该批次。将当前能力证据与目标架构、构建者旅程及路线图严格区分开来。纯设计性质的批次可以确立一个被接受的方向；但绝不能把未来的运行时或构建器能力谎报为已构建完毕。
 
-## 1. Checks
+## 1. 验证检查
 
-- Run `scripts/verify.sh <step>` for every step the batch touched (see AGENTS.md "Verify"); `capabilities` whenever `capabilities/server` changed, `composition` whenever an app or protocol did, `web` whenever `web/` did.
-- A new journal entry kind or field: its row in `docs/Platform.md` §2.7, and `CheckReplay` covering it in a composition's tests.
-- For frontend or builder work, verify the complete task named by Platform §10.6 and the work item: representative data, permissions, error/recovery states, visual and keyboard behavior. A component export, generated page or passing unit test alone does not establish product acceptance. Do not claim visual approval the owner has not given.
-- For documentation-only changes, check links, references, decision status and consistency with current code; report that runtime tests were not run if they were not applicable. Validate changed skills with the skill-creator validator when available.
-- Report exactly what ran and what did not (Swift, Docker, the browser). A pass on an earlier tree is not evidence.
+- 针对该批次触及的所有步骤运行 `scripts/verify.sh <step>`（见 AGENTS.md “验证命令”）；凡变更 `capabilities/server` 必跑 `capabilities`，凡变更应用或协议必跑 `composition`，凡变更 `web/` 必跑 `web`。
+- 新增日志分录类别或字段：在 `docs/Platform.md` §2.7 中增补对应行，并在解决方案编排测试中补充覆盖它的 `CheckReplay`。
+- 针对前端或构建器工作，验证 Platform §10.6 与工作项指明的完整任务：代表性业务数据、权限控制、错误与故障恢复状态、视觉呈现与全键盘操作行为。仅仅导出了组件、拥有自动生成页面或通过了单元测试，绝不等于产品验收通过。切勿擅自宣称负责人尚未给出的视觉认可。
+- 对于纯文档类变更，检查链接、引用、决策状态以及与当前代码的一致性；若不适用运行时测试，需如实说明未运行测试。若有条件，通过技能校验工具验证变更的技能文件。
+- 如实报告执行了哪些检查、未执行哪些检查（Swift、Docker、真实浏览器）。在早期旧代码树上的测试通过不能作为当前证据。
 
-## 2. Documents (one home per fact)
+## 2. 文档同步（每项事实唯一归宿）
 
-| What changed | Where it goes |
+| 变更内容 | 归宿位置 |
 |---|---|
-| What was built, where, proven by which tests, what is not yet | The ADR's "As built" |
-| A capability now exists or changed | `docs/Platform.md` §2.4 (the capability map); reconcile any conflicting current-state claim, retaining the date and scope of §10.2 audit evidence |
-| Product direction, target architecture, builder journey or annual acceptance changed | `docs/Intent.md` and the corresponding part of `docs/Platform.md` §10; an ADR for decisions with lasting cost. Targets remain targets until supported by implementation and verification |
-| A promise of an accepted ADR is now built, or newly partial | `docs/Platform.md` §2.9 |
-| A new term, or a new owner of data | `docs/Platform.md` §2.5 and §2.3 |
-| Something a person can try | A route in `docs/Testing.md` (in Chinese, like the rest of it), walked in the UI first; addresses, accounts and settings in `deploy/local/README.md`. Future acceptance scenarios stay explicitly planned until built and walked |
-| A builder can now execute a new authoring or release path | `docs/Apps.md`, with observed prerequisites, commands or UI steps and current limits; keep future paths in Platform §10.4 |
-| A new directory, platform app or skill | The map in `AGENTS.md` |
-| The item's state | `docs/WorkQueue.md`; delete the item when done |
-| Friction found on the way | An `F-n` row in `docs/WorkQueue.md` |
-| A type or route the host answers with | `go run ./cmd/api-types` in `capabilities/server` (`TestAPIContract` fails on a stale `host.ts`); a new route is declared with its `Route` |
-| A new title, description, choice or UI word | Its Chinese in the app's `i18n/zh-CN.json` or the package's `i18n.ts` (AGENTS.md rule 10; `TestChinese`, `TestLanguages` and the kit's i18n test fail otherwise) |
+| 构建了什么、代码位置、由哪些测试证明、尚缺失什么 | 对应 ADR 的“实际构建 (As built)”节 |
+| 某项能力现已存在或发生变更 | `docs/Platform.md` §2.4（能力地图）；调和任何冲突的现状宣称，保留 §10.2 审计证据的日期与范畴 |
+| 产品战略方向、目标架构、构建者旅程或年度验收标准发生变更 | `docs/Intent.md` 以及 `docs/Platform.md` §10 的对应章节；对于具有持久成本的决策撰写 ADR。在获得实现与测试支持前，目标始终保持为目标 |
+| 已接受 ADR 的承诺现已构建完成，或成为最新部分完成 | `docs/Platform.md` §2.9 |
+| 新术语，或数据的新归属方 | `docs/Platform.md` §2.5 与 §2.3 |
+| 人类可实际上手体验的操作 | `docs/Testing.md` 中的测试路由（使用中文，与全文保持一致），先在 UI 中实际走通；地址、账号与配置写入 `deploy/local/README.md`。未来的验收场景在实际构建并人工走通前保持显式规划状态 |
+| 构建者现可执行全新的编写或发布路径 | `docs/Apps.md`，记录观察到的前置条件、命令或 UI 操作步骤及当前限制；未来路径保留在 Platform §10.4 |
+| 新目录、新平台应用或新技能 | `AGENTS.md` 中的地图导航表 |
+| 该工作项的即时推进状态 | `docs/WorkQueue.md`；任务完成后删除条目 |
+| 推进过程中发现的新摩擦力 | `docs/WorkQueue.md` 中的 `F-n` 行 |
+| 宿主应答的新类型或新路由 | 在 `capabilities/server` 运行 `go run ./cmd/api-types`（`host.ts` 陈旧会导致 `TestAPIContract` 失败）；新路由需通过其 `Route` 完成声明 |
+| 新增标题、描述、选项或 UI 词汇 | 在应用的 `i18n/zh-CN.json` 或 UI 包的 `src/i18n.ts` 中补充中文翻译（AGENTS.md 规则 10；缺失会导致 `TestChinese`、`TestLanguages` 及 UI 库 i18n 测试失败） |
 
-Then search the docs and agent instructions for the capability's name and fix stale guidance: `rg -n "<name>" docs AGENTS.md .claude/skills deploy/local/README.md`. Preserve historical ADR decisions and mark what supersedes them rather than rewriting history as if the new capability already existed.
+随后在技术文档与智能体指令中全文检索该能力的名称并修正陈旧指引：`rg -n "<name>" docs AGENTS.md .claude/skills deploy/local/README.md`。完整保留历史 ADR 决策并标明取代关系，绝不可通过重写历史伪装成该能力早已存在。
 
-## 3. Commit
+## 3. 代码提交
 
-- One imperative sentence of what changed, with the ADR and item in parentheses (AGENTS.md rule 9).
-- Push to the working branch.
-- Honor the task's delivery scope: if the owner requested a reviewable document change or explicitly excluded commit/push, leave the changes available for review and report that state.
+- 提交信息必须为单句祈使句说明变更内容，并在括号中注明 ADR 和工作项编号（AGENTS.md 规则 9）。
+- 推送至当前工作分支。
+- 严格遵循任务的交付范围约定：若负责人要求提供可审查的文档变更或明确排除了提交/推送，保留变更供负责人审查并如实汇报该状态。
 
-## 4. Report
+## 4. 汇报总结
 
-What was built; what was verified and how; what was not; which test-guide route the owner should walk.
+汇报构建了什么；验证了什么以及如何验证的；哪些内容未作验证；负责人应亲自走通测试指南中的哪条路由。

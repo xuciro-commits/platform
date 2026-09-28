@@ -1,78 +1,78 @@
-# ADR-0035: A composed page is a layout of bound widgets
+# ADR-0035: 组合页面是绑定部件的布局
 
-**Status:** Accepted (2026-09-27, #132/#123). The owner set the benchmark: the builder is measured against Palantir **Workshop**, whose strength is the editing surface itself, and asked that the layout model be built now rather than deferred, borrowing from what good products do. D1–D5 are accepted as recommended.
+**状态：** 已接受 (2026-09-27, #132/#123)。项目负责人树立了标杆：构建器以 Palantir **Workshop** 为对标基准（其强项在于编辑界面本身），并要求布局模型现在就构建而不是推迟，借鉴优秀产品的做法。D1–D5 按推荐方案接受。
 
-## Context
+## 背景
 
-ADR-0034 gave a tenant objects and, in 15b, pages: one object, a list, a detail, some actions, composed by typing field names. That is a bounded form, not a builder. A person building an operational screen wants to say what goes where: a table beside a chart, a summary under it, the buttons that act on what is selected.
+ADR-0034 赋予了租户对象，并在 15b 中赋予了页面：一个对象、一个列表、一个详情、若干动作，通过手动输入字段名进行组合。那只是一个受限的表单，并不是构建器。构建业务操作屏幕的人希望能够指明什么放在哪里：图表旁边的表格、其下方的摘要、对所选项进行操作的按钮。
 
-What exists to build on: the record store and its scoped reads, generated forms, aggregates (ADR-0019) with the kit's `Chart` and its `ChartSpec`, the action catalog, the definition registry (ADR-0032) and `PageWorkspace`, and the kit's list, record page, table, tags and form primitives.
+已有可供构建的基础：记录存储及其具作用域的读取、生成的表单、聚合（ADR-0019）以及 UI 套件的 `Chart` 和 `ChartSpec`、动作目录、定义注册表（ADR-0032）与 `PageWorkspace`，以及 UI 套件的列表、记录页面、表格、标签与表单原语。
 
-| Current reference evidence (Palantir Workshop, consulted 2026-09-27) | What we take |
+| 当前参考依据 (Palantir Workshop, 2026-09-27 调研) | 我们借鉴的内容 |
 |---|---|
-| [Layouts](https://www.palantir.com/docs/foundry/workshop/concepts-layouts): a module has a header, **pages**, **sections** and overlays; sections subdivide a page and carry one or more widgets or a nested layout, with layout types Columns, Rows, Tabs, Flow, Toolbar and Loop; builders edit through a **Layout** panel with add, cut, copy and paste. | Pages made of sections, edited in a layout panel. We start with one widget per section and a width, not nested layouts, tabs, loops or overlays. |
-| [Widgets](https://www.palantir.com/docs/foundry/workshop/concepts-widgets): widgets are the building blocks; commonly the **Object Table**, **Filter List** and **Button Group**; each is configured with **input and output variables**, display options and Actions; display sizing is Auto, Absolute or Flex. | A small set of widgets, each configured against our own semantics, and a widget that outputs what is selected for others to read. |
-| [Variables](https://www.palantir.com/docs/foundry/workshop/concepts-variables): variables carry object sets and selections between widgets, with a variables panel and a lineage graph. | One page-level selection to begin with — the record a table outputs and a detail or buttons read. Named variables, filters and lineage come later. |
+| [布局 (Layouts)](https://www.palantir.com/docs/foundry/workshop/concepts-layouts)：模块拥有页眉、**页面 (pages)**、**区块 (sections)** 和覆盖层 (overlays)；区块细分页面并承载一个或多个部件或嵌套布局，布局类型包括 Columns、Rows、Tabs、Flow、Toolbar 和 Loop；构建者通过带有添加、剪切、复制和粘贴功能的 **Layout** 面板进行编辑。 | 由区块构成的页面，在布局面板中编辑。我们从每个区块一个部件和宽度开始，暂不支持嵌套布局、标签页、循环或覆盖层。 |
+| [部件 (Widgets)](https://www.palantir.com/docs/foundry/workshop/concepts-widgets)：部件是基本构建块；常见的是 **Object Table**、**Filter List** 和 **Button Group**；每个部件都配置有**输入和输出变量**、显示选项和 Actions；显示尺寸调整包括 Auto、Absolute 或 Flex。 | 一组小型部件，每个部件均针对我们自己的语义进行配置，并且部件可以输出所选内容供其他部件读取。 |
+| [变量 (Variables)](https://www.palantir.com/docs/foundry/workshop/concepts-variables)：变量在部件之间传递对象集和所选内容，配有变量面板和沿革血缘图 (lineage graph)。 | 从单一页面级选中项开始——表格输出的记录，由详情或按钮读取。具名变量、过滤器和血缘关系后续提供。 |
 
-The owner added the frontend benchmark on the same day, after seeing the first editor: **Retool and Appsmith** are the reference for how building should feel — [Retool's IDE](https://docs.retool.com/apps/concepts/ide) puts a component palette on the left, the canvas in the middle and the inspector on the right, and [Appsmith](https://docs.appsmith.com/core-concepts/building-ui/dynamic-ui) shows a widget's whole configuration in one property pane — while Workshop is the reference for what a widget is bound to. Platform.md §10.1 and AGENTS.md rule 5 carry that direction beyond this ADR.
+项目负责人在看到第一个编辑器后于当天补充了前端对标基准：**Retool 和 Appsmith** 是构建体验的参考——[Retool 的 IDE](https://docs.retool.com/apps/concepts/ide) 将组件面板放在左侧，画布在中间，检查器在右侧，而 [Appsmith](https://docs.appsmith.com/core-concepts/building-ui/dynamic-ui) 在单一属性窗格中展示部件的全部配置——而 Workshop 则是部件所绑定内容的参考。Platform.md §10.1 和 AGENTS.md 规则 5 将这一方向延伸至本 ADR 之外。
 
-Workshop is the shape to learn from, not a product to clone: its object sets, variable graph, overlays and function-backed widgets rest on years of Foundry semantics. The honest first step is the layout and the binding, on the capabilities this platform can already answer for.
+Workshop 是值得借鉴的形态，而不是克隆的产品：其对象集、变量图、覆盖层和基于函数的数据部件依赖于 Foundry 多年的语义积累。务实的第一步是立足于本平台已能完全负责的能力，构建布局与绑定机制。
 
-## Our constraints
+## 我们的约束
 
-- A widget renders through the kit's owners (rule 11): the records list, the record page, the action catalog, the aggregate chart. A widget kind that needs a new component extends the kit, and no app draws its own.
-- A composed page grants nothing. Every read and action inside it is the member's own, checked when it runs; the page only says what to show.
-- A definition is typed data validated when it is published, never code the tenant supplies.
-- What the registry offers must open: a section naming a field, action or measure that is not there is refused at publication, with the reason.
-- The editor is the platform's, in the builder app's UI, built from kit components.
+- 部件通过 UI 套件的所属主件进行渲染（规则 11）：记录列表、记录页面、动作目录、聚合图表。需要新组件的部件类型会扩展 UI 套件，任何应用不得自行绘制。
+- 组合页面不赋予任何权限。其内部的每一次读取和动作都是成员自身的，并在运行时进行检查；页面只负责说明展示什么。
+- 定义是在发布时校验的具类型数据，绝不是租户提供的代码。
+- 注册表提供的内容必须能够打开：如果区块指名了不存在的字段、动作或度量，在发布时会被拒绝，并说明原因。
+- 编辑器属于平台本身，位于构建器应用的 UI 中，由 UI 套件组件构建。
 
-## Design
+## 设计
 
-1. **Sections and widgets.** `platform.Page` gains `Sections []Section`; a page with sections has layout `composed`, and the earlier `list-detail` page stays as the shorthand a code page and a defined object's page use. A `Section` names its widget, an optional title, a width (`full` or `half`, in the order they are laid out), and the binding that widget needs.
-2. **The first widgets**, each backed by an owner that already exists: `table` (the object's records, the fields chosen; Workshop's Object Table), `detail` (the selected record's fields; its Object View), `actions` (buttons for chosen actions on the selection; its Button Group), `chart` (an aggregate grouped by a field and measured, drawn by the kit's `Chart`), `metric` (one measure as a number), and `text` (words the builder writes). Later widgets — filters, a form, a timeline, a map — are added as the platform owns them.
-3. **One selection, output and read.** A `table` outputs the record a person selects; `detail` and `actions` read it. That is Workshop's input/output variable at its smallest honest size. Named variables, filters between widgets and cross-page navigation come with #132's later batches, not now.
-4. **The editor is Workshop-shaped**: a layout panel listing the sections with add, move and remove; a canvas showing the page with real data as it is being built; a panel configuring the selected widget. Saving writes the page's record through its own action; publishing installs it, checked by the host as in ADR-0034.
-5. **What is not promised here**: nested layouts, tabs, overlays, loops, absolute sizing, module headers, variable lineage, custom widgets, function-backed data, and any tenant-supplied code. Each stays a named absence rather than a half-built imitation.
+1. **区块与部件。** `platform.Page` 获得 `Sections []Section`；包含区块的页面其布局为 `composed`，之前的 `list-detail` 页面仍保留为代码页面与已定义对象页面使用的简写。`Section` 指明其部件、可选标题、宽度（`full` 或 `half`，按排布顺序排列）以及该部件所需的绑定。
+2. **首批部件**，每个部件均由已存在的所属主件支持：`table`（对象的记录、所选字段；对应 Workshop 的 Object Table）、`detail`（所选记录的字段；对应其 Object View）、`actions`（针对选中项所选动作的按钮；对应其 Button Group）、`chart`（按字段分组并计量的聚合，由 UI 套件的 `Chart` 绘制）、`metric`（作为单一数值的度量指标）和 `text`（构建者编写的文字）。后续部件——过滤器、表单、时间线、地图——将在平台具备其归属时逐步添加。
+3. **单项选择、输出与读取。** `table` 输出人员选择的记录；`detail` 和 `actions` 读取它。这是 Workshop 输入/输出变量最小巧且务实的形态。具名变量、部件间的过滤器以及跨页面导航将随 #132 的后续批次提供，而非现在。
+4. **编辑器采用 Workshop 形态**：布局面板列出区块，支持添加、移动和删除；画布在构建时展示带有真实数据的页面；右侧面板配置所选部件。保存会通过页面自身的动作写入记录；发布则由宿主进行检查并安装，如 ADR-0034 所述。
+5. **本阶段不承诺的内容**：嵌套布局、标签页、覆盖层、循环、绝对尺寸、模块页眉、变量血缘、自定义部件、函数支持的数据，以及任何租户提供的代码。每一项均保留为指名的空缺，而非半成品的模仿。
 
-## Decision points for the owner
+## 负责人决策点
 
-| # | Question | Options | Recommendation |
+| # | 问题 | 选项 | 推荐方案 |
 |---|---|---|---|
-| D1 | Do we build the layout model now or after actions and permissions? | Now, as the owner directed; or after 15c. | Now. The builder is judged by its editing surface, and every later capability (filters, forms, AI widgets) hangs off the section model. |
-| D2 | How much of Workshop's layout do we take in the first slice? | Sections with one widget and a width; or nested layouts with tabs, loops and overlays. | Sections with a width. Nesting is where a layout editor becomes a product of its own; it can be added once the widget set earns it. |
-| D3 | How do widgets share what is selected? | One page selection a table outputs and others read; or named variables with a lineage graph. | One selection now. Named variables need a type model and a debugger to be worth anything. |
-| D4 | Where does a widget's rendering live? | The UI kit and `@platform/app`, one component per widget kind; or in the builder app. | The kit and `@platform/app`. A code page must be able to use the same widgets. |
-| D5 | Is the canvas live or sampled? | Live records with actions disabled while editing; or the sample-data preview of ADR-0032 13b. | Live with actions disabled. A builder needs to see the real shape of their data; ADR-0034's isolation questions belong to #135, not to a read-only canvas. |
+| D1 | 我们是现在构建布局模型，还是在动作和权限之后构建？ | 按照负责人的指示，现在构建；或在 15c 之后构建。 | 现在构建。构建器取决于其编辑界面，后续所有能力（过滤器、表单、AI 部件）都挂靠在区块模型之上。 |
+| D2 | 在第一批切片中我们采纳多少 Workshop 的布局能力？ | 带有单一部件和宽度的区块；或带有标签页、循环和覆盖层的嵌套布局。 | 带有宽度的区块。嵌套是布局编辑器自成独立体系之处；一旦部件集合发展成熟，即可追加支持。 |
+| D3 | 部件之间如何共享所选项？ | 由表格输出且其他部件读取的单一页面选中项；或带有血缘图的具名变量。 | 目前采用单一选中项。具名变量需要类型模型和调试器才有实际价值。 |
+| D4 | 部件的渲染逻辑驻留在何处？ | UI 套件和 `@platform/app`，每种部件类型一个组件；或在构建器应用中。 | UI 套件和 `@platform/app`。代码页面必须能够使用相同的部件。 |
+| D5 | 画布是实时的还是样例数据的？ | 实时记录，编辑期间动作处于禁用状态；或 ADR-0032 13b 的样例数据预览。 | 带有禁用动作的实时数据。构建者需要看到数据的真实形态；ADR-0034 的隔离问题属于 #135，而不属于只读画布。 |
 
-## Build items after the decisions
+## 决策后的构建项
 
-| Batch | Item | Done when |
+| 批次 | 事项 | 完成标志 |
 |---|---|---|
-| 16a | The section model, the six widgets, publication checks, the composed renderer and the Workshop-shaped editor | A person composes a page of several widgets over a real object in the workspace, sees it with real data while composing, publishes it, and uses it: selecting a row fills the detail and arms the actions. Invalid bindings are refused with reasons. `scripts/verify.sh ci capabilities web` passes, with a browser route |
-| 16b | The widgets the platform can already answer for but this slice leaves out — filter, form, timeline, tasks — and the second variable | Each on an existing owner, with its own acceptance |
+| 16a | 区块模型、六种部件、发布校验、组合渲染器和 Workshop 形态的编辑器 | 人员在工作区中基于真实对象组合包含多个部件的页面，在组合时看到真实数据，发布并使用它：选择一行数据可填充详情并激活相应动作。无效绑定将被拒绝并说明原因。`scripts/verify.sh ci capabilities web` 通过，并包含浏览器路由测试 |
+| 16b | 平台已有归属支持但本切片省略的部件——filter、form、timeline、tasks——以及第二变量 | 每个部件均基于现有归属主件构建，具备各自的验收测试 |
 
-## Consequences
+## 后果
 
-The builder becomes an editing surface rather than a form, and the same section model is what later work (filters, forms, AI logic widgets, dashboards) extends. The cost is a descriptor with real shape: it must be validated, versioned and migrated like any contract, and the editor is now a piece of product to maintain. We keep the blast radius small by giving every widget an owner that already exists and by refusing anything the host cannot check.
+构建器变成了编辑界面而非纯表单，且这一相同的区块模型正是后续工作（过滤器、表单、AI 逻辑部件、仪表盘）扩展的基础。代价是描述符具有了真实的结构形态：它必须像任何契约一样经过校验、版本控制和迁移，且编辑器现在成为了需要维护的产品构件。我们通过为每个部件赋予已存在的归属主件，并拒绝宿主无法校验的任何内容，来将影响面控制在小范围内。
 
-## As built (16a)
+## 实施现状 (16a)
 
-- **The descriptor** (`platform.Page.Sections`, `platform.Section`): a widget (`table`, `detail`, `actions`, `chart`, `metric`, `text`), a title, a width (`full` or `half`), and the binding that widget needs — the object it shows, the fields, the actions, what it groups by and measures, or the words. A page with sections has layout `composed`; `list-detail` remains the shorthand of a code page and of a defined object's own page.
-- **The host checks every binding when the page is published** (`Tenant.checkSections`): a widget it does not know, a width that is neither, an object this tenant has not, a field that object does not declare, an action about something else, a measure that is not `count`/`sum:`/`avg:`/`min:`/`max:`, a chart with nothing to group by, text with no words. Each refusal names what is wrong, and a refused composition leaves the page people are using untouched (`TestTenantDefinedObject`).
-- **The renderer** (`@platform/app`'s `ComposedPage`): sections laid out in order over two columns, sharing the page's selection — the table says which record is selected, the detail and the actions read it. Every widget renders through the owner that already has it: the kit's `RecordList`, `RecordDetail`, the action catalog's `NewActions`/`RecordActions`, and `Chart` over the host's aggregates. `live={false}` is the composer's canvas: the same widgets over the same records, with nothing that writes.
-- **The editor** (`@pkg/build`'s `PageEditor`) is the three-pane grammar of Retool and Appsmith: a palette of widgets with the layout beneath it on the left, the page itself in the middle over real records, the widget in hand on the right — each pane named and scrolling on its own, and clicking a widget on the canvas takes it in hand. The layout panel lists the sections with add, move and remove; the canvas shows the page with real records as it is being composed; the panel on the right configures the widget in hand — its title, its width, the fields it shows, the actions it offers, what it measures and groups by, or its words. Save writes the page's record; publish installs it.
-- **Three platform repairs the batch needed**: a field can be declared `aside` (`FieldInfo.Aside`), so a purpose-built editor owns it and generated forms do not ask for it — a page's sections are the first; the kit's `Dialog` now keeps its title and scrolls its content, so a long form's buttons are always reachable; and the chip toggle behind a multi-select is now one owner (`Toggles`), used by the field editor and by the composer.
-- **Proven**: `TestTenantDefinedObject` (a page of six widgets published, each kind of invalid binding refused with its reason, the running page unchanged, replay and snapshot), browser route 30 (compose a table, a detail and the CRM's close action over `crm.opportunity`, publish, then select a record and see the detail fill and the action appear), the kit's tests. `scripts/verify.sh ci capabilities composition web` passes.
-- **Found by the owner on the first walk, and repaired (2)**: the editor rendered as one long column, not three panes — `@pkg/build` was missing from the workspace's Tailwind `@source` list, so none of its layout classes existed. The list is now one glob over `packages`, so a package added later cannot lose its styles, and browser route 30 measures that the three panes sit side by side.
-- **Found by the owner on the first walk, and repaired**: publishing a page with nothing laid out was refused by the host, but the composer only flashed a notice — the page stayed a draft with no explanation on screen. A decision may now tell its screen why it was refused (`Decision.onRefused`), the composer keeps that reason in front of the person, offers no publish until something is laid out, says when work is unsaved, and shows whether the page is a draft or published. Publishing no longer proceeds when the save before it fails.
-- **Not built after 16a**: see 16b below.
+- **描述符**（`platform.Page.Sections`，`platform.Section`）：部件（`table`、`detail`、`actions`、`chart`、`metric`、`text`）、标题、宽度（`full` 或 `half`）以及该部件所需的绑定——展示的对象、字段、动作、分组与度量依据，或文本内容。包含区块的页面布局为 `composed`；`list-detail` 仍保留为代码页面与已定义对象自身页面的简写。
+- **宿主在页面发布时检查每项绑定**（`Tenant.checkSections`）：未知的部件、非合规的宽度、该租户不具备的对象、该对象未声明的字段、针对其他内容的动作、非 `count`/`sum:`/`avg:`/`min:`/`max:` 的度量、没有分组依据的图表、没有文字的文本。每次拒绝都会指明具体错误，被拒绝的组合不会影响人们正在使用的页面（`TestTenantDefinedObject`）。
+- **渲染器**（`@platform/app` 的 `ComposedPage`）：区块按顺序排布在两列之上，共享页面的选中项——表格指示哪条记录被选中，详情与动作读取该记录。每个部件均通过已有的归属主件渲染：UI 套件的 `RecordList`、`RecordDetail`、动作目录的 `NewActions`/`RecordActions`，以及基于宿主聚合的 `Chart`。`live={false}` 是组合器的画布：在相同的记录上运行相同的部件，但不执行任何写入操作。
+- **编辑器**（`@pkg/build` 的 `PageEditor`）采用了 Retool 和 Appsmith 的三栏语法：左侧是部件面板及其下方的布局，中间是基于真实记录的页面本身，右侧是手头选中的部件——每个窗格均具名且独立滚动，在画布上点击部件即可将其选入手头。布局面板列出区块，支持添加、移动和删除；画布在组合时展示带有真实记录的页面；右侧面板配置选中的部件——其标题、宽度、展示字段、提供动作、度量与分组依据，或其文本内容。保存会写入页面的记录；发布执行安装。
+- **该批次所需的三个平台修复**：字段可以声明为 `aside`（`FieldInfo.Aside`），以便由专用编辑器拥有而生成的表单不主动请求它——页面的区块是首个应用场景；UI 套件的 `Dialog` 现在保留其标题并滚动其内容，确保长表单的按钮始终可触达；多选背后的 chip 切换开关现在归于单一主件（`Toggles`），由字段编辑器和组合器共同使用。
+- **验证通过**：`TestTenantDefinedObject`（发布包含六个部件的页面、各种无效绑定均被拒绝并提示原因、运行中页面保持不变、重放与快照）、浏览器路由 30（在 `crm.opportunity` 上组合表格、详情和 CRM 的关闭动作，发布，然后选择记录并看到详情填充和动作出现）、UI 套件测试。`scripts/verify.sh ci capabilities composition web` 通过。
+- **负责人在首次走查时发现并完成修复 (2)**：编辑器此前渲染为单一长列而非三栏——`@pkg/build` 遗漏在工作区的 Tailwind `@source` 列表中，导致其所有布局样式类均未生成。该列表现已改为针对 `packages` 的通配符，后续添加的包不会再丢失样式，且浏览器路由 30 会测量验证三栏并排展示。
+- **负责人在首次走查时发现并完成修复**：发布没有排布任何内容的页面会被宿主拒绝，但组合器此前仅短暂闪烁提示——页面保持草稿状态但在屏幕上没有任何说明。决策现在可以向其屏幕告知被拒绝的原因（`Decision.onRefused`），组合器将该原因展示在用户面前，在排布内容之前不提供发布按钮，提示未保存的工作，并展示页面是草稿还是已发布。在保存失败时不再继续执行发布。
+- **16a 之后未构建内容**：参见下方 16b。
 
-## As built (16b)
+## 实施现状 (16b)
 
-- **Four widgets, each on an owner that exists**: `filter` (a value per chosen field — choices, yes/no, or a record through the kit's `RecordLookup`), `form` (a new record through the object's own create action, rendered by `GeneratedForm` with the fields chosen, in order), `timeline` (the selected record's history from the journal, through the kit's `RecordHistory`, now the one owner a record page and a composed page share), and `tasks` (what waits on the selected record for whoever opens the page — approvals and flow steps from the work app — through the kit's `Tasks`, answered where they are).
-- **The second variable**: a filter outputs the conditions it sets over its object, as the host's domain; a table, chart or metric over the same object reads them, and a change clears the selection, which may no longer be among them. Filters over different objects do not meet. This is still not Workshop's named variables: there is one narrowing per object and no lineage.
-- **Publication checks**: a filter needs at least one field and takes only choice, boolean and reference fields; a form needs the object's create action and must ask for every required field that action needs. `Tenant.Definitions` removes, per member, a form whose create action they may not take.
-- **The editor**: the palette offers all ten widgets; a filter starts with the object's filterable fields and a form with the fields its create action requires, so both publish as placed; the widget panel says what each new widget reads. The canvas renders the form without submitting.
-- **One shell repair it needed**: a page's tab was titled by its internal name; it now reads what people call it, from the registry.
-- **Proven**: `TestTenantDefinedObject` (ten widgets published; a filter over nothing, a filter over a text field and a form missing a required field each refused with its reason), and browser route 33 (compose a filter, table, form, timeline and tasks over `crm.account`, publish, create a person through the form, narrow the table to companies and back, select it, see its creation in the timeline and nothing waiting). `scripts/verify.sh format capabilities composition web` passes.
-- **Not built**: nested layouts, tabs, overlays, named variables across widgets and pages, a form that edits the selected record, and range filters over dates and numbers.
+- **四个部件，每个均基于已有归属主件**：`filter`（所选字段的值——选项、是/否，或通过 UI 套件的 `RecordLookup` 查找的记录）、`form`（通过对象自身的创建动作新建记录，由 `GeneratedForm` 按顺序渲染所选字段）、`timeline`（来自日志的所选记录历史，通过 UI 套件的 `RecordHistory` 渲染，现为记录页面与组合页面共享的唯一样式主件），以及 `tasks`（在所选记录上等待打开页面者处理的事务——来自 work 应用的审批与流转步骤——通过 UI 套件的 `Tasks` 在所在位置予以响应）。
+- **第二变量**：过滤器将其在对象上设置的条件作为宿主作用域输出；针对相同对象的表格、图表或度量指标读取这些条件，变更会清除当前选中项（该项可能已不再满足条件）。针对不同对象的过滤器互不相交。这仍不是 Workshop 的具名变量：每个对象仅有一组收窄条件且没有血缘传递。
+- **发布检查**：过滤器至少需要一个字段，且仅接受 choice、boolean 和 reference 字段；表单需要对象的创建动作，且必须请求该动作所需的每个必填字段。`Tenant.Definitions` 会按成员移除他们无权执行创建动作的表单。
+- **编辑器**：面板提供全部十种部件；过滤器初始化为对象的已配置可过滤字段，表单初始化为其创建动作所需的字段，因此两者放置即可发布；部件面板会说明每个新部件读取什么。画布渲染表单但不提供提交功能。
+- **所需的一项外壳修复**：页面的标签页此前使用内部名称命名；现在从注册表中读取人们对它的称谓。
+- **验证通过**：`TestTenantDefinedObject`（发布十个部件；针对空内容的过滤器、针对文本字段的过滤器以及缺少必填字段的表单均被拒绝并提示原因），以及浏览器路由 33（在 `crm.account` 上组合 filter、table、form、timeline 和 tasks，发布，通过表单创建人员，将表格收窄至企业然后再恢复，选择企业，在时间线中看到其创建且无待办事项）。`scripts/verify.sh format capabilities composition web` 通过。
+- **未构建内容**：嵌套布局、标签页、覆盖层、跨部件和页面的具名变量、编辑所选记录的表单，以及针对日期和数值的范围过滤器。

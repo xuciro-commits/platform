@@ -1,31 +1,31 @@
-# K1 Identity — semantics (contract v1alpha1)
+# K1 身份标识 — 语义规范 (契约 v1alpha1)
 
-Schema: `proto/platform/kernel/v1alpha1/identity.proto`. Vectors: `vectors/k1-identity.json`. Errors: `errors.md`. Keywords MUST/MUST NOT/SHOULD follow RFC 2119.
+模式定义：`proto/platform/kernel/v1alpha1/identity.proto`。一致性测试向量：`vectors/k1-identity.json`。错误代码：`errors.md`。关键字 MUST/MUST NOT/SHOULD 遵循 RFC 2119 规范。
 
-## Model
+## 概念模型
 
-- An **entity reference** is the pair (`type`, `id`). Two references are equal only if both parts are equal: the same `id` under two types names two entities.
-- `id` is opaque. Implementations MUST NOT derive meaning from it and MUST NOT reuse an `id` for another entity, even after it is retired by a redirect.
-- External identifiers (catalogue IDs, file paths, server keys) are claims about an entity, not its identity, and are outside K1.
-- A **redirect** retires its `from` reference and points to one target (merge) or two or more targets (split). Redirects are history: they are never edited or removed.
+- **实体引用 (entity reference)** 是二元组 (`type`, `id`)。两个引用仅在两部分均完全相同时方才相等：在两个不同类型下的相同 `id` 指向两个不同的实体。
+- `id` 是不透明的。具体实现严禁 (MUST NOT) 从中推导业务含义，严禁 (MUST NOT) 将某个 `id` 复用于另一个实体，即使在它被重定向废弃淘汰后亦不可复用。
+- 外部标识符（商品目录编码、文件路径、服务端主键）是关于实体的断言，而不是身份本身，属于 K1 范畴之外。
+- **重定向 (redirect)** 淘汰其 `from` 引用并指向一个目标（合并 merge）或两个及以上目标（拆分 split）。重定向属于历史事实：绝不修改或删除。
 
-## Rules
+## 语义规则
 
-| # | Rule | Error when violated |
+| 编号 | 规则描述 | 违规返回错误 |
 |---|---|---|
-| I1 | A reference that exists and has no redirect resolves to itself. | — |
-| I2 | Resolving an unknown reference fails. | `NOT_FOUND` |
-| I3 | A merge redirect has exactly one target; a split has at least two; the kind is not `UNSPECIFIED`. | `INVALID_ARGUMENT` |
-| I4 | A redirect's `from` must exist. | `NOT_FOUND` |
-| I5 | Every target must exist. | `INVALID_REFERENCE` |
-| I6 | A reference has at most one redirect. | `CONFLICT` |
-| I7 | A redirect must not make any reference reachable from itself, including a redirect to itself. | `REDIRECT_CYCLE` |
-| I8 | Resolution follows redirects transitively. If every path ends at one terminal reference, the result is `resolved`; otherwise it is `ambiguous` with the distinct terminal references in depth-first order of the declared targets. | — |
-| I9 | A rejected operation leaves state unchanged. | — |
-| I10 | An entity exists once it is created: by the decision (K4) or derivation (K2) that makes it. Creating a reference that exists or was retired by a redirect fails; IDs are never reused (Model). | `CONFLICT`, `INVALID_ARGUMENT` (empty type or ID) |
+| I1 | 存在且未设立重定向的引用解析为其自身。 | — |
+| I2 | 解析未知引用必须失败。 | `NOT_FOUND` |
+| I3 | 合并重定向必须且仅有一个目标；拆分重定向至少有两个目标；类别不得为 `UNSPECIFIED`。 | `INVALID_ARGUMENT` |
+| I4 | 重定向的来源 `from` 引用必须已存在。 | `NOT_FOUND` |
+| I5 | 重定向的每个目标引用必须均已存在。 | `INVALID_REFERENCE` |
+| I6 | 一个引用最多只能设立一条重定向。 | `CONFLICT` |
+| I7 | 重定向绝不能导致任何引用自可达，包括指向自身的重定向。 | `REDIRECT_CYCLE` |
+| I8 | 解析过程传递式追踪重定向。若所有路径均终止于同一个终态引用，则解析结果为 `resolved`；否则解析结果为 `ambiguous`（歧义），按已声明目标的深度优先顺序列出互不相同的终态引用。 | — |
+| I9 | 被拒绝的操作不改变系统状态。 | — |
+| I10 | 实体在其被创建后即宣告存在：由产生它的决策 (K4) 或派生推导 (K2) 生成。创建已存在或已被重定向淘汰的引用必须失败；ID 绝不复用（概念模型）。 | `CONFLICT`, `INVALID_ARGUMENT`（类型或 ID 为空） |
 
-## Notes
+## 补充说明
 
-- Types may differ between `from` and a target: an entity type can split into new types (K7).
-- Choosing among `ambiguous` candidates is a domain decision (K4), never an implicit kernel choice.
-- Recording who created a redirect and why belongs to the K4 change that carries it.
+- `from` 引用与目标引用的类型 `type` 允许不同：一个实体类型可以拆分为全新的实体类型 (K7)。
+- 在出现 `ambiguous`（歧义）候选目标时做出取舍选择属于领域业务决策 (K4)，内核绝不做出隐式裁决。
+- 记录谁创建了重定向以及为何创建，归属于承载该重定向的 K4 变更记录。

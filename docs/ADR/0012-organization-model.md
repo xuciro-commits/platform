@@ -1,62 +1,62 @@
-# ADR-0012: Organisation is a network of units in several structures, over time
+# ADR-0012: 组织是多套结构中跨时间演进的单元协作网络
 
-**Status:** Accepted (2026-09-24, #96; owner's partner asked for a design above departments and teams)
+**状态：** 已接受 (2026-09-24, #96；负责人的业务合伙人要求提供超越单一部门与团队树的更高阶组织设计)
 
-**Context.** ADR-0010 listed organisational units as a host capability. The owner's partner pointed out that an organisation is not a tree of departments, teams and people. A group holds subsidiaries, business groups, factories, project organisations, temporary committees and external partners, and one person often belongs to several of these structures at once. Organisation in general is wider still:
+**背景上下文。** ADR-0010 曾将组织架构单元列为一项宿主通用能力。负责人的合伙人深刻指出，真实世界的企业组织绝非仅仅是一棵由部门、团队与员工构成的简单树状图。一个集团旗下往往涵盖多家独立法人子公司、事业群板块、离线制造工厂、敏捷项目组、临时管委会以及外部生态合作伙伴，且同一个人往往在同一时间横跨属于上述多套不同的结构体系。放眼更广阔的人类协同范式，组织的形态更为宽广：
 
-| Kind of organisation | What it shows |
+| 组织形态类别 | 展现出的核心组织特征 |
 |---|---|
-| A living organism | The same parts (organs) belong to several systems at once (nervous, circulatory) |
-| A nonprofit | Governance by a board and members, with volunteers and donors outside employment |
-| An open-source project | Roles are earned (contributor → committer → maintainer), working groups overlap, identities live elsewhere, and a foundation hosts many projects |
+| 生命有机体 | 相同的器官部件同时从属于多套协同系统（神经系统、血液循环系统） |
+| 非营利性慈善组织 | 由理事会与全员协同治理，涵盖大量位于劳动雇佣合同体系之外的志愿者与捐赠人 |
+| 开源社区项目 | 角色需要靠实力逐步赢得（贡献者 → 提交者 → 维护核心），工作组彼此交叠穿插，人员身份凭据分散在全网各处，一个基金会往往托管数百个项目 |
 
-Across all of these, six things recur:
-- **Parts:** units of different kinds.
-- **Structures:** several independent ways the parts relate — legal ownership, management, finance, site, project, governance, community.
-- **Membership:** who belongs, how, since when and until when.
-- **Authority:** which structure carries which right.
-- **Boundary:** inside, outside, or shared.
-- **Lifecycle:** founding, temporary existence, merger, split, dissolution.
+贯穿于上述所有形态，六大核心共性反复出现：
+- **组成单元 (Parts)：** 涵盖多种不同种类的组织单元。
+- **关系结构 (Structures)：** 单元之间具备多套相互独立的关联范式——法定股权所有权、行政汇报管理、财务核算、物理地理驻地、项目制交付、公司治理、社区关系。
+- **从属成员体系 (Membership)：** 谁具体从属于哪里、以何种角色从属、自何时生效以及至何时失效。
+- **权威与职权 (Authority)：** 哪一套结构体系承载何种具体的业务裁决权限。
+- **组织边界 (Boundary)：** 明确区分内部自有、外部生态、或是联合共建。
+- **生命周期演进 (Lifecycle)：** 创立孵化、临时组建、兼并合并、分拆剥离、宣告解散。
 
-Established models agree:
-- The W3C Organization Ontology (ORG) models organisations, units, collaborations, memberships with a role and an interval, posts, sites and change events.
-- Workday keeps separate supervisory, company, cost-center, region and matrix hierarchies.
-- SAP HCM relates organisational units, positions and persons, each relation with a validity period.
-- FHIR relates organisations to each other and to practitioners through affiliations.
+业界成熟的企业模型高度印证了这一点：
+- W3C 组织本体规范 (ORG)：对组织、单元、跨方协作、带有角色与有效时间区间的成员从属、岗位职务、物理驻地及组织变更事件进行了严密的本体建模。
+- Workday：在底层独立维护相互解耦的行政汇报树、法人公司树、成本中心树、大区地理树以及矩阵式多维层级。
+- SAP HCM：严密关联组织单元、岗位职务与自然人，且每一层关联均附带严格的生效有效时间区间。
+- FHIR (医疗健康规范)：通过归属联合模型将各个医疗机构之间、以及机构与专业执业医师之间进行多维关联。
 
-**Decision.** The platform's organisation capability (layer 2, the `org` app of every tenant) models these generically. Industries name the kinds; the kernel does not change (K6: organisation stays context for policy, not kernel schema).
+**决策。** 平台的组织架构通用能力（位于第 2 层能力层，每个租户内置独立的 `org` 应用）将上述概念进行高度通用的形式化建模。各垂直行业按需定义具体单元种类；内核契约本身保持稳定未改 (遵循 K6：组织架构是提供给策略引擎查阅的上下文，绝非僵化的内核底层模式)。
 
-1. **Units.** A unit is any organisation or part of one: a group, subsidiary, business group, factory, line, department, team, project, committee, working group, an external partner, a whole other organisation. Its kind is open vocabulary, chosen by the tenant or the industry, never a fixed list. Its facets are independent of its kind:
-   - **Legal:** is it a legal entity?
-   - **Boundary:** internal or external.
-   - **Lifespan:** valid from, and until (temporary units carry an end date).
-2. **Structures.** A structure is one named way units relate. Units belong to any number of structures, with different parents in each.
-   - **Kinds:** legal (ownership, with a share), management (reports to), finance (cost or profit center), site (located at), project, governance (committees, boards), community, or custom.
-   - **Links:** each unit links to its parent in a structure through an edge valid from/until. Structures are trees by default; a structure may allow several parents (a matrix).
-   - **Example:** a factory can belong legally to subsidiary A, be managed by business group B, and sit in region C.
-3. **Memberships.** A membership links a party to a unit.
-   - **Who:** a member of the directory (person, service, AI agent) or another unit (an organisation as a member of a consortium or foundation).
-   - **What:** a role (employee, contractor, volunteer, maintainer, delegate, observer, chair — open vocabulary), a primary flag, and a validity interval.
-   - One party may hold any number of memberships across structures at the same time.
-4. **Time.** Every unit, edge and membership has valid time, so both of these can be answered:
-   - who belonged where on a past date;
-   - a reorganisation that takes effect next month.
+1. **组织单元 (Units)。** 组织单元代表任意实体组织或其内部组成部分：集团、法人子公司、事业群、工厂车间、生产产线、职能部门、敏捷小组、交付项目、专项委员会、工作组、外部合作伙伴、乃至另一家完整的外部法人企业。其具体类别属于开放式词汇体系，由具体租户或行业方案自由定义，绝非硬编码的有限枚举。单元的内在属性与其表面分类完全解耦：
+   - **法人属性：** 该单元是否为一个独立的法定法人实体？
+   - **组织边界：** 属于组织内部编制，还是外部生态协同。
+   - **生命周期周期：** 生效起始日期，以及计划截止日期（临时设立的敏捷单元必须配置结束日期）。
+2. **关系结构 (Structures)。** 关系结构代表单元之间某种特定维度的关系组织网络。同一个单元可以同时挂接在任意数量的结构体系中，且在每套结构中拥有完全不同的上级父节点。
+   - **结构类别：** 法定股权控制（带持股比例）、行政汇报（直接向谁汇报）、财务核算（成本中心或利润中心）、物理地理分布（实际坐落于何处）、交付项目、公司治理（董事会、监事会）、开源社区、或客户自定义结构。
+   - **拓扑边链接：** 每个单元通过一条附带生效起始/截止日期的拓扑边，指向其在该结构下的父节点。结构默认采用树状拓扑；特定结构亦允许配置为支持多个父节点（多维矩阵网状结构）。
+   - **典型现实场景：** 一座工业制造工厂，在法律层面完全归属于法人子公司 A，在行政业务上直接由事业群 B 垂直管辖，而在地理位置上坐落于华南大区 C。
+3. **从属成员关系 (Memberships)。** 成员关系将具体的操作主体与特定组织单元紧密相连。
+   - **参与主体：** 可以是人员目录中的合法成员（自然人、后台系统服务、AI 智能体），亦可以是另一个组织单元（例如某法人实体作为某个产业联盟或基金会的成员机构单位加入）。
+   - **关系内涵：** 所担任的具体角色（正式雇员、外包顾问、志愿人员、核心维护者、派驻代表、列席观察员、委员会主席——完全开放的业务词汇）、是否为主属归属标记、以及严格的有效时间区间。
+   - 单一主体在同一时间跨度内，允许同时持有横跨多套结构的任意数量的从属成员关系。
+4. **时间双时态模型 (Time)。** 每个组织单元、拓扑连接边以及成员从属关系均具备严格的有效业务生效时间，使系统能够精确自如地应对应答：
+   - 某人在过去的特定历史日期具体归属于哪套组织的哪个节点；
+   - 已经提前规划录入、并定于下个月正式生效的大型组织架构调整方案。
 
-   A change is a decision of the `org` app (K4) with history, journaled like any other. A merger or split closes units and records their successors (K1 redirects when references must keep resolving).
-5. **Authority follows a named structure.** Apps do not read org charts; they ask the host for *the units a member belongs to in structure S, at time T, including everything below them* (`Caller.Units`). Each rule states which structure carries it:
-   - a line operator's scope comes from the site structure;
-   - an approval limit comes from the management structure;
-   - a cost report comes from the finance structure.
+   任何组织变更均作为 `org` 平台应用的一项受审决策 (K4) 记入日志并完整保留历史，同系统中的所有其他业务事实完全一样享有保序日志追踪。企业的合并或拆分会正式关闭旧单元并明确记录其法定继承单元 (当需要保持旧实体引用持续可解析时，利用 K1 重定向技术优雅实现)。
+5. **权威职权严格依据具名的关系结构生效。** 业务应用绝不需要自行去遍历复杂的组织架构图；业务应用仅需向平台宿主查询：*“该成员在指定时间点 T、在特定结构体系 S 中具体归属于哪些单元，并包含其名下的所有下级分支节点”* (`Caller.Units`)。每项具体的业务规则清晰声明其依赖哪一套结构体系：
+   - 车间机台操作员的管辖操作范围，严格由其在**物理驻地结构**中的位置决定；
+   - 业务单据的财务审批授权额度，严格由其在**行政汇报管理结构**中的位置决定；
+   - 研发或经营成本核算报告，严格由其在**财务核算结构**中的归属决定。
 
-   This replaces ad hoc member attributes such as `lines`.
-6. **The organisation is data, not code.** Industry packages ship their unit and structure kinds and a starting shape. Tenants change their organisation in Settings as decisions, within ADR-0008: the rules stay code, the organisation is theirs.
+   这彻底淘汰并清除了此前在成员身上手工硬编码拼接 `lines`（产线）等零散属性的粗糙做法。
+6. **组织架构是动态业务数据，绝非硬编码死代码。** 垂直行业应用包随自身预置其行业常用的单元种类、结构类型与初始组织拓扑。租户后续在系统设置中心中通过发起标准的决策来维护并调整其组织架构，完全符合 ADR-0008 的规定：核心业务规则保持为严谨代码，而具体的组织架构完全归属于租户自主掌控。
 
-**Consequences.**
-- Manufacturing's lines become units of the plant's site structure. Operators and agents belong to lines, supervisors to the plant, and the plant's rules ask for the member's site units instead of a `lines` attribute.
-- Settings gains Organisation:
-  - each structure as a tree, at a chosen date;
-  - a unit with its members;
-  - a person with every membership across structures.
-- Not yet: posts (positions independent of their holders, as in SAP HCM), delegation of authority between units, and federation with another tenant's organisation. Each comes with its first real need.
+**影响与后果。**
+- 离散制造中的各条作业产线，自然映射为工厂物理驻地结构下的标准组织单元。操作工与 AI 智能体归属于特定产线单元，车间主任归属于整个工厂大单元，工厂的核心业务规则直接通过查询成员名下的物理驻地单元来进行视野控制，彻底废除了旧有的 `lines` 属性。
+- 系统设置中心全面上线“组织架构”治理模块：
+  - 支持按任意指定的历史或未来日期，可视化查看每套结构的树状拓扑图；
+  - 查看特定组织单元名下的所有成员及其所担任的角色；
+  - 钻取查看某位员工横跨集团多套结构的全部从属关系网络。
+- 暂未引入的高阶特性：与具体任职者彻底解耦的独立职务编制体系 (类似 SAP HCM 中的 Positions 编制管理)、不同组织单元之间的交叉职权委派授权、以及跨不同企业租户之间的组织联邦联合体。这些特性将严格遵循敏捷演进原则，在真实业务场景首次提出切实需求时再行落地。
 
-**Revisit when** a rule needs a structure that is not a tree or matrix (a network of peers), or organisations of two tenants must share units (federation).
+**重新评估时机：** 当某项极其特殊的业务规则需要一种既非树状亦非矩阵的全新网络拓扑时（例如去中心化的完全对等对等体协同网）、或者当两个不同企业租户的组织架构需要直接跨租户共享单元时（组织架构跨租户联邦）。
