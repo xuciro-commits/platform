@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -102,6 +103,76 @@ func stockTenant(t testing.TB, extra ...platform.App) *Tenant {
 		t.Fatal(err)
 	}
 	return tn
+}
+
+func TestRecordDraftIsolationAndPromotion(t *testing.T) {
+	tn := stockTenant(t)
+	c := platform.NewCaller(runtime{tn}, platform.Member{ID: "ana", Tenant: "t-1"}, "stock", false, false)
+	at := timestamppb.New(time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC))
+	change := func(id string, revision uint32) *pb.ChangeRecord {
+		return &pb.ChangeRecord{ChangeId: id, RecordedTime: at, Revision: revision,
+			Submission: &pb.Submission{PrincipalId: "ana", Target: &pb.EntityRef{Type: "stock.item", Id: "I1"},
+				Schema: &pb.SchemaRef{Name: "stock.item.create"}}}
+	}
+	put := func(s *recordStore, id string, revision uint32, qty int) {
+		t.Helper()
+		if err := s.put(c, change(id, revision), Item{Record: platform.Record{ID: "I1"}, Name: "Bolt", Qty: qty}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put(tn.records, "c1", 1, 2)
+	var touched []string
+	tn.records.touched = func(typ, id string) { touched = append(touched, typ+"/"+id) }
+	discarded := tn.records.forkRecords()
+	put(discarded, "discarded", 2, 99)
+	live, _ := tn.records.get(c, reflect.TypeFor[Item](), "I1")
+	if live.(Item).Qty != 2 || len(touched) != 0 {
+		t.Fatal("discarded draft modified or projected a live row")
+	}
+	draft := tn.records.forkRecords()
+	put(draft, "c2", 2, 3)
+	if got := len(touched); got != 0 {
+		t.Fatalf("uncommitted draft projected %d rows", got)
+	}
+	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
+	staged, _ := draft.get(c, reflect.TypeFor[Item](), "I1")
+	if live.(Item).Qty != 2 || staged.(Item).Qty != 3 {
+		t.Fatalf("draft leaked into live records: live=%+v staged=%+v", live, staged)
+	}
+	if len(tn.records.types["stock.item"].rows["I1"].history) != 1 {
+		t.Fatal("draft changed live history before promotion")
+	}
+	draft.types["stock.item"].rows["I1"].history[0].Fields[0].After[0] ^= 1
+	if draft.types["stock.item"].rows["I1"].history[0].Fields[0].After[0] ==
+		tn.records.types["stock.item"].rows["I1"].history[0].Fields[0].After[0] {
+		t.Fatal("draft shares history bytes with live store")
+	}
+	draft.types["stock.item"].rows["I1"].history[0].Fields[0].After[0] ^= 1
+	if err := tn.records.promoteRecords(draft); err != nil {
+		t.Fatal(err)
+	}
+	if len(touched) != 1 || touched[0] != "stock.item/I1" {
+		t.Fatalf("projected rows after promotion: %v", touched)
+	}
+	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
+	if live.(Item).Qty != 3 || len(tn.records.types["stock.item"].rows["I1"].history) != 2 {
+		t.Fatalf("accepted image or history missing: %+v", live)
+	}
+	if err := tn.records.promoteRecords(draft); err == nil {
+		t.Fatal("draft was promoted twice")
+	}
+	if err := draft.put(c, change("c3", 3), Item{Record: platform.Record{ID: "I1"}, Name: "Bolt", Qty: 4}); err == nil {
+		t.Fatal("promoted draft remained writable")
+	}
+	stale := tn.records.forkRecords()
+	put(tn.records, "c3", 3, 4)
+	if err := tn.records.promoteRecords(stale); err == nil {
+		t.Fatal("stale draft replaced a newer live record")
+	}
+	live, _ = tn.records.get(c, reflect.TypeFor[Item](), "I1")
+	if live.(Item).Qty != 4 {
+		t.Fatal("rejecting stale draft changed live record")
+	}
 }
 
 func TestRecords(t *testing.T) {

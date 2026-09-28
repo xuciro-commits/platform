@@ -185,6 +185,7 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 			emptyLists(v) // a snapshot of older code may hold null lists
 			et.rows[recordOf(v).ID] = &row{value: v, history: r.History}
 		}
+		t.records.generation++
 	}
 	return held, nil
 }

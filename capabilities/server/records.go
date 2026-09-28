@@ -29,6 +29,13 @@ type recordStore struct {
 	mu    sync.Mutex
 	types map[string]*entityType
 	byGo  map[reflect.Type]*entityType
+	// A private 19a decision view has no projection callback. It may replace
+	// its parent only if no direct write reached that parent in the meantime.
+	parent         *recordStore
+	generation     uint64
+	baseGeneration uint64
+	writes         map[string]bool
+	sealed         bool
 	// touched, when set, hears of each record put, under mu (the PostgreSQL projection, ADR-0019).
 	touched func(typ, id string)
 	// dirty are the records of knowledge-bearing types put since the index last
@@ -156,6 +163,78 @@ func newRecordStore() *recordStore {
 	return &recordStore{types: map[string]*entityType{}, byGo: map[reflect.Type]*entityType{}}
 }
 
+// forkRecords gives one decision an isolated view of records and their
+// history. It is a preparatory 19a primitive, not yet used by Tenant.Submit:
+// the caller must still stage the ledger and every generated intent, durably
+// append the result, and only then promote this view.
+func (s *recordStore) forkRecords() *recordStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	draft := &recordStore{parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
+		dirty: make(map[string]bool, len(s.dirty)), changed: make(map[string][]string, len(s.changed)),
+		order: slices.Clone(s.order)}
+	for typ, et := range s.types {
+		copied := &entityType{info: et.info, knowledge: et.knowledge, rows: make(map[string]*row, len(et.rows))}
+		for id, r := range et.rows {
+			copied.rows[id] = &row{value: copyOf(et.info.Go, r.value.Interface()), history: copyHistory(r.history)}
+		}
+		draft.types[typ] = copied
+		draft.byGo[et.info.Go] = copied
+	}
+	for ref, dirty := range s.dirty {
+		draft.dirty[ref] = dirty
+	}
+	for change, refs := range s.changed {
+		draft.changed[change] = slices.Clone(refs)
+	}
+	return draft
+}
+
+func copyHistory(history []RecordChange) []RecordChange {
+	out := slices.Clone(history)
+	for i := range out {
+		out[i].Fields = slices.Clone(history[i].Fields)
+		for j := range out[i].Fields {
+			out[i].Fields[j].Before = slices.Clone(history[i].Fields[j].Before)
+			out[i].Fields[j].After = slices.Clone(history[i].Fields[j].After)
+		}
+	}
+	return out
+}
+
+// promoteRecords makes a staged view visible after its result is durable.
+// The tenant lock must cover the decision and promotion. The projection is
+// notified only for the rows the decision changed, never while staging.
+func (s *recordStore) promoteRecords(draft *recordStore) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if draft == nil || draft.parent != s {
+		return fmt.Errorf("record draft belongs to another store")
+	}
+	draft.mu.Lock()
+	defer draft.mu.Unlock()
+	if draft.sealed || s.generation != draft.baseGeneration {
+		return fmt.Errorf("record draft is stale or already promoted")
+	}
+	s.types, s.byGo = draft.types, draft.byGo
+	s.dirty, s.changed, s.order = draft.dirty, draft.changed, draft.order
+	s.generation++
+	draft.sealed = true
+	refs := make([]string, 0, len(draft.writes))
+	for ref := range draft.writes {
+		refs = append(refs, ref)
+	}
+	slices.Sort(refs)
+	for _, ref := range refs {
+		if s.touched != nil {
+			typ, id, _ := strings.Cut(ref, "/")
+			s.touched(typ, id)
+		}
+	}
+	return nil
+}
+
 // declare registers an app's entity types; references resolve within the app.
 func (s *recordStore) declare(a platform.App) error {
 	m := a.Manifest()
@@ -180,6 +259,7 @@ func (s *recordStore) declare(a platform.App) error {
 		}
 		et := &entityType{info: info, rows: map[string]*row{}, knowledge: knowledgeBearing(info)}
 		s.types[e.Type], s.byGo[info.Go] = et, et
+		s.generation++
 	}
 	for _, e := range m.Entities { // seeds after every type is known, so references resolve
 		seeder := platform.NewCaller(nil, platform.Member{ID: "seed"}, m.ID, false, false)
@@ -272,6 +352,9 @@ func recordOf(v reflect.Value) *platform.Record {
 func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *kernel.Error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.sealed {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
 	et := s.of(c, reflect.TypeOf(entity))
 	if et == nil || r == nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
@@ -322,6 +405,10 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 		rec.Revision = r.GetRevision()
 	}
 	et.rows[rec.ID] = &row{value: v, history: append(history, change)}
+	s.generation++
+	if s.writes != nil {
+		s.writes[et.info.Type+"/"+rec.ID] = true
+	}
 	s.remember(c.App+"/"+r.GetChangeId(), et.info.Type+"/"+rec.ID)
 	if et.knowledge {
 		if s.dirty == nil {

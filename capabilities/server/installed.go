@@ -71,6 +71,7 @@ func (s *recordStore) install(info platform.EntityInfo) error {
 		delete(s.byGo, before.info.Go)
 	}
 	s.types[info.Type], s.byGo[info.Go] = et, et
+	s.generation++
 	return nil
 }
 
