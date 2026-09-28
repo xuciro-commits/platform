@@ -438,6 +438,38 @@ test("route 30: compose a page of widgets and use it", async ({ page, request },
   await page.screenshot({ path: testInfo.outputPath("composed-page.png"), fullPage: true });
 });
 
+// The integrated editor's object picker and the runtime's reference filter
+// must agree: a related table follows the selected master, not every record.
+test("route 30: a composed related table follows the selected account", async ({ page, request }) => {
+  const first = fresh("ACC"), second = fresh("ACC");
+  const firstOpp = fresh("OPP"), secondOpp = fresh("OPP");
+  const name = `related${Date.now().toString(36).slice(-5)}`, id = fresh("P");
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: first }, { name: "First " + first, kind: "company" });
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: second }, { name: "Second " + second, kind: "company" });
+  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: firstOpp }, { account: first, title: "First deal " + firstOpp });
+  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: secondOpp }, { account: second, title: "Second deal " + secondOpp });
+  await decide(request, "manager", "build", "build.page.create", { type: "build.page", id },
+    { name, title: "Related deals", object: "crm.account", list: ["name"], detail: ["name"] });
+  await open(page, "manager", `/compose?id=${id}`);
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  const inspector = page.getByRole("region", { name: "The widget in hand" });
+  await inspector.getByRole("combobox", { name: "Object" }).selectOption("crm.opportunity");
+  await inspector.getByRole("textbox", { name: "Title" }).fill("Opportunities for account");
+  await inspector.getByRole("group", { name: "Fields it shows" }).getByRole("button", { name: "Title" }).click();
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The page is in the workspace.")).toBeVisible();
+
+  await open(page, "manager", `/page?app=build&kind=page&name=${name}`);
+  await expect(page.getByText("Select a record to see related opportunities.")).toBeVisible();
+  await page.getByRole("row").filter({ hasText: "First " + first }).click();
+  await expect(page.getByRole("row").filter({ hasText: "First deal " + firstOpp })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "Second deal " + secondOpp })).toHaveCount(0);
+  await page.getByRole("row").filter({ hasText: "Second " + second }).click();
+  await expect(page.getByRole("row").filter({ hasText: "Second deal " + secondOpp })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "First deal " + firstOpp })).toHaveCount(0);
+});
+
 // Route 31 (ADR-0036): what someone builds is handed to the people it was
 // built for — a name and an icon in their launcher, holding the page composed
 // in route 30, and nobody gains access they did not already have.
