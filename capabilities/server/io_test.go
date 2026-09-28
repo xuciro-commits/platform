@@ -39,7 +39,9 @@ func TestIOLane(t *testing.T) {
 		t.Fatal("a failed probe doubles the pause")
 	}
 	b.report("x", true, t0.Add(3*breakerPause))
-	if !b.allow("x", t0.Add(3*breakerPause)) || !b.allow("x", t0.Add(3*breakerPause)) {
+	probe1 := b.allow("x", t0.Add(3*breakerPause))
+	probe2 := b.allow("x", t0.Add(3*breakerPause))
+	if !probe1 || !probe2 {
 		t.Fatal("a success closes the breaker")
 	}
 
