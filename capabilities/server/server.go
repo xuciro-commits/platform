@@ -22,6 +22,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/ai"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -293,6 +294,35 @@ func (h *Host) Handler() http.Handler {
 	})
 	handle(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Definitions(m), t.Language(m, r)))
+	})
+	handle(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition (ADR-0039 20a)", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		body, readErr := io.ReadAll(io.LimitReader(r.Body, 4097))
+		if readErr != nil || len(body) > 4096 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		var request ReleasePreviewRequest
+		decoder := json.NewDecoder(strings.NewReader(string(body)))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || request.ID == "" {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "a draft kind and id are required"})
+			return
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		answer, err := t.PreviewRelease(m, request.Kind, request.ID)
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
 	})
 	handle(Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller (ADR-0028)",
 		Query: []Param{{"preview", "true: check each row and apply none"}}, Body: []byte{}, Answer: []ImportRow{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

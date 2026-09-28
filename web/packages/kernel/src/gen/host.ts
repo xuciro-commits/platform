@@ -704,6 +704,20 @@ export type Related = {
   total: number;
 };
 
+export type ReleasePreview = {
+  currentId?: string;
+  candidateId?: string;
+  added: AssetRef[];
+  removed: AssetRef[];
+  changed: AssetRef[];
+  diagnostic?: string;
+};
+
+export type ReleasePreviewRequest = {
+  kind: string;
+  id: string;
+};
+
 export type RunStep = {
   at: string;
   tool: string;

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -19,17 +20,29 @@ func (t *Tenant) ReleaseCandidate(roots []platform.AssetRef) (platform.ReleaseCa
 }
 
 func (t *Tenant) releaseCandidateLocked(roots []platform.AssetRef) (platform.ReleaseCandidate, error) {
+	available, err := t.releaseAssetsLocked(nil, false)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	return platform.Candidate(roots, available)
+}
+
+func (t *Tenant) releaseAssetsLocked(builderAssets []platform.ReleaseAsset, replaceBuilder bool) ([]platform.ReleaseAsset, error) {
 	var available []platform.ReleaseAsset
 	for _, app := range t.apps {
 		manifest := app.Manifest()
 		if source, ok := app.(interface {
 			ReleaseAssets() ([]platform.ReleaseAsset, error)
 		}); ok {
-			owned, err := source.ReleaseAssets()
-			if err != nil {
-				return platform.ReleaseCandidate{}, fmt.Errorf("%s release assets: %w", manifest.ID, err)
+			if replaceBuilder && manifest.ID == build.ID {
+				available = append(available, builderAssets...)
+			} else {
+				owned, err := source.ReleaseAssets()
+				if err != nil {
+					return nil, fmt.Errorf("%s release assets: %w", manifest.ID, err)
+				}
+				available = append(available, owned...)
 			}
-			available = append(available, owned...)
 		}
 		for _, def := range t.definitions {
 			if def.Ref.App != manifest.ID || def.Source != "code" {
@@ -39,32 +52,32 @@ func (t *Tenant) releaseCandidateLocked(roots []platform.AssetRef) (platform.Rel
 			case platform.AssetObject:
 				i := slices.IndexFunc(manifest.Entities, func(e platform.Entity) bool { return e.Type == def.Ref.Name })
 				if i < 0 || def.Entity == nil {
-					return platform.ReleaseCandidate{}, fmt.Errorf("code object %s has no owner declaration", def.Ref)
+					return nil, fmt.Errorf("code object %s has no owner declaration", def.Ref)
 				}
 				body, err := json.Marshal(codeObjectDescriptor(manifest.Entities[i], *def.Entity))
 				if err != nil {
-					return platform.ReleaseCandidate{}, fmt.Errorf("encode code object %s: %w", def.Ref, err)
+					return nil, fmt.Errorf("encode code object %s: %w", def.Ref, err)
 				}
 				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
 					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
 			case platform.AssetAction:
 				action, ok := manifest.Actions.Action(def.Ref.Name)
 				if !ok {
-					return platform.ReleaseCandidate{}, fmt.Errorf("code action %s has no owner declaration", def.Ref)
+					return nil, fmt.Errorf("code action %s has no owner declaration", def.Ref)
 				}
 				body, err := json.Marshal(codeActionDescriptor(action))
 				if err != nil {
-					return platform.ReleaseCandidate{}, fmt.Errorf("encode code action %s: %w", def.Ref, err)
+					return nil, fmt.Errorf("encode code action %s: %w", def.Ref, err)
 				}
 				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
 					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
 			case platform.AssetPage:
 				if def.Page == nil {
-					return platform.ReleaseCandidate{}, fmt.Errorf("code page %s has no owner declaration", def.Ref)
+					return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)
 				}
 				asset, err := platform.PageReleaseAsset(manifest.ID, manifest.Version, *def.Page)
 				if err != nil {
-					return platform.ReleaseCandidate{}, err
+					return nil, err
 				}
 				available = append(available, asset)
 			}
@@ -77,12 +90,120 @@ func (t *Tenant) releaseCandidateLocked(roots []platform.AssetRef) (platform.Rel
 			asset, err := platform.ApplicationReleaseAsset(manifest.ID, manifest.Version,
 				platform.Application{Name: manifest.ID, Title: manifest.Title, Pages: pages})
 			if err != nil {
-				return platform.ReleaseCandidate{}, err
+				return nil, err
 			}
 			available = append(available, asset)
 		}
 	}
+	return available, nil
+}
+
+// A changed object or page can affect a page or application above it. Include
+// those owners in the preview roots so its ID and diff describe the actual
+// impacted closure, not just the object picked in the editor.
+func dependentRoots(ref platform.AssetRef, available []platform.ReleaseAsset) []platform.AssetRef {
+	roots := []platform.AssetRef{ref}
+	seen := map[platform.AssetRef]bool{ref: true}
+	for changed := true; changed; {
+		changed = false
+		for _, asset := range available {
+			if seen[asset.Ref] {
+				continue
+			}
+			if slices.ContainsFunc(asset.Requires, func(dep platform.AssetRef) bool { return seen[dep] }) {
+				seen[asset.Ref] = true
+				roots = append(roots, asset.Ref)
+				changed = true
+			}
+		}
+	}
+	return roots
+}
+
+func (t *Tenant) previewCandidateLocked(ref platform.AssetRef, builderAssets []platform.ReleaseAsset, additionalRoots []platform.AssetRef) (platform.ReleaseCandidate, error) {
+	available, err := t.releaseAssetsLocked(builderAssets, true)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	roots := dependentRoots(ref, available)
+	for _, other := range additionalRoots {
+		if slices.ContainsFunc(available, func(a platform.ReleaseAsset) bool { return a.Ref == other }) &&
+			!slices.Contains(roots, other) {
+			roots = append(roots, other)
+		}
+	}
 	return platform.Candidate(roots, available)
+}
+
+// ReleasePreview is a builder-only comparison between the installed
+// development definition and one saved draft. The IDs are candidate IDs,
+// not published versions or an active release pointer.
+type ReleasePreview struct {
+	CurrentID   string              `json:"currentId,omitempty"`
+	CandidateID string              `json:"candidateId,omitempty"`
+	Added       []platform.AssetRef `json:"added"`
+	Removed     []platform.AssetRef `json:"removed"`
+	Changed     []platform.AssetRef `json:"changed"`
+	Diagnostic  string              `json:"diagnostic,omitempty"`
+}
+
+type ReleasePreviewRequest struct {
+	Kind platform.AssetKind `json:"kind"`
+	ID   string             `json:"id"`
+}
+
+// PreviewRelease checks authority before looking up the owner's unfiltered
+// records and before computing any digest or error path. It never changes the
+// installed definitions, persistent records, or active operator work.
+func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id string) (ReleasePreview, error) {
+	if m.Roles[build.ID] != build.Builder {
+		return ReleasePreview{}, fmt.Errorf("builder role required")
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	owner, ok := t.app(build.ID).(*build.Build)
+	if !ok {
+		return ReleasePreview{}, fmt.Errorf("tenant has no builder")
+	}
+	before, after, oldRoot, newRoot, hadPrior, diagnostic := owner.DraftReleaseAssets(kind, id)
+	reply := ReleasePreview{Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
+	var current platform.ReleaseCandidate
+	var oldOwners []platform.AssetRef
+	if hadPrior {
+		var err error
+		available, err := t.releaseAssetsLocked(before, true)
+		if err != nil {
+			return ReleasePreview{}, err
+		}
+		oldOwners = dependentRoots(oldRoot, available)
+		current, err = platform.Candidate(oldOwners, available)
+		if err != nil {
+			return ReleasePreview{}, fmt.Errorf("installed definition: %w", err)
+		}
+		reply.CurrentID = current.ID
+		// Renames must still check surviving pages/apps that pointed at the
+		// old identity. Removed generated assets are not roots of the new
+		// release, but a surviving dependent must be closed or diagnosed.
+		oldOwners = slices.DeleteFunc(oldOwners, func(ref platform.AssetRef) bool { return ref == oldRoot && ref != newRoot })
+	}
+	if diagnostic != nil {
+		reply.Diagnostic = diagnostic.Error()
+		return reply, nil
+	}
+	candidate, err := t.previewCandidateLocked(newRoot, after, oldOwners)
+	if err != nil {
+		reply.Diagnostic = err.Error()
+		return reply, nil
+	}
+	reply.CandidateID = candidate.ID
+	if !hadPrior {
+		for _, asset := range candidate.Assets {
+			reply.Added = append(reply.Added, asset.Ref)
+		}
+		return reply, nil
+	}
+	reply.Added, reply.Removed, reply.Changed, err = platform.CandidateDiff(current, candidate)
+	return reply, err
 }
 
 // Code behavior is pinned by Manifest.Version rather than serialized Go

@@ -470,6 +470,48 @@ test("route 30: a composed related table follows the selected account", async ({
   await expect(page.getByRole("row").filter({ hasText: "First deal " + firstOpp })).toHaveCount(0);
 });
 
+// Route 37 (ADR-0039 20a): the builder reviews the saved draft's semantic
+// closure and failure reason without installing it or disclosing it to others.
+test("route 37: review a saved draft and its dependencies", async ({ page, request }, testInfo) => {
+  const id = fresh("OBJ"), name = `review${Date.now().toString(36).slice(-5)}`;
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id },
+    { name, title: "Review visit", fields: [{ name: "guest", title: "Guest", type: "text" }] });
+  const noAccess = await request.post("/v1/releases/preview", {
+    headers: { Authorization: "Bearer desk" }, data: { kind: "object", id },
+  });
+  expect(noAccess.status()).toBe(403);
+  expect(await noAccess.text()).toBe("");
+  await open(page, "manager", "/home");
+  await page.getByRole("button", { name: "Application Studio" }).first().click();
+  await page.getByRole("button", { name: "Release review" }).click();
+  await page.getByRole("combobox", { name: "Saved draft" }).selectOption(id);
+  await page.getByRole("button", { name: "Check draft and dependencies" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Candidate ready for review")).toBeVisible();
+  await expect(page.getByText(`build/page/${name}`)).toBeVisible();
+  await expect(page.getByText(`build/object/build.${name}`)).toBeVisible();
+  await expect(page.getByText("Installed candidate:", { exact: false })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("release-review.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect(page.getByText(`build/page/${name}`)).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("release-review-narrow.png"), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  // Preview reads only: publication is a separate accepted action.
+  await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id }, {});
+  await page.getByRole("button", { name: "Check draft and dependencies" }).click();
+  await expect(page.getByText("Installed candidate:", { exact: false })).toBeVisible();
+  await expect(page.getByText("Changed · 0")).toBeVisible();
+
+  const bad = fresh("PAGE");
+  await decide(request, "manager", "build", "build.page.create", { type: "build.page", id: bad },
+    { name: `bad${Date.now().toString(36).slice(-5)}`, title: "Unbound", object: "crm.opportunity" });
+  await page.getByRole("combobox", { name: "Definition kind" }).selectOption("page");
+  await page.getByRole("combobox", { name: "Saved draft" }).selectOption(bad);
+  await page.getByRole("button", { name: "Check draft and dependencies" }).click();
+  await expect(page.getByText("Candidate rejected")).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "a page needs fields" })).toBeVisible();
+});
+
 // Route 31 (ADR-0036): what someone builds is handed to the people it was
 // built for — a name and an icon in their launcher, holding the page composed
 // in route 30, and nobody gains access they did not already have.
