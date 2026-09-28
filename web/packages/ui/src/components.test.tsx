@@ -46,6 +46,73 @@ test("DataTable shows custom empty text when not loading and data is empty", () 
   expect(screen.getByText("Nothing here")).toBeTruthy();
 });
 
+test("DataTable handles cell editing, Escape cancel, Enter commit, and Tab hop", () => {
+  const onCellEdit = vi.fn();
+  const editableColumns: ColumnDef<Row, any>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      meta: {
+        field: {
+          label: "Name",
+          editor: ({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) => (
+            <input
+              data-testid="cell-input"
+              value={String(value ?? "")}
+              onChange={(e) => onChange(e.target.value)}
+            />
+          ),
+        } as any,
+      },
+    },
+    {
+      accessorKey: "qty",
+      header: "Qty",
+    },
+  ];
+
+  render(
+    <DataTable
+      data={rows.slice(0, 5)}
+      columns={editableColumns}
+      getRowId={(r) => r.id}
+      onCellEdit={onCellEdit}
+    />
+  );
+
+  const firstCell = screen.getAllByRole("cell")[0]!;
+
+  // Double-click to begin editing
+  fireEvent.doubleClick(firstCell);
+  const input = screen.getByTestId("cell-input") as HTMLInputElement;
+  expect(input).toBeTruthy();
+  expect(input.value).toBe("Item 0");
+
+  // Type new value
+  fireEvent.change(input, { target: { value: "Updated Item 0" } });
+
+  // Escape cancels edit and does not commit
+  fireEvent.keyDown(input, { key: "Escape" });
+  expect(screen.queryByTestId("cell-input")).toBeNull();
+  expect(onCellEdit).not.toHaveBeenCalled();
+
+  // Double-click again, type and press Enter to commit
+  fireEvent.doubleClick(firstCell);
+  const input2 = screen.getByTestId("cell-input") as HTMLInputElement;
+  fireEvent.change(input2, { target: { value: "Committed Item 0" } });
+  fireEvent.keyDown(input2, { key: "Enter" });
+  expect(onCellEdit).toHaveBeenCalledWith(rows[0], "name", "Committed Item 0");
+  expect(screen.queryByTestId("cell-input")).toBeNull();
+
+  // Double-click again, change and press Tab to commit and hop
+  fireEvent.doubleClick(firstCell);
+  const input3 = screen.getByTestId("cell-input") as HTMLInputElement;
+  fireEvent.change(input3, { target: { value: "Tab Item 0" } });
+  fireEvent.keyDown(input3, { key: "Tab" });
+  expect(onCellEdit).toHaveBeenCalledWith(rows[0], "name", "Tab Item 0");
+  expect(screen.queryByTestId("cell-input")).toBeNull();
+});
+
 test("RecordLookup finds a scoped record beyond the first 500 without preloading them", async () => {
   const all = Array.from({ length: 600 }, (_, i) => ({ id: `A-${String(i + 1).padStart(3, "0")}`, name: `Account ${i + 1}` }));
   const list = vi.fn(async (_type: string, q: { search?: string; offset?: number; limit?: number }) => {
@@ -154,7 +221,7 @@ test("humanizeKernelError maps error codes and translates to reader's language",
 test("RecordPage shows structured error state with retry on fetch failure", async () => {
   let callCount = 0;
   const mockSource: RecordSource = {
-    entity: () => ({ type: "crm.account", title: "Account", plural: "Accounts", display: "id", fields: [] }),
+    entity: () => ({ app: "crm", type: "crm.account", title: "Account", plural: "Accounts", display: "id", fields: [], standard: [] }),
     get: vi.fn().mockImplementation(() => {
       callCount++;
       if (callCount === 1) return Promise.reject(new Error("ERROR_CODE_NOT_FOUND"));
