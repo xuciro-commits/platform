@@ -29,7 +29,7 @@ export function PayloadFields({ fields, values, onChange, preview = false }: { f
           : f.from ? preview ? <Input id={id} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
             : <ReadPicker id={id} field={f} value={String(value ?? "")} onChange={(v) => set(v || undefined)} />
           : f.type === "string" && String(value ?? "").length > 60 ? <Textarea id={id} rows={4} value={String(value ?? "")} onChange={(e) => set(e.target.value)} />
-          : <Input id={id} type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? "date" : "text"} value={value === undefined ? "" : String(value)}
+          : <Input id={id} type={f.type === "integer" || f.type === "number" ? "number" : f.type === "date" ? "date" : f.type === "datetime" ? "datetime-local" : "text"} value={value === undefined ? "" : String(value)}
               onChange={(e) => set(f.type === "integer" || f.type === "number" ? (e.target.value === "" ? undefined : Number(e.target.value)) : e.target.value)} />}
       </div>
     );
@@ -64,24 +64,38 @@ function ActionDialog({ declared, type, record, onClose }: { declared: ActionDec
   const info = source.entity(type);
   const [id, setId] = useState(() => newId(prefixOf(type)));
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const [submitting, setSubmitting] = useState(false);
   const target = { type, id: record?.id ?? id };
   const options = record ? { expectedRevision: record.revision } : { expectedRevision: 0 };
   const done = (ok: boolean) => { if (ok) onClose(); };
   const generated = declared.schema === `${type}.create`; // the entity's own form
   const missing = declared.payload.some((f) => f.required && (values[f.name] === undefined || values[f.name] === ""));
+
+  const submitAction = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      done(await decide(declared.schema, target, values, options));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Dialog open wide={generated && info?.fields.some((f) => f.type === "lines")} onOpenChange={(o) => !o && onClose()}
+    <Dialog open wide={generated && info?.fields.some((f) => f.type === "lines")} onOpenChange={(o) => !o && !submitting && onClose()}
       title={record ? `${declared.title} ${record.id}` : declared.title}>
       <div className="grid gap-3">
         {declared.description && <p className="text-sm text-muted">{declared.description}</p>}
-        {!record && <label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={(e) => setId(e.target.value.trim())} /></label>}
+        {!record && <label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={(e) => setId(e.target.value.trim())} disabled={submitting} /></label>}
         {generated
           ? <GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onSubmit={async (v) => done(!!id && await decide(declared.schema, target, v, options))} />
           : <>
               <PayloadFields fields={declared.payload} values={values} onChange={setValues} />
               <div className="flex justify-end gap-2">
-                <Button onClick={onClose}>{t("Cancel")}</Button>
-                <Button variant="primary" disabled={missing || !target.id} onClick={async () => done(await decide(declared.schema, target, values, options))}>{declared.title}</Button>
+                <Button onClick={onClose} disabled={submitting}>{t("Cancel")}</Button>
+                <Button variant="primary" disabled={missing || !target.id || submitting} onClick={submitAction}>
+                  {submitting ? t("Executing…") : declared.title}
+                </Button>
               </div>
             </>}
       </div>

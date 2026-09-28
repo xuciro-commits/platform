@@ -24,7 +24,7 @@ function chosen(): string {
   return languages.some((l) => l.id === wanted) ? wanted : "en";
 }
 
-const current = chosen();
+let current = chosen();
 if (typeof document !== "undefined") document.documentElement.lang = current;
 
 /** The page's language, such as "en" or "zh-CN". */
@@ -34,8 +34,13 @@ export function language(): string {
 
 /** Chooses the page's language; the page reloads in it. */
 export function setLanguage(id: string): void {
+  current = id;
+  if (typeof document !== "undefined") document.documentElement.lang = current;
   try { localStorage.setItem(key, id); } catch { /* storage unavailable: this page only */ }
-  location.reload();
+  const inTest = typeof globalThis !== "undefined" && Boolean((globalThis as unknown as { process?: { env?: { VITEST?: string } } }).process?.env?.VITEST);
+  if (typeof location !== "undefined" && !inTest) {
+    try { location.reload(); } catch { /* in environments where reload is unavailable */ }
+  }
 }
 
 /** Adds a package's translations for a language. */

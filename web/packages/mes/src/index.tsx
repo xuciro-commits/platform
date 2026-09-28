@@ -42,7 +42,7 @@ const downtimeStatus = defineStatuses({
 // The plant's records (ADR-0016), through the host's generic reads.
 const ordersQuery = "/v1/records/mes.order?sort=id&archived=true&limit=500";
 const sfcsQuery = "/v1/records/mes.sfc?sort=id&archived=true&limit=500";
-const time = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString() : "—");
+const dateTime = (iso?: string) => (iso ? new Date(iso).toLocaleString() : "—");
 
 // The host for the signed-in member, with the plant's master data (products, routings, work centers).
 function usePlant() {
@@ -55,8 +55,9 @@ function routing(master: Master | undefined, productId: string) {
 
 function PlannedOrders() {
   const orders = useRead<{ records: Order[] }>(ordersQuery)?.records ?? [];
+  const plannedOrders = useRead<Planned[]>("/v1/planned-orders");
   // Joined into the rows: the table caches accessor values per row object.
-  const planned = (useRead<Planned[]>("/v1/planned-orders") ?? [])
+  const planned = (plannedOrders ?? [])
     .map((p) => {
       const o = orders.find((x) => x.planned === p.erpId);
       return { ...p, released: o?.id ?? "", erp: o?.erp ?? "", confirmation: o?.confirmation ?? o?.erpDetail ?? "" };
@@ -79,7 +80,7 @@ function PlannedOrders() {
   return (
     <>
       <PageHeader title={t("Planned orders")} description={t("Production orders the ERP released to the plant (production.orders/1); release a shop order against one.")} />
-      <DataTable data={planned} columns={columns} getRowId={(p) => p.erpId} height="calc(100dvh - 190px)" />
+      <DataTable data={planned} columns={columns} getRowId={(p) => p.erpId} height="calc(100dvh - 190px)" loading={!plannedOrders} />
       <Dialog open={!!releasing} onOpenChange={(o) => !o && setReleasing(undefined)} title={t("Release {id}", { id: releasing?.number ?? "" })}>
         {releasing && (
           <EntityForm schema={z.object({ order: z.string().regex(/^SO-\d+$/, t("Format SO-123")), sfcs: z.number().int().min(1).max(releasing.quantity) })}
@@ -143,7 +144,8 @@ const shown = { work: (s: SFC) => s.state === "queued" || s.state === "active", 
 
 function SFCTable({ initial = "work", title, description }: { initial?: keyof typeof shown; title: string; description: string }) {
   const [which, setWhich] = useState<keyof typeof shown>(initial);
-  const sfcs = (useRead<{ records: SFC[] }>(sfcsQuery)?.records ?? []).filter(shown[which]);
+  const sfcData = useRead<{ records: SFC[] }>(sfcsQuery);
+  const sfcs = (sfcData?.records ?? []).filter(shown[which]);
   const { master } = usePlant();
   const { open } = useWorkspace();
   const columns: ColumnDef<SFC, any>[] = [
@@ -164,7 +166,7 @@ function SFCTable({ initial = "work", title, description }: { initial?: keyof ty
           <option value="done">{t("Done or scrapped")}</option><option value="all">{t("All")}</option>
         </Select>} />
       <DataTable data={sfcs} columns={columns} getRowId={(s) => s.id} height="calc(100dvh - 190px)"
-        onRowClick={(s) => open({ view: "sfc", params: { id: s.id } }, { window: "float" })} empty={t("Nothing here")} />
+        onRowClick={(s) => open({ view: "sfc", params: { id: s.id } }, { window: "float" })} loading={!sfcData} empty={t("Nothing here")} />
     </>
   );
 }
@@ -247,13 +249,14 @@ function SFCDetail({ id }: { id: string }) {
 }
 
 function Equipment() {
-  const events = useRead<Downtime[]>("/v1/downtime") ?? [];
+  const data = useRead<Downtime[]>("/v1/downtime");
+  const events = data ?? [];
   const { decide, can } = usePlant();
   const [assigning, setAssigning] = useState<Downtime>();
   const columns: ColumnDef<Downtime, any>[] = [
     { accessorKey: "resource", header: t("Resource"), meta: { width: 110 } },
-    { accessorKey: "start", header: t("Start"), meta: { width: 110 }, cell: (c) => time(c.getValue()) },
-    { accessorKey: "end", header: t("End"), meta: { width: 110 }, cell: (c) => time(c.getValue()) },
+    { accessorKey: "start", header: t("Start"), meta: { width: 160 }, cell: (c) => dateTime(c.getValue()) },
+    { accessorKey: "end", header: t("End"), meta: { width: 160 }, cell: (c) => dateTime(c.getValue()) },
     { id: "status", header: t("Status"), meta: { width: 110 }, accessorFn: (d) => (d.needsCheck ? "check" : d.end ? "closed" : "open"),
       cell: (c) => <StatusTag status={c.getValue()} registry={downtimeStatus} /> },
     { accessorKey: "reason", header: t("Reason") },
@@ -263,7 +266,7 @@ function Equipment() {
   return (
     <>
       <PageHeader title={t("Equipment downtime")} description={t("Derived from gateway state batches; each stop is an entity, so its reason survives late data.")} />
-      <DataTable data={events} columns={columns} getRowId={(d) => d.id} height="calc(100dvh - 190px)" empty={t("No downtime yet — run gateway-sim")} />
+      <DataTable data={events} columns={columns} getRowId={(d) => d.id} height="calc(100dvh - 190px)" loading={!data} empty={t("No downtime yet — run gateway-sim")} />
       <Dialog open={!!assigning} onOpenChange={(o) => !o && setAssigning(undefined)} title={t("Reason for {resource} stop", { resource: assigning?.resource ?? "" })}>
         {assigning && (
           <EntityForm schema={z.object({ reason: z.string().min(1) })} defaultValues={{ reason: assigning.reason ?? downtimeReasons[0] }}

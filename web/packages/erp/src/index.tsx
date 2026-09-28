@@ -49,7 +49,8 @@ type Stock = { product: string; name: string; unit: string; quantity: number; va
 const amount = (minor: number) => (minor / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function OnHand() {
-  const rows = useRead<Stock[]>("/v1/on-hand") ?? [];
+  const data = useRead<Stock[]>("/v1/on-hand");
+  const rows = data ?? [];
   const columns: ColumnDef<Stock, any>[] = [
     { id: "product", header: t("Product"), accessorFn: (r) => `${r.product} ${r.name}` },
     { id: "quantity", header: t("Quantity"), meta: { width: 140, align: "right" }, accessorFn: (r) => `${r.quantity.toLocaleString()} ${r.unit}` },
@@ -58,7 +59,7 @@ function OnHand() {
   return (
     <>
       <PageHeader title={t("On hand")} description={t("What is in stock: the sum of each product's moves, valued at standard cost.")} />
-      <DataTable data={rows} columns={columns} getRowId={(r) => r.product} height="calc(100dvh - 190px)" searchable={false} empty={t("Nothing in stock")} />
+      <DataTable data={rows} columns={columns} getRowId={(r) => r.product} height="calc(100dvh - 190px)" searchable={false} loading={!data} empty={t("Nothing in stock")} />
     </>
   );
 }
@@ -78,7 +79,8 @@ function Periods() {
 type Balance = { account: string; name: string; kind: string; debit: number; credit: number; balance: number };
 
 function TrialBalance() {
-  const rows = useRead<Balance[]>("/v1/trial-balance") ?? [];
+  const data = useRead<Balance[]>("/v1/trial-balance");
+  const rows = data ?? [];
   const total = (k: "debit" | "credit") => rows.reduce((s, r) => s + r[k], 0);
   // The totals as the last row: debits equal credits when the books balance.
   const shown = rows.length ? [...rows, { account: "", name: t("Total"), kind: "", debit: total("debit"), credit: total("credit"), balance: NaN }] : [];
@@ -92,14 +94,14 @@ function TrialBalance() {
   return (
     <>
       <PageHeader title={t("Trial balance")} description={t("Every account with postings: the sums of its debits and credits, and its balance. Debits equal credits when the books balance.")} />
-      <DataTable data={shown} columns={columns} getRowId={(r) => r.account || "total"} height="calc(100dvh - 190px)" searchable={false} empty={t("Nothing posted")} />
+      <DataTable data={shown} columns={columns} getRowId={(r) => r.account || "total"} height="calc(100dvh - 190px)" searchable={false} loading={!data} empty={t("Nothing posted")} />
     </>
   );
 }
 
 export default defineApp({
   id: "erp",
-  title: "ERP",
+  title: t("ERP"),
   icon: <Landmark />,
   home: { view: "entries" },
   views: [

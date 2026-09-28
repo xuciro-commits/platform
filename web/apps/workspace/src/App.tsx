@@ -5,7 +5,7 @@
 import "./i18n";
 import { HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
-import { Workspace, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
+import { Workspace, humanizeKernelError, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Bookmark, Boxes, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -103,8 +103,10 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       ok = entry.state === "SUBMISSION_STATE_CONFIRMED";
       const declared = actions?.find((a) => a.schema === schema);
       const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree (ADR-0017)
-      if (!ok) options.onRefused?.(entry.reason ?? entry.outcome ?? t("refused"));
-      if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? schema, target: target.id, outcome: ok ? done : entry.reason ?? entry.outcome ?? "" }));
+      const rawOutcome = entry.reason ?? entry.outcome;
+      const outcomeText = ok ? done : humanizeKernelError(rawOutcome);
+      if (!ok) options.onRefused?.(outcomeText);
+      if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? schema, target: target.id, outcome: outcomeText }));
     }
     setOutbox([...client.authorities.outbox]);
     await queries.invalidateQueries();

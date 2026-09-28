@@ -3,13 +3,13 @@
 // search, sort and paging, a record page (fields, related records, history) and
 // generated forms. Components take a RecordSource, so the kit knows no client.
 import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { DataTable } from "../components/DataTable";
 import { PropertyList } from "../components/EntityCard";
 import { Tag } from "../components/StatusTag";
 import { columnsFor, defineEntity, type Entity } from "../fields/entity";
-import { checkbox, date, datetime, longText, multiSelect, number, singleSelect, tags, text, type FieldType } from "../fields/types";
+import { checkbox, date, datetime, longText, markdown, multiSelect, number, singleSelect, tags, text, type FieldType } from "../fields/types";
 import { Button } from "../primitives/button";
 import { Input, Select } from "../primitives/input";
 import { RecordLookup } from "./RecordLookup";
@@ -18,6 +18,7 @@ import { Graph, type GraphEdge, type GraphNode } from "../graph/Graph";
 import { Pivot } from "../charts/Pivot";
 import type { AggregateData, AggregateQuery, ChartSpec, Mark } from "../charts/spec";
 import { t } from "../i18n";
+import { humanizeKernelError } from "../lib/errors";
 import type { Api } from "@platform/kernel";
 
 // What the host describes is generated from its Go types (ADR-0023 D7); the kit
@@ -98,7 +99,10 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
     const common = { label: f.title, help: f.help, required: f.required, readOnly: f.readOnly };
     fields[f.name] = (() => {
       switch (f.type) {
-        case "longtext": return longText(common);
+        case "longtext":
+          return info.type === "knowledge.document" && f.name === "text"
+            ? markdown(common)
+            : longText(common);
         case "integer": return number(common);
         case "decimal": return number({ ...common, decimals: 2 });
         case "money": return money(common);
@@ -315,7 +319,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
       </div>
       {view === "list" && (
         <DataTable data={page?.records ?? []} columns={columnsOf as never} getRowId={(r: EntityRecord) => r.id} height={height} searchable={false}
-          onRowClick={onOpen} empty={page ? t("No {things}", { things: info.plural.toLowerCase() }) : t("Loading…")} />
+          onRowClick={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })} />
       )}
       {view === "pivot" && aggregate && rows && (
         <Pivot source={{ aggregate, revision: source.revision }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}
@@ -328,13 +332,13 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
 
 /** A record's history from the journal: who changed what, newest last. Its
  *  page shows it, and so does a composed page's timeline (ADR-0035 16b). */
-export function RecordHistory({ info, history, heading = true }: { info: EntityInfo; history: RecordView["history"]; heading?: boolean }) {
+export function RecordHistory({ info, history = [], heading = true }: { info: EntityInfo; history?: RecordView["history"]; heading?: boolean }) {
   return (
     <section aria-label={t("History")}>
       {heading && <h2 className="mb-1 flex items-center gap-1 text-sm font-semibold"><HistoryIcon className="size-3.5" />{t("History")}</h2>}
-      {history.length === 0 && <p className="text-sm text-muted">{t("No changes yet.")}</p>}
+      {(history ?? []).length === 0 && <p className="text-sm text-muted">{t("No changes yet.")}</p>}
       <ol className="grid gap-2">
-        {history.map((h, i) => (
+        {(history ?? []).map((h, i) => (
           <li key={`${h.change}:${i}`} className="rounded-md border border-border bg-surface p-2 text-xs">
             <div className="flex gap-2"><span className="font-mono">{h.schema}</span><span className="text-muted">{h.by} · {new Date(h.at).toLocaleString()}</span></div>
             {h.fields.length > 0 && (
@@ -374,9 +378,23 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   const info = source.entity(type);
   const [view, setView] = useState<RecordView>();
   const [error, setError] = useState<string>();
-  useEffect(() => { source.get(type, id).then(setView, (e) => setError(String(e))); }, [source, type, id, reload]);
+  const load = useCallback(() => {
+    setError(undefined);
+    source.get(type, id).then(setView, (e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [source, type, id]);
+  useEffect(() => { load(); }, [load, reload]);
   const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
-  if (error) return <p className="text-sm text-[var(--tone-danger)]">{error}</p>;
+  if (error) {
+    return (
+      <div role="alert" className="grid max-w-xl gap-2 rounded-md border border-[var(--tone-danger)] bg-surface p-4 text-sm">
+        <p className="font-medium text-[var(--tone-danger)]">{t("Could not load record.")}</p>
+        <p className="font-mono text-xs text-muted">{humanizeKernelError(error)}</p>
+        <div>
+          <Button size="sm" onClick={load}>{t("Try again")}</Button>
+        </div>
+      </div>
+    );
+  }
   if (!info || !entity || !view) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const r = view.record;
   return (

@@ -8,6 +8,7 @@ export { Dialog } from "./primitives/dialog";
 export { StatusTag, Tag, defineStatuses, submissionStatuses, type StatusRegistry, type Tone } from "./components/StatusTag";
 export { DataTable, type DataTableProps } from "./components/DataTable";
 export { EntityForm, RecordForm, type Field } from "./components/EntityForm";
+export { Markdown, MarkdownEditor, parseInline } from "./components/Markdown";
 export * as field from "./fields/types";
 export type { FieldType, EditorProps, Operator, Option, Attachment } from "./fields/types";
 export { defineEntity, columnsFor, recordSchema, applyFilters, valueOf, FilterBar, type Entity, type Filter } from "./fields/entity";
@@ -27,3 +28,5 @@ export { aggregateQuery, aggregateValues, columnOf, type ChartSpec, type ChartDa
 export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, RecordHistory, Tasks, StatusBar, entityFrom, setCurrency, type Options, type InboxTask, type Lifecycle, type State, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";
 export { RecordWorkspace } from "./records/RecordWorkspace";
 export { RecordLookup } from "./records/RecordLookup";
+export { humanizeKernelError } from "./lib/errors";
+

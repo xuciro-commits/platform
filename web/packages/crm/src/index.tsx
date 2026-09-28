@@ -13,7 +13,7 @@ const count = { aggregate: "count", type: "quantitative" } as const;
 
 export default defineApp({
   id: "crm",
-  title: "CRM",
+  title: t("CRM"),
   icon: <Handshake />,
   home: { view: "accounts" },
   // The pipeline within what the member may see: a sales rep's own opportunities, a manager's all (ADR-0019).
@@ -29,7 +29,7 @@ export default defineApp({
     { id: "accounts", title: () => t("Accounts"), render: () => <Records type="crm.account" description={t("Customers, companies or people, each with their opportunities and the stays booked for them.")} /> },
     { id: "opportunities", title: () => t("Opportunities"), render: () => <Records type="crm.opportunity" /> },
   ],
-  nav: () => [{ label: "CRM", items: [
+  nav: () => [{ label: t("CRM"), items: [
     { label: t("Accounts"), icon: <Building2 />, route: { view: "accounts" } },
     { label: t("Opportunities"), icon: <Handshake />, route: { view: "opportunities" } },
   ] }],

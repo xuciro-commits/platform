@@ -5,7 +5,7 @@
 // checks every binding when the page is published.
 import { ComposedPage, NewActions, useHost, useReadQuery, type Definition } from "@platform/app";
 import {
-  Button, Card, Input, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, cn, defineStatuses, notify, t, useWorkspace,
+  Button, Card, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, cn, defineStatuses, humanizeKernelError, notify, t, useWorkspace,
   type EntityInfo,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Settings2, Trash2 } from "lucide-react";
@@ -70,6 +70,8 @@ export function PageEditor({ id }: { id: string }) {
   const [settings, setSettings] = useState<{ title: string; description: string }>();
   // Why the host refused, kept in front of the person until the next attempt.
   const [refused, setRefused] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   useEffect(() => {
     if (page && !dirty) {
       setSections(page.sections ?? []);
@@ -103,15 +105,25 @@ export function PageEditor({ id }: { id: string }) {
   };
   const save = async () => {
     setRefused(undefined);
-    const ok = await decide("build.page.edit", { type: "build.page", id }, { sections, ...settings }, { expectedRevision: page.revision, onRefused: setRefused });
-    if (ok) setDirty(false);
-    return ok;
+    setSaving(true);
+    try {
+      const ok = await decide("build.page.edit", { type: "build.page", id }, { sections, ...settings }, { expectedRevision: page.revision, onRefused: setRefused });
+      if (ok) setDirty(false);
+      return ok;
+    } finally {
+      setSaving(false);
+    }
   };
   const publish = async () => {
     setRefused(undefined);
     if (dirty && !(await save())) return; // what is published is what was saved
-    if (await decide("build.page.publish", { type: "build.page", id }, {}, { onRefused: setRefused })) {
-      notify.success(t("The page is in the workspace."));
+    setPublishing(true);
+    try {
+      if (await decide("build.page.publish", { type: "build.page", id }, {}, { onRefused: setRefused })) {
+        notify.success(t("The page is in the workspace."));
+      }
+    } finally {
+      setPublishing(false);
     }
   };
   // Nothing to publish: no widget laid out and no list/detail from the simple form.
@@ -121,12 +133,14 @@ export function PageEditor({ id }: { id: string }) {
       <PageHeader title={settings?.title || page.title} description={t("Compose what people see. Save keeps your work; publish puts it in the workspace.")}
         actions={<div className="flex items-center gap-2">
           <StatusTag status={page.state} registry={pageStates} />
-          <Button onClick={() => void save()} disabled={!dirty}>{t("Save")}</Button>
-          <Button variant="primary" onClick={() => void publish()} disabled={nothing}
-            title={nothing ? t("Add at least one widget before publishing.") : undefined}>{t("Publish")}</Button>
+          <Button onClick={() => void save()} disabled={!dirty || saving || publishing}>{saving ? t("Saving…") : t("Save")}</Button>
+          <Button variant="primary" onClick={() => void publish()} disabled={nothing || publishing || saving}
+            title={nothing ? t("Add at least one widget before publishing.") : undefined}>
+            {publishing ? t("Publishing…") : t("Publish")}
+          </Button>
         </div>} />
       {nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before publishing.")}</Panel>}
-      {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {refused}</Panel>}
+      {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {dirty && <Panel role="status" className="text-xs text-muted">{t("Not saved yet. Publishing saves first.")}</Panel>}
       {/* The workspace scrolls the stack on narrow screens. Wide screens keep
           independent panes so the canvas stays in view while editing. */}
@@ -268,9 +282,10 @@ function Properties({ section, info, catalog, object, onChange }: {
         </label>
       )}
       {section.widget === "text" && (
-        <label className="grid gap-1 text-xs">{t("Words")}
-          <Textarea rows={5} value={section.text ?? ""} onChange={(e) => onChange({ text: e.target.value })} />
-        </label>
+        <div className="grid gap-1 text-xs">
+          <span className="font-medium text-muted">{t("Words")}</span>
+          <MarkdownEditor value={section.text ?? ""} onChange={(text) => onChange({ text })} rows={6} placeholder={t("Write markdown here…")} />
+        </div>
       )}
     </Card>
   );

@@ -33,13 +33,17 @@ export type DataTableProps<T> = {
   searchable?: boolean;
   toolbar?: ReactNode;
   empty?: ReactNode;
+  /** Shows a loading state when rows are being fetched. */
+  loading?: boolean;
+  loadingText?: ReactNode;
   /** Makes cells of editable field types (columnsFor) editable in place: double-click or Enter. */
   onCellEdit?: (row: T, column: string, value: unknown) => void;
 };
 
 /** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
-  data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"), onCellEdit,
+  data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
+  loading = false, loadingText, onCellEdit,
 }: DataTableProps<T>) {
   const [editing, setEditing] = useState<{ row: string; column: string; draft: unknown }>();
   // Like a spreadsheet: opening an editor selects the value, so typing replaces it.
@@ -102,7 +106,9 @@ export function DataTable<T>({
             </div>
           ))}
         </div>
-        {rows.length === 0 ? (
+        {loading && rows.length === 0 ? (
+          <div role="status" className="p-6 text-center text-sm text-muted">{loadingText ?? t("Loading…")}</div>
+        ) : rows.length === 0 ? (
           <div className="p-6 text-center text-sm text-muted">{empty}</div>
         ) : (
           <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize(), minWidth }}>

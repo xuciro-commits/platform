@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "CRM": "CRM",
   "Customers, companies or people, each with their opportunities and the stays booked for them.": "客户，公司或个人，每个客户都有自己的商机和为它预订的住宿。",
   "Accounts": "客户",
   "By owner and stage": "按负责人和阶段",

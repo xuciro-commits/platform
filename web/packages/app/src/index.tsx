@@ -151,13 +151,20 @@ export function Records({ type, description, actions, covers, saved }: { type: s
   const { open } = useWorkspace();
   const info = source.entity(type);
   const [saving, setSaving] = useState<ListState>();
+  const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(saved?.title ?? "");
   const initial = useMemo<ListState>(() => { try { return saved ? JSON.parse(saved.state) as ListState : {}; } catch { return {}; } }, [saved]);
   const save = async () => {
-    const id = saved?.id ?? newId("VIEW");
-    if (await decide("work.view.save", { type: "work.view", id }, { title, entity: type, state: JSON.stringify(saving) })) {
-      setSaving(undefined);
-      if (!saved) open({ view: "saved", params: { id } });
+    if (busy) return;
+    setBusy(true);
+    try {
+      const id = saved?.id ?? newId("VIEW");
+      if (await decide("work.view.save", { type: "work.view", id }, { title, entity: type, state: JSON.stringify(saving) })) {
+        setSaving(undefined);
+        if (!saved) open({ view: "saved", params: { id } });
+      }
+    } finally {
+      setBusy(false);
     }
   };
   return (
@@ -166,12 +173,12 @@ export function Records({ type, description, actions, covers, saved }: { type: s
         <Transfer type={type} client={client} importable={can(`${type}.create`) || can(`${type}.edit`)} /></>}
         description={saved ? t("Your saved view of {things}.", { things: info?.plural.toLowerCase() ?? type }) : description ?? info?.description ?? t("Generated from the entity's declaration: search, sort and pages come from the host, within what you may see.")} />
       <RecordList key={saved?.id ?? type} source={source} type={type} initial={initial} onSave={setSaving} onOpen={(r) => openRecord({ type, id: r.id })} />
-      <Dialog open={!!saving} onOpenChange={(o) => !o && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
-        <Form className="grid gap-3" onSubmit={() => { if (title.trim()) void save(); }}>
-          <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+      <Dialog open={!!saving} onOpenChange={(o) => !o && !busy && setSaving(undefined)} title={saved ? t("Save {name}", { name: saved.title }) : t("Save view")}>
+        <Form className="grid gap-3" onSubmit={() => { if (title.trim() && !busy) void save(); }}>
+          <Input aria-label={t("Name")} placeholder={t("Name of the view")} value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} autoFocus />
           <div className="flex justify-end gap-2">
-            <Button type="button" onClick={() => setSaving(undefined)}>{t("Cancel")}</Button>
-            <Button type="submit" variant="primary" disabled={!title.trim()}>{t("Save")}</Button>
+            <Button type="button" onClick={() => setSaving(undefined)} disabled={busy}>{t("Cancel")}</Button>
+            <Button type="submit" variant="primary" disabled={!title.trim() || busy}>{busy ? t("Saving…") : t("Save")}</Button>
           </div>
         </Form>
       </Dialog>

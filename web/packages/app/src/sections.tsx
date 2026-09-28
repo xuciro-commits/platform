@@ -5,7 +5,7 @@
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, Panel, RecordHistory, RecordList, RecordLookup, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
+  Button, Card, Chart, Markdown, Panel, RecordHistory, RecordList, RecordLookup, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
 } from "@platform/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
@@ -187,7 +187,7 @@ export function SectionView(bound: Bound & Composing) {
       case "actions": return <ActionsWidget {...bound} />;
       case "chart": return <ChartWidget {...bound} kpi={false} />;
       case "metric": return <ChartWidget {...bound} kpi />;
-      case "text": return <p className="whitespace-pre-wrap text-sm">{section.text}</p>;
+      case "text": return <Markdown content={section.text} className="text-sm" />;
       case "filter": return <FilterWidget {...bound} />;
       case "form": return <FormWidget {...bound} />;
       case "timeline": return <TimelineWidget {...bound} />;
