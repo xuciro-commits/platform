@@ -69,8 +69,26 @@ func (t *Tenant) enqueue(now time.Time) {
 		t.events = t.events[1:]
 		s := e.Record.GetSubmission()
 		names := append([]string{s.GetSchema().GetName()}, t.protocolEvents(e.Event)...)
+		if e.plan != nil {
+			names = e.plan.Names
+		}
 		for _, o := range t.observers {
 			o.Observe(e.Event, names[1:])
+		}
+		if e.plan != nil {
+			t.opsMu.Lock()
+			for _, planned := range e.plan.Effects {
+				t.outbound = append(t.outbound, &effect{Effect: planned, span: t.current()})
+			}
+			t.trimEffects()
+			t.opsMu.Unlock()
+			for _, id := range e.plan.Subscribers {
+				if t.app(id) == nil {
+					panic(fmt.Errorf("accepted result requires missing subscriber %s", id))
+				}
+				t.deliver(id, e, now)
+			}
+			continue
 		}
 		t.emit(e.Event, names)
 		for _, a := range t.apps {
@@ -255,6 +273,9 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 	var err *kernel.Error
 	if x, ok := t.app(task.App).(host.Listener); ok { // the platform's own listeners, on the attempt's clock
 		names := append([]string{task.event.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(task.event.Event)...)
+		if task.event.plan != nil {
+			names = task.event.plan.Names
+		}
 		err = x.Listen(t.automation(task.App, replaying), task.event.Event, names, now)
 	} else {
 		err = t.app(task.App).(platform.Subscriber).Handle(t.automation(task.App, replaying), task.event.Event)

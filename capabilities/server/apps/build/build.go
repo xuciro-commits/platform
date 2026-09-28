@@ -160,6 +160,7 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 }
 
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
+func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (b *Build) Snapshot() (json.RawMessage, error)       { return b.ledger.Snapshot() }
 func (b *Build) Restore(raw json.RawMessage) error        { return b.ledger.Restore(raw) }
 func (b *Build) Read(platform.Caller, string) (any, *kernel.Error) {

@@ -32,6 +32,10 @@ func TestTenantDefinedObject(t *testing.T) {
 	}
 	tn := compose()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		journal = append(journal, e)
+		return e.Body, nil
+	}
 	member := func(id string) platform.Member {
 		m, _ := tn.app(PlatformApp).(*Console).Member(id)
 		return m
@@ -293,6 +297,11 @@ func TestTenantDefinedObject(t *testing.T) {
 	// field's own choices — the application never reaches publication with one.
 	if got := do("dana", build.AppType+".edit", build.AppType, "A-1", map[string]any{"icon": "rocket"}); got == "ok" {
 		t.Error("an icon outside the platform's set was stored")
+	}
+	if !slices.ContainsFunc(journal, func(e Entry) bool {
+		return e.Kind == "accepted-result" && e.App == build.ID
+	}) {
+		t.Fatal("tenant-defined records did not use the accepted-result boundary")
 	}
 	CheckReplay(t, tn, journal, compose)
 }

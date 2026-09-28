@@ -12,8 +12,19 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/platform"
 )
+
+type acceptedListener struct {
+	*notes
+	enabled bool
+}
+
+func (a acceptedListener) Interested([]string, platform.Event) bool { return a.enabled }
+func (a acceptedListener) Listen(platform.Caller, platform.Event, []string, time.Time) *kernel.Error {
+	return nil
+}
 
 func TestJournalAcceptedResultAtomicRetryAndRecovery(t *testing.T) {
 	url := os.Getenv("PLATFORM_TEST_DATABASE")
@@ -125,6 +136,63 @@ func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	CheckReplay(t, live, entries, func() *Tenant { return stockTenant(t) })
 }
 
+func TestGeneratedActionWithWrongTargetCannotFallBackToLegacy(t *testing.T) {
+	tn := stockTenant(t)
+	m, _ := tn.Member("ana")
+	var journal []Entry
+	tn.Record = func(e Entry) { journal = append(journal, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		journal = append(journal, e)
+		return e.Body, nil
+	}
+	_, err := tn.Submit(m, &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: "stock",
+		IdempotencyKey: "wrong-target", Target: &pb.EntityRef{Type: "stock.bin", Id: "B1"},
+		Schema:  &pb.SchemaRef{Name: "stock.item.create", Version: 1},
+		Payload: []byte(`{"name":"Bolt","line":"L1"}`)},
+		time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC))
+	if err == nil || len(journal) != 0 ||
+		tn.records.types["stock.item"].rows["B1"] != nil ||
+		tn.records.types["stock.bin"].rows["B1"] != nil {
+		t.Fatalf("malformed generated action escaped the isolated result boundary: %v, journal=%+v", err, journal)
+	}
+}
+
+func TestAcceptedRetryUsesCommittedInputClock(t *testing.T) {
+	original := stockTenant(t)
+	m, _ := original.Member("ana")
+	at := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
+	s := &pb.Submission{TenantId: original.ID, PrincipalId: m.ID, Authority: "stock",
+		IdempotencyKey: "resend", Target: &pb.EntityRef{Type: "stock.bin", Id: "B1"},
+		Schema: &pb.SchemaRef{Name: "stock.bin.create", Version: 1}, Payload: []byte(`{"code":"A"}`)}
+	var committed Entry
+	original.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		committed = e
+		return e.Body, nil
+	}
+	if _, err := original.Submit(m, s, at); err != nil {
+		t.Fatal(err)
+	}
+	// Another process read before this writer committed and retries the same
+	// request at a later clock. PostgreSQL returns the original result.
+	retry := stockTenant(t)
+	retry.AcceptResult = func(Entry, string, string) ([]byte, error) {
+		return committed.Body, nil
+	}
+	got, err := retry.Submit(m, s, at.Add(time.Hour))
+	if err != nil || got.GetChangeId() != "chg-1" {
+		t.Fatalf("retry was not answered from the committed result: %+v %v", got, err)
+	}
+	if len(retry.Audit()) != 1 || !retry.Audit()[0].At.Equal(at) {
+		t.Fatalf("retry adopted the caller's new clock: %+v", retry.Audit())
+	}
+	CheckReplay(t, retry, []Entry{committed}, func() *Tenant { return stockTenant(t) })
+	changedClock := committed
+	changedClock.At = at.Add(time.Hour)
+	if err := stockTenant(t).Replay([]Entry{changedClock}); err == nil {
+		t.Fatal("replay accepted a result whose input clock differs from the journal entry")
+	}
+}
+
 func TestAcceptedResultCrashAfterAppendBeforeApply(t *testing.T) {
 	source := stockTenant(t)
 	member, _ := source.Member("ana")
@@ -158,6 +226,99 @@ func TestAcceptedResultCrashAfterAppendBeforeApply(t *testing.T) {
 	}
 }
 
+func TestAcceptedResultPreservesWorkAndEffectIntents(t *testing.T) {
+	source := stockTenant(t, acceptedListener{newNotes("t-1", "listener"), true})
+	source.endpoints = []*Endpoint{{ID: "receiver", Events: []string{"stock.bin.create"}}}
+	member, _ := source.Member("ana")
+	at := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
+	var saved Entry
+	source.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		saved = e
+		return e.Body, nil
+	}
+	_, err := source.Submit(member, &pb.Submission{TenantId: source.ID, PrincipalId: member.ID, Authority: "stock",
+		IdempotencyKey: "intent", Target: &pb.EntityRef{Type: "stock.bin", Id: "B1"},
+		Schema: &pb.SchemaRef{Name: "stock.bin.create", Version: 1}, Payload: []byte(`{"code":"A"}`)}, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, decodeErr := decodeAcceptedResult(saved.Body)
+	if decodeErr != nil || result.Version != 2 || len(result.Event.Subscribers) != 1 ||
+		result.Event.Subscribers[0] != "listener" || len(result.Event.Effects) != 1 {
+		t.Fatalf("result omitted owned work: %+v, %v", result.Event, decodeErr)
+	}
+	// The installed code and endpoint subscriptions change before recovery.
+	// Replay uses the saved intent, not their new routing rules.
+	restarted := stockTenant(t, acceptedListener{newNotes("t-1", "listener"), false})
+	restarted.endpoints = []*Endpoint{{ID: "receiver", Events: []string{"stock.item.edit"}}}
+	if err := restarted.Replay([]Entry{saved}); err != nil {
+		t.Fatal(err)
+	}
+	if len(restarted.queues["listener"]) != 1 || len(restarted.outbound) != 1 ||
+		restarted.outbound[0].ID != source.outbound[0].ID ||
+		restarted.outbound[0].Event != "stock.bin.create" {
+		t.Fatalf("saved intents were rediscovered rather than restored: queues=%+v effects=%+v",
+			restarted.queues["listener"], restarted.outbound)
+	}
+	snapshot, _, snapErr := restarted.Snapshot(func() int64 { return 1 })
+	if snapErr != nil {
+		t.Fatal(snapErr)
+	}
+	restored := stockTenant(t, acceptedListener{newNotes("t-1", "listener"), false})
+	if err := restored.Restore(snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if len(restored.queues["listener"]) != 1 || restored.queues["listener"][0].event.plan == nil ||
+		restored.queues["listener"][0].event.plan.Names[0] != "stock.bin.create" {
+		t.Fatal("snapshot lost the committed delivery's original routing")
+	}
+}
+
+func TestAcceptedResultLegacyVersionAndInvalidWorkIntent(t *testing.T) {
+	source := stockTenant(t)
+	m, _ := source.Member("ana")
+	at := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
+	var committed Entry
+	source.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		committed = e
+		return e.Body, nil
+	}
+	_, err := source.Submit(m, &pb.Submission{TenantId: source.ID, PrincipalId: m.ID, Authority: "stock",
+		IdempotencyKey: "old", Target: &pb.EntityRef{Type: "stock.bin", Id: "B1"},
+		Schema: &pb.SchemaRef{Name: "stock.bin.create", Version: 1}, Payload: []byte(`{"code":"A"}`)}, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result acceptedResult
+	if err := json.Unmarshal(committed.Body, &result); err != nil {
+		t.Fatal(err)
+	}
+	result.Event.Names = nil
+	digest, digestErr := digestAcceptedResult(result)
+	if digestErr != nil {
+		t.Fatal(digestErr)
+	}
+	result.Digest = digest
+	malformed, _ := json.Marshal(result)
+	if err := stockTenant(t).Replay([]Entry{{App: "stock", Kind: "accepted-result", Body: malformed,
+		Principal: committed.Principal, At: at}}); err == nil {
+		t.Fatal("version 2 accepted a result without a recorded event plan")
+	}
+	// Results written by the previous format must remain readable.
+	result.Version = 1
+	result.At = time.Time{}
+	digest, digestErr = digestAcceptedResult(result)
+	if digestErr != nil {
+		t.Fatal(digestErr)
+	}
+	result.Digest = digest
+	prior, _ := json.Marshal(result)
+	if err := stockTenant(t).Replay([]Entry{{App: "stock", Kind: "accepted-result", Body: prior,
+		Principal: committed.Principal, At: at}}); err != nil {
+		t.Fatalf("previous result format no longer recovers: %v", err)
+	}
+}
+
 func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 	source := stockTenant(t)
 	app := source.app("stock").(*stock)
@@ -176,7 +337,7 @@ func TestAcceptedResultAppliesWithoutDecisionCode(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		raw, encodeErr := draft.result("stock", receipt)
+		raw, encodeErr := draft.result("stock", receipt, at)
 		if encodeErr != nil {
 			t.Fatal(encodeErr)
 		}
@@ -248,11 +409,12 @@ func TestAcceptedResultRejectsMalformedOrIncompatibleBytes(t *testing.T) {
 	sub := &pb.Submission{TenantId: source.ID, PrincipalId: member.ID, Authority: "stock", IdempotencyKey: "k1",
 		Target: &pb.EntityRef{Type: "stock.item", Id: "I1"}, Schema: &pb.SchemaRef{Name: "stock.item.create", Version: 1},
 		Payload: []byte(`{"name":"Bolt","qty":2}`)}
-	receipt, err := app.Submit(c, sub, time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC))
+	now := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
+	receipt, err := app.Submit(c, sub, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, encodeErr := draft.result("stock", receipt)
+	raw, encodeErr := draft.result("stock", receipt, now)
 	if encodeErr != nil {
 		t.Fatal(encodeErr)
 	}

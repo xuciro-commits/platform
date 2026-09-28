@@ -289,7 +289,6 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
-	defer t.enqueue(now)
 	if m.Agent && t.suspended(m.ID) { // an agent an administrator switched off (ADR-0029 D4)
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
@@ -298,6 +297,7 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 			return t.submitAccepted(resultApp, m, s, now)
 		}
 	}
+	defer t.enqueue(now)
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil && t.owner["action:"+work.SchemaRequest] != nil {
 		return t.request(m, a, s, now)
 	}
@@ -315,10 +315,16 @@ func (t *Tenant) acceptsGenerated(a platform.App, s *pb.Submission) bool {
 	}
 	t.records.mu.Lock()
 	defer t.records.mu.Unlock()
-	et := t.records.types[s.GetTarget().GetType()]
-	return et != nil && et.info.App == a.Manifest().ID &&
-		slices.Contains(et.info.Standard, schema) &&
-		(schema == et.info.Type+".create" || schema == et.info.Type+".edit")
+	// Select by the declared action, not the submitted target. A malformed
+	// target must be refused inside the isolated decision, not silently routed
+	// to the legacy direct mutator.
+	for _, et := range t.records.types {
+		if et.info.App == a.Manifest().ID && slices.Contains(et.info.Standard, schema) &&
+			(schema == et.info.Type+".create" || schema == et.info.Type+".edit") {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
@@ -334,7 +340,7 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 	if refusal != nil {
 		return nil, explained(refusal, a, s.GetSchema().GetName(), target(s))
 	}
-	raw, err := draft.result(a.Manifest().ID, record)
+	raw, err := draft.result(a.Manifest().ID, record, now)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
 	}
@@ -365,11 +371,15 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 	if err != nil {
 		panic(err)
 	}
+	if saved.At.IsZero() {
+		saved.At = receipt.GetRecordedTime().AsTime()
+	}
 	if applied {
-		t.remember(submitted(m.ID, a, receipt.GetSubmission(), now))
-		t.publish(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed})
+		t.remember(submitted(m.ID, a, receipt.GetSubmission(), saved.At))
+		t.publishAccepted(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event, saved.Version)
 		t.changed()
 	}
+	t.enqueue(saved.At)
 	return receipt, nil
 }
 
@@ -508,13 +518,44 @@ type caused struct {
 	platform.Event
 	hops int
 	span trace.SpanContext // the input that caused it, whose trace its delivery continues
+	plan *acceptedEvent    // durable work/effect intent; nil for legacy entries
 }
 
 // publish queues an accepted decision for its subscribers (Ledger, through Runtime).
 func (t *Tenant) publish(e platform.Event) {
 	e.Changed = t.Changed(e)
-	t.events = append(t.events, caused{e, t.hops, t.current()})
+	t.events = append(t.events, caused{Event: e, hops: t.hops, span: t.current()})
 	t.acted++
+}
+
+// planAcceptedEvent freezes the subscribers and outbound intents while the
+// decision is private. Recovery does not rediscover them from a newer
+// manifest or changed endpoint subscriptions.
+func (t *Tenant) planAcceptedEvent(e platform.Event) acceptedEvent {
+	names := append([]string{e.Record.GetSubmission().GetSchema().GetName()}, t.protocolEvents(e)...)
+	plan := acceptedEvent{App: e.App, Changed: slices.Clone(e.Changed), Names: names,
+		Effects: t.eventEffects(e, names)}
+	for _, a := range t.apps {
+		if slices.ContainsFunc(a.Manifest().Subscribes, func(x string) bool { return slices.Contains(names, x) }) {
+			plan.Subscribers = append(plan.Subscribers, a.Manifest().ID)
+		}
+	}
+	for _, id := range t.listeners {
+		if id != e.App && t.app(id).(host.Listener).Interested(names, e) &&
+			!slices.Contains(plan.Subscribers, id) {
+			plan.Subscribers = append(plan.Subscribers, id)
+		}
+	}
+	return plan
+}
+
+func (t *Tenant) publishAccepted(e platform.Event, plan acceptedEvent, version int) {
+	t.acted++
+	c := caused{Event: e, hops: t.hops, span: t.current()}
+	if version >= 2 {
+		c.plan = &plan
+	}
+	t.events = append(t.events, c)
 }
 
 // Deliveries is the tenant's recent event deliveries, oldest first.
@@ -593,15 +634,18 @@ func (t *Tenant) Replay(entries []Entry) error {
 				return fmt.Errorf("entry %d: app %s cannot apply accepted results", i+1, e.App)
 			}
 			saved, receipt, decodeErr := decodeAcceptedResult(e.Body)
-			if decodeErr != nil || saved.App != e.App {
+			if decodeErr != nil {
 				return fmt.Errorf("entry %d: invalid accepted result: %v", i+1, decodeErr)
+			}
+			if saved.App != e.App || saved.Version >= 2 && !saved.At.Equal(e.At) {
+				return fmt.Errorf("entry %d: accepted result app or input clock differs from journal entry", i+1)
 			}
 			applied, applyErr := t.applyAcceptedResult(ra.AcceptedLedger(), e.Body)
 			if applyErr != nil || !applied {
 				return fmt.Errorf("entry %d: accepted result: %v (applied=%t)", i+1, applyErr, applied)
 			}
 			t.remember(submitted(m.ID, a, receipt.GetSubmission(), e.At))
-			t.publish(platform.Event{App: e.App, Record: receipt, Changed: saved.Event.Changed})
+			t.publishAccepted(platform.Event{App: e.App, Record: receipt, Changed: saved.Event.Changed}, saved.Event, saved.Version)
 			t.enqueue(e.At)
 			continue
 		}

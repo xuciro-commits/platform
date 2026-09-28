@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -18,16 +19,16 @@ import (
 	"platformserver/platform"
 )
 
-// acceptedResult is the bounded 19a result for one generated create/edit
-// decision. It is not yet a journal entry: its version and size are checked
-// here before the host is allowed to persist or recover this family.
-const acceptedResultVersion = 1
+// acceptedResult is the bounded journal result for one generated create/edit
+// decision. Its version and size are checked before persistence and recovery.
+const acceptedResultVersion = 2
 const maxAcceptedResultBytes = 1 << 20
 
 type acceptedResult struct {
 	Version     int             `json:"version"`
 	Tenant      string          `json:"tenant"`
 	App         string          `json:"app"`
+	At          time.Time       `json:"at,omitempty"` // the original input clock, not a retry's
 	RequestHash string          `json:"requestHash"`
 	Digest      string          `json:"digest,omitempty"`
 	Receipt     json.RawMessage `json:"receipt"`
@@ -43,11 +44,14 @@ type acceptedRow struct {
 }
 
 type acceptedEvent struct {
-	App     string   `json:"app"`
-	Changed []string `json:"changed"`
+	App         string            `json:"app"`
+	Changed     []string          `json:"changed"`
+	Names       []string          `json:"names,omitempty"`
+	Subscribers []string          `json:"subscribers,omitempty"`
+	Effects     []platform.Effect `json:"effects,omitempty"`
 }
 
-func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord) ([]byte, error) {
+func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
 	if receipt == nil || len(d.events) != 1 || len(d.records.writes) != 1 || len(d.logs) != 1 {
 		return nil, fmt.Errorf("one accepted record and event are required")
 	}
@@ -87,9 +91,9 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord) ([]byte, e
 	}
 	hash := sha256.Sum256(request)
 	result := acceptedResult{Version: acceptedResultVersion, Tenant: receipt.GetSubmission().GetTenantId(),
-		App: app, RequestHash: hex.EncodeToString(hash[:]), Receipt: raw,
+		App: app, At: submittedAt.UTC(), RequestHash: hex.EncodeToString(hash[:]), Receipt: raw,
 		Row:   acceptedRow{Type: typ, ID: id, Value: value, History: history},
-		Event: acceptedEvent{App: app, Changed: []string{ref}}}
+		Event: d.tenant.planAcceptedEvent(d.events[0])}
 	result.Digest, err = digestAcceptedResult(result)
 	if err != nil {
 		return nil, err
@@ -126,7 +130,7 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 		return result, nil, fmt.Errorf("accepted receipt: %w", err)
 	}
 	sub := receipt.GetSubmission()
-	if result.Version != acceptedResultVersion || result.Tenant == "" || result.App == "" ||
+	if result.Version != 1 && result.Version != acceptedResultVersion || result.Tenant == "" || result.App == "" ||
 		sub == nil || sub.GetTenantId() != result.Tenant || sub.GetAuthority() != result.App ||
 		sub.GetIdempotencyKey() == "" || sub.GetPrincipalId() == "" || receipt.GetChangeId() == "" ||
 		receipt.GetRecordedTime() == nil || receipt.GetValidTime() == nil ||
@@ -135,6 +139,23 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 		len(result.Event.Changed) != 1 || result.Event.Changed[0] != result.Row.Type+"/"+result.Row.ID ||
 		len(result.Row.History) == 0 || len(result.Row.Value) == 0 {
 		return result, nil, fmt.Errorf("accepted result has inconsistent identity or effects")
+	}
+	if result.Version == acceptedResultVersion {
+		if result.At.IsZero() || len(result.Event.Names) == 0 || result.Event.Names[0] != sub.GetSchema().GetName() {
+			return result, nil, fmt.Errorf("accepted result has no event intent")
+		}
+		seen := map[string]bool{}
+		for _, id := range result.Event.Subscribers {
+			if id == "" || seen[id] {
+				return result, nil, fmt.Errorf("accepted result has duplicate or empty subscriber")
+			}
+			seen[id] = true
+		}
+		for _, effect := range result.Event.Effects {
+			if effect.ID == "" || effect.Endpoint == "" || effect.Event == "" {
+				return result, nil, fmt.Errorf("accepted result has incomplete effect intent")
+			}
+		}
 	}
 	verb, ok := strings.CutPrefix(sub.GetSchema().GetName(), result.Row.Type+".")
 	if !ok || verb != "create" && verb != "edit" {

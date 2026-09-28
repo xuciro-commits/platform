@@ -81,7 +81,7 @@
 | N7 | 运行观察、评估和反馈（#133、#134、#135、#136） | 从业务异常定位到发布版本、定义、记录来源、AI 调用、工具和外部效果；确认费用、时延、失败和人类纠正可关联。比较候选提示词/模型/定义与基线评估，验证发布门槛确实阻止未达标版本；线上失败脱敏后转为回归案例 | 一条完整排障链、评估基线与报告、门槛拒绝记录、案例来源与数据授权、回归结果；年度质量和性能阈值引用 Platform.md §10.6 |
 | N8 | 关键规则形式化与实现对应（#137） | 对选定不变量声明模型、假设和证明范围，再用契约向量、性质测试与故障注入核对运行实现；涉及边缘契约时验证跨语言一致性 | 定理及假设、对应规则和测试、反例与修复；模型证明只能证明其范围，不能代替数据库、网络、UI 或交付验收 |
 
-N5 的受限结果边界可先由代码层复核：在酒店提交 `crm.account.create/edit`、在制造提交 `erp.account.create/edit`，检查 PostgreSQL 的 `accepted-result`、相同幂等键不增加行数、冲突或拒绝不泄漏记录；在追加前失败与追加后应用前崩溃后重启，比较账本收据、记录历史与事件投递。`TestAcceptedSubmitCommitFailureRetryAndReplay`、`TestAcceptedResultCrashAfterAppendBeforeApply`、`TestJournalAcceptedResultAtomicRetryAndRecovery`、两个解决方案的 `TestAcceptedResult*Probe` 以及 `deploy/local/rehearse.sh` 是已执行的自动探针，不代替 N5 的构建者/操作员界面和多入口验收。
+N5 的受限结果边界可先由代码层复核：在酒店提交 `crm.account.create/edit`、在制造提交 `erp.account.create/edit`，并让构建器创建对象、发布、用生成动作创建和编辑其记录。检查 PostgreSQL 的 `accepted-result`、相同幂等键不增加行数、冲突或拒绝不泄漏记录；在追加前失败与追加后应用前崩溃后重启，比较账本收据、记录历史、订阅工作与发件箱意图。`TestTenantDefinedObject`、`TestAcceptedResultPreservesWorkAndEffectIntents`（包括订阅/端点变动后的快照）、`TestAcceptedResultLegacyVersionAndInvalidWorkIntent`、其他受限结果测试、两个解决方案的 `TestAcceptedResult*Probe` 以及 `deploy/local/rehearse.sh` 是自动探针，不代替 N5 的构建者/操作员界面、原子发布和多入口验收。
 
 **当前边界与待复现事实（2026-09-27，只读代码审计）：**
 

@@ -55,6 +55,7 @@ type taskState struct {
 	Event    json.RawMessage `json:"event,omitempty"`
 	Hops     int             `json:"hops,omitempty"`
 	Changed  []string        `json:"changed,omitempty"` // the records its decision put
+	Plan     *acceptedEvent  `json:"plan,omitempty"`    // accepted-result delivery routing
 }
 
 type effectState struct {
@@ -139,6 +140,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 		state := taskState{Task: *x, Since: x.since}
 		if x.event != nil {
 			state.EventApp, state.Hops, state.Changed = x.event.App, x.event.hops, x.event.Changed
+			state.Plan = x.event.plan
 			if state.Event, err = platform.Protos([]*pb.ChangeRecord{x.event.Record}); err != nil {
 				return tenantState{}, nil, 0, err
 			}
@@ -260,7 +262,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			if err != nil || len(records) != 1 {
 				return fmt.Errorf("tenant %s: task %s: bad event", t.ID, x.ID)
 			}
-			task.event = &caused{Event: platform.Event{App: x.EventApp, Record: records[0], Changed: x.Changed}, hops: x.Hops}
+			task.event = &caused{Event: platform.Event{App: x.EventApp, Record: records[0], Changed: x.Changed}, hops: x.Hops, plan: x.Plan}
 		}
 		tasks[x.ID] = &task
 	}

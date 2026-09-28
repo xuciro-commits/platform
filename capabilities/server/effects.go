@@ -92,9 +92,22 @@ func settled(state string) bool {
 // emit turns an accepted decision into effects for every endpoint subscribed to
 // one of its names. It runs inside the input and inside replay.
 func (t *Tenant) emit(e platform.Event, names []string) {
+	planned := t.eventEffects(e, names)
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	for _, x := range planned {
+		t.outbound = append(t.outbound, &effect{span: t.current(), Effect: x})
+	}
+	t.trimEffects()
+}
+
+// eventEffects computes the immutable outbound intents without enqueuing
+// them. A staged result saves these bytes before the journal commit.
+func (t *Tenant) eventEffects(e platform.Event, names []string) []platform.Effect {
 	s := e.Record.GetSubmission()
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
+	var planned []platform.Effect
 	for _, ep := range t.endpoints {
 		i := slices.IndexFunc(names, func(n string) bool { return slices.Contains(ep.Events, n) })
 		if i < 0 {
@@ -108,10 +121,10 @@ func (t *Tenant) emit(e platform.Event, names []string) {
 		body, _ := json.Marshal(map[string]any{"type": names[i], "timestamp": at, "data": map[string]any{
 			"app": e.App, "action": s.GetSchema().GetName(), "schemaVersion": s.GetSchema().GetVersion(), "entity": target(s), "changeId": e.Record.GetChangeId(),
 			"principal": s.GetPrincipalId(), "revision": e.Record.GetRevision(), "payload": payload}})
-		t.outbound = append(t.outbound, &effect{span: t.current(), Effect: platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
-			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)}})
+		planned = append(planned, platform.Effect{ID: fmt.Sprintf("%s:%s:%s:%s", t.ID, e.App, e.Record.GetChangeId(), ep.ID),
+			Endpoint: ep.ID, Event: names[i], Target: target(s), At: at, State: "pending", Due: at, Body: string(body)})
 	}
-	t.trimEffects()
+	return planned
 }
 
 func (t *Tenant) trimEffects() {
