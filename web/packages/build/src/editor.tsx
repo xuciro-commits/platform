@@ -117,7 +117,7 @@ export function PageEditor({ id }: { id: string }) {
   // Nothing to publish: no widget laid out and no list/detail from the simple form.
   const nothing = sections.length === 0 && (page.list ?? []).length === 0;
   return (
-    <div className="flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3">
+    <div className="flex flex-col gap-3 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
       <PageHeader title={settings?.title || page.title} description={t("Compose what people see. Save keeps your work; publish puts it in the workspace.")}
         actions={<div className="flex items-center gap-2">
           <StatusTag status={page.state} registry={pageStates} />
@@ -128,19 +128,18 @@ export function PageEditor({ id }: { id: string }) {
       {nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before publishing.")}</Panel>}
       {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {refused}</Panel>}
       {dirty && <Panel role="status" className="text-xs text-muted">{t("Not saved yet. Publishing saves first.")}</Panel>}
-      {/* Left: what there is to place, and where it sits. Middle: the page
-          itself, over real records. Right: the widget in hand. Each pane
-          scrolls on its own, so the canvas never pushes the rest off screen. */}
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_19rem]">
-        <div role="region" aria-label={t("Widgets and layout")} className="min-h-0 overflow-y-auto">
+      {/* The workspace scrolls the stack on narrow screens. Wide screens keep
+          independent panes so the canvas stays in view while editing. */}
+      <div className="grid gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[15rem_minmax(0,1fr)_19rem]">
+        <div role="region" aria-label={t("Widgets and layout")} className="lg:min-h-0 lg:overflow-y-auto">
           <Layout sections={sections} chosen={chosen} onChoose={setChosen} title={settings?.title || page.title} onAdd={add} onMove={move}
             onRemove={(i) => { setSections(sections.filter((_, at) => at !== i)); setChosen(0); setDirty(true); }} />
         </div>
-        <div role="region" aria-label={t("The page")} className="min-h-0 min-w-0 overflow-y-auto rounded-md border border-dashed border-border p-3">
+        <div role="region" aria-label={t("The page")} className="min-w-0 rounded-md border border-dashed border-border p-3 lg:min-h-0 lg:overflow-y-auto">
           <ComposedPage page={asPage({ ...page, ...settings }, sections)} live={false} chosen={chosen} onChoose={setChosen}
             notice={<Panel role="status" className="text-xs text-muted">{t("Your records, as they are. Actions do not run while you compose.")}</Panel>} />
         </div>
-        <div role="region" aria-label={t("The widget in hand")} className="min-h-0 overflow-y-auto">
+        <div role="region" aria-label={t("The widget in hand")} className="lg:min-h-0 lg:overflow-y-auto">
           {chosen < 0 && settings ? <Settings value={settings} object={info?.title ?? page.object}
             onChange={(patch) => { setSettings({ ...settings, ...patch }); setDirty(true); }} /> :
           <Properties section={sections[chosen]} info={info} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}

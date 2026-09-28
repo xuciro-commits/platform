@@ -136,7 +136,7 @@ export function ProcessEditor({ id }: { id: string }) {
   const field = chosen?.kind === "field" ? process.fields[chosen.at] : undefined;
   const issues = process.actions.flatMap((a) => actionIssues(a, process).map((message) => `${a.title || a.name}: ${message}`));
   return (
-    <div className="flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-3">
+    <div className="flex flex-col gap-3 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
       <PageHeader title={t("Design {object}", { object: object.title })}
         description={t("Define its fields, states, actions and access. Save keeps your work; publish installs it.")}
         actions={<div className="flex items-center gap-2">
@@ -149,8 +149,8 @@ export function ProcessEditor({ id }: { id: string }) {
       {issues.length > 0 && <Panel role="alert" className="text-xs text-[var(--tone-danger)]"><strong>{t("Check these rules before publishing:")}</strong>
         <ul className="ml-4 list-disc">{issues.map((message, i) => <li key={i}>{message}</li>)}</ul></Panel>}
       {dirty && <Panel role="status" className="text-xs text-muted">{t("Not saved yet. Publishing saves first.")}</Panel>}
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[15rem_minmax(0,1fr)_21rem]">
-        <div role="region" aria-label={t("States and actions")} className="min-h-0 overflow-y-auto">
+      <div className="grid gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[15rem_minmax(0,1fr)_21rem]">
+        <div role="region" aria-label={t("States and actions")} className="lg:min-h-0 lg:overflow-y-auto">
           <FieldsOutline fields={process.fields} chosen={chosen} onChoose={setChosen}
             onAdd={() => { change({ ...process, fields: [...process.fields, { name: nameOf("field", process.fields.map((f) => f.name)), title: t("Field"), type: "text" }] }); setChosen({ kind: "field", at: process.fields.length }); }} />
           <Outline process={process} chosen={chosen} onChoose={setChosen} onAddState={addState} onAddAction={addAction} onChange={change} />
@@ -158,7 +158,7 @@ export function ProcessEditor({ id }: { id: string }) {
             onAdd={() => { change({ ...process, access: [...process.access, { role: nameOf("role", process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); setChosen({ kind: "access", at: process.access.length }); }}
             onRemove={(i) => { change({ ...process, access: process.access.filter((_, at) => at !== i) }); setChosen(undefined); }} />
         </div>
-        <div role="region" aria-label={t("What people see")} className="min-h-0 min-w-0 overflow-y-auto rounded-md border border-dashed border-border p-3">
+        <div role="region" aria-label={t("What people see")} className="min-w-0 rounded-md border border-dashed border-border p-3 lg:min-h-0 lg:overflow-y-auto">
           <div role="tablist" aria-label={t("Object view")} className="mb-3 flex gap-1 border-b border-border pb-2">
             <Button role="tab" aria-selected={center === "map"} size="sm" variant={center === "map" ? "primary" : "ghost"} onClick={() => setCenter("map")}>{t("Process map")}</Button>
             <Button role="tab" aria-selected={center === "preview"} size="sm" variant={center === "preview" ? "primary" : "ghost"} onClick={() => setCenter("preview")}>{t("Record preview")}</Button>
@@ -166,7 +166,7 @@ export function ProcessEditor({ id }: { id: string }) {
           {center === "map" ? <ProcessGraph key={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
             : <Preview object={object} process={process} action={action} />}
         </div>
-        <div role="region" aria-label={t("The piece in hand")} className="min-h-0 overflow-y-auto">
+        <div role="region" aria-label={t("The piece in hand")} className="lg:min-h-0 lg:overflow-y-auto">
           {field && chosen && <FieldProperties field={field} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
           {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
           {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}

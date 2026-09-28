@@ -372,6 +372,14 @@ test("route 30: compose a page of widgets and use it", async ({ page, request },
   await page.locator("div").filter({ hasText: /^Detail/ }).last().click();
   await expect(page.getByRole("group", { name: "Fields it shows" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("composer.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 780 });
+  const [mobileLayout, mobilePage, mobileProperties] = await Promise.all([pane("Widgets and layout"), pane("The page"), pane("The widget in hand")]);
+  expect(mobileLayout.y + mobileLayout.height).toBeLessThanOrEqual(mobilePage.y + 1);
+  expect(mobilePage.y + mobilePage.height).toBeLessThanOrEqual(mobileProperties.y + 1);
+  expect(mobilePage.height).toBeGreaterThan(200);
+  expect(mobileProperties.height).toBeGreaterThan(150);
+  await page.screenshot({ path: testInfo.outputPath("mobile-composer.png"), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText("The page is in the workspace.")).toBeVisible(); // what the host answered
   await expect(page.getByText("Published", { exact: true })).toBeVisible(); // and the composer shows where the page stands
@@ -616,6 +624,15 @@ test("route 34: states and actions a tenant defines", async ({ page, request }, 
   await expect(preview.locator("ol").getByText("Found", { exact: true })).toBeVisible();
   await expect(preview.getByText("Handed to *")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("object-process.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 780 });
+  const box = async (name: string) => (await page.getByRole("region", { name }).boundingBox())!;
+  const [mobileOutline, mobileCanvas, mobileInspector] = await Promise.all([box("States and actions"), box("What people see"), box("The piece in hand")]);
+  expect(mobileOutline.y + mobileOutline.height).toBeLessThanOrEqual(mobileCanvas.y + 1);
+  expect(mobileCanvas.y + mobileCanvas.height).toBeLessThanOrEqual(mobileInspector.y + 1);
+  expect(mobileCanvas.height).toBeGreaterThan(200);
+  expect(mobileInspector.height).toBeGreaterThan(200);
+  await page.screenshot({ path: testInfo.outputPath("mobile-process.png"), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText("The object is installed with its states and actions.")).toBeVisible();
 

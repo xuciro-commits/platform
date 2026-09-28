@@ -14,6 +14,12 @@ Today `Tenant.Submit` (`capabilities/server/host.go`) lets an app mutate the ten
 
 The shared principle is to make a durable boundary explicit, then derive visible state and subsequent work from what crossed it. An input and an accepted result are different objects.
 
+### Adversarial review of the current write paths (2026-09-28)
+
+`Tenant.Submit` defers `enqueue`, calls the app, then journals an accepted input. `runtime.Put` writes the record store immediately; `hostView.Submit` invokes another app without opening a separate journal entry. A nested decision can therefore change records, work or an installed definition before the outer append succeeds. `Tenant.Input`, agent/model outcomes, protocol answers and work deliveries also enter through paths other than the public submission method. In the PostgreSQL host, an append error terminates the process after those memory changes. `Tenant.Replay` currently invokes the app again for submissions and inputs. These are code facts, not covered by the existing same-code replay test.
+
+The first slice must inventory **every** entry point and mutable owner, including `recordStore`, the builder's `Install*`, work/process state, idempotency receipts, generated IDs, audit, model usage and outbound intent queues. An entry point outside the accepted-result boundary must be disabled or explicitly excluded from the guarantee; a partially migrated host must never report the full guarantee. A nested call contributes to its parent's staged result, while a later asynchronous answer, job or delivery is a new top-level input with its own result. A refused input leaves no staged state or dispatchable intent; a duplicate returns the durable prior receipt without re-running decision code. After the append commits, recovery applies the result exactly once in logical state even if the process dies before replying. These are testable conditions for D1–D3, not an assertion that staging exists today.
+
 ## Our constraints
 
 - A replay or projection rebuild never calls outside, reauthorizes history or invokes current business decision code. The journal must stay bounded enough to replay; snapshots and projection rebuild are separate from business decisions.
@@ -45,7 +51,7 @@ Declined: replacing PostgreSQL with Datomic, running all business rules as workf
 
 | Batch | Item | Done when |
 |---|---|---|
-| 19a | Inventory every authoritative mutation and outbound intent; introduce result types, pure application and a staged record/ledger decision for one vertical path | A record create/edit, refusal, duplicate key and crash at each boundary yield the same durable answer and no partial visible state; `CheckReplay` applies results; hospitality and manufacturing each exercise the path; `scripts/verify.sh ci capabilities composition` and `deploy/local/rehearse.sh` pass. |
+| 19a | Inventory every authoritative mutation and outbound intent, with each entry point marked staged, fenced or excluded; introduce result types, pure application and a staged record/ledger decision for one vertical path | A record create/edit, refusal, duplicate key and crash at each boundary yield the same durable answer and no partial visible state; nested decisions share the outer result; `CheckReplay` applies results; hospitality and manufacturing each exercise the path; `scripts/verify.sh ci capabilities composition` and `deploy/local/rehearse.sh` pass. |
 | 19b | Extend staging to work, approvals, effects, connector inputs, flow and agent choices, sequences and dynamic definitions; remove old input re-decision | The two industry probes complete builder and operator tasks through crash/restore with no lost intents, no external call on replay, and stable IDs; full `CheckReplay`, fault matrix, `scripts/verify.sh ci capabilities composition web` and rehearsal pass. |
 | 19c | Tenant quarantine, projection repair, format/version handling and restore diagnostics | A bad tenant stops safely and can be repaired while another makes progress; the UI explains the status and recovery action; `CheckReplay`, restore and upgrade rehearsals and applicable verification steps pass. Shared-process and PostgreSQL outages remain explicitly tested or excluded. |
 

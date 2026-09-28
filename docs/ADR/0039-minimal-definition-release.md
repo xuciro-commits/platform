@@ -15,6 +15,12 @@
 
 The references agree that a mutable name, immutable content and the version actually running are different things. Our first release contract must express all three without pretending that a local sample preview is production isolation.
 
+### Adversarial review of the current publication paths (2026-09-28)
+
+The builder's object, page and application transitions call `Install`, `InstallPage` or `InstallApplication` during a decision and only then write the mutable `Published` JSON field. `recordStore.install` can replace a type and convert its rows before a later action or dependency check fails; `InstallApplication` replaces its registry entry in place. Definitions in that registry currently carry constant version `"1"`, and the object/page/application references name logical assets without a revision. The present publisher therefore cannot pin a running approval to the definition it started with, atomically activate a closed set, or prove that a failed publication left the prior release intact. These are prerequisites for 20b and depend on #135's staged commit result.
+
+For D1, the revision format must specify canonical encoding, treatment of absent versus empty fields, ordering of sets versus ordered page sections, normalization of references, and a collision-resistant digest algorithm. Keep the exact canonical bytes and format version; test that equivalent inputs hash alike and a semantic change hashes differently. For D2, validation must resolve the *same* closed graph that activation will install, including references inside sections and actions, and distinguish a missing dependency from an unauthorized one without leaking its contents. A failed candidate or activation leaves the previous pointer and all its descriptors available. A release manifest must identify its tenant/environment binding separately from portable content and avoid hashing credential values. For D4, work records must carry the actual starting revision; either the old evaluator remains available or activation refuses while incompatible work is open. These are acceptance tests, not claims about the present registry.
+
 ## Our constraints
 
 - Code and controlled, typed definitions share `AssetRef`, validation, authority and UI component owners (ADR-0031). No arbitrary tenant code, expression runtime or downloadable UI bundle is introduced by this gate.
@@ -46,7 +52,7 @@ Declined: a Git repository as the business database, mutable “published” JSO
 
 | Batch | Item | Done when |
 |---|---|---|
-| 20a | Revision format, canonicalization, graph validation and read-only candidate diff | One descriptor through code and builder resolves to the same logical asset and exact revision; missing/invalid dependencies are refused with a path; tests cover both hospitality and manufacturing and `scripts/verify.sh ci capabilities composition web` passes. |
+| 20a | Revision format, canonicalization, graph validation and read-only candidate diff | Equivalent canonical descriptors yield one revision; a semantic change yields another; the exact bytes are retained. One descriptor through code and builder resolves to the same logical asset and exact revision; nested, missing and invalid dependencies are refused with a path; a failed candidate preserves the active graph; tests cover hospitality and manufacturing and `scripts/verify.sh ci capabilities composition web` passes. |
 | 20b | Publish and activate a closed object/action/page/application release on #135's commit result; bind new work to it | A builder completes draft → validation → diff → publish → activate, an operator task uses the active release, and a previous in-flight approval keeps its version; `CheckReplay`, crash-point tests, browser routes, `scripts/verify.sh ci capabilities composition web` and `deploy/local/rehearse.sh` pass. |
 | 20c | Environment bindings, promotion diagnostics and compatibility-aware upgrade plan | The same release goes to two controlled industry environments with separate credentials; activation reports incompatible records/work and an explicit repair path. Owner-observed desktop/narrow-screen and keyboard task evidence, `CheckReplay`, restore/upgrade rehearsal and applicable verify steps pass. |
 
