@@ -26,6 +26,9 @@ type Deployment struct {
 	Files                                        string // http(s)://host:port/bucket of an S3-compatible store (ADR-0028); empty: memory
 	Project                                      bool
 	SnapshotEvery                                int64
+	// Rebuild composes a fresh, unstarted tenant with the same durable app and
+	// connector declarations. Required for an in-process recovery retry.
+	Rebuild func(id string) (*Tenant, error)
 	// Seed gives a tenant whose journal is empty its first data, through
 	// ordinary decisions journaled like any other (in memory: every start).
 	Seed func(t *Tenant, now time.Time) error
@@ -69,6 +72,7 @@ func (d *Deployment) Seats(development []Seat) []Seat {
 // shutdown (ADR-0019), and serves until SIGINT or SIGTERM.
 func (d *Deployment) Serve(tenants ...*Tenant) error {
 	ctx := context.Background()
+	registry := newTenantRegistry(tenants)
 	flush := exportTelemetry(ctx, filepath.Base(os.Args[0])) // traces and metrics, when an OTLP endpoint is set (ADR-0027 D5)
 	defer flush(context.Background())
 	if d.Files != "" {
@@ -139,20 +143,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			}
 			// An input the journal did not take is never answered; the client's
 			// outbox resends it after the restart has replayed the rest.
-			t.Store = journal
-			t.Record = func(e Entry) {
-				if err := journal.Append(ctx, t.ID, e); err != nil {
-					log.Fatalf("journal append: %v", err)
-				}
-			}
-			tenantID := t.ID
-			t.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
-				raw, err := journal.AppendAccepted(ctx, tenantID, e, key, hash)
-				if err != nil && err != errAcceptedConflict {
-					log.Fatalf("accepted result append: %v", err)
-				}
-				return raw, err
-			}
+			t.attachJournal(ctx, journal)
 		}
 	}
 	for _, t := range tenants {
@@ -181,30 +172,41 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 				continue
 			}
 			log.Printf("projected %s into schema %s (reader role %s)", t.ID, ProjectionSchema(t.ID), ReaderRole(t.ID))
-			go func() {
-				for range time.Tick(time.Second) {
-					if err := p.Flush(ctx); err != nil {
-						log.Printf("projection %s: %v", t.ID, err)
-					}
-				}
-			}()
+			flushProjection(ctx, registry, t, p)
 		}
 	}
-	RunWork(tenants...)
-	observe(tenants)
+	runWorkFrom(registry.list)
+	observeFrom(registry.list)
 	var snapshots *snapshotter
 	if journal != nil && d.SnapshotEvery > 0 {
 		snapshots = &snapshotter{journal: journal, code: code, every: d.SnapshotEvery, saved: map[string]int64{}}
-		for _, t := range tenants {
-			snapshots.saved[t.ID] = restored[t.ID] // what was replayed since is worth saving too
+		for _, original := range tenants {
+			snapshots.saved[original.ID] = restored[original.ID] // what was replayed since is worth saving too
 			go func() {
 				for range time.Tick(5 * time.Second) {
-					snapshots.save(ctx, t, false)
+					snapshots.save(ctx, registry.current(original.ID), false)
 				}
 			}()
 		}
 	}
 	host := NewHost(authenticate, tenants...)
+	host.tenantsFrom = registry.list
+	if journal != nil && d.Rebuild != nil {
+		var recoveryMu sync.Mutex
+		host.Recover = func(ctx context.Context, id string) error {
+			recoveryMu.Lock()
+			defer recoveryMu.Unlock()
+			if err := d.retryTenant(ctx, journal, registry, code, id); err != nil {
+				return err
+			}
+			if snapshots != nil {
+				snapshots.mu.Lock()
+				snapshots.saved[id] = journal.Position(id)
+				snapshots.mu.Unlock()
+			}
+			return nil
+		}
+	}
 	host.Web, host.Issuer, host.Client, host.Development = d.Web, d.Issuer, "platform-web", d.Issuer == ""
 	server := &http.Server{Addr: d.Addr, Handler: host.Handler()}
 	stop, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
@@ -221,7 +223,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 	defer done()
 	server.Shutdown(shutdown) // requests in flight finish; no new ones
 	if snapshots != nil {
-		for _, t := range tenants {
+		for _, t := range registry.list() {
 			snapshots.save(ctx, t, true)
 		}
 	}
@@ -306,8 +308,13 @@ func CodeOf(tenants ...*Tenant) string {
 // RunWork runs the tenants' owned work (ADR-0013) and sends their outbound
 // effects (ADR-0014) every second, for as long as the process lives.
 func RunWork(tenants ...*Tenant) {
+	runWorkFrom(func() []*Tenant { return tenants })
+}
+
+func runWorkFrom(current func() []*Tenant) {
 	go func() {
 		for range time.Tick(time.Second) {
+			tenants := current()
 			Schedule(tenants, Now(), roundSize, 900*time.Millisecond)
 			// Work on the outside — effects (ADR-0014) and agents' model calls
 			// (ADR-0021) — goes to the I/O lane of every tenant at once, outside
@@ -321,7 +328,7 @@ func RunWork(tenants ...*Tenant) {
 	}()
 	go func() { // evaluations, embeddings and old transcripts: many calls, apart from runs
 		for range time.Tick(5 * time.Second) {
-			for _, t := range tenants {
+			for _, t := range current() {
 				if t.quarantined() {
 					continue
 				}

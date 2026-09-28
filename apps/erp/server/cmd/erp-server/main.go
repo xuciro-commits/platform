@@ -31,7 +31,10 @@ func main() {
 		seat("accountant", "accountant-1", map[string]string{erp.ID: erp.Accountant}),
 		seat("buyer", "buyer-1", map[string]string{erp.ID: erp.Buyer}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), work.New("dev"), flow.New("dev"), erp.New("dev"))
+	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		return platformserver.NewTenant(id, platformserver.NewConsole(id, seats...), work.New(id), flow.New(id), erp.New(id))
+	}
+	t, err := deployment.Rebuild("dev")
 	deployment.Seed = seed
 	if err == nil {
 		err = deployment.Serve(t)

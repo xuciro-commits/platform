@@ -253,6 +253,14 @@ func (p *Plant) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*p
 	})
 }
 
+// Confirmation and generated lifecycle decisions use only the staged record,
+// ledger and intent owners. Release and observation-derived identity changes
+// are deliberately not opted in until their own state has a saved result.
+func (p *Plant) AcceptedLedger() *platform.Ledger { return p.ledger }
+func (*Plant) AcceptedActionSchemas() []string {
+	return []string{SchemaConfirm, SchemaAnswer, SchemaResend}
+}
+
 type releasePayload struct {
 	Product  string `json:"product"`
 	Quantity int    `json:"quantity"`

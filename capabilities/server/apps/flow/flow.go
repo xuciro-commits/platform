@@ -165,8 +165,17 @@ func (f *Flows) Manifest() platform.Manifest {
 }
 
 func (f *Flows) Declarations() []*pb.AuthorityDeclaration { return f.ledger.Declarations() }
-func (f *Flows) Snapshot() (json.RawMessage, error)       { return f.ledger.Snapshot() }
-func (f *Flows) Restore(raw json.RawMessage) error        { return f.ledger.Restore(raw) }
+func (f *Flows) AcceptedLedger() *platform.Ledger         { return f.ledger }
+func (*Flows) AcceptedWork()                              {}
+func (f *Flows) AcceptedActionSchemas() []string {
+	var schemas []string
+	for _, action := range f.ledger.Catalog.All() {
+		schemas = append(schemas, action.Schema)
+	}
+	return schemas
+}
+func (f *Flows) Snapshot() (json.RawMessage, error) { return f.ledger.Snapshot() }
+func (f *Flows) Restore(raw json.RawMessage) error  { return f.ledger.Restore(raw) }
 func (f *Flows) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
@@ -284,7 +293,7 @@ func (f *Flows) Versions() map[string]int {
 func (f *Flows) Pin(versions map[string]int) { f.pins = versions }
 
 func (f *Flows) Check() error {
-	c := f.host.Automation(ID, true)
+	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
 	for _, x := range f.running(c) {
 		if f.def(x.Flow, x.Version) == nil {
 			return fmt.Errorf("flow instance %s runs %s version %d, which the code no longer declares", x.ID, x.Flow, x.Version)
@@ -336,7 +345,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 					continue
 				}
 				record, held := f.host.Record(ref)
-				if !held || !latest.Start.When(f.host.Automation(latest.app, c.Replaying), record) {
+				if !held || !latest.Start.When(f.host.Automation(c, latest.app), record) {
 					continue
 				}
 				d, err := f.version(c, id)
@@ -352,7 +361,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 		if !slices.ContainsFunc(latest.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			continue
 		}
-		key, data, ok := latest.Start.Begin(f.host.Automation(latest.app, c.Replaying), e)
+		key, data, ok := latest.Start.Begin(f.host.Automation(c, latest.app), e)
 		if !ok {
 			continue
 		}
@@ -373,7 +382,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 		for i := range x.Tokens {
 			tok := &x.Tokens[i]
 			step := d.steps[tok.Step]
-			app := f.host.Automation(d.app, c.Replaying)
+			app := f.host.Automation(c, d.app)
 			switch {
 			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.On != "" && slices.Contains(names, step.Wait.On) && step.Wait.Match(app, run, e):
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
@@ -384,7 +393,7 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 					return err
 				}
 			case tok.Waits == "ask" && s.GetSchema().GetName() == "work.task.complete" && s.GetTarget().GetId() == tok.Task:
-				task, _ := platform.Get[work.WorkTask](f.host.Automation(work.ID, c.Replaying), tok.Task)
+				task, _ := platform.Get[work.WorkTask](f.host.Automation(c, work.ID), tok.Task)
 				answer := cmp.Or(task.Answer, "done")
 				if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					in.Answer = answer
@@ -423,7 +432,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 		for _, tok := range x.Tokens {
 			step := d.steps[tok.Step]
 			due := !tok.Due.IsZero() && !tok.Due.After(now)
-			holds := tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.Until != nil && step.Wait.Until(f.host.Automation(d.app, c.Replaying), run)
+			holds := tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.Until != nil && step.Wait.Until(f.host.Automation(c, d.app), run)
 			if !due && !holds {
 				continue
 			}
@@ -436,7 +445,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 				})
 			case tok.Waits == "retry" || tok.Waits == "undo":
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) { ss.token(in, tok.ID).Waits = "ready" })
-			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.At != nil && tok.Due.Equal(step.Wait.At(f.host.Automation(d.app, c.Replaying), run)):
+			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.At != nil && tok.Due.Equal(step.Wait.At(f.host.Automation(c, d.app), run)):
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					ss.trace(in, tok.Step, "time", "reached", "")
 					ss.next(in, tok.ID, "")

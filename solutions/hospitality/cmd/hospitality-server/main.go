@@ -40,7 +40,12 @@ func withUnits(s platformserver.Seat, units ...platform.Membership) platformserv
 func main() {
 	deployment := platformserver.Flags("127.0.0.1:8496")
 	flag.Parse()
-	t, err := hospitality.NewTenant("hotel-a", map[string]pms.RoomType{"standard": {Rooms: 3, Overbooking: 1}, "suite": {Rooms: 1}}, deployment.Seats(demo)...)
+	seats := deployment.Seats(demo)
+	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		return hospitality.NewTenant(id, map[string]pms.RoomType{
+			"standard": {Rooms: 3, Overbooking: 1}, "suite": {Rooms: 1}}, seats...)
+	}
+	t, err := deployment.Rebuild("hotel-a")
 	if err == nil {
 		err = deployment.Serve(t)
 	}

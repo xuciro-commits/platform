@@ -70,10 +70,16 @@ func (t *Tenant) enqueue(now time.Time) {
 		s := e.Record.GetSubmission()
 		names := append([]string{s.GetSchema().GetName()}, t.protocolEvents(e.Event)...)
 		if e.plan != nil {
+			for _, id := range e.plan.Stopped {
+				t.delivered(Delivery{At: now, App: e.App, Action: s.GetSchema().GetName(), Target: target(s), Subscriber: id,
+					Outcome: fmt.Sprintf("stopped: more than %d events caused by events", maxHops)})
+			}
 			names = e.plan.Names
 		}
-		for _, o := range t.observers {
-			o.Observe(e.Event, names[1:])
+		if e.plan == nil || !e.plan.Observed {
+			for _, o := range t.observers {
+				o.Observe(e.Event, names[1:])
+			}
 		}
 		if e.plan != nil {
 			t.opsMu.Lock()
@@ -133,6 +139,13 @@ func (t *Tenant) delivered(d Delivery) {
 
 func (t *Tenant) automation(app string, replaying bool) platform.Caller {
 	return platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + app, Tenant: t.ID, Roles: map[string]string{}}, app, replaying, true)
+}
+
+func (t *Tenant) automated(parent platform.Caller, app string) platform.Caller {
+	if parent.Staging() {
+		return platform.ActingCaller(parent, platform.Member{ID: "app:" + app, Tenant: t.ID}, app, true)
+	}
+	return t.automation(app, parent.Replaying)
 }
 
 type workBody struct {
@@ -270,6 +283,11 @@ func (t *Tenant) Deferred(now time.Time) []string {
 
 // attempt hands a queued event to its subscriber once; the outcome is journaled.
 func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
+	if !replaying && t.AcceptResult != nil {
+		if _, ok := t.app(task.App).(platform.AcceptedWorker); ok {
+			return t.acceptWork(task, now)
+		}
+	}
 	generation, _, _ := t.works.Start(task.ID, "host")
 	t.hops = task.event.hops + 1
 	outcome := "ok"
@@ -327,6 +345,11 @@ func (t *Tenant) attempt(task *Task, now time.Time, replaying bool) string {
 
 // run runs a job once; it is journaled when it decided or notified something.
 func (t *Tenant) run(task *Task, now time.Time, replaying bool) string {
+	if !replaying && t.AcceptResult != nil {
+		if _, ok := t.app(task.App).(platform.AcceptedWorker); ok {
+			return t.acceptWork(task, now)
+		}
+	}
 	before := t.acted
 	generation, _, _ := t.works.Start(task.ID, "host")
 	outcome := "ok"

@@ -30,13 +30,17 @@ func newBooks(t *testing.T) *books {
 }
 
 func build(t *testing.T) *platformserver.Tenant {
+	return buildTenant(t, "t")
+}
+
+func buildTenant(t *testing.T, tenant string) *platformserver.Tenant {
 	seat := func(id, role string) platformserver.Seat {
 		return platformserver.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: map[string]string{ID: role}}}
 	}
 	controller := seat("cy", Controller)
 	controller.Roles[platformserver.PlatformApp] = platformserver.Admin // sets the tenant's currency
-	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t", seat("ada", Accountant), controller, seat("bo", Buyer), seat("pi", Planner)),
-		work.New("t"), flow.New("t"), New("t"))
+	tn, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seat("ada", Accountant), controller, seat("bo", Buyer), seat("pi", Planner)),
+		work.New(tenant), flow.New(tenant), New(tenant))
 	if err != nil {
 		t.Fatal(err)
 	}

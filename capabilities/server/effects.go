@@ -26,6 +26,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
@@ -139,48 +140,66 @@ func (t *Tenant) trimEffects() {
 
 // emitFor makes c's app's effect of kind for every endpoint bound to it (Caller.Emit).
 func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *kernel.Error) {
+	planned, err := t.planAppEffects(c, kind, key, entity, data, now, nil)
+	if err != nil {
+		return 0, err
+	}
+	t.installAcceptedIntents(planned)
+	t.askHeldEffects(c, kind, entity, planned, now)
+	return len(planned), nil
+}
+
+// The same planner serves live and staged Runtime callers; it never dispatches
+// an effect, mutates a queue or resolves an administrator after a commit.
+func (t *Tenant) planAppEffects(c platform.Caller, kind, key, entity string, data any, now time.Time, staged []platform.Effect) ([]platform.Effect, *kernel.Error) {
 	a := t.app(c.App)
 	if a == nil || key == "" {
-		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
 	if i < 0 {
-		return 0, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	agent, run := "", ""
 	if c.Agent {
 		agent, run = c.ID, t.agentRun
 	}
 	name := c.App + "/" + kind
-	body, _ := json.Marshal(map[string]any{"type": name, "timestamp": now, "data": data})
+	body, err := json.Marshal(map[string]any{"type": name, "timestamp": now, "data": data})
+	if err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
 	t.opsMu.Lock()
-	n, held := 0, []string{}
+	defer t.opsMu.Unlock()
+	var planned []platform.Effect
 	for _, ep := range t.endpoints {
 		id := fmt.Sprintf("%s:%s:%s:%s:%s", t.ID, c.App, kind, key, ep.ID)
-		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id }) {
+		if !slices.Contains(ep.Effects, name) || slices.ContainsFunc(t.outbound, func(x *effect) bool { return x.ID == id }) ||
+			slices.ContainsFunc(staged, func(x platform.Effect) bool { return x.ID == id }) {
 			continue
 		}
 		state := "pending"
 		if c.Agent && (a.Manifest().Emits[i].Irreversible || ep.Irreversible) {
 			state = "held"
 		}
-		t.outbound = append(t.outbound, &effect{span: t.current(), Effect: platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
-			State: state, Agent: agent, Run: run, Due: now, Body: string(body)}})
-		n++
-		if state == "held" {
-			held = append(held, id)
+		planned = append(planned, platform.Effect{ID: id, Endpoint: ep.ID, Event: name, App: c.App, Key: key, Target: entity, At: now,
+			State: state, Agent: agent, Run: run, Due: now, Body: string(body)})
+	}
+	return planned, nil
+}
+
+func (t *Tenant) askHeldEffects(c platform.Caller, kind, entity string, planned []platform.Effect, now time.Time) {
+	a := t.app(c.App)
+	i := slices.IndexFunc(a.Manifest().Emits, func(e platform.EffectKind) bool { return e.Name == kind })
+	console := t.automated(c, PlatformApp)
+	for _, x := range planned {
+		if x.State != "held" {
+			continue
 		}
-	}
-	t.trimEffects()
-	t.opsMu.Unlock()
-	// The tenant's administrators are asked, as the platform app, inside the input: replay asks again.
-	console := platform.NewCaller(runtime{t}, platform.Member{ID: "app:" + PlatformApp, Tenant: t.ID, Roles: map[string]string{}}, PlatformApp, c.Replaying, true)
-	for _, id := range held {
-		t.notify(console, platform.Notification{Title: fmt.Sprintf("Approve %s for %s", a.Manifest().Emits[i].Title, entity),
+		console.Notify(platform.Notification{Title: fmt.Sprintf("Approve %s for %s", a.Manifest().Emits[i].Title, entity),
 			Body: fmt.Sprintf("The AI agent %s caused it, and it cannot be recalled once sent. Approve or discard it in Settings → Integrations.", c.ID),
-			Ref:  EffectType + "/" + id, Key: "approve:" + id}, now, []platform.Recipient{{AppRole: Admin}})
+			Ref:  EffectType + "/" + x.ID, Key: "approve:" + x.ID}, now, platform.Recipient{AppRole: Admin})
 	}
-	return n, nil
 }
 
 // Effects lists the tenant's effects, newest first; bodies older than 30 days are dropped.
@@ -290,7 +309,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 			}
 			span := outside(j.span, "send "+j.effect.Event+" to "+j.endpoint.ID, attribute.String("platform.tenant", t.ID),
 				attribute.String("platform.endpoint", j.endpoint.ID), attribute.String("platform.effect", j.effect.ID))
-			outcome := t.send(j.endpoint, j.effect, now)
+			outcome, usage := t.sendWithUsage(j.endpoint, j.effect, now)
 			end(span, map[bool]string{true: "ok", false: outcome.Result + ": " + outcome.Detail}[outcome.Result == "delivered"])
 			if t.quarantined() {
 				return // an already in-flight call may have escaped; do not record its answer in damaged state
@@ -299,17 +318,25 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 			if j.endpoint.Kind != modelEndpoint {
 				t.breakers.report("endpoint:"+j.endpoint.ID, outcome.Result != "retry", now)
 			}
-			t.settle(j.effect.ID, outcome, now)
+			t.settleWithUsage(j.effect.ID, outcome, usage, now)
 		})
 	}
 	return sends
+}
+
+func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *ai.Usage) {
+	if ep.Kind == modelEndpoint {
+		return t.sendModel(x, now)
+	}
+	return t.send(ep, x, now), nil
 }
 
 // send makes one attempt, signed as Standard Webhooks, with the effect's ID as
 // both webhook-id and Idempotency-Key.
 func (t *Tenant) send(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
 	if ep.Kind == modelEndpoint {
-		return t.sendModel(x, now)
+		out, _ := t.sendModel(x, now)
+		return out
 	}
 	if ep.Kind == "email" {
 		return t.sendMail(ep, x, now)
@@ -393,9 +420,20 @@ func guardedDialer(allowPrivate bool) *net.Dialer {
 
 // settle journals an attempt's outcome, then applies it.
 func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
+	t.settleWithUsage(effect, o, nil, now)
+}
+
+func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *ai.Usage, now time.Time) {
+	if t.AcceptResult == nil && usage != nil {
+		t.meter(platform.Member{ID: usage.Member, Tenant: t.ID}, *usage)
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.quarantined() {
+		return
+	}
+	if t.AcceptResult != nil {
+		t.settleAccepted(effect, o, usage, now)
 		return
 	}
 	body, _ := json.Marshal(o)
@@ -457,9 +495,14 @@ func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) 
 		return platform.Effect{}, false
 	}
 	x := t.outbound[i]
+	markEffect(x, o, at)
+	return x.Effect, true
+}
+
+func markEffect(x *effect, o platform.Outcome, at time.Time) {
 	x.sending, x.Last, x.Digest, x.Error = false, at, o.Digest, o.Detail
 	if x.State == "discarded" {
-		return x.Effect, true // discarded while its attempt was on the way
+		return // discarded while its attempt was on the way
 	}
 	x.Attempts++
 	switch {
@@ -472,7 +515,6 @@ func (t *Tenant) mark(o platform.Outcome, at time.Time) (platform.Effect, bool) 
 	default:
 		x.State, x.Due = "retrying", at.Add(effectBackoff(x.ID, x.Attempts-x.since))
 	}
-	return x.Effect, true
 }
 
 // The console's actions about endpoints and effects.

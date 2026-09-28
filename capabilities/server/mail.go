@@ -38,8 +38,15 @@ type letter struct {
 // mailNotice makes the email effects of a notice given to a member at address,
 // in the member's language (opsMu held).
 func (t *Tenant) mailNotice(n platform.Notification, address, lang string) {
+	for _, planned := range t.planMailNotice(n, address, lang) {
+		t.outbound = append(t.outbound, &effect{Effect: planned})
+	}
+}
+
+func (t *Tenant) planMailNotice(n platform.Notification, address, lang string) []platform.Effect {
+	var effects []platform.Effect
 	if address == "" {
-		return
+		return effects
 	}
 	for _, ep := range t.endpoints {
 		if ep.Kind != "email" || !slices.Contains(ep.Notifications, n.App) {
@@ -50,9 +57,10 @@ func (t *Tenant) mailNotice(n platform.Notification, address, lang string) {
 			text += "\n\n" + t.Say(lang, "About") + ": " + n.Ref
 		}
 		body, _ := json.Marshal(letter{To: address, Subject: t.Say(lang, n.Title), Text: strings.TrimSpace(text) + "\n\n— " + t.ID + " · " + n.App})
-		t.outbound = append(t.outbound, &effect{Effect: platform.Effect{ID: fmt.Sprintf("%s:notice:%s:%s", t.ID, n.ID, ep.ID), Endpoint: ep.ID,
-			Event: n.App + "/notification", Target: n.Ref, At: n.At, State: "pending", Due: n.At, Body: string(body)}})
+		effects = append(effects, platform.Effect{ID: fmt.Sprintf("%s:notice:%s:%s", t.ID, n.ID, ep.ID), Endpoint: ep.ID,
+			Event: n.App + "/notification", Target: n.Ref, At: n.At, State: "pending", Due: n.At, Body: string(body)})
 	}
+	return effects
 }
 
 // sendMail makes one attempt over SMTP: STARTTLS when offered, PLAIN

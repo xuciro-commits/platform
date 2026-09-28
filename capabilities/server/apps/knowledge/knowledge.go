@@ -103,7 +103,7 @@ func (k *Knowledge) Submit(c platform.Caller, s *pb.Submission, now time.Time) (
 
 // Terms are the glossary terms an app's members may read ("" for every term).
 func (k *Knowledge) Terms(app string) []Term {
-	all, _, _ := platform.Find[Term](k.host.Automation(ID, false), platform.Query{Limit: 500, Sort: []string{"term"}})
+	all, _, _ := platform.Find[Term](k.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 500, Sort: []string{"term"}})
 	out := all[:0]
 	for _, x := range all {
 		if app == "" || len(x.Apps) == 0 || slices.Contains(x.Apps, app) {

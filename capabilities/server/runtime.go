@@ -14,6 +14,13 @@ type runtime struct{ t *Tenant }
 
 var _ platform.Runtime = runtime{}
 
+func (r runtime) ProbeDecision(c platform.Caller, decide func(platform.Caller) *kernel.Error) *kernel.Error {
+	was := r.t.probing
+	r.t.probing = true
+	defer func() { r.t.probing = was }()
+	return decide(c)
+}
+
 func (r runtime) Publish(c platform.Caller, record *pb.ChangeRecord) {
 	r.t.publish(platform.Event{App: c.App, Record: record})
 }

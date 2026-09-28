@@ -178,8 +178,8 @@ func (w *Work) entities() []platform.Entity {
 					{Name: "complete", Title: "Done", From: []string{"open"}, To: []string{"done"}, Roles: everyone, Capability: "tasks",
 						Payload:     []platform.Field{{Name: "answer", Type: "string", Description: "One of the task's answers, when it has any"}},
 						Description: "Mark a task of yours done.", Do: w.completer,
-						After: func(_ platform.Caller, _ *pb.ChangeRecord, record any, _ time.Time) {
-							w.closed(record.(*WorkTask).ID)
+						After: func(c platform.Caller, _ *pb.ChangeRecord, record any, _ time.Time) {
+							w.closed(c, record.(*WorkTask).ID)
 						}},
 				}}},
 		{Type: ViewType, Title: "Saved view", Model: SavedView{}},
@@ -200,6 +200,18 @@ func (w *Work) Manifest() platform.Manifest {
 }
 
 func (w *Work) Declarations() []*pb.AuthorityDeclaration { return w.ledger.Declarations() }
+
+func (w *Work) AcceptedLedger() *platform.Ledger { return w.ledger }
+
+func (*Work) AcceptedWork() {}
+
+func (w *Work) AcceptedActionSchemas() []string {
+	var schemas []string
+	for _, action := range w.ledger.Catalog.All() {
+		schemas = append(schemas, action.Schema)
+	}
+	return schemas
+}
 
 func (w *Work) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
@@ -243,7 +255,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 	if !known || declared.Approval == nil || !ok {
 		return nil, invalid
 	}
-	asker := w.host.Caller(requester, app, c.Replaying)
+	asker := w.host.Caller(c, requester, app)
 	var steps []ApprovalStep
 	for _, level := range declared.Approval.Levels {
 		if level.When != nil && !level.When(asker, held) {
@@ -329,7 +341,7 @@ func (w *Work) close(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, l
 	if t, ok := platform.Get[WorkTask](c, fmt.Sprintf("%s#%d", a.ID, level+1)); ok && t.State == "open" {
 		t.State = state
 		c.Put(r, t)
-		w.closed(t.ID)
+		w.closed(c, t.ID)
 	}
 }
 
@@ -398,7 +410,7 @@ func (w *Work) run(c platform.Caller, r *pb.ChangeRecord, a ApprovalRequest, now
 	// submission runs by the rules of now, not that revision (D3).
 	held.ExpectedRevision = nil
 	requester, _ := w.host.Member(a.Requester)
-	_, err := w.host.Submit(w.host.Caller(requester, a.App, c.Replaying), held, now)
+	_, err := w.host.Attempt(w.host.Caller(c, requester, a.App), held, now)
 	if err != nil {
 		a.State, a.Outcome = "refused", err.Error()
 		w.move(c, a, platform.ApprovalReturned, now)
@@ -453,7 +465,7 @@ func (w *Work) move(c platform.Caller, a ApprovalRequest, suffix string, now tim
 	if _, _, known := w.host.Action(schema); !known {
 		return
 	}
-	automation := w.host.Automation(a.App, c.Replaying)
+	automation := w.host.Automation(c, a.App)
 	w.host.Submit(automation, &pb.Submission{TenantId: held.GetTenantId(), PrincipalId: automation.ID, Authority: a.App, IdempotencyKey: "approval:" + a.ID + suffix,
 		Target: held.GetTarget(), Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte("{}")}, now)
 }
@@ -569,7 +581,7 @@ func (w *Work) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 // Assign creates an app's task (Caller.Assign), resolving its recipients now.
 func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignment) *kernel.Error {
 	candidates := w.host.Recipients(c, r.GetRecordedTime().AsTime(), a.To)
-	work := w.host.Automation(ID, c.Replaying)
+	work := w.host.Automation(c, ID)
 	id := fmt.Sprintf("%s:%s", c.App, a.Key)
 	if a.Key == "" {
 		id = fmt.Sprintf("%s:%s", c.App, r.GetChangeId())
@@ -592,18 +604,18 @@ func (w *Work) Assign(c platform.Caller, r *pb.ChangeRecord, a platform.Assignme
 // Close cancels an open task as part of the decision r: a flow's wait
 // ended another way, or its path stopped (ADR-0020).
 func (w *Work) Close(c platform.Caller, r *pb.ChangeRecord, id string) {
-	work := w.host.Automation(ID, c.Replaying)
+	work := w.host.Automation(c, ID)
 	if task, ok := platform.Get[WorkTask](work, id); ok && task.State == "open" {
 		task.State = "canceled"
 		work.Put(r, task)
-		w.closed(id)
+		w.closed(c, id)
 	}
 }
 
 // closed marks what the work app told people about a task read for every
 // recipient once it closes: done, or ended another way (F-30). It runs inside
 // the closing decision, so replay marks them again.
-func (w *Work) closed(id string) { w.host.Seen(ID, "task:"+id, "overdue:"+id) }
+func (w *Work) closed(c platform.Caller, id string) { w.host.Seen(c, "task:"+id, "overdue:"+id) }
 
 // candidates are the level's approvers and their delegates.
 func (s ApprovalStep) candidates() []string {
@@ -628,7 +640,7 @@ func (s ApprovalStep) actingFor(member string) string {
 // delegates are those standing in on now's day for any of approvers (ADR-0028 D11).
 func (w *Work) delegates(c platform.Caller, approvers []string, now time.Time) map[string]string {
 	day := now.UTC().Format(time.DateOnly)
-	all, _, _ := platform.Find[Delegation](w.host.Automation(ID, c.Replaying), platform.Query{Limit: 1000})
+	all, _, _ := platform.Find[Delegation](w.host.Automation(c, ID), platform.Query{Limit: 1000})
 	out := map[string]string{}
 	for _, d := range all {
 		if !d.Archived && slices.Contains(approvers, d.From) && d.Start <= day && day <= d.End && !slices.Contains(approvers, d.To) {

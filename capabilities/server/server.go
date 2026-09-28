@@ -5,6 +5,7 @@
 package platformserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,9 +41,10 @@ func Now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 // Host serves tenants; each tenant's directory resolves its members.
 type Host struct {
 	tenants      []*Tenant
-	consoles     map[*Tenant]*Console
+	tenantsFrom  func() []*Tenant // deployment generations; nil for an in-memory host
 	authenticate Authenticate
 	Now          func() time.Time
+	Recover      func(context.Context, string) error // only configured with a durable journal and a tenant factory
 	// Web is the directory of the workspace's build (ADR-0018), served at "/"
 	// from the API's origin; empty serves no pages.
 	Web string
@@ -56,13 +58,19 @@ type Host struct {
 
 // NewHost serves tenants; a tenant's members come from its console (the platform app).
 func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
-	h := &Host{tenants: tenants, consoles: map[*Tenant]*Console{}, authenticate: authenticate, Now: Now}
-	for _, t := range tenants {
-		if d, ok := t.app(PlatformApp).(*Console); ok {
-			h.consoles[t] = d
-		}
+	return &Host{tenants: tenants, authenticate: authenticate, Now: Now}
+}
+
+func (h *Host) currentTenants() []*Tenant {
+	if h.tenantsFrom != nil {
+		return h.tenantsFrom()
 	}
-	return h
+	return h.tenants
+}
+
+func consoleOf(t *Tenant) *Console {
+	d, _ := t.app(PlatformApp).(*Console)
+	return d
 }
 
 // TenantHeader names the tenant a request is for, when the caller is a member
@@ -75,8 +83,8 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 		return platform.Member{}, nil, false
 	}
 	want := r.Header.Get(TenantHeader)
-	for _, t := range h.tenants {
-		if d := h.consoles[t]; d == nil || want != "" && t.ID != want {
+	for _, t := range h.currentTenants() {
+		if d := consoleOf(t); d == nil || want != "" && t.ID != want {
 			continue
 		} else if m, ok := d.Member(subject); ok {
 			return m, t, true
@@ -89,8 +97,8 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 func (h *Host) tenantsOf(r *http.Request) []string {
 	subject, _ := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	out := []string{}
-	for _, t := range h.tenants {
-		if d := h.consoles[t]; d != nil {
+	for _, t := range h.currentTenants() {
+		if d := consoleOf(t); d != nil {
 			if _, ok := d.Member(subject); ok {
 				out = append(out, t.ID)
 			}
@@ -116,7 +124,8 @@ func (h *Host) Handler() http.Handler {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			if t.quarantined() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") {
+			if t.quarantined() && (r.Method != http.MethodGet || r.URL.Path != "/v1/health") &&
+				(r.Method != http.MethodPost || r.URL.Path != "/v1/recovery/retry") {
 				WriteJSON(w, http.StatusServiceUnavailable, map[string]any{
 					"error": map[string]string{"code": "TENANT_QUARANTINED"}})
 				return
@@ -126,6 +135,28 @@ func (h *Host) Handler() http.Handler {
 	}
 	handle(Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: \"changed\" each time the tenant takes inputs, so a client reads again what it shows (F-32)", Answer: ""},
 		func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) { followChanges(w, r, t) })
+	handle(Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause (ADR-0038)",
+		Answer: TenantHealth{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[PlatformApp] != Admin {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if h.Recover == nil {
+			w.WriteHeader(http.StatusNotImplemented)
+			return
+		}
+		if err := h.Recover(r.Context(), t.ID); err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error(), "health": t.Health(h.Now())})
+			return
+		}
+		for _, current := range h.currentTenants() {
+			if current.ID == t.ID {
+				WriteJSON(w, http.StatusOK, current.Health(h.Now()))
+				return
+			}
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	})
 	handle(Route{Pattern: "POST /v1/submissions", Summary: "Submit a decision: an action on a target, received in the kernel's order (K6) and journaled once accepted", Body: pb.Submission{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(r.Body)
 		sub := &pb.Submission{}
@@ -314,12 +345,13 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, t.Search(&m, r.URL.Query().Get("q"), h.Now()))
 	})
 	public(Route{Pattern: "GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", Summary: "A published agent's A2A 1.0 card (ADR-0022)"}, func(w http.ResponseWriter, r *http.Request) {
-		i := slices.IndexFunc(h.tenants, func(t *Tenant) bool { return t.ID == r.PathValue("tenant") })
-		if i < 0 || !h.tenants[i].published(r.PathValue("agent")) {
+		tenants := h.currentTenants()
+		i := slices.IndexFunc(tenants, func(t *Tenant) bool { return t.ID == r.PathValue("tenant") })
+		if i < 0 || !tenants[i].published(r.PathValue("agent")) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		WriteJSON(w, http.StatusOK, h.agentCard(r, h.tenants[i], r.PathValue("agent")))
+		WriteJSON(w, http.StatusOK, h.agentCard(r, tenants[i], r.PathValue("agent")))
 	})
 	public(Route{Pattern: "POST /a2a/{tenant}/{agent}", Summary: "A2A 1.0 JSON-RPC to a published agent; the caller signs in with the host's issuer", Body: json.RawMessage{}}, h.serveA2A)
 	handle(Route{Pattern: "GET /v1/knowledge", Summary: "Passages of the knowledge the caller may read, best first (ADR-0022)", Answer: []Passage{}, Query: []Param{{"q", "What to find"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -381,8 +413,8 @@ func (h *Host) Handler() http.Handler {
 			out.Issuer, out.Client = h.Issuer, h.Client
 		} else if h.Development {
 			out.Identities = []Identity{}
-			for _, t := range h.tenants {
-				if d := h.consoles[t]; d != nil {
+			for _, t := range h.currentTenants() {
+				if d := consoleOf(t); d != nil {
 					out.Identities = append(out.Identities, d.Identities()...)
 				}
 			}
@@ -397,7 +429,8 @@ func (h *Host) Handler() http.Handler {
 	// health is the administrators' read /v1/health.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		quarantined := 0
-		for _, t := range h.tenants {
+		tenants := h.currentTenants()
+		for _, t := range tenants {
 			if t.quarantined() {
 				quarantined++
 			}
@@ -406,7 +439,7 @@ func (h *Host) Handler() http.Handler {
 		if quarantined > 0 {
 			status = "degraded"
 		}
-		WriteJSON(w, http.StatusOK, map[string]any{"status": status, "tenants": len(h.tenants), "quarantined": quarantined})
+		WriteJSON(w, http.StatusOK, map[string]any{"status": status, "tenants": len(tenants), "quarantined": quarantined})
 	})
 	if h.Web != "" {
 		// The workspace is one page: a path that is not a file is its route.

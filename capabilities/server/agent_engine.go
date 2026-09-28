@@ -1,12 +1,16 @@
 package platformserver
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
@@ -232,6 +236,12 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 	if t.quarantined() {
 		return
 	}
+	// The step's journal clock is a PostgreSQL timestamptz. Make the live
+	// decision use its durable precision too; otherwise a full-journal retry
+	// recreates a different run history from the same saved model step.
+	if t.Record != nil {
+		now = now.Truncate(time.Microsecond)
+	}
 	delete(t.agents.busy, b.Run)
 	run, _ := platform.Get[AgentRunRecord](t.automation(AgentApp, false), b.Run)
 	if b.Evaluation != nil {
@@ -248,6 +258,19 @@ func (t *Tenant) agentStep(b stepBody, now time.Time) {
 	t.record(t.agents, "agent", t.agents.member(run.Agent), body, now)
 	t.agents.apply(b, now, false)
 	t.enqueue(now)
+}
+
+func normalizedStepJSON(raw json.RawMessage) (json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return nil, fmt.Errorf("step JSON has trailing data")
+	}
+	return json.Marshal(value)
 }
 
 // apply takes one journaled step as a decision of the agent app.
@@ -282,6 +305,19 @@ func (a *Agents) apply(b stepBody, now time.Time, replaying bool) *kernel.Error 
 
 // take runs the step's tool and returns how the run changes.
 func (a *Agents) take(c platform.Caller, run AgentRunRecord, b stepBody, now time.Time) func(*pb.ChangeRecord) {
+	// PostgreSQL JSONB may reorder nested object keys differently from Go's
+	// encoder. Normalize on both live application and replay, not only before
+	// journaling, because these raw bytes become strings in the run history.
+	if len(b.Arguments) > 0 {
+		if normalized, err := normalizedStepJSON(b.Arguments); err == nil {
+			b.Arguments = normalized
+		}
+	}
+	if len(b.Observation) > 0 {
+		if normalized, err := normalizedStepJSON(b.Observation); err == nil {
+			b.Observation = normalized
+		}
+	}
 	d := a.defs[run.Agent]
 	step := RunStep{At: now, Tool: b.Tool, Arguments: string(b.Arguments), Tokens: b.Usage.Input + b.Usage.Output}
 	run.StepsUsed++
@@ -399,7 +435,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		if m := a.reader(*run); m != nil {
 			out, err = t.Read(*m, tool.schema)
 		} else {
-			out, err = t.app(d.app).Read(t.automation(d.app, c.Replaying), tool.schema)
+			out, err = t.app(d.app).Read(t.automated(c, d.app), tool.schema)
 		}
 		if err != nil {
 			return "refused: " + err.Error(), nil
@@ -416,7 +452,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	}
 	if tool.kind == "effect" { // sent to the endpoints bound to it, an external agent's answer awaited (ADR-0022 D7)
 		key := fmt.Sprintf("%s:%d", run.ID, len(run.Steps)+1)
-		sender := platform.NewCaller(runtime{t}, a.member(run.Agent), d.app, c.Replaying, true)
+		sender := platform.ActingCaller(c, a.member(run.Agent), d.app, true)
 		t.agentRun = run.ID
 		n, err := sender.Emit(tool.schema, key, cmp.Or(run.Ref, RunType+"/"+run.ID), map[string]string{"message": str("message"), "run": run.ID, "agent": run.Agent}, now)
 		t.agentRun = ""
@@ -440,12 +476,12 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	delete(payload, "rationale")
 	body, _ := json.Marshal(payload)
 	if d.Guard != nil {
-		if err := d.Guard(t.automation(d.app, c.Replaying), a.run(*run), tool.schema, target, body); err != nil {
+		if err := d.Guard(t.automated(c, d.app), a.run(*run), tool.schema, target, body); err != nil {
 			return "refused by its guard: " + err.Error(), nil
 		}
 	}
 	key := fmt.Sprintf("agent:%s:%d", run.ID, len(run.Steps)+1)
-	agent := platform.NewCaller(runtime{t}, a.member(run.Agent), d.app, c.Replaying, true)
+	agent := platform.ActingCaller(c, a.member(run.Agent), d.app, true)
 	person := a.reader(*run)
 	// For a person, it drafts and the person confirms (D6); a flow's agent acts itself.
 	draft := func(typ string) (string, func(*pb.ChangeRecord)) {
@@ -481,9 +517,13 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 	s := &pb.Submission{TenantId: t.ID, PrincipalId: agent.ID, Authority: t.authorityOf(tool.target), IdempotencyKey: key,
 		Target: &pb.EntityRef{Type: tool.target, Id: target}, Schema: &pb.SchemaRef{Name: tool.schema, Version: 1}, Payload: body, CorrelationId: run.ID}
 	if person != nil { // D2: never more than the person it runs for
-		t.probing = true
-		_, err := app.Submit(t.caller(*person, app, c.Replaying), s, now)
-		t.probing = false
+		request := proto.Clone(s).(*pb.Submission)
+		request.PrincipalId = person.ID
+		asked := platform.ActingCaller(c, *person, app.Manifest().ID, false)
+		err := platform.ProbeDecision(asked, func(probe platform.Caller) *kernel.Error {
+			_, err := platform.Decide(probe, app, request, now)
+			return err
+		})
 		if err != nil {
 			return "refused: " + person.ID + " may not do this (" + err.Error() + ")", nil
 		}
@@ -492,7 +532,7 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		}
 	}
 	t.agentRun = run.ID
-	record, err := app.Submit(agent, s, now)
+	record, err := platform.Decide(agent, app, s, now)
 	t.agentRun = ""
 	if err != nil {
 		return "refused: " + err.Error(), nil
@@ -506,7 +546,7 @@ func (a *Agents) recipients(c platform.Caller, d *agentDef, run AgentRunRecord) 
 		return []platform.Recipient{{Member: run.OnBehalf}}
 	}
 	if d != nil && d.To != nil {
-		return d.To(a.t.automation(d.app, c.Replaying), a.run(run))
+		return d.To(a.t.automated(c, d.app), a.run(run))
 	}
 	return nil
 }
@@ -536,7 +576,7 @@ func (a *Agents) ended(c platform.Caller, r *pb.ChangeRecord, run AgentRunRecord
 
 // Start, Signal and Finished serve flows' agent steps (internal/host.Runs).
 func (a *Agents) Start(c platform.Caller, r *pb.ChangeRecord, s host.RunStart, now time.Time) {
-	a.t.automation(AgentApp, c.Replaying).Put(r, a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now))
+	a.t.automated(c, AgentApp).Put(r, a.create(s.ID, s.Agent, s.Goal, s.Ref, "", s.Flow, s.Step, s.Token, now))
 }
 
 func (a *Agents) Signal(c platform.Caller, r *pb.ChangeRecord, run string, s host.RunSignal, now time.Time) {
@@ -549,7 +589,7 @@ func (a *Agents) Finished(c platform.Caller, flow, step string) []string {
 		where = append(where, []any{"step", "=", step})
 	}
 	domain, _ := json.Marshal(where)
-	runs, _, _ := platform.Find[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
+	runs, _, _ := platform.Find[AgentRunRecord](a.t.automated(c, AgentApp), platform.Query{Domain: domain, Sort: []string{"created", "id"}})
 	var out []string
 	for _, run := range runs {
 		out = append(out, run.ID)
@@ -577,7 +617,7 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 		if run.Task != id {
 			continue
 		}
-		task, _ := platform.Get[work.WorkTask](a.t.automation(work.ID, c.Replaying), id)
+		task, _ := platform.Get[work.WorkTask](a.t.automated(c, work.ID), id)
 		s := &pb.Submission{TenantId: a.t.ID, PrincipalId: c.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		_, err := a.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
@@ -596,7 +636,7 @@ func (a *Agents) handle(c platform.Caller, e platform.Event, now time.Time) *ker
 // it happens in, or nil for one of its own.
 func (a *Agents) effectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.Effect, o platform.Outcome, now time.Time) {
 	task := "effect:" + x.Event + ":" + x.Key
-	for _, run := range a.runs(a.t.automation(AgentApp, c.Replaying), "waiting") {
+	for _, run := range a.runs(a.t.automated(c, AgentApp), "waiting") {
 		if run.Task != task {
 			continue
 		}
@@ -611,10 +651,10 @@ func (a *Agents) effectEnded(c platform.Caller, r *pb.ChangeRecord, x platform.E
 		}
 		run.State, run.Task = "running", ""
 		if r != nil {
-			a.t.automation(AgentApp, c.Replaying).Put(r, run)
+			a.t.automated(c, AgentApp).Put(r, run)
 			return
 		}
-		ac := a.t.automation(AgentApp, c.Replaying)
+		ac := a.t.automated(c, AgentApp)
 		s := &pb.Submission{TenantId: a.t.ID, PrincipalId: ac.ID, Authority: AgentApp, IdempotencyKey: fmt.Sprintf("%s:%d", run.ID, run.Revision+1),
 			Target: &pb.EntityRef{Type: RunType, Id: run.ID}, Schema: &pb.SchemaRef{Name: SchemaRunStep, Version: 1}, Payload: []byte("{}")}
 		a.ledger.Receive(ac, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {

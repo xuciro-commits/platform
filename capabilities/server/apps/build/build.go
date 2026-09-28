@@ -102,7 +102,15 @@ func (b *Build) objectEntity() platform.Entity {
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
-					if err := b.install(*object); err != nil {
+					if c.Staging() {
+						if err := b.check(*object, object.ID); err != nil {
+							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+						}
+						entity := Entity(*object)
+						if err := b.host.ValidateInstall(entity, platform.EntityActions(entity), page(*object)); err != nil {
+							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+						}
+					} else if err := b.install(c, *object); err != nil {
 						return err
 					}
 					object.Installed = TypeOf(object.Name) // what its records are kept as, for people to see
@@ -161,8 +169,99 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
-func (b *Build) Snapshot() (json.RawMessage, error)       { return b.ledger.Snapshot() }
-func (b *Build) Restore(raw json.RawMessage) error        { return b.ledger.Restore(raw) }
+func (*Build) AcceptedPublicationSchemas() []string {
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver}
+}
+
+// publicationImage reads and verifies the already committed record image
+// without rerunning builder action rules or publishing a second decision.
+func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, []platform.Action, []platform.Page, *platform.Application, error) {
+	switch schema {
+	case SchemaPublish:
+		var record Object
+		if err := json.Unmarshal(image, &record); err != nil {
+			return platform.Entity{}, nil, nil, nil, err
+		}
+		published, ok := wasPublished[Object](record.Published)
+		if !ok || record.State != "published" || record.ID != published.ID ||
+			record.Name != published.Name || record.Installed != TypeOf(published.Name) {
+			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted object has no matching published definition")
+		}
+		entity := Entity(published)
+		actions := platform.EntityActions(entity)
+		return entity, actions, []platform.Page{page(published)}, nil, nil
+	case SchemaRelease:
+		var record Page
+		if err := json.Unmarshal(image, &record); err != nil {
+			return platform.Entity{}, nil, nil, nil, err
+		}
+		published, ok := wasPublished[Page](record.Published)
+		if !ok || record.State != "published" || record.ID != published.ID ||
+			record.Name != published.Name {
+			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted page has no published definition")
+		}
+		return platform.Entity{}, nil, []platform.Page{descriptor(published)}, nil, nil
+	case SchemaHandOver:
+		var record Application
+		if err := json.Unmarshal(image, &record); err != nil {
+			return platform.Entity{}, nil, nil, nil, err
+		}
+		published, ok := wasPublished[Application](record.Published)
+		if !ok || record.State != "published" || record.ID != published.ID ||
+			record.Name != published.Name {
+			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted application has no published definition")
+		}
+		app := applicationDescriptor(published)
+		return platform.Entity{}, nil, nil, &app, nil
+	}
+	return platform.Entity{}, nil, nil, nil, fmt.Errorf("not an accepted builder publication: %s", schema)
+}
+
+func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	entity, actions, pages, app, err := b.publicationImage(schema, image)
+	if err != nil {
+		return err
+	}
+	switch schema {
+	case SchemaPublish:
+		return b.host.ValidateInstall(entity, actions, pages...)
+	case SchemaRelease:
+		return b.host.ValidateInstallPage(pages[0])
+	case SchemaHandOver:
+		return b.host.ValidateInstallApplication(*app)
+	}
+	return fmt.Errorf("unknown builder publication: %s", schema)
+}
+
+// Installation reconstructs the runtime registry from the saved published
+// image, not by running the publish transition or making another journal entry.
+func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	entity, actions, pages, app, err := b.publicationImage(schema, image)
+	if err != nil {
+		return err
+	}
+	switch schema {
+	case SchemaPublish:
+		if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
+			return fmt.Errorf("extend accepted object: %w", err)
+		}
+		if err := b.host.Install(platform.Caller{Replaying: true}, entity, actions, pages...); err != nil {
+			return fmt.Errorf("install accepted object: %w", err)
+		}
+		b.installed[entity.Type] = entity
+	case SchemaRelease:
+		if err := b.host.InstallPage(platform.Caller{Replaying: true}, pages[0]); err != nil {
+			return fmt.Errorf("install accepted page: %w", err)
+		}
+	case SchemaHandOver:
+		if err := b.host.InstallApplication(platform.Caller{Replaying: true}, *app); err != nil {
+			return fmt.Errorf("install accepted application: %w", err)
+		}
+	}
+	return nil
+}
+func (b *Build) Snapshot() (json.RawMessage, error) { return b.ledger.Snapshot() }
+func (b *Build) Restore(raw json.RawMessage) error  { return b.ledger.Restore(raw) }
 func (b *Build) Read(platform.Caller, string) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 }
@@ -279,7 +378,7 @@ func (b *Build) taken(name, id string) (string, bool) {
 	if _, mine := b.installed[TypeOf(name)]; !mine && b.host.Declares(TypeOf(name)) {
 		return "an app's own type", true
 	}
-	objects, _, _ := platform.Find[Object](b.host.Automation(ID, false), platform.Query{Limit: 500})
+	objects, _, _ := platform.Find[Object](b.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 500})
 	for _, o := range objects {
 		if o.Name == name && o.ID != id && !o.Archived {
 			return "the object " + o.Title, true
@@ -304,7 +403,10 @@ func named(s string) bool {
 // records, the ledger takes its generated actions, and the asset registry
 // offers it and its page (ADR-0034 D2). Installed again, it takes its new
 // fields and its records come with it (D3).
-func (b *Build) install(o Object) *kernel.Error {
+func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
+	if c.Staging() {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
 	if err := b.check(o, o.ID); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
@@ -313,7 +415,7 @@ func (b *Build) install(o Object) *kernel.Error {
 	if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	if err := b.host.Install(entity, actions, page(o)); err != nil {
+	if err := b.host.Install(c, entity, actions, page(o)); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	b.installed[entity.Type] = entity
@@ -323,6 +425,20 @@ func (b *Build) install(o Object) *kernel.Error {
 // published is a definition as it was published: what is installed, kept on the
 // record so a restore installs that and not a draft written since (ADR-0034 D3).
 func published[T any](definition T) string {
+	// A published definition is one version, not a recursive copy of every
+	// preceding publication. Keeping the old Published string inside the new
+	// image would double its size at each edit and exhaust the bounded result.
+	switch value := any(definition).(type) {
+	case Object:
+		value.Published = ""
+		definition = any(value).(T)
+	case Page:
+		value.Published = ""
+		definition = any(value).(T)
+	case Application:
+		value.Published = ""
+		definition = any(value).(T)
+	}
 	raw, _ := json.Marshal(definition)
 	return string(raw)
 }
@@ -341,33 +457,33 @@ func wasPublished[T any](raw string) (T, bool) {
 // of the types they define (ADR-0034 D4). It installs what was published, so a
 // draft written since stays a draft.
 func (b *Build) Reinstall() error {
-	objects, _, _ := platform.Find[Object](b.host.Automation(ID, false), platform.Query{Limit: 1000, Sort: []string{"id"}})
+	objects, _, _ := platform.Find[Object](b.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 1000, Sort: []string{"id"}})
 	for _, o := range objects {
 		was, ok := wasPublished[Object](o.Published)
 		if !ok || o.Archived {
 			continue
 		}
-		if err := b.install(was); err != nil {
+		if err := b.install(platform.Caller{Replaying: true}, was); err != nil {
 			return fmt.Errorf("object %s: %v", o.Name, err)
 		}
 	}
-	pages, _, _ := platform.Find[Page](b.host.Automation(ID, false), platform.Query{Limit: 1000, Sort: []string{"id"}})
+	pages, _, _ := platform.Find[Page](b.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 1000, Sort: []string{"id"}})
 	for _, p := range pages { // after the objects they show
 		was, ok := wasPublished[Page](p.Published)
 		if !ok || p.Archived {
 			continue
 		}
-		if err := b.release(was); err != nil {
+		if err := b.release(platform.Caller{Replaying: true}, was); err != nil {
 			return fmt.Errorf("page %s: %v", p.Name, err)
 		}
 	}
-	applications, _, _ := platform.Find[Application](b.host.Automation(ID, false), platform.Query{Limit: 1000, Sort: []string{"id"}})
+	applications, _, _ := platform.Find[Application](b.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 1000, Sort: []string{"id"}})
 	for _, a := range applications { // after the pages they hold
 		was, ok := wasPublished[Application](a.Published)
 		if !ok || a.Archived {
 			continue
 		}
-		if err := b.hand(was); err != nil {
+		if err := b.hand(platform.Caller{Replaying: true}, was); err != nil {
 			return fmt.Errorf("application %s: %v", a.Name, err)
 		}
 	}

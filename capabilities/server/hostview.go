@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"time"
 
@@ -20,8 +21,23 @@ type hostView struct {
 }
 
 // Install declares an entity this app composed at runtime (ADR-0034).
-func (h hostView) Install(e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
+func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
+	if c.Staging() {
+		unsupportedStagedEffect()
+	}
 	return h.t.Install(h.app, e, actions, pages...)
+}
+
+// Validation uses the same installation code against a private registry and
+// record store; a failed or refused publication cannot change live metadata.
+func (h hostView) installationDraft() *Tenant {
+	draft := &Tenant{ID: h.t.ID, apps: h.t.apps, owner: maps.Clone(h.t.owner),
+		records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions)}
+	return draft
+}
+
+func (h hostView) ValidateInstall(e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
+	return h.installationDraft().Install(h.app, e, actions, pages...)
 }
 
 func (h hostView) OwnerOf(dataClass string) (string, bool) {
@@ -38,15 +54,18 @@ func (h hostView) ProtocolEvent(name string) (platform.ProtocolEvent, bool) {
 }
 
 func (h hostView) As(c platform.Caller, app string) platform.Caller {
-	return platform.NewCaller(runtime{h.t}, c.Member, app, c.Replaying, c.Automation)
+	return platform.RouteCaller(c, app)
 }
 
-func (h hostView) Caller(m platform.Member, app string, replaying bool) platform.Caller {
-	return platform.NewCaller(runtime{h.t}, m, app, replaying, false)
+func (h hostView) Caller(parent platform.Caller, m platform.Member, app string) platform.Caller {
+	if !parent.Staging() {
+		return platform.NewCaller(runtime{h.t}, m, app, parent.Replaying, false)
+	}
+	return platform.ActingCaller(parent, m, app, false)
 }
 
-func (h hostView) Automation(app string, replaying bool) platform.Caller {
-	return h.t.automation(app, replaying)
+func (h hostView) Automation(parent platform.Caller, app string) platform.Caller {
+	return h.t.automated(parent, app)
 }
 
 func (h hostView) Member(id string) (platform.Member, bool) { return h.t.member(id) }
@@ -72,7 +91,16 @@ func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	return a.Submit(platform.NewCaller(runtime{h.t}, c.Member, a.Manifest().ID, c.Replaying, c.Automation), s, now)
+	return platform.Decide(c, a, s, now)
+}
+
+func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if c.Staging() {
+		return platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
+			return h.Submit(c, s, now)
+		})
+	}
+	return h.Submit(c, s, now)
 }
 
 func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {
@@ -81,11 +109,15 @@ func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Rec
 
 func (h hostView) Directory() host.Directory { return h.t.directory }
 
-func (h hostView) Seen(app string, keys ...string) {
+func (h hostView) Seen(c platform.Caller, keys ...string) {
+	if c.Staging() {
+		platform.MarkSeen(c, keys...)
+		return
+	}
 	h.t.opsMu.Lock()
 	defer h.t.opsMu.Unlock()
 	for i, n := range h.t.notices {
-		if n.App == app && slices.Contains(keys, n.Key) {
+		if n.App == c.App && slices.Contains(keys, n.Key) {
 			h.t.notices[i].Read = true
 		}
 	}
@@ -108,11 +140,25 @@ func (h hostView) Runs() host.Runs {
 }
 
 // InstallPage offers a page composed in this tenant (ADR-0034).
-func (h hostView) InstallPage(p platform.Page) error { return h.t.InstallPage(h.app, p) }
+func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {
+	if c.Staging() {
+		unsupportedStagedEffect()
+	}
+	return h.t.InstallPage(h.app, p)
+}
+func (h hostView) ValidateInstallPage(p platform.Page) error {
+	return h.installationDraft().InstallPage(h.app, p)
+}
 
 // InstallApplication offers an application handed over in this tenant (ADR-0036).
-func (h hostView) InstallApplication(a platform.Application) error {
+func (h hostView) InstallApplication(c platform.Caller, a platform.Application) error {
+	if c.Staging() {
+		unsupportedStagedEffect()
+	}
 	return h.t.InstallApplication(h.app, a)
+}
+func (h hostView) ValidateInstallApplication(a platform.Application) error {
+	return h.installationDraft().InstallApplication(h.app, a)
 }
 
 // Entity is an entity type's declaration.

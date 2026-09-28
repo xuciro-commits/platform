@@ -16,9 +16,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Entry is one accepted input of a tenant: a submission, a connector delivery.
-// A domain rebuilds its state, kernel logs included, by replaying its entries in
-// order through the same code that accepted them (docs/ADR/0007).
+// Entry is one durable tenant input or accepted result. Legacy entries replay
+// the application code; accepted-result entries apply saved record and intent
+// bytes without rerunning the original business decision (ADR-0038).
 type Entry struct {
 	App       string          `json:"app"`
 	Kind      string          `json:"kind"`
@@ -29,6 +29,13 @@ type Entry struct {
 	// handled (ADR-0020 D6): replay starts them on the same ones, whatever the
 	// code declares since.
 	Versions map[string]int `json:"versions,omitempty"`
+}
+
+// PostgreSQL timestamptz stores microseconds while the JSONB result envelope
+// retains Go's nanoseconds. Compare the durable precision, not the transient
+// sub-microsecond fraction, when replaying a saved result from a real journal.
+func sameJournalTime(result, entry time.Time) bool {
+	return result.Truncate(time.Microsecond).Equal(entry)
 }
 
 // Journal keeps entries in PostgreSQL. Each tenant's entries are numbered; an
@@ -63,8 +70,16 @@ var schema = []string{
 		tenant text not null, at timestamptz not null, member text not null, model text not null,
 		run text not null default '', request jsonb not null, answer jsonb not null, outcome text not null)`,
 	`create index if not exists transcripts_run on transcripts (tenant, run, at)`,
-	`create unique index if not exists journal_accepted_key on journal
-		(tenant, app, (body #>> '{receipt,submission,idempotencyKey}'))
+	`drop index if exists journal_accepted_key`,
+	`drop index if exists journal_result_key`,
+	`drop index if exists journal_result_request_key`,
+	`drop index if exists journal_result_input_key`,
+	`drop index if exists journal_result_scoped_key`,
+	`create unique index if not exists journal_result_scoped_key on journal
+		(tenant, app, (case when body ->> 'kind' = 'work-result' then 'work'
+			when body ->> 'kind' = 'input-result' then 'input'
+			when body ->> 'kind' = 'effect-result' then 'effect' else 'submission' end),
+		 (coalesce(body ->> 'key', body #>> '{submission,idempotencyKey}', body #>> '{receipt,submission,idempotencyKey}')))
 		where kind = 'accepted-result'`,
 }
 
@@ -124,18 +139,51 @@ func (j *Journal) Position(tenant string) int64 {
 // SaveSnapshot keeps a tenant's state at a position, compressed, with the code
 // that wrote it; the two newest are kept (ADR-0019 D6).
 func (j *Journal) SaveSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error {
-	var packed bytes.Buffer
-	w := gzip.NewWriter(&packed)
-	w.Write(state)
-	if err := w.Close(); err != nil {
+	packed, err := packSnapshot(state)
+	if err != nil {
 		return err
 	}
 	if _, err := j.pool.Exec(ctx, `insert into snapshots (tenant, seq, code, state) values ($1, $2, $3, $4) on conflict (tenant, seq) do nothing`,
-		tenant, seq, code, packed.Bytes()); err != nil {
+		tenant, seq, code, packed); err != nil {
 		return err
 	}
-	_, err := j.pool.Exec(ctx, `delete from snapshots where tenant = $1 and seq < (select min(seq) from (select seq from snapshots where tenant = $1 order by seq desc limit 2) newest)`, tenant)
+	_, err = j.pool.Exec(ctx, `delete from snapshots where tenant = $1 and seq < (select min(seq) from (select seq from snapshots where tenant = $1 order by seq desc limit 2) newest)`, tenant)
 	return err
+}
+
+func packSnapshot(state []byte) ([]byte, error) {
+	var packed bytes.Buffer
+	w := gzip.NewWriter(&packed)
+	if _, err := w.Write(state); err != nil {
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return packed.Bytes(), nil
+}
+
+// RepairSnapshot replaces only this tenant's derived checkpoints, after the
+// entire durable journal has been validated and a fresh state captured. A
+// corrupt checkpoint at the same sequence must not survive the next restart.
+func (j *Journal) RepairSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error {
+	packed, err := packSnapshot(state)
+	if err != nil {
+		return err
+	}
+	tx, err := j.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `delete from snapshots where tenant=$1`, tenant); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `insert into snapshots (tenant, seq, code, state) values ($1,$2,$3,$4)`,
+		tenant, seq, code, packed); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Snapshot is the tenant's newest snapshot written by code, if any.
@@ -197,6 +245,14 @@ func (j *Journal) Append(ctx context.Context, tenant string, e Entry) error {
 // unique index makes retries after an unknown commit outcome return the prior
 // result; a competing writer with a stale sequence cannot advance this tenant.
 func (j *Journal) AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
+	identity, err := acceptedIdentity(e.Body)
+	if err != nil || e.Kind != "accepted-result" || identity.Tenant != tenant || identity.App != e.App ||
+		identity.Key != key {
+		return nil, fmt.Errorf("journal: accepted input identity differs: %v", err)
+	}
+	if identity.Hash != hash {
+		return nil, errAcceptedConflict
+	}
 	j.mu.Lock()
 	lock := j.locks[tenant]
 	if lock == nil {
@@ -209,19 +265,23 @@ func (j *Journal) AppendAccepted(ctx context.Context, tenant string, e Entry, ke
 	read := func() ([]byte, error) {
 		var raw []byte
 		err := j.pool.QueryRow(ctx, `select body from journal where tenant=$1 and app=$2
-			and kind='accepted-result' and body #>> '{receipt,submission,idempotencyKey}'=$3`,
-			tenant, e.App, key).Scan(&raw)
+			and kind='accepted-result' and coalesce(body ->> 'key', body #>> '{submission,idempotencyKey}',
+				body #>> '{receipt,submission,idempotencyKey}')=$3
+			and (case when body ->> 'kind' = 'work-result' then 'work'
+				when body ->> 'kind' = 'input-result' then 'input'
+				when body ->> 'kind' = 'effect-result' then 'effect' else 'submission' end)=$4`,
+			tenant, e.App, key, identity.Scope).Scan(&raw)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		if err != nil {
 			return nil, err
 		}
-		result, _, err := decodeAcceptedResult(raw)
+		savedHash, err := resultRequestHash(raw)
 		if err != nil {
 			return nil, err
 		}
-		if result.RequestHash != hash {
+		if savedHash != hash {
 			return nil, errAcceptedConflict
 		}
 		return raw, nil
@@ -250,7 +310,11 @@ func (j *Journal) AppendAccepted(ctx context.Context, tenant string, e Entry, ke
 	j.mu.Lock()
 	j.next[tenant] = seq + 1
 	j.mu.Unlock()
-	return e.Body, nil
+	// PostgreSQL stores the envelope as jsonb. It normalizes key order even
+	// inside raw record history values; applying the caller's pre-insert bytes
+	// would leave live history different from a restart's recovered history.
+	// Always apply the exact representation the committed journal returns.
+	return read()
 }
 
 func (j *Journal) Close() { j.pool.Close() }

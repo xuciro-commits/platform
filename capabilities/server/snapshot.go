@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/platform"
@@ -21,26 +23,29 @@ import (
 // CheckReplay holds every composition to that. A snapshot is only a shortcut:
 // the journal stays the truth, and a snapshot of other code is never used.
 type tenantState struct {
-	Apps       map[string]json.RawMessage `json:"apps"`
-	Records    map[string][]recordState   `json:"records"`
-	Audit      []AuditEntry               `json:"audit"`
-	Deliveries []Delivery                 `json:"deliveries"`
-	Acted      int                        `json:"acted"`
-	Bindings   map[string]string          `json:"bindings"` // protocol → provider app
-	Works      json.RawMessage            `json:"works"`
-	Queues     map[string][]string        `json:"queues"` // subscriber → task IDs, head first
-	Failed     []string                   `json:"failed"`
-	Tasks      []taskState                `json:"tasks"` // every delivery task, by ID
-	Jobs       []Task                     `json:"jobs"`
-	Connectors json.RawMessage            `json:"connectors"`
-	Marks      []kernel.ConnectorMark     `json:"marks"`
-	LastError  map[string]ConnectorError  `json:"lastError"`
-	Notices    []platform.Notification    `json:"notices"`
-	NoticeSeq  int                        `json:"noticeSeq"`
-	Settings   map[string]string          `json:"settings"`
-	Endpoints  []*Endpoint                `json:"endpoints"`
-	Outbound   []effectState              `json:"outbound"`
-	Sequences  map[string]int             `json:"sequences,omitempty"`
+	Apps            map[string]json.RawMessage `json:"apps"`
+	Records         map[string][]recordState   `json:"records"`
+	Audit           []AuditEntry               `json:"audit"`
+	Refusals        map[string]refusedResult   `json:"refusals,omitempty"`
+	AcceptedAnswers map[string]json.RawMessage `json:"acceptedAnswers,omitempty"`
+	AcceptedInputs  map[string]json.RawMessage `json:"acceptedInputs,omitempty"`
+	Deliveries      []Delivery                 `json:"deliveries"`
+	Acted           int                        `json:"acted"`
+	Bindings        map[string]string          `json:"bindings"` // protocol → provider app
+	Works           json.RawMessage            `json:"works"`
+	Queues          map[string][]string        `json:"queues"` // subscriber → task IDs, head first
+	Failed          []string                   `json:"failed"`
+	Tasks           []taskState                `json:"tasks"` // every delivery task, by ID
+	Jobs            []Task                     `json:"jobs"`
+	Connectors      json.RawMessage            `json:"connectors"`
+	Marks           []kernel.ConnectorMark     `json:"marks"`
+	LastError       map[string]ConnectorError  `json:"lastError"`
+	Notices         []platform.Notification    `json:"notices"`
+	NoticeSeq       int                        `json:"noticeSeq"`
+	Settings        map[string]string          `json:"settings"`
+	Endpoints       []*Endpoint                `json:"endpoints"`
+	Outbound        []effectState              `json:"outbound"`
+	Sequences       map[string]int             `json:"sequences,omitempty"`
 }
 
 type recordState struct {
@@ -119,6 +124,9 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	t.auditMu.Lock()
 	s.Audit = slices.Clone(t.audit)
 	t.auditMu.Unlock()
+	s.Refusals = maps.Clone(t.refusals)
+	s.AcceptedAnswers = maps.Clone(t.acceptedAnswers)
+	s.AcceptedInputs = maps.Clone(t.acceptedInputs)
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	s.Deliveries, s.Acted, s.Failed = slices.Clone(t.deliveries), t.acted, []string{}
@@ -239,6 +247,45 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	t.auditMu.Lock()
 	t.audit = s.Audit
 	t.auditMu.Unlock()
+	for key, result := range s.Refusals {
+		raw, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("tenant %s: refusal snapshot %s: %w", t.ID, key, err)
+		}
+		decoded, sub, err := decodeRefusedResult(raw)
+		if err != nil || decoded.Tenant != t.ID || key != decoded.App+"/"+sub.GetIdempotencyKey() {
+			return fmt.Errorf("tenant %s: refusal snapshot %s is incompatible: %v", t.ID, key, err)
+		}
+	}
+	t.refusals = maps.Clone(s.Refusals)
+	if t.refusals == nil {
+		t.refusals = map[string]refusedResult{}
+	}
+	for key, raw := range s.AcceptedAnswers {
+		result, receipt, err := decodeAcceptedBatch(raw)
+		sub, subErr := batchSubmission(result, receipt)
+		if err != nil || subErr != nil || result.Tenant != t.ID ||
+			len(result.Submission) == 0 || key != result.App+"/"+sub.GetIdempotencyKey() {
+			return fmt.Errorf("tenant %s: accepted answer snapshot %s is incompatible", t.ID, key)
+		}
+		owner, ok := t.app(receipt.GetSubmission().GetAuthority()).(platform.ResultApp)
+		if !ok || !proto.Equal(owner.AcceptedLedger().AcceptedFor(t.ID, receipt.GetSubmission().GetIdempotencyKey()), receipt) {
+			return fmt.Errorf("tenant %s: accepted answer snapshot %s has no receipt", t.ID, key)
+		}
+		if _, refused := t.refusals[key]; refused {
+			return fmt.Errorf("tenant %s: accepted answer snapshot %s reuses a refused key", t.ID, key)
+		}
+	}
+	t.acceptedAnswers = maps.Clone(s.AcceptedAnswers)
+	for key, raw := range s.AcceptedInputs {
+		result, err := decodeAcceptedInput(raw)
+		owner, ok := t.app(result.App).(platform.AcceptedInputApp)
+		if err != nil || !ok || result.Tenant != t.ID ||
+			key != result.App+"/"+result.Key || !slices.Contains(owner.AcceptedInputs(), result.Name) {
+			return fmt.Errorf("tenant %s: accepted input snapshot %s is incompatible: %v", t.ID, key, err)
+		}
+	}
+	t.acceptedInputs = maps.Clone(s.AcceptedInputs)
 	for protocol, provider := range s.Bindings {
 		if !t.rebind(protocol, provider) {
 			return fmt.Errorf("tenant %s: %s is not a provider of %s", t.ID, provider, protocol)

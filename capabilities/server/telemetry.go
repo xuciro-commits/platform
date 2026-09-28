@@ -94,6 +94,10 @@ func counted(t *Tenant, kind, app, outcome string) {
 // queue depth and the oldest item's age per app, failed items, open breakers
 // and apps deferred past their quota.
 func observe(tenants []*Tenant) {
+	observeFrom(func() []*Tenant { return tenants })
+}
+
+func observeFrom(current func() []*Tenant) {
 	m := otel.Meter("platformserver")
 	depth, _ := m.Int64ObservableGauge("platform.queue.depth", metric.WithDescription("Owned work waiting, per tenant and app"))
 	oldest, _ := m.Float64ObservableGauge("platform.queue.oldest", metric.WithUnit("s"), metric.WithDescription("Age of the oldest waiting item, per tenant and app"))
@@ -101,7 +105,7 @@ func observe(tenants []*Tenant) {
 	open, _ := m.Int64ObservableGauge("platform.breakers.open", metric.WithDescription("Destinations whose breaker is open"))
 	m.RegisterCallback(func(_ context.Context, o metric.Observer) error {
 		now := time.Now()
-		for _, t := range tenants {
+		for _, t := range current() {
 			h := t.Health(now)
 			for _, q := range h.Queues {
 				attrs := metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.app", q.App))

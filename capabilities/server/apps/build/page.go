@@ -69,7 +69,14 @@ func (b *Build) pageEntity() platform.Entity {
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
-					if err := b.release(*page); err != nil {
+					if c.Staging() {
+						if err := b.checkPage(*page); err != nil {
+							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+						}
+						if err := b.host.ValidateInstallPage(descriptor(*page)); err != nil {
+							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+						}
+					} else if err := b.release(c, *page); err != nil {
 						return err
 					}
 					page.Published = published(*page)
@@ -79,11 +86,11 @@ func (b *Build) pageEntity() platform.Entity {
 
 // release installs the page: the host checks it against what is installed now
 // and offers it to the members who may read its object.
-func (b *Build) release(p Page) *kernel.Error {
+func (b *Build) release(c platform.Caller, p Page) *kernel.Error {
 	if err := b.checkPage(p); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	if err := b.host.InstallPage(descriptor(p)); err != nil {
+	if err := b.host.InstallPage(c, descriptor(p)); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	return nil

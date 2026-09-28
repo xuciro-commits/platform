@@ -53,19 +53,23 @@ func main() {
 		assistant,
 		manufacturing.Seat("erp", "erp", map[string]string{erpadapter.ID: erpadapter.Connector}),
 	})
-	var app platform.App = erp.New(tenant)
+	newBooks := func(id string) platform.App { return erp.New(id) }
 	switch *books {
 	case "app":
 		deployment.Seed = func(t *platformserver.Tenant, now time.Time) error { return manufacturing.Seed(t, "sup-1", now) }
 	case "external":
-		app = erpadapter.New(tenant)
+		newBooks = func(id string) platform.App { return erpadapter.New(id) }
 	default:
 		log.Fatalf("-erp: %q is neither app nor external", *books)
 	}
-	t, err := manufacturing.NewTenant(tenant, app, seats...)
-	if err == nil && *books == "external" {
-		err = t.Connect(erpadapter.Poll("erp"))
+	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		t, err := manufacturing.NewTenant(id, newBooks(id), seats...)
+		if err == nil && *books == "external" {
+			err = t.Connect(erpadapter.Poll("erp"))
+		}
+		return t, err
 	}
+	t, err := deployment.Rebuild(tenant)
 	if err == nil {
 		err = deployment.Serve(t)
 	}

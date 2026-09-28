@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -203,6 +204,66 @@ func (d *Console) Manifest() platform.Manifest {
 }
 
 func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.Declarations() }
+
+// Member decisions are the Console's bounded, app-owned state. Host operations
+// remain outside this path until their respective owners can be staged too.
+func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
+func (*Console) AcceptedActionSchemas() []string {
+	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage}
+}
+
+func (d *Console) ForkAcceptedState() (platform.App, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	members := make(map[string]*platform.Member, len(d.members))
+	for id, member := range d.members {
+		copy := clone(member)
+		members[id] = &copy
+	}
+	return &Console{tenant: d.tenant, members: members, subjects: maps.Clone(d.subjects),
+		ledger: d.ledger, t: d.t}, nil
+}
+
+func (d *Console) AcceptedState() (json.RawMessage, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return json.Marshal(consoleState{d.members, d.subjects})
+}
+
+func (d *Console) ValidateAcceptedState(raw json.RawMessage) error {
+	var state consoleState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return err
+	}
+	if state.Members == nil || state.Subjects == nil {
+		return fmt.Errorf("accepted directory is incomplete")
+	}
+	for id, member := range state.Members {
+		if id == "" || member == nil || member.ID != id || member.Tenant != d.tenant || member.Roles == nil {
+			return fmt.Errorf("accepted directory has invalid member %q", id)
+		}
+	}
+	for subject, id := range state.Subjects {
+		if subject == "" || state.Members[id] == nil {
+			return fmt.Errorf("accepted directory has invalid subject %q", subject)
+		}
+	}
+	return nil
+}
+
+func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
+	if err := d.ValidateAcceptedState(raw); err != nil {
+		return err
+	}
+	var state consoleState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.members, d.subjects = state.Members, state.Subjects
+	return nil
+}
 
 // Submit decides the console's actions under the tenant's lock, as every
 // decision; its own lock guards only the directory, so a tenant's operations

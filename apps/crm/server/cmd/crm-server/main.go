@@ -27,8 +27,11 @@ func main() {
 			ai.ID: ai.Admin, flow.ID: flow.Admin, platformserver.AgentApp: platformserver.AgentAdmin}),
 		seat("sales", "sales-1", map[string]string{crm.ID: string(crm.Sales)}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), ai.New("dev"), work.New("dev"),
-		flow.New("dev"), platformserver.NewAgents("dev"), crm.New("dev"))
+	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		return platformserver.NewTenant(id, platformserver.NewConsole(id, seats...), ai.New(id), work.New(id),
+			flow.New(id), platformserver.NewAgents(id), crm.New(id))
+	}
+	t, err := deployment.Rebuild("dev")
 	if err == nil {
 		err = deployment.Serve(t)
 	}

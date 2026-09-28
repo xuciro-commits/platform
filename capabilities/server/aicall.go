@@ -97,6 +97,7 @@ func unavailable(e *AIError) bool {
 // enabled models and their providers, and the usage of every call.
 type models interface {
 	platform.App
+	Snapshot() (json.RawMessage, error)
 	Callable(m platform.Member, name string) (ai.Model, ai.Provider, *kernel.Error)
 	Model(name string) (ai.Model, ai.Provider, *kernel.Error)
 	Provider(id string) (ai.Provider, bool)
@@ -501,6 +502,16 @@ type modelAsk struct {
 }
 
 func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
+	planned := t.planModelRequest(c, rec, q, nil)
+	t.opsMu.Lock()
+	defer t.opsMu.Unlock()
+	t.outbound = append(t.outbound, &effect{span: t.current(), Effect: planned})
+	t.trimEffects()
+}
+
+// The live and staged paths share the exact model intent planner. Planning
+// allocates no work and never calls a provider.
+func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q platform.Request, pending []platform.Effect) platform.Effect {
 	prompt, _ := q.Payload.(platform.Prompt)
 	s := rec.GetSubmission()
 	body, _ := json.Marshal(modelAsk{Model: q.Model, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target})
@@ -508,26 +519,30 @@ func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Re
 	defer t.opsMu.Unlock()
 	n := 0
 	for _, x := range t.outbound {
-		if x.Endpoint == modelEndpoint && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
+		if x.Endpoint == modelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
+			n++
+		}
+	}
+	for _, x := range pending {
+		if x.Endpoint == modelEndpoint && x.App == c.App && strings.HasPrefix(x.Key, rec.GetChangeId()+"#") {
 			n++
 		}
 	}
 	key := fmt.Sprintf("%s#%d", rec.GetChangeId(), n)
-	t.outbound = append(t.outbound, &effect{span: t.current(), Effect: platform.Effect{ID: fmt.Sprintf("%s:%s:model:%s", t.ID, c.App, key), Endpoint: modelEndpoint,
-		Event: c.App + "/model", App: c.App, Key: key, Target: q.Target, At: rec.GetRecordedTime().AsTime(), State: "pending", Due: rec.GetRecordedTime().AsTime(), Body: string(body)}})
-	t.trimEffects()
+	return platform.Effect{ID: fmt.Sprintf("%s:%s:model:%s", t.ID, c.App, key), Endpoint: modelEndpoint,
+		Event: c.App + "/model", App: c.App, Key: key, Target: q.Target, At: rec.GetRecordedTime().AsTime(), State: "pending", Due: rec.GetRecordedTime().AsTime(), Body: string(body)}
 }
 
 // sendModel makes one attempt of a model request: delivered with the answer,
 // retried while the provider or a limit keeps it, rejected when it cannot be asked.
-func (t *Tenant) sendModel(x platform.Effect, now time.Time) platform.Outcome {
+func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *ai.Usage) {
 	out := platform.Outcome{Effect: x.ID}
 	var ask modelAsk
 	json.Unmarshal([]byte(x.Body), &ask)
 	model := cmp.Or(ask.Model, t.setting(t.automation(ai.ID, false), ai.SettingAppModel))
 	if model == "" {
 		out.Result, out.Detail = "rejected", "no model is set for apps"
-		return out
+		return out, nil
 	}
 	messages := []Message{{Role: "user", Content: ask.Prompt.User}}
 	if ask.Prompt.System != "" {
@@ -541,18 +556,17 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) platform.Outcome {
 	t.mu.Unlock()
 	if err != nil {
 		out.Result, out.Detail = "rejected", "the model "+model+" is not enabled"
-		return out
+		return out, nil
 	}
 	if !t.breakers.allow("ai:"+pv.ID, now) {
 		out.Result, out.Detail = "retry", "the provider "+pv.ID+" failed repeatedly"
-		return out
+		return out, nil
 	}
 	if why := t.allowed(m, enabled, now); why != "" {
 		out.Result, out.Detail = "retry", why
-		return out
+		return out, nil
 	}
 	answer, failure := t.call(pv, enabled, m, ChatRequest{Model: model, Messages: messages, MaxTokens: ask.Prompt.MaxTokens, run: x.ID}, now)
-	t.meter(m, answer.Usage)
 	switch {
 	case failure != nil && unavailable(failure):
 		out.Result, out.Detail = "retry", failure.Detail
@@ -561,17 +575,30 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) platform.Outcome {
 	default:
 		out.Result, out.Answer = "delivered", json.RawMessage(strconv.Quote(answer.Content))
 	}
-	return out
+	return out, &answer.Usage
 }
 
 // answerModel submits a settled model request's answer to the app's Reply
 // action, as the app, and journals it; a replay has it in the journal.
 func (t *Tenant) answerModel(x platform.Effect, o platform.Outcome, now time.Time) {
+	app, reply := t.modelAnswerSubmission(x, o)
+	if app == nil || reply == nil {
+		return
+	}
+	c := t.automation(x.App, false)
+	if _, err := app.Submit(c, reply, now); err != nil {
+		log.Printf("tenant %s: %s refused the answer to its model request %s: %v", t.ID, x.App, x.ID, err) // a defect of the app
+		return
+	}
+	t.journal(app, c.Member, reply, now)
+}
+
+func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome) (platform.App, *pb.Submission) {
 	var ask modelAsk
 	json.Unmarshal([]byte(x.Body), &ask)
 	app := t.app(x.App)
 	if app == nil || ask.Reply == "" {
-		return
+		return nil, nil
 	}
 	answer := platform.Answer{Call: ask.Call, Action: "ask", Outcome: "accepted"}
 	if x.State == "delivered" {
@@ -580,13 +607,8 @@ func (t *Tenant) answerModel(x platform.Effect, o platform.Outcome, now time.Tim
 		answer.Outcome, answer.Code = "refused", o.Detail
 	}
 	typ, id, _ := strings.Cut(ask.Record, "/")
-	c := t.automation(x.App, false)
 	payload, _ := json.Marshal(answer)
-	reply := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(typ), Target: &pb.EntityRef{Type: typ, Id: id},
+	reply := &pb.Submission{TenantId: t.ID, PrincipalId: "app:" + x.App, Authority: t.authorityOf(typ), Target: &pb.EntityRef{Type: typ, Id: id},
 		Schema: &pb.SchemaRef{Name: ask.Reply, Version: 1}, IdempotencyKey: "answer:" + x.ID, Payload: payload}
-	if _, err := app.Submit(c, reply, now); err != nil {
-		log.Printf("tenant %s: %s refused the answer to its model request %s: %v", t.ID, x.App, x.ID, err) // a defect of the app
-		return
-	}
-	t.journal(app, c.Member, reply, now)
+	return app, reply
 }

@@ -135,6 +135,12 @@ func (a *App) Manifest() platform.Manifest {
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
 func (a *App) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *App) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
+func (*App) AcceptedInputs() []string                   { return []string{"planned-orders"} }
+func (*App) DecodeAcceptedInput(raw json.RawMessage) (any, error) {
+	var count int
+	err := json.Unmarshal(raw, &count)
+	return count, err
+}
 
 func fail(code pb.ErrorCode) *kernel.Error { return &kernel.Error{Code: code} }
 

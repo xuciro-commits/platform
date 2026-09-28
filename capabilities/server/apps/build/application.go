@@ -62,7 +62,14 @@ func (b *Build) applicationEntity() platform.Entity {
 					if !ok {
 						return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 					}
-					if err := b.hand(*application); err != nil {
+					if c.Staging() {
+						if err := b.checkApplication(*application); err != nil {
+							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+						}
+						if err := b.host.ValidateInstallApplication(applicationDescriptor(*application)); err != nil {
+							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+						}
+					} else if err := b.hand(c, *application); err != nil {
 						return err
 					}
 					application.Published = published(*application)
@@ -72,18 +79,18 @@ func (b *Build) applicationEntity() platform.Entity {
 
 // hand installs the application: the host checks that every page it names is
 // there, and offers it to whoever may open one of them.
-func (b *Build) hand(a Application) *kernel.Error {
+func (b *Build) hand(c platform.Caller, a Application) *kernel.Error {
 	if err := b.checkApplication(a); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	if err := b.host.InstallApplication(application(a)); err != nil {
+	if err := b.host.InstallApplication(c, applicationDescriptor(a)); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	return nil
 }
 
 // application is the descriptor the registry holds.
-func application(a Application) platform.Application {
+func applicationDescriptor(a Application) platform.Application {
 	groups := make([]platform.AppGroup, 0, len(a.Groups))
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
@@ -110,5 +117,5 @@ func (b *Build) checkApplication(a Application) error {
 		}
 		seen[name] = true
 	}
-	return application(a).CheckGroups()
+	return applicationDescriptor(a).CheckGroups()
 }

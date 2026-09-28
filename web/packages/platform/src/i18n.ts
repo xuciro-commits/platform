@@ -47,7 +47,7 @@ register("zh-CN", {
   "{app}: {n} waiting, oldest {s} s": "{app}：{n} 项等待，最早 {s} 秒",
   "Needs attention": "需要处理",
   "Quarantined": "已隔离",
-  "This tenant is quarantined. Inputs and work are stopped until its journal or snapshot is repaired and the host is restarted.": "此租户已隔离。输入与受属工作均已停止；修复日志或快照并重启宿主后才能恢复。",
+  "This tenant is quarantined. Inputs and work are stopped. Repair its journal or restore a valid backup, then retry recovery.": "此租户已隔离，输入与受属工作均已停止。修复日志或恢复有效备份后重试恢复。",
   "Healthy": "正常",
   "Glossary": "术语表",
   "New term": "新建术语",

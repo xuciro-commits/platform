@@ -48,7 +48,7 @@ func (a *Agents) switchDecision(c platform.Caller, s *pb.Submission, p struct{ R
 	if id == "" {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	app := a.t.automation(AgentApp, c.Replaying)
+	app := a.t.automated(c, AgentApp)
 	sw, _ := platform.Get[Switch](app, id)
 	suspend := s.GetSchema().GetName() == SchemaSuspend
 	if sw.Suspended == suspend {

@@ -83,5 +83,5 @@ func TestStagedDecisionRefusesOtherEffects(t *testing.T) {
 			t.Fatal("unsupported effect changed the live tenant")
 		}
 	}()
-	draft.Notify(platform.Caller{}, platform.Notification{}, time.Now(), nil)
+	draft.Deliver(platform.Caller{}, "", "", "", time.Now())
 }

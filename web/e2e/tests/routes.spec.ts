@@ -238,6 +238,35 @@ test("route 18: quarantined tenant is explicit", async ({ page }) => {
   await expect(notice).toContainText("entry 4: invalid accepted result");
 });
 
+test("route 18: operator retries in-place recovery after repairing the journal", async ({ page }) => {
+  let repaired = false;
+  let attempts = 0;
+  await page.route("**/v1/me", async (route) => {
+    if (!repaired) await route.fulfill({ status: 503, json: { error: { code: "TENANT_QUARANTINED" } } });
+    else await route.continue();
+  });
+  await page.route("**/v1/health", async (route) => {
+    await route.fulfill({ json: {
+      status: "quarantined", recoveryError: "entry 4: digest mismatch", started: "2026-09-28T14:00:00Z",
+      apps: 4, queues: [], failed: 0, deferred: [], breakers: [], openBreakers: 0,
+      connectorsFailing: 0, endpointsFailing: 0,
+    } });
+  });
+  await page.route("**/v1/recovery/retry", async (route) => {
+    attempts++;
+    if (attempts === 1) await route.fulfill({ status: 409, json: { error: "entry 4: digest mismatch" } });
+    else { repaired = true; await route.fulfill({ json: { status: "ok" } }); }
+  });
+  await open(page, "manager", "/automation");
+  await expect(page.getByRole("heading", { name: "Tenant recovery" })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("entry 4: digest mismatch");
+  await page.getByRole("button", { name: "Retry recovery" }).click();
+  await expect(page.getByRole("alert").last()).toContainText("entry 4: digest mismatch");
+  await page.getByRole("button", { name: "Retry recovery" }).click();
+  await expect(page.getByRole("heading", { name: "Tenant recovery" })).toHaveCount(0);
+  await expect(page.getByText("Automation", { exact: true }).first()).toBeVisible();
+});
+
 // Route 19 (ADR-0028): a file added on a record's page is listed there and
 // downloads for whoever may read the record.
 test("route 19: a file on a ticket", async ({ page, request }) => {

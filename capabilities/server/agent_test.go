@@ -18,6 +18,13 @@ import (
 	"platformserver/platform"
 )
 
+func TestAgentStepUsesJournalJSONOrder(t *testing.T) {
+	got, err := normalizedStepJSON(json.RawMessage(`{"z":{"y":2,"x":1},"a":9007199254740993}`))
+	if err != nil || string(got) != `{"a":9007199254740993,"z":{"x":1,"y":2}}` {
+		t.Fatalf("model step does not use stable JSONB-compatible bytes: %s, %v", got, err)
+	}
+}
+
 // desk is a test app: tickets answered by people or by its triage agent.
 type Ticket struct {
 	platform.Record
@@ -180,6 +187,14 @@ func scriptedModel(t *testing.T) *httptest.Server {
 // ADR-0021: agents run in the host as governed principals; each step the
 // model chose is journaled and replayed without calling it.
 func TestAgents(t *testing.T) {
+	for _, accepted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "legacy", true: "accepted"}[accepted], func(t *testing.T) {
+			testAgents(t, accepted)
+		})
+	}
+}
+
+func testAgents(t *testing.T, accepted bool) {
 	model := scriptedModel(t)
 	var journal []Entry
 	build := func() *Tenant {
@@ -198,6 +213,12 @@ func TestAgents(t *testing.T) {
 	tn := build()
 	tn.AIClient = nil // the default client: the local stand-in
 	tn.Record = func(e Entry) { journal = append(journal, e) }
+	if accepted {
+		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+			journal = append(journal, e)
+			return e.Body, nil
+		}
+	}
 	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	keys := 0

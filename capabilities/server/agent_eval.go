@@ -385,9 +385,10 @@ func (a *Agents) dryUse(d *agentDef, run, dry AgentRunRecord, tool agentTool, ar
 		}
 		for _, who := range as {
 			s.PrincipalId = who.ID
-			t.probing = true
-			_, err := app.Submit(who, s, now)
-			t.probing = false
+			err := platform.ProbeDecision(who, func(probe platform.Caller) *kernel.Error {
+				_, err := platform.Decide(probe, app, s, now)
+				return err
+			})
 			if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED { // the records may have moved on since; what it may do has not
 				return "refused: " + who.ID + " may not (" + err.Error() + ")"
 			}
@@ -411,5 +412,5 @@ func (a *Agents) startEvaluation(c platform.Caller, id string, p struct {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The agent {agent} declares no cases", p.Agent)
 	}
 	ev := Evaluation{Record: platform.Record{ID: id}, Agent: p.Agent, Model: p.Model, State: "queued", Cases: []EvalCase{}, Suite: p.Suite}
-	return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, ev) }, nil
+	return func(r *pb.ChangeRecord) { a.t.automated(c, AgentApp).Put(r, ev) }, nil
 }

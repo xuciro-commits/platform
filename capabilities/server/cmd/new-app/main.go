@@ -408,7 +408,10 @@ func main() {
 			work.ID: work.Admin, flow.ID: flow.Admin}),
 		seat("member", "member-1", map[string]string{[[.ID]].ID: [[.ID]].Member}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), work.New("dev"), flow.New("dev"), [[.ID]].New("dev"))
+	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		return platformserver.NewTenant(id, platformserver.NewConsole(id, seats...), work.New(id), flow.New(id), [[.ID]].New(id))
+	}
+	t, err := deployment.Rebuild("dev")
 	if err == nil {
 		err = deployment.Serve(t)
 	}

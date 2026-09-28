@@ -16,12 +16,16 @@ import (
 )
 
 func build(t *testing.T) *platformserver.Tenant {
+	return buildTenant(t, "t")
+}
+
+func buildTenant(t *testing.T, id string) *platformserver.Tenant {
 	seat := func(id string, roles map[string]string) platformserver.Seat {
 		return platformserver.Seat{Subjects: []string{id}, Member: platform.Member{ID: id, Roles: roles}}
 	}
-	tn, err := platformserver.NewTenant("t", platformserver.NewConsole("t",
+	tn, err := platformserver.NewTenant(id, platformserver.NewConsole(id,
 		seat("admin", map[string]string{platformserver.PlatformApp: platformserver.Admin}),
-		seat("erp", map[string]string{ID: Connector}), seat("pat", map[string]string{ID: Planner})), New("t"))
+		seat("erp", map[string]string{ID: Connector}), seat("pat", map[string]string{ID: Planner})), New(id))
 	if err == nil {
 		err = tn.Connect(Poll("erp"))
 	}

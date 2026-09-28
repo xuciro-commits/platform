@@ -57,7 +57,7 @@ export function Automation() {
             {health.built ? ` · ${t("built from {revision}", { revision: health.built })}` : ""}</span>
         </div>
         {health.status === "quarantined" && <div role="alert" className="text-danger">
-          {t("This tenant is quarantined. Inputs and work are stopped until its journal or snapshot is repaired and the host is restarted.")}
+          {t("This tenant is quarantined. Inputs and work are stopped. Repair its journal or restore a valid backup, then retry recovery.")}
           {health.recoveryError && <code className="block break-all">{health.recoveryError}</code>}
         </div>}
         {(health.queues.length > 0 || health.deferred.length > 0 || health.breakers.length > 0) && <div className="flex flex-wrap items-center gap-2">

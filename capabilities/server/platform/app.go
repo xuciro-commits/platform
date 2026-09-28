@@ -6,6 +6,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -45,12 +46,112 @@ type Caller struct {
 // Role is the member's role in the app being called ("" for none).
 func (c Caller) Role() string { return c.Roles[c.App] }
 
+// Staging reports that this decision is still private. An app may validate
+// a definition now, but must not install it until the accepted result commits.
+func (c Caller) Staging() bool {
+	_, ok := c.rt.(interface{ StagedDecision() })
+	return ok
+}
+
+// AcceptedPublisher installs a definition from an already committed record
+// image. This is not a second decision and must never emit external effects.
+type AcceptedPublisher interface {
+	AcceptedPublicationSchemas() []string
+	ValidateAcceptedPublication(schema string, image []byte) error
+	ApplyAcceptedPublication(schema string, image []byte) error
+}
+
+// AcceptedStateApp owns mutable authoritative state outside host records.
+// ForkAcceptedState copies only that owner's decision state, retaining the
+// same staged ledger identity and read-only declarations. It must not copy
+// running work, locks or the tenant. Applying a saved image is pure recovery,
+// not a business decision, and must never publish or dispatch an effect.
+type AcceptedStateApp interface {
+	App
+	ForkAcceptedState() (App, error)
+	AcceptedState() (json.RawMessage, error)
+	ValidateAcceptedState(json.RawMessage) error
+	ApplyAcceptedState(json.RawMessage) error
+}
+
+// AcceptedInputApp opts a connector input into result-based recovery. Its Input
+// implementation must mutate only its caller's staged Runtime or an
+// AcceptedStateApp fork. DecodeAcceptedInput reconstructs the already saved
+// answer on retry; it must not run business rules or external calls.
+type AcceptedInputApp interface {
+	App
+	AcceptedInputs() []string
+	DecodeAcceptedInput(json.RawMessage) (any, error)
+}
+
+// AcceptedFactApp lets an app-owned private fact log satisfy evidence checks
+// in child decisions of the same connector input. The live fact log remains
+// untouched until the accepted result is durable.
+type AcceptedFactApp interface {
+	HasAcceptedFact(tenant, id string) bool
+}
+
 // As views member from app, without a host (tests of one app).
 func As(app string, m Member) Caller { return Caller{Member: m, App: app} }
 
 // NewCaller is how the host runtime hands an app its caller.
 func NewCaller(rt Runtime, m Member, app string, replaying, automation bool) Caller {
 	return Caller{Member: m, App: app, Replaying: replaying, Automation: automation, rt: rt}
+}
+
+// RouteCaller changes the authority being called without replacing the
+// decision's runtime. The host uses it for nested decisions; a staged parent
+// must never hand its child a live runtime.
+func RouteCaller(c Caller, app string) Caller {
+	c.App = app
+	return c
+}
+
+// ActingCaller changes the principal, but keeps the parent's transaction.
+// Approval execution and platform work must not acquire a live runtime here.
+func ActingCaller(parent Caller, m Member, app string, automation bool) Caller {
+	return NewCaller(parent.rt, m, app, parent.Replaying, automation)
+}
+
+// Attempt allows a parent to explicitly handle a nested business refusal.
+// Only a runtime with savepoints may isolate writes made by that attempt.
+func Attempt(c Caller, decide func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error) {
+	if owner, ok := c.rt.(interface {
+		Attempt(func() (*pb.ChangeRecord, *kernel.Error)) (*pb.ChangeRecord, *kernel.Error)
+	}); ok {
+		return owner.Attempt(decide)
+	}
+	return decide()
+}
+
+// MarkSeen stays within the calling decision's notification view.
+func MarkSeen(c Caller, keys ...string) {
+	if owner, ok := c.rt.(interface{ Seen(Caller, ...string) }); ok {
+		owner.Seen(c, keys...)
+	}
+}
+
+// ProbeDecision checks rules against a private parent view, applying nothing.
+// It cannot temporarily switch a shared tenant's runtime into probing mode.
+func ProbeDecision(c Caller, decide func(Caller) *kernel.Error) *kernel.Error {
+	if owner, ok := c.rt.(interface {
+		ProbeDecision(Caller, func(Caller) *kernel.Error) *kernel.Error
+	}); ok {
+		return owner.ProbeDecision(c, decide)
+	}
+	return decide(c)
+}
+
+// Decide routes through the existing decision runtime, if it owns nested
+// calls. It never replaces a staged runtime with a live one.
+func Decide(c Caller, app App, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	c = RouteCaller(c, app.Manifest().ID)
+	if owner, ok := c.rt.(interface {
+		Decide(Caller, App, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+	}); ok {
+		return owner.Decide(c, app, s, at)
+	}
+	return app.Submit(c, s, at)
 }
 
 // Runtime is what the host does for a caller; package platformserver implements
@@ -135,11 +236,27 @@ type App interface {
 	Input(c Caller, name string, body []byte, now time.Time) (any, *kernel.Error)
 }
 
-// ResultApp opts a code app's generated record actions into the host's
-// accepted-result boundary. Other actions still use the legacy input journal.
+// ResultApp exposes the ledger that pure result application advances. Only
+// supported generated/selected actions and explicitly audited workers use it;
+// it does not certify arbitrary app-owned mutable state.
 type ResultApp interface {
 	App
 	AcceptedLedger() *Ledger
+}
+
+// AcceptedActionApp opts explicitly audited non-generated actions into the
+// same private result decision. Actions not listed retain the legacy path
+// until their owned effects can be represented without live mutation.
+type AcceptedActionApp interface {
+	ResultApp
+	AcceptedActionSchemas() []string
+}
+
+// AcceptedWorker declares that this app's jobs/listener use only the staged
+// Runtime and host routes. Their own K9 attempt is part of the same result.
+type AcceptedWorker interface {
+	ResultApp
+	AcceptedWork()
 }
 
 // Event is an accepted decision, delivered to subscribers after commit.

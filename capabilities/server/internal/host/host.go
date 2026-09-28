@@ -6,6 +6,7 @@
 package host
 
 import (
+	"encoding/json"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -23,8 +24,8 @@ type Host interface {
 	// roles it holds there (a platform app deciding for a caller of another app).
 	As(c platform.Caller, app string) platform.Caller
 	// Caller is member m acting in app; Automation is app acting as itself.
-	Caller(m platform.Member, app string, replaying bool) platform.Caller
-	Automation(app string, replaying bool) platform.Caller
+	Caller(parent platform.Caller, m platform.Member, app string) platform.Caller
+	Automation(parent platform.Caller, app string) platform.Caller
 	// Member is a member of the tenant by ID, with its roles now; Holding are
 	// the members holding role in app.
 	Member(id string) (platform.Member, bool)
@@ -34,6 +35,9 @@ type Host interface {
 	// Submit routes s to the app declaring its action, as c's member, inside
 	// the input being handled: it is not journaled apart, the input replays it.
 	Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
+	// Attempt isolates an optional nested decision. A refusal discards its
+	// changes, allowing the parent to record the refused business outcome.
+	Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error)
 	// Recipients resolves recipients to members on now's day.
 	Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string
 	// Directory is the organisation, or nil when the tenant runs none.
@@ -49,22 +53,25 @@ type Host interface {
 	// the pages people open it through. Installed again, the type takes its new
 	// fields and its records come with them. The app teaches its own ledger the
 	// data class and schemas first (Ledger.Extend).
-	Install(e platform.Entity, actions []platform.Action, pages ...platform.Page) error
+	Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error
+	ValidateInstall(e platform.Entity, actions []platform.Action, pages ...platform.Page) error
 	// InstallPage offers a page someone composed in this tenant (ADR-0034): the
 	// same descriptor a manifest declares, checked against what is installed and
 	// served to the members who may read its object. Composed again, it replaces
 	// the one before it.
-	InstallPage(p platform.Page) error
+	InstallPage(c platform.Caller, p platform.Page) error
+	ValidateInstallPage(p platform.Page) error
 	// InstallApplication offers an application someone in this tenant handed to
 	// its people (ADR-0036): a name, an icon and the pages it holds, checked
 	// against what is installed. Handed over again, it replaces the one before.
-	InstallApplication(a platform.Application) error
+	InstallApplication(c platform.Caller, a platform.Application) error
+	ValidateInstallApplication(a platform.Application) error
 	// Entity is an entity type's declaration, for an app composing over it.
 	Entity(typ string) (platform.EntityInfo, bool)
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
 	Declares(name string) bool
 	// Seen marks an app's notifications with any of keys read for everyone.
-	Seen(app string, keys ...string)
+	Seen(c platform.Caller, keys ...string)
 	// Invoke submits a protocol action to the tenant's provider for c's app,
 	// inside the input being handled (a flow's step, ADR-0020).
 	Invoke(c platform.Caller, protocol, action, id string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *kernel.Error)
@@ -141,6 +148,15 @@ type Attached interface {
 // the decision is.
 type Observer interface {
 	Observe(e platform.Event, events []string)
+}
+
+// AcceptedObserver freezes an event projection and stages its notifications.
+// Applying it is a pure projection update, not a call to today's Observe code.
+type AcceptedObserver interface {
+	Observer
+	PlanObserved(c platform.Caller, e platform.Event, events []string) (json.RawMessage, error)
+	ValidateObserved(json.RawMessage) error
+	ApplyObserved(json.RawMessage) error
 }
 
 // Linker serves Caller.Link and Caller.Links for every app.

@@ -5,7 +5,7 @@
 import "./i18n";
 import { HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
-import { Workspace, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
+import { Button, Card, Workspace, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Bookmark, Boxes, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -35,6 +35,44 @@ const remembered = (key: string) => { try { return sessionStorage.getItem(key) ?
 const remember = (key: string, value: string) => { try { sessionStorage.setItem(key, value); } catch { /* storage unavailable */ } };
 // The development identity that sees most: an administrator if there is one.
 const preferred = (ids: Identity[]) => [...ids].sort((a, b) => Object.keys(b.roles).length - Object.keys(a.roles).length)[0]?.token ?? "";
+
+function Recovery({ client, token, tenant }: { client: EdgeClient; token: string; tenant: string }) {
+  const queries = useQueryClient();
+  const health = useQuery({ queryKey: [token, tenant, "recovery-health"],
+    queryFn: () => client.get<Api.TenantHealth>("/v1/health"), refetchInterval: 5000, retry: false });
+  const [retrying, setRetrying] = useState(false);
+  const [failure, setFailure] = useState("");
+  const retry = async () => {
+    setRetrying(true);
+    setFailure("");
+    try {
+      const result = await client.call<{ error?: string }>("POST", "/v1/recovery/retry");
+      if (!result.ok) {
+        setFailure(result.body.error ?? t("Recovery is not available for this tenant."));
+      } else {
+        await queries.invalidateQueries({ queryKey: [token, tenant, "me"] });
+      }
+      await health.refetch();
+    } catch {
+      setFailure(t("The host is unreachable."));
+    } finally {
+      setRetrying(false);
+    }
+  };
+  return <main className="grid min-h-dvh place-items-center p-4">
+    <Card className="w-full max-w-xl space-y-3 p-5">
+      <h1 className="text-lg font-semibold">{t("Tenant recovery")}</h1>
+      <p>{t("This tenant is quarantined. Business inputs and work are stopped; other tenants can continue.")}</p>
+      {health.data?.recoveryError && <p role="alert" className="break-all text-danger">{health.data.recoveryError}</p>}
+      {health.error && <p role="alert">{t("Only a tenant administrator can view recovery diagnostics and retry.")}</p>}
+      <p>{t("Repair the underlying journal or restore a valid backup before retrying. Recovery rebuilds this tenant from its durable history without restarting healthy tenants.")}</p>
+      {failure && <p role="alert" className="break-all text-danger">{failure}</p>}
+      {!health.error && <Button disabled={retrying || !health.data} onClick={() => void retry()}>
+        {retrying ? t("Recovering…") : t("Retry recovery")}
+      </Button>}
+    </Card>
+  </main>;
+}
 
 export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig; session: OidcSession }; identities: Identity[] }) {
   const [token, setToken] = useState(signedIn?.session.accessToken ?? remembered("workspace:identity") ?? preferred(identities));
@@ -170,6 +208,9 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   }, [apps, select]);
 
   if (meQuery.error) {
+    if (/HTTP 503/.test(String(meQuery.error))) {
+      return <Recovery client={client} token={token} tenant={tenant} />;
+    }
     const problem = /HTTP 401/.test(String(meQuery.error))
       ? signedIn ? t("{email} is not a member of this host.", { email: signedIn.session.email }) : t("This host does not accept this identity.")
       : t("The host is unreachable.");

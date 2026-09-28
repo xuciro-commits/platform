@@ -79,7 +79,7 @@ func (ss *session) apply(r *pb.ChangeRecord) {
 		}
 	}
 	for _, x := range ss.assigns {
-		ss.f.host.Automation(x.app, ss.c.Replaying).Assign(r, x.Assignment)
+		ss.f.host.Automation(ss.c, x.app).Assign(r, x.Assignment)
 	}
 	if runs := ss.f.host.Runs(); runs != nil {
 		for _, run := range ss.runs {
@@ -95,7 +95,7 @@ func (ss *session) apply(r *pb.ChangeRecord) {
 // result as the answer; stopped, to the step's fault path, or a person does
 // the step instead.
 func (f *Flows) RunEnded(c platform.Caller, run host.RunEnd, now time.Time) {
-	c = f.host.Automation(ID, c.Replaying)
+	c = f.host.Automation(c, ID)
 	x, ok := platform.Get[FlowInstance](c, run.Flow)
 	if !ok || ended(x.State) {
 		return
@@ -142,7 +142,7 @@ func (ss *session) token(x *FlowInstance, id int) *Token {
 func (ss *session) def(x *FlowInstance) *flowDef { return ss.f.def(x.Flow, x.Version) }
 
 func (ss *session) app(x *FlowInstance) platform.Caller {
-	return ss.f.host.Automation(ss.def(x).app, ss.c.Replaying)
+	return ss.f.host.Automation(ss.c, ss.def(x).app)
 }
 
 func (ss *session) run(x *FlowInstance) *platform.Run {
@@ -403,7 +403,7 @@ func payloadOf(build func(platform.Caller, *platform.Run) any, c platform.Caller
 // act submits an action as the app: its own, or a protocol's through the host.
 func (ss *session) act(appID, protocol, action, target string, payload json.RawMessage, key string) (*pb.EntityRef, *kernel.Error) {
 	h := ss.f.host
-	c := h.Automation(appID, ss.c.Replaying)
+	c := h.Automation(ss.c, appID)
 	if protocol != "" {
 		return h.Invoke(c, protocol, action, target, payload, key, key, ss.now)
 	}
@@ -591,7 +591,7 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	var p struct{ Token int }
 	json.Unmarshal(s.GetPayload(), &p)
 	return f.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
-		ss := f.session(f.host.Automation(ID, c.Replaying), now)
+		ss := f.session(f.host.Automation(c, ID), now)
 		x := ss.load(id)
 		if x == nil {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}

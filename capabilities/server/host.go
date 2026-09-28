@@ -43,25 +43,28 @@ type Tenant struct {
 	// Record, when set, makes each accepted input durable before it is answered;
 	// a failure must stop the server (ADR-0007).
 	Record func(Entry)
-	// AcceptResult persists a complete generated-record decision before it is
-	// visible. It is installed only by the durable deployment.
+	// AcceptResult persists a supported top-level decision or owned-work
+	// attempt before any authoritative changes or intents are visible.
 	AcceptResult func(Entry, string, string) ([]byte, error)
 	// Store keeps what is derived outside the journal: vectors and transcripts
 	// (ADR-0022); without one they stay in memory.
-	Store        Store
-	derivedMu    sync.Mutex
-	vectorMemory map[string][]float32
-	transcripts  []Transcript
-	knowledge    glossary // the knowledge app: documents are searched, terms read (ADR-0022)
-	index        index    // passages cut from documents and knowledge fields
-	dictionaries sync.Map // language → map[string]string, merged from the platform's and the apps' (ADR-0023)
-	patternCache sync.Map // language → []pattern
-	agentRun     string   // the run whose agent is submitting, under mu: its effects name it
-	mu           sync.Mutex
-	fault        atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
-	apps         []platform.App
-	definitions  []platform.Definition   // installed code assets; member views are derived on read
-	owner        map[string]platform.App // "action:", "read:" and "input:" names → app
+	Store           Store
+	derivedMu       sync.Mutex
+	vectorMemory    map[string][]float32
+	transcripts     []Transcript
+	knowledge       glossary // the knowledge app: documents are searched, terms read (ADR-0022)
+	index           index    // passages cut from documents and knowledge fields
+	dictionaries    sync.Map // language → map[string]string, merged from the platform's and the apps' (ADR-0023)
+	patternCache    sync.Map // language → []pattern
+	agentRun        string   // the run whose agent is submitting, under mu: its effects name it
+	mu              sync.Mutex
+	fault           atomic.Pointer[tenantFault] // recovery failure stops this tenant without stopping its neighbors
+	apps            []platform.App
+	refusals        map[string]refusedResult   // "<app>/<key>" → committed effect-free answer
+	acceptedAnswers map[string]json.RawMessage // original input → approval answer, not the held action's later receipt
+	acceptedInputs  map[string]json.RawMessage // connector input identity → saved answer and owned effects
+	definitions     []platform.Definition      // installed code assets; member views are derived on read
+	owner           map[string]platform.App    // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	auditMu    sync.Mutex
@@ -151,7 +154,7 @@ func (t *Tenant) remember(e AuditEntry) {
 // NewTenant enables apps for a tenant; it refuses duplicate names, consumed
 // protocols no earlier app provides, and manifests the host could not honour.
 func NewTenant(id string, apps ...platform.App) (*Tenant, error) {
-	t := &Tenant{ID: id, apps: apps, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
+	t := &Tenant{ID: id, apps: apps, refusals: map[string]refusedResult{}, owner: map[string]platform.App{}, bindings: map[string]binding{}, works: kernel.NewWorks(), queues: map[string][]*Task{},
 		connectors: kernel.NewConnectors(), records: newRecordStore(), descriptors: map[string]*pb.ConnectorDescriptor{}, lastError: map[string]ConnectorError{}, settings: map[string]string{}, sequences: map[string]int{}}
 	claim := func(name string, a platform.App) error {
 		if other := t.owner[name]; other != nil {
@@ -297,13 +300,13 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
 		attribute.String("platform.target", target(s)), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
-	if m.Agent && t.suspended(m.ID) { // an agent an administrator switched off (ADR-0029 D4)
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
-	}
 	if t.AcceptResult != nil {
 		if resultApp, ok := a.(platform.ResultApp); ok && t.acceptsGenerated(a, s) {
 			return t.submitAccepted(resultApp, m, s, now)
 		}
+	}
+	if m.Agent && t.suspended(m.ID) { // an agent an administrator switched off (ADR-0029 D4)
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
 	defer t.enqueue(now)
 	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil && t.owner["action:"+work.SchemaRequest] != nil {
@@ -318,7 +321,37 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 
 func (t *Tenant) acceptsGenerated(a platform.App, s *pb.Submission) bool {
 	schema := s.GetSchema().GetName()
-	if !strings.HasSuffix(schema, ".create") && !strings.HasSuffix(schema, ".edit") {
+	if selected, ok := a.(platform.AcceptedActionApp); ok &&
+		slices.Contains(selected.AcceptedActionSchemas(), schema) {
+		return true
+	}
+	if published, ok := a.(platform.AcceptedPublisher); ok &&
+		slices.Contains(published.AcceptedPublicationSchemas(), schema) {
+		return true
+	}
+	if acceptsPureTransition(a, schema) {
+		return true
+	}
+	// Generated callbacks run through the same private Runtime. Any capability
+	// not yet representable fails closed instead of changing the live tenant.
+	for _, entity := range a.Manifest().Entities {
+		verb, match := strings.CutPrefix(schema, entity.Type+".")
+		if !match || entity.Lifecycle == nil {
+			continue
+		}
+		for _, transition := range entity.Lifecycle.Transitions {
+			if verb == transition.Name {
+				return true
+			}
+			if transition.Approval != nil && transition.Approval.Pending != "" &&
+				slices.Contains([]string{transition.Name + platform.ApprovalHeld,
+					transition.Name + platform.ApprovalRejected, transition.Name + platform.ApprovalReturned}, verb) {
+				return true
+			}
+		}
+	}
+	if !strings.HasSuffix(schema, ".create") && !strings.HasSuffix(schema, ".edit") &&
+		!strings.HasSuffix(schema, ".archive") {
 		return false
 	}
 	t.records.mu.Lock()
@@ -328,33 +361,97 @@ func (t *Tenant) acceptsGenerated(a platform.App, s *pb.Submission) bool {
 	// to the legacy direct mutator.
 	for _, et := range t.records.types {
 		if et.info.App == a.Manifest().ID && slices.Contains(et.info.Standard, schema) &&
-			(schema == et.info.Type+".create" || schema == et.info.Type+".edit") {
+			(schema == et.info.Type+".create" || schema == et.info.Type+".edit" ||
+				schema == et.info.Type+".archive") {
 			return true
 		}
 	}
 	return false
 }
 
+// Callback-free transitions retain the smaller version-4 result format.
+// Callback and approval transactions use the validated multi-decision batch.
+func acceptsPureTransition(a platform.App, schema string) bool {
+	for _, entity := range a.Manifest().Entities {
+		verb, match := strings.CutPrefix(schema, entity.Type+".")
+		if !match || entity.Lifecycle == nil {
+			continue
+		}
+		for _, transition := range entity.Lifecycle.Transitions {
+			if transition.Name == verb && transition.Do == nil && transition.After == nil && transition.Approval == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
+	// A malformed transport identity cannot reserve a durable key for another
+	// tenant, authority or member. The kernel still supplies its ordinary
+	// refusal, but no result under this tenant can represent that submission.
+	if s.GetTenantId() != t.ID || s.GetAuthority() != a.Manifest().ID ||
+		s.GetPrincipalId() != m.ID || s.GetIdempotencyKey() == "" ||
+		s.GetTarget() == nil || s.GetSchema() == nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission has an invalid identity")
+	}
 	ledger := a.AcceptedLedger()
+	if saved := t.acceptedAnswers[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; len(saved) > 0 {
+		result, receipt, err := decodeAcceptedBatch(saved)
+		hash, hashErr := submissionHash(s)
+		if err != nil || hashErr != nil || result.RequestHash != hash {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		}
+		return receipt, nil
+	}
 	if prior := ledger.AcceptedFor(t.ID, s.GetIdempotencyKey()); prior != nil {
 		if !proto.Equal(prior.GetSubmission(), s) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
 		return prior, nil
 	}
+	hash, err := submissionHash(s)
+	if err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The submission cannot be encoded")
+	}
+	if prior, ok := t.refusals[a.Manifest().ID+"/"+s.GetIdempotencyKey()]; ok {
+		if prior.RequestHash != hash {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
+		}
+		answer := prior.Error
+		return nil, &answer
+	}
+	if m.Agent && t.suspended(m.ID) {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
+	}
 	draft := t.newStagedDecision()
 	record, refusal = decideAccepted(a, draft, m, s, now)
+	var raw []byte
 	if refusal != nil {
-		return nil, explained(refusal, a, s.GetSchema().GetName(), target(s))
+		refusal = explained(refusal, a, s.GetSchema().GetName(), target(s))
+		raw, err = encodeRefusedResult(s, now, refusal)
+	} else {
+		selected, explicit := a.(platform.AcceptedActionApp)
+		schema := s.GetSchema().GetName()
+		single := strings.HasSuffix(schema, ".create") || strings.HasSuffix(schema, ".edit") ||
+			strings.HasSuffix(schema, ".archive") || acceptsPureTransition(a, schema)
+		if publisher, ok := a.(platform.AcceptedPublisher); ok {
+			single = single || slices.Contains(publisher.AcceptedPublicationSchemas(), schema)
+		}
+		if len(draft.events) > 1 || len(draft.records.writes) > 1 || len(draft.allocated) > 0 || draft.noticeChanged || len(draft.intents) > 0 || len(draft.deliveries) > 0 ||
+			!proto.Equal(record.GetSubmission(), s) || !single || draft.observed && len(t.observers) > 0 ||
+			explicit && slices.Contains(selected.AcceptedActionSchemas(), s.GetSchema().GetName()) {
+			raw, err = draft.batchResult(a.Manifest().ID, s, record, now)
+		} else {
+			raw, err = draft.result(a.Manifest().ID, record, now)
+		}
+		if err != nil {
+			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
+			raw, err = encodeRefusedResult(s, now, refusal)
+		}
 	}
-	raw, err := draft.result(a.Manifest().ID, record, now)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action cannot produce a bounded accepted result")
-	}
-	result, _, err := decodeAcceptedResult(raw)
-	if err != nil {
-		panic(err)
 	}
 	member, _ := json.Marshal(m)
 	var versions map[string]int
@@ -362,13 +459,17 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 		versions = t.procs.Versions()
 	}
 	committed, err := t.AcceptResult(Entry{App: a.Manifest().ID, Kind: "accepted-result",
-		Principal: member, Body: raw, At: now, Versions: versions}, s.GetIdempotencyKey(), result.RequestHash)
+		Principal: member, Body: raw, At: now, Versions: versions}, s.GetIdempotencyKey(), hash)
 	if err != nil {
 		if err == errAcceptedConflict {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}
 		}
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The accepted result could not be committed")
 	}
+	return t.finishCommittedResult(a, m, hash, committed)
+}
+
+func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, hash string, committed []byte) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// Once committed, even an unexpected application panic is tenant-local:
 	// never answer from a possibly half-applied memory image or take down the
 	// other tenants. A repaired journal requires a fresh process to resume.
@@ -379,8 +480,46 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 			refusal = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}()
+	var envelope struct{ Kind string }
+	if err := json.Unmarshal(committed, &envelope); err != nil {
+		t.quarantine(fmt.Errorf("committed result is not an envelope: %w", err))
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+	}
+	if envelope.Kind == "refusal" {
+		saved, sub, err := decodeRefusedResult(committed)
+		if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
+			saved.RequestHash != hash || sub.GetPrincipalId() != m.ID {
+			t.quarantine(fmt.Errorf("committed refusal differs from the accepted request: %v", err))
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		t.refusals[saved.App+"/"+sub.GetIdempotencyKey()] = saved
+		answer := saved.Error
+		return nil, &answer
+	}
+	if envelope.Kind == "record-batch" {
+		saved, receipt, err := decodeAcceptedBatch(committed)
+		sub, subErr := batchSubmission(saved, receipt)
+		if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
+			saved.RequestHash != hash || subErr != nil || sub.GetPrincipalId() != m.ID {
+			t.quarantine(fmt.Errorf("committed batch differs from the accepted request: %v", err))
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		applied, err := t.applyAcceptedBatch(a.AcceptedLedger(), committed)
+		if err != nil {
+			t.quarantine(fmt.Errorf("committed record batch could not be applied: %w", err))
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		if applied {
+			t.remember(submitted(m.ID, a, sub, saved.At))
+			t.publishAcceptedBatch(saved)
+			t.changed()
+		}
+		t.enqueue(saved.At)
+		return receipt, nil
+	}
 	saved, receipt, err := decodeAcceptedResult(committed)
-	if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID || saved.RequestHash != result.RequestHash {
+	if err != nil || saved.App != a.Manifest().ID || saved.Tenant != t.ID ||
+		saved.RequestHash != hash || receipt.GetSubmission().GetPrincipalId() != m.ID {
 		t.quarantine(fmt.Errorf("committed result differs from the accepted request: %v", err))
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
@@ -390,7 +529,7 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}
-	applied, err := t.applyAcceptedResult(ledger, committed)
+	applied, err := t.applyAcceptedResult(a.AcceptedLedger(), committed)
 	if err != nil {
 		t.quarantine(fmt.Errorf("committed accepted result could not be applied: %w", err))
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
@@ -419,7 +558,19 @@ func decideAccepted(a platform.ResultApp, draft *stagedDecision, m platform.Memb
 			refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This action uses an effect outside the accepted-result boundary")
 		}
 	}()
-	return a.Submit(platform.NewCaller(draft, m, a.Manifest().ID, false, false), s, now)
+	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil &&
+		draft.tenant.owner["action:"+work.SchemaRequest] != nil {
+		record, refusal = draft.requestApproval(a, m, s, now)
+	} else {
+		record, refusal = platform.Decide(platform.NewCaller(draft, m, a.Manifest().ID, false, false), a, s, now)
+	}
+	if refusal == nil {
+		refusal = draft.answerRequests(now)
+	}
+	if refusal == nil {
+		refusal = draft.stageObservers()
+	}
+	return record, refusal
 }
 
 // explained gives a refusal an app returned without saying why the reason its
@@ -508,6 +659,16 @@ func (t *Tenant) Input(m platform.Member, name string, body []byte, now time.Tim
 	}
 	end := t.begin("input "+name, trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID), attribute.String("platform.member", m.ID))
 	defer func() { end(outcomeOf(err)) }()
+	if t.AcceptResult != nil {
+		if a.Manifest().Inputs[name] {
+			accepted, ok := a.(platform.AcceptedInputApp)
+			if !ok || !slices.Contains(accepted.AcceptedInputs(), name) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT,
+					"This connector input has no accepted-result boundary")
+			}
+			return t.inputAccepted(accepted, m, name, body, now)
+		}
+	}
 	defer t.enqueue(now)
 	out, err = a.Input(t.caller(m, a, false), name, body, now)
 	if err != nil {
@@ -584,6 +745,7 @@ func (t *Tenant) publishAccepted(e platform.Event, plan acceptedEvent, version i
 	c := caused{Event: e, hops: t.hops, span: t.current()}
 	if version >= 2 {
 		c.plan = &plan
+		c.hops = plan.Hops
 	}
 	t.events = append(t.events, c)
 }
@@ -659,16 +821,93 @@ func (t *Tenant) Replay(entries []Entry) error {
 			continue
 		}
 		if e.Kind == "accepted-result" {
+			var envelope struct{ Kind string }
+			if err := json.Unmarshal(e.Body, &envelope); err != nil {
+				return fmt.Errorf("entry %d: unreadable result envelope: %w", i+1, err)
+			}
+			if envelope.Kind == "input-result" {
+				saved, applied, err := t.applyAcceptedInput(e.Body)
+				if err != nil || !applied || saved.App != e.App || saved.Member != m.ID || !sameJournalTime(saved.At, e.At) {
+					return fmt.Errorf("entry %d: connector result: %v (applied=%t)", i+1, err, applied)
+				}
+				if saved.Refusal == nil {
+					t.remember(AuditEntry{At: e.At, Member: m.ID, App: e.App, Action: "input:" + saved.Name})
+					t.enqueue(e.At)
+				}
+				continue
+			}
+			if envelope.Kind == "effect-result" {
+				saved, applied, err := t.applyAcceptedEffect(e.Body)
+				if err != nil || !applied || saved.App != e.App || m.ID != "app:"+PlatformApp ||
+					!sameJournalTime(saved.At, e.At) {
+					return fmt.Errorf("entry %d: effect result: %v (applied=%t)", i+1, err, applied)
+				}
+				t.enqueue(saved.At)
+				continue
+			}
 			ra, ok := a.(platform.ResultApp)
 			if !ok {
 				return fmt.Errorf("entry %d: app %s cannot apply accepted results", i+1, e.App)
+			}
+			if envelope.Kind == "work-result" {
+				saved, decodeErr := decodeAcceptedWork(e.Body)
+				if decodeErr != nil || saved.App != e.App || !sameJournalTime(saved.At, e.At) || m.ID != "app:"+e.App {
+					return fmt.Errorf("entry %d: invalid work result: %v", i+1, decodeErr)
+				}
+				if _, err := t.applyAcceptedWork(e.Body); err != nil {
+					return fmt.Errorf("entry %d: work result: %w", i+1, err)
+				}
+				t.enqueue(e.At)
+				continue
+			}
+			if envelope.Kind == "refusal" {
+				saved, sub, decodeErr := decodeRefusedResult(e.Body)
+				if decodeErr != nil || saved.App != e.App || saved.Tenant != t.ID ||
+					!sameJournalTime(saved.At, e.At) || sub.GetPrincipalId() != m.ID {
+					return fmt.Errorf("entry %d: invalid refused result: %v", i+1, decodeErr)
+				}
+				key := e.App + "/" + sub.GetIdempotencyKey()
+				if _, duplicate := t.refusals[key]; duplicate || ra.AcceptedLedger().AcceptedFor(t.ID, sub.GetIdempotencyKey()) != nil {
+					return fmt.Errorf("entry %d: duplicate refused result key", i+1)
+				}
+				t.refusals[key] = saved
+				continue
+			}
+			if envelope.Kind == "record-batch" {
+				saved, receipt, decodeErr := decodeAcceptedBatch(e.Body)
+				if decodeErr != nil {
+					return fmt.Errorf("entry %d: invalid record batch: %w", i+1, decodeErr)
+				}
+				sub, subErr := batchSubmission(saved, receipt)
+				if subErr != nil {
+					return fmt.Errorf("entry %d: invalid record batch request: %w", i+1, subErr)
+				}
+				if saved.App != e.App || saved.Tenant != t.ID || !sameJournalTime(saved.At, e.At) || sub.GetPrincipalId() != m.ID {
+					return fmt.Errorf("entry %d: record batch journal identity differs (app=%q/%q tenant=%q/%q principal=%q/%q time=%s/%s)",
+						i+1, saved.App, e.App, saved.Tenant, t.ID, sub.GetPrincipalId(), m.ID, saved.At, e.At)
+				}
+				if _, refused := t.refusals[e.App+"/"+sub.GetIdempotencyKey()]; refused {
+					return fmt.Errorf("entry %d: record batch reused a refused key", i+1)
+				}
+				applied, applyErr := t.applyAcceptedBatch(ra.AcceptedLedger(), e.Body)
+				if applyErr != nil || !applied {
+					return fmt.Errorf("entry %d: record batch: %v (applied=%t)", i+1, applyErr, applied)
+				}
+				t.remember(submitted(m.ID, a, sub, saved.At))
+				t.publishAcceptedBatch(saved)
+				t.enqueue(e.At)
+				continue
 			}
 			saved, receipt, decodeErr := decodeAcceptedResult(e.Body)
 			if decodeErr != nil {
 				return fmt.Errorf("entry %d: invalid accepted result: %v", i+1, decodeErr)
 			}
-			if saved.App != e.App || saved.Version >= 2 && !saved.At.Equal(e.At) {
+			if saved.App != e.App || receipt.GetSubmission().GetPrincipalId() != m.ID ||
+				saved.Version >= 2 && !sameJournalTime(saved.At, e.At) {
 				return fmt.Errorf("entry %d: accepted result app or input clock differs from journal entry", i+1)
+			}
+			if _, refused := t.refusals[e.App+"/"+receipt.GetSubmission().GetIdempotencyKey()]; refused {
+				return fmt.Errorf("entry %d: accepted result reused a refused key", i+1)
 			}
 			applied, applyErr := t.applyAcceptedResult(ra.AcceptedLedger(), e.Body)
 			if applyErr != nil || !applied {

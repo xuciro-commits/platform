@@ -4,6 +4,7 @@ package relations
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -140,6 +141,50 @@ func (r *Relations) Manifest() platform.Manifest {
 }
 
 func (r *Relations) Declarations() []*pb.AuthorityDeclaration { return r.ledger.Declarations() }
+func (r *Relations) AcceptedLedger() *platform.Ledger         { return r.ledger }
+func (*Relations) AcceptedActionSchemas() []string {
+	return []string{SchemaLink, SchemaUnlink, SchemaComment, SchemaFollow, SchemaUnfollow}
+}
+
+// Only the link graph is private decision state. Timeline notes are projected
+// from saved observations, not recomputed by an action or copied with this
+// fork. The ledger stays the same identity and is staged by the host Runtime.
+func (r *Relations) ForkAcceptedState() (platform.App, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return &Relations{host: r.host, links: slices.Clone(r.links), ledger: r.ledger}, nil
+}
+func (r *Relations) AcceptedState() (json.RawMessage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return json.Marshal(r.links)
+}
+func (*Relations) ValidateAcceptedState(raw json.RawMessage) error {
+	var links []Link
+	if err := json.Unmarshal(raw, &links); err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for _, l := range links {
+		key := l.From + "\x00" + l.To
+		if l.From == "" || l.To == "" || l.By == "" || l.At.IsZero() || seen[key] {
+			return fmt.Errorf("invalid accepted relation link")
+		}
+		seen[key] = true
+	}
+	return nil
+}
+func (r *Relations) ApplyAcceptedState(raw json.RawMessage) error {
+	if err := r.ValidateAcceptedState(raw); err != nil {
+		return err
+	}
+	var links []Link
+	_ = json.Unmarshal(raw, &links)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.links = links
+	return nil
+}
 
 func (r *Relations) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
@@ -222,15 +267,23 @@ func (r *Relations) Read(c platform.Caller, name string) (any, *kernel.Error) {
 // to it (host.Observer). It runs inside the input, so replay
 // tells them again.
 func (r *Relations) Observe(e platform.Event, events []string) {
+	raw, err := r.PlanObserved(r.host.Automation(platform.Caller{}, ID), e, events)
+	if err == nil {
+		_ = r.ApplyObserved(raw)
+	}
+}
+
+func (r *Relations) PlanObserved(c platform.Caller, e platform.Event, events []string) (json.RawMessage, error) {
 	s := e.Record.GetSubmission()
 	entity := s.GetTarget().GetType() + "/" + s.GetTarget().GetId()
 	if t := s.GetTarget().GetType(); t != CommentType && t != FollowType && t != LinkType && !strings.HasPrefix(s.GetPrincipalId(), "app:") {
 		// A member's decision on a record tells its followers (ADR-0028 D6).
-		r.tell(r.host.Automation(ID, false), entity, entity+" changed: "+s.GetSchema().GetName(), "by "+s.GetPrincipalId(),
+		r.tell(c, entity, entity+" changed: "+s.GetSchema().GetName(), "by "+s.GetPrincipalId(),
 			"change:"+e.App+"/"+e.Record.GetChangeId(), []string{s.GetPrincipalId()}, e.Record.GetRecordedTime().AsTime())
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	notes := []Note{}
 	for _, name := range events {
 		declared, _ := r.host.ProtocolEvent(name)
 		text := entity + ", by " + s.GetPrincipalId()
@@ -244,9 +297,35 @@ func (r *Relations) Observe(e platform.Event, events []string) {
 			}
 		}
 		for _, x := range about {
-			r.notes = append(r.notes, Note{Entity: x, By: "app:" + e.App, At: e.Record.GetRecordedTime().AsTime(), Title: declared.Title, Text: text})
+			notes = append(notes, Note{Entity: x, By: "app:" + e.App, At: e.Record.GetRecordedTime().AsTime(), Title: declared.Title, Text: text})
 		}
 	}
+	return json.Marshal(notes)
+}
+
+func (*Relations) ValidateObserved(raw json.RawMessage) error {
+	var notes []Note
+	if err := json.Unmarshal(raw, &notes); err != nil {
+		return err
+	}
+	for _, n := range notes {
+		if n.Entity == "" || !strings.HasPrefix(n.By, "app:") || n.At.IsZero() || n.Title == "" || n.Text == "" {
+			return fmt.Errorf("invalid saved timeline note")
+		}
+	}
+	return nil
+}
+
+func (r *Relations) ApplyObserved(raw json.RawMessage) error {
+	if err := r.ValidateObserved(raw); err != nil {
+		return err
+	}
+	var notes []Note
+	_ = json.Unmarshal(raw, &notes)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.notes = append(r.notes, notes...)
+	return nil
 }
 
 // Links are the entities linked to entity that c sees (Caller.Links, host.Linker).
@@ -335,7 +414,7 @@ func (r *Relations) collaborate(c platform.Caller, s *pb.Submission, now time.Ti
 // tell notifies a record's followers, except those in skip.
 func (r *Relations) tell(c platform.Caller, target, title, body, key string, skip []string, now time.Time) {
 	domain, _ := json.Marshal([]any{[]any{"target", "=", target}})
-	follows, _, _ := platform.Find[Follow](r.host.Automation(ID, c.Replaying), platform.Query{Domain: domain, Limit: 1000})
+	follows, _, _ := platform.Find[Follow](r.host.Automation(c, ID), platform.Query{Domain: domain, Limit: 1000})
 	var to []platform.Recipient
 	for _, f := range follows {
 		if !slices.Contains(skip, f.Member) {
@@ -343,6 +422,6 @@ func (r *Relations) tell(c platform.Caller, target, title, body, key string, ski
 		}
 	}
 	if len(to) > 0 {
-		r.host.Automation(ID, c.Replaying).Notify(platform.Notification{Title: title, Body: body, Ref: target, Key: key}, now, to...)
+		r.host.Automation(c, ID).Notify(platform.Notification{Title: title, Body: body, Ref: target, Key: key}, now, to...)
 	}
 }

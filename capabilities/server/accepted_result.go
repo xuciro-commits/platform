@@ -19,13 +19,15 @@ import (
 	"platformserver/platform"
 )
 
-// acceptedResult is the bounded journal result for one generated create/edit
-// decision. Its version and size are checked before persistence and recovery.
-const acceptedResultVersion = 2
+// acceptedResult is the bounded journal result for one generated create/edit/archive
+// or builder publication decision. Its version and size are checked before
+// persistence and recovery.
+const acceptedResultVersion = 4
 const maxAcceptedResultBytes = 1 << 20
 
 type acceptedResult struct {
 	Version     int             `json:"version"`
+	Kind        string          `json:"kind,omitempty"` // version 4: callback-free lifecycle transition
 	Tenant      string          `json:"tenant"`
 	App         string          `json:"app"`
 	At          time.Time       `json:"at,omitempty"` // the original input clock, not a retry's
@@ -49,6 +51,9 @@ type acceptedEvent struct {
 	Names       []string          `json:"names,omitempty"`
 	Subscribers []string          `json:"subscribers,omitempty"`
 	Effects     []platform.Effect `json:"effects,omitempty"`
+	Observed    bool              `json:"observed,omitempty"`
+	Hops        int               `json:"hops,omitempty"`
+	Stopped     []string          `json:"stopped,omitempty"`
 }
 
 func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
@@ -90,8 +95,16 @@ func (d *stagedDecision) result(app string, receipt *pb.ChangeRecord, submittedA
 		return nil, err
 	}
 	hash := sha256.Sum256(request)
-	result := acceptedResult{Version: acceptedResultVersion, Tenant: receipt.GetSubmission().GetTenantId(),
-		App: app, At: submittedAt.UTC(), RequestHash: hex.EncodeToString(hash[:]), Receipt: raw,
+	version := 2
+	kind := ""
+	if publisher, ok := d.tenant.app(app).(platform.AcceptedPublisher); ok &&
+		slices.Contains(publisher.AcceptedPublicationSchemas(), receipt.GetSubmission().GetSchema().GetName()) {
+		version = 3
+	} else if acceptsPureTransition(d.tenant.app(app), receipt.GetSubmission().GetSchema().GetName()) {
+		version, kind = acceptedResultVersion, "pure-transition"
+	}
+	result := acceptedResult{Version: version, Tenant: receipt.GetSubmission().GetTenantId(),
+		Kind: kind, App: app, At: submittedAt.UTC(), RequestHash: hex.EncodeToString(hash[:]), Receipt: raw,
 		Row:   acceptedRow{Type: typ, ID: id, Value: value, History: history},
 		Event: d.tenant.planAcceptedEvent(d.events[0])}
 	result.Digest, err = digestAcceptedResult(result)
@@ -130,7 +143,7 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 		return result, nil, fmt.Errorf("accepted receipt: %w", err)
 	}
 	sub := receipt.GetSubmission()
-	if result.Version != 1 && result.Version != acceptedResultVersion || result.Tenant == "" || result.App == "" ||
+	if result.Version < 1 || result.Version > acceptedResultVersion || result.Tenant == "" || result.App == "" ||
 		sub == nil || sub.GetTenantId() != result.Tenant || sub.GetAuthority() != result.App ||
 		sub.GetIdempotencyKey() == "" || sub.GetPrincipalId() == "" || receipt.GetChangeId() == "" ||
 		receipt.GetRecordedTime() == nil || receipt.GetValidTime() == nil ||
@@ -140,7 +153,7 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 		len(result.Row.History) == 0 || len(result.Row.Value) == 0 {
 		return result, nil, fmt.Errorf("accepted result has inconsistent identity or effects")
 	}
-	if result.Version == acceptedResultVersion {
+	if result.Version >= 2 {
 		if result.At.IsZero() || len(result.Event.Names) == 0 || result.Event.Names[0] != sub.GetSchema().GetName() {
 			return result, nil, fmt.Errorf("accepted result has no event intent")
 		}
@@ -158,8 +171,13 @@ func decodeAcceptedResult(raw []byte) (acceptedResult, *pb.ChangeRecord, error) 
 		}
 	}
 	verb, ok := strings.CutPrefix(sub.GetSchema().GetName(), result.Row.Type+".")
-	if !ok || verb != "create" && verb != "edit" {
-		return result, nil, fmt.Errorf("accepted result is outside generated create/edit family")
+	standard := verb == "create" || verb == "edit" || verb == "archive"
+	publication := result.Version == 3 && verb == "publish" && result.Kind == ""
+	pureTransition := result.Version == 4 && !standard && verb != "publish" && result.Kind == "pure-transition"
+	legacy := result.Version == 1 && (verb == "create" || verb == "edit")
+	if !ok || !(legacy && result.Kind == "" ||
+		standard && result.Version == 2 && result.Kind == "" || publication || pureTransition) {
+		return result, nil, fmt.Errorf("accepted result is outside the supported generated action family")
 	}
 	request, err := proto.MarshalOptions{Deterministic: true}.Marshal(sub)
 	if err != nil {
@@ -201,8 +219,8 @@ func digestAcceptedResult(result acceptedResult) (string, error) {
 }
 
 // applyAcceptedResult reconstructs one record and its kernel receipt without
-// calling current application decision code. The tenant lock must be held;
-// journaling, work intents and a production entry point are not wired yet.
+// calling application decision code. A version-three publication additionally
+// installs the committed definition. The tenant lock must be held.
 func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, error) {
 	result, receipt, err := decodeAcceptedResult(raw)
 	if err != nil {
@@ -240,6 +258,20 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.mu.Unlock()
 		return false, fmt.Errorf("accepted record image differs from receipt")
 	}
+	var publisher platform.AcceptedPublisher
+	if result.Version == 3 {
+		schema := receipt.GetSubmission().GetSchema().GetName()
+		var ok bool
+		publisher, ok = t.app(result.App).(platform.AcceptedPublisher)
+		if !ok || !slices.Contains(publisher.AcceptedPublicationSchemas(), schema) {
+			draft.mu.Unlock()
+			return false, fmt.Errorf("accepted publication has no installer")
+		}
+		if err := publisher.ValidateAcceptedPublication(schema, result.Row.Value); err != nil {
+			draft.mu.Unlock()
+			return false, fmt.Errorf("accepted publication is invalid: %w", err)
+		}
+	}
 	prior := et.rows[rec.ID]
 	if prior != nil && reflect.DeepEqual(prior.value.Interface(), value.Interface()) &&
 		reflect.DeepEqual(prior.history, result.Row.History) {
@@ -248,7 +280,7 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	}
 	verb, _ := strings.CutPrefix(receipt.GetSubmission().GetSchema().GetName(), result.Row.Type+".")
 	before := len(result.Row.History) - 1
-	if verb == "create" && prior != nil || verb == "edit" && prior == nil ||
+	if verb == "create" && prior != nil || verb != "create" && prior == nil ||
 		prior == nil && !reflect.DeepEqual(rec.Created, rec.Changed) ||
 		prior == nil && before != 0 || prior != nil && (len(prior.history) != before ||
 		!reflect.DeepEqual(prior.history, result.Row.History[:before]) ||
@@ -271,6 +303,11 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 	}
 	if err := s.promoteRecords(draft); err != nil {
 		return false, err
+	}
+	if changed && publisher != nil {
+		if err := publisher.ApplyAcceptedPublication(receipt.GetSubmission().GetSchema().GetName(), result.Row.Value); err != nil {
+			return false, err
+		}
 	}
 	return changed, nil
 }

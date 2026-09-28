@@ -164,9 +164,8 @@ func newRecordStore() *recordStore {
 }
 
 // forkRecords gives one decision an isolated view of records and their
-// history. It is a preparatory 19a primitive, not yet used by Tenant.Submit:
-// the caller must still stage the ledger and every generated intent, durably
-// append the result, and only then promote this view.
+// history; the accepted-result path stages the ledger and supported intents,
+// appends the result, and only then promotes this view.
 func (s *recordStore) forkRecords() *recordStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -874,8 +873,12 @@ func (t *Tenant) Entities(m platform.Member) []platform.EntityInfo {
 // readableLocked reports whether m may read the record ref ("<type>/<id>"),
 // with the store's lock held.
 func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bool {
+	return t.readableIn(t.records, m, ref, now)
+}
+
+func (t *Tenant) readableIn(store *recordStore, m platform.Member, ref string, now time.Time) bool {
 	typ, id, _ := strings.Cut(ref, "/")
-	et := t.records.types[typ]
+	et := store.types[typ]
 	if et == nil {
 		return false
 	}
@@ -883,7 +886,7 @@ func (t *Tenant) readableLocked(m platform.Member, ref string, now time.Time) bo
 	if r == nil {
 		return false
 	}
-	visible, err := t.visible(m, et, now)
+	visible, err := t.visibleIn(store, m, et, now)
 	return err == nil && (visible == nil || visible(r.value))
 }
 
@@ -896,6 +899,10 @@ func (t *Tenant) Readable(m platform.Member, ref string, now time.Time) bool {
 
 // visible is m's scope over a type's records on now's day (D4).
 func (t *Tenant) visible(m platform.Member, et *entityType, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
+	return t.visibleIn(t.records, m, et, now)
+}
+
+func (t *Tenant) visibleIn(store *recordStore, m platform.Member, et *entityType, now time.Time) (func(reflect.Value) bool, *kernel.Error) {
 	role, scope := m.Roles[et.info.App], et.info.Scope
 	if scope.Through != nil { // readable when the record it belongs to is; the store's lock is held by whoever calls it
 		seen := map[string]bool{}
@@ -903,7 +910,7 @@ func (t *Tenant) visible(m platform.Member, et *entityType, now time.Time) (func
 			ref := scope.Through(v.Interface())
 			ok, known := seen[ref]
 			if !known {
-				ok = t.readableLocked(m, ref, now)
+				ok = t.readableIn(store, m, ref, now)
 				seen[ref] = ok
 			}
 			return ok

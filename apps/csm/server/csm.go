@@ -169,6 +169,8 @@ func (a *App) Manifest() platform.Manifest {
 }
 
 func (a *App) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
+func (a *App) AcceptedLedger() *platform.Ledger         { return a.ledger }
+func (*App) AcceptedActionSchemas() []string            { return []string{SchemaSummary} }
 
 // Answer hears what became of a reply's mail: a reply never sent (discarded,
 // refused or failed) leaves the ticket unanswered again, and the desk is told

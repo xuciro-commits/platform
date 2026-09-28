@@ -112,28 +112,35 @@ func (t *Tenant) invoke(c platform.Caller, protocol, action, id string, payload 
 	if _, mapped := b.provision.Actions[action]; !ok || !mapped {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No app provides {protocol} here", protocol)
 	}
-	call := func(b binding) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
+	call := func(b binding, c platform.Caller) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error) {
 		schema := b.provision.Actions[action]
 		declared, _ := b.provider.Manifest().Actions.Action(schema)
 		target := &pb.EntityRef{Type: declared.Target, Id: id}
-		called := platform.NewCaller(runtime{t}, c.Member, b.provider.Manifest().ID, c.Replaying, c.Automation)
-		record, err := b.provider.Submit(called, &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(declared.Target),
-			Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}, now)
+		called := platform.RouteCaller(c, b.provider.Manifest().ID)
+		sub := &pb.Submission{TenantId: t.ID, PrincipalId: c.ID, Authority: t.authorityOf(declared.Target),
+			Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}
+		var record *pb.ChangeRecord
+		var err *kernel.Error
+		if c.Staging() {
+			record, err = (hostView{t: t}).Submit(called, sub, now)
+		} else {
+			record, err = b.provider.Submit(called, sub, now)
+		}
 		return target, record, explained(err, b.provider, schema, target.GetType()+"/"+id)
 	}
-	return call(t.holder(b, protocol, action, call))
+	return call(t.holder(c, b, protocol, action, call), c)
 }
 
 // holder is the provider a call about an existing target goes to: the bound
 // one, unless it does not know the target and another provider does — a hold
 // made before the tenant rebound the protocol is confirmed or released where
 // it was made (F-39). Asking applies nothing.
-func (t *Tenant) holder(bound binding, protocol, action string, call func(binding) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)) binding {
-	was := t.probing
-	t.probing = true
-	defer func() { t.probing = was }()
+func (t *Tenant) holder(c platform.Caller, bound binding, protocol, action string, call func(binding, platform.Caller) (*pb.EntityRef, *pb.ChangeRecord, *kernel.Error)) binding {
 	knows := func(b binding) bool {
-		_, _, err := call(b)
+		err := platform.ProbeDecision(c, func(probe platform.Caller) *kernel.Error {
+			_, _, err := call(b, probe)
+			return err
+		})
 		return err == nil || err.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND
 	}
 	if knows(bound) {
@@ -157,11 +164,10 @@ func (t *Tenant) probe(c platform.Caller, protocol, action, id string, payload [
 		}
 		return nil
 	}
-	was := t.probing
-	t.probing = true
-	defer func() { t.probing = was }()
-	_, _, err := t.invoke(c, protocol, action, id, payload, "probe", "", now)
-	return err
+	return platform.ProbeDecision(c, func(probe platform.Caller) *kernel.Error {
+		_, _, err := t.invoke(probe, protocol, action, id, payload, "probe", "", now)
+		return err
+	})
 }
 
 // request is a protocol action an accepted decision asked for (Caller.Request).
@@ -215,7 +221,7 @@ func (t *Tenant) query(c platform.Caller, protocol, read string) ([]platform.Pro
 	}
 	var out []platform.ProviderResult
 	for _, b := range all {
-		called := platform.NewCaller(runtime{t}, c.Member, b.provider.Manifest().ID, c.Replaying, c.Automation)
+		called := platform.RouteCaller(c, b.provider.Manifest().ID)
 		result, err := b.provider.Read(called, b.provision.Reads[read])
 		if err != nil {
 			return nil, err

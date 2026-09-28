@@ -2,7 +2,10 @@ package platformserver
 
 import (
 	"encoding/json"
+	"errors"
+
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +19,14 @@ import (
 // A tenant-authored step uses the work app's approval and inbox, including
 // rejection, rather than a second process runtime (ADR-0037 18c).
 func TestTenantDefinedApproval(t *testing.T) {
+	for _, accepted := range []bool{false, true} {
+		t.Run(fmt.Sprint("accepted=", accepted), func(t *testing.T) {
+			testTenantDefinedApproval(t, accepted)
+		})
+	}
+}
+
+func testTenantDefinedApproval(t *testing.T, accepted bool) {
 	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	var journal []Entry
 	compose := func() *Tenant {
@@ -31,6 +42,17 @@ func TestTenantDefinedApproval(t *testing.T) {
 	}
 	tn := compose()
 	tn.Record = func(e Entry) { journal = append(journal, e) }
+	fail := false
+	if accepted {
+		tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+			if fail {
+				return nil, errors.New("injected append failure")
+			}
+			journal = append(journal, e)
+			return e.Body, nil
+		}
+	}
+	var retried []*pb.Submission
 	member := func(id string) platform.Member { m, _ := tn.app(PlatformApp).(*Console).Member(id); return m }
 	keys := 0
 	do := func(who, schema, typ, id string, payload any) string {
@@ -40,9 +62,30 @@ func TestTenantDefinedApproval(t *testing.T) {
 		if typ == work.ApprovalType {
 			authority = work.ID
 		}
-		if _, err := tn.Submit(member(who), &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: authority, IdempotencyKey: fmt.Sprint("ap", keys),
-			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now); err != nil {
+		sub := &pb.Submission{TenantId: "t-1", PrincipalId: who, Authority: authority, IdempotencyKey: fmt.Sprint("ap", keys),
+			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}
+		if accepted {
+			before := snapshot(tn)
+			fail = true
+			if _, err := tn.Submit(member(who), sub, now); err == nil {
+				t.Fatal("failed append accepted")
+			}
+			fail = false
+			if snapshot(tn) != before {
+				t.Fatal("failed append leaked approval, task, publication or notification state")
+			}
+		}
+		receipt, err := tn.Submit(member(who), sub, now)
+		if err != nil {
 			return fmt.Sprintf("%s: %s", err.Code, err.Message)
+		}
+		if accepted {
+			count, before := len(journal), snapshot(tn)
+			again, err := tn.Submit(member(who), sub, now.Add(time.Hour))
+			if err != nil || !proto.Equal(receipt, again) || len(journal) != count || snapshot(tn) != before {
+				t.Fatalf("retry changed the accepted answer or state: %v", err)
+			}
+			retried = append(retried, proto.Clone(sub).(*pb.Submission))
 		}
 		return "ok"
 	}
@@ -153,4 +196,24 @@ func TestTenantDefinedApproval(t *testing.T) {
 		t.Fatalf("after rejection: %s %s", s, claimant)
 	}
 	CheckReplay(t, tn, journal, compose)
+	if accepted {
+		restored := compose()
+		if err := restored.Replay(journal); err != nil {
+			t.Fatal(err)
+		}
+		restored.AcceptResult = func(Entry, string, string) ([]byte, error) {
+			t.Fatal("recovered retry appended a result")
+			return nil, nil
+		}
+		for _, sub := range retried {
+			original, err := tn.Submit(member(sub.GetPrincipalId()), sub, now.Add(2*time.Hour))
+			if err != nil {
+				t.Fatal(err)
+			}
+			recovered, err := restored.Submit(member(sub.GetPrincipalId()), sub, now.Add(3*time.Hour))
+			if err != nil || !proto.Equal(original, recovered) {
+				t.Fatalf("recovery changed answer: %v", err)
+			}
+		}
+	}
 }

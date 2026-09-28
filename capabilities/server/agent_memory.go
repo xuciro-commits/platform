@@ -86,7 +86,7 @@ func (a *Agents) remember(c platform.Caller, run *AgentRunRecord, fact string, a
 		m.For = run.OnBehalf
 	}
 	return "remembered" + map[bool]string{true: " about " + m.For, false: ""}[m.For != ""], func(r *pb.ChangeRecord) {
-		a.t.automation(AgentApp, c.Replaying).Put(r, m)
+		a.t.automated(c, AgentApp).Put(r, m)
 	}
 }
 
@@ -107,7 +107,7 @@ func (a *Agents) propose(c platform.Caller, r *pb.ChangeRecord, run AgentRunReco
 	}
 	m := Memory{Record: platform.Record{ID: fmt.Sprintf("%s:p%d", run.ID, len(run.Signals))}, Agent: run.Agent, Fact: fact, For: about, Run: run.ID, Sources: sourcesOf(run),
 		State: "proposed", Expires: now.AddDate(0, 0, proposalDays)}
-	a.t.automation(AgentApp, c.Replaying).Put(r, m)
+	a.t.automated(c, AgentApp).Put(r, m)
 }
 
 // memories are what an agent remembers for a run: active, unexpired, about

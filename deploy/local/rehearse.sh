@@ -10,7 +10,18 @@ compose() { docker compose -p platform-rehearsal -f compose.yaml "$@"; }
 IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://localhost:$MANUFACTURING_PORT HOSPITALITY=http://localhost:$HOSPITALITY_PORT SINK=http://localhost:$SINK_PORT
 backup=$(mktemp -d)
 trap 'compose down -v --remove-orphans >/dev/null 2>&1; rm -rf "$backup"' EXIT
-fail() { echo "FAIL: $*" >&2; exit 1; }
+fail() {
+  echo "FAIL: $*" >&2
+  # Retain tenant-local recovery diagnostics before the disposable project is
+  # removed. Do not dump requests, environment variables or credentials.
+  compose logs --no-color manufacturing-server hospitality-server 2>/dev/null |
+    grep -E 'quarantin|accepted work|accepted result|record batch' | tail -20 >&2 || true
+  if [[ -n ${SUP:-} ]]; then
+    curl -s --max-time 3 -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/health" |
+      jq -c '{status, recoveryError, queues, failed}' >&2 || true
+  fi
+  exit 1
+}
 wait_for() { for _ in $(seq 60); do curl -sf -o /dev/null "$1" && return; sleep 1; done; fail "$1 never answered"; }
 
 compose down -v --remove-orphans >/dev/null 2>&1 || true
@@ -269,7 +280,8 @@ hosp hcm "$SALES_TOKEN" h-1 hcm.leave.create hcm.leave LV-1 '{"kind":"vacation",
 task=$(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/inbox" | jq -r '.[0].ref')
 [[ $task == work.approval/hcm.h-2 ]] || fail "manager's inbox: $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/inbox")"
 [[ $(hosp work "$SALES_TOKEN" h-3 work.approval.approve work.approval hcm.h-2 '{}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "the requester approved"
-hosp work "$MGR" h-4 work.approval.approve work.approval hcm.h-2 '{}' | jq -e .record >/dev/null || fail "approve"
+approval=$(hosp work "$MGR" h-4 work.approval.approve work.approval hcm.h-2 '{}')
+jq -e .record >/dev/null <<<"$approval" || fail "approve: $(jq -c '{error}' <<<"$approval")"
 [[ $(records "$SALES_TOKEN" 'hcm.leave/LV-1' | jq -r '.record.state') == approved ]] || fail "leave after approval: $(records "$SALES_TOKEN" 'hcm.leave/LV-1')"
 [[ $(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$HOSPITALITY/v1/requests" | jq -r '.[0].state') == approved ]] || fail "request state"
 echo "ok   approvals: a leave request held, found in the manager's inbox through the organisation, approved, and applied by the approval"
@@ -374,3 +386,38 @@ compose exec -T postgres createdb -U platform journal_test
 (cd ../../capabilities/server && PLATFORM_TEST_DATABASE=postgres://platform:platform-local-only@localhost:$PG_PORT/journal_test \
   go test -count=1 -run 'TestJournal|TestJournalAcceptedResult' . 2>&1) >"$backup/journal-test.log" || { cat "$backup/journal-test.log" >&2; fail "journal test"; }
 echo "ok   journal numbering and accepted result retry/recovery (capabilities/server)"
+for app in erpadapter mes pms; do
+  (cd "../../apps/$app/server" && PLATFORM_TEST_DATABASE=postgres://platform:platform-local-only@localhost:$PG_PORT/journal_test \
+    go test -count=1 -run 'TestJournalAccepted' . 2>&1) >"$backup/$app-accepted-test.log" ||
+    { cat "$backup/$app-accepted-test.log" >&2; fail "$app accepted input recovery"; }
+  echo "ok   $app accepted input crash/restart against PostgreSQL"
+done
+
+# Tenant-local recovery without restarting its neighbor: a corrupt derived
+# checkpoint isolates the plant on restart; retry rebuilds from the entire
+# durable journal and replaces that checkpoint before the next restart.
+[[ $(sql "select count(*) from snapshots where tenant='plant-sz'") -gt 0 ]] || fail "plant checkpoint absent for corruption drill"
+# Stop before corrupting: graceful shutdown writes a fresh checkpoint, so
+# corrupting a live checkpoint and then restarting would silently replace it.
+compose stop manufacturing-server >/dev/null 2>&1
+sql "update snapshots set state=decode('00','hex') where tenant='plant-sz'" >/dev/null
+[[ $(sql "select count(*) from snapshots where tenant='plant-sz' and state<>decode('00','hex')") == 0 ]] ||
+  fail "plant checkpoint corruption was not applied"
+compose start manufacturing-server >/dev/null 2>&1
+wait_for "$MANUFACTURING/healthz"
+if [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/health" | jq -r .status) != quarantined ]]; then
+  sql "select seq,code,octet_length(state) from snapshots where tenant='plant-sz' order by seq" >&2 || true
+  compose logs --no-color manufacturing-server 2>/dev/null |
+    grep -E 'restored|replayed|quarantined|snapshot' | tail -15 >&2 || true
+  fail "damaged plant checkpoint did not isolate its tenant"
+fi
+[[ $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] ||
+  fail "healthy hotel was stopped by the plant's recovery"
+recovery=$(curl -s -X POST -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/recovery/retry")
+[[ $(jq -r .status <<<"$recovery") == ok ]] ||
+  fail "operator could not rebuild the plant without a process restart: $recovery"
+[[ $(state) == "$now" ]] || fail "in-place tenant recovery changed the business state"
+compose restart manufacturing-server >/dev/null 2>&1
+for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
+[[ $(code "$SUP") == 200 && $(state) == "$now" ]] || fail "repaired checkpoint failed on the next restart"
+echo "ok   operator recovery: quarantine, healthy neighbor, in-place journal rebuild, durable replacement checkpoint"

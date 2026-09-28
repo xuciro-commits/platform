@@ -90,6 +90,35 @@ func TestJournalAcceptedResultAtomicRetryAndRecovery(t *testing.T) {
 	CheckReplay(t, live, persisted, build)
 }
 
+func TestAcceptedGeneratedArchivePreservesReceiptAndHistory(t *testing.T) {
+	live := stockTenant(t)
+	member, _ := live.Member("ana")
+	now := time.Date(2026, 9, 28, 15, 0, 0, 0, time.UTC)
+	var entries []Entry
+	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	submit := func(key, schema, body string) {
+		t.Helper()
+		if _, err := live.Submit(member, &pb.Submission{TenantId: live.ID, PrincipalId: member.ID,
+			Authority: "stock", IdempotencyKey: key, Target: &pb.EntityRef{Type: "stock.item", Id: "I1"},
+			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(body)}, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	submit("create", "stock.item.create", `{"name":"Bolt","qty":2,"line":"L1"}`)
+	submit("archive", "stock.item.archive", `{}`)
+	if len(entries) != 2 || entries[1].Kind != "accepted-result" {
+		t.Fatalf("archive was not committed as a result: %+v", entries)
+	}
+	if row := live.records.types["stock.item"].rows["I1"]; row == nil ||
+		!row.value.Interface().(Item).Archived || len(row.history) != 2 {
+		t.Fatal("committed archive or its history was lost")
+	}
+	CheckReplay(t, live, entries, func() *Tenant { return stockTenant(t) })
+}
+
 func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	live := stockTenant(t)
 	member, _ := live.app(PlatformApp).(*Console).Member("ana")
@@ -124,14 +153,22 @@ func TestAcceptedSubmitCommitFailureRetryAndReplay(t *testing.T) {
 	if _, err := live.Submit(member, sub("k1", "create", `{"name":"Other"}`), now); err == nil || len(entries) != 1 {
 		t.Fatal("conflicting key committed")
 	}
-	if _, err := live.Submit(member, sub("bad", "edit", `{"qty":"wrong"}`), now); err == nil || len(entries) != 1 {
-		t.Fatal("rejected edit committed")
+	if _, err := live.Submit(member, sub("bad", "edit", `{"qty":"wrong"}`), now); err == nil || len(entries) != 2 {
+		t.Fatal("rejected edit did not retain its durable refusal")
+	}
+	rejected, _, err := decodeRefusedResult(entries[1].Body)
+	if err != nil || rejected.Kind != "refusal" {
+		t.Fatalf("rejected edit did not preserve its answer: %+v, %v", rejected, err)
+	}
+	if _, retry := live.Submit(member, sub("bad", "edit", `{"qty":"wrong"}`), now.Add(time.Hour)); retry == nil ||
+		retry.Code != rejected.Error.Code || retry.Message != rejected.Error.Message || len(entries) != 2 {
+		t.Fatal("rejected edit was rerun or changed its answer on retry")
 	}
 	if _, err := live.Submit(member, sub("k2", "edit", `{"qty":7}`), now.Add(time.Second)); err != nil {
 		t.Fatalf("edit: %v", err)
 	}
-	if len(entries) != 2 || entries[0].Kind != "accepted-result" || entries[1].Kind != "accepted-result" {
-		t.Fatalf("expected two result entries: %+v", entries)
+	if len(entries) != 3 || entries[0].Kind != "accepted-result" || entries[2].Kind != "accepted-result" {
+		t.Fatalf("expected an accepted result, durable refusal, and accepted edit: %+v", entries)
 	}
 	CheckReplay(t, live, entries, func() *Tenant { return stockTenant(t) })
 }
@@ -150,10 +187,13 @@ func TestGeneratedActionWithWrongTargetCannotFallBackToLegacy(t *testing.T) {
 		Schema:  &pb.SchemaRef{Name: "stock.item.create", Version: 1},
 		Payload: []byte(`{"name":"Bolt","line":"L1"}`)},
 		time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC))
-	if err == nil || len(journal) != 0 ||
+	if err == nil || len(journal) != 1 ||
 		tn.records.types["stock.item"].rows["B1"] != nil ||
 		tn.records.types["stock.bin"].rows["B1"] != nil {
 		t.Fatalf("malformed generated action escaped the isolated result boundary: %v, journal=%+v", err, journal)
+	}
+	if _, _, decodeErr := decodeRefusedResult(journal[0].Body); decodeErr != nil {
+		t.Fatalf("malformed target was not committed as a refusal: %v", decodeErr)
 	}
 }
 

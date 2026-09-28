@@ -93,6 +93,14 @@ func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 	return l.Changes.ApplyAccepted(record)
 }
 
+// ForkAcceptedChanges validates a complete host batch without advancing the
+// authoritative log. The tenant commit lock still owns promotion.
+func (l *Ledger) ForkAcceptedChanges() *kernel.ChangeLog {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.Changes.Fork()
+}
+
 // AcceptedFor returns a saved receipt for a key without running application
 // decision code. The host uses this before staging a generated action.
 func (l *Ledger) AcceptedFor(tenant, key string) *pb.ChangeRecord {
@@ -120,17 +128,7 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
 	rules = l.checked(c, s, rules)
-	if c.rt != nil && c.rt.Probing() { // a request for approval: policy and rules, nothing recorded or applied (ADR-0017 D3)
-		if !c.Automation && !(l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())) {
-			return nil, l.denied(c, s)
-		}
-		if rules != nil {
-			if _, err := rules(); err != nil {
-				return nil, err
-			}
-		}
-		return nil, nil
-	}
+	probing := c.rt != nil && c.rt.Probing()
 	refused := false // the kernel's policy step said no
 	changes := l.Changes
 	// ADR-0038 19a: a host-owned decision view may use a private change log.
@@ -140,9 +138,14 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	}); ok {
 		changes = draft.DraftChanges(l)
 	}
+	if probing {
+		// Probes validate kernel identity, key conflicts and expected revisions
+		// too. Only their private log advances; their apply callback never runs.
+		changes = changes.Fork()
+	}
 	receiver := kernel.Receiver{Changes: changes, Authorities: l.authorities,
 		Policy: func(kernel.Caller, *pb.Submission) bool {
-			ok := c.Replaying || c.Automation || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
+			ok := c.Replaying && !probing || c.Automation || l.Catalog.Permits(c.Role(), s.GetSchema().GetName()) && (allowed == nil || allowed())
 			refused = !ok
 			return ok
 		}}
@@ -157,6 +160,9 @@ func (l *Ledger) Receive(c Caller, s *pb.Submission, now time.Time,
 	})
 	if err != nil && err.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED && err.Message == "" && refused {
 		err = l.denied(c, s) // the kernel's policy step refused: say whose role does not reach
+	}
+	if probing {
+		return nil, err
 	}
 	if err == nil && apply != nil {
 		apply(record)

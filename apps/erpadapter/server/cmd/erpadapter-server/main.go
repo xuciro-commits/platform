@@ -24,10 +24,14 @@ func main() {
 		seat("planner", "planner-1", map[string]string{erpadapter.ID: erpadapter.Planner, platformserver.PlatformApp: platformserver.Admin}),
 		seat("erp", "erp", map[string]string{erpadapter.ID: erpadapter.Connector}),
 	})
-	t, err := platformserver.NewTenant("dev", platformserver.NewConsole("dev", seats...), erpadapter.New("dev"))
-	if err == nil {
-		err = t.Connect(erpadapter.Poll("erp"))
+	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...), erpadapter.New(id))
+		if err == nil {
+			err = t.Connect(erpadapter.Poll("erp"))
+		}
+		return t, err
 	}
+	t, err := deployment.Rebuild("dev")
 	if err == nil {
 		err = deployment.Serve(t)
 	}

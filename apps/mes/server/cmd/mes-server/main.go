@@ -7,6 +7,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"strings"
 
@@ -56,18 +57,23 @@ func main() {
 	deployment := platformserver.Flags("127.0.0.1:8499")
 	disable := flag.String("disable", "", "comma-separated capabilities to deactivate (ADR-0008)")
 	flag.Parse()
-	plant := mes.New(tenant, mes.DemoMaster())
-	for _, c := range strings.FieldsFunc(*disable, func(r rune) bool { return r == ',' }) {
-		if !plant.Disable(c) {
-			log.Fatalf("-disable: no capability %q", c)
-		}
-	}
 	seats := deployment.Seats(demo)
-	t, err := platformserver.NewTenant(tenant, platformserver.NewConsole(tenant, seats...),
-		org.New(tenant, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(tenant), work.New(tenant), flow.New(tenant), platformserver.NewAgents(tenant), knowledge.New(tenant), files.New(tenant), relations.New(tenant), plant)
-	if err == nil {
-		err = t.Connect(mes.DemoConnectors(tenant)...)
+	deployment.Rebuild = func(id string) (*platformserver.Tenant, error) {
+		plant := mes.New(id, mes.DemoMaster())
+		for _, c := range strings.FieldsFunc(*disable, func(r rune) bool { return r == ',' }) {
+			if !plant.Disable(c) {
+				return nil, fmt.Errorf("-disable: no capability %q", c)
+			}
+		}
+		t, err := platformserver.NewTenant(id, platformserver.NewConsole(id, seats...),
+			org.New(id, mes.DemoOrganization(platformserver.Memberships(seats))), ai.New(id), work.New(id), flow.New(id),
+			platformserver.NewAgents(id), knowledge.New(id), files.New(id), relations.New(id), plant)
+		if err == nil {
+			err = t.Connect(mes.DemoConnectors(id)...)
+		}
+		return t, err
 	}
+	t, err := deployment.Rebuild(tenant)
 	if err == nil {
 		err = deployment.Serve(t)
 	}

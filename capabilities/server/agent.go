@@ -199,6 +199,7 @@ func (a *Agents) Manifest() platform.Manifest {
 }
 
 func (a *Agents) Declarations() []*pb.AuthorityDeclaration { return a.ledger.Declarations() }
+func (a *Agents) AcceptedLedger() *platform.Ledger         { return a.ledger }
 func (a *Agents) Snapshot() (json.RawMessage, error)       { return a.ledger.Snapshot() }
 func (a *Agents) Restore(raw json.RawMessage) error        { return a.ledger.Restore(raw) }
 func (a *Agents) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.Error) {
@@ -352,7 +353,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 	json.Unmarshal(s.GetPayload(), &p)
 	d := a.defs[p.Agent]
 	id := s.GetTarget().GetId()
-	run, known := platform.Get[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), id)
+	run, known := platform.Get[AgentRunRecord](a.t.automated(c, AgentApp), id)
 	allowed := func() bool {
 		switch s.GetSchema().GetName() {
 		case SchemaRunStart:
@@ -378,7 +379,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			}
 			run := a.create(id, p.Agent, p.Goal, p.Ref, c.ID, "", "", 0, now)
 			run.Acts, run.Language = p.Act, p.Language
-			return func(r *pb.ChangeRecord) { a.t.automation(AgentApp, c.Replaying).Put(r, run) }, nil
+			return func(r *pb.ChangeRecord) { a.t.automated(c, AgentApp).Put(r, run) }, nil
 		case SchemaEvalStart:
 			return a.startEvaluation(c, id, struct {
 				Agent, Model string
@@ -392,7 +393,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			}
 			return func(r *pb.ChangeRecord) {
 				a.stop(c, r, &run, "stopped by "+c.ID, now)
-				a.t.automation(AgentApp, c.Replaying).Put(r, run)
+				a.t.automated(c, AgentApp).Put(r, run)
 			}, nil
 		case SchemaRunConfirm, SchemaRunReject:
 			if len(run.Draft) == 0 || run.State != "waiting" {
@@ -426,7 +427,7 @@ func (a *Agents) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb
 			}
 			run.Draft, run.State, run.Task = nil, "running", ""
 			return func(r *pb.ChangeRecord) {
-				a.t.automation(AgentApp, c.Replaying).Put(r, run)
+				a.t.automated(c, AgentApp).Put(r, run)
 				if proposed != nil {
 					a.propose(c, r, run, *proposed, now)
 				}
@@ -467,7 +468,7 @@ func sameJSON(x, y []byte) bool {
 
 // signal records what a person made of a run's work, in another app's decision.
 func (a *Agents) signal(c platform.Caller, r *pb.ChangeRecord, id string, sig Signal, now time.Time) {
-	c = a.t.automation(AgentApp, c.Replaying)
+	c = a.t.automated(c, AgentApp)
 	if run, ok := platform.Get[AgentRunRecord](c, id); ok {
 		run.Signals = append(run.Signals, sig)
 		c.Put(r, run)
@@ -496,7 +497,7 @@ func (a *Agents) create(id, agent, goal, ref, onBehalf, flow, step string, token
 func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	if name == "memories" { // what agents remember about the caller
 		about, _ := json.Marshal([]any{[]any{"for", "=", c.ID}, []any{"state", "!=", "forgotten"}})
-		out, _, _ := platform.Find[Memory](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
+		out, _, _ := platform.Find[Memory](a.t.automated(c, AgentApp), platform.Query{Domain: about, Sort: []string{"-created"}, Limit: 100})
 		return out, nil
 	}
 	if name == "agent-overview" {
@@ -507,7 +508,7 @@ func (a *Agents) Read(c platform.Caller, name string) (any, *kernel.Error) {
 	}
 	if name == "runs" {
 		mine, _ := json.Marshal([]any{[]any{"onBehalf", "=", c.ID}})
-		out, _, _ := platform.Find[AgentRunRecord](a.t.automation(AgentApp, c.Replaying), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
+		out, _, _ := platform.Find[AgentRunRecord](a.t.automated(c, AgentApp), platform.Query{Domain: mine, Sort: []string{"-created"}, Limit: 50})
 		out = slices.DeleteFunc(out, func(run AgentRunRecord) bool {
 			d := a.defs[run.Agent]
 			return d == nil || c.Roles[d.app] == ""
