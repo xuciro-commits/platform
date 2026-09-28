@@ -1,6 +1,6 @@
 # ADR-0038: Accepted results and tenant recovery
 
-**Status:** Proposed (2026-09-28, #135). ADR-0031 already accepts result-based recovery, PostgreSQL and a fresh disposable development baseline. This gate resolves the commit unit, state staging, failure boundary and format before implementation. It does not change the running journal.
+**Status:** Accepted (2026-09-28, #135). The owner accepted D1–D4 as recommended. ADR-0031 already accepts result-based recovery, PostgreSQL and a fresh disposable development baseline. This gate resolves the commit unit, state staging, failure boundary and format before implementation. Acceptance does not change the running journal.
 
 ## Context
 
@@ -19,6 +19,17 @@ The shared principle is to make a durable boundary explicit, then derive visible
 `Tenant.Submit` defers `enqueue`, calls the app, then journals an accepted input. `runtime.Put` writes the record store immediately; `hostView.Submit` invokes another app without opening a separate journal entry. A nested decision can therefore change records, work or an installed definition before the outer append succeeds. `Tenant.Input`, agent/model outcomes, protocol answers and work deliveries also enter through paths other than the public submission method. In the PostgreSQL host, an append error terminates the process after those memory changes. `Tenant.Replay` currently invokes the app again for submissions and inputs. These are code facts, not covered by the existing same-code replay test.
 
 The first slice must inventory **every** entry point and mutable owner, including `recordStore`, the builder's `Install*`, work/process state, idempotency receipts, generated IDs, audit, model usage and outbound intent queues. An entry point outside the accepted-result boundary must be disabled or explicitly excluded from the guarantee; a partially migrated host must never report the full guarantee. A nested call contributes to its parent's staged result, while a later asynchronous answer, job or delivery is a new top-level input with its own result. A refused input leaves no staged state or dispatchable intent; a duplicate returns the durable prior receipt without re-running decision code. After the append commits, recovery applies the result exactly once in logical state even if the process dies before replying. These are testable conditions for D1–D3, not an assertion that staging exists today.
+
+**19a entry-point and mutation inventory, before changing the journal.** The first staged path must name its supported action family; all other rows retain their existing input-replay guarantee until migrated. A staged path may not silently fall through to a direct mutator after an accepted result has been formed.
+
+| Current entry point and owned state | 19a boundary | Required before its result path is enabled |
+|---|---|---|
+| `Tenant.Submit` → app `Ledger.Receive` → kernel `ChangeLog` → `runtime.Put` → `recordStore.put` → `runtime.Publish` (`host.go`, `platform/ledger.go`, `records.go`) | Stage one bounded generated create/edit family first | The same stage owns the kernel idempotency/revision record, record values/history and published event; append the result before exposing any of them. A duplicate returns the saved receipt. |
+| `hostView.Submit`, protocol invocation and approval request (`hostview.go`, `protocol.go`, `host.go`) | Nested in its top-level input, fenced from the first family until staged | A nested app decision cannot append or acknowledge independently; its changes and intents join the outer result. |
+| `Tenant.Input`, import, connector delivery (`host.go`, `transfer.go`, `runtime.go`) | 19b | Cursor, observation and resulting decisions become one result; an external delayed answer is a later input. |
+| Delivery/job execution, agent steps, model usage, effect outcome/answer (`operations.go`, `agent_engine.go`, `aicall.go`, `effects.go`) | 19b | Generation, retries, meter/step results and stable outbound intents are committed before workers act; recovery never calls a model or sends outside. |
+| `runtime.Notify`, `Emit`, `Request`, `Assign`, `Link`, `Deliver`, plus `hostView.Install*` (`runtime.go`, `hostview.go`, `installed.go`) | Fence in 19a's selected path; stage in 19b | No call may mutate an operational queue, relation, connector mark or installed schema before the result append. Publishing a builder asset is not enabled on 19a's draft edit path. |
+| Projection, knowledge index, snapshot, transcript cache and uploaded file bytes (`projection.go`, `knowledge.go`, `snapshot.go`, `files.go`) | Derived or external bytes, outside the authoritative result | Rebuildable indexes may lag; a result referring to file bytes verifies their immutable digest exists before commit. Snapshot position and format must identify the accepted-result sequence. |
 
 ## Our constraints
 
@@ -58,3 +69,7 @@ Declined: replacing PostgreSQL with Datomic, running all business rules as workf
 ## Consequences
 
 This is a host/app API refactor with a durable format commitment. It enables #136's immutable release activation and later AI/work version binding. Until every supported path crosses the new boundary, Platform §2 must call the guarantee partial and the old journal a development baseline. The first batch should be narrow enough to reveal capability escapes before broad replacement.
+
+## As built (2026-09-28, #135 19a preparation)
+
+The entry-point/mutation inventory above identifies which owners a first staged submission must enclose and which paths remain for 19b. The Go kernel change log can now make a private `Fork` for a decision and `ApplyAccepted` a saved change into its live log without policy or business-rule execution. Application ledgers expose the latter under their lock. A focused fault test proves discard-before-append leaves the live log untouched, applying the saved change yields the durable receipt, a duplicate does not apply twice, a reused key with other input conflicts, and a gap or altered receipt is refused. These are **staging primitives only**: no tenant submission uses them yet, the PostgreSQL journal still stores inputs, and no result-replay, record-store staging, durable-intent or tenant quarantine guarantee has been claimed. The next 19a increment must stage the host record write and event/work intent together with the ledger before wiring a live input to a result entry.

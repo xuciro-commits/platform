@@ -29,6 +29,67 @@ func NewChangeLog(schemas *SchemaRegistry) *ChangeLog {
 
 func (l *ChangeLog) Records(tenant string) []*pb.ChangeRecord { return l.logs[tenant] }
 
+// Fork gives one decision a private change-log view. Accepted records are
+// immutable; the maps and slices that SubmitChecked extends are independent.
+// The host can discard this view when a durable append fails (ADR-0038 19a).
+func (l *ChangeLog) Fork() *ChangeLog {
+	copy := &ChangeLog{schemas: l.schemas, logs: make(map[string][]*pb.ChangeRecord, len(l.logs)),
+		byKey: make(map[string]map[string]*pb.ChangeRecord, len(l.byKey)), revs: make(map[[3]string]uint32, len(l.revs)), next: l.next, Facts: l.Facts}
+	for tenant, records := range l.logs {
+		copy.logs[tenant] = slices.Clone(records)
+	}
+	for tenant, keys := range l.byKey {
+		copy.byKey[tenant] = make(map[string]*pb.ChangeRecord, len(keys))
+		for key, record := range keys {
+			copy.byKey[tenant][key] = record
+		}
+	}
+	for target, revision := range l.revs {
+		copy.revs[target] = revision
+	}
+	return copy
+}
+
+// ApplyAccepted advances a log from the saved decision, without running its
+// policy or business rules. It rejects a missing predecessor or conflicting
+// receipt; reapplying the same saved record is a no-op. The host calls this
+// only after the result's durable append or while recovering it (ADR-0038).
+func (l *ChangeLog) ApplyAccepted(saved *pb.ChangeRecord) (bool, error) {
+	if saved == nil || saved.GetSubmission() == nil || saved.GetRecordedTime() == nil || saved.GetValidTime() == nil {
+		return false, fmt.Errorf("accepted change is incomplete")
+	}
+	s := saved.GetSubmission()
+	if s.GetTenantId() == "" || s.GetIdempotencyKey() == "" || s.GetTarget().GetType() == "" || s.GetTarget().GetId() == "" {
+		return false, fmt.Errorf("accepted change has no scoped identity")
+	}
+	if prior := l.byKey[s.GetTenantId()][s.GetIdempotencyKey()]; prior != nil {
+		if proto.Equal(prior, saved) {
+			return false, nil
+		}
+		return false, fmt.Errorf("accepted change conflicts with an earlier receipt")
+	}
+	if saved.GetChangeId() != fmt.Sprintf("chg-%d", l.next+1) {
+		return false, fmt.Errorf("accepted change %s is not next after %d", saved.GetChangeId(), l.next)
+	}
+	target := [3]string{s.GetTenantId(), s.GetTarget().GetType(), s.GetTarget().GetId()}
+	if saved.GetRevision() != l.revs[target]+1 {
+		return false, fmt.Errorf("accepted change %s has revision %d after %d", saved.GetChangeId(), saved.GetRevision(), l.revs[target])
+	}
+	log := l.logs[s.GetTenantId()]
+	if len(log) > 0 && saved.GetRecordedTime().AsTime().Before(log[len(log)-1].GetRecordedTime().AsTime()) {
+		return false, fmt.Errorf("accepted change %s moves recorded time backwards", saved.GetChangeId())
+	}
+	record := proto.Clone(saved).(*pb.ChangeRecord)
+	l.next++
+	l.revs[target] = record.GetRevision()
+	l.logs[s.GetTenantId()] = append(log, record)
+	if l.byKey[s.GetTenantId()] == nil {
+		l.byKey[s.GetTenantId()] = map[string]*pb.ChangeRecord{}
+	}
+	l.byKey[s.GetTenantId()][s.GetIdempotencyKey()] = record
+	return true, nil
+}
+
 func (l *ChangeLog) Submit(s *pb.Submission, now time.Time) (*pb.ChangeRecord, *Error) {
 	return l.SubmitChecked(s, now, nil)
 }

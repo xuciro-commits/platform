@@ -81,6 +81,16 @@ func (l *Ledger) Extend(classes []string, actions []Action) error {
 // Declarations are the package's authority declarations, for edges (K5 A9).
 func (l *Ledger) Declarations() []*pb.AuthorityDeclaration { return l.declarations }
 
+// ApplyAcceptedChange advances the kernel log from a durable result. It does
+// not run current catalog policy, rules or a generated action (ADR-0038 19a).
+// The boolean says whether this result was new to the log, so the host can
+// avoid applying its record images twice after a retry or partial recovery.
+func (l *Ledger) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.Changes.ApplyAccepted(record)
+}
+
 // Receive accepts s from c or refuses it: an action outside the enabled catalog
 // is UNKNOWN_SCHEMA; c's role must be granted and allowed (attribute conditions,
 // may be nil) must hold, except in a replay (ADR-0008); rules (may be nil)

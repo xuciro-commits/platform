@@ -1,6 +1,6 @@
 # ADR-0039: A minimal release for tenant definitions
 
-**Status:** Proposed (2026-09-28, #136 and #131 13c). ADR-0031 already accepts independently versioned definition releases and environment bindings. This gate fixes the smallest contract that makes builder publication durable and reviewable; promotion, customer extensions and upgrades follow in later batches. Nothing in today's registry is an immutable revision.
+**Status:** Accepted (2026-09-28, #136 and #131 13c). The owner accepted D1–D4 as recommended. ADR-0031 already accepts independently versioned definition releases and environment bindings. This gate fixes the smallest contract that makes builder publication durable and reviewable; promotion, customer extensions and upgrades follow in later batches. Nothing in today's registry is an immutable revision.
 
 ## Context
 
