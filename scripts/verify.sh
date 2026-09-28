@@ -59,10 +59,6 @@ mes() {
   step mes-server bash -c 'cd apps/mes/server && go vet ./... && go test -count=1 ./...'
 }
 
-drills() {
-  step drills bash -c 'cd apps/drills && go vet ./... && go test -count=1 ./...'
-}
-
 composition() {
   # Apps know no other app; they meet through protocols (ADR-0011).
   local dir
@@ -99,13 +95,12 @@ case "$target" in
   capabilities) capabilities ;;
   format) format ;;
   mes) mes ;;
-  drills) drills ;;
   composition) composition ;;
   deploy) deploy ;;
-  all) contract; format; capabilities; web; pms; mes; composition; drills; deploy ;;
+  all) contract; format; capabilities; web; pms; mes; composition; deploy ;;
   # What CI runs on Linux: the rehearsal needs Docker, so it stays on the owner's Mac.
-  ci) contract; format; capabilities; mes; composition; drills ;;
-  *) echo "usage: $0 [contract|capabilities|web|pms|mes|composition|drills|deploy|format|ci]..."; exit 2 ;;
+  ci) contract; format; capabilities; mes; composition ;;
+  *) echo "usage: $0 [contract|capabilities|web|pms|mes|composition|deploy|format|ci]..."; exit 2 ;;
 esac
 done
 

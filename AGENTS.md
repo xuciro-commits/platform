@@ -25,7 +25,6 @@ Before choosing work, read `docs/Intent.md` → `docs/Platform.md` §10 → `doc
 | `protocols/` | Protocols apps provide and consume (ADR-0011): `lodging` (`lodging.booking/1` with holds, confirm and release, and a reference provider; `lodgingtest` checks any provider's conformance), `production` (`production.orders/1`: the ERP releases production orders, a plant confirms them) |
 | `solutions/hospitality/` | The hospitality solution: platform, relations, the PMS and a second lodging provider, the CRM, HCM and CSM; `cmd/hospitality-server` |
 | `solutions/manufacturing/` | The manufacturing solution (ADR-0024): platform, the MES and its books — the ERP, or the ERP adapter — meeting through `production.orders/1`; `cmd/manufacturing-server` (`-erp external` for the adapter) |
-| `apps/drills/` | Evolution drills that run on the kernel alone (E2 shared library) |
 | `deploy/local/` | Infrastructure as code for the production path (ADR-0007): Docker Compose with PostgreSQL, Rauthy (declarative bootstrap), RustFS (file bytes, ADR-0028), manufacturing-server and hospitality-server; `rehearse.sh` rehearses OIDC principals, restart and restore; `README.md` is the local environment (addresses, accounts, service accounts, what to enter to connect webhooks, email, the ERP and AI providers) |
 | `web/` | pnpm workspace: `web/packages/ui` (`@platform/ui`, the shared UI kit, ADR-0004), `web/packages/kernel` (`@platform/kernel`: generated contract types, the K5 outbox and an HTTP edge client), `web/packages/app` (`@platform/app`: `defineApp` and `useHost`, the app API of UIs, ADR-0018; the assistant, agent runs and global search, ADR-0021), `web/apps/workspace` (the one workspace every host serves: one sign-in, a launcher, every app a member may open), `web/apps/gallery` (every component with cross-industry data), `web/apps/pms-desk` (the PMS desk's UI, loaded by Tauri, offline), `web/e2e` (docs/Testing.md's routes as Playwright tests against a development host, run by `scripts/verify.sh web`), one UI package per app `web/packages/<id>` (`build`, `crm`, `csm`, `erp`, `erpadapter`, `hcm`, `mes`, `pms`) and `web/packages/platform` (Settings) |
 | `i18n/`, `i18n.ts` | Languages (ADR-0023): each Go app embeds `i18n/<language>.json` (the host's own in `capabilities/server/i18n`), each web package registers `src/i18n.ts`; both keyed by the English text, and tests fail on a text without Chinese |
@@ -64,10 +63,9 @@ scripts/verify.sh contract  # contract vocabulary, buf lint + generated code, Go
 scripts/verify.sh web       # UI kit tests, typecheck and build of every web app, and the test routes in a browser (needs node, pnpm, Go, Chrome)
 scripts/verify.sh pms       # web build, PMS server tests, Rust K5 vectors, end-to-end flows (needs cargo)
 scripts/verify.sh mes       # MES tests (F-5 to F-9 verdicts)
-scripts/verify.sh drills    # evolution drills on the kernel
 scripts/verify.sh composition  # app boundaries and layout (scripts/boundaries.sh), every protocol, every other app, every solution
 scripts/verify.sh capabilities  # server capability tests
 scripts/verify.sh deploy    # production-path rehearsal (needs Docker via OrbStack: orb start)
 scripts/verify.sh format    # gofmt over every Go file
-scripts/verify.sh ci        # what CI runs on Linux: contract, format, capabilities, mes, composition, drills
+scripts/verify.sh ci        # what CI runs on Linux: contract, format, capabilities, mes, composition
 ```

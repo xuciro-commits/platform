@@ -121,4 +121,21 @@ func TestGroupBlock(t *testing.T) {
 	w.expect(alone.submit("sales", crm.ID, crm.SchemaClose, crm.OpportunityType, "OPP-5", "close-lost", map[string]string{"outcome": "lost"}), "ok")
 	w.expect(block(alone, "OPP-5")+" "+opportunity(alone, "OPP-5").Stage, "releasing OPP-5-H1:held lost")
 	platformserver.CheckReplay(t, alone.tenant, alone.journal, func() *platformserver.Tenant { return newWorld(t).tenant })
+
+	// F-39: a hold made at the hotel is confirmed at the hotel after the
+	// administrator binds the lodging protocol to another provider; new holds go
+	// to the new one.
+	rebound := newWorld(t, hotelProvider, memoryProvider)
+	rebound.setup()
+	open(rebound, "OPP-1")
+	w.expect(plan(rebound, "OPP-1", 1, "2026-11-20", "2026-11-10"), "ok")
+	w.expect(rebound.submit("admin", platformserver.PlatformApp, platformserver.SchemaProtocolBind, platformserver.ProtocolType, lodging.ID, "bind",
+		map[string]string{"provider": "memstay"}), "ok")
+	closeAs(rebound, "OPP-1", "won")
+	w.expect(block(rebound, "OPP-1")+" "+opportunity(rebound, "OPP-1").Stage, "confirmed OPP-1-H1:booked won")
+	open(rebound, "OPP-2")
+	w.expect(rebound.submit("sales", crm.ID, crm.SchemaPlan, crm.OpportunityType, "OPP-2", "plan-opp2",
+		map[string]any{"rooms": 1, "roomType": "loft", "arrive": "2026-11-20", "depart": "2026-11-28", "cutoff": "2026-11-10"}), "ok")
+	w.expect(block(rebound, "OPP-2"), "held OPP-2-H1:held")
+	platformserver.CheckReplay(t, rebound.tenant, rebound.journal, func() *platformserver.Tenant { return newWorld(t, hotelProvider, memoryProvider).tenant })
 }
