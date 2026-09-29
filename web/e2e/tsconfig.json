@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "typeRoots": [
+      "../packages/ui/node_modules/@types",
+      "../node_modules/.pnpm/node_modules/@types"
+    ],
+    "types": ["node"]
+  },
+  "include": ["tests"]
+}

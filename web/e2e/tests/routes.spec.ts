@@ -885,3 +885,38 @@ test("route 36: approve a tenant-defined action", async ({ page, request }, test
   await expect(desk.getByText("Returned", { exact: true }).first()).toBeVisible();
   await desk.close();
 });
+
+// Route 38 (ADR-0040 21b D1): a builder object's reference field declares a named
+// inverse relation on the referenced record (e.g. "visits" on crm.account). The
+// referenced record's page lists the related records under that relation name.
+// A member with no access to the referenced type cannot read the record.
+test("route 38: a named relation on the referenced record", async ({ page, request }, testInfo) => {
+  const stamp = Date.now().toString(36).slice(-5), name = `vis${stamp}`, id = fresh("O");
+  const account = fresh("ACC");
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: account }, { name: "Host " + account, kind: "company" });
+
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id }, {
+    name, title: "Visit " + stamp, plural: "Visits " + stamp,
+    fields: [
+      { name: "guest", title: "Guest", type: "text", required: true },
+      { name: "account", title: "Account", type: "reference", ref: "crm.account", inverse: "visits", required: true },
+    ],
+  });
+  await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id }, {});
+
+  const type = `build.${name}`, record = `V-${stamp}`;
+  await decide(request, "manager", "build", `${type}.create`, { type, id: record }, { guest: "Ada Lovelace", account });
+
+  // Open that account's record page as manager and expect a section heading containing "visits"
+  await open(page, "manager", `/record?type=crm.account&id=${account}`);
+  const sectionHeading = page.getByRole("heading", { level: 2 }).filter({ hasText: /visits/i });
+  await expect(sectionHeading).toBeVisible();
+  await expect(page.getByText("Ada Lovelace")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("named-relation.png"), fullPage: true });
+
+  // As "desk" (no CRM role), the account must not be readable.
+  const noAccess = await request.get(`/v1/records/crm.account/${account}`, {
+    headers: { Authorization: "Bearer desk" },
+  });
+  expect(noAccess.status()).toBe(403);
+});
