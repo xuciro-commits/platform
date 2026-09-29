@@ -10,7 +10,7 @@ import (
 	"platformserver/platform"
 )
 
-// A flow's pinned function survives newer installations. Resolve each edge
+// A page or flow's pinned function survives newer installations. Resolve each edge
 // through its original owner before the language-neutral candidate validator
 // checks the complete bytes. A single candidate cannot contain two versions
 // of one named asset, or replace an explicitly requested function root.

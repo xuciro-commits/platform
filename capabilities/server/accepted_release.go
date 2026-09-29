@@ -219,7 +219,7 @@ func (t *Tenant) runningMatchesLocked(candidateID string, raw []byte) error {
 	for _, asset := range saved.Assets {
 		roots = append(roots, asset.Ref)
 	}
-	running, err := platform.Candidate(roots, available)
+	running, err := t.candidateWithFunctions(roots, available, nil)
 	if err != nil {
 		return fmt.Errorf("release differs from the running definitions: %w", err)
 	}

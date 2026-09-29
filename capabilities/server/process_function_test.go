@@ -139,6 +139,16 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	if err != nil || retainedPage.ID != firstPage.ID {
 		t.Fatalf("page drifted to latest function: %v %v", retainedPage.ID, err)
 	}
+	keys++
+	pageRelease, err := tn.SaveReleaseCandidate(member("builder"), platform.AssetPage, "PAGE", firstPage.ID, fmt.Sprint(keys), at)
+	if err != nil {
+		t.Fatalf("save retained page: %v", err)
+	}
+	keys++
+	if activated, err := tn.ActivateRelease(member("builder"), pageRelease, fmt.Sprint(keys), at); err != nil || activated != firstPage.ID {
+		t.Fatalf("activate page pinned to old function: %s %v", activated, err)
+	}
+	CheckReplay(t, tn, entries, compose)
 	conflict, err := tn.PreviewRelease(member("builder"), platform.AssetFunction, "F")
 	if err == nil && conflict.Diagnostic == "" {
 		t.Fatalf("function draft silently replaced a flow pin: %+v %v", conflict, err)
@@ -157,6 +167,10 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	updatedPage, err := tn.ReleaseCandidate(pageRoot)
 	if err != nil || updatedPage.ID == firstPage.ID {
 		t.Fatalf("updated page retained old function: %v %v", updatedPage.ID, err)
+	}
+	keys++
+	if _, err := tn.ActivateRelease(member("builder"), pageRelease, fmt.Sprint(keys), at); err == nil {
+		t.Fatal("changed page activated a stale saved candidate")
 	}
 	if first == second {
 		t.Fatal("new function reused release")

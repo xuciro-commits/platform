@@ -118,3 +118,5 @@
 本批执行 `scripts/verify.sh format capabilities composition web` 与 `scripts/verify.sh contract mes` 通过；`web` 含两行业新增路由及全套 40 个浏览器用例。未运行本批页面调用的 PostgreSQL/Docker 恢复演练，也未测试真实模型质量。
 
 页面调用不是 24c 收尾：正式评测门禁、候选激活后的页面与流程共同版本旅程、两行业 PostgreSQL 重启/恢复、真实模型质量和负责人体验仍待验证。
+
+**固定依赖的激活校验（2026-09-29）。** 发现激活校验曾直接用当前安装的最新版函数重建候选；页面仍引用旧保留版本时，合法的已保存候选会被误拒。激活现与候选预览复用 Build 归属方的保留版本解析。单元用例验证旧函数版页面在新版函数已发布后仍可保存/激活，页面自身改版后再激活旧候选则拒绝，并检查结果重放；该用例另通过 `go test -race`，`scripts/verify.sh format capabilities composition` 通过。它只覆盖候选指针与精确依赖，尚未证明正式评测门禁、页面/Flow 一同激活后的操作员路径或 PostgreSQL 故障恢复。

@@ -72,6 +72,8 @@
 
 同日第二批落实 D4 的最小版本：`work.ApprovalRequest.Release` 记录请求打开时的活跃发布（经 `host.ActiveRelease`，在决策内读取）。激活前宿主检查每个待审批请求：若新候选中其持有动作的描述符与其启动发布中的不同，激活被拒绝并指明请求与动作，要求先决定或撤回；没有迁移，也不以新定义改写在途工作。`TestPendingApprovalHoldsItsRelease` 覆盖拒绝、审批完成后再激活成功。制造业 `TestPlantReleaseActivatedForOperator` 让构建者在真实 MES 生产订单上发布页面、保存并激活闭包，操作员按活跃发布打开该页，之后的草稿不改变活跃指针与操作员页面；酒店由路线 37 与既有组合测试覆盖。`scripts/verify.sh ci web` 在本机通过。**仍未完成（并入 20c）**：激活本身安装定义（目前指针只描述已安装内容，开发期发布仍直接覆盖）、操作员读取与新动作携带发布标识、审批按启动发布的旧求值器执行（现以拒绝不兼容激活代替）、激活崩溃点测试与 `deploy/local/rehearse.sh`。20b 按 WorkQueue 的最小可用标准收尾，不宣称 ADR 全部实现。
 
+**2026-09-29 随 #133 修正固定函数依赖的激活校验。** 页面或原生 Flow 可固定仍被 Build 保留的函数旧版本；`runningMatchesLocked` 现在与预览/保存共用归属方版本解析，再用纯候选校验器比较运行闭包。仅函数发布新版、页面及流程保持旧引用时，旧版候选可保存并激活；页面自身改版后，旧候选仍会被拒绝。`TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery` 覆盖正反两侧及 `CheckReplay`；`scripts/verify.sh format capabilities composition` 通过。这只修复现有“先安装、后激活”路径的版本判定，不实现激活即安装、正式评测门禁或 20c 的恢复/升级矩阵；本批未运行 Docker 演练或新的浏览器路线。
+
 **构建者入口的租户边界（2026-09-29，#130）。** `PreviewRelease`、`SaveReleaseCandidate` 与 `ActivateRelease` 在检查构建者角色前统一调用 `Tenant.admits`，其他租户中即使同名、同角色的成员也不能读取候选、走已保存候选的幂等返回分支或移动活跃指针。`TestAcceptedReleaseCandidateCommitRetryAndRecovery` 覆盖外租户预览/保存拒绝；`TestActivateReleaseMatchesRunningDefinitions` 覆盖外租户激活拒绝且快照与日志未变。HTTP 身份解析仍复用既有租户目录；宿主直接调用与 HTTP 路径具有相同的成员边界。
 
 ### 构建器资产清单分页 (Builder inventory pagination, 2026-09-29, #132/#136)
