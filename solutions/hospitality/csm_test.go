@@ -169,6 +169,9 @@ func TestCSMTriage(t *testing.T) {
 	effects, _ := w.tenant.Read(ops, "effects")
 	held := slices.DeleteFunc(effects.([]platform.Effect), func(e platform.Effect) bool { return e.Endpoint != "mail-gateway" }) // the summary's request aside
 	w.expect(fmt.Sprint(len(held), " ", held[0].State, " ", len(mailed)), "1 held 0")
+	w.expect(do(desk, platformserver.PlatformApp, platformserver.SchemaEffectApprove, platformserver.EffectType, held[0].ID, map[string]any{}), "ERROR_CODE_POLICY_DENIED")
+	tick(2 * time.Second)
+	w.expect(fmt.Sprint(len(mailed)), "0")
 	w.expect(do(ops, platformserver.PlatformApp, platformserver.SchemaEffectApprove, platformserver.EffectType, held[0].ID, map[string]any{}), "ok")
 	tick(2 * time.Second)
 	w.expect(fmt.Sprint(len(mailed), " ", strings.Contains(mailed[0], `"to":"anna@acme.test"`)), "1 true")

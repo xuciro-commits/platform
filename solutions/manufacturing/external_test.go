@@ -303,7 +303,12 @@ func TestCorrectedByTheAgent(t *testing.T) {
 	mine := whole.Records[0].(platformserver.AgentRunRecord)
 	x.expect("whole for the supervisor", fmt.Sprint(mine.Withheld, " ", strings.Contains(mine.Steps[0].Outcome, "PO-9002"), " ", mine.Result != ""), "false true true")
 	out, _ := x.tn.Read(x.member("sup-1"), "inbox")
-	x.expect("resend", x.do("sup-1", work.ID, "work.task.complete", work.TaskType, out.([]work.WorkTask)[0].ID, map[string]string{"answer": "resend"}), "ok")
+	task := out.([]work.WorkTask)[0].ID
+	x.expect("no ERP call before human confirmation", fmt.Sprint(x.calls), "0")
+	x.expect("operator cannot discover or approve the proposal", x.do("op-l1", work.ID, "work.task.complete", work.TaskType, task, map[string]string{"answer": "resend"}), "ERROR_CODE_NOT_FOUND")
+	x.work(2)
+	x.expect("refused answer changed neither order nor destination", fmt.Sprint(x.calls, " ", x.order("SO-2").Planned), "0 ")
+	x.expect("resend", x.do("sup-1", work.ID, "work.task.complete", work.TaskType, task, map[string]string{"answer": "resend"}), "ok")
 	x.work(6)
 	o := x.order("SO-2")
 	x.expect("confirmed", fmt.Sprint(o.ERP, " ", o.Confirmation, " ", o.Planned), "confirmed CONF-PO-9002-1 PO-9002")
