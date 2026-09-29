@@ -668,5 +668,10 @@
  "For a table: a named query of its object, like crm.open-opportunities": "表格类组件：该对象的具名查询，例如 crm.open-opportunities",
  "{member} is not a member here": "{member} 不是这里的成员",
  "{action} cannot be tried": "{action} 无法试运行",
- "{action} cannot be tried without running it": "{action} 无法在不真正执行的情况下试运行"
+ "{action} cannot be tried without running it": "{action} 无法在不真正执行的情况下试运行",
+ "Choose a saved object, a fixed time and 1–20 test steps": "请选择已保存对象、固定时间和 1–20 个测试步骤",
+ "The candidate cannot be tested: {why}": "无法测试候选：{why}",
+ "Test step {step} must name an action and record of the candidate objects": "测试步骤 {step} 必须指向候选对象的动作和记录",
+ "The test state did not recover exactly": "测试状态未能准确恢复",
+ "The test plan must be a valid bounded JSON object": "测试计划必须是有效且大小受限的 JSON 对象"
 }

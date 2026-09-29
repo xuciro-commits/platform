@@ -1,6 +1,7 @@
 // The routes of docs/Testing.md as browser smoke tests (F-35): a development
 // host of the hospitality solution, in memory on development tokens, serving
 // the workspace's build. `scripts/verify.sh web` builds the workspace first.
+import process from "node:process";
 import { defineConfig } from "@playwright/test";
 
 const port = 18496;

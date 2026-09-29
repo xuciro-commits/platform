@@ -211,6 +211,13 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, sourceVer
 				requires = append(requires, platform.AssetRef{App: app, Kind: platform.AssetObject, Name: field.Ref})
 			}
 		}
+		for _, action := range saved.Actions {
+			for _, create := range action.Creates {
+				requires = append(requires, platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: create.Object})
+			}
+		}
+		slices.SortFunc(requires, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
+		requires = slices.Compact(requires)
 		if err := add(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion,
 			Requires: requires, Body: body}, false); err != nil {
 			return nil, err

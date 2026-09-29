@@ -401,6 +401,26 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
+	handle(Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test a saved object draft using fixed actions in an empty isolated tenant (ADR-0040 21d)",
+		Body: CandidateSimulationRequest{}, Answer: CandidateSimulation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		var request CandidateSimulationRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&request) != nil || decoder.Decode(new(any)) != io.EOF {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The test plan must be a valid bounded JSON object"))
+			return
+		}
+		out, err := t.SimulateCandidate(m, request)
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	handle(Route{Pattern: "GET /v1/releases/active", Summary: "The tenant's active release ID, readable by any member (ADR-0039 20b)", Answer: ReleaseActive{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, ReleaseActive{ID: t.ActiveRelease()})
 	})

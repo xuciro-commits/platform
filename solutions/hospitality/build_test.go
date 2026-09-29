@@ -6,10 +6,37 @@ import (
 	"testing"
 
 	"crm"
+	"platformserver"
 
 	"platformserver/apps/build"
 	"platformserver/platform"
 )
+
+func TestTheHotelTestsASavedObjectWithoutProductionRows(t *testing.T) {
+	w := newWorld(t, hotelProvider)
+	w.setup()
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".create", build.ObjectType, "O-TEST", "test-object", map[string]any{
+		"name": "visitcheck", "title": "Visit check", "fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}},
+		"states":  []map[string]any{{"name": "open", "title": "Open"}, {"name": "done", "title": "Done"}},
+		"actions": []map[string]any{{"name": "close", "title": "Close", "from": []string{"open"}, "to": "done"}},
+	}), "ok")
+	before, _, _ := w.tenant.Snapshot(func() int64 { return 0 })
+	out, err := w.tenant.SimulateCandidate(w.members["manager"], platformserver.CandidateSimulationRequest{
+		ObjectID: "O-TEST", As: w.members["desk"].ID, At: t0, Steps: []platformserver.SimulationStep{
+			{Type: "build.visitcheck", ID: "TEST", Action: "build.visitcheck.create", Payload: json.RawMessage(`{"guest":"Ada"}`)},
+			{Type: "build.visitcheck", ID: "TEST", Action: "build.visitcheck.close", Payload: json.RawMessage(`{}`)},
+			{Type: "build.visitcheck", ID: "TEST", Action: "build.visitcheck.close", Payload: json.RawMessage(`{}`)},
+		},
+	})
+	if err != nil || !out.Recovered || !out.Steps[1].Accepted || out.Steps[2].Accepted {
+		t.Fatalf("fixed hotel candidate: %+v, %v", out, err)
+	}
+	after, _, _ := w.tenant.Snapshot(func() int64 { return 0 })
+	if string(before) != string(after) {
+		t.Fatal("fixed hotel test changed production state")
+	}
+	platformserver.CheckReplay(t, w.tenant, w.journal, func() *platformserver.Tenant { return newWorld(t, hotelProvider).tenant })
+}
 
 // ADR-0034 in a solution that is already running: the hotel's manager defines an
 // object the platform never heard of, publishes it, and the front desk keeps its

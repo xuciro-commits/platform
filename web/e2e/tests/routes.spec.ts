@@ -1028,3 +1028,68 @@ test("route 40: a page lists a named query", async ({ page, request }, testInfo)
   await expect(page.getByRole("row").filter({ hasText: "Other deal " + otherOpp })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("named-query-page.png"), fullPage: true });
 });
+
+// Route 41 (ADR-0040 21d): fixed samples exercise a saved candidate before
+// publication. Success, refusal and snapshot recovery never touch live rows.
+test("route 41: test a candidate, publish and operate", async ({ page, request }, testInfo) => {
+  const id = fresh("OBJ"), name = `test${Date.now().toString(36).slice(-5)}`, type = `build.${name}`;
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id }, {
+    name, title: "Test visit", fields: [{ name: "guest", title: "Guest", type: "text" }],
+    states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
+    actions: [{ name: "close", title: "Close", from: ["open"], to: "done" }],
+  });
+  const denied = await request.post("/v1/simulate/candidate", { headers: { Authorization: "Bearer desk" }, data: {} });
+  expect(denied.status()).toBe(403);
+  await open(page, "manager", "/home");
+  await page.getByRole("button", { name: "Application Studio" }).first().click();
+  await page.getByRole("button", { name: "Test a candidate", exact: true }).click();
+  await page.getByRole("combobox", { name: "Saved object draft" }).selectOption(id);
+  await page.getByRole("textbox", { name: "Member ID (empty: you)" }).fill("desk-1");
+  const first = page.getByRole("group", { name: "Test step 1", exact: true });
+  await first.getByRole("textbox", { name: "Test inputs (JSON)" }).fill('{"guest":"Sample Ada"}');
+  await page.getByRole("button", { name: "Add a test step" }).click();
+  await page.getByRole("button", { name: "Run isolated test" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Test step 2 · Accepted", { exact: true })).toBeVisible();
+  await expect(page.getByText("Test step 3 · Refused", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Test state recovered exactly." })).toBeVisible();
+  const testedCandidate = await page.getByText("Tested candidate:").locator("code").innerText();
+  await page.screenshot({ path: testInfo.outputPath("candidate-test.png"), fullPage: true });
+  await page.getByRole("status").filter({ hasText: "Test state recovered exactly." }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("candidate-test-results.png"), fullPage: true });
+  // Repeating the plan starts from empty data, including the same TEST-1 ID.
+  await page.getByRole("button", { name: "Run isolated test" }).click();
+  await expect(page.getByText("Test step 2 · Accepted", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect(page.getByRole("button", { name: "Run isolated test" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({ path: testInfo.outputPath("candidate-test-narrow.png"), fullPage: true });
+  await page.getByText("Test step 2 · Accepted", { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("candidate-test-results-narrow.png"), fullPage: true });
+  // Sample rows do not publish definitions or become operator records.
+  const missing = await request.get(`/v1/records/${type}/TEST-1`, { headers: { Authorization: "Bearer desk" } });
+  expect(missing.status()).toBe(404);
+  await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id }, {});
+  await open(page, "manager", "/release-review");
+  await page.getByRole("combobox", { name: "Saved draft" }).selectOption(id);
+  await page.getByRole("button", { name: "Check draft and dependencies" }).click();
+  await expect(page.getByText("Candidate ready for review")).toBeVisible();
+  await expect(page.getByText("Draft candidate:").locator("code")).toHaveText(testedCandidate);
+  await page.getByRole("button", { name: "Save immutable candidate" }).click();
+  await page.getByRole("button", { name: "Activate release" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
+  await decide(request, "desk", "build", `${type}.create`, { type, id: "REAL-1" }, { guest: "Operator Ada" });
+  const operator = await page.context().newPage();
+  await open(operator, "desk", `/record?type=${type}&id=REAL-1`);
+  await expect(operator.getByRole("banner").getByText("desk-1", { exact: true })).toBeVisible();
+  await operator.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(operator.getByText("Done", { exact: true }).first()).toBeVisible();
+  await operator.close();
+  const chinese = await page.context().newPage();
+  await chinese.addInitScript(() => localStorage.setItem("platform.language", "zh-CN"));
+  await open(chinese, "manager", "/candidate-test");
+  await expect(chinese.getByRole("heading", { name: "测试候选" })).toBeVisible();
+  await expect(chinese.getByRole("button", { name: "运行隔离测试" })).toBeVisible();
+  await chinese.screenshot({ path: testInfo.outputPath("candidate-test-chinese.png"), fullPage: true });
+  await chinese.close();
+});

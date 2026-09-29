@@ -231,5 +231,32 @@ func TestInspectionActionCreatesFinding(t *testing.T) {
 	}
 
 	// 8. CheckReplay
+	plan := platformserver.CandidateSimulationRequest{ObjectID: "O-INSP", As: op.ID, At: now, Steps: []platformserver.SimulationStep{
+		{Type: inspectionType, ID: "INSP-1", Action: inspectionType + ".create", Payload: json.RawMessage(`{"order":"SO-1"}`)},
+		{Type: inspectionType, ID: "INSP-1", Action: inspectionType + ".fail", Payload: json.RawMessage(`{"detail":"test tolerance"}`)},
+	}}
+	// A production MES reference cannot acquire live rows as test fixtures.
+	if _, kerr := tn.SimulateCandidate(sup, plan); kerr == nil {
+		t.Fatal("test silently acquired a live MES dependency")
+	}
+	// Save a self-contained test candidate; the installed MES binding stays
+	// intact. Its fixed inputs are plain identifiers, not production records.
+	must(do(sup, build.ObjectType+".edit", build.ObjectType, "O-INSP", map[string]any{"fields": []map[string]any{
+		{"name": "order", "title": "Order reference", "type": "text", "ref": "", "inverse": ""},
+		{"name": "result", "title": "Result", "type": "text"},
+	}}))
+	before, _, _ := tn.Snapshot(func() int64 { return 0 })
+	count := len(journal)
+	tested, kerr := tn.SimulateCandidate(sup, plan)
+	if kerr != nil {
+		t.Fatalf("fixed inspection candidate: %s", kerr.Message)
+	}
+	if !tested.Recovered || !tested.Steps[1].Accepted || len(tested.Steps[1].Changes) != 2 {
+		t.Fatalf("fixed inspection candidate: %+v", tested)
+	}
+	after, _, _ := tn.Snapshot(func() int64 { return 0 })
+	if string(before) != string(after) || len(journal) != count {
+		t.Fatal("fixed inspection test changed the running factory")
+	}
 	platformserver.CheckReplay(t, tn, journal, compose)
 }

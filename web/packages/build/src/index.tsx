@@ -8,6 +8,7 @@ import { defineApp } from "@platform/app";
 import { PageEditor, PagesList } from "./editor";
 import { ProcessEditor, ProcessPicker } from "./process";
 import { ReleaseReview } from "./release";
+import { CandidateTest } from "./simulate";
 import { t, type NavSection } from "@platform/ui";
 import { AppWindow, Boxes, GitBranch, Hammer, LayoutList } from "lucide-react";
 
@@ -24,6 +25,7 @@ export default defineApp({
     { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
     { id: "process", title: () => t("Object design"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
     { id: "release-review", title: () => t("Release review"), render: () => <ReleaseReview /> },
+    { id: "candidate-test", title: () => t("Test a candidate"), render: () => <CandidateTest /> },
   ],
   opens: { "build.page": "compose", "build.object": "process" }, // open a semantic asset in its editor
   nav: (host): NavSection[] => {
@@ -36,7 +38,10 @@ export default defineApp({
           { label: t("Process and access"), icon: <GitBranch />, route: { view: "process" } },
           { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },
           { label: t("Applications"), icon: <AppWindow />, route: page("applications") },
-          ...(host.role("build") === "builder" ? [{ label: t("Release review"), icon: <Boxes />, route: { view: "release-review" } }] : []),
+          ...(host.role("build") === "builder" ? [
+            { label: t("Test a candidate"), icon: <Boxes />, route: { view: "candidate-test" } },
+            { label: t("Release review"), icon: <Boxes />, route: { view: "release-review" } },
+          ] : []),
         ],
       },
       ...(own.length > 0

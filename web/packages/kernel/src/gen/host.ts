@@ -188,6 +188,19 @@ export type Calendar = {
   holidays?: string[];
 };
 
+export type CandidateSimulation = {
+  candidateId: string;
+  steps: Simulation[];
+  recovered: boolean;
+};
+
+export type CandidateSimulationRequest = {
+  objectId: string;
+  as?: string;
+  at: string;
+  steps: SimulationStep[];
+};
+
 export type CapabilityInfo = {
   name: string;
   enabled: boolean;
@@ -823,6 +836,13 @@ export type Simulation = {
   accepted: boolean;
   refusal?: string;
   changes: SimulatedChange[];
+};
+
+export type SimulationStep = {
+  type: string;
+  id: string;
+  action: string;
+  payload: unknown;
 };
 
 export type Stamp = {
