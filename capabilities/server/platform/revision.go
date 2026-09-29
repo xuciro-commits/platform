@@ -231,6 +231,15 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 	}
 	var required []AssetRef
 	switch ref.Kind {
+	case AssetFunction:
+		var function AIFunction
+		if err := json.Unmarshal(body, &function); err != nil {
+			return fmt.Errorf("release function %s: %w", ref, err)
+		}
+		if err := function.Check(); err != nil {
+			return err
+		}
+		required = append(required, AssetRef{App: ref.App, Kind: AssetObject, Name: function.Object})
 	case AssetFlow:
 		var flow FlowReleaseDescriptor
 		if err := json.Unmarshal(body, &flow); err != nil {

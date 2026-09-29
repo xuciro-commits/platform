@@ -219,6 +219,9 @@ func (t *Tenant) Texts(app string) []string {
 	for _, ag := range m.Agents {
 		parts = append(parts, map[string]any{"title": ag.Title, "description": ag.Description})
 	}
+	for _, f := range m.Functions {
+		parts = append(parts, map[string]any{"title": f.Title, "description": f.Description, "output": f.Output})
+	}
 	seen := map[string]bool{}
 	out := []string{}
 	for _, p := range parts {

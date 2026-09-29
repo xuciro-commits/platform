@@ -125,10 +125,18 @@ type Order struct {
 	Status   string              `json:"status" field:"readonly" choices:"released,completed"`
 	// The confirmation to the ERP when the last SFC ends (production.orders/1):
 	// sent, confirmed (with the ERP's number), refused or failed.
-	ERP          string `json:"erp,omitempty" field:"readonly" title:"ERP"`
-	Confirmation string `json:"confirmation,omitempty" field:"readonly"`
-	ERPDetail    string `json:"erpDetail,omitempty" field:"readonly" title:"ERP detail"`
-	Resent       int    `json:"resent,omitempty" field:"readonly"` // corrected confirmations sent after a refusal or failure
+	ERP              string   `json:"erp,omitempty" field:"readonly" title:"ERP"`
+	Confirmation     string   `json:"confirmation,omitempty" field:"readonly"`
+	ERPDetail        string   `json:"erpDetail,omitempty" field:"readonly" title:"ERP detail"`
+	Resent           int      `json:"resent,omitempty" field:"readonly"` // corrected confirmations sent after a refusal or failure
+	Advice           string   `json:"advice,omitempty" field:"readonly" title:"Review advice"`
+	AdviceCategory   string   `json:"adviceCategory,omitempty" field:"readonly" title:"Advice category" choices:"routine,review"`
+	AdviceReview     bool     `json:"adviceReview,omitempty" field:"readonly" title:"Needs review"`
+	AdviceState      string   `json:"adviceState,omitempty" field:"readonly" title:"Advice status" choices:"pending,ready,rejected"`
+	AdviceDefinition string   `json:"adviceDefinition,omitempty" field:"readonly" title:"Advice definition"`
+	AdviceModel      string   `json:"adviceModel,omitempty" field:"readonly" title:"Advice model"`
+	AdviceSources    []string `json:"adviceSources,omitempty" field:"readonly,aside" title:"Advice sources"`
+	AdviceWithheld   bool     `json:"adviceWithheld,omitempty" field:"readonly" title:"Advice withheld"`
 }
 
 // Plant is one tenant: master data, execution state and its kernel logs.
@@ -224,6 +232,8 @@ func (p *Plant) allowed(who platform.Caller, s *pb.Submission, now time.Time) bo
 	case SchemaResend, SchemaConfirm, SchemaAnswer:
 		o, known := platform.Get[Order](who, s.GetTarget().GetId())
 		return known && onLine(p.orderLine(o))
+	case SchemaAdvice, SchemaAdviceAnswer:
+		return true // host function planning enforces the source's read scope
 	case SchemaReason:
 		refs, _ := p.identity.Resolve(&pb.EntityRef{Type: DowntimeType, Id: s.GetTarget().GetId()})
 		return roleOf(who) == Supervisor || len(refs) > 0 && onLine(p.resourceLine(resourceOfEvent(refs[0].ID)))
@@ -258,7 +268,7 @@ func (p *Plant) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*p
 // are deliberately not opted in until their own state has a saved result.
 func (p *Plant) AcceptedLedger() *platform.Ledger { return p.ledger }
 func (*Plant) AcceptedActionSchemas() []string {
-	return []string{SchemaConfirm, SchemaAnswer, SchemaResend}
+	return []string{SchemaConfirm, SchemaAnswer, SchemaResend, SchemaAdvice, SchemaAdviceAnswer}
 }
 
 type releasePayload struct {
@@ -290,6 +300,8 @@ type reasonPayload struct {
 func (p *Plant) validate(who platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *kernel.Error) {
 	id := s.GetTarget().GetId()
 	switch s.GetSchema().GetName() {
+	case SchemaAdvice, SchemaAdviceAnswer:
+		return advice(who, s)
 	case SchemaRelease:
 		var r releasePayload
 		if json.Unmarshal(s.GetPayload(), &r) != nil || p.product(r.Product) == nil || r.Quantity < 1 || r.SFCs < 1 || r.SFCs > r.Quantity {
@@ -401,6 +413,7 @@ func Entities(p *Plant) []platform.Entity {
 	}
 	return []platform.Entity{
 		{Type: OrderType, Title: "Shop order", Model: Order{}, Synonyms: "work order,production order",
+			Derived: []platform.Derivation{{From: "adviceSources", Fields: []string{"advice", "adviceCategory", "adviceReview", "adviceSources"}}}, Withheld: "adviceWithheld",
 			Description: "An order released to the shop floor to make a quantity of a product; it is split into SFCs and confirmed to the ERP when its last SFC ends.",
 			Lifecycle: &platform.Lifecycle{Field: "status", Initial: "released",
 				States: []platform.State{{Name: "released", Title: "Released", Tone: "info"}, {Name: "completed", Title: "Completed", Tone: "success"}}}},
@@ -560,6 +573,7 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 // and the protocol it reaches an ERP through (ADR-0024).
 func (p *Plant) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "MES", Version: "1", Actions: p.ledger.Catalog, Queries: queries, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
+		Functions: []platform.AIFunction{platform.RecordAdviceFunction(OrderType, []string{"product", "quantity", "status"}, []string{string(Supervisor)})},
 		Pages: []platform.Page{{Name: "shop-orders", Title: "Shop orders", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: OrderType},
 			Layout: "list-detail", ListFields: []string{"product", "quantity", "status", "erp"},
 			DetailFields: []string{"product", "quantity", "status", "planned", "sfcs", "erp", "confirmation", "erpDetail"},

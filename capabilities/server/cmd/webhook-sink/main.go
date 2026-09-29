@@ -15,6 +15,7 @@
 //	                triage agent searches knowledge, triages a ticket as normal and
 //	                replies citing what it found; model "embed" embeds hashed words;
 //	                the plant's planner asks the supplier's agent, then answers
+//	                bounded record-advice requests get a fixed typed fixture (ADR-0043)
 //	POST /a2a       a supplier's agent over A2A 1.0 (card at /a2a/.well-known/agent-card.json):
 //	                every SendMessage gets a completed task with a lead time of 12 days
 package main
@@ -161,6 +162,15 @@ func main() {
 			return
 		}
 		last := req.Messages[len(req.Messages)-1].Content
+		// A deterministic fixture for the first typed function; it proves the
+		// real wire, validation and recovery path, not model reasoning quality.
+		if len(req.Tools) == 0 && len(req.Messages) == 2 && req.Messages[0].Role == "system" &&
+			strings.HasPrefix(req.Messages[0].Content, "Summarise only the provided record.") && json.Valid([]byte(last)) {
+			content, _ := json.Marshal(map[string]any{"summary": "Record: " + last, "category": "routine", "review": false})
+			json.NewEncoder(w).Encode(map[string]any{"model": "echo", "choices": []map[string]any{{"message": map[string]string{"role": "assistant", "content": string(content)}}},
+				"usage": map[string]int{"prompt_tokens": len(strings.Fields(last)), "completion_tokens": 20}})
+			return
+		}
 		if len(req.Tools) > 0 { // an agent (ADR-0021): read first, then propose the first ID read that the goal does not name
 			call := func(name string, args map[string]string) {
 				raw, _ := json.Marshal(args)

@@ -77,6 +77,7 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/ai-usage" | jq -c '.totals'
   for path in records/pms.reservation records/pms.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1 records/hcm.leave records/work.approval; do curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/$path"; done
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -c '[.[] | {id, bound}]'
+  curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/ai-usage" | jq -c '.totals'
   workflow_state; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
 
@@ -267,6 +268,14 @@ streamed=$(curl -s -N -H "Authorization: Bearer $SUP" -H 'Content-Type: applicat
 [[ $streamed == *"event: delta"*"echo: hi"*"event: done"* ]] || fail "streamed call: $streamed"
 echo "ok   AI providers: a local model server added and a model opened to ai users; an operator's call answered and metered, the assistant refused; past the operator's limit the call is refused; a call streams"
 
+# ADR-0043 24b: the same bounded declaration and model effect path advises a
+# real shop order. Advice never completes it or confirms production to ERP.
+AUTHORITY=platform submit "$SUP" fn-model platform.setting.set platform.setting ai/app-model '{"value":"local/echo"}' | jq -e .record >/dev/null || fail "plant function model"
+[[ $(submit "$OP1" fn-denied mes.order.advise mes.order WO-1 '{}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "operator called supervisor function"
+submit "$SUP" fn-order mes.order.advise mes.order WO-1 '{}' | jq -e .record >/dev/null || fail "order advice"
+for _ in $(seq 30); do [[ $(curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/mes.order/WO-1" | jq -r .record.adviceState) == ready ]] && break; sleep 0.5; done
+curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/records/mes.order/WO-1" | jq -e '.record | .adviceState == "ready" and .status == "released" and .adviceCategory == "routine" and .adviceModel == "local/echo" and (.adviceDefinition | length == 64) and (.adviceSources | length == 3)' >/dev/null || fail "typed order result"
+
 # Agents (ADR-0021): the confirmation flow's agent corrects a refused order. For
 # WO-4 (P-200, released without a planned order) the plant refuses; its agent,
 # on the local model, reads the planned orders and proposes MO-2; the
@@ -314,7 +323,7 @@ hosp crm "$SALES_TOKEN" s-b crm.opportunity.book crm.opportunity OPP-1 '{"roomTy
 [[ $(curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -r '.[] | select(.id == "lodging.booking/1") | "\(.bound) \(.consumers)"') == 'pms ["crm"]' ]] || fail "protocol binding"
 hosp platform "$MGR" s-r platform.member.revoke platform.member sales-1 '{"app":"pms"}' | jq -e .record >/dev/null || fail "revoke"
 catalog=$(curl -s -H "Authorization: Bearer $SALES_TOKEN" "$HOSPITALITY/v1/actions" | jq -c '[.[].schema | select(startswith("crm.") or startswith("pms."))]')
-[[ $catalog == '["crm.account.create","crm.account.edit","crm.account.archive","crm.opportunity.open","crm.opportunity.close","crm.opportunity.plan","crm.opportunity.answer"]' ]] || fail "catalog after revocation: $catalog"
+[[ $catalog == '["crm.account.create","crm.account.edit","crm.account.archive","crm.opportunity.advise","crm.opportunity.open","crm.opportunity.close","crm.opportunity.plan","crm.opportunity.answer"]' ]] || fail "catalog after revocation: $catalog"
 [[ $(hosp crm "$SALES_TOKEN" s-b2 crm.opportunity.book crm.opportunity OPP-1 '{"roomType":"standard","checkIn":"2026-10-05","checkOut":"2026-10-06","guest":"x"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "revoked member booked"
 # Outbound effects (ADR-0014): the administrator subscribes a webhook endpoint to
 # the protocol's cancellation; the cancellation below reaches the sink signed, once.
@@ -413,6 +422,11 @@ a2a=$(curl -s -H "Authorization: Bearer $MGR" -H 'A2A-Version: 1.0' -H 'Content-
   -d '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"messageId":"ext-1","role":"ROLE_USER","parts":[{"text":"Triage and answer ticket T-1 from anna@acme.test (account ACME).\nSubject: Wifi keeps dropping"}]}}}')
 [[ $(jq -r .result.task.status.state <<<"$a2a") == TASK_STATE_COMPLETED ]] || fail "A2A task: $a2a"
 echo "ok   CSM: summarised by the model for apps; published over A2A and answered a client outside; the triage agent found the house rules (knowledge, embedded on the local model), triaged and replied citing them; its transcripts kept; its reply's mail held, approved by the manager, and sent to the mail gateway"
+hosp crm "$SALES_TOKEN" fn-opportunity crm.opportunity.advise crm.opportunity OPP-1 '{}' | jq -e .record >/dev/null || fail "opportunity advice"
+[[ $(hosp crm "$SALES_TOKEN" fn-forged crm.opportunity.advice-answer crm.opportunity OPP-1 '{"outcome":"accepted","text":"{}"}' | jq -r .error.code) == ERROR_CODE_POLICY_DENIED ]] || fail "person forged a model reply"
+for _ in $(seq 30); do [[ $(records "$MGR" 'crm.opportunity/OPP-1' | jq -r .record.adviceState) == ready ]] && break; sleep 0.5; done
+records "$MGR" 'crm.opportunity/OPP-1' | jq -e '.record | .adviceState == "ready" and .stage == "open" and .adviceCategory == "routine" and .adviceModel == "local/echo" and (.adviceDefinition | length == 64) and (.adviceSources | length == 2)' >/dev/null || fail "typed opportunity result"
+echo "ok   typed AI functions: CRM opportunity and MES order use the shared bounded path; structured advice, sources, definition/model bindings and usage persist; business states stay unchanged; unauthorized calls and forged replies refused"
 workflow_setup "$MANUFACTURING" plant-sz "$SUP" "$OP1" sup-1 op-l1 plant
 workflow_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" manager-1 sales-1 hotel
 echo "ok   workflows: fixed isolated plans, exact releases, old/new native asks, incompatible dependency publication refused in both industries"

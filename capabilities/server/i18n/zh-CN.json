@@ -771,5 +771,18 @@
  "Choose one candidate action or workflow answer per test step": "每个测试步骤请选择一个候选动作或工作流答案",
  "Choose exactly one saved object or workflow draft for the test plan": "测试计划请选择且仅选择一个已保存对象或工作流草稿",
  "Step member ID (empty: plan member)": "步骤成员标识（留空：计划成员）",
- "Advance clock (seconds)": "推进时钟（秒）"
+ "Advance clock (seconds)": "推进时钟（秒）",
+	"AI functions require an accepted decision": "AI 函数需要已接受结果的决策",
+	"AI functions need an explicit authorised member": "AI 函数需要明确的受权成员",
+	"The AI function is not declared": "该 AI 函数未声明",
+	"This member cannot call the AI function": "该成员无权调用此 AI 函数",
+	"The AI function needs an automatic reply on its source object": "AI 函数需要源对象上的自动回执动作",
+	"The AI function source is not readable": "AI 函数的源记录不可读取",
+	"The AI function input exceeds its byte budget": "AI 函数的输入超过字节预算",
+	"The AI function definition cannot be bound": "无法绑定 AI 函数定义",
+	"The AI function dependencies cannot be bound": "无法绑定 AI 函数依赖",
+	"The AI function needs a bound model": "AI 函数需要已绑定的模型",
+	"The saved model request is invalid": "保存的模型请求无效",
+	"The AI function input is no longer authorised": "AI 函数的输入已不再获得授权",
+	"The AI function answer failed its type or budget checks": "AI 函数的回答未通过类型或预算检查"
 }

@@ -64,4 +64,14 @@
 
 `TestAcceptedModelDefaultIsPinnedBeforeDispatch` 使用实际设置/模型动作和本地 OpenAI 线路替身，覆盖默认、显式覆盖及无默认三种输入；改设置后的派发、禁用后的拒绝、待派发快照/重放以及回答/Reply/用量结果恢复。`TestAcceptedModelRequestsPersistWithoutCallingProvider` 与既有模型结果/用量故障测试继续通过；未扩大直接 Chat、Agent 步骤或评估的保存边界。
 
-当前树运行 `scripts/verify.sh format capabilities composition deploy` 全部通过。新一轮 `deploy/local/rehearse.sh` 在一次性项目内完成实际 CSM 模型请求、酒店/制造快照重启、新 PostgreSQL 卷备份恢复、应用输入崩溃恢复、隔离租户原地重建和原生流程旧/新任务继续；这不是新增类型化函数的双行业旅程证明。该批未改 Web、未执行新浏览器/真实模型质量或负责人体验验收。24b–24c 仍未实现。
+该检查点运行 `scripts/verify.sh format capabilities composition deploy` 全部通过。一次性项目完成实际 CSM 模型请求、酒店/制造快照重启、新 PostgreSQL 卷备份恢复、应用输入崩溃恢复、隔离租户原地重建和原生流程旧/新任务继续；这不是新增类型化函数的双行业旅程证明。24a 未改 Web，也未执行新浏览器/真实模型质量或负责人体验验收；当时 24b–24c 尚未实现。
+
+**24b：受权类型化函数与双行业代码探针（2026-09-29）。** `platform/function.go` 的 `AIFunction` 定义直接标量来源、提示词、严格输出字段、角色和输入/输出字节与输出 Token 上限；`Manifest.Functions` 注册为 `AssetFunction`，沿既有代码描述符与候选闭包绑定源对象，不新增执行器或日志类别。`Caller.RequestFunction` 仅在启用受限接受结果的动作中规划意图；同对象自动 Reply 防止人员伪造回答。当前仅支持显式人员、本应用单条记录的非派生标量字段，不支持 Flow 自动化代人调用、关系/知识检索或工具调用。
+
+宿主 `function.go` 在暂存记录库按成员源记录/字段和函数角色读取输入；调用拒绝使整个暂存决定失败。既有 `modelAsk` 保存完整函数声明、接受时输入、人员、来源、定义/依赖闭包/输入摘要及模型。派发重查当前来源权限、模型启用与应用限额，不以新代码提示词或当前记录数据替换已接受输入。输出只接受一份有界 JSON 对象，未知/重复键、缺失必填字段、null、类型强转、非法选择值、工具调用及报告的输出 Token 超限都拒绝。实际模型回答及其用量仍沿 `acceptedEffect` 和自动 Reply 一起保存；非法回答只保存拒绝及已消耗用量。输入/输出字节是平台强制界限，Token 上限传给提供商并核查其报告，不证明上游未报告的消耗。
+
+共享 `RecordAdviceFunction`/`RecordAdvice` 被 CRM 商机（标题、阶段）和 MES 工单（产品、数量、状态）通过相同规范调用路径采用；两者是各应用拥有的声明，不是已发布的全局函数资产。它们仅保存建议和定义/模型/来源标识，声明 `Entity.Derived`/`Withheld` 由宿主按读者当前来源权限收窄输出；商机仍开放，工单仍待生产，业务决定通过原有动作进行。
+
+`TestFunctionOutputIsStrictAndBounded`/`TestFunctionScalarNumbersDoNotCoerce` 验证输出语义；`TestAIFunctionUsesAcceptedInputAndStrictOutput` 覆盖记录/租户拒绝、提交与结算追加失败、输入改变与代码提示词升级后的旧待发请求、非法回答、输出预算、来源授权撤销及结果 `CheckReplay`；`TestAIFunctionRefusalsAndModelGates` 覆盖私有字段、输入超限、无模型、禁用及应用配额；`TestAIFunctionDiscoveryAndDependencyBinding` 覆盖按源字段授权的发现和完整候选依赖。`TestTypedFunctionOnOpportunity`/`TestTypedFunctionOnOrder` 在实际行业装配中通过替身线路取得结构化建议，核查业务状态未变、自动 Reply 不可伪造、待发与已完成 `CheckReplay`，恢复不请求模型。
+
+当前树执行 `scripts/verify.sh format capabilities mes composition web deploy` 通过；新增函数边界测试另通过 `go test -race`。部署演练以实际 OIDC 身份和本地模型替身完成两行业建议调用，来源/定义/模型/回答与用量纳入快照重启、新 PostgreSQL 卷备份恢复及隔离后全量重建比较；同轮 PostgreSQL 条件测试 `TestJournalAcceptedFunctionCrashBeforeApplication` 在回答结果追加后、应用前注入崩溃，证明回答、自动 Reply 与用量一同恢复且不重新调用模型。`web` 验证现有路线，未新增或人工走通函数 UI；模型替身只验证协议与治理，不验证真实模型质量。代码升级探针只修改提示词，源对象和 Reply 保持兼容；不兼容数据类别/Reply 迁移及完整客户升级矩阵仍属于 #136 的交付边界。24c 的 Build 编写、固定案例评测、页面/Flow 显式绑定及测试→候选发布旅程仍未实现；负责人体验未验收。

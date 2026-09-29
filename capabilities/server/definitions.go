@@ -162,6 +162,33 @@ func (t *Tenant) registerDefinitions() error {
 				return err
 			}
 		}
+		for _, function := range manifest.Functions {
+			f := function
+			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetFunction, Name: f.Name}
+			if err := f.Check(); err != nil {
+				return err
+			}
+			object, ok := objects[f.Object]
+			if !ok || object.App != manifest.ID {
+				return fmt.Errorf("asset %s needs its owner's source object", ref)
+			}
+			for _, role := range f.Roles {
+				if !slices.Contains(manifest.AllRoles(), role) {
+					return fmt.Errorf("asset %s names an undeclared role", ref)
+				}
+			}
+			for _, name := range f.Fields {
+				field, ok := objectInfo[f.Object].Field(name)
+				if !ok || !slices.Contains([]string{"text", "longtext", "choice", "integer", "decimal", "boolean"}, field.Type) ||
+					slices.Contains(t.narrowable(t.records.types[f.Object]), name) {
+					return fmt.Errorf("asset %s needs direct scalar source fields", ref)
+				}
+			}
+			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
+				Requires: []platform.AssetRef{object}, Function: &f}); err != nil {
+				return err
+			}
+		}
 	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return nil
@@ -212,6 +239,17 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			}
 			if _, ok := entities[def.Query.Object]; !ok {
 				continue // it reads an object this member does not
+			}
+		case platform.AssetFunction:
+			if def.Function == nil || !slices.Contains(def.Function.Roles, m.Roles[def.Ref.App]) {
+				continue
+			}
+			info, ok := entities[def.Function.Object]
+			if !ok || slices.ContainsFunc(def.Function.Fields, func(name string) bool {
+				_, found := info.Field(name)
+				return !found
+			}) {
+				continue
 			}
 		case platform.AssetPage:
 			if m.Roles[def.Ref.App] == "" || def.Page == nil {

@@ -494,11 +494,12 @@ const modelEndpoint = "model"
 
 // modelAsk is a model request as the outbound queue keeps it.
 type modelAsk struct {
-	Model  string          `json:"model"`
-	Prompt platform.Prompt `json:"prompt"`
-	Reply  string          `json:"reply"`
-	Record string          `json:"record"` // the decision's target, "<type>/<id>", which the reply is on
-	Call   string          `json:"call"`
+	Model    string           `json:"model"`
+	Prompt   platform.Prompt  `json:"prompt"`
+	Reply    string           `json:"reply"`
+	Record   string           `json:"record"` // the decision's target, "<type>/<id>", which the reply is on
+	Call     string           `json:"call"`
+	Function *functionBinding `json:"function,omitempty"`
 }
 
 func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
@@ -542,7 +543,19 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, *ai.Usage) {
 	out := platform.Outcome{Effect: x.ID}
 	var ask modelAsk
-	json.Unmarshal([]byte(x.Body), &ask)
+	if json.Unmarshal([]byte(x.Body), &ask) != nil {
+		out.Result, out.Detail = "rejected", "The saved model request is invalid"
+		return out, nil
+	}
+	if ask.Function != nil {
+		t.mu.Lock()
+		allowed := t.functionAllowed(x.App, ask, now)
+		t.mu.Unlock()
+		if !allowed {
+			out.Result, out.Detail = "rejected", "The AI function input is no longer authorised"
+			return out, nil
+		}
+	}
 	model := ask.Model
 	if model == "" {
 		out.Result, out.Detail = "rejected", "no model is set for apps"
@@ -578,6 +591,10 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "rejected", failure.Detail
 	default:
 		out.Result, out.Answer = "delivered", json.RawMessage(strconv.Quote(answer.Content))
+		if ask.Function != nil && (len(answer.ToolCalls) != 0 || answer.Usage.Output > ask.Function.Definition.MaxTokens ||
+			ask.Function.Definition.ValidateOutput([]byte(answer.Content)) != nil) {
+			out.Result, out.Detail, out.Answer = "rejected", "The AI function answer failed its type or budget checks", nil
+		}
 	}
 	return out, &answer.Usage
 }

@@ -3,6 +3,21 @@
 import type { AuthorityDeclarationJson } from "./platform/kernel/v1alpha1/authority_pb";
 import type { ChangeRecordJson, SubmissionJson } from "./platform/kernel/v1alpha1/change_pb";
 
+export type AIFunction = {
+  name: string;
+  title: string;
+  description: string;
+  object: string;
+  fields: string[];
+  instructions: string;
+  output: Field[];
+  model?: string;
+  maxInputBytes: number;
+  maxOutputBytes: number;
+  maxTokens: number;
+  roles: string[];
+};
+
 export type AIUsage = {
   calls: Usage[];
   totals: Total[];
@@ -308,6 +323,7 @@ export type Definition = {
   page?: Page;
   application?: Application;
   query?: NamedQuery;
+  function?: AIFunction;
 };
 
 export type Delivery = {

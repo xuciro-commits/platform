@@ -81,6 +81,16 @@ func (t *Tenant) releaseAssetsLocked(builderAssets []platform.ReleaseAsset, repl
 				}
 				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
 					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+			case platform.AssetFunction:
+				if def.Function == nil {
+					return nil, fmt.Errorf("code function %s has no owner declaration", def.Ref)
+				}
+				body, err := json.Marshal(def.Function)
+				if err != nil {
+					return nil, err
+				}
+				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
+					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
 			case platform.AssetPage:
 				if def.Page == nil {
 					return nil, fmt.Errorf("code page %s has no owner declaration", def.Ref)

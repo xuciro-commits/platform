@@ -81,7 +81,20 @@ go run ./cmd/new-app -id purchasing -entity request -title "Purchase request" -z
 
 在应用的业务规则执行之前，目录层会首先对调用者角色进行权限拦截；被拒绝的动作绝不会在系统中留下半截脏状态。需要生成不跳号连号单据的业务模型，可在其 Manifest 清单中声明 `platform.Sequence`，并在决策应用的提交函数中通过 `Caller.Next` 申请流水号，严禁在预检规则中提前取号，从而保证被拒绝的请求绝对不消耗连号配额（例如 `apps/erp` 的会计凭证号、`apps/csm` 的工单号）。AI 智能体、MCP 客户端与前端交互表单调用的是完全相同的动作入口。
 
-应用请求模型仍使用 `Caller.Request`，Payload 为 `platform.Prompt`、Reply 为本应用的回执动作。显式 `Model` 或空值对应的 `ai/app-model` 在接受决策时固定（ADR-0043 24a）；后来设置改变不改写旧请求，禁用原模型仍会拒绝尚未派发的调用。接受时没有模型则请求保持无绑定并拒绝，不能在后来补配置使旧请求自动执行。这条代码接口尚不等于可复用的类型化 AI 函数或 AI 编写器。
+应用的普通模型请求仍使用 `Caller.Request`，Payload 为 `platform.Prompt`、Reply 为本应用的回执动作。显式 `Model` 或空值对应的 `ai/app-model` 在接受决策时固定（ADR-0043 24a）；后来设置改变不改写旧请求，禁用原模型仍会拒绝尚未派发的调用。接受时没有模型则普通请求保持无绑定并拒绝，不能在后来补配置使旧请求自动执行。
+
+**类型化 AI 函数代码路径 (Typed AI function code path, ADR-0043 24b)。** 在清单 `Functions` 声明 `platform.AIFunction`，指定本应用对象的直接标量输入字段、具名输出类型、允许角色、提示词及输入/输出字节和输出 Token 上限。复用记录建议声明的例子：
+
+```go
+Functions: []platform.AIFunction{
+    platform.RecordAdviceFunction(OrderType,
+        []string{"product", "quantity", "status"}, []string{string(Supervisor)}),
+},
+```
+
+人员通过普通动作发起调用。在受限结果动作的 apply 回调里执行 `call, err := c.RequestFunction(r, "record-advice", SchemaAdviceAnswer)`；声明的 Reply 必须是同对象的 `Automation: true` 动作，人员不能伪造回答。调用拒绝使整个暂存决定失败，即使回调忽略错误也不能保存半截意图。当前要求启用 `AcceptResult` 的宿主、显式人员和已绑定模型；自动化/Flow 代人调用尚不支持。声明外字段、非标量或派生输入在注册时拒绝；源记录和字段在接受时及派发前按当前权限检查。
+
+`FunctionCall` 返回定义/依赖闭包/输入摘要、模型标识和来源引用，不返回私有输入字节。应用把 `Sources` 与建议字段一并存回记录，并用 `Entity.Derived`/`Withheld` 声明读取时的来源检查。严格 JSON 输出通过后，宿主沿已有模型效果/Reply 路径保存回答与用量；Reply 采用 `platform.RecordAdvice`，由人员继续通过原有业务动作决定。完整示例为 [CRM](../apps/crm/server/advice.go) 与 [MES](../apps/mes/server/advice.go)。Build 函数编写器、固定评测和页面/Flow 的显式函数绑定仍未交付；来源范围当前仅为本应用单条记录的直接标量字段。
 
 ## 4. 声明流程
 

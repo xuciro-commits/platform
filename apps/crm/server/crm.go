@@ -68,14 +68,22 @@ type Opportunity struct {
 	// The group's block (ADR-0026 D6), as a hotel sales system keeps it: planned
 	// rooms are held until a cutoff date; won, they are confirmed; lost, or past
 	// the cutoff, they are released.
-	Rooms    int    `json:"rooms,omitempty" field:"readonly" title:"Group rooms"`
-	RoomType string `json:"roomType,omitempty" field:"readonly" title:"Room type"`
-	Arrive   string `json:"arrive,omitempty" field:"readonly" type:"date"`
-	Depart   string `json:"depart,omitempty" field:"readonly" type:"date"`
-	Cutoff   string `json:"cutoff,omitempty" field:"readonly" type:"date" help:"The last day the rooms are held without being confirmed"`
-	Block    string `json:"block,omitempty" field:"readonly" title:"Group block" choices:"holding,held,confirming,confirmed,releasing,released,failed" help:"Where the group's rooms stand with the provider"`
-	Plans    int    `json:"plans,omitempty" field:"readonly"` // how many blocks were planned: the current one's rooms carry its number
-	Stays    []Stay `json:"stays" field:"readonly" title:"Rooms and stays"`
+	Rooms            int      `json:"rooms,omitempty" field:"readonly" title:"Group rooms"`
+	RoomType         string   `json:"roomType,omitempty" field:"readonly" title:"Room type"`
+	Arrive           string   `json:"arrive,omitempty" field:"readonly" type:"date"`
+	Depart           string   `json:"depart,omitempty" field:"readonly" type:"date"`
+	Cutoff           string   `json:"cutoff,omitempty" field:"readonly" type:"date" help:"The last day the rooms are held without being confirmed"`
+	Block            string   `json:"block,omitempty" field:"readonly" title:"Group block" choices:"holding,held,confirming,confirmed,releasing,released,failed" help:"Where the group's rooms stand with the provider"`
+	Plans            int      `json:"plans,omitempty" field:"readonly"` // how many blocks were planned: the current one's rooms carry its number
+	Stays            []Stay   `json:"stays" field:"readonly" title:"Rooms and stays"`
+	Advice           string   `json:"advice,omitempty" field:"readonly" title:"Review advice"`
+	AdviceCategory   string   `json:"adviceCategory,omitempty" field:"readonly" title:"Advice category" choices:"routine,review"`
+	AdviceReview     bool     `json:"adviceReview,omitempty" field:"readonly" title:"Needs review"`
+	AdviceState      string   `json:"adviceState,omitempty" field:"readonly" title:"Advice status" choices:"pending,ready,rejected"`
+	AdviceDefinition string   `json:"adviceDefinition,omitempty" field:"readonly" title:"Advice definition"`
+	AdviceModel      string   `json:"adviceModel,omitempty" field:"readonly" title:"Advice model"`
+	AdviceSources    []string `json:"adviceSources,omitempty" field:"readonly,aside" title:"Advice sources"`
+	AdviceWithheld   bool     `json:"adviceWithheld,omitempty" field:"readonly" title:"Advice withheld"`
 }
 
 // Stay is one room the opportunity asked of the lodging provider: held for the
@@ -100,6 +108,7 @@ func Entities() []platform.Entity {
 			Description: "A customer the company sells to: an organisation or a person.",
 			Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: both, Capability: "accounts"}},
 		{Type: OpportunityType, Title: "Opportunity", Model: Opportunity{}, Synonyms: "deal,lead",
+			Derived: []platform.Derivation{{From: "adviceSources", Fields: []string{"advice", "adviceCategory", "adviceReview", "adviceSources"}}}, Withheld: "adviceWithheld",
 			Description: "A chance to sell something to an account, followed until it is won or lost; stays for a group can be booked through the lodging protocol.",
 			Scope:       platform.Scope{Owner: "owner", Levels: map[string]string{string(Sales): platform.ScopeOwn}},
 			Standard:    platform.Standard{Edit: true, Roles: []string{string(Manager)}, Capability: "opportunities"}},
@@ -109,7 +118,7 @@ func Entities() []platform.Entity {
 // Actions is the CRM catalog (ADR-0008).
 func Actions() *platform.Catalog {
 	both := []string{string(Sales), string(Manager)}
-	return platform.NewCatalog(append(append(platform.EntityActions(Entities()[0]), platform.EntityActions(Entities()[1])...),
+	return platform.NewCatalog(append(append(append(platform.EntityActions(Entities()[0]), platform.EntityActions(Entities()[1])...), adviceActions()...),
 		platform.Action{Schema: SchemaOpen, Target: OpportunityType, New: true, Capability: "opportunities", Title: "Open opportunity",
 			Description: "Open a sales opportunity for an account; the caller owns it.",
 			Payload: []platform.Field{{Name: "account", Type: "string", Required: true, Description: "Account ID", Ref: AccountType},
@@ -182,6 +191,8 @@ func (c *CRM) Submit(who platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			asks = append(asks, platform.Request{Protocol: lodging.ID, Action: action, Target: booking, Payload: payload, Reply: SchemaAnswer})
 		}
 		switch s.GetSchema().GetName() {
+		case SchemaAdvice, SchemaAdviceAnswer:
+			return advice(who, s, o)
 		case SchemaOpen:
 			if known {
 				return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
@@ -415,6 +426,7 @@ func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) 
 
 func (c *CRM) Manifest() platform.Manifest {
 	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(), Queries: queries,
+		Functions: []platform.AIFunction{platform.RecordAdviceFunction(OpportunityType, []string{"title", "stage"}, []string{string(Sales), string(Manager)})},
 		Pages: []platform.Page{{Name: "opportunities", Title: "Opportunities", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: OpportunityType},
 			Layout: "list-detail", ListFields: []string{"title", "account", "stage", "rooms"},
 			DetailFields: []string{"title", "account", "owner", "stage", "margin", "rooms", "roomType", "arrive", "depart", "cutoff", "block", "stays"},

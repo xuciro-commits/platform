@@ -22,7 +22,8 @@ const (
 	// pages and agent tools run the same declaration.
 	AssetQuery AssetKind = "query"
 	// AssetFlow is a versioned definition executed by the existing flow app.
-	AssetFlow AssetKind = "flow"
+	AssetFlow     AssetKind = "flow"
+	AssetFunction AssetKind = "function"
 )
 
 // NamedQuery reads records of one object: fixed conditions, and optionally
@@ -51,7 +52,7 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery && r.Kind != AssetFlow {
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery && r.Kind != AssetFlow && r.Kind != AssetFunction {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -170,4 +171,5 @@ type Definition struct {
 	Page            *Page        `json:"page,omitempty"`
 	Application     *Application `json:"application,omitempty"`
 	Query           *NamedQuery  `json:"query,omitempty"`
+	Function        *AIFunction  `json:"function,omitempty"`
 }

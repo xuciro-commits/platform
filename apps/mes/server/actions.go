@@ -12,7 +12,7 @@ func Actions() *platform.Catalog {
 		}
 		return out
 	}
-	return platform.NewCatalog(append(append([]platform.Action{
+	return platform.NewCatalog(append(append(append(adviceActions(), []platform.Action{
 		{Schema: SchemaRelease, Target: OrderType, New: true, Capability: "orders", Title: "Release shop order",
 			Description: "Release a shop order for a product; it splits into SFCs that start at the routing's first operation. Name the ERP planned order it fulfils.",
 			Payload: []platform.Field{{Name: "product", Type: "string", Required: true, Description: "Product ID"},
@@ -20,7 +20,7 @@ func Actions() *platform.Catalog {
 				{Name: "sfcs", Type: "integer", Required: true, Description: "Number of SFCs (lots), at most the quantity"},
 				{Name: "planned", Type: "string", Description: "ERP planned order ID"}},
 			Roles: roles(Supervisor)},
-	}, platform.EntityActions(Entities(nil)[1])...),
+	}...), platform.EntityActions(Entities(nil)[1])...),
 		platform.Action{Schema: SchemaReason, Target: DowntimeType, Capability: "downtime-reasons", Title: "Assign downtime reason",
 			Description: "Assign the reason of a downtime event on a resource of your lines.",
 			Payload: []platform.Field{{Name: "reason", Type: "string", Required: true, Description: "Tool change, Setup, Material shortage, Breakdown or Quality issue",
