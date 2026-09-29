@@ -560,7 +560,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 }
 
 func (f *Flows) run(x *FlowInstance) *platform.Run {
-	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, OnBehalf: x.OnBehalf, Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
+	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, OnBehalf: x.OnBehalf, Release: x.Release, Sequence: x.Seq, Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
 }
 
 // Read "flows": the declared flows, for the workspace to draw.

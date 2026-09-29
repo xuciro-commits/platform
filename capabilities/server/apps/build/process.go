@@ -39,16 +39,18 @@ type Process struct {
 	Versions  []string `json:"versions,omitempty" field:"readonly" title:"Published versions"`
 }
 
-// ProcessStep asks a role (Ask, with its Answers) or takes an action (Act).
+// ProcessStep asks a role (Ask, with its Answers), takes an action (Act),
+// or calls a retained function version through a native action and wait.
 // Next is the default path; Branches maps an allowed answer to a named step.
 type ProcessStep struct {
-	Name     string            `json:"name" help:"Lower-case letters and digits" example:"check"`
-	Title    string            `json:"title,omitempty" title:"What people read" example:"Check the visit"`
-	Ask      string            `json:"ask,omitempty" title:"Asks the role" help:"A role of the builder app" example:"user"`
-	Answers  []string          `json:"answers,omitempty" help:"What the person may answer"`
-	Act      string            `json:"act,omitempty" title:"Takes the action" help:"An action of the object, by its name" example:"approve"`
-	Next     string            `json:"next,omitempty" help:"The step after it; empty: the process ends"`
-	Branches map[string]string `json:"branches,omitempty" title:"Answer branches"`
+	Name     string                `json:"name" help:"Lower-case letters and digits" example:"check"`
+	Title    string                `json:"title,omitempty" title:"What people read" example:"Check the visit"`
+	Ask      string                `json:"ask,omitempty" title:"Asks the role" help:"A role of the builder app" example:"user"`
+	Answers  []string              `json:"answers,omitempty" help:"What the person may answer"`
+	Act      string                `json:"act,omitempty" title:"Takes the action" help:"An action of the object, by its name" example:"approve"`
+	Function *platform.FunctionRef `json:"function,omitempty" title:"Published AI function"`
+	Next     string                `json:"next,omitempty" help:"The step after it; empty: the process ends"`
+	Branches map[string]string     `json:"branches,omitempty" title:"Answer branches"`
 }
 
 func (b *Build) processEntity() platform.Entity {
@@ -150,9 +152,33 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 			readable[role] = true
 		}
 	}
+	functionVersions := map[string]int{}
 	for _, step := range p.Steps {
-		if (step.Ask == "") == (step.Act == "") {
-			return refuse("The process step {step} must ask a role or take an action", step.Name)
+		kinds := 0
+		if step.Ask != "" {
+			kinds++
+		}
+		if step.Act != "" {
+			kinds++
+		}
+		if step.Function != nil {
+			if version := functionVersions[step.Function.Name]; version != 0 && version != step.Function.Version {
+				return refuse("A process must use one retained version of each function")
+			}
+			functionVersions[step.Function.Name] = step.Function.Version
+			kinds++
+		}
+		if kinds != 1 {
+			return refuse("The process step {step} must ask a role, take an action or call a function", step.Name)
+		}
+		if step.Function != nil {
+			f, _, ok := b.FunctionDefinition(step.Function.Name, step.Function.Version)
+			if !ok || step.Function.Version < 1 || f.Object != p.Object {
+				return refuse("The process function must name a retained version on its source object")
+			}
+			if len(step.Answers) != 0 || len(step.Branches) != 0 {
+				return refuse("Only an ask step may declare answers and branches")
+			}
 		}
 		if step.Ask != "" && !readable[step.Ask] {
 			return refuse("The process role {role} must read all records of its object", step.Ask)
@@ -241,6 +267,33 @@ func flowOf(p Process) platform.Flow {
 					return next, r.Answer
 				}
 			}
+		} else if s.Function != nil {
+			// A function step is two ordinary native steps: accept the request,
+			// then wait for its durable reply. The call key includes the native
+			// sequence so loops make new calls while retries keep the same one.
+			function := *s.Function
+			wait := "_function_" + s.Name
+			step.Next = wait
+			step.Act = &platform.Act{Action: SchemaFunctionCall,
+				Target: func(_ platform.Caller, r *platform.Run) string {
+					return fmt.Sprintf("%s:%s:%d", r.ID, s.Name, r.Sequence)
+				},
+				Payload: func(_ platform.Caller, r *platform.Run) any {
+					return platform.FunctionRequest{Name: function.Name, Version: function.Version, Source: r.Key, OnBehalf: r.OnBehalf, Release: &r.Release}
+				},
+				Done: func(_ platform.Caller, r *platform.Run, target *pb.EntityRef) {
+					calls := platform.DataOf[map[string]string](r)
+					if calls == nil {
+						calls = map[string]string{}
+					}
+					calls[s.Name] = target.GetId()
+					r.Set(calls)
+				}}
+			fl.Steps = append(fl.Steps, step)
+			step = platform.Step{Name: wait, Title: cmp.Or(s.Title, s.Name), Next: s.Next, Wait: &platform.Wait{Until: func(c platform.Caller, r *platform.Run) bool {
+				call, ok := platform.Get[FunctionRun](c, platform.DataOf[map[string]string](r)[s.Name])
+				return ok && (call.State == "ready" || call.State == "rejected")
+			}}}
 		} else {
 			step.Act = &platform.Act{Action: p.Object + "." + s.Act,
 				Target: func(_ platform.Caller, r *platform.Run) string { return r.Key }}

@@ -136,11 +136,11 @@ func (b *Build) installFunction(c platform.Caller, f Function) error {
 
 func (b *Build) FunctionDefinition(name string, version int) (platform.AIFunction, int, bool) {
 	installed, ok := b.functions[name]
-	if !ok {
-		return platform.AIFunction{}, 0, false
-	}
-	if version == 0 || version == installed.Version {
+	if ok && (version == 0 || version == installed.Version) {
 		return installed.definition(), installed.Version, true
+	}
+	if version == 0 {
+		return platform.AIFunction{}, 0, false
 	}
 	list, err := b.functionInventory()
 	if err != nil {

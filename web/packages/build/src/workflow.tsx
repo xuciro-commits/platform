@@ -5,7 +5,7 @@ import { Button, Card, Input, NodeCanvas, PageHeader, Panel, RecordList, Select,
   type CanvasEdge, type CanvasNode, type NodeCatalog } from "@platform/ui";
 import { useEffect, useState } from "react";
 
-export type WorkflowStep = { name: string; title?: string; ask?: string; answers?: string[]; act?: string; next?: string; branches?: Record<string, string> };
+export type WorkflowStep = { name: string; title?: string; ask?: string; answers?: string[]; act?: string; function?: { name: string; version: number }; next?: string; branches?: Record<string, string> };
 export type WorkflowDraft = { id: string; revision: number; name: string; title: string; object: string; when: string; steps: WorkflowStep[]; version?: number; published?: string };
 export type WorkflowObject = { id: string; name: string; title: string; published?: string; states?: { name: string; title: string }[];
   actions?: { name: string; title: string; inputs?: { required?: boolean }[]; approval?: unknown }[]; access?: { role: string; read: string }[] };
@@ -18,6 +18,7 @@ export function installedObjects<T extends WorkflowObject>(records: T[]): T[] {
     catch { return []; }
   });
 }
+type WorkflowFunction = { name: string; title: string; object: string; version: number; versions?: string[] };
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", steps: [] });
 const nextName = (steps: WorkflowStep[], base: string) => {
   let name = base, n = 2;
@@ -40,6 +41,7 @@ export function WorkflowEditor({ id }: { id: string }) {
   const { decide, role } = useHost();
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
+  const functionRecords = useRecordInventory<WorkflowFunction>("build.function");
   const sources = useRecordInventory<WorkflowObject>("build.object");
   const objects = installedObjects(sources.data?.records ?? []).filter((object) => object.states?.length);
   const [draft, setDraft] = useState<WorkflowDraft>(empty);
@@ -49,6 +51,9 @@ export function WorkflowEditor({ id }: { id: string }) {
   const [error, setError] = useState("");
   useEffect(() => { if (query.data?.record && !dirty) setDraft(query.data.record); }, [query.data, dirty]);
   const object = objects.find((o) => `build.${o.name}` === draft.object);
+  const functions = (functionRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
+    try { const version = JSON.parse(raw) as WorkflowFunction; return version.object === draft.object ? [version] : []; } catch { return []; }
+  }));
   const actions = (object?.actions ?? []).filter((a) => !a.approval && !a.inputs?.some((input) => input.required));
   const roles = [...new Set(["builder", ...(object?.access?.length ? object.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])])];
   // Authoring hints only; the owner compiler remains the publication gate.
@@ -58,17 +63,17 @@ export function WorkflowEditor({ id }: { id: string }) {
   if (!draft.steps.length) issues.push(t("Add at least one human task or object action."));
   if (draft.steps.some((s) => !named(s.name)) || new Set(draft.steps.map((s) => s.name)).size !== draft.steps.length)
     issues.push(t("Each step needs a unique lower-case name."));
-  if (draft.steps.some((s) => s.ask !== undefined ? !roles.includes(s.ask) : !actions.some((a) => a.name === s.act)))
-    issues.push(t("Choose a readable human role or supported object action."));
+  if (draft.steps.some((s) => s.ask !== undefined ? !roles.includes(s.ask) : s.function ? !functions.some((f) => f.name === s.function?.name && f.version === s.function.version) : !actions.some((a) => a.name === s.act)))
+    issues.push(t("Choose a readable human role, supported object action or retained function version."));
   if (draft.steps.some((s) => s.answers?.some((answer) => !answer.trim()) || new Set(s.answers ?? []).size !== (s.answers?.length ?? 0)))
     issues.push(t("Human answers must be nonempty and unique."));
   if (draft.steps.some((s) => (s.next && !draft.steps.some((to) => to.name === s.next)) || Object.entries(s.branches ?? {}).some(([answer, to]) => !s.answers?.includes(answer) || !draft.steps.some((step) => step.name === to))))
     issues.push(t("Choose an existing step for every path."));
   const change = (patch: Partial<WorkflowDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); };
   const update = (patch: Partial<WorkflowStep>) => change({ steps: draft.steps.map((step, i) => i === chosen ? { ...step, ...patch } : step) });
-  const add = (kind: "ask" | "act") => {
-    const step: WorkflowStep = { name: nextName(draft.steps, kind === "ask" ? "review" : "action"), title: kind === "ask" ? t("Human task") : t("Object action"),
-      ...(kind === "ask" ? { ask: "user", answers: ["approve", "reject"] } : { act: actions[0]?.name ?? "" }) };
+  const add = (kind: "ask" | "act" | "function") => {
+    const step: WorkflowStep = { name: nextName(draft.steps, kind === "ask" ? "review" : kind === "function" ? "infer" : "action"), title: kind === "ask" ? t("Human task") : kind === "function" ? t("Call AI function") : t("Object action"),
+      ...(kind === "ask" ? { ask: "user", answers: ["approve", "reject"] } : kind === "function" ? { function: { name: functions[0]?.name ?? "", version: functions[0]?.version ?? 1 } } : { act: actions[0]?.name ?? "" }) };
     setChosen(draft.steps.length); change({ steps: [...draft.steps, step] });
   };
   const save = async (): Promise<number | undefined> => {
@@ -119,7 +124,7 @@ export function WorkflowEditor({ id }: { id: string }) {
     {dirty && <Panel role="status" className="text-xs">{t("Not saved yet. Publishing saves first.")}</Panel>}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {(dirty || draft.id) && issues.length > 0 && <Panel className="text-xs text-danger" aria-live="polite">{issues.join(" ")}</Panel>}
-    {sources.isError && <Panel role="alert">{t("The workflow sources could not be loaded.")}</Panel>}
+    {(sources.isError || functionRecords.isError) && <Panel role="alert">{t("The workflow sources could not be loaded.")}</Panel>}
     <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-[14rem_minmax(0,1fr)_20rem]">
       <Panel role="region" aria-label={t("Workflow steps")} className="grid content-start gap-2 p-3">
         <Button variant={chosen === -1 ? "primary" : "ghost"} onClick={() => setChosen(-1)}>{t("Workflow settings")}</Button>
@@ -127,6 +132,7 @@ export function WorkflowEditor({ id }: { id: string }) {
         {draft.steps.map((s, i) => <Button key={i} variant={chosen === i ? "primary" : "ghost"} onClick={() => setChosen(i)}>{i + 1}. {s.title || s.name}</Button>)}
         <Button onClick={() => add("ask")}>{t("Add human task")}</Button>
         <Button disabled={!actions.length} onClick={() => add("act")}>{t("Add object action")}</Button>
+        <Button disabled={!functions.length} onClick={() => add("function")}>{t("Add AI function")}</Button>
       </Panel>
       <div className="min-w-0" role="region" aria-label={t("Workflow map")}>
         {issues.includes(t("Each step needs a unique lower-case name."))
@@ -150,9 +156,10 @@ export function WorkflowEditor({ id }: { id: string }) {
               next: s.next === old ? name : s.next, branches: Object.fromEntries(Object.entries(s.branches ?? {}).map(([answer, to]) => [answer, to === old ? name : to])) })) });
           }} /></label>
           <label className="grid gap-1 text-xs">{t("Step title")}<Input value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} /></label>
-          <label className="grid gap-1 text-xs">{t("Step kind")}<Select value={step.ask !== undefined ? "ask" : "act"} onChange={(e) => update(e.target.value === "ask"
-            ? { ask: "user", answers: ["approve", "reject"], act: undefined } : { act: actions[0]?.name ?? "", ask: undefined, answers: undefined, branches: undefined })}>
-            <option value="ask">{t("Human task")}</option><option value="act">{t("Object action")}</option></Select></label>
+          <label className="grid gap-1 text-xs">{t("Step kind")}<Select value={step.ask !== undefined ? "ask" : step.function ? "function" : "act"} onChange={(e) => update(e.target.value === "ask"
+            ? { ask: "user", answers: ["approve", "reject"], act: undefined, function: undefined } : e.target.value === "function"
+            ? { function: { name: functions[0]?.name ?? "", version: functions[0]?.version ?? 1 }, act: undefined, ask: undefined, answers: undefined, branches: undefined } : { function: undefined, act: actions[0]?.name ?? "", ask: undefined, answers: undefined, branches: undefined })}>
+            <option value="ask">{t("Human task")}</option><option value="act">{t("Object action")}</option><option value="function">{t("Call AI function")}</option></Select></label>
           {step.ask !== undefined ? <>
             <label className="grid gap-1 text-xs">{t("Human role")}<Select value={step.ask} onChange={(e) => update({ ask: e.target.value })}>
               {!roles.includes(step.ask) && <option value={step.ask}>{step.ask}</option>}{roles.map((r) => <option key={r} value={r}>{r}</option>)}</Select></label>
@@ -165,6 +172,12 @@ export function WorkflowEditor({ id }: { id: string }) {
                 const branches = { ...step.branches }; if (e.target.value) branches[answer] = e.target.value; else delete branches[answer]; update({ branches });
               }}><option value="">{t("Use default next step")}</option>{draft.steps.filter((s) => s.name !== step.name).map((s) => <option key={s.name} value={s.name}>{s.title || s.name}</option>)}</Select>
             </label>)}
+          </> : step.function ? <>
+            <label className="grid gap-1 text-xs">{t("Published function version")}<Select value={`${step.function.name}:${step.function.version}`} onChange={(e) => {
+              const selected = functions.find((f) => `${f.name}:${f.version}` === e.target.value);
+              if (selected) update({ function: { name: selected.name, version: selected.version } });
+            }}><option value="">{t("Choose a published function")}</option>{functions.map((f) => <option key={`${f.name}:${f.version}`} value={`${f.name}:${f.version}`}>{f.title} · {t("Version")} {f.version}</option>)}</Select></label>
+            <p className="text-xs text-muted">{t("Waits for a typed answer or refusal. The next step keeps its own permissions; add a human task to review the result.")}</p>
           </> : <label className="grid gap-1 text-xs">{t("Object action")}<Select value={step.act ?? ""} onChange={(e) => update({ act: e.target.value })}>
             <option value="">{t("Choose an action")}</option>{actions.map((a) => <option key={a.name} value={a.name}>{a.title}</option>)}</Select></label>}
           <label className="grid gap-1 text-xs">{t("Default next step")}<Select value={step.next ?? ""} onChange={(e) => update({ next: e.target.value })}>
@@ -181,7 +194,7 @@ export function WorkflowEditor({ id }: { id: string }) {
 
 function WorkflowMap({ draft, chosen, onChoose, onChange }: { draft: WorkflowDraft; chosen: number; onChoose: (i: number) => void; onChange: (steps: WorkflowStep[]) => void }) {
   const catalog: NodeCatalog = [{ id: "@start", title: t("Start state"), category: "workflow", inputs: [], outputs: [{ id: "next", label: t("Starts"), type: "flow", limit: 1 }] },
-    ...draft.steps.map((s, i) => ({ id: `step:${i}`, title: s.ask !== undefined ? t("Human task") : t("Object action"), category: "workflow",
+    ...draft.steps.map((s, i) => ({ id: `step:${i}`, title: s.ask !== undefined ? t("Human task") : s.function ? t("Call AI function") : t("Object action"), category: "workflow",
       inputs: [{ id: "enter", label: t("Arrives here"), type: "flow" }], outputs: [{ id: "next", label: t("Default"), type: "flow", limit: 1 },
         ...(s.ask !== undefined ? (s.answers ?? []).map((answer, n) => ({ id: `answer:${n}`, label: answer, type: "flow", limit: 1 })) : [])] }))];
   const edges: CanvasEdge[] = draft.steps.flatMap((s, i) => [
@@ -192,7 +205,7 @@ function WorkflowMap({ draft, chosen, onChoose, onChange }: { draft: WorkflowDra
   const places = layout([{ id: "@start", label: draft.when }, ...draft.steps.map((s) => ({ id: s.name, label: s.title ?? s.name }))], edges.map((e) => ({ from: e.source, to: e.target })), "right",
     { width: 160, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 40, gapY: 30 });
   const nodes: CanvasNode[] = [{ id: "@start", kind: "@start", label: draft.when || t("Choose a state"), position: places.get("@start") ?? { x: 0, y: 0 } },
-    ...draft.steps.map((s, i) => ({ id: s.name, kind: `step:${i}`, label: s.title || s.name, detail: s.ask || s.act, position: places.get(s.name) ?? { x: 0, y: 0 } }))];
+    ...draft.steps.map((s, i) => ({ id: s.name, kind: `step:${i}`, label: s.title || s.name, detail: s.ask || s.act || (s.function ? `${s.function.name} · ${t("Version")} ${s.function.version}` : undefined), position: places.get(s.name) ?? { x: 0, y: 0 } }))];
   return <Card className="grid gap-2 p-3">
     <p className="text-xs text-muted">{t("Connect outputs to steps, or use the properties with your keyboard. Select a line and Delete to remove its path.")}</p>
     <NodeCanvas label={t("Workflow map")} catalog={catalog} nodes={nodes} edges={edges} selected={chosen < 0 ? "@start" : draft.steps[chosen]?.name}

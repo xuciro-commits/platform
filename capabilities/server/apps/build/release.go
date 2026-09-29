@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 
 	"platformserver/platform"
@@ -454,11 +455,19 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 	ref := platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: TypeOf(fl.Name)}
 	subject := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: fl.Subject}
 	var actions []platform.AssetRef
-	for _, step := range fl.Steps {
-		if step.Act != nil {
-			actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: step.Act.Action})
+	var functions []platform.AssetBinding
+	for _, step := range saved.Steps {
+		if step.Act != "" {
+			actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: saved.Object + "." + step.Act})
+		}
+		if step.Function != nil {
+			binding := platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: step.Function.Name}, SourceVersion: sourceVersion + ".function-" + strconv.Itoa(step.Function.Version)}
+			if !slices.Contains(functions, binding) {
+				functions = append(functions, binding)
+			}
 		}
 	}
+	slices.SortFunc(functions, func(a, b platform.AssetBinding) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	slices.SortFunc(actions, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	actions = slices.Compact(actions)
 	definition := json.RawMessage(published(saved))
@@ -473,9 +482,13 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition})
+	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition, Functions: functions})
+	requires := append([]platform.AssetRef{subject}, actions...)
+	for _, binding := range functions {
+		requires = append(requires, binding.Ref)
+	}
 	return platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion,
-		Requires: append([]platform.AssetRef{subject}, actions...), Body: body}, err
+		Requires: requires, Body: body}, err
 }
 
 // ProcessFromReleaseAsset reconstructs the bounded owner definition, checking

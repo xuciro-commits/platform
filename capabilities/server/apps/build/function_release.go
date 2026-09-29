@@ -16,6 +16,22 @@ func functionReleaseAsset(f Function, sourceVersion string) (platform.ReleaseAss
 		SourceVersion: sourceVersion + ".function-" + strconv.Itoa(f.Version), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: f.Object}}, Body: body}, err
 }
 
+// FunctionReleaseAsset resolves only a retained version from this owner.
+func (b *Build) FunctionReleaseAsset(name string, sourceVersion string) (platform.ReleaseAsset, error) {
+	ordinalText, found := strings.CutPrefix(sourceVersion, b.Manifest().Version+".function-")
+	version, err := strconv.Atoi(ordinalText)
+	if !found || err != nil || strconv.Itoa(version) != ordinalText {
+		return platform.ReleaseAsset{}, fmt.Errorf("invalid retained function version %s", sourceVersion)
+	}
+	f, ordinal, ok := b.FunctionDefinition(name, version)
+	if !ok || ordinal != version || version < 1 {
+		return platform.ReleaseAsset{}, fmt.Errorf("function %s version %d is not retained", name, version)
+	}
+	body, err := json.Marshal(f)
+	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: name}, ContractVersion: 1,
+		SourceVersion: b.Manifest().Version + ".function-" + strconv.Itoa(version), Requires: []platform.AssetRef{{App: ID, Kind: platform.AssetObject, Name: f.Object}}, Body: body}, err
+}
+
 func (b *Build) functionAssets() ([]platform.ReleaseAsset, error) {
 	var out []platform.ReleaseAsset
 	// This cache is reconstructed only from validated publications or an

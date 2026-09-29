@@ -40,7 +40,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 		return platform.FunctionCall{}, platform.Effect{}, platform.Refuse(code, message)
 	}
 	if c.Tenant != t.ID || r.GetSubmission().GetTenantId() != t.ID || r.GetSubmission().GetAuthority() != c.App ||
-		request.Version < 0 || c.Automation && request.OnBehalf == "" || !c.Automation && request.OnBehalf != "" && request.OnBehalf != c.ID {
+		request.Version < 0 || c.Automation && request.OnBehalf == "" || !c.Automation && (request.Release != nil || request.OnBehalf != "" && request.OnBehalf != c.ID) {
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "AI functions need an explicit authorised member")
 	}
 	member := c.Member
@@ -108,7 +108,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function definition cannot be bound")
 	}
-	candidate, release, err := t.functionClosure(c.App, f, version)
+	candidate, release, err := t.functionClosure(c.App, f, version, request.Release)
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function dependencies cannot be bound")
 	}
@@ -239,7 +239,7 @@ func functionDefinition(app platform.App, name string, version int) (platform.AI
 	return platform.AIFunction{}, 0, false
 }
 
-func (t *Tenant) functionClosure(app string, f platform.AIFunction, version int) (platform.ReleaseCandidate, string, error) {
+func (t *Tenant) functionClosure(app string, f platform.AIFunction, version int, retained *string) (platform.ReleaseCandidate, string, error) {
 	ref := platform.AssetRef{App: app, Kind: platform.AssetFunction, Name: f.Name}
 	available, err := t.releaseAssetsLocked(nil, false)
 	if err != nil {
@@ -261,19 +261,26 @@ func (t *Tenant) functionClosure(app string, f platform.AIFunction, version int)
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
-	if t.activeRelease == "" {
+	release := t.activeRelease
+	if retained != nil {
+		release = *retained
+	}
+	if release == "" {
 		return candidate, "", nil
 	}
-	saved, err := platform.ReadCandidate(t.activeRelease, t.releaseCandidates[t.activeRelease])
+	saved, err := platform.ReadCandidate(release, t.releaseCandidates[release])
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
 	if !slices.ContainsFunc(saved.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == ref }) {
+		if retained != nil {
+			return platform.ReleaseCandidate{}, "", fmt.Errorf("function %s is missing from its retained release", ref)
+		}
 		return candidate, "", nil
 	}
 	active, err := platform.Candidate([]platform.AssetRef{ref}, saved.Assets)
 	if err != nil || active.ID != candidate.ID {
 		return platform.ReleaseCandidate{}, "", fmt.Errorf("function %s differs from its active release", ref)
 	}
-	return candidate, t.activeRelease, nil
+	return candidate, release, nil
 }

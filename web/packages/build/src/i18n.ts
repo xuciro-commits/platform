@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Choose a readable human role, supported object action or retained function version.": "请选择可读的人工角色、支持的对象动作或保留的函数版本。",
+  "Add AI function": "添加 AI 函数",
+  "Published function version": "已发布函数版本",
+  "Choose a published function": "选择已发布函数",
+  "Waits for a typed answer or refusal. The next step keeps its own permissions; add a human task to review the result.": "等待类型化回答或拒绝。后续步骤使用自身权限；可添加人工任务复核结果。",
+  "Advance clock": "推进时钟",
+
   "Only a builder can edit AI functions.": "只有构建者可以编辑 AI 函数。",
   "Turn readable record fields into typed suggestions for human review.": "将可读记录字段转为供人工复核的类型化建议。",
   "New AI function": "新建 AI 函数",

@@ -55,6 +55,16 @@ type FunctionRequest struct {
 	Source   string `json:"source,omitempty"` // source ID; type is declared by the function
 	OnBehalf string `json:"onBehalf,omitempty"`
 	Version  int    `json:"version,omitempty"`
+	// Only trusted automation may carry an existing run's release. Nil
+	// resolves the current activation; an explicit empty value retains a
+	// development run that started without an activated release.
+	Release *string `json:"release,omitempty"`
+}
+
+// FunctionRef pins a native published function of the declaring app.
+type FunctionRef struct {
+	Name    string `json:"name"`
+	Version int    `json:"version"`
 }
 
 // RequestFunction plans this application's declared function over the target

@@ -98,7 +98,7 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	// Establish a saved release to test exact runtime binding. This is not a
 	// proof of the future function candidate evaluation/activation journey.
 	tn.releaseCandidates, tn.activeRelease = map[string]json.RawMessage{c1.ID: c1.Bytes}, c1.ID
-	if closure, release, err := tn.functionClosure(build.ID, definition, 1); err != nil || closure.ID != c1.ID || release != c1.ID {
+	if closure, release, err := tn.functionClosure(build.ID, definition, 1, nil); err != nil || closure.ID != c1.ID || release != c1.ID {
 		t.Fatalf("published function did not bind its saved release: %s %s %v", closure.ID, release, err)
 	}
 	tn.activeRelease = ""

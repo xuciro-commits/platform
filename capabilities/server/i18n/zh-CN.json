@@ -1,4 +1,10 @@
 {
+ "Published AI function": "已发布 AI 函数",
+ "Retained release for a native automation; empty keeps a development run": "原生自动化保留的发布；留空保留开发态运行",
+ "The process step {step} must ask a role, take an action or call a function": "流程步骤 {step} 必须请求角色、执行动作或调用函数",
+ "The process function must name a retained version on its source object": "流程函数必须指定其源对象上保留的版本",
+ "A process must use one retained version of each function": "同一流程必须使用每个函数的一个保留版本",
+ "A clock step needs a candidate object and record ID": "时钟步骤需要候选对象和记录 ID",
  "No run of this agent was confirmed, changed or rejected by a person yet, so there is nothing to compare the candidate with. Let people judge its runs first, or run its declared cases.": "这个智能体还没有被人确认、修改或驳回过的运行，所以没有可以拿来比较的。先让人评判它的运行，或者运行它声明的测试用例。",
  "The refusal's code": "拒绝的错误码",
  "Why it was refused, as the provider said": "提供方给出的拒绝原因",

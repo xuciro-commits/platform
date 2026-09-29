@@ -95,7 +95,10 @@ export function NodeCanvas({ catalog, nodes, edges, selected, onSelect, onConnec
       const next = nodes.map((n) => {
         const next = toFlowNode(n, catalog);
         const before = old.get(n.id);
-        return { ...next, position: moved.current[n.id] ?? (relayout ? next.position : before?.position ?? next.position), selected: n.id === selected };
+        // Semantic edits do not erase React Flow's measured dimensions. If
+        // the DOM size stays the same, ResizeObserver need not fire again;
+        // dropping these leaves otherwise unchanged nodes hidden forever.
+        return { ...next, measured: before?.measured, position: moved.current[n.id] ?? (relayout ? next.position : before?.position ?? next.position), selected: n.id === selected };
       });
       return !relayout && next.length === previous.length && next.every((n, i) => {
         const before = previous[i];

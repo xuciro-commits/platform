@@ -48,6 +48,7 @@ func functionCallActions(roles []string) []platform.Action {
 		Payload: []platform.Field{{Name: "name", Type: "string", Required: true, Description: "Published function name"},
 			{Name: "source", Type: "string", Required: true, Description: "Source record ID"},
 			{Name: "version", Type: "integer", Description: "Published version; zero selects the installed version"},
+			{Name: "release", Type: "string", Description: "Retained release for a native automation; empty keeps a development run"},
 			{Name: "onBehalf", Type: "string", Description: "Retained member for a native automation"}}},
 		{Schema: SchemaFunctionAnswer, Target: FunctionCallType, Capability: "functions", Title: "Record AI function answer",
 			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.AnswerFields()}}

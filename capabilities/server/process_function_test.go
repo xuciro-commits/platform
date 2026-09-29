@@ -1,0 +1,195 @@
+package platformserver
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/apps/ai"
+	"platformserver/apps/build"
+	"platformserver/apps/flow"
+	"platformserver/apps/work"
+	"platformserver/platform"
+)
+
+func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
+	at := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	compose := func() *Tenant {
+		tn, err := NewTenant("process-function", NewConsole("process-function",
+			Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder, PlatformApp: Admin, ai.ID: ai.Admin, flow.ID: flow.Admin}}},
+			Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User}}}),
+			ai.New("process-function"), work.New("process-function"), flow.New("process-function"), build.New("process-function"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Record = func(e Entry) { entries = append(entries, e) }
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	member := func(id string) platform.Member { m, _ := tn.Member(id); return m }
+	keys := 0
+	must := func(who, app, schema, typ, id string, payload any) {
+		t.Helper()
+		keys++
+		_, err := tn.Submit(member(who), &pb.Submission{TenantId: tn.ID, PrincipalId: who, Authority: app, IdempotencyKey: fmt.Sprint(keys), Schema: &pb.SchemaRef{Name: schema, Version: 1}, Target: &pb.EntityRef{Type: typ, Id: id}, Payload: platform.Raw(payload)}, at)
+		if err != nil {
+			t.Fatalf("%s: %v fault=%v", schema, err, tn.fault.Load())
+		}
+	}
+	tick := func() {
+		at = at.Add(2 * time.Second)
+		tn.Work(at)
+		if tn.quarantined() {
+			t.Fatal(tn.fault.Load())
+		}
+	}
+	must("builder", build.ID, build.ObjectType+".create", build.ObjectType, "O", map[string]any{"name": "intake", "title": "Intake", "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}}, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "actions": []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}}})
+	must("builder", build.ID, build.SchemaPublish, build.ObjectType, "O", struct{}{})
+	definition := platform.RecordAdviceFunction("build.intake", []string{"note"}, []string{build.User, build.Builder})
+	definition.Name = "advice"
+	must("builder", build.ID, build.FunctionType+".create", build.FunctionType, "F", definition)
+	must("builder", build.ID, build.SchemaFunction, build.FunctionType, "F", struct{}{})
+	steps := []build.ProcessStep{{Name: "gate", Ask: build.User, Answers: []string{"continue"}, Next: "infer"}, {Name: "infer", Function: &platform.FunctionRef{Name: "advice", Version: 1}, Next: "review"}, {Name: "review", Ask: build.User, Answers: []string{"approve"}, Next: "close"}, {Name: "close", Act: "close"}}
+	must("builder", build.ID, build.ProcessType+".create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review intake", "object": "build.intake", "when": "open", "steps": steps})
+
+	before := snapshot(tn)
+	request := CandidateSimulationRequest{ProcessID: "P", As: "operator", Model: "fixture/probe", At: at, Steps: []SimulationStep{
+		{Type: "build.intake", ID: "TEST", Action: "build.intake.create", Payload: json.RawMessage(`{"note":"Fixed sample"}`), AdvanceSeconds: 2, Expect: "accepted"},
+		{Type: "build.intake", ID: "TEST", Flow: "build.review", Step: "gate", Answer: "continue", AdvanceSeconds: 2, Expect: "accepted",
+			Function: &build.FunctionFixture{Output: `{"summary":"Check source","category":"review","review":true}`, ExpectState: "ready"}},
+		{Type: "build.intake", ID: "TEST", AdvanceSeconds: 2, Expect: "accepted"},
+		{Type: "build.intake", ID: "TEST", Flow: "build.review", Step: "review", Answer: "approve", AdvanceSeconds: 2, Expect: "accepted"},
+	}}
+	result, problem := tn.SimulateCandidate(member("builder"), request)
+	if problem != nil || !result.Recovered || result.Passed == nil || !*result.Passed || len(result.Steps[3].Flows) != 1 || result.Steps[3].Flows[0].State != "done" {
+		t.Fatalf("native function simulation: %+v %v", result, problem)
+	}
+	if snapshot(tn) != before {
+		t.Fatal("simulation changed production")
+	}
+	request.Steps = request.Steps[:2]
+	request.Steps[1].Function = nil
+	if _, problem := tn.SimulateCandidate(member("builder"), request); problem == nil {
+		t.Fatal("unfinished function passed")
+	}
+	request.Steps[1].Function = &build.FunctionFixture{Output: "invalid JSON", ExpectState: "rejected"}
+	request.Steps = append(request.Steps, SimulationStep{Type: "build.intake", ID: "TEST", AdvanceSeconds: 2, Expect: "accepted"})
+	rejected, problem := tn.SimulateCandidate(member("builder"), request)
+	if problem != nil || rejected.Passed == nil || !*rejected.Passed || len(rejected.Steps[2].Tasks) != 1 || len(rejected.Steps[2].Functions) != 1 || rejected.Steps[2].Functions[0].Output != "" {
+		t.Fatalf("rejected model answer did not reach human review: %+v %v", rejected, problem)
+	}
+	must("builder", build.ID, build.SchemaProcess, build.ProcessType, "P", struct{}{})
+	must("builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": "http://candidate.invalid"})
+	must("builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "users"})
+	must("builder", PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": "fixture/probe"})
+	activate := func() string {
+		t.Helper()
+		preview, err := tn.PreviewRelease(member("builder"), platform.AssetFlow, "P")
+		if err != nil || preview.Diagnostic != "" {
+			t.Fatalf("preview: %+v %v", preview, err)
+		}
+		keys++
+		id, err := tn.SaveReleaseCandidate(member("builder"), platform.AssetFlow, "P", preview.CandidateID, fmt.Sprint(keys), at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		keys++
+		if _, err := tn.ActivateRelease(member("builder"), id, fmt.Sprint(keys), at); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	// A development run must remain unbound even after a release is activated.
+	must("operator", build.ID, "build.intake.create", "build.intake", "DEV", map[string]string{"note": "Before activation"})
+	tick()
+	keys++
+	_, impersonation := tn.Submit(member("operator"), &pb.Submission{TenantId: tn.ID, PrincipalId: "operator", Authority: build.ID, IdempotencyKey: fmt.Sprint(keys),
+		Schema: &pb.SchemaRef{Name: build.SchemaFunctionCall, Version: 1}, Target: &pb.EntityRef{Type: build.FunctionCallType, Id: "SPOOF"},
+		Payload: json.RawMessage(`{"name":"advice","source":"DEV","release":""}`)}, at)
+	if impersonation == nil {
+		t.Fatal("human request overrode its release binding")
+	}
+	first := activate()
+	must("operator", build.ID, "build.intake.create", "build.intake", "OLD", map[string]string{"note": "First release"})
+	tick()
+	CheckReplay(t, tn, entries, compose)
+	must("builder", build.ID, build.FunctionType+".edit", build.FunctionType, "F", map[string]string{"instructions": "New function instructions"})
+	must("builder", build.ID, build.SchemaFunction, build.FunctionType, "F", struct{}{})
+	conflict, err := tn.PreviewRelease(member("builder"), platform.AssetFunction, "F")
+	if err == nil && conflict.Diagnostic == "" {
+		t.Fatalf("function draft silently replaced a flow pin: %+v %v", conflict, err)
+	}
+	steps[1].Function = &platform.FunctionRef{Name: "advice", Version: 2}
+	must("builder", build.ID, build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": steps})
+	must("builder", build.ID, build.SchemaProcess, build.ProcessType, "P", struct{}{})
+	second := activate()
+	if first == second {
+		t.Fatal("new function reused release")
+	}
+	must("operator", build.ID, "build.intake.create", "build.intake", "NEW", map[string]string{"note": "Second release"})
+	tick()
+	CheckReplay(t, tn, entries, compose)
+	answer := func(source, answer string) {
+		t.Helper()
+		inbox, err := tn.Read(member("operator"), "inbox")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, task := range inbox.([]work.WorkTask) {
+			if task.Ref == "build.intake/"+source {
+				must("operator", work.ID, "work.task.complete", work.TaskType, task.ID, map[string]string{"answer": answer})
+				tick()
+				return
+			}
+		}
+		t.Fatalf("no human task for %s", source)
+	}
+	for _, tc := range []struct {
+		id, release string
+		version     int
+	}{{"DEV", "", 1}, {"OLD", first, 1}, {"NEW", second, 2}} {
+		answer(tc.id, "continue")
+		pending := pendingFunctionEffects(tn)
+		if len(pending) != 1 {
+			t.Fatalf("native function did not queue: %+v", pending)
+		}
+		var ask modelAsk
+		json.Unmarshal([]byte(pending[0].Body), &ask)
+		if ask.Function == nil || ask.Function.Call.Version != tc.version || ask.Function.Call.Release != tc.release || ask.Function.Member != "operator" {
+			t.Fatalf("wrong retained binding: %+v", ask.Function)
+		}
+		if (tc.version == 2) != strings.Contains(ask.Function.Definition.Instructions, "New function") {
+			t.Fatal("function prompt drifted")
+		}
+		CheckReplay(t, tn, entries, compose)
+		matched, err := settleFunctionFixture(tn, member("operator"), build.FunctionFixture{Output: `{"summary":"Check source","category":"review","review":true}`, InputTokens: 4, OutputTokens: 8, ExpectState: "ready"}, at)
+		if err != nil || !matched {
+			t.Fatalf("native reply: %v %v", matched, err)
+		}
+		tick()
+		answer(tc.id, "approve")
+		view, problem := tn.RecordOf(member("builder"), flow.InstanceType, "build.review:"+tc.id, at)
+		if problem != nil || view.Record.(flow.FlowInstance).State != "done" {
+			t.Fatalf("flow did not finish: %+v %v", view, problem)
+		}
+	}
+	CheckReplay(t, tn, entries, compose)
+	// Pure candidate reading must reject a mismatched pinned dependency.
+	saved, err := platform.ReadCandidate(first, tn.releaseCandidates[first])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range saved.Assets {
+		if saved.Assets[i].Ref.Kind == platform.AssetFunction {
+			saved.Assets[i].SourceVersion = "1.function-2"
+		}
+	}
+	if _, err := platform.Candidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetFlow, Name: "build.review"}}, saved.Assets); err == nil {
+		t.Fatal("candidate accepted a different pinned function")
+	}
+}

@@ -199,6 +199,13 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 				payload, _ := json.Marshal(map[string]string{"answer": step.Answer})
 				sub = &pb.Submission{Authority: work.ID, Target: &pb.EntityRef{Type: work.TaskType, Id: taskID}, Schema: &pb.SchemaRef{Name: "work.task.complete", Version: 1}, Payload: payload}
 			}
+		} else if step.Action == "" && step.AdvanceSeconds > 0 && step.Flow == "" && step.Step == "" {
+			if !slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool {
+				return a.Ref.Kind == platform.AssetObject && a.Ref.Name == step.Type
+			}) || step.ID == "" {
+				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A clock step needs a candidate object and record ID")
+			}
+			_, refusal = sandbox.RecordOf(actor, step.Type, step.ID, now)
 		} else {
 			action := sandbox.owner["action:"+step.Action]
 			if action == nil || step.ID == "" || action.Manifest().ID != build.ID || !strings.HasPrefix(step.Type, build.ID+".") ||
@@ -333,6 +340,7 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 		return nil, err
 	}
 	definitions := map[string][]recordState{build.ObjectType: {}}
+	processes := map[string][]recordState{}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind == platform.AssetFunction {
 			continue // compiled after its source objects below
@@ -346,7 +354,7 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 				return nil, err
 			}
 			raw, _ := json.Marshal(process)
-			definitions[build.ProcessType] = append(definitions[build.ProcessType], recordState{Value: raw})
+			processes[build.ProcessType] = append(processes[build.ProcessType], recordState{Value: raw})
 			continue
 		}
 		if asset.Ref.Kind == platform.AssetAction || asset.Ref.Kind == platform.AssetPage || asset.Ref.Kind == platform.AssetApp {
@@ -388,6 +396,15 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 			}
 		}
 		sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	}
+	// Functions must exist before process validation resolves their pinned versions.
+	if len(processes) != 0 {
+		if _, err := sandbox.restoreRecords(processes); err != nil {
+			return nil, err
+		}
+		if err := b.Reinstall(); err != nil {
+			return nil, err
+		}
 	}
 	// Restore the same dependent page/application descriptors the release
 	// review includes. Actions are compiled solely from their owning objects.

@@ -24,6 +24,11 @@ for (const fixture of [
       await properties.getByRole("combobox", { name: "Source object" }).selectOption(type);
       await expect(properties.getByRole("checkbox", { name: /Day/ })).not.toBeVisible();
       await properties.getByRole("checkbox", { name: /Note/ }).check();
+      const canvas = page.getByRole("region", { name: "Function map", exact: true });
+      for (const id of ["source", "model", "output"]) await expect(canvas.locator(`[data-id="${id}"]`)).toBeVisible();
+      await properties.getByRole("checkbox", { name: /Note/ }).uncheck();
+      await properties.getByRole("checkbox", { name: /Note/ }).check();
+      for (const id of ["source", "model", "output"]) await expect(canvas.locator(`[data-id="${id}"]`)).toBeVisible();
       // Canvas selection reaches the same inspector as keyboard stage buttons.
       await page.getByRole("region", { name: "Function map", exact: true }).locator('[data-id="model"]').click();
       await properties.getByRole("textbox", { name: "Model instructions" }).fill("Use only the source note. Return a summary and whether review is needed.");

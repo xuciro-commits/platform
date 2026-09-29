@@ -140,6 +140,8 @@ type Run struct {
 	Version  int
 	Key      string
 	OnBehalf string // who started it
+	Release  string // the activation retained when this instance started
+	Sequence int    // the next native action sequence within this instance
 	Data     json.RawMessage
 	Answer   string // the last Ask's or Call's
 	Event    *Event // the event that started it or ended the last wait

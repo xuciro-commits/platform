@@ -94,7 +94,7 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded function fixture with a ready or rejected outcome")
 			}
 			if step.Answer == "" {
-				if !strings.HasPrefix(step.Action, step.Type+".") || step.Flow != "" || step.Step != "" {
+				if (step.Action == "" && step.AdvanceSeconds == 0 || step.Action != "" && !strings.HasPrefix(step.Action, step.Type+".")) || step.Flow != "" || step.Step != "" {
 					return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one candidate action or workflow answer per test step")
 				}
 			} else if step.Action != "" || !strings.HasPrefix(step.Flow, ID+".") || !named(step.Step) {

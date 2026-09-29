@@ -32,6 +32,13 @@ type FlowReleaseDescriptor struct {
 	Subject    AssetRef        `json:"subject"`
 	Actions    []AssetRef      `json:"actions"`
 	Definition json.RawMessage `json:"definition"`
+	Functions  []AssetBinding  `json:"functions,omitempty"`
+}
+
+// AssetBinding fixes the owner's exact source version at a dependency edge.
+type AssetBinding struct {
+	Ref           AssetRef `json:"ref"`
+	SourceVersion string   `json:"sourceVersion"`
 }
 
 // PageReleaseAsset is the single descriptor path for a code page and a page
@@ -143,6 +150,20 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 		if err := checkReleaseBindings(ref, body, asset.Requires); err != nil {
 			return err
 		}
+		if ref.Kind == AssetFlow {
+			var flow FlowReleaseDescriptor
+			if err := json.Unmarshal(body, &flow); err != nil {
+				return err
+			}
+			seen := map[AssetRef]bool{}
+			for _, binding := range flow.Functions {
+				dependency, ok := lookup[binding.Ref]
+				if !ok || seen[binding.Ref] || binding.Ref.Kind != AssetFunction || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
+					return fmt.Errorf("flow %s needs exact function dependency %s at %s", ref, binding.Ref, binding.SourceVersion)
+				}
+				seen[binding.Ref] = true
+			}
+		}
 		visiting[ref] = true
 		deps := slices.Clone(asset.Requires)
 		slices.SortFunc(deps, compareRef)
@@ -249,6 +270,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 			return fmt.Errorf("release flow %s needs a subject object and complete definition", ref)
 		}
 		required = append(required, flow.Subject)
+		for _, binding := range flow.Functions {
+			required = append(required, binding.Ref)
+		}
 		for _, action := range flow.Actions {
 			if action.Kind != AssetAction {
 				return fmt.Errorf("release flow %s binds a non-action", ref)

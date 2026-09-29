@@ -70,7 +70,7 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
     finally { setBusy(false); }
   };
   const inputs = (): Api.CandidateSimulationRequest => ({
-    ...(kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
+    ...(kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id, model } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
       ...step, payload: JSON.parse(step.payload),
     })),
   });
@@ -81,7 +81,7 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
     setBusy(true);
     try {
       if (await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target },
-        { title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind === "function" ? model : "", as: member, at: new Date(at).toISOString(), steps },
+        { title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps },
         { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) {
         const refreshed = await plans.refetch();
         const record = refreshed.data?.records.find((plan) => plan.id === target);
@@ -140,8 +140,7 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
               <option value="">{t("Choose a saved draft")}</option>{functions.data?.records.map((f) => <option key={f.id} value={f.id}>{f.title || f.name}</option>)}
             </Select>
           </label>
-          <label className="grid gap-1 text-xs">{t("Fixture model identifier")}<Input value={model} onChange={(e) => { setModel(e.target.value); clear(); }} /></label>
-          <p className="text-xs text-muted">{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</p>
+
         </> : kind === "flow" ? <label className="grid gap-1 text-xs">{t("Saved workflow draft")}
           <Select value={id} onChange={(e) => { setID(e.target.value); clear(); const chosen = processes.data?.records.find((p) => p.id === e.target.value); setSteps(chosen ? workflowSteps(chosen) : []); }}>
             <option value="">{t("Choose a saved draft")}</option>{processes.data?.records.map((p) => <option key={p.id} value={p.id}>{p.title || p.name}</option>)}
@@ -158,6 +157,10 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
           </Select>
         </label>
         }
+        {kind !== "object" && <>
+          <label className="grid gap-1 text-xs">{t("Fixture model identifier")}<Input value={model} onChange={(e) => { setModel(e.target.value); clear(); }} /></label>
+          <p className="text-xs text-muted">{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</p>
+        </>}
         {(objects.isError || processes.isError || functions.isError) && <p role="alert" className="text-sm text-danger">{t("The candidate test could not be run.")}</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">{t("Member ID (empty: you)")}
@@ -173,20 +176,20 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="grid gap-1 text-xs">{t("Test record ID")}<Input value={step.id} onChange={(event) => update(index, { id: event.target.value })} /></label>
-            {kind === "flow" && <label className="grid gap-1 text-xs">{t("Test step kind")}<Select value={step.answer !== undefined ? "answer" : "action"} onChange={(e) => update(index, e.target.value === "answer"
+            {kind === "flow" && <label className="grid gap-1 text-xs">{t("Test step kind")}<Select value={step.answer !== undefined ? "answer" : step.action ? "action" : "clock"} onChange={(e) => update(index, e.target.value === "answer"
               ? { action: "", flow: `build.${process?.name}`, step: askSteps[0]?.name, answer: askSteps[0]?.answers?.[0] ?? "", payload: "{}" }
-              : { action: `${object ? `build.${object.name}` : step.type}.create`, flow: undefined, step: undefined, answer: undefined })}>
-              <option value="action">{t("Object action")}</option><option value="answer">{t("Human answer")}</option></Select></label>}
+              : { action: e.target.value === "clock" ? "" : `${object ? `build.${object.name}` : step.type}.create`, advanceSeconds: e.target.value === "clock" ? 2 : step.advanceSeconds, flow: undefined, step: undefined, answer: undefined })}>
+              <option value="action">{t("Object action")}</option><option value="answer">{t("Human answer")}</option><option value="clock">{t("Advance clock")}</option></Select></label>}
             {step.answer !== undefined ? <>
               <label className="grid gap-1 text-xs">{t("Human task step")}<Select value={step.step ?? ""} onChange={(e) => update(index, { step: e.target.value, answer: askSteps.find((s) => s.name === e.target.value)?.answers?.[0] ?? "" })}>
                 {askSteps.map((ask) => <option key={ask.name} value={ask.name}>{ask.title || ask.name}</option>)}</Select></label>
               <label className="grid gap-1 text-xs">{t("Human answer")}<Select value={step.answer} onChange={(e) => update(index, { answer: e.target.value })}>
                 {askSteps.find((ask) => ask.name === step.step)?.answers?.map((answer) => <option key={answer} value={answer}>{answer}</option>)}</Select></label>
-            </> : <label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={(event) => update(index, { action: event.target.value, type: event.target.value === "build.function-call.start" ? "build.function-call" : `build.${object?.name}`, function: event.target.value === "build.function-call.start" ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>
+            </> : step.action ? <label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={(event) => update(index, { action: event.target.value, type: event.target.value === "build.function-call.start" ? "build.function-call" : `build.${object?.name}`, function: event.target.value === "build.function-call.start" ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>
               {kind === "function" && <option value="build.function-call.start">{t("Call AI function")}</option>}
               {step.action !== "build.function-call.start" && !actions.some((action) => `build.${object?.name}.${action.name}` === step.action) && <option value={step.action}>{step.action}</option>}
               {actions.map((action) => <option key={action.name} value={`build.${object?.name}.${action.name}`}>{action.title}</option>)}
-            </Select></label>}
+            </Select></label> : null}
           </div>
           {(kind === "flow" || kind === "function") && <div className="grid gap-2 sm:grid-cols-2">
             <label className="grid gap-1 text-xs">{t("Step member ID (empty: plan member)")}<Input value={step.as ?? ""} onChange={(e) => update(index, { as: e.target.value })} /></label>
@@ -200,7 +203,7 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
           <label className="grid gap-1 text-xs">{t("Test inputs (JSON)")}
             <Textarea rows={3} value={step.payload} onChange={(event) => update(index, { payload: event.target.value })} className="font-mono" />
           </label>
-          {step.action === "build.function-call.start" && <Checkbox checked={!!step.function} onChange={(enabled) => update(index, { function: enabled ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>{t("Supply a fixed model answer")}</Checkbox>}
+          {(kind === "flow" || step.action === "build.function-call.start") && <Checkbox checked={!!step.function} onChange={(enabled) => update(index, { function: enabled ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>{t("Supply a fixed model answer")}</Checkbox>}
           {step.function && <fieldset className="grid gap-2 rounded border border-border p-2">
             <legend className="px-1 text-xs">{t("Fixed model answer")}</legend>
             <label className="grid gap-1 text-xs">{t("Provider answer")}<Textarea rows={3} value={step.function.output} onChange={(e) => update(index, { function: { ...step.function!, output: e.target.value } })} className="font-mono" /></label>
