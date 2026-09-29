@@ -108,3 +108,5 @@
 
 
 **提交身份的租户边界（2026-09-29，#130）。** 固定计划的负向测试暴露 `Tenant.Submit` 只检查提交租户和成员 ID、未先验证成员自身租户的问题。正式入口现在复用 `admits`，在动作分派、暂存或重复答复返回之前拒绝其他租户及空租户成员；相同 ID/角色不能进入写入路径或获得该租户的重复收据。`TestSubmitRejectsForeignMembersBeforeNewOrRepeatedDecisions` 分别覆盖旧提交与已接受结果入口的新请求/重复请求、状态和日志不变及合法成员重试；标准计划编辑的回归见 ADR-0040。制造协议测试使用登记于当前租户的 ERP 文员验证 MES 权限拒绝，不再把未登记身份当作同租户无权成员。PMS 的 `TestTenantPrincipalAndAuthorityAreChecked` 区分宿主拒绝其他租户成员（`NOT_FOUND`）与本租户成员伪造提交租户/主体（内核 `POLICY_DENIED`），保留权威校验。此修复不改变结果格式或纯应用恢复语义；受影响的宿主能力及组合检查已通过，`scripts/verify.sh format pms` 也已通过 Web/浏览器、PMS 服务端、Rust K5 向量和端到端流程。
+
+**#133 实际使用的 AI 结果入口复核（2026-09-29）。** Build 函数调用与候选评测的模型回答均由既有 `effect-result` 同批保存效果状态、提供商用量及应用自动 Reply。`TestJournalAcceptedJointFunctionActivationCrash` 在 PostgreSQL 对评测回答补上追加失败与提交后未应用崩溃：失败前报告/计量/效果不暴露，恢复直接应用已保存字节且不调用模型；两行业部署浏览器再验证恢复后结果读取与待办继续。证据只涵盖这一已接入的函数/评测入口，不扩张为直接 Chat、智能体模型步骤、其他评估用量或旧日志的全面保证；这些仍按 #135 余项处理。

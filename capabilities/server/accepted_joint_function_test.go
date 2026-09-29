@@ -135,6 +135,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	activeJournal := journal
 	attempts := 0
 	for _, effect := range live.Effects(at) {
 		var ask modelAsk
@@ -145,7 +146,71 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		if outcome.Result != "delivered" || usage == nil || !usage.CostReported {
 			t.Fatalf("measured call: %+v %+v", outcome, usage)
 		}
-		live.settleWithUsage(effect.ID, outcome, usage, at)
+		if attempts == 0 {
+			// Losing the append must not expose the report, meter or effect.
+			position := activeJournal.Position(id)
+			live.AcceptResult = func(Entry, string, string) ([]byte, error) {
+				return nil, errors.New("injected evaluation answer append failure")
+			}
+			live.settleWithUsage(effect.ID, outcome, usage, at)
+			unchanged, ok := platform.Get[build.Evaluation](live.automation(build.ID, false), reportID)
+			if !ok || unchanged.Attempts[0].Outcome != "" || len(live.ai.Usage()) != 0 || activeJournal.Position(id) != position {
+				t.Fatalf("failed append exposed evaluation state: %+v", unchanged)
+			}
+			live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+				return activeJournal.AppendAccepted(ctx, id, e, key, hash)
+			}
+		}
+		if attempts == 1 {
+			// The next answer commits, then the process disappears before apply.
+			live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+				if _, err := activeJournal.AppendAccepted(ctx, id, e, key, hash); err != nil {
+					t.Fatal(err)
+				}
+				panic("crash after evaluation answer append")
+			}
+			func() {
+				defer func() {
+					if recover() == nil {
+						t.Fatal("evaluation answer crash was not injected")
+					}
+				}()
+				live.settleWithUsage(effect.ID, outcome, usage, at)
+			}()
+			unapplied, ok := platform.Get[build.Evaluation](live.automation(build.ID, false), reportID)
+			if !ok || unapplied.Attempts[1].Outcome != "" || len(live.ai.Usage()) != 1 {
+				t.Fatalf("unapplied evaluation answer became visible: %+v", unapplied)
+			}
+			reopened, err := OpenJournal(ctx, dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reopened.Close()
+			entries, err := reopened.Entries(ctx, id, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			recovered := compose()
+			recovered.AIClient = func(*http.Request) (*http.Response, error) {
+				t.Error("evaluation replay called the provider")
+				return nil, errors.New("no provider I/O during replay")
+			}
+			if err := recovered.Replay(entries); err != nil {
+				t.Fatal(err)
+			}
+			replayed, ok := platform.Get[build.Evaluation](recovered.automation(build.ID, false), reportID)
+			if !ok || replayed.Attempts[1].Outcome != "accepted" || len(recovered.ai.Usage()) != 2 {
+				t.Fatalf("evaluation answer and meter did not recover together: %+v", replayed)
+			}
+			recovered.AIClient = nil
+			activeJournal = reopened
+			recovered.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+				return activeJournal.AppendAccepted(ctx, id, e, key, hash)
+			}
+			live = recovered
+		} else {
+			live.settleWithUsage(effect.ID, outcome, usage, at)
+		}
 		attempts++
 	}
 	report, ok := platform.Get[build.Evaluation](live.automation(build.ID, false), reportID)
@@ -153,7 +218,7 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 		t.Fatalf("joint evaluation: %+v (%d attempts)", report, attempts)
 	}
 	live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
-		if _, err := journal.AppendAccepted(ctx, id, e, key, hash); err != nil {
+		if _, err := activeJournal.AppendAccepted(ctx, id, e, key, hash); err != nil {
 			t.Fatal(err)
 		}
 		panic("crash after activation append")

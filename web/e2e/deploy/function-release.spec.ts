@@ -18,7 +18,6 @@ async function signIn(page: Page, email: string) {
   await page.locator('button[type="submit"]').click();
   await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').click();
-  await expect.poll(async () => page.evaluate(() => Boolean(sessionStorage.getItem("oidc:session")))).toBe(true);
   await expect(page.getByRole("button", { name: "Application Studio" }).first()).toBeVisible();
   const token = await page.evaluate(() => (JSON.parse(sessionStorage.getItem("oidc:session") ?? "null") as { accessToken?: string } | null)?.accessToken);
   if (!token) throw new Error("OIDC sign-in returned no browser session");
