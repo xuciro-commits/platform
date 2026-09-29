@@ -749,5 +749,12 @@
  "The answer must belong to a flow and object in this candidate": "回答必须属于当前候选中的流程和对象",
  "This test record has no waiting task at that step": "该测试记录在此步骤没有等待中的任务",
  "a process may retain at most 64 published versions": "一个流程最多可保留 64 个已发布版本",
- "this tenant runs no processes": "该租户没有流程运行时"
+ "this tenant runs no processes": "该租户没有流程运行时",
+ "Saved workflow draft": "已保存工作流草稿",
+ "Fixed sample inputs and expected outcomes for testing a saved object or workflow draft.": "用于测试已保存对象或工作流草稿的固定样本输入与预期结果。",
+ "Every test step needs a candidate action or answer, record ID, JSON object, bounded time and expected outcome": "每个测试步骤需要候选动作或答案、记录标识、JSON 对象、有界时间与预期结果",
+ "Choose one candidate action or workflow answer per test step": "每个测试步骤请选择一个候选动作或工作流答案",
+ "Choose exactly one saved object or workflow draft for the test plan": "测试计划请选择且仅选择一个已保存对象或工作流草稿",
+ "Step member ID (empty: plan member)": "步骤成员标识（留空：计划成员）",
+ "Advance clock (seconds)": "推进时钟（秒）"
 }

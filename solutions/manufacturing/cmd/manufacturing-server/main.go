@@ -33,7 +33,13 @@ func main() {
 	deployment := platformserver.Flags("127.0.0.1:8491")
 	books := flag.String("erp", "app", "the plant's books: app (the ERP app) or external (the adapter to an ERP outside)")
 	flag.Parse()
-	seat := func(role mes.Role) map[string]string { return map[string]string{"mes": string(role)} }
+	seat := func(role mes.Role) map[string]string {
+		roles := map[string]string{"mes": string(role)}
+		if role == mes.Operator {
+			roles[build.ID] = build.User
+		}
+		return roles
+	}
 	supervisor := seat(mes.Supervisor)
 	for app, role := range map[string]string{erp.ID: erp.Controller, erpadapter.ID: erpadapter.Planner, platformserver.PlatformApp: platformserver.Admin,
 		org.ID: org.Admin, ai.ID: ai.Admin, flow.ID: flow.Admin,

@@ -49,6 +49,22 @@ export class EdgeClient {
     return response.json() as Promise<T>;
   }
 
+  /** Read all pages of a bounded record inventory. Never silently return the
+   * first 500 rows or a partial read after a failed page. */
+  async inventory<T>(type: string, limit = 1000): Promise<{ records: T[] }> {
+    const path = `/v1/records/${encodeURIComponent(type)}`;
+    const records: T[] = [];
+    let total: number | undefined;
+    do {
+      const page = await this.get<{ records: T[]; total: number }>(`${path}?limit=500&offset=${records.length}`);
+      total ??= page.total;
+      if (!Number.isInteger(total) || total < 0 || total > limit || total !== page.total || records.length + page.records.length > total
+        || (page.records.length === 0 && records.length < total)) throw new Error("Incomplete or oversized record inventory");
+      records.push(...page.records);
+    } while (records.length < total);
+    return { records };
+  }
+
   /**
    * Follows the tenant's changes (`GET /v1/changes`, server-sent events): calls
    * `onChange` each time the host took inputs, until `signal` aborts; reconnects

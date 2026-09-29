@@ -316,7 +316,7 @@ func (b *Build) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if name := s.GetSchema().GetName(); (name == TestPlanType+".create" || name == TestPlanType+".edit") && !c.Replaying {
-		if err := checkTestPlanFields(s.GetPayload()); err != nil {
+		if err := b.checkTestPlan(c, s); err != nil {
 			return nil, err
 		}
 	}

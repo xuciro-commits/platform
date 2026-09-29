@@ -1,6 +1,6 @@
 // A builder-only review and immutable candidate save. Saving does not install
 // a definition, activate a release or run a preview sandbox.
-import { useHost, useReadQuery } from "@platform/app";
+import { useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, PageHeader, Select, t } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useState } from "react";
@@ -25,7 +25,7 @@ export function ReleaseReview() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const selected = kinds.find((item) => item.kind === kind)!;
-  const query = useReadQuery<{ records: Record[] }>(`/v1/records/${selected.type}?limit=1000`);
+  const query = useRecordInventory<Record>(selected.type);
   const records = query.data?.records ?? [];
   if (role("build") !== "builder") {
     return <PageHeader title={t("Release review")} description={t("Only a builder can review complete release definitions.")} />;

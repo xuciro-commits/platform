@@ -1,30 +1,42 @@
-import { useHost, useReadQuery } from "@platform/app";
-import { Button, Card, Input, PageHeader, Select, Textarea, t } from "@platform/ui";
+import { useHost, useRecordInventory } from "@platform/app";
+import { Button, Card, FlowView, Input, PageHeader, Select, Textarea, t } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { useState } from "react";
+import { installedObjects, type WorkflowDraft, type WorkflowObject } from "./workflow";
+import { useEffect, useState } from "react";
 
-type ObjectDraft = { id: string; name: string; title: string; actions?: { name: string; title: string }[] };
-type Step = { type: string; id: string; action: string; payload: string; expect: "accepted" | "refused" };
-type TestPlan = { id: string; revision: number; title: string; object: string; as?: string; at: string; steps: Step[] };
+type ObjectDraft = WorkflowObject;
+type Step = { type: string; id: string; action: string; payload: string; expect: "accepted" | "refused"; as?: string; advanceSeconds?: number; flow?: string; step?: string; answer?: string };
+type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; as?: string; at: string; steps: Step[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
-export function CandidateTest() {
+export function CandidateTest({ processId = "" }: { processId?: string }) {
   const { client, role, decide } = useHost();
-  const objects = useReadQuery<{ records: ObjectDraft[] }>("/v1/records/build.object?limit=1000");
-  const plans = useReadQuery<{ records: TestPlan[] }>("/v1/records/build.testplan?limit=1000");
+  const objects = useRecordInventory<ObjectDraft>("build.object");
+  const plans = useRecordInventory<TestPlan>("build.testplan");
+  const processes = useRecordInventory<WorkflowDraft>("build.process");
+  const [kind, setKind] = useState<"object" | "flow">(processId ? "flow" : "object");
   const [planID, setPlanID] = useState("");
   const [revision, setRevision] = useState(0);
   const [title, setTitle] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [id, setID] = useState("");
+  const [id, setID] = useState(processId);
   const [member, setMember] = useState("");
   const [at, setAt] = useState("2026-01-01T09:00:00Z");
   const [steps, setSteps] = useState<Step[]>([]);
   const [result, setResult] = useState<Api.CandidateSimulation>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const object = objects.data?.records.find((record) => record.id === id);
+  const process = kind === "flow" ? processes.data?.records.find((record) => record.id === id) : undefined;
+  const object = kind === "object" ? objects.data?.records.find((record) => record.id === id)
+    : installedObjects(objects.data?.records ?? []).find((record) => `build.${record.name}` === process?.object);
+  const askSteps = process?.steps.filter((step) => step.ask !== undefined) ?? [];
+  const workflowSteps = (workflow: WorkflowDraft): Step[] => {
+    const ask = workflow.steps.find((step) => step.ask !== undefined);
+    return [{ type: workflow.object, id: "TEST-1", action: `${workflow.object}.create`, payload: "{}", expect: "accepted", advanceSeconds: 2 },
+      ...(ask ? [{ type: workflow.object, id: "TEST-1", action: "", payload: "{}", flow: `build.${workflow.name}`, step: ask.name, answer: ask.answers?.[0] ?? "", expect: "accepted" as const, advanceSeconds: 2 }] : [])];
+  };
+  useEffect(() => { if (process && steps.length === 0) setSteps(workflowSteps(process)); }, [process, steps.length]);
   const actions = [{ name: "create", title: t("Create records") }, { name: "edit", title: t("Edit records") },
     { name: "archive", title: t("Archive records") }, ...(object?.actions ?? [])];
   const clear = () => { setResult(undefined); setError(""); setSaved(false); setDirty(true); };
@@ -34,7 +46,7 @@ export function CandidateTest() {
   };
   const load = (plan: TestPlan) => {
     clear(); setPlanID(plan.id); setRevision(plan.revision);
-    setTitle(plan.title); setID(plan.object); setMember(plan.as ?? ""); setAt(plan.at);
+    setTitle(plan.title); setKind(plan.process ? "flow" : "object"); setID(plan.process || plan.object || ""); setMember(plan.as ?? ""); setAt(plan.at);
     setSteps(plan.steps); setDirty(false);
   };
   const reload = async () => {
@@ -48,8 +60,8 @@ export function CandidateTest() {
     finally { setBusy(false); }
   };
   const inputs = (): Api.CandidateSimulationRequest => ({
-    objectId: id, as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
-      type: step.type, id: step.id, action: step.action, expect: step.expect, payload: JSON.parse(step.payload),
+    ...(kind === "flow" ? { processId: id } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
+      ...step, payload: JSON.parse(step.payload),
     })),
   });
   const save = async () => {
@@ -59,7 +71,7 @@ export function CandidateTest() {
     setBusy(true);
     try {
       if (await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target },
-        { title, object: id, as: member, at: new Date(at).toISOString(), steps },
+        { title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", as: member, at: new Date(at).toISOString(), steps },
         { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) {
         const refreshed = await plans.refetch();
         const record = refreshed.data?.records.find((plan) => plan.id === target);
@@ -88,7 +100,7 @@ export function CandidateTest() {
   };
   if (role("build") !== "builder") return <PageHeader title={t("Test a candidate")} description={t("Only a builder can test saved definitions.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Test a candidate")} description={t("Try a saved object draft with fixed sample actions. Every run starts empty; production records and effects are never used.")} />
+    <PageHeader title={t("Test a candidate")} description={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")} />
     <Card className="p-3">
       <fieldset disabled={busy} className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -107,7 +119,16 @@ export function CandidateTest() {
           </label>
         </div>
         {plans.isError && <p role="alert" className="text-sm text-danger">{t("The saved test plans could not be loaded.")}</p>}
-        <label className="grid gap-1 text-xs">{t("Saved object draft")}
+        <label className="grid gap-1 text-xs">{t("Candidate kind")}
+          <Select value={kind} onChange={(e) => { setKind(e.target.value as typeof kind); setID(""); setSteps([]); clear(); }}>
+            <option value="object">{t("Objects")}</option><option value="flow">{t("Workflows")}</option>
+          </Select>
+        </label>
+        {kind === "flow" ? <label className="grid gap-1 text-xs">{t("Saved workflow draft")}
+          <Select value={id} onChange={(e) => { setID(e.target.value); clear(); const chosen = processes.data?.records.find((p) => p.id === e.target.value); setSteps(chosen ? workflowSteps(chosen) : []); }}>
+            <option value="">{t("Choose a saved draft")}</option>{processes.data?.records.map((p) => <option key={p.id} value={p.id}>{p.title || p.name}</option>)}
+          </Select>
+        </label> : <label className="grid gap-1 text-xs">{t("Saved object draft")}
           <Select value={id} onChange={(event) => {
             setID(event.target.value); clear();
             const draft = objects.data?.records.find((record) => record.id === event.target.value);
@@ -118,7 +139,8 @@ export function CandidateTest() {
             {(objects.data?.records ?? []).map((draft) => <option key={draft.id} value={draft.id}>{draft.title || draft.name}</option>)}
           </Select>
         </label>
-        {objects.isError && <p role="alert" className="text-sm text-danger">{t("The candidate test could not be run.")}</p>}
+        }
+        {(objects.isError || processes.isError) && <p role="alert" className="text-sm text-danger">{t("The candidate test could not be run.")}</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">{t("Member ID (empty: you)")}
             <Input value={member} onChange={(event) => { setMember(event.target.value); clear(); }} />
@@ -133,11 +155,24 @@ export function CandidateTest() {
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="grid gap-1 text-xs">{t("Test record ID")}<Input value={step.id} onChange={(event) => update(index, { id: event.target.value })} /></label>
-            <label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={(event) => update(index, { action: event.target.value, type: `build.${object?.name}` })}>
+            {kind === "flow" && <label className="grid gap-1 text-xs">{t("Test step kind")}<Select value={step.answer !== undefined ? "answer" : "action"} onChange={(e) => update(index, e.target.value === "answer"
+              ? { action: "", flow: `build.${process?.name}`, step: askSteps[0]?.name, answer: askSteps[0]?.answers?.[0] ?? "", payload: "{}" }
+              : { action: `${object ? `build.${object.name}` : step.type}.create`, flow: undefined, step: undefined, answer: undefined })}>
+              <option value="action">{t("Object action")}</option><option value="answer">{t("Human answer")}</option></Select></label>}
+            {step.answer !== undefined ? <>
+              <label className="grid gap-1 text-xs">{t("Human task step")}<Select value={step.step ?? ""} onChange={(e) => update(index, { step: e.target.value, answer: askSteps.find((s) => s.name === e.target.value)?.answers?.[0] ?? "" })}>
+                {askSteps.map((ask) => <option key={ask.name} value={ask.name}>{ask.title || ask.name}</option>)}</Select></label>
+              <label className="grid gap-1 text-xs">{t("Human answer")}<Select value={step.answer} onChange={(e) => update(index, { answer: e.target.value })}>
+                {askSteps.find((ask) => ask.name === step.step)?.answers?.map((answer) => <option key={answer} value={answer}>{answer}</option>)}</Select></label>
+            </> : <label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={(event) => update(index, { action: event.target.value, type: `build.${object?.name}` })}>
               {!actions.some((action) => `build.${object?.name}.${action.name}` === step.action) && <option value={step.action}>{step.action}</option>}
               {actions.map((action) => <option key={action.name} value={`build.${object?.name}.${action.name}`}>{action.title}</option>)}
-            </Select></label>
+            </Select></label>}
           </div>
+          {kind === "flow" && <div className="grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1 text-xs">{t("Step member ID (empty: plan member)")}<Input value={step.as ?? ""} onChange={(e) => update(index, { as: e.target.value })} /></label>
+            <label className="grid gap-1 text-xs">{t("Advance clock (seconds)")}<Input type="number" min={0} max={86400} value={step.advanceSeconds ?? 0} onChange={(e) => update(index, { advanceSeconds: Number(e.target.value) })} /></label>
+          </div>}
           <label className="grid gap-1 text-xs">{t("Expected outcome")}
             <Select value={step.expect} onChange={(event) => update(index, { expect: event.target.value as Step["expect"] })}>
               <option value="accepted">{t("Accepted")}</option><option value="refused">{t("Refused")}</option>
@@ -167,6 +202,10 @@ export function CandidateTest() {
         <p className="text-sm font-medium">{t("Test step {n}", { n: index + 1 })} · {step.accepted ? t("Accepted") : t("Refused")}</p>
         {step.matched !== undefined && <p className="text-xs">{step.matched ? t("Expected outcome matched") : t("Expected outcome did not match")}</p>}
         {step.refusal && <p className="text-sm text-danger">{step.refusal}</p>}
+        {step.flows?.map((flow) => <Card key={flow.id} className="min-w-0 overflow-x-auto p-2">
+          <FlowView instance={{ ...flow, title: process?.title ?? flow.flow, key: flow.id, undo: null }} />
+        </Card>)}
+        {step.tasks?.map((task) => <p key={task.id} className="text-xs">{t("Human task")}: {task.title}</p>)}
         {step.changes.map((change) => <div key={`${change.type}/${change.id}`} className="min-w-0 text-xs">
           <p className="font-mono">{change.type}/{change.id}</p>
           <pre className="overflow-x-auto rounded bg-muted/10 p-2">{JSON.stringify(change.record, null, 2)}</pre>

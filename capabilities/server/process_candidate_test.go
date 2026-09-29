@@ -87,6 +87,23 @@ func TestProcessCandidateClosesNativeBindingsAndRecovers(t *testing.T) {
 				{Type: typ, ID: "TEST", Flow: "build.review", Step: "review", Answer: answer, AdvanceSeconds: 2, Expect: "accepted"},
 				{Type: typ, ID: "TEST", Action: typ + ".create", Payload: json.RawMessage(`{"note":"DUPLICATE"}`), Expect: "refused"},
 			}}
+			planSteps := make([]build.TestStep, 0, len(request.Steps))
+			for _, step := range request.Steps {
+				payload := string(step.Payload)
+				if payload == "" {
+					payload = "{}"
+				}
+				planSteps = append(planSteps, build.TestStep{Type: step.Type, ID: step.ID, Action: step.Action, Payload: payload, Expect: step.Expect, As: step.As, AdvanceSeconds: step.AdvanceSeconds, Flow: step.Flow, Step: step.Step, Answer: step.Answer})
+			}
+			submit(build.TestPlanType+".create", build.TestPlanType, "PLAN", map[string]any{"title": "Workflow fixed samples", "process": "P", "as": operator.ID, "at": at, "steps": planSteps})
+			for _, bad := range []map[string]any{{"object": "O"}, {"process": ""}, {"steps": []build.TestStep{{Type: typ, ID: "TEST", Action: typ + ".create", Flow: "build.review", Step: "review", Answer: answer, Payload: "{}", Expect: "accepted"}}}} {
+				key++
+				raw, _ := json.Marshal(bad)
+				if _, problem := tn.Submit(builder, &pb.Submission{TenantId: tn.ID, PrincipalId: builder.ID, Authority: build.ID, IdempotencyKey: fmt.Sprint(key), Target: &pb.EntityRef{Type: build.TestPlanType, Id: "PLAN"}, Schema: &pb.SchemaRef{Name: build.TestPlanType + ".edit", Version: 1}, Payload: raw}, at); problem == nil {
+					t.Fatal("invalid workflow plan patch was saved")
+				}
+			}
+			before, count = snapshot(tn), len(journal)
 			result, problem := tn.SimulateCandidate(builder, request)
 			if problem != nil || !result.Recovered || result.Passed == nil || !*result.Passed || result.CandidateID != preview.CandidateID {
 				t.Fatalf("workflow simulation: %+v %v", result, problem)
@@ -230,7 +247,25 @@ func TestProcessCandidateClosesNativeBindingsAndRecovers(t *testing.T) {
 			if snapshot(restored) != snapshot(tn) || restored.ActiveRelease() != saved {
 				t.Fatal("snapshot lost workflow candidate/active release")
 			}
+			plan := platformGetPlan(t, restored, builder, "PLAN", at)
+			if len(plan.Steps) != len(planSteps) || !reflect.DeepEqual(plan.Steps, planSteps) || plan.Process != "P" || plan.Object != "" {
+				t.Fatal("restoration lost the saved workflow inputs")
+			}
 			CheckReplay(t, tn, journal, compose)
 		})
 	}
+}
+
+func platformGetPlan(t *testing.T, tenant *Tenant, member platform.Member, id string, at time.Time) build.TestPlan {
+	t.Helper()
+	view, err := tenant.RecordOf(member, build.TestPlanType, id, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(view.Record)
+	var plan build.TestPlan
+	if err := json.Unmarshal(raw, &plan); err != nil {
+		t.Fatal(err)
+	}
+	return plan
 }

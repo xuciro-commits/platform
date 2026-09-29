@@ -138,6 +138,8 @@ cd apps/mes/server && MES_AGENT_CLIENT=mes-assistant MES_AGENT_SECRET=assistantL
 
 右上角的身份菜单可以切换开发身份。要带 OpenRouter 密钥，就先 `set -a; . deploy/local/.env; set +a`，再加上 `PLATFORM_SECRET_OPENROUTER=$OPENROUTER_API_KEY`。
 
+制造内存演示宿主的 `operator-l1`、`operator-l2` 同时持有 `build.user`，用于路线 43 的对象操作与人工收件箱探针；它们不能编辑构建器定义。此演示角色不修改 OIDC 部署的角色绑定。
+
 ## 接入外部系统时填什么
 
 这些都在 Settings 里添加（登录 `sup@plant.test` 或 `manager@hotel.test`）。
