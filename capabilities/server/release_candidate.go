@@ -188,6 +188,9 @@ type ReleaseActive struct {
 // records and before computing any digest or error path. It never changes the
 // installed definitions, persistent records, or active operator work.
 func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id string) (ReleasePreview, error) {
+	if err := t.admits(m); err != nil {
+		return ReleasePreview{}, err
+	}
 	if m.Roles[build.ID] != build.Builder {
 		return ReleasePreview{}, fmt.Errorf("builder role required")
 	}

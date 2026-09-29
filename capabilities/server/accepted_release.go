@@ -114,6 +114,9 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 // preview cannot be persisted by submitting its ID alone. A retry of an
 // already-saved ID remains possible even after the editor changes the draft.
 func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind, draftID, candidateID, key string, now time.Time) (string, error) {
+	if err := t.admits(m); err != nil {
+		return "", err
+	}
 	if m.Roles[build.ID] != build.Builder {
 		return "", fmt.Errorf("builder role required")
 	}
@@ -161,6 +164,9 @@ func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind
 // every asset of the candidate must equal the running definition byte for
 // byte; a stale or not-yet-installed candidate is refused with its paths.
 func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now time.Time) (string, error) {
+	if err := t.admits(m); err != nil {
+		return "", err
+	}
 	if m.Roles[build.ID] != build.Builder {
 		return "", fmt.Errorf("builder role required")
 	}

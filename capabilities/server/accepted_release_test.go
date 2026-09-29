@@ -61,6 +61,11 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if err != nil || preview.CandidateID == "" || preview.Diagnostic != "" {
 		t.Fatalf("expected a valid saved draft candidate: %+v, %v", preview, err)
 	}
+	foreign := member
+	foreign.Tenant = "foreign"
+	if out, err := live.PreviewRelease(foreign, platform.AssetObject, "O1"); err == nil || out.CandidateID != "" {
+		t.Fatal("foreign builder read a private candidate")
+	}
 	fail = true
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", preview.CandidateID, "save-1", at); err == nil {
 		t.Fatal("append failure should be returned")
@@ -81,8 +86,10 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	}
 	other := member
 	other.Roles = map[string]string{}
-	if _, err := live.SaveReleaseCandidate(other, platform.AssetObject, "O1", savedID, "unauthorized", at); err == nil || len(entries) != 2 {
-		t.Fatal("unprivileged member saved a candidate")
+	for _, bad := range []platform.Member{other, foreign} {
+		if _, err := live.SaveReleaseCandidate(bad, platform.AssetObject, "O1", savedID, "unauthorized", at); err == nil || len(entries) != 2 {
+			t.Fatal("unauthorized member saved or retrieved a candidate")
+		}
 	}
 	recovered := compose()
 	if err := recovered.Replay(entries); err != nil {
@@ -348,8 +355,16 @@ func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
 		t.Fatal("a candidate operators do not run was activated")
 	}
 	submit("publish", build.SchemaPublish, `{}`)
-	if _, err := live.ActivateRelease(user, draft.CandidateID, "a2", at); err == nil {
-		t.Fatal("a non-builder moved the release pointer")
+	foreign := member
+	foreign.Tenant = "foreign"
+	before, count := snapshot(live), len(entries)
+	for _, bad := range []platform.Member{user, foreign} {
+		if _, err := live.ActivateRelease(bad, draft.CandidateID, "a2", at); err == nil {
+			t.Fatal("an unauthorized member moved the release pointer")
+		}
+	}
+	if snapshot(live) != before || len(entries) != count {
+		t.Fatal("unauthorized release activation changed state or journal")
 	}
 	if id, err := live.ActivateRelease(member, draft.CandidateID, "a3", at); err != nil || id != draft.CandidateID {
 		t.Fatalf("activate published candidate: %s, %v", id, err)
