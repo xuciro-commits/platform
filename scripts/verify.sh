@@ -31,7 +31,12 @@ contract() {
 }
 
 formal() {
+  local proof_failures=${#failed[@]}
   step kernel-proofs scripts/formal.sh
+  if ((${#failed[@]} == proof_failures)); then
+    sed -n '1p' .build/verify/kernel-proofs.log
+    cat .build/formal-tools/proof-axioms.log
+  fi
 }
 
 web() {

@@ -33,11 +33,11 @@ Go 性质测试比较参考实现的真实收据、日志和检查次数。
 | C4/C5 tenant-key scope / 租户键作用域 | `other_tenant_unchanged` | `k4.idempotency-scoped-by-tenant`; `TestIdempotencySequences` compares both tenants after every request / 每步比较两租户 |
 
 `TestAcceptedResultHospitalityProbe` and `TestAcceptedResultManufacturingProbe`
-add object-draft, publication and generated-record duplicate/conflict requests,
+add object-draft, development publication and generated-record duplicate/conflict requests,
 verify identical receipts and unchanged snapshots/journals, then run `CheckReplay`.
 These are host integration evidence, not additional Lean theorems.
 
-酒店和制造的上述探针在对象草稿、发布和生成记录上重发及冲突请求，核对收据、
+酒店和制造的上述探针在对象草稿、开发发布和生成记录上重发及冲突请求，核对收据、
 快照与日志不变后运行 `CheckReplay`。它们属于宿主集成证据，而非额外 Lean 定理。
 
 ## Assumptions and limits / 前提与边界
