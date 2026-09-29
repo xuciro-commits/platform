@@ -920,3 +920,69 @@ test("route 38: a named relation on the referenced record", async ({ page, reque
   });
   expect(noAccess.status()).toBe(403);
 });
+
+// Route 39 (ADR-0040 21c D2): a tenant action creates a related record under the
+// same change. In the browser, taking the action transitions the record, creates
+// the related record, and lists it under the inverse relation on the parent page.
+test("route 39: an action creates a related record", async ({ page, request }, testInfo) => {
+  const stamp = Date.now().toString(36).slice(-5);
+  const visitName = `vis${stamp}`, visitId = fresh("O");
+  const followupName = `fol${stamp}`, followupId = fresh("O");
+  const visitType = `build.${visitName}`, followupType = `build.${followupName}`;
+
+  // 1. Create and publish Visit object with states open/done
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id: visitId }, {
+    name: visitName, title: "Visit " + stamp, plural: "Visits " + stamp,
+    fields: [{ name: "guest", title: "Guest", type: "text", required: true }],
+    states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
+  });
+  await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id: visitId }, {});
+
+  // 2. Create and publish Followup object referencing visit with inverse "followups", required note
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id: followupId }, {
+    name: followupName, title: "Follow-up " + stamp, plural: "Follow-ups " + stamp,
+    fields: [
+      { name: "visit", title: "Visit", type: "reference", ref: visitType, inverse: "followups", required: true },
+      { name: "note", title: "Note", type: "text", required: true },
+    ],
+  });
+  await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id: followupId }, {});
+
+  // 3. Edit visit object to add "close" action that creates followup
+  await decide(request, "manager", "build", "build.object.edit", { type: "build.object", id: visitId }, {
+    name: visitName, title: "Visit " + stamp, plural: "Visits " + stamp,
+    fields: [{ name: "guest", title: "Guest", type: "text", required: true }],
+    states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
+    actions: [{
+      name: "close", title: "Close", from: ["open"], to: "done",
+      inputs: [{ name: "note", title: "Note", type: "text", required: true }],
+      creates: [{
+        object: followupType,
+        via: "visit",
+        sets: [{ field: "note", from: "note" }],
+      }],
+    }],
+  });
+  await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id: visitId }, {});
+
+  // 4. Create a visit record
+  const record = `V-${stamp}`;
+  await decide(request, "manager", "build", `${visitType}.create`, { type: visitType, id: record }, { guest: "Ada Lovelace" });
+
+  // 5. Open the visit in the browser
+  await open(page, "manager", `/record?type=${visitType}&id=${record}`);
+  await expect(page.getByText("Open", { exact: true }).first()).toBeVisible();
+
+  // 6. Take "close" action with a note
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: /Note/ }).fill("Call back tomorrow");
+  await dialog.getByRole("button").filter({ hasText: "Close" }).click();
+
+  // 7. Expect state Done and followup listed on the visit's page
+  await expect(page.getByText("Done", { exact: true }).first()).toBeVisible();
+  const sectionHeading = page.getByRole("heading", { level: 2 }).filter({ hasText: /followups/i });
+  await expect(sectionHeading).toBeVisible();
+  await expect(page.getByText("Call back tomorrow")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("action-creates-record.png"), fullPage: true });
+});

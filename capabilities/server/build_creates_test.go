@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,7 +20,8 @@ func TestActionCreatesRelatedRecordAtomically(t *testing.T) {
 	var journal []Entry
 	compose := func() *Tenant {
 		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana", Roles: map[string]string{build.ID: build.Builder}}}
-		tn, err := NewTenant("cr", NewConsole("cr", seat), build.New("cr"))
+		seatUser := Seat{Subjects: []string{"kai"}, Member: platform.Member{ID: "kai", Roles: map[string]string{build.ID: build.User}}}
+		tn, err := NewTenant("cr", NewConsole("cr", seat, seatUser), build.New("cr"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,17 +37,21 @@ func TestActionCreatesRelatedRecordAtomically(t *testing.T) {
 		return e.Body, nil
 	}
 	dana, _ := tn.Member("dana")
+	kai, _ := tn.Member("kai")
 	keys := 0
-	do := func(schema, typ, id string, payload any) string {
+	doAs := func(m platform.Member, schema, typ, id string, payload any) string {
 		keys++
 		raw, _ := json.Marshal(payload)
-		_, err := tn.Submit(dana, &pb.Submission{TenantId: "cr", PrincipalId: "dana", Authority: build.ID,
+		_, err := tn.Submit(m, &pb.Submission{TenantId: "cr", PrincipalId: m.ID, Authority: build.ID,
 			IdempotencyKey: fmt.Sprint("k", keys), Target: &pb.EntityRef{Type: typ, Id: id},
 			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, now)
 		if err != nil {
 			return err.Code.String() + ": " + err.Message
 		}
 		return "ok"
+	}
+	do := func(schema, typ, id string, payload any) string {
+		return doAs(dana, schema, typ, id, payload)
 	}
 	must := func(got string) {
 		t.Helper()
@@ -59,6 +65,7 @@ func TestActionCreatesRelatedRecordAtomically(t *testing.T) {
 		"fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}}, "states": states}))
 	must(do(build.SchemaPublish, build.ObjectType, "O-V", map[string]any{}))
 	must(do(build.ObjectType+".create", build.ObjectType, "O-F", map[string]any{"name": "followup", "title": "Follow-up",
+		"access": []map[string]any{{"role": build.User, "read": "all", "create": false}},
 		"fields": []map[string]any{{"name": "visit", "title": "Visit", "type": "reference", "ref": visit, "inverse": "followups"},
 			{"name": "note", "title": "Note", "type": "text", "required": true}}}))
 	must(do(build.SchemaPublish, build.ObjectType, "O-F", map[string]any{}))
@@ -70,12 +77,23 @@ func TestActionCreatesRelatedRecordAtomically(t *testing.T) {
 				"inputs":  []map[string]any{{"name": "note", "title": "Note", "type": "text"}},
 				"creates": []map[string]any{{"object": followup, "via": "visit", "sets": sets}}}}}
 	}
-	// Another app's object, or a Via that is not its reference here, is refused at publish.
-	bad := close(nil)
-	bad["actions"].([]map[string]any)[0]["creates"] = []map[string]any{{"object": "crm.task", "via": "visit"}}
-	must(do(build.ObjectType+".edit", build.ObjectType, "O-V", bad))
-	if got := do(build.SchemaPublish, build.ObjectType, "O-V", map[string]any{}); got == "ok" {
-		t.Fatal("an action creating another app's record was published")
+	for _, c := range []struct {
+		desc    string
+		creates []map[string]any
+		want    string
+	}{
+		{"another app's object", []map[string]any{{"object": "crm.account", "via": "visit"}}, "another app's object"},
+		{"this object itself", []map[string]any{{"object": visit, "via": "visit"}}, "this object itself"},
+		{"via not reference to this", []map[string]any{{"object": followup, "via": "note"}}, "is not its reference to"},
+		{"field related object lacks", []map[string]any{{"object": followup, "via": "visit", "sets": []map[string]any{{"field": "nonexistent", "from": "note"}}}}, "has no field for"},
+	} {
+		bad := close(nil)
+		bad["actions"].([]map[string]any)[0]["creates"] = c.creates
+		must(do(build.ObjectType+".edit", build.ObjectType, "O-V", bad))
+		got := do(build.SchemaPublish, build.ObjectType, "O-V", map[string]any{})
+		if !strings.Contains(got, c.want) {
+			t.Fatalf("%s: got %q, want %q", c.desc, got, c.want)
+		}
 	}
 	must(do(build.ObjectType+".edit", build.ObjectType, "O-V", close([]map[string]any{{"field": "note", "from": "note"}})))
 	must(do(build.SchemaPublish, build.ObjectType, "O-V", map[string]any{}))
@@ -97,6 +115,10 @@ func TestActionCreatesRelatedRecordAtomically(t *testing.T) {
 		var r struct{ State string }
 		json.Unmarshal(raw, &r)
 		return r.State
+	}
+	// A member whose role lacks create on the related object is refused and nothing is written.
+	if got := doAs(kai, visit+".close", visit, "V-1", map[string]any{"note": "Call back"}); got == "ok" || stateOf("V-1") != "open" || count() != 0 {
+		t.Fatalf("unprivileged creator wrote a change: %s, %s, %d", got, stateOf("V-1"), count())
 	}
 	// The follow-up's required note is missing: the whole action is refused.
 	if got := do(visit+".close", visit, "V-1", map[string]any{}); got == "ok" || stateOf("V-1") != "open" || count() != 0 {
