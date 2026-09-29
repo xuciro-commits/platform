@@ -43,15 +43,17 @@ type Page struct {
 
 // Section is one widget on a composed page, as someone lays it out.
 type Section struct {
-	Widget  string   `json:"widget" field:"required" choices:"table,detail,actions,chart,metric,text,filter,form,timeline,tasks" help:"What it shows"`
-	Title   string   `json:"title,omitempty"`
-	Width   string   `json:"width,omitempty" choices:"full,half"`
-	Object  string   `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
-	Fields  []string `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
-	Actions []string `json:"actions,omitempty" help:"For actions: the schemas it offers"`
-	Group   string   `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
-	Measure string   `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
-	Text    string   `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
+	Widget string `json:"widget" field:"required" choices:"table,detail,actions,chart,metric,text,filter,form,timeline,tasks" help:"What it shows"`
+	Title  string `json:"title,omitempty"`
+	Width  string `json:"width,omitempty" choices:"full,half"`
+	Object string `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
+	// Relation is the named relation from the page's object the section follows (ADR-0040 21b D3).
+	Relation string   `json:"relation,omitempty" title:"Through" help:"For a table, chart or metric of another object: the relation from the selected record it follows"`
+	Fields   []string `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
+	Actions  []string `json:"actions,omitempty" help:"For actions: the schemas it offers"`
+	Group    string   `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
+	Measure  string   `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
+	Text     string   `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
 }
 
 func (b *Build) pageEntity() platform.Entity {
@@ -113,7 +115,7 @@ func descriptor(p Page) platform.Page {
 	}
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
-		section := platform.Section{Widget: s.Widget, Title: s.Title, Width: s.Width, Fields: slices.Clone(s.Fields),
+		section := platform.Section{Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Fields: slices.Clone(s.Fields),
 			Group: s.Group, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}}
 		if s.Object != "" {
 			owner, _, _ := strings.Cut(s.Object, ".")

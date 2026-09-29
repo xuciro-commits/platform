@@ -175,6 +175,16 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 			info = shown
 		}
+		if s.Relation != "" {
+			if s.Widget != "table" && s.Widget != "chart" && s.Widget != "metric" {
+				return fmt.Errorf("%s: only a table, chart or metric follows a relation", where)
+			}
+			if info.Type == p.Object.Name || !slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool {
+				return f.Type == "reference" && f.Ref == p.Object.Name && f.Inverse == s.Relation
+			}) {
+				return fmt.Errorf("%s: %s declares no relation %q from %s", where, info.Type, s.Relation, p.Object.Name)
+			}
+		}
 		field := func(name string) error {
 			if _, ok := info.Field(strings.Split(name, ":")[0]); !ok {
 				return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)

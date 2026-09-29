@@ -78,6 +78,16 @@ export function PageEditor({ id }: { id: string }) {
       .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && f.ref === page?.object))
       .map((d) => d.ref.name);
   }, [definitions, page?.object]);
+  // The named relations from the page's object, by the related object that declares them (ADR-0040 21b).
+  const relationsOf = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const d of definitions ?? []) {
+      if (d.ref.kind !== "object" || !d.entity) continue;
+      const names = d.entity.fields.filter((f) => f.type === "reference" && f.ref === page?.object && f.inverse).map((f) => f.inverse!);
+      if (names.length) out[d.ref.name] = names;
+    }
+    return out;
+  }, [definitions, page?.object]);
   useEffect(() => {
     if (page && !dirty) {
       setSections(page.sections ?? []);
@@ -164,7 +174,7 @@ export function PageEditor({ id }: { id: string }) {
             onChange={(patch) => { setSettings({ ...settings, ...patch }); setDirty(true); }} /> :
           <Properties section={sections[chosen]} info={source.entity(sections[chosen]?.object || page.object)}
             catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            object={page.object} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
+            object={page.object} relatedObjects={relatedObjects} relationsOf={relationsOf} onChange={(patch) => change(chosen, patch)} />}
         </div>
       </div>
     </div>
@@ -217,8 +227,8 @@ function Layout({ sections, chosen, title, onChoose, onAdd, onMove, onRemove }: 
 }
 
 /** The panel that configures the widget in hand: only what that widget binds. */
-function Properties({ section, info, catalog, object, relatedObjects = [], onChange }: {
-  section?: Draft; info?: EntityInfo; object: string; relatedObjects?: string[];
+function Properties({ section, info, catalog, object, relatedObjects = [], relationsOf = {}, onChange }: {
+  section?: Draft; info?: EntityInfo; object: string; relatedObjects?: string[]; relationsOf?: Record<string, string[]>;
   catalog: { schema: string; title: string; target: string }[];
   onChange: (patch: Partial<Draft>) => void;
 }) {
@@ -231,9 +241,17 @@ function Properties({ section, info, catalog, object, relatedObjects = [], onCha
       <div className="text-xs font-semibold text-muted">{widgetTitles[section.widget]?.() ?? section.widget}</div>
       {relatedObjects.length > 0 && (section.widget === "table" || section.widget === "detail" || section.widget === "chart" || section.widget === "metric" || section.widget === "form") && (
         <label className="grid gap-1 text-xs">{t("Object")}
-          <Select value={section.object ?? object} onChange={(e) => onChange({ object: e.target.value === object ? undefined : e.target.value, fields: [] })}>
+          <Select value={section.object ?? object} onChange={(e) => onChange({ object: e.target.value === object ? undefined : e.target.value, relation: undefined, fields: [] })}>
             <option value={object}>{t("{object} (this page)", { object })}</option>
             {relatedObjects.map((rel) => <option key={rel} value={rel}>{rel}</option>)}
+          </Select>
+        </label>
+      )}
+      {section.object && (relationsOf[section.object]?.length ?? 0) > 0 && (section.widget === "table" || section.widget === "chart" || section.widget === "metric") && (
+        <label className="grid gap-1 text-xs">{t("Through")}
+          <Select value={section.relation ?? ""} onChange={(e) => onChange({ relation: e.target.value || undefined })}>
+            <option value="">{t("Any reference to this page's object")}</option>
+            {relationsOf[section.object]!.map((name) => <option key={name} value={name}>{name}</option>)}
           </Select>
         </label>
       )}

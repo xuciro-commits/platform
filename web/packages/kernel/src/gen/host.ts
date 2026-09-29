@@ -768,6 +768,7 @@ export type Section = {
   title?: string;
   width?: string;
   object?: AssetRef;
+  relation?: string;
   fields?: string[];
   actions?: AssetRef[];
   group?: string;

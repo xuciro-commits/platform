@@ -581,6 +581,8 @@
  "timeline": "时间线",
  "For actions: the schemas it offers": "动作：它提供哪些动作的 schema",
  "Grouped by": "分组依据",
+ "Through": "经由关系",
+ "For a table, chart or metric of another object: the relation from the selected record it follows": "用于其他对象的表格、图表或指标：从所选记录沿哪条关系展开",
  "For a chart: the field, or <field>:month": "图表：按哪个字段分组，或 <字段>:month",
  "Measure": "度量",
  "For a chart or a metric: count, sum:<field>, avg:<field>": "图表或指标：count、sum:<字段>、avg:<字段>",

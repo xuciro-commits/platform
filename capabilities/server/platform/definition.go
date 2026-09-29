@@ -65,12 +65,16 @@ type Section struct {
 	// Width is full or half, in the order the sections are laid out.
 	Width string `json:"width,omitempty"`
 	// Object is what it shows; empty: the page's own object.
-	Object  AssetRef   `json:"object,omitempty"`
-	Fields  []string   `json:"fields,omitempty"`  // table, detail, filter, form
-	Actions []AssetRef `json:"actions,omitempty"` // actions
-	Group   string     `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
-	Measure string     `json:"measure,omitempty"` // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
-	Text    string     `json:"text,omitempty"`    // text
+	Object AssetRef `json:"object,omitempty"`
+	// Relation is the named inverse (FieldInfo.Inverse) of Object's reference to
+	// the page's object: the section shows the selected record's related records
+	// through it (ADR-0040 21b D3). Empty: no declared relation.
+	Relation string     `json:"relation,omitempty"`
+	Fields   []string   `json:"fields,omitempty"`  // table, detail, filter, form
+	Actions  []AssetRef `json:"actions,omitempty"` // actions
+	Group    string     `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
+	Measure  string     `json:"measure,omitempty"` // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
+	Text     string     `json:"text,omitempty"`    // text
 }
 
 // Widgets are the widget kinds a composed page may hold (ADR-0035 D2).

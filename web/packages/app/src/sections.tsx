@@ -33,13 +33,19 @@ const objectOf = (page: Page, section: Section) => section.object?.name || page.
 const domainOf = (narrowed: Narrowed, object: string): unknown[] =>
   Object.entries(narrowed[object] ?? {}).filter(([, v]) => v !== undefined && v !== "").map(([field, v]) => [field, "=", v]);
 
+/** The reference that ties a section's object to the page's selected record:
+ *  the declared relation when the section names one (ADR-0040 21b), else the
+ *  first reference to the page's object. */
+const relatedField = (fields: { name: string; type: string; ref?: string; inverse?: string }[] | undefined, page: Page, section: Section) =>
+  fields?.find((f) => f.type === "reference" && f.ref === page.object.name && (!section.relation || f.inverse === section.relation));
+
 /** The records of an object, as a list; selecting one fills the rest of the page. */
 function TableWidget({ page, section, onSelect, selected, narrowed }: Bound) {
   const { source } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === page.object.name;
   const info = source.entity(type);
-  const refField = !isMaster ? info?.fields.find((f) => f.type === "reference" && f.ref === page.object.name) : undefined;
+  const refField = !isMaster ? relatedField(info?.fields, page, section) : undefined;
 
   if (refField && !selected) {
     return (
@@ -107,7 +113,7 @@ function ChartWidget({ page, section, kpi, narrowed, selected }: Bound & { kpi: 
   const type = objectOf(page, section);
   const isMaster = type === page.object.name;
   const info = source.entity(type);
-  const refField = !isMaster ? info?.fields.find((f) => f.type === "reference" && f.ref === page.object.name) : undefined;
+  const refField = !isMaster ? relatedField(info?.fields, page, section) : undefined;
   const relationDomain = refField && selected ? [[refField.name, "=", selected.id]] : [];
   const domain = [...domainOf(narrowed, type), ...relationDomain];
 
