@@ -121,10 +121,14 @@ func TestTenantPrincipalAndAuthorityAreChecked(t *testing.T) {
 	h := newHotel()
 	other := as("desk-9", "hotel-b", FrontDesk)
 	_, got := create(h, other, "r1", "k1", "suite", "2026-10-01", "2026-10-02")
-	expect(t, got, "ERROR_CODE_POLICY_DENIED")
+	expect(t, got, "ERROR_CODE_NOT_FOUND") // the host refuses the foreign member before routing to this hotel
 	s := submission(desk, SchemaCreate, "r1", "k2", map[string]string{})
-	s.PrincipalId = "manager-1" // claims someone else
+	s.TenantId = "hotel-b" // this hotel's member claims a different submission tenant
 	_, err := submit(h, desk, s)
+	expect(t, err.Error(), "ERROR_CODE_POLICY_DENIED")
+	s = submission(desk, SchemaCreate, "r1", "k2", map[string]string{})
+	s.PrincipalId = "manager-1" // claims someone else
+	_, err = submit(h, desk, s)
 	expect(t, err.Error(), "ERROR_CODE_POLICY_DENIED")
 	s = submission(desk, SchemaCreate, "r1", "k3", map[string]string{"roomType": "suite", "checkIn": "2026-10-01", "checkOut": "2026-10-02", "guest": "G"})
 	s.Authority = "desk-laptop"
