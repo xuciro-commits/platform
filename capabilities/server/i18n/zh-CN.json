@@ -665,5 +665,8 @@
  "the action %q creates %q and sets %q, which the action fills with this record": "动作 %q 创建了 %q 并设置 %q，但该字段已由动作自动填充为当前记录",
  "the action %q creates %q and sets %q, which it has no field for": "动作 %q 创建了 %q 并设置 %q，但该对象没有这个字段",
  "Query": "查询",
- "For a table: a named query of its object, like crm.open-opportunities": "表格类组件：该对象的具名查询，例如 crm.open-opportunities"
+ "For a table: a named query of its object, like crm.open-opportunities": "表格类组件：该对象的具名查询，例如 crm.open-opportunities",
+ "{member} is not a member here": "{member} 不是这里的成员",
+ "{action} cannot be tried": "{action} 无法试运行",
+ "{action} cannot be tried without running it": "{action} 无法在不真正执行的情况下试运行"
 }

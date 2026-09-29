@@ -17,7 +17,7 @@ type Section = NonNullable<Api["sections"]>[number];
 type PageRecord = {
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
   list?: string[]; detail?: string[]; actions?: string[];
-  sections?: { widget: string; title?: string; width?: string; object?: string; relation?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string }[];
+  sections?: { widget: string; title?: string; width?: string; object?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
@@ -232,6 +232,11 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
   catalog: { schema: string; title: string; target: string }[];
   onChange: (patch: Partial<Draft>) => void;
 }) {
+  const { definitions } = useHost();
+  // Named queries of an object (ADR-0040 21c), as "<app>.<name>".
+  const queriesOf = (obj: string) => (definitions ?? [])
+    .filter((d) => d.ref.kind === "query" && d.query?.object === obj)
+    .map((d) => ({ key: `${d.ref.app}.${d.ref.name}`, title: d.query?.title ?? d.ref.name }));
   if (!section) return <Card className="p-3 text-xs text-muted">{t("Choose a section to configure it.")}</Card>;
   const fields = info?.fields ?? [];
   const actions = catalog.filter((a) => a.target === (section.object || object));
@@ -252,6 +257,14 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
           <Select value={section.relation ?? ""} onChange={(e) => onChange({ relation: e.target.value || undefined })}>
             <option value="">{t("Any reference to this page's object")}</option>
             {relationsOf[section.object]!.map((name) => <option key={name} value={name}>{name}</option>)}
+          </Select>
+        </label>
+      )}
+      {section.widget === "table" && queriesOf(section.object || object).length > 0 && (
+        <label className="grid gap-1 text-xs">{t("Query")}
+          <Select value={section.query ?? ""} onChange={(e) => onChange({ query: e.target.value || undefined })}>
+            <option value="">{t("All records it may read")}</option>
+            {queriesOf(section.object || object).map((q) => <option key={q.key} value={q.key}>{q.title}</option>)}
           </Select>
         </label>
       )}

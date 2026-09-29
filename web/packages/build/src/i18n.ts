@@ -8,6 +8,8 @@ register("zh-CN", {
   "Pages": "页面",
   "Applications": "应用",
   "Release review": "发布候选审查",
+  "Query": "查询",
+  "All records it may read": "可读取的全部记录",
   "Through": "经由关系",
   "Any reference to this page's object": "任一指向本页对象的引用",
   "Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.": "对比已保存的草稿，再保存候选的精确字节。保存不会让操作员使用它。",

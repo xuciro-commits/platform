@@ -382,6 +382,25 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
+	handle(Route{Pattern: "POST /v1/simulate", Summary: "Builder-only dry run: decide an action as a member in a private staged decision and discard it (ADR-0040 21d)",
+		Query: []Param{{"as", "the member it is tried as; empty: the builder"}}, Body: []byte{}, Answer: Simulation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		s := &pb.Submission{}
+		if protojson.Unmarshal(body, s) != nil || s.GetSchema() == nil || s.GetTarget() == nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "a submission with a schema and a target is required"})
+			return
+		}
+		out, err := t.Simulate(m, r.URL.Query().Get("as"), s, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	handle(Route{Pattern: "GET /v1/releases/active", Summary: "The tenant's active release ID, readable by any member (ADR-0039 20b)", Answer: ReleaseActive{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, ReleaseActive{ID: t.ActiveRelease()})
 	})

@@ -813,6 +813,18 @@ export type Signal = {
   value?: string;
 };
 
+export type SimulatedChange = {
+  type: string;
+  id: string;
+  record: unknown;
+};
+
+export type Simulation = {
+  accepted: boolean;
+  refusal?: string;
+  changes: SimulatedChange[];
+};
+
 export type Stamp = {
   by?: string;
   at?: string;
