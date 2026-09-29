@@ -100,7 +100,8 @@ workflow_state() {
     if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
     for path in records/build.object/WF-O records/build.process/WF-P records/build.testplan/WF-PLAN \
       records/build.rehearsal$suffix records/flow.instance/build.review$suffix:WF-OLD \
-      records/flow.instance/build.review$suffix:WF-NEW releases/active; do
+      records/flow.instance/build.review$suffix:WF-NEW \
+      records/flow.instance/build.review$suffix:WF-JOINT releases/active; do
       workflow_get "$actor" "$path" || fail "workflow state $suffix $path"
     done
   done
@@ -231,6 +232,67 @@ function_after_recovery() {
   function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$candidate"
   workflow_submit "$operator" fn-call-recovered build.function-call.start build.function-call FN-CALL-RECOVERED "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-NEW\"}"
   function_wait "$operator" FN-CALL-RECOVERED "$typ/WF-NEW" "$candidate"
+}
+function_joint_setup() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 operator=$4 suffix=$5
+  local typ=build.rehearsal$suffix name=advice$suffix flow=build.review$suffix candidate report state result
+  # The retained first function version now belongs to both operator paths.
+  workflow_submit "$builder" fn-joint-flow-edit build.process.edit build.process WF-P \
+    "{\"steps\":[{\"name\":\"infer\",\"function\":{\"name\":\"$name\",\"version\":1},\"next\":\"review\"},{\"name\":\"review\",\"ask\":\"user\",\"answers\":[\"approve\"],\"branches\":{\"approve\":\"reject\"}},{\"name\":\"reject\",\"act\":\"reject\"}]}"
+  workflow_submit "$builder" fn-joint-flow-publish build.process.publish build.process WF-P '{}'
+  result=$(workflow_post "$builder" releases/preview '{"kind":"object","id":"WF-O"}') || fail "joint function preview"
+  candidate=$(jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId' <<<"$result") || fail "joint function candidate"
+  jq -e --arg name "$name" --arg flow "$flow" --arg page "advicepage$suffix" \
+    '[.included[] | select(.app == "build" and ((.kind == "function" and .name == $name) or (.kind == "page" and .name == $page) or (.kind == "flow" and .name == $flow)))] | length == 3' \
+    <<<"$result" >/dev/null || fail "joint candidate omitted function, page or flow"
+  workflow_post "$builder" releases/candidates "{\"kind\":\"object\",\"id\":\"WF-O\",\"candidateId\":\"$candidate\",\"key\":\"fn-joint-save\"}" |
+    jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "joint function candidate save"
+  report=$(workflow_post "$builder" releases/evaluations "{\"candidateId\":\"$candidate\",\"planId\":\"FN-PLAN\",\"key\":\"fn-joint-eval\"}" | jq -er .id) || fail "joint function evaluation"
+  for _ in $(seq 30); do
+    state=$(workflow_get "$builder" "records/build.evaluation/$report" | jq -r .record.state) || true
+    [[ $state == passed ]] && break
+    sleep 1
+  done
+  [[ $state == passed ]] || fail "joint function evaluation: $state"
+  workflow_post "$builder" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"fn-joint-active\"}" |
+    jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "joint function activation"
+  workflow_submit "$operator" fn-joint-source "$typ.create" "$typ" WF-JOINT '{"note":"Shared function release"}'
+  workflow_submit "$operator" fn-joint-page build.function-call.start build.function-call FN-CALL-JOINT \
+    "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-JOINT\"}"
+  function_wait "$operator" FN-CALL-JOINT "$typ/WF-JOINT" "$candidate"
+  jq -n --arg candidate "$candidate" --arg flow "$flow" '{candidate:$candidate,flow:$flow}' >"$backup/function-joint-$suffix.json"
+}
+function_joint_wait() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 suffix=$4 candidate flow typ=build.rehearsal$suffix result
+  candidate=$(jq -r .candidate "$backup/function-joint-$suffix.json")
+  flow=$(jq -r .flow "$backup/function-joint-$suffix.json")
+  for _ in $(seq 30); do
+    result=$(workflow_get "$builder" "records/build.function-call?limit=500") || true
+    if jq -e --arg source "$typ/WF-JOINT" --arg release "$candidate" \
+      '[.records[] | select(.source == $source and .release == $release and .state == "ready" and .version == 1 and .costReported == true)] | length == 2' \
+      <<<"$result" >/dev/null 2>&1; then break; fi
+    sleep 1
+  done
+  jq -e --arg source "$typ/WF-JOINT" --arg release "$candidate" \
+    '[.records[] | select(.source == $source and .release == $release and .state == "ready" and .version == 1 and .costReported == true)] | length == 2' \
+    <<<"$result" >/dev/null || fail "joint page and flow calls did not retain the same release"
+  workflow_wait "$builder" "$flow:WF-JOINT" 3 "$candidate"
+}
+function_joint_finish() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=work builder=$3 operator=$4 suffix=$5 candidate flow typ=build.rehearsal$suffix task result
+  candidate=$(jq -r .candidate "$backup/function-joint-$suffix.json")
+  flow=$(jq -r .flow "$backup/function-joint-$suffix.json")
+  function_joint_wait "$SERVER" "$TENANT" "$builder" "$suffix"
+  task=$(workflow_get "$builder" "records/flow.instance/$flow:WF-JOINT" | jq -er '.record.tokens[] | select(.waits == "ask") | .task') || fail "joint flow task missing"
+  workflow_submit "$operator" fn-joint-answer work.task.complete work.task "$task" '{"answer":"approve"}'
+  for _ in $(seq 30); do
+    result=$(workflow_get "$builder" "records/$typ/WF-JOINT") || true
+    [[ $(jq -r .record.state <<<"$result") == rejected ]] && break
+    sleep 1
+  done
+  [[ $(jq -r .record.state <<<"$result") == rejected ]] || fail "joint flow did not finish after recovery"
+  workflow_get "$builder" "records/flow.instance/$flow:WF-JOINT" |
+    jq -e --arg r "$candidate" '.record | .state == "done" and .version == 3 and .release == $r' >/dev/null || fail "joint flow lost its release after recovery"
 }
 
 # Inputs of every kind the journal keeps: decisions and a push batch.
@@ -508,6 +570,11 @@ echo "ok   workflows: fixed isolated plans, exact releases, old/new native asks,
 function_setup "$MANUFACTURING" plant-sz "$SUP" "$OP2" plant op-l2
 function_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel sales-1
 echo "ok   builder AI functions: both industries activate a page pinned to retained version 1 after publishing version 2; operators keep strict results in separate call records"
+function_joint_setup "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
+function_joint_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
+function_joint_wait "$MANUFACTURING" plant-sz "$SUP" plant
+function_joint_wait "$HOSPITALITY" hotel-a "$MGR" hotel
+echo "ok   joint AI function release: both industries activate one evaluated candidate for page and native flow calls"
 before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
@@ -522,6 +589,8 @@ for host in manufacturing-server hospitality-server; do
 done
 function_after_restart "$MANUFACTURING" plant-sz "$OP2" plant
 function_after_restart "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
+function_joint_wait "$MANUFACTURING" plant-sz "$SUP" plant
+function_joint_wait "$HOSPITALITY" hotel-a "$MGR" hotel
 echo "ok   builder AI functions: saved answers survived PostgreSQL restart and new calls retained the activated page's older function version"
 hosp crm "$SALES_TOKEN" f-3 crm.opportunity.close crm.opportunity OPP-9 '{"outcome":"won"}' | jq -e .record >/dev/null || fail "win the group after the restart"
 [[ $(blockstate) == "confirmed booked,booked" ]] || fail "group block after winning: $(blockstate)"
@@ -630,4 +699,6 @@ workflow_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
 echo "ok   workflows: PostgreSQL restart, backup restore and full mixed journal rebuild preserved plans, bindings, versions and inbox tasks; old/new asks continued along their original paths in both industries"
 function_after_recovery "$MANUFACTURING" plant-sz "$OP2" plant
 function_after_recovery "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
+function_joint_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
+function_joint_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
 echo "ok   builder AI functions: both operators called the page's retained function again after backup restore and complete journal recovery"
