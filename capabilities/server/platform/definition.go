@@ -80,7 +80,7 @@ type Page struct {
 // detail and the actions read it.
 type Section struct {
 	// Widget is table, detail, actions, chart, metric, text, filter, form,
-	// timeline or tasks.
+	// timeline, tasks or a published function.
 	Widget string `json:"widget"`
 	Title  string `json:"title,omitempty"`
 	// Width is full or half, in the order the sections are laid out.
@@ -93,18 +93,19 @@ type Section struct {
 	Relation string `json:"relation,omitempty"`
 	// Query is a named query (AssetQuery) the section lists instead of all of
 	// Object: its conditions, and the selected record when it takes one (21c).
-	Query   AssetRef   `json:"query,omitempty"`
-	Fields  []string   `json:"fields,omitempty"`  // table, detail, filter, form
-	Actions []AssetRef `json:"actions,omitempty"` // actions
-	Group   string     `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
-	Measure string     `json:"measure,omitempty"` // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
-	Text    string     `json:"text,omitempty"`    // text
+	Query    AssetRef      `json:"query,omitempty"`
+	Fields   []string      `json:"fields,omitempty"`   // table, detail, filter, form
+	Actions  []AssetRef    `json:"actions,omitempty"`  // actions
+	Group    string        `json:"group,omitempty"`    // chart: the field it groups by, or "<field>:month"
+	Measure  string        `json:"measure,omitempty"`  // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
+	Text     string        `json:"text,omitempty"`     // text
+	Function *AssetBinding `json:"function,omitempty"` // exact published function
 }
 
 // Widgets are the widget kinds a composed page may hold (ADR-0035 D2).
 // A filter outputs the page's second variable — the records it narrows to —
 // which the table, chart and metric over the same object read (16b).
-var Widgets = []string{"table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks"}
+var Widgets = []string{"table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function"}
 
 // Filterable are the field types a filter widget offers: values that repeat.
 var Filterable = []string{"choice", "boolean", "reference"}

@@ -54,6 +54,21 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	definition.Name = "advice"
 	must("builder", build.ID, build.FunctionType+".create", build.FunctionType, "F", definition)
 	must("builder", build.ID, build.SchemaFunction, build.FunctionType, "F", struct{}{})
+	pageSections := []build.Section{{Widget: "table", Fields: []string{"note"}}, {Widget: "function", Function: &platform.FunctionRef{Name: "advice", Version: 1}}}
+	must("builder", build.ID, build.PageType+".create", build.PageType, "PAGE", map[string]any{"name": "intakeadvice", "title": "Intake advice", "object": "build.intake", "sections": pageSections})
+	must("builder", build.ID, build.SchemaRelease, build.PageType, "PAGE", struct{}{})
+	pagePreview, err := tn.PreviewRelease(member("builder"), platform.AssetPage, "PAGE")
+	if err != nil || pagePreview.Diagnostic != "" {
+		t.Fatalf("page function binding: %+v %v", pagePreview, err)
+	}
+	pageRoot := []platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "intakeadvice"}}
+	firstPage, err := tn.ReleaseCandidate(pageRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(firstPage.Assets) != 3 {
+		t.Fatalf("page omitted source or function: %+v", firstPage.Assets)
+	}
 	steps := []build.ProcessStep{{Name: "gate", Ask: build.User, Answers: []string{"continue"}, Next: "infer"}, {Name: "infer", Function: &platform.FunctionRef{Name: "advice", Version: 1}, Next: "review"}, {Name: "review", Ask: build.User, Answers: []string{"approve"}, Next: "close"}, {Name: "close", Act: "close"}}
 	must("builder", build.ID, build.ProcessType+".create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review intake", "object": "build.intake", "when": "open", "steps": steps})
 
@@ -120,6 +135,10 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	CheckReplay(t, tn, entries, compose)
 	must("builder", build.ID, build.FunctionType+".edit", build.FunctionType, "F", map[string]string{"instructions": "New function instructions"})
 	must("builder", build.ID, build.SchemaFunction, build.FunctionType, "F", struct{}{})
+	retainedPage, err := tn.ReleaseCandidate(pageRoot)
+	if err != nil || retainedPage.ID != firstPage.ID {
+		t.Fatalf("page drifted to latest function: %v %v", retainedPage.ID, err)
+	}
 	conflict, err := tn.PreviewRelease(member("builder"), platform.AssetFunction, "F")
 	if err == nil && conflict.Diagnostic == "" {
 		t.Fatalf("function draft silently replaced a flow pin: %+v %v", conflict, err)
@@ -128,6 +147,17 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	must("builder", build.ID, build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": steps})
 	must("builder", build.ID, build.SchemaProcess, build.ProcessType, "P", struct{}{})
 	second := activate()
+	pageSections[1].Function = &platform.FunctionRef{Name: "advice", Version: 2}
+	must("builder", build.ID, build.PageType+".edit", build.PageType, "PAGE", map[string]any{"sections": pageSections})
+	must("builder", build.ID, build.SchemaRelease, build.PageType, "PAGE", struct{}{})
+	pagePreview, err = tn.PreviewRelease(member("builder"), platform.AssetPage, "PAGE")
+	if err != nil || pagePreview.Diagnostic != "" {
+		t.Fatalf("updated page function binding: %+v %v", pagePreview, err)
+	}
+	updatedPage, err := tn.ReleaseCandidate(pageRoot)
+	if err != nil || updatedPage.ID == firstPage.ID {
+		t.Fatalf("updated page retained old function: %v %v", updatedPage.ID, err)
+	}
 	if first == second {
 		t.Fatal("new function reused release")
 	}
@@ -191,5 +221,13 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	}
 	if _, err := platform.Candidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetFlow, Name: "build.review"}}, saved.Assets); err == nil {
 		t.Fatal("candidate accepted a different pinned function")
+	}
+	for i := range firstPage.Assets {
+		if firstPage.Assets[i].Ref.Kind == platform.AssetFunction {
+			firstPage.Assets[i].SourceVersion = "1.function-2"
+		}
+	}
+	if _, err := platform.Candidate(pageRoot, firstPage.Assets); err == nil {
+		t.Fatal("page candidate accepted a different pinned function")
 	}
 }

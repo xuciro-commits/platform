@@ -51,6 +51,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 	requires := []AssetRef{page.Object}
 	requires = append(requires, page.Actions...)
 	for _, section := range page.Sections {
+		if section.Function != nil {
+			requires = append(requires, section.Function.Ref)
+		}
 		if section.Object.Name != "" {
 			requires = append(requires, section.Object)
 		}
@@ -150,16 +153,30 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 		if err := checkReleaseBindings(ref, body, asset.Requires); err != nil {
 			return err
 		}
-		if ref.Kind == AssetFlow {
-			var flow FlowReleaseDescriptor
-			if err := json.Unmarshal(body, &flow); err != nil {
-				return err
+		if ref.Kind == AssetFlow || ref.Kind == AssetPage {
+			var bindings []AssetBinding
+			if ref.Kind == AssetFlow {
+				var flow FlowReleaseDescriptor
+				if err := json.Unmarshal(body, &flow); err != nil {
+					return err
+				}
+				bindings = flow.Functions
+			} else {
+				var page Page
+				if err := json.Unmarshal(body, &page); err != nil {
+					return err
+				}
+				for _, section := range page.Sections {
+					if section.Function != nil {
+						bindings = append(bindings, *section.Function)
+					}
+				}
 			}
 			seen := map[AssetRef]bool{}
-			for _, binding := range flow.Functions {
+			for _, binding := range bindings {
 				dependency, ok := lookup[binding.Ref]
-				if !ok || seen[binding.Ref] || binding.Ref.Kind != AssetFunction || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
-					return fmt.Errorf("flow %s needs exact function dependency %s at %s", ref, binding.Ref, binding.SourceVersion)
+				if !ok || seen[binding.Ref] && ref.Kind == AssetFlow || binding.Ref.Kind != AssetFunction || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
+					return fmt.Errorf("%s needs exact function dependency %s at %s", ref, binding.Ref, binding.SourceVersion)
 				}
 				seen[binding.Ref] = true
 			}
@@ -287,6 +304,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		required = append(required, page.Object)
 		required = append(required, page.Actions...)
 		for _, section := range page.Sections {
+			if section.Function != nil {
+				required = append(required, section.Function.Ref)
+			}
 			if section.Object.Name != "" {
 				required = append(required, section.Object)
 			}

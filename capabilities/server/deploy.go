@@ -146,6 +146,28 @@ func (d *Deployment) Serve(tenants ...*Tenant) error {
 			t.attachJournal(ctx, journal)
 		}
 	}
+	if journal == nil {
+		// The development host still uses the accepted-result boundary. Its
+		// memory journal, like all of its records, ends with this process.
+		for _, tenant := range tenants {
+			var mu sync.Mutex
+			var entries []Entry
+			appendEntry := func(e Entry) {
+				mu.Lock()
+				entries = append(entries, e)
+				mu.Unlock()
+			}
+			if tenant.Record == nil {
+				tenant.Record = appendEntry
+			}
+			if tenant.AcceptResult == nil {
+				tenant.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+					appendEntry(e)
+					return e.Body, nil
+				}
+			}
+		}
+	}
 	for _, t := range tenants {
 		if d.Seed != nil && !t.quarantined() && (journal == nil || fresh[t.ID]) {
 			if err := d.Seed(t, time.Now()); err != nil {

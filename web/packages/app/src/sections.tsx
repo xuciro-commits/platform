@@ -5,7 +5,7 @@
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, Markdown, Panel, RecordHistory, RecordList, RecordLookup, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
+  Button, Card, Chart, Markdown, Panel, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
 } from "@platform/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
@@ -216,6 +216,42 @@ function TasksWidget({ page, section, selected, live }: Bound) {
   return <Tasks list={view.tasks} tasks={answer} />;
 }
 
+/** The builder's published function is called by its ordinary action. The
+ * saved call record remains the only answer and permission surface. */
+function FunctionWidget({ page, section, selected, live }: Bound) {
+  const { source, can, decide } = useHost();
+  const [callID, setCallID] = useState("");
+  const [reload, setReload] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const name = section.function?.ref.name ?? "";
+  const version = Number(section.function?.sourceVersion.match(/\.function-(\d+)$/)?.[1] ?? 0);
+  useEffect(() => { setCallID(""); setError(""); }, [selected?.id, name, version]);
+  if (!name || !version) return <p role="alert" className="text-sm text-danger">{t("Choose a published function for this page.")}</p>;
+  return <div className="grid gap-3">
+    <p className="text-xs text-muted">{name} · {t("Version")} {version}</p>
+    {!selected ? <p className="text-sm text-muted">{t("Select a record to request advice.")}</p> : <>
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={!live || busy || !can("build.function-call.start")} onClick={async () => {
+          setBusy(true); setError("");
+          const id = newId("CALL");
+          try {
+            if (await decide("build.function-call.start", { type: "build.function-call", id },
+              { name, version, source: selected.id }, { quiet: true, onRefused: setError })) { setCallID(id); setReload((n) => n + 1); }
+          } finally { setBusy(false); }
+        }}>{busy ? t("Requesting advice…") : t("Request advice")}</Button>
+        <Button disabled={!live} onClick={() => setReload((n) => n + 1)}>{t("Refresh advice")}</Button>
+      </div>
+      {!live && <p className="text-xs text-muted">{t("Advice calls do not run while you compose.")}</p>}
+      {error && <p role="alert" className="text-xs text-danger">{error}</p>}
+      {live && <RecordList key={reload} source={source} type="build.function-call" fields={["function", "version", "state", "source"]}
+        domain={[["source", "=", `${page.object.name}/${selected.id}`], ["function", "=", name], ["version", "=", version]]}
+        onOpen={(record) => setCallID(record.id)} />}
+      {live && callID && <RecordPage source={source} type="build.function-call" id={callID} fields={["state", "output", "code", "reason"]} reload={reload} />}
+    </>}
+  </div>;
+}
+
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 export function SectionView(bound: Bound & Composing) {
@@ -232,6 +268,7 @@ export function SectionView(bound: Bound & Composing) {
       case "form": return <FormWidget {...bound} />;
       case "timeline": return <TimelineWidget {...bound} />;
       case "tasks": return <TasksWidget {...bound} />;
+      case "function": return <FunctionWidget {...bound} />;
       default: return <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
     }
   })();
@@ -276,4 +313,3 @@ export function ComposedPage({ page, live = true, notice, chosen, onChoose }: {
 
 /** Whether a page is composed of sections (ADR-0035) rather than the list-detail shorthand. */
 export const isComposed = (page: Page) => page.layout === "composed";
-

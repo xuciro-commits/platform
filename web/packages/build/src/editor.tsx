@@ -3,7 +3,7 @@
 // records while it is being composed, and a panel configuring the widget that
 // is selected. It writes the page's own record through its own action; the host
 // checks every binding when the page is published.
-import { ComposedPage, NewActions, useHost, useReadQuery, type Definition } from "@platform/app";
+import { ComposedPage, NewActions, useHost, useReadQuery, useRecordInventory, type Definition } from "@platform/app";
 import {
   Button, Card, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, cn, defineStatuses, humanizeKernelError, notify, t, useWorkspace,
   type EntityInfo,
@@ -17,17 +17,18 @@ type Section = NonNullable<Api["sections"]>[number];
 type PageRecord = {
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
   list?: string[]; detail?: string[]; actions?: string[];
-  sections?: { widget: string; title?: string; width?: string; object?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string }[];
+  sections?: { widget: string; title?: string; width?: string; object?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number } }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
 const pageStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 
-const widgets = ["table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks"] as const;
+const widgets = ["table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function"] as const;
 const widgetTitles: Record<string, () => string> = {
   table: () => t("Table"), detail: () => t("Detail"), actions: () => t("Actions"),
   chart: () => t("Chart"), metric: () => t("Metric"), text: () => t("Text"),
   filter: () => t("Filter"), form: () => t("Form"), timeline: () => t("Timeline"), tasks: () => t("Tasks"),
+  function: () => t("AI function"),
 };
 /** The field types a filter offers: values that repeat (the host's platform.Filterable). */
 const filterable = ["choice", "boolean", "reference"];
@@ -40,6 +41,7 @@ const asPage = (record: PageRecord, sections: Draft[]): Api => ({
   sections: sections.map((s) => ({
     widget: s.widget, title: s.title, width: s.width, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
+    function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,
     actions: (s.actions ?? []).map((schema) => ({ app: schema.split(".")[0] ?? "", kind: "action", name: schema })),
   })) as Section[],
 });
@@ -233,6 +235,11 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
   onChange: (patch: Partial<Draft>) => void;
 }) {
   const { definitions } = useHost();
+  const functionRecords = useRecordInventory<{ name: string; title: string; object: string; versions?: string[] }>("build.function");
+  const functions = (functionRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
+    try { const version = JSON.parse(raw) as { name: string; title: string; object: string; version: number };
+      return version.object === object ? [version] : []; } catch { return []; }
+  }));
   // Named queries of an object (ADR-0040 21c), as "<app>.<name>".
   const queriesOf = (obj: string) => (definitions ?? [])
     .filter((d) => d.ref.kind === "query" && d.query?.object === obj)
@@ -277,6 +284,16 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
           <option value="half">{t("Half width")}</option>
         </Select>
       </label>
+      {section.widget === "function" && <>
+        <label className="grid gap-1 text-xs">{t("Published function version")}
+          <Select value={section.function ? `${section.function.name}:${section.function.version}` : ""} onChange={(e) => {
+            const selected = functions.find((f) => `${f.name}:${f.version}` === e.target.value);
+            onChange({ function: selected ? { name: selected.name, version: selected.version } : undefined });
+          }}><option value="">{t("Choose a published function")}</option>
+            {functions.map((f) => <option key={`${f.name}:${f.version}`} value={`${f.name}:${f.version}`}>{f.title} · {t("Version")} {f.version}</option>)}
+          </Select></label>
+        <p className="text-xs text-muted">{t("The selected record supplies the function input. Its typed answer stays in a separate call record.")}</p>
+      </>}
       {section.widget === "filter" && (
         <fieldset className="grid gap-1 text-xs">
           <legend className="mb-1">{t("Fields it filters by")}</legend>

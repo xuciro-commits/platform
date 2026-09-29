@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	ID         = "build"
-	ObjectType = "build.object"
+	ID                = "build"
+	definitionVersion = "1"
+	ObjectType        = "build.object"
 	// Builder defines and publishes objects; User works with what is published.
 	Builder       = "builder"
 	User          = "user"
@@ -141,7 +142,7 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: "1", Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Functions: b.functionDeclarations(),
+	return platform.Manifest{ID: ID, Title: "Builder", Version: definitionVersion, Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Functions: b.functionDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},

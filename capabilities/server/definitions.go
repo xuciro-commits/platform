@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"platformserver/platform"
@@ -282,6 +283,26 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					}
 					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool { _, ok := shown.Field(name); return !ok })
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
+					if section.Function != nil {
+						owner, ok := t.app(section.Function.Ref.App).(interface {
+							FunctionDefinition(string, int) (platform.AIFunction, int, bool)
+						})
+						if !ok {
+							continue
+						}
+						versionText, ok := strings.CutPrefix(section.Function.SourceVersion, t.app(section.Function.Ref.App).Manifest().Version+".function-")
+						version, err := strconv.Atoi(versionText)
+						if !ok || err != nil {
+							continue
+						}
+						function, _, exists := owner.FunctionDefinition(section.Function.Ref.Name, version)
+						if !exists || !slices.Contains(function.Roles, m.Roles[section.Function.Ref.App]) || slices.ContainsFunc(function.Fields, func(name string) bool {
+							field, found := shown.Field(name)
+							return !found || !field.Reads(m.Roles[section.Function.Ref.App])
+						}) {
+							continue
+						}
+					}
 					if _, creates := actions[shown.Type+".create"]; section.Widget == "form" && !creates {
 						continue // a form this member could not submit is not on their page
 					}

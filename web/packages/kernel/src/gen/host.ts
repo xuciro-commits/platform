@@ -166,6 +166,11 @@ export type ApprovalStep = {
   decidedBy?: Record<string, string>;
 };
 
+export type AssetBinding = {
+  ref: AssetRef;
+  sourceVersion: string;
+};
+
 export type AssetRef = {
   app: string;
   kind: string;
@@ -854,6 +859,7 @@ export type Section = {
   group?: string;
   measure?: string;
   text?: string;
+  function?: AssetBinding;
 };
 
 export type SettingValue = {

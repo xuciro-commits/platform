@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Version": "版本",
+  "Choose a published function for this page.": "请为此页面选择已发布函数。",
+  "Select a record to request advice.": "选中记录后再请求建议。",
+  "Request advice": "请求建议",
+  "Requesting advice…": "正在请求建议…",
+  "Refresh advice": "刷新建议",
+  "Advice calls do not run while you compose.": "组合页面时不会执行建议调用。",
   "Action preview": "动作预览",
   "Preview only": "仅预览",
   "Preview record is unavailable.": "预览记录不可用。",

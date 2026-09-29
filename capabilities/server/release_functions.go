@@ -33,20 +33,32 @@ func (t *Tenant) candidateWithFunctions(roots []platform.AssetRef, available []p
 			return fmt.Errorf("release requires missing asset %s", ref)
 		}
 		asset := assets[i]
+		var bindings []platform.AssetBinding
 		if ref.Kind == platform.AssetFlow {
 			var flow platform.FlowReleaseDescriptor
 			if err := json.Unmarshal(asset.Body, &flow); err != nil {
 				return err
 			}
-			for _, binding := range flow.Functions {
-				if binding.Ref.Kind != platform.AssetFunction || binding.SourceVersion == "" {
-					return fmt.Errorf("flow %s has an invalid function binding", ref)
-				}
-				if prior := pins[binding.Ref]; prior != "" && prior != binding.SourceVersion {
-					return fmt.Errorf("release binds conflicting versions of function %s", binding.Ref)
-				}
-				pins[binding.Ref] = binding.SourceVersion
+			bindings = flow.Functions
+		} else if ref.Kind == platform.AssetPage {
+			var page platform.Page
+			if err := json.Unmarshal(asset.Body, &page); err != nil {
+				return err
 			}
+			for _, section := range page.Sections {
+				if section.Function != nil {
+					bindings = append(bindings, *section.Function)
+				}
+			}
+		}
+		for _, binding := range bindings {
+			if binding.Ref.Kind != platform.AssetFunction || binding.SourceVersion == "" {
+				return fmt.Errorf("%s has an invalid function binding", ref)
+			}
+			if prior := pins[binding.Ref]; prior != "" && prior != binding.SourceVersion {
+				return fmt.Errorf("release binds conflicting versions of function %s", binding.Ref)
+			}
+			pins[binding.Ref] = binding.SourceVersion
 		}
 		for _, dep := range asset.Requires {
 			if err := visit(dep); err != nil {

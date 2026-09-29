@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "AI function": "AI 函数",
+  "The selected record supplies the function input. Its typed answer stays in a separate call record.": "选中的记录提供函数输入，类型化回答保存在独立调用记录中。",
   "Choose a readable human role, supported object action or retained function version.": "请选择可读的人工角色、支持的对象动作或保留的函数版本。",
   "Add AI function": "添加 AI 函数",
   "Published function version": "已发布函数版本",

@@ -110,3 +110,11 @@
 本批执行 `scripts/verify.sh format capabilities mes composition web` 通过；原生函数流程、函数固定案例和原生候选测试另通过 `go test -race`。配套 Playwright Chromium 的函数编写与函数流程两行业 4 个用例通过；远端 Linux CI 以实际运行结果为准。本批未重跑 Docker/PostgreSQL 演练。
 
 本批不宣称完成 24c。页面显式调用、正式评测门禁、完整候选激活与两行业真实操作/部署恢复仍待后续交付；真实模型质量和负责人体验未验收。
+
+**24c 页面显式调用检查点（2026-09-29，整项仍在进行）。** Build 页面分区新增受控的 `function` 小组件：构建者在已发布源对象的页面上选择该对象的已发布函数精确版本；发布时宿主验证页面有可选源记录的表格、函数来源对象/字段及保留版本。候选依赖闭包包含该函数，纯候选校验拒绝被换掉的函数版本；修改函数草稿或另发新版不会暗改旧页面。成员看到函数分区时再次核对其角色和字段读取权。共享 `@platform/app` 页面组件只以选中的记录发起原有 `build.function-call.start` 动作，再按来源/函数/版本列出独立调用记录并展示阶段、严格回答或拒绝。预览不运行调用；模型不取得业务动作权限。
+
+`page-function.spec.ts` 在酒店及制造开发宿主经 UI 编写并发布页面，由另一个操作员身份选源记录，观察未启用模型的拒绝，再接本地 OpenAI 兼容替身取得严格 JSON 回答，并从保存的调用记录读取；桌面与 390px 窄屏截图已检查。`TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery` 增加页面候选闭包、旧版本保持及依赖被篡改拒绝；它在受限结果入口 `CheckReplay`，但没有覆盖页面调用在 PostgreSQL 中的故障恢复。无数据库开发宿主现把接受结果交给进程内记录回调，以便走通同一动作/结果边界；该记录及其状态在进程退出时全部丢失，不构成持久化保证。
+
+本批执行 `scripts/verify.sh format capabilities composition web` 与 `scripts/verify.sh contract mes` 通过；`web` 含两行业新增路由及全套 40 个浏览器用例。未运行本批页面调用的 PostgreSQL/Docker 恢复演练，也未测试真实模型质量。
+
+页面调用不是 24c 收尾：正式评测门禁、候选激活后的页面与流程共同版本旅程、两行业 PostgreSQL 重启/恢复、真实模型质量和负责人体验仍待验证。

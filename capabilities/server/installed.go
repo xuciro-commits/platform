@@ -167,6 +167,33 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 		if s.Width != "" && s.Width != "full" && s.Width != "half" {
 			return fmt.Errorf("%s: width %q is neither full nor half", where, s.Width)
 		}
+		if s.Widget == "function" {
+			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
+				return other.Widget == "table" && (other.Object.Name == "" || other.Object == p.Object)
+			}) {
+				return fmt.Errorf("%s: add a table that selects a source record", where)
+			}
+			if s.Function == nil || s.Function.Ref.Kind != platform.AssetFunction || s.Function.Ref.App != p.Object.App ||
+				s.Object.Name != "" && s.Object != p.Object || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
+				return fmt.Errorf("%s: a function must bind one retained version on this page's object", where)
+			}
+			owner, ok := t.app(s.Function.Ref.App).(interface {
+				FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
+			})
+			if !ok {
+				return fmt.Errorf("%s: the function has no published call owner", where)
+			}
+			asset, err := owner.FunctionReleaseAsset(s.Function.Ref.Name, s.Function.SourceVersion)
+			if err != nil {
+				return fmt.Errorf("%s: %w", where, err)
+			}
+			var function platform.AIFunction
+			if asset.Ref != s.Function.Ref || json.Unmarshal(asset.Body, &function) != nil || function.Object != p.Object.Name {
+				return fmt.Errorf("%s: the function does not read this page's object", where)
+			}
+		} else if s.Function != nil {
+			return fmt.Errorf("%s: only a function widget may bind a function", where)
+		}
 		info := page
 		if s.Object.Name != "" && s.Object.Name != p.Object.Name {
 			shown, known := t.entity(s.Object.Name)
