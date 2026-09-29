@@ -9,7 +9,14 @@ export PG_PORT=55433 IDP_PORT=58480 MANUFACTURING_PORT=58490 HOSPITALITY_PORT=58
 compose() { docker compose -p platform-rehearsal -f compose.yaml "$@"; }
 IDP=http://localhost:$IDP_PORT/auth/v1 MANUFACTURING=http://localhost:$MANUFACTURING_PORT HOSPITALITY=http://localhost:$HOSPITALITY_PORT SINK=http://localhost:$SINK_PORT
 backup=$(mktemp -d)
-trap 'compose down -v --remove-orphans >/dev/null 2>&1; rm -rf "$backup"' EXIT
+cleanup() {
+  local result=$?
+  trap - EXIT
+  compose down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "$backup"
+  exit "$result"
+}
+trap cleanup EXIT
 fail() {
   echo "FAIL: $*" >&2
   # Retain tenant-local recovery diagnostics before the disposable project is
@@ -81,6 +88,56 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   workflow_state
   function_state; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
+same_state() {
+  local expected=$1 actual
+  for _ in $(seq 20); do
+    actual=$(state)
+    [[ $actual == "$expected" ]] && return 0
+    sleep 1
+  done
+  printf '%s\n' "$expected" >"$backup/state-expected.jsonl"
+  printf '%s\n' "$actual" >"$backup/state-actual.jsonl"
+  python3 - "$backup/state-expected.jsonl" "$backup/state-actual.jsonl" <<'PY'
+import json, sys
+left = [json.loads(line) for line in open(sys.argv[1])]
+right = [json.loads(line) for line in open(sys.argv[2])]
+print(f"state sections: expected {len(left)}, observed {len(right)}", file=sys.stderr)
+for i, (a, b) in enumerate(zip(left, right)):
+    if a == b: continue
+    paths = []
+    def changed(x, y, path):
+        if x == y or len(paths) >= 20: return
+        if isinstance(x, dict) and isinstance(y, dict):
+            for key in sorted(x.keys() | y.keys()):
+                if key not in x or key not in y: paths.append(f"{path}.{key} presence")
+                else: changed(x[key], y[key], f"{path}.{key}")
+        elif isinstance(x, list) and isinstance(y, list):
+            if len(x) != len(y): paths.append(f"{path} length {len(x)} -> {len(y)}")
+            for index, (xx, yy) in enumerate(zip(x, y)):
+                changed(xx, yy, f"{path}[{index}]")
+        else:
+            paths.append(path)
+    changed(a, b, f"section[{i}]")
+    print("changed state paths: " + ", ".join(paths), file=sys.stderr)
+PY
+  return 1
+}
+settled_state() {
+  local previous current stable=0
+  previous=$(state)
+  for _ in $(seq 30); do
+    sleep 1
+    current=$(state)
+    if [[ $current == "$previous" ]]; then
+      stable=$((stable+1))
+      if ((stable >= 3)); then printf '%s\n' "$current"; return 0; fi
+    else
+      stable=0
+    fi
+    previous=$current
+  done
+  fail "rehearsal state did not settle before its recovery baseline"
+}
 
 # Workflow probes add their private records and exact bindings to every state
 # comparison below. Defined here; called after both OIDC builders are ready.
@@ -216,26 +273,28 @@ function_setup() {
 }
 function_after_restart() {
   local SERVER=$1 TENANT=$2 AUTHORITY=build operator=$3 suffix=$4
-  local typ=build.rehearsal$suffix candidate name
+  local typ=build.rehearsal$suffix candidate joint name
   candidate=$(jq -r .candidate "$backup/function-$suffix.json")
+  joint=$(jq -r .candidate "$backup/function-joint-$suffix.json")
   name=$(jq -r .name "$backup/function-$suffix.json")
   function_wait "$operator" FN-CALL-OLD "$typ/WF-OLD" "$candidate"
   workflow_submit "$operator" fn-call-new build.function-call.start build.function-call FN-CALL-NEW "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-NEW\"}"
-  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$candidate"
+  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$joint"
 }
 function_after_recovery() {
   local SERVER=$1 TENANT=$2 AUTHORITY=build operator=$3 suffix=$4
-  local typ=build.rehearsal$suffix candidate name
+  local typ=build.rehearsal$suffix candidate joint name
   candidate=$(jq -r .candidate "$backup/function-$suffix.json")
+  joint=$(jq -r .candidate "$backup/function-joint-$suffix.json")
   name=$(jq -r .name "$backup/function-$suffix.json")
   function_wait "$operator" FN-CALL-OLD "$typ/WF-OLD" "$candidate"
-  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$candidate"
+  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$joint"
   workflow_submit "$operator" fn-call-recovered build.function-call.start build.function-call FN-CALL-RECOVERED "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-NEW\"}"
-  function_wait "$operator" FN-CALL-RECOVERED "$typ/WF-NEW" "$candidate"
+  function_wait "$operator" FN-CALL-RECOVERED "$typ/WF-NEW" "$joint"
 }
 function_joint_setup() {
-  local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 operator=$4 suffix=$5
-  local typ=build.rehearsal$suffix name=advice$suffix flow=build.review$suffix candidate report state result
+  local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 suffix=$4
+  local name=advice$suffix flow=build.review$suffix candidate result
   # The retained first function version now belongs to both operator paths.
   workflow_submit "$builder" fn-joint-flow-edit build.process.edit build.process WF-P \
     "{\"steps\":[{\"name\":\"infer\",\"function\":{\"name\":\"$name\",\"version\":1},\"next\":\"review\"},{\"name\":\"review\",\"ask\":\"user\",\"answers\":[\"approve\"],\"branches\":{\"approve\":\"reject\"}},{\"name\":\"reject\",\"act\":\"reject\"}]}"
@@ -245,25 +304,21 @@ function_joint_setup() {
   jq -e --arg name "$name" --arg flow "$flow" --arg page "advicepage$suffix" \
     '[.included[] | select(.app == "build" and ((.kind == "function" and .name == $name) or (.kind == "page" and .name == $page) or (.kind == "flow" and .name == $flow)))] | length == 3' \
     <<<"$result" >/dev/null || fail "joint candidate omitted function, page or flow"
-  workflow_post "$builder" releases/candidates "{\"kind\":\"object\",\"id\":\"WF-O\",\"candidateId\":\"$candidate\",\"key\":\"fn-joint-save\"}" |
-    jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "joint function candidate save"
-  report=$(workflow_post "$builder" releases/evaluations "{\"candidateId\":\"$candidate\",\"planId\":\"FN-PLAN\",\"key\":\"fn-joint-eval\"}" | jq -er .id) || fail "joint function evaluation"
-  for _ in $(seq 30); do
-    state=$(workflow_get "$builder" "records/build.evaluation/$report" | jq -r .record.state) || true
-    [[ $state == passed ]] && break
-    sleep 1
-  done
-  [[ $state == passed ]] || fail "joint function evaluation: $state"
-  workflow_post "$builder" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"fn-joint-active\"}" |
-    jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "joint function activation"
+  jq -n --arg candidate "$candidate" --arg flow "$flow" '{candidate:$candidate,flow:$flow}' >"$backup/function-joint-$suffix.json"
+}
+function_joint_api() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=build operator=$3 suffix=$4
+  local typ=build.rehearsal$suffix name=advice$suffix candidate
+  candidate=$(jq -r .candidate "$backup/function-joint-$suffix.json")
+  workflow_get "$operator" releases/active | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "browser did not activate the joint candidate"
   workflow_submit "$operator" fn-joint-source "$typ.create" "$typ" WF-JOINT '{"note":"Shared function release"}'
   workflow_submit "$operator" fn-joint-page build.function-call.start build.function-call FN-CALL-JOINT \
     "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-JOINT\"}"
   function_wait "$operator" FN-CALL-JOINT "$typ/WF-JOINT" "$candidate"
-  jq -n --arg candidate "$candidate" --arg flow "$flow" '{candidate:$candidate,flow:$flow}' >"$backup/function-joint-$suffix.json"
 }
 function_joint_wait() {
-  local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 suffix=$4 candidate flow typ=build.rehearsal$suffix result
+  local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 suffix=$4 candidate flow result
+  local typ=build.rehearsal$suffix
   candidate=$(jq -r .candidate "$backup/function-joint-$suffix.json")
   flow=$(jq -r .flow "$backup/function-joint-$suffix.json")
   for _ in $(seq 30); do
@@ -279,7 +334,8 @@ function_joint_wait() {
   workflow_wait "$builder" "$flow:WF-JOINT" 3 "$candidate"
 }
 function_joint_finish() {
-  local SERVER=$1 TENANT=$2 AUTHORITY=work builder=$3 operator=$4 suffix=$5 candidate flow typ=build.rehearsal$suffix task result
+  local SERVER=$1 TENANT=$2 AUTHORITY=work builder=$3 operator=$4 suffix=$5 candidate flow task result
+  local typ=build.rehearsal$suffix
   candidate=$(jq -r .candidate "$backup/function-joint-$suffix.json")
   flow=$(jq -r .flow "$backup/function-joint-$suffix.json")
   function_joint_wait "$SERVER" "$TENANT" "$builder" "$suffix"
@@ -293,6 +349,16 @@ function_joint_finish() {
   [[ $(jq -r .record.state <<<"$result") == rejected ]] || fail "joint flow did not finish after recovery"
   workflow_get "$builder" "records/flow.instance/$flow:WF-JOINT" |
     jq -e --arg r "$candidate" '.record | .state == "done" and .version == 3 and .release == $r' >/dev/null || fail "joint flow lost its release after recovery"
+}
+deployed_browser() {
+  local phase=$1
+  if ! PLATFORM_DEPLOY_PHASE="$phase" PLATFORM_DEPLOY_PASSWORD=Plant-Local-1 \
+    pnpm --dir ../../web/e2e exec playwright test --config playwright.deploy.config.ts >"$backup/browser-$phase.log" 2>&1; then
+    # Playwright traces are retained under web/e2e/test-results/deploy-* for diagnosis.
+    # Do not print provider redirect URLs or browser session tokens in logs.
+    fail "deployed browser function release ($phase); see the retained Playwright trace"
+  fi
+  echo "ok   deployed browser $phase: OIDC workspace, shared function page and native flow"
 }
 
 # Inputs of every kind the journal keeps: decisions and a push batch.
@@ -570,17 +636,20 @@ echo "ok   workflows: fixed isolated plans, exact releases, old/new native asks,
 function_setup "$MANUFACTURING" plant-sz "$SUP" "$OP2" plant op-l2
 function_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel sales-1
 echo "ok   builder AI functions: both industries activate a page pinned to retained version 1 after publishing version 2; operators keep strict results in separate call records"
-function_joint_setup "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
-function_joint_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
+function_joint_setup "$MANUFACTURING" plant-sz "$SUP" plant
+function_joint_setup "$HOSPITALITY" hotel-a "$MGR" hotel
+deployed_browser before
+function_joint_api "$MANUFACTURING" plant-sz "$OP1" plant
+function_joint_api "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
 function_joint_wait "$MANUFACTURING" plant-sz "$SUP" plant
 function_joint_wait "$HOSPITALITY" hotel-a "$MGR" hotel
 echo "ok   joint AI function release: both industries activate one evaluated candidate for page and native flow calls"
-before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
+before=$(settled_state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
 compose restart manufacturing-server hospitality-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 && $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done
-[[ $(state) == "$before" ]] || fail "state after restart differs"
+same_state "$before" || fail "state after restart differs"
 # Snapshots (ADR-0019 D6): each host saved its tenant at shutdown and started from it.
 logged() { for _ in $(seq 10); do compose logs "$1" | grep -q "$2" && return; sleep 1; done; return 1; }
 for host in manufacturing-server hospitality-server; do
@@ -595,7 +664,7 @@ echo "ok   builder AI functions: saved answers survived PostgreSQL restart and n
 hosp crm "$SALES_TOKEN" f-3 crm.opportunity.close crm.opportunity OPP-9 '{"outcome":"won"}' | jq -e .record >/dev/null || fail "win the group after the restart"
 [[ $(blockstate) == "confirmed booked,booked" ]] || fail "group block after winning: $(blockstate)"
 echo "ok   decisions across apps: a group's rooms held at the provider until a cutoff survived the restart, and winning confirmed them, each answer on the opportunity"
-before=$(state) # what the backup below holds
+before=$(settled_state) # what the backup below holds
 sleep 2; [[ $(curl -s "$SINK/received" | jq .calls) == "$calls" ]] || fail "a delivered webhook was sent again after the restart"
 echo "ok   restart: each host saved a snapshot at shutdown and started from it (plant $(compose logs manufacturing-server | grep -o 'snapshot at [0-9]*, then replayed [0-9]* entries' | tail -1)); same state, revocation kept"
 
@@ -701,4 +770,5 @@ function_after_recovery "$MANUFACTURING" plant-sz "$OP2" plant
 function_after_recovery "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
 function_joint_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
 function_joint_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
+deployed_browser after
 echo "ok   builder AI functions: both operators called the page's retained function again after backup restore and complete journal recovery"

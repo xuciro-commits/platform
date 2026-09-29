@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Platform verification. Usage: scripts/verify.sh [contract|formal|capabilities|web|pms|mes|composition|deploy|format|ci]...   (default: everything; several steps run in turn)
-# The web step needs node and pnpm (brew install node pnpm); deploy needs a running Docker (orb start), curl and jq.
+# The web step needs node and pnpm (brew install node pnpm); deploy also needs a running Docker (orb start), curl, jq and Chrome or Playwright Chromium.
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
 cd "$(dirname "$0")/.."

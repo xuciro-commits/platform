@@ -27,7 +27,7 @@
 | `solutions/hospitality/` | 酒店解决方案：平台、关系、PMS 与第二个住宿提供方、CRM、HCM 和 CSM；`cmd/hospitality-server` |
 | `solutions/manufacturing/` | 制造解决方案 (ADR-0024)：平台、MES 及其账簿——ERP 或 ERP 适配器——通过 `production.orders/1` 相遇；`cmd/manufacturing-server`（使用 `-erp external` 切换为适配器） |
 | `deploy/local/` | 面向生产路径的基础设施即代码 (ADR-0007)：包含 PostgreSQL、Rauthy（声明式初始化）、RustFS（文件存储，ADR-0028）、manufacturing-server 与 hospitality-server 的 Docker Compose；`rehearse.sh` 演练 OIDC 主体、重启与恢复；`README.md` 是本地环境说明（地址、账号、服务账号、对接 Webhook、邮件、ERP 与 AI 提供商的配置说明） |
-| `web/` | pnpm 工作区：`web/packages/ui` (`@platform/ui`，共享 UI 库，ADR-0004)、`web/packages/kernel` (`@platform/kernel`：生成的契约类型、K5 发件箱与 HTTP 边缘客户端)、`web/packages/app` (`@platform/app`：`defineApp` 与 `useHost`，UI 应用 API，ADR-0018；智能助手、智能体运行与全局搜索，ADR-0021)、`web/apps/workspace`（每个宿主统一提供的工作区：统一登录、启动器、成员可打开的每个应用）、`web/apps/gallery`（包含跨行业数据的各组件陈列室）、`web/apps/pms-desk`（PMS 前台 UI，由 Tauri 离线加载）、`web/e2e`（docs/Testing.md 中的路由作为 Playwright 测试针对开发宿主运行，由 `scripts/verify.sh web` 执行）、每个应用的 UI 包 `web/packages/<id>`（`build`、`crm`、`csm`、`erp`、`erpadapter`、`hcm`、`mes`、`pms`）以及 `web/packages/platform`（系统设置） |
+| `web/` | pnpm 工作区：`web/packages/ui` (`@platform/ui`，共享 UI 库，ADR-0004)、`web/packages/kernel` (`@platform/kernel`：生成的契约类型、K5 发件箱与 HTTP 边缘客户端)、`web/packages/app` (`@platform/app`：`defineApp` 与 `useHost`，UI 应用 API，ADR-0018；智能助手、智能体运行与全局搜索，ADR-0021)、`web/apps/workspace`（每个宿主统一提供的工作区：统一登录、启动器、成员可打开的每个应用）、`web/apps/gallery`（包含跨行业数据的各组件陈列室）、`web/apps/pms-desk`（PMS 前台 UI，由 Tauri 离线加载）、`web/e2e/tests`（开发宿主 Playwright 路由，由 `scripts/verify.sh web` 执行）、`web/e2e/deploy`（一次性 OIDC/PostgreSQL 部署的浏览器恢复路线，由 `scripts/verify.sh deploy` 执行）、每个应用的 UI 包 `web/packages/<id>`（`build`、`crm`、`csm`、`erp`、`erpadapter`、`hcm`、`mes`、`pms`）以及 `web/packages/platform`（系统设置） |
 | `i18n/`, `i18n.ts` | 多语言 (ADR-0023)：每个 Go 应用内嵌 `i18n/<language>.json`（宿主自身位于 `capabilities/server/i18n`），每个 Web 包注册 `src/i18n.ts`；二者均以英文原文为键，测试会在缺少中文翻译时报错 |
 | `docs/Platform.md` | 平台架构设计。§2 当前产品模型与能力地图；§4 内核假说 K1–K9；§8 验证策略；§9 长期风险。§10 下一阶段权威设计 (ADR-0031)：§10.1 目标与参考标杆，§10.2 历史能力审计，§10.3 目标架构，§10.4 应用如何生长，§10.5 年度四阶段路线图，§10.6 验收标准 |
 | `docs/Apps.md` | 应用编写指南：当前可执行的脚手架 → 实体 → 动作 → 流程 → 翻译 → 运行，以及与 Platform §10.4 目标 FDE/客户构建路径的边界 |
@@ -67,7 +67,7 @@ scripts/verify.sh pms       # Web 构建、PMS 服务端测试、Rust K5 向量�
 scripts/verify.sh mes       # MES 测试（F-5 至 F-9 判定）
 scripts/verify.sh composition  # 应用边界与布局检查 (scripts/boundaries.sh)、每个协议、每个其他应用、每个解决方案
 scripts/verify.sh capabilities  # 服务端能力测试
-scripts/verify.sh deploy    # 生产路径全量演练（依赖通过 OrbStack 运行的 Docker：orb start）
+scripts/verify.sh deploy    # 生产路径与 OIDC 浏览器恢复演练（依赖 Docker、Node/pnpm、Chrome 或 Playwright Chromium）
 scripts/verify.sh format    # 所有 Go 文件的 gofmt 格式化
 scripts/verify.sh ci        # Linux CI 运行的检查：contract、formal、format、capabilities、mes、composition
 ```

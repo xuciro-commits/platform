@@ -26,7 +26,7 @@ cd deploy/local && docker compose ps
 - 只重建主机：`docker compose up -d --build manufacturing-server hospitality-server webhook-sink`。改了前端要先重新构建工作台。
 - **在 8495/8490 验收本次代码时**：先运行 `pnpm --dir web/apps/workspace build`，再在 `deploy/local` 运行 `docker compose up -d --no-deps --build hospitality-server`（或对应的 `manufacturing-server`），最后刷新浏览器。`scripts/verify.sh web` 的浏览器路线使用一次性的内存酒店主机 `18496`；它通过也不会自动更新你正在看的 8495 容器。两者的测试数据和登录方式也不同，视觉验收应以你实际使用的容器地址为准。
 - 灌酒店业演示数据：`./seed-hospitality.sh`。可以重复执行，结果不变。
-- 完整演练：在仓库根目录运行 `scripts/verify.sh deploy`。它用另一组端口和一套全新的数据，不会动你的本地数据。
+- 完整演练：在仓库根目录运行 `scripts/verify.sh deploy`。它用另一组端口和一套全新的数据，不会动你的本地数据；需 Docker、Node/pnpm 与 Google Chrome（或在 `CI=1` 下已安装的 Playwright Chromium）。两行业 OIDC 浏览器会在发布前及 PostgreSQL 恢复后执行共同函数/页面/Flow 路线，自动截图保存在 `web/e2e/test-results/deploy-*`；脚本结束后移除一次性容器。
 
 真实供应商的密钥放在 `deploy/local/.env`，compose 启动时自动读取。一行一个：
 
