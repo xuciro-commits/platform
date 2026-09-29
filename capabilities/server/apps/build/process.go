@@ -102,6 +102,20 @@ func (b *Build) publishProcess(c platform.Caller, record any, _ json.RawMessage,
 // an object this builder has not published, a start state it has not, a step
 // that is neither one ask nor one action, or a path to no step.
 func (b *Build) checkFlow(p Process) *kernel.Error {
+	plans, err := b.processInventory()
+	if err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process inventory cannot be checked")
+	}
+	for _, other := range plans {
+		installed, _ := wasPublished[Process](other.Published)
+		if other.ID != p.ID && (other.Name == p.Name || installed.Name == p.Name) {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The process name {name} is already used", p.Name)
+		}
+	}
+	return b.checkFlowOn(p, b.installed[p.Object])
+}
+
+func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 	refuse := func(message string, args ...any) *kernel.Error {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message, args...)
 	}
@@ -111,17 +125,7 @@ func (b *Build) checkFlow(p Process) *kernel.Error {
 	if old, ok := wasPublished[Process](p.Published); ok && (old.Name != p.Name || old.Object != p.Object) {
 		return refuse("A published process keeps its name and object")
 	}
-	plans, err := b.processInventory()
-	if err != nil {
-		return refuse("The process inventory cannot be checked")
-	}
-	for _, other := range plans {
-		if other.ID != p.ID && other.Name == p.Name {
-			return refuse("The process name {name} is already used", p.Name)
-		}
-	}
-	entity, ok := b.installed[p.Object]
-	if !ok || entity.Lifecycle == nil {
+	if entity.Type != p.Object || entity.Lifecycle == nil {
 		return refuse("The process needs a published builder object with states")
 	}
 	if !slices.ContainsFunc(entity.Lifecycle.States, func(s platform.State) bool { return s.Name == p.When }) {

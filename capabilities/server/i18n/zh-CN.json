@@ -742,5 +742,12 @@
  "The process branch {answer} must name an allowed answer and step": "流程分支 {answer} 必须指定有效回答及步骤",
  "finish the running processes before changing their object definition": "请先结束正在运行的流程，再修改其对象定义",
  "builder release inventory exceeds 1000 definitions of one kind": "构建器发布清单中同类定义超过 1000 个",
- "builder definition inventory is incomplete": "构建器定义清单不完整"
+ "builder definition inventory is incomplete": "构建器定义清单不完整",
+ "Choose one saved object or process, a fixed time and 1–20 test steps": "请选择一个已保存的对象或流程、固定时间和 1–20 个测试步骤",
+ "Advance each test step by 0–86400 fixed seconds": "每个测试步骤可将固定时钟推进 0–86400 秒",
+ "An answer test step needs a candidate flow, source record and ask step": "回答测试步骤需要指定候选流程、源记录和人工步骤",
+ "The answer must belong to a flow and object in this candidate": "回答必须属于当前候选中的流程和对象",
+ "This test record has no waiting task at that step": "该测试记录在此步骤没有等待中的任务",
+ "a process may retain at most 64 published versions": "一个流程最多可保留 64 个已发布版本",
+ "this tenant runs no processes": "该租户没有流程运行时"
 }

@@ -11,6 +11,8 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
 	"platformserver/apps/build"
+	"platformserver/apps/flow"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -22,6 +24,18 @@ type Simulation struct {
 	Refusal  string            `json:"refusal,omitempty"`
 	Changes  []SimulatedChange `json:"changes"`
 	Matched  *bool             `json:"matched,omitempty"`
+	Flows    []SimulatedFlow   `json:"flows,omitempty"`
+	Tasks    []work.WorkTask   `json:"tasks,omitempty"`
+}
+
+// SimulatedFlow exposes native progress/trace, never its raw source Data.
+type SimulatedFlow struct {
+	ID      string           `json:"id"`
+	Flow    string           `json:"flow"`
+	Version int              `json:"version"`
+	State   string           `json:"state"`
+	Tokens  []flow.Token     `json:"tokens"`
+	Trace   []flow.TraceLine `json:"trace"`
 }
 
 // SimulatedChange is one record the decision would write, as it would read.

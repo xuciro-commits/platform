@@ -579,7 +579,11 @@ func Entity(o Object) platform.Entity { return entityWith(o, nil) }
 func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b.create) }
 
 func entityWith(o Object, creates creator) platform.Entity {
-	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[platform.Record](), Anonymous: true}}
+	// StructOf interns identical shapes. The entity identity keeps two named
+	// objects distinct, just as two named Go record types are distinct; this
+	// tag adds no JSON field and stays stable across draft/publication/restore.
+	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[platform.Record](), Anonymous: true,
+		Tag: reflect.StructTag(fmt.Sprintf(`entity:"%s"`, TypeOf(o.Name)))}}
 	for _, f := range o.Fields {
 		tag := fmt.Sprintf(`json:"%s,omitempty" title:"%s"`, f.Name, f.Title)
 		switch f.Type {

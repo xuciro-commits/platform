@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -17,7 +18,11 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	if err != nil {
 		return nil, err
 	}
-	return releaseAssets(objects, pages, apps, b.Manifest().Version)
+	processes, err := b.processInventory()
+	if err != nil {
+		return nil, err
+	}
+	return releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
 }
 
 func (b *Build) releaseInventory() ([]Object, []Page, []Application, error) {
@@ -71,7 +76,11 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 	if err != nil {
 		return nil, nil, prior, next, false, err
 	}
-	before, err = releaseAssets(objects, pages, apps, b.Manifest().Version)
+	processes, err := b.processInventory()
+	if err != nil {
+		return nil, nil, prior, next, false, err
+	}
+	before, err = releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
 	if err != nil {
 		return nil, nil, prior, next, false, err
 	}
@@ -79,6 +88,33 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 		return before, nil, prior, next, false, fmt.Errorf("draft record id is empty")
 	}
 	switch kind {
+	case platform.AssetFlow:
+		i := slices.IndexFunc(processes, func(p Process) bool { return p.ID == id })
+		if i < 0 {
+			return before, nil, prior, next, false, fmt.Errorf("draft process %q not found", id)
+		}
+		record := processes[i]
+		if was, ok := wasPublished[Process](record.Published); ok {
+			prior = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(was.Name)}
+			hadPrior = true
+		}
+		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
+		if problem := b.checkFlow(record); problem != nil {
+			err = fmt.Errorf("%s", problem.Message)
+		} else if record.Version >= 64 {
+			err = fmt.Errorf("a process may retain at most 64 published versions")
+		} else if b.host.Processes() == nil {
+			err = fmt.Errorf("this tenant runs no processes")
+		} else {
+			record.Version++
+			err = b.host.Processes().Validate(b, flowOf(record))
+			if err == nil {
+				record.Published = published(record)
+				record.Versions = append(slices.Clone(record.Versions), record.Published)
+				record.State = "published"
+				processes[i] = record
+			}
+		}
 	case platform.AssetObject:
 		i := slices.IndexFunc(objects, func(o Object) bool { return o.ID == id && !o.Archived })
 		if i < 0 {
@@ -136,7 +172,7 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 	if err != nil {
 		return before, nil, prior, next, hadPrior, err
 	}
-	after, err = releaseAssets(objects, pages, apps, b.Manifest().Version)
+	after, err = releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
 	return before, after, prior, next, hadPrior, err
 }
 
@@ -186,6 +222,28 @@ func (b *Build) validateObjectInstallation(record Object) error {
 		}
 	}
 	entity := Entity(record)
+	processes, err := b.processInventory()
+	if err != nil {
+		return err
+	}
+	current, _ := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), record.ID)
+	previous, _ := wasPublished[Object](current.Published)
+	for _, process := range processes {
+		if process.Published == "" {
+			continue
+		}
+		raw, _ := json.Marshal(process)
+		installed, err := processImage(raw)
+		if err != nil {
+			return err
+		}
+		if installed.Object != entity.Type && installed.Object != TypeOf(previous.Name) {
+			continue
+		}
+		if problem := b.checkFlowOn(installed, entity); problem != nil {
+			return fmt.Errorf("%s", problem.Message)
+		}
+	}
 	pages, generated, err := b.objectInstallationPages(record)
 	if err != nil {
 		return err
@@ -211,7 +269,7 @@ func (b *Build) objectInstallationPages(record Object) ([]platform.Page, string,
 // and approvals), excluding only record identity/stamps and editor state.
 // An action depends on that complete object, so changing a rule changes its
 // closed release even when the action's display metadata stays the same.
-func releaseAssets(objects []Object, pages []Page, apps []Application, sourceVersion string) ([]platform.ReleaseAsset, error) {
+func releaseAssets(objects []Object, pages []Page, apps []Application, processes []Process, sourceVersion string) ([]platform.ReleaseAsset, error) {
 	var assets []platform.ReleaseAsset
 	index := map[platform.AssetRef]int{}
 	add := func(asset platform.ReleaseAsset, replacesGeneratedPage bool) error {
@@ -326,8 +384,84 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, sourceVer
 			return nil, err
 		}
 	}
+	for _, record := range processes {
+		if record.Published == "" {
+			continue
+		}
+		image, _ := json.Marshal(record)
+		saved, err := processImage(image)
+		if err != nil {
+			return nil, err
+		}
+		asset, err := processReleaseAsset(saved, sourceVersion)
+		if err != nil {
+			return nil, err
+		}
+		if err := add(asset, false); err != nil {
+			return nil, err
+		}
+	}
 	slices.SortFunc(assets, func(a, b platform.ReleaseAsset) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return assets, nil
+}
+
+func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseAsset, error) {
+	fl := flowOf(saved)
+	ref := platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: TypeOf(fl.Name)}
+	subject := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: fl.Subject}
+	var actions []platform.AssetRef
+	for _, step := range fl.Steps {
+		if step.Act != nil {
+			actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: step.Act.Action})
+		}
+	}
+	slices.SortFunc(actions, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
+	actions = slices.Compact(actions)
+	definition := json.RawMessage(published(saved))
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(definition, &fields); err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	for _, key := range []string{"id", "revision", "created", "changed", "archived", "state", "version"} {
+		delete(fields, key)
+	}
+	definition, err := json.Marshal(fields)
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition})
+	return platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion,
+		Requires: append([]platform.AssetRef{subject}, actions...), Body: body}, err
+}
+
+// ProcessFromReleaseAsset reconstructs the bounded owner definition, checking
+// that its compiled bindings are exactly the ones in the release envelope.
+// A sandbox assigns its own native version ordinal; that counter is not the
+// semantic content identity or a dependency version.
+func ProcessFromReleaseAsset(asset platform.ReleaseAsset) (Process, error) {
+	var envelope platform.FlowReleaseDescriptor
+	var p Process
+	if asset.Ref.App != ID || asset.Ref.Kind != platform.AssetFlow || asset.ContractVersion != 1 {
+		return p, fmt.Errorf("unsupported process release asset %s", asset.Ref)
+	}
+	if err := json.Unmarshal(asset.Body, &envelope); err != nil {
+		return p, err
+	}
+	if err := json.Unmarshal(envelope.Definition, &p); err != nil {
+		return p, err
+	}
+	expected, err := processReleaseAsset(p, asset.SourceVersion)
+	if err != nil {
+		return p, err
+	}
+	var got, want any
+	if json.Unmarshal(asset.Body, &got) != nil || json.Unmarshal(expected.Body, &want) != nil || expected.Ref != asset.Ref || !reflect.DeepEqual(got, want) {
+		return p, fmt.Errorf("process %s definition and compiled bindings differ", asset.Ref)
+	}
+	p.ID, p.Version, p.State = asset.Ref.Name, 1, "published"
+	p.Published = published(p)
+	p.Versions = []string{p.Published}
+	return p, nil
 }
 
 func definitionBody(value Object, typ string) (json.RawMessage, error) {

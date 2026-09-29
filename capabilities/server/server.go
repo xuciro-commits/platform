@@ -401,7 +401,7 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
-	handle(Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test a saved object draft using fixed actions in an empty isolated tenant (ADR-0040 21d)",
+	handle(Route{Pattern: "POST /v1/simulate/candidate", Summary: "Test a saved object or process draft using fixed actions and answers in an empty isolated tenant (ADR-0040 21d, ADR-0042 23b)",
 		Body: CandidateSimulationRequest{}, Answer: CandidateSimulation{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder {
 			w.WriteHeader(http.StatusForbidden)

@@ -196,7 +196,8 @@ export type CandidateSimulation = {
 };
 
 export type CandidateSimulationRequest = {
-  objectId: string;
+  objectId?: string;
+  processId?: string;
   as?: string;
   at: string;
   steps: SimulationStep[];
@@ -833,11 +834,22 @@ export type SimulatedChange = {
   record: unknown;
 };
 
+export type SimulatedFlow = {
+  id: string;
+  flow: string;
+  version: number;
+  state: string;
+  tokens: Token[];
+  trace: TraceLine[];
+};
+
 export type Simulation = {
   accepted: boolean;
   refusal?: string;
   changes: SimulatedChange[];
   matched?: boolean;
+  flows?: SimulatedFlow[];
+  tasks?: WorkTask[];
 };
 
 export type SimulationStep = {
@@ -846,6 +858,11 @@ export type SimulationStep = {
   action: string;
   payload: unknown;
   expect?: string;
+  as?: string;
+  advanceSeconds?: number;
+  flow?: string;
+  step?: string;
+  answer?: string;
 };
 
 export type Stamp = {
@@ -908,6 +925,18 @@ export type TenantHealth = {
   openBreakers: number;
   connectorsFailing: number;
   endpointsFailing: number;
+};
+
+export type Token = {
+  id: number;
+  step: string;
+  branch?: string;
+  waits?: string;
+  attempts?: number;
+  due?: string;
+  task?: string;
+  child?: string;
+  error?: string;
 };
 
 export type Tool = {
@@ -997,4 +1026,23 @@ export type Vendor = {
   name: string;
   baseUrl: string;
   wire: string;
+};
+
+export type WorkTask = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  title: string;
+  body?: string;
+  ref?: string;
+  app: string;
+  key?: string;
+  candidates: string[];
+  assignee?: string;
+  due?: string;
+  state: "open" | "done" | "canceled";
+  answers?: string[];
+  answer?: string;
 };

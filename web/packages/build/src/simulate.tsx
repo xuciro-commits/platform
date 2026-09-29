@@ -1,6 +1,6 @@
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Card, Input, PageHeader, Select, Textarea, t } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useState } from "react";
 
 type ObjectDraft = { id: string; name: string; title: string; actions?: { name: string; title: string }[] };
@@ -79,7 +79,7 @@ export function CandidateTest() {
     try {
       const response = await client.call<Api.CandidateSimulation>("POST", "/v1/simulate/candidate", plan);
       if (response.ok) setResult(response.body);
-      else setError((response.body as { error?: string }).error ?? t("The candidate test could not be run."));
+      else setError(apiErrorMessage(response.body) ?? t("The candidate test could not be run."));
     } catch {
       setError(t("The candidate test could not be run."));
     } finally {

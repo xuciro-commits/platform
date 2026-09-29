@@ -21,6 +21,8 @@ const (
 	// AssetQuery is a named, pure query an app declares once (ADR-0040 21c):
 	// pages and agent tools run the same declaration.
 	AssetQuery AssetKind = "query"
+	// AssetFlow is a versioned definition executed by the existing flow app.
+	AssetFlow AssetKind = "flow"
 )
 
 // NamedQuery reads records of one object: fixed conditions, and optionally
@@ -49,7 +51,7 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery {
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery && r.Kind != AssetFlow {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil

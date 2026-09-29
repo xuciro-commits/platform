@@ -78,3 +78,7 @@
 - **未构建内容**：租户编写的动作、流程与 AI 逻辑；除 `list-detail` 之外的布局；从列表中选取字段而非手动输入名称；按对象的角色与范围；不可变修订版与发布。
 
 - **分页清单与恢复 (Paged inventory and restoration, 2026-09-29)：** 名称校验与恢复安装复用发布归属方的完整有界读取，分页缺陷与回归证据归 [ADR-0039](0039-minimal-definition-release.md#构建器资产清单分页-builder-inventory-pagination-2026-09-29-132136)。
+
+### 命名模型的类型身份 (Named model type identity, 2026-09-29，实际构建)
+
+`Build.Entity` 在嵌入 Record 的结构标签中保留 `build.<name>` 身份，防止 `reflect.StructOf` 将结构相同的不同租户对象合并为同一个 Go 类型。JSON 字段与记录字节不因此增加字段。`TestProcessCandidateClosesNativeBindingsAndRecovers` 发布同结构的两对象并核对候选安装、快照和混合重放；浏览器路线 41–42 在多个同结构对象并存时运行候选。酒店重命名探针改为核对真正缺失的应用页面依赖，继续拒绝破坏闭包的改名，不依赖旧类型碰撞错误。这不是旧客户数据自动迁移保证。

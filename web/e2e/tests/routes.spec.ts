@@ -475,7 +475,9 @@ test("route 30: a composed related table follows the selected account", async ({
 test("route 37: review a saved draft and its dependencies", async ({ page, request }, testInfo) => {
   const id = fresh("OBJ"), name = `review${Date.now().toString(36).slice(-5)}`;
   await decide(request, "manager", "build", "build.object.create", { type: "build.object", id },
-    { name, title: "Review visit", fields: [{ name: "guest", title: "Guest", type: "text" }] });
+    { name, title: "Review visit", fields: [{ name: "guest", title: "Guest", type: "text" }],
+      states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
+      actions: [{ name: "close", title: "Close", from: ["open"], to: "done" }] });
   const noAccess = await request.post("/v1/releases/preview", {
     headers: { Authorization: "Bearer desk" }, data: { kind: "object", id },
   });
@@ -524,6 +526,28 @@ test("route 37: review a saved draft and its dependencies", async ({ page, reque
   await page.getByRole("button", { name: "Check draft and dependencies" }).click();
   await expect(page.getByText("Candidate rejected")).toBeVisible();
   await expect(page.getByRole("alert").filter({ hasText: "a page needs fields" })).toBeVisible();
+
+  // Workflow candidates use the same review/save/activation path and include
+  // the object's action binding; saving the graph cannot install it early.
+  const process = fresh("FLOW"), flowName = `flow${name}`;
+  await decide(request, "manager", "build", "build.process.create", { type: "build.process", id: process }, {
+    name: flowName, title: "Visit review workflow", object: `build.${name}`, when: "open",
+    steps: [{ name: "review", ask: "builder", answers: ["approve"], branches: { approve: "close" } }, { name: "close", act: "close" }],
+  });
+  await page.getByRole("combobox", { name: "Definition kind" }).selectOption("flow");
+  await page.getByRole("combobox", { name: "Saved draft" }).selectOption(process);
+  await page.getByRole("button", { name: "Check draft and dependencies" }).click();
+  await expect(page.getByText(`build/flow/build.${flowName}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`build/action/build.${name}.close`, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Save immutable candidate" }).click();
+  await page.getByRole("button", { name: "Activate release" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "differs from the running definitions" })).toBeVisible();
+  await decide(request, "manager", "build", "build.process.publish", { type: "build.process", id: process }, {});
+  await page.getByRole("button", { name: "Check draft and dependencies" }).click();
+  await expect(page.getByText("Changed · 0")).toBeVisible();
+  await page.getByRole("button", { name: "Save immutable candidate" }).click();
+  await page.getByRole("button", { name: "Activate release" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
 });
 
 // Route 31 (ADR-0036): what someone builds is handed to the people it was
@@ -1168,4 +1192,17 @@ test("route 41: test a candidate, publish and operate", async ({ page, request }
   await expect(chinese.getByRole("button", { name: "运行隔离测试" })).toBeVisible();
   await chinese.screenshot({ path: testInfo.outputPath("candidate-test-chinese.png"), fullPage: true });
   await chinese.close();
+
+  // A real structured HTTP refusal must remain a usable diagnostic, rather
+  // than trying to render {code,message} as a React child.
+  const unsupported = fresh("OBJ"), unsupportedName = `foreign${name}`;
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id: unsupported }, {
+    name: unsupportedName, title: "Unsupported test dependency",
+    fields: [{ name: "account", title: "Account", type: "reference", ref: "crm.account" }],
+  });
+  await open(page, "manager", "/candidate-test");
+  await page.getByRole("combobox", { name: "Saved object draft" }).selectOption(unsupported);
+  await page.getByRole("button", { name: "Run isolated test" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "The candidate cannot be tested:" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run isolated test" })).toBeEnabled();
 });

@@ -26,7 +26,7 @@ func TestPublishedBuilderReleaseUsesCompleteOwnerDefinitions(t *testing.T) {
 	root := platform.AssetRef{App: ID, Kind: platform.AssetApp, Name: "desk"}
 	release := func(o Object) platform.ReleaseCandidate {
 		t.Helper()
-		assets, err := releaseAssets([]Object{o}, []Page{page}, []Application{app}, "1")
+		assets, err := releaseAssets([]Object{o}, []Page{page}, []Application{app}, nil, "1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +63,7 @@ func TestPublishedBuilderReleaseRejectsUnclosedReferences(t *testing.T) {
 	}}
 	object.ID = "O1"
 	object.Published = published(object)
-	assets, err := releaseAssets([]Object{object}, nil, nil, "1")
+	assets, err := releaseAssets([]Object{object}, nil, nil, nil, "1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestPublishedBuilderPageReplacesTheGeneratedPage(t *testing.T) {
 		List: []string{"guest"}, Detail: []string{"guest"}}
 	page.ID = "P1"
 	page.Published = published(page)
-	assets, err := releaseAssets([]Object{object}, []Page{page}, nil, "1")
+	assets, err := releaseAssets([]Object{object}, []Page{page}, nil, nil, "1")
 	if err != nil {
 		t.Fatal(err)
 	}

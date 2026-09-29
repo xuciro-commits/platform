@@ -24,6 +24,16 @@ type ReleaseAsset struct {
 	Body            json.RawMessage `json:"body"`
 }
 
+// FlowReleaseDescriptor keeps the owner's complete definition and the
+// bindings extracted from its compiled native flow. It is a release format,
+// not an interpreter; the flow and definition owners still validate/run it.
+type FlowReleaseDescriptor struct {
+	Name       string          `json:"name"`
+	Subject    AssetRef        `json:"subject"`
+	Actions    []AssetRef      `json:"actions"`
+	Definition json.RawMessage `json:"definition"`
+}
+
 // PageReleaseAsset is the single descriptor path for a code page and a page
 // assembled by the builder. Its bindings become closure dependencies.
 func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error) {
@@ -221,6 +231,21 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 	}
 	var required []AssetRef
 	switch ref.Kind {
+	case AssetFlow:
+		var flow FlowReleaseDescriptor
+		if err := json.Unmarshal(body, &flow); err != nil {
+			return fmt.Errorf("release flow %s: %w", ref, err)
+		}
+		if flow.Subject.Kind != AssetObject || !json.Valid(flow.Definition) || len(flow.Definition) == 0 || flow.Definition[0] != '{' {
+			return fmt.Errorf("release flow %s needs a subject object and complete definition", ref)
+		}
+		required = append(required, flow.Subject)
+		for _, action := range flow.Actions {
+			if action.Kind != AssetAction {
+				return fmt.Errorf("release flow %s binds a non-action", ref)
+			}
+			required = append(required, action)
+		}
 	case AssetPage:
 		var page Page
 		if err := json.Unmarshal(body, &page); err != nil {

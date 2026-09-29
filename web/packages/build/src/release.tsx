@@ -2,15 +2,16 @@
 // a definition, activate a release or run a preview sandbox.
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Card, PageHeader, Select, t } from "@platform/ui";
-import type { Api } from "@platform/kernel";
+import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useState } from "react";
 
-type Kind = "object" | "page" | "app";
+type Kind = "object" | "page" | "app" | "flow";
 type Record = { id: string; title: string; name: string; state: string };
 const kinds: { kind: Kind; type: string; label: string }[] = [
   { kind: "object", type: "build.object", label: "Objects" },
   { kind: "page", type: "build.page", label: "Pages" },
   { kind: "app", type: "build.app", label: "Applications" },
+  { kind: "flow", type: "build.process", label: "Workflows" },
 ];
 
 export function ReleaseReview() {
@@ -37,7 +38,7 @@ export function ReleaseReview() {
     setActiveID("");
     try {
       const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", { kind, id });
-      if (!result.ok) setError((result.body as Api.ReleasePreview & { error?: string }).error ?? t("Release review could not be loaded."));
+      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release review could not be loaded."));
       else {
         setReview(result.body);
         setCandidateKey(crypto.randomUUID());
@@ -55,7 +56,7 @@ export function ReleaseReview() {
     try {
       const result = await client.call<Api.ReleaseSaved>("POST", "/v1/releases/candidates",
         { kind, id, candidateId: review.candidateId, key: candidateKey } satisfies Api.ReleaseSaveRequest);
-      if (!result.ok) setError((result.body as Api.ReleaseSaved & { error?: string }).error ?? t("Candidate could not be saved."));
+      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Candidate could not be saved."));
       else setSavedID(result.body.id);
     } catch {
       setError(t("Candidate could not be saved."));
@@ -71,7 +72,7 @@ export function ReleaseReview() {
     try {
       const result = await client.call<Api.ReleaseActive>("POST", "/v1/releases/active",
         { candidateId: savedID, key: crypto.randomUUID() } satisfies Api.ReleaseActivateRequest);
-      if (!result.ok) setError((result.body as Api.ReleaseActive & { error?: string }).error ?? t("Release could not be activated."));
+      if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release could not be activated."));
       else setActiveID(result.body.id);
     } catch {
       setError(t("Release could not be activated."));

@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Workflows": "工作流",
   "Saved test plan": "已保存测试计划",
   "New test plan": "新测试计划",
   "Test plan name": "测试计划名称",

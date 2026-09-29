@@ -9,6 +9,16 @@ export type ActionDeclaration = Action;
 
 export type Connection = { server: string; token: string; tenant: string; principal: string };
 
+/** The HTTP edge accepts both the host's structured refusal and a plain
+ * diagnostic. Callers render only text, never the error object itself. */
+export function apiErrorMessage(body: unknown): string | undefined {
+  if (!body || typeof body !== "object" || !("error" in body)) return undefined;
+  const error = body.error;
+  const message = typeof error === "string" ? error
+    : error && typeof error === "object" && "message" in error ? error.message : undefined;
+  return typeof message === "string" && message.trim() ? message : undefined;
+}
+
 export class EdgeClient {
   readonly authorities: Authorities;
   private readonly storageKey: string;
