@@ -11,6 +11,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/apps/build"
 	"platformserver/apps/flow"
 	"platformserver/apps/work"
@@ -20,11 +21,13 @@ import (
 // CandidateSimulationRequest fixes all business inputs of an isolated run.
 // Create actions establish its sample data; nothing is copied from live rows.
 type CandidateSimulationRequest struct {
-	ObjectID  string           `json:"objectId,omitempty"`
-	ProcessID string           `json:"processId,omitempty"`
-	As        string           `json:"as,omitempty"`
-	At        time.Time        `json:"at"`
-	Steps     []SimulationStep `json:"steps"`
+	ObjectID   string           `json:"objectId,omitempty"`
+	ProcessID  string           `json:"processId,omitempty"`
+	FunctionID string           `json:"functionId,omitempty"`
+	Model      string           `json:"model,omitempty"`
+	As         string           `json:"as,omitempty"`
+	At         time.Time        `json:"at"`
+	Steps      []SimulationStep `json:"steps"`
 }
 
 type SimulationStep struct {
@@ -37,19 +40,23 @@ type SimulationStep struct {
 	AdvanceSeconds int             `json:"advanceSeconds,omitempty"`
 	// Answer identifies a candidate flow's native ask token, never an arbitrary
 	// production task. The ordinary work action still checks the chosen actor.
-	Flow   string `json:"flow,omitempty"`
-	Step   string `json:"step,omitempty"`
-	Answer string `json:"answer,omitempty"`
+	Flow     string                 `json:"flow,omitempty"`
+	Step     string                 `json:"step,omitempty"`
+	Answer   string                 `json:"answer,omitempty"`
+	Function *build.FunctionFixture `json:"function,omitempty"`
 }
 
 type CandidateSimulation struct {
 	CandidateID string       `json:"candidateId"`
+	TestID      string       `json:"testId,omitempty"`
+	Model       string       `json:"model,omitempty"`
+	Fixture     bool         `json:"fixture,omitempty"`
 	Steps       []Simulation `json:"steps"`
 	Recovered   bool         `json:"recovered"`
 	Passed      *bool        `json:"passed,omitempty"`
 }
 
-// SimulateCandidate installs a saved object or process draft in a fresh, bounded tenant.
+// SimulateCandidate installs a saved object, process or function draft in a fresh, bounded tenant.
 // Only this builder's objects are supported. All action decisions and result
 // reads use the ordinary runtime, with no live records or external bindings.
 func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSimulationRequest) (CandidateSimulation, *kernel.Error) {
@@ -60,8 +67,14 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if builder.Roles[build.ID] != build.Builder {
 		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	if (request.ObjectID == "") == (request.ProcessID == "") || request.At.IsZero() || len(request.Steps) == 0 || len(request.Steps) > 20 {
-		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one saved object or process, a fixed time and 1–20 test steps")
+	roots := 0
+	for _, root := range []string{request.ObjectID, request.ProcessID, request.FunctionID} {
+		if root != "" {
+			roots++
+		}
+	}
+	if roots != 1 || len(request.Model) > 256 || request.At.IsZero() || len(request.Steps) == 0 || len(request.Steps) > 20 {
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose one saved object, process or function, a fixed time and 1–20 test steps")
 	}
 	t.mu.Lock()
 	if t.quarantined() {
@@ -79,6 +92,10 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	}
 	members := []platform.Member{m}
 	for _, step := range request.Steps {
+		if step.Function != nil && !step.Function.Check() {
+			t.mu.Unlock()
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded function fixture with a ready or rejected outcome")
+		}
 		if step.AdvanceSeconds < 0 || step.AdvanceSeconds > 86400 {
 			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Advance each test step by 0–86400 fixed seconds")
@@ -96,7 +113,15 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if request.ProcessID != "" {
 		kind, id = platform.AssetFlow, request.ProcessID
 	}
+	if request.FunctionID != "" {
+		kind, id = platform.AssetFunction, request.FunctionID
+	}
 	review, candidate, err := t.previewReleaseLocked(kind, id)
+	functionName := ""
+	if request.FunctionID != "" {
+		selected, _ := platform.Get[build.Function](t.automation(build.ID, false), request.FunctionID)
+		functionName = selected.Name
+	}
 	t.mu.Unlock()
 	if err == nil && review.Diagnostic != "" {
 		err = fmt.Errorf("%s", review.Diagnostic)
@@ -106,15 +131,35 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	}
 	// The constructor takes exact owner-produced bytes, not callbacks closing
 	// over the production Build or its host. Each invocation owns every app.
-	compose := func() (*Tenant, error) { return candidateTestTenant(candidate, m, members[1:]...) }
+	compose := func() (*Tenant, error) {
+		sandbox, err := candidateTestTenant(candidate, m, members[1:]...)
+		if err == nil && sandbox.ai != nil {
+			err = configureFunctionFixtureModel(sandbox, request.Model, request.At)
+		}
+		return sandbox, err
+	}
 	sandbox, err := compose()
 	if err != nil {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
 	out := CandidateSimulation{CandidateID: candidate.ID, Steps: []Simulation{}}
+	if sandbox.ai != nil {
+		out.TestID, err = canonicalDigest([]any{candidate.ID, request, members})
+		if err != nil {
+			return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
+		out.Model, out.Fixture = request.Model, true
+	}
 	passed, asserted := true, 0
+	functionAttempted := false
 	now := request.At
 	for i, step := range request.Steps {
+		if request.FunctionID != "" && step.Action == build.SchemaFunctionCall {
+			var call platform.FunctionRequest
+			if json.Unmarshal(step.Payload, &call) == nil {
+				functionAttempted = functionAttempted || call.Name == functionName
+			}
+		}
 		if step.Expect != "" && step.Expect != "accepted" && step.Expect != "refused" {
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose accepted or refused as the expected test outcome")
 		}
@@ -157,7 +202,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		} else {
 			action := sandbox.owner["action:"+step.Action]
 			if action == nil || step.ID == "" || action.Manifest().ID != build.ID || !strings.HasPrefix(step.Type, build.ID+".") ||
-				step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType {
+				step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType || step.Type == build.TestPlanType || step.Type == build.ProcessType || step.Type == build.FunctionType {
 				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test step {step} must name an action and record of the candidate objects", fmt.Sprint(i+1))
 			}
 			payload := step.Payload
@@ -176,6 +221,22 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 			sandbox.Work(now)
 		}
 		result := Simulation{Accepted: refusal == nil, Changes: []SimulatedChange{}}
+		if step.Function != nil {
+			matched, err := settleFunctionFixture(sandbox, actor, *step.Function, now)
+			if err != nil {
+				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The function fixture cannot run: {why}", err.Error())
+			}
+			result.FunctionMatched = &matched
+			passed = passed && matched
+		}
+		if sandbox.ai != nil {
+			page, problem := sandbox.Records(actor, build.FunctionCallType, platform.Query{Limit: 100}, now)
+			if problem == nil {
+				for _, record := range page.Records {
+					result.Functions = append(result.Functions, record.(build.FunctionRun))
+				}
+			}
+		}
 		if step.Expect != "" {
 			matched := (step.Expect == "accepted") == result.Accepted
 			result.Matched = &matched
@@ -219,6 +280,12 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		}
 		out.Steps = append(out.Steps, result)
 	}
+	if request.FunctionID != "" && !functionAttempted {
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A function test must call the selected candidate function")
+	}
+	if len(pendingFunctionEffects(sandbox)) != 0 {
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Provide a fixed answer for every pending function call")
+	}
 	if asserted == len(request.Steps) {
 		out.Passed = &passed
 	}
@@ -253,6 +320,10 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 		seats = append(seats, Seat{Subjects: []string{other.ID}, Member: other})
 	}
 	apps := []platform.App{NewConsole(member.Tenant, seats...)}
+	hasFunctions := slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFunction })
+	if hasFunctions {
+		apps = append(apps, ai.New(member.Tenant))
+	}
 	if slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFlow }) {
 		apps = append(apps, work.New(member.Tenant), flow.New(member.Tenant))
 	}
@@ -263,6 +334,9 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 	}
 	definitions := map[string][]recordState{build.ObjectType: {}}
 	for _, asset := range candidate.Assets {
+		if asset.Ref.Kind == platform.AssetFunction {
+			continue // compiled after its source objects below
+		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {
 			return nil, fmt.Errorf("unsupported test dependency or compiler version %s", asset.Ref)
 		}
@@ -304,6 +378,16 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 	}
 	if err := b.Reinstall(); err != nil {
 		return nil, err
+	}
+	if hasFunctions {
+		for _, asset := range candidate.Assets {
+			if asset.Ref.Kind == platform.AssetFunction {
+				if err := b.InstallFunctionAsset(asset); err != nil {
+					return nil, err
+				}
+			}
+		}
+		sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
 	}
 	// Restore the same dependent page/application descriptors the release
 	// review includes. Actions are compiled solely from their owning objects.

@@ -20,12 +20,14 @@ import (
 // in a private staged decision that is then discarded (ADR-0040 21d): no
 // journal entry, no record, notice, effect or delivery leaves it.
 type Simulation struct {
-	Accepted bool              `json:"accepted"`
-	Refusal  string            `json:"refusal,omitempty"`
-	Changes  []SimulatedChange `json:"changes"`
-	Matched  *bool             `json:"matched,omitempty"`
-	Flows    []SimulatedFlow   `json:"flows,omitempty"`
-	Tasks    []work.WorkTask   `json:"tasks,omitempty"`
+	Accepted        bool                `json:"accepted"`
+	Refusal         string              `json:"refusal,omitempty"`
+	Changes         []SimulatedChange   `json:"changes"`
+	Matched         *bool               `json:"matched,omitempty"`
+	Flows           []SimulatedFlow     `json:"flows,omitempty"`
+	Tasks           []work.WorkTask     `json:"tasks,omitempty"`
+	Functions       []build.FunctionRun `json:"functions,omitempty"`
+	FunctionMatched *bool               `json:"functionMatched,omitempty"`
 }
 
 // SimulatedFlow exposes native progress/trace, never its raw source Data.

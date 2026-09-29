@@ -14,7 +14,7 @@ export type WorkflowObject = { id: string; name: string; title: string; publishe
 export function installedObjects(records: WorkflowObject[]): WorkflowObject[] {
   return records.flatMap((record) => {
     if (!record.published) return [];
-    try { const installed = JSON.parse(record.published) as WorkflowObject; return installed.states?.length ? [installed] : []; }
+    try { const installed = JSON.parse(record.published) as WorkflowObject; return [installed]; }
     catch { return []; }
   });
 }
@@ -41,7 +41,7 @@ export function WorkflowEditor({ id }: { id: string }) {
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
   const sources = useRecordInventory<WorkflowObject>("build.object");
-  const objects = installedObjects(sources.data?.records ?? []);
+  const objects = installedObjects(sources.data?.records ?? []).filter((object) => object.states?.length);
   const [draft, setDraft] = useState<WorkflowDraft>(empty);
   const [dirty, setDirty] = useState(false);
   const [chosen, setChosen] = useState(-1);

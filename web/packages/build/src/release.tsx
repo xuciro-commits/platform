@@ -5,13 +5,14 @@ import { Button, Card, PageHeader, Select, t } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useState } from "react";
 
-type Kind = "object" | "page" | "app" | "flow";
+type Kind = "object" | "page" | "app" | "flow" | "function";
 type Record = { id: string; title: string; name: string; state: string };
 const kinds: { kind: Kind; type: string; label: string }[] = [
   { kind: "object", type: "build.object", label: "Objects" },
   { kind: "page", type: "build.page", label: "Pages" },
   { kind: "app", type: "build.app", label: "Applications" },
   { kind: "flow", type: "build.process", label: "Workflows" },
+  { kind: "function", type: "build.function", label: "AI functions" },
 ];
 
 export function ReleaseReview() {

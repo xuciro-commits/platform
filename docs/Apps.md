@@ -94,7 +94,10 @@ Functions: []platform.AIFunction{
 
 人员通过普通动作发起调用。在受限结果动作的 apply 回调里执行 `call, err := c.RequestFunction(r, platform.FunctionRequest{Name: "record-advice", Reply: SchemaAdviceAnswer})`；声明的 Reply 必须是函数所属应用对当前回答目标对象的 `Automation: true` 动作，人员不能伪造回答。调用拒绝使整个暂存决定失败，即使回调忽略错误也不能保存半截意图。当前要求启用 `AcceptResult` 的宿主与已绑定模型。`Source` 可指定函数声明对象中的另一条源记录 ID，留空时沿用同类型回答目标；`Version` 留空时固定已安装版本，指定时只能读取仍保留的发布版本。人员不能用 `OnBehalf` 冒充他人；受管自动化必须明确保留当前有效的成员身份，原生流程编写器尚未接通该入口。声明外字段、非标量或派生输入在注册时拒绝；源记录和字段在接受时及派发前按当前权限检查。
 
-`FunctionCall` 返回定义/依赖闭包/输入摘要、模型标识和来源引用，不返回私有输入字节。应用把 `Sources` 与建议字段一并存回记录，并用 `Entity.Derived`/`Withheld` 声明读取时的来源检查。严格 JSON 输出通过后，宿主沿已有模型效果/Reply 路径保存回答与用量；Reply 采用 `platform.RecordAdvice`，由人员继续通过原有业务动作决定。完整示例为 [CRM](../apps/crm/server/advice.go) 与 [MES](../apps/mes/server/advice.go)。Build 目前另有 `build.function` 标准创建/编辑/发布动作，发布时保存至多 64 个平坦版本，已安装声明与草稿分离；`build.function-call.start` 接受 `name`、`source` 与可选 `version`，在独立的 `build.function-call` 记录保存建议或拒绝。结果不回写源对象；成员对结果的读取按来源当前权限收窄。前置条件是该租户有已发布的 Build 对象、函数定义、成员授权及已启用模型；固定案例评测、编写器、页面/Flow 显式调用尚未交付。来源范围当前仅为本应用单条记录的直接标量字段。
+`FunctionCall` 返回定义/依赖闭包/输入摘要、模型标识和来源引用，不返回私有输入字节。应用把 `Sources` 与建议字段一并存回记录，并用 `Entity.Derived`/`Withheld` 声明读取时的来源检查。严格 JSON 输出通过后，宿主沿已有模型效果/Reply 路径保存回答与用量；Reply 采用 `platform.RecordAdvice`，由人员继续通过原有业务动作决定。完整示例为 [CRM](../apps/crm/server/advice.go) 与 [MES](../apps/mes/server/advice.go)。Build 目前另有 `build.function` 标准创建/编辑/发布动作，发布时保存至多 64 个平坦版本，已安装声明与草稿分离；`build.function-call.start` 接受 `name`、`source` 与可选 `version`，在独立的 `build.function-call` 记录保存建议或拒绝。结果不回写源对象；成员对结果的读取按来源当前权限收窄。前置条件是该租户有已发布的 Build 对象、函数定义、成员授权及已启用模型；已有固定回答的隔离案例与计划界面；函数编写器、页面/Flow 显式调用和正式评测发布门禁尚未交付。来源范围当前仅为本应用单条记录的直接标量字段。
+
+**函数固定案例（Function fixtures, ADR-0043 24c）**：用标准动作保存函数草稿后，在“测试候选 → 候选种类 → AI 函数”选择它。填写固定案例模型标识 `provider/model`，以新建动作建立样本，再用预置函数调用步骤选择源 ID；填写固定提供商回答、报告的 Token 数与预期函数状态，可选严格 JSON 回答比较。命名保存计划，刷新重载并运行；核对候选、测试标识、调用版本与函数预期。畸形回答可预期“已拒绝”；调用本身因无模型/无权而拒绝时取消“提供固定模型回答”并预期动作拒绝。此界面不会请求真实模型。预期和输入修改清除旧结果；测试标识不构成正式发布许可，当前每步最多处理一个待回答的函数请求。
+
 
 ## 4. 声明流程
 

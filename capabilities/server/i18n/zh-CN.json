@@ -831,5 +831,14 @@
  "The function name {name} must be lower-case letters and digits": "函数名称 {name} 必须使用小写字母和数字",
  "Function {name} needs a published object of this builder": "函数 {name} 需要该构建器的已发布对象",
  "Function {name} is already declared": "函数 {name} 已被声明",
- "A published function keeps its name and source object": "已发布函数保留其名称与源对象"
+ "A published function keeps its name and source object": "已发布函数保留其名称与源对象",
+ "Choose one saved object, process or function, a fixed time and 1–20 test steps": "选择一个已保存对象、流程或函数、固定时间和 1–20 个测试步骤",
+ "Use a bounded function fixture with a ready or rejected outcome": "使用有界的函数固定回答，并预期就绪或拒绝结果",
+ "Choose exactly one saved object, workflow or function draft for the test plan": "测试计划请选择且仅选择一个已保存对象、工作流或函数草稿",
+ "Fixed sample inputs and expected outcomes for testing a saved object, workflow or function draft.": "用于测试已保存对象、工作流或函数草稿的固定样本输入与预期结果。",
+ "The function fixture cannot run: {why}": "无法运行函数固定案例：{why}",
+ "A function test must call the selected candidate function": "函数测试必须调用所选候选函数",
+ "Provide a fixed answer for every pending function call": "请为每个待处理函数调用提供固定回答",
+ "Saved function draft": "已保存函数草稿",
+ "Fixture model identifier": "固定案例模型标识"
 }

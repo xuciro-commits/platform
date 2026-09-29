@@ -205,6 +205,9 @@ export type Calendar = {
 
 export type CandidateSimulation = {
   candidateId: string;
+  testId?: string;
+  model?: string;
+  fixture?: boolean;
   steps: Simulation[];
   recovered: boolean;
   passed?: boolean;
@@ -213,6 +216,8 @@ export type CandidateSimulation = {
 export type CandidateSimulationRequest = {
   objectId?: string;
   processId?: string;
+  functionId?: string;
+  model?: string;
   as?: string;
   at: string;
   steps: SimulationStep[];
@@ -481,6 +486,37 @@ export type FlowSummary = {
   flow: string;
   state: string;
   trace: TraceLine[];
+};
+
+export type FunctionFixture = {
+  output: string;
+  inputTokens: number;
+  outputTokens: number;
+  expectState: "ready" | "rejected";
+  expectOutput?: string;
+};
+
+export type FunctionRun = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  function: string;
+  version: number;
+  member: string;
+  source: string;
+  state: "pending" | "ready" | "rejected";
+  output?: string;
+  code?: string;
+  reason?: string;
+  definition: string;
+  dependencies: string;
+  model: string;
+  inputHash: string;
+  release?: string;
+  sources: string[];
+  withheld?: boolean;
 };
 
 export type Hit = {
@@ -868,6 +904,8 @@ export type Simulation = {
   matched?: boolean;
   flows?: SimulatedFlow[];
   tasks?: WorkTask[];
+  functions?: FunctionRun[];
+  functionMatched?: boolean;
 };
 
 export type SimulationStep = {
@@ -881,6 +919,7 @@ export type SimulationStep = {
   flow?: string;
   step?: string;
   answer?: string;
+  function?: FunctionFixture;
 };
 
 export type Stamp = {
