@@ -8,6 +8,7 @@ import { defineApp } from "@platform/app";
 import { PageEditor, PagesList } from "./editor";
 import { ProcessEditor, ProcessPicker } from "./process";
 import { WorkflowEditor, Workflows } from "./workflow";
+import { FunctionEditor, Functions } from "./function";
 import { ReleaseReview } from "./release";
 import { CandidateTest } from "./simulate";
 import { t, type NavSection } from "@platform/ui";
@@ -26,10 +27,11 @@ export default defineApp({
     { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
     { id: "process", title: () => t("Object design"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
     { id: "workflow", title: () => t("Workflows"), render: (p) => p.id ? <WorkflowEditor key={p.id} id={p.id} /> : <Workflows /> },
+    { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <Functions /> },
     { id: "release-review", title: () => t("Release review"), render: () => <ReleaseReview /> },
-    { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <CandidateTest key={p.processId ?? "object"} processId={p.processId} /> },
+    { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <CandidateTest key={p.functionId ?? p.processId ?? "object"} processId={p.processId} functionId={p.functionId} /> },
   ],
-  opens: { "build.page": "compose", "build.object": "process", "build.process": "workflow" }, // open a semantic asset in its editor
+  opens: { "build.page": "compose", "build.object": "process", "build.process": "workflow", "build.function": "function" }, // open a semantic asset in its editor
   nav: (host): NavSection[] => {
     const own = host.definitions.filter((d) => d.ref.kind === "page" && d.ref.app === "build" && d.source === "tenant");
     return [
@@ -42,6 +44,7 @@ export default defineApp({
           { label: t("Applications"), icon: <AppWindow />, route: page("applications") },
           ...(host.role("build") === "builder" ? [
             { label: t("Workflows"), icon: <GitBranch />, route: { view: "workflow" } },
+            { label: t("AI functions"), icon: <Boxes />, route: { view: "function" } },
             { label: t("Test a candidate"), icon: <Boxes />, route: { view: "candidate-test" } },
             { label: t("Release review"), icon: <Boxes />, route: { view: "release-review" } },
           ] : []),

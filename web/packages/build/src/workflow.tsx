@@ -11,10 +11,10 @@ export type WorkflowObject = { id: string; name: string; title: string; publishe
   actions?: { name: string; title: string; inputs?: { required?: boolean }[]; approval?: unknown }[]; access?: { role: string; read: string }[] };
 
 /** Pickers use the installed source semantics, even while its draft changes. */
-export function installedObjects(records: WorkflowObject[]): WorkflowObject[] {
+export function installedObjects<T extends WorkflowObject>(records: T[]): T[] {
   return records.flatMap((record) => {
     if (!record.published) return [];
-    try { const installed = JSON.parse(record.published) as WorkflowObject; return [installed]; }
+    try { const installed = JSON.parse(record.published) as T; return [installed]; }
     catch { return []; }
   });
 }

@@ -75,7 +75,7 @@
 | C27 | 派生内容按来源收窄（ADR-0033，#130） | 应用在实体上声明哪些内容取自别的记录（取自哪个字段、列表里的哪一项、或某个命名读取的权限），宿主在每个面向成员的读取上按读者当前权限重查来源：智能体运行看过的记录、每一步的参数与结果、引文（按记录，也按字段）、草稿、结论，以及它记住的事实。来源不可读时字段被清空或该项被去掉，并明确告诉读者；被隐去的字段不参与聚合分组与度量；运行的模型调用只给既是智能体/AI 管理员、又能读该运行读过的全部来源的人；任何读取入口都拒绝其他租户的成员；声明不成立（字段不存在、路径不是列表、没有布尔提示字段）时租户直接起不来 | 自动：`TestAgentTraceScope`（同应用换 owner/单位、只有 lead 能读的字段、只有智能体管理员、跨租户）、`TestDerivedDeclarationIsChecked`（声明校验）、`TestSimulationResultsUseBuilderReadPermissions`（旧试运行返回值的单元视野、字段脱敏和跨租户拒绝）、发布候选预览/保存/激活的其他租户构建者拒绝（`TestAcceptedReleaseCandidateCommitRetryAndRecovery`、`TestActivateReleaseMatchesRunningDefinitions`）、`TestCSMTriage`（酒店：引文与模型调用）、`TestCorrectedByTheAgent`（制造：助手读到的计划订单与结论） | `platform.Derivation`/`Entity.Derived`（应用只声明）、`Tenant.narrowed`、`Tenant.mayRead`、`Tenant.admits`、`Tenant.TranscriptsFor`（宿主执行） |
 
 | C42 | 受权类型化 AI 函数代码调用（ADR-0043 24b） | 清单声明单记录直接标量输入与严格输出，人员通过同一受限动作/模型效果/自动 Reply 路径请求建议；源记录和字段授权、预算、模型绑定与禁用生效，保存回答、来源和用量，恢复不请求模型，不自动推进业务状态 | 自动：`TestAIFunctionUsesAcceptedInputAndStrictOutput`、`TestAIFunctionRefusalsAndModelGates`、`TestFunctionOutputIsStrictAndBounded`、`TestTypedFunctionOnOpportunity`、`TestTypedFunctionOnOrder`（两行业 `CheckReplay`）；PostgreSQL 条件测试 `TestJournalAcceptedFunctionCrashBeforeApplication`；`rehearse.sh` 实际 OIDC/模型替身调用和双行业恢复。新函数 UI 尚未人工走通，不作为已验收操作路线 | `platform.AIFunction`、`Caller.RequestFunction`、`function.go`、既有 `accepted-result` / 模型效果路径 |
-| C43 | Build 函数发布、独立调用与固定案例（ADR-0043 24c 部分实现） | 构建者经标准动作保存草稿/发布新版本；人员以另一条可读记录为源调用，结果与拒绝保留在独立记录，旧待发调用保留原输入/提示词，后续撤销源字段权限则隐去已有结果 | 自动：`TestBuilderFunctionVersionsCallsAndRecovery`、`TestFunctionImageRetainsOnlyValidPublishedVersions`、`TestJournalAcceptedBuilderPublicationRecovery`（PostgreSQL 条件测试含发布追加后崩溃）。`TestCandidateFunctionFixtures` 验证固定计划/精确版本/恢复与拒绝边界；`function-fixture.spec.ts` 在两行业开发宿主运行固定案例界面，检查键盘、保存重载、错误、中文与窄屏截图。函数可视编写、正式评测激活与页面/Flow 完整路线尚未交付；负责人体验未验收 | `build.function`、`build.function-call`、现有 `accepted-result` / 模型效果路径 |
+| C43 | Build 函数发布、独立调用与固定案例（ADR-0043 24c 部分实现） | 构建者经标准动作保存草稿/发布新版本；人员以另一条可读记录为源调用，结果与拒绝保留在独立记录，旧待发调用保留原输入/提示词，后续撤销源字段权限则隐去已有结果 | 自动：`TestBuilderFunctionVersionsCallsAndRecovery`、`TestFunctionImageRetainsOnlyValidPublishedVersions`、`TestJournalAcceptedBuilderPublicationRecovery`（PostgreSQL 条件测试含发布追加后崩溃）。`TestCandidateFunctionFixtures` 验证固定计划/精确版本/恢复与拒绝边界；`function-fixture.spec.ts` 在两行业开发宿主运行固定案例界面，检查键盘、保存重载、错误、中文与窄屏截图。`function-editor.spec.ts` 通过两行业函数编写、测试/审查一致、冲突重载及双版本发布与截图检查。正式评测激活与页面/Flow 完整路线尚未交付；负责人体验未验收 | `build.function`、`build.function-call`、现有 `accepted-result` / 模型效果路径 |
 
 ## 下一阶段验收方法（待实现、待验收）
 
@@ -265,11 +265,14 @@ N5 的租户隔离代码探针：向一个租户注入缺号日志、损坏快�
 
 ### 函数固定案例检查（C43，24c 部分界面）
 
-此检查仅验证固定回答的隔离案例，不是完整函数编写/发布/操作路线。前置条件：已通过标准动作保存 Build 函数草稿，其来源是已发布 Build 对象；浏览器测试的两行业夹具负责准备这些定义。
+此检查验证函数编写/固定回答隔离案例与开发期发布，尚不是包含页面/Flow 操作员调用的完整路线。前置条件：已发布 Build 源对象；两行业浏览器夹具通过 API 准备源对象。固定案例用例通过动作准备函数，编写用例通过界面创建函数。
 
 1. 应用设计台进入“测试候选”，候选种类选“AI 函数”，选已保存函数草稿。填写固定模型标识、实际操作员成员 ID、固定时间和计划名称；第一步的 JSON 创建样本，第二步填写提供商回答、Token 数与预期严格回答。
 2. 保存计划，用键盘启动“运行隔离测试”，核对预期、候选/测试标识与独立调用记录。刷新重载再跑应保持相同标识。生产记录中不出现样本，普通操作员不可读取测试计划。
 3. 将回答改为畸形 JSON，函数预期选“已拒绝”，候选保持不变而测试标识改变；取消固定回答应提示每个待处理函数调用都需要回答。重载正向计划，在中文和 390px 窄屏完成同样操作。
-4. 发布候选审查选择“AI 函数”及同一草稿，核对候选标识一致。此处不证明正式评测门禁、函数可视编写或页面/Flow 调用。
+4. 发布候选审查选择“AI 函数”及同一草稿，核对候选标识一致。此处不证明正式评测门禁或页面/Flow 调用。
 
 以上浏览器步骤已自动运行并检查截图，负责人尚未进行体验验收。真实模型质量须另行测试。
+
+
+**函数编写器检查（C43）**：进入“应用设计台 → AI 函数”，新建函数；在函数设置填名称、标题、描述与角色，在记录输入选已发布对象及字段，在模型推断填指令/模型/预算，在严格输出添加描述明确的标量字段。图上选择与左侧步骤按钮编辑同一声明。用键盘保存后点“测试函数”完成上述固定案例，随后保存一致候选并回编写器发布；安装版本应显示 1。修改提示词后再次发布显示版本 2，刷新后保持；名字与来源不可修改。并发编辑拒绝应保留本地输入，明确重载后取得保存值。两行业自动用例已完成此段并检查桌面、中文与窄屏截图；仍未证明页面/Flow 操作员旅程、真实模型质量或负责人验收。
