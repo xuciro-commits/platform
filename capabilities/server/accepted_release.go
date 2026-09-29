@@ -155,6 +155,81 @@ func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind
 	return t.commitReleaseLocked(m, saved)
 }
 
+// ActivateRelease moves the tenant's single release pointer to a saved
+// candidate (ADR-0039 D2). The pointer must describe what operators run, so
+// every asset of the candidate must equal the running definition byte for
+// byte; a stale or not-yet-installed candidate is refused with its paths.
+func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now time.Time) (string, error) {
+	if m.Roles[build.ID] != build.Builder {
+		return "", fmt.Errorf("builder role required")
+	}
+	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
+		return "", fmt.Errorf("candidate ID and idempotency key are required")
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.quarantined() {
+		return "", fmt.Errorf("tenant is quarantined")
+	}
+	raw := t.releaseCandidates[candidateID]
+	if raw == nil {
+		return "", fmt.Errorf("release candidate %s is not saved", candidateID)
+	}
+	if t.activeRelease == candidateID && t.AcceptResult == nil {
+		return candidateID, nil
+	}
+	if t.activeRelease != candidateID {
+		if err := t.runningMatchesLocked(candidateID, raw); err != nil {
+			return "", err
+		}
+	}
+	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
+		Member: m.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidateID,
+		Bytes: slices.Clone(raw), Active: true}
+	var err error
+	saved.RequestHash, err = releaseRequestHash(t.ID, m.ID, saved.Key, candidateID, true)
+	if err != nil {
+		return "", err
+	}
+	return t.commitReleaseLocked(m, saved)
+}
+
+func (t *Tenant) runningMatchesLocked(candidateID string, raw []byte) error {
+	saved, err := platform.ReadCandidate(candidateID, raw)
+	if err != nil {
+		return err
+	}
+	available, err := t.releaseAssetsLocked(nil, false)
+	if err != nil {
+		return err
+	}
+	// Rebuild the same closure from what runs now: equal content yields the
+	// same canonical ID; anything else is reported by asset path.
+	roots := make([]platform.AssetRef, 0, len(saved.Assets))
+	for _, asset := range saved.Assets {
+		roots = append(roots, asset.Ref)
+	}
+	running, err := platform.Candidate(roots, available)
+	if err != nil {
+		return fmt.Errorf("release differs from the running definitions: %w", err)
+	}
+	if running.ID == candidateID {
+		return nil
+	}
+	added, removed, changed, err := platform.CandidateDiff(saved, running)
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf("release differs from the running definitions: changed %v, missing %v, extra %v", changed, removed, added)
+}
+
+// ActiveRelease is the tenant's active release ID, empty before any activation.
+func (t *Tenant) ActiveRelease() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.activeRelease
+}
+
 // commitReleaseLocked appends one release result and applies only what the
 // journal returned; the caller holds the tenant lock.
 func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedRelease) (string, error) {

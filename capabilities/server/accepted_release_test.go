@@ -309,3 +309,59 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 		t.Fatal("replay lost the saved candidate or activated it")
 	}
 }
+
+// Activation moves the single pointer only to a saved candidate that equals the
+// running definitions; an unpublished draft's candidate is refused, the pointer
+// survives replay, and a non-builder cannot move it (ADR-0039 D2).
+func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
+	const tenantID = "release-activate"
+	compose := func() *Tenant {
+		seats := []Seat{{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}},
+			{Subjects: []string{"erin"}, Member: platform.Member{ID: "erin", Roles: map[string]string{build.ID: build.User}}}}
+		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seats...), build.New(tenantID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tenant
+	}
+	live := compose()
+	var entries []Entry
+	live.Record = func(e Entry) { entries = append(entries, e) }
+	member, _ := live.Member("dana")
+	user, _ := live.Member("erin")
+	at := time.Date(2026, 9, 28, 18, 0, 0, 0, time.UTC)
+	submit := func(key, schema string, payload string) {
+		t.Helper()
+		if _, err := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
+			Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: []byte(payload)}, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	submit("create", build.ObjectType+".create", `{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`)
+	draft, _ := live.PreviewRelease(member, platform.AssetObject, "O1")
+	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", draft.CandidateID, "s1", at); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := live.ActivateRelease(member, draft.CandidateID, "a1", at); err == nil || live.ActiveRelease() != "" {
+		t.Fatal("a candidate operators do not run was activated")
+	}
+	submit("publish", build.SchemaPublish, `{}`)
+	if _, err := live.ActivateRelease(user, draft.CandidateID, "a2", at); err == nil {
+		t.Fatal("a non-builder moved the release pointer")
+	}
+	if id, err := live.ActivateRelease(member, draft.CandidateID, "a3", at); err != nil || id != draft.CandidateID {
+		t.Fatalf("activate published candidate: %s, %v", id, err)
+	}
+	if _, err := live.ActivateRelease(member, "sha256-v1:missing", "a4", at); err == nil {
+		t.Fatal("an unsaved candidate was activated")
+	}
+	recovered := compose()
+	if err := recovered.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	if recovered.ActiveRelease() != draft.CandidateID {
+		t.Fatalf("replay lost the active release: %q", recovered.ActiveRelease())
+	}
+}

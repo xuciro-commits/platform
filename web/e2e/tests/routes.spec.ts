@@ -500,11 +500,21 @@ test("route 37: review a saved draft and its dependencies", async ({ page, reque
   await page.getByRole("button", { name: "Save immutable candidate" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Candidate saved; not active for operators." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save immutable candidate" })).toBeDisabled();
+  // Operators do not run the draft yet: activation is refused with its paths.
+  await page.getByRole("button", { name: "Activate release" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "differs from the running definitions" })).toBeVisible();
   // Preview reads only: publication is a separate accepted action.
   await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id }, {});
   await page.getByRole("button", { name: "Check draft and dependencies" }).click();
   await expect(page.getByText("Installed candidate:", { exact: false })).toBeVisible();
   await expect(page.getByText("Changed · 0")).toBeVisible();
+  // Now the saved bytes are what runs: the single release pointer moves.
+  await page.getByRole("button", { name: "Save immutable candidate" }).click();
+  await page.getByRole("button", { name: "Activate release" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
+  const active = await request.get("/v1/releases/active", { headers: { Authorization: "Bearer desk" } });
+  expect(active.ok()).toBeTruthy();
+  expect((await active.json()).id).toMatch(/^sha256-v1:/);
 
   const bad = fresh("PAGE");
   await decide(request, "manager", "build", "build.page.create", { type: "build.page", id: bad },

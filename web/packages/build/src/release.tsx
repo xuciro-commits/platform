@@ -20,6 +20,7 @@ export function ReleaseReview() {
   const [review, setReview] = useState<Api.ReleasePreview>();
   const [candidateKey, setCandidateKey] = useState("");
   const [savedID, setSavedID] = useState("");
+  const [activeID, setActiveID] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const selected = kinds.find((item) => item.kind === kind)!;
@@ -33,6 +34,7 @@ export function ReleaseReview() {
     setError("");
     setReview(undefined);
     setSavedID("");
+    setActiveID("");
     try {
       const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", { kind, id });
       if (!result.ok) setError((result.body as Api.ReleasePreview & { error?: string }).error ?? t("Release review could not be loaded."));
@@ -61,6 +63,22 @@ export function ReleaseReview() {
       setBusy(false);
     }
   };
+  // Activation succeeds only when operators already run exactly these bytes.
+  const activate = async () => {
+    if (!savedID) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await client.call<Api.ReleaseActive>("POST", "/v1/releases/active",
+        { candidateId: savedID, key: crypto.randomUUID() } satisfies Api.ReleaseActivateRequest);
+      if (!result.ok) setError((result.body as Api.ReleaseActive & { error?: string }).error ?? t("Release could not be activated."));
+      else setActiveID(result.body.id);
+    } catch {
+      setError(t("Release could not be activated."));
+    } finally {
+      setBusy(false);
+    }
+  };
   const changed = (label: string, refs?: Api.AssetRef[]) => (
     <div>
       <h3 className="text-xs font-semibold">{t(label)} · {refs?.length ?? 0}</h3>
@@ -73,12 +91,12 @@ export function ReleaseReview() {
     <PageHeader title={t("Release review")} description={t("Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.")} />
     <Card className="grid gap-3 p-3">
       <label className="grid gap-1 text-xs">{t("Definition kind")}
-        <Select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setId(""); setReview(undefined); setSavedID(""); setError(""); }}>
+        <Select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setId(""); setReview(undefined); setSavedID(""); setActiveID(""); setError(""); }}>
           {kinds.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
         </Select>
       </label>
       <label className="grid gap-1 text-xs">{t("Saved draft")}
-        <Select value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setSavedID(""); setError(""); }}>
+        <Select value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setSavedID(""); setActiveID(""); setError(""); }}>
           <option value="">{t("Choose a saved draft")}</option>
           {records.map((record) => <option key={record.id} value={record.id}>{record.title || record.name} · {record.state}</option>)}
         </Select>
@@ -99,7 +117,9 @@ export function ReleaseReview() {
       </div>}
       {!review.diagnostic && review.candidateId && <div className="grid gap-2">
         <Button disabled={busy || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>
-        {savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
+        {savedID && !activeID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
+        {savedID && <Button variant="secondary" disabled={busy || activeID === savedID} onClick={activate}>{t("Activate release")}</Button>}
+        {activeID && <p className="break-all text-sm" role="status">{t("Release active for operators.")} <code>{activeID}</code></p>}
       </div>}
     </Card>}
   </div>;

@@ -163,6 +163,17 @@ type ReleaseSaved struct {
 	ID string `json:"id"`
 }
 
+// ReleaseActivateRequest moves the tenant's release pointer to a saved candidate.
+type ReleaseActivateRequest struct {
+	CandidateID string `json:"candidateId"`
+	Key         string `json:"key"`
+}
+
+// ReleaseActive is the tenant's active release, empty before any activation.
+type ReleaseActive struct {
+	ID string `json:"id"`
+}
+
 // PreviewRelease checks authority before looking up the owner's unfiltered
 // records and before computing any digest or error path. It never changes the
 // installed definitions, persistent records, or active operator work.

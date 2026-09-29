@@ -704,6 +704,15 @@ export type Related = {
   total: number;
 };
 
+export type ReleaseActivateRequest = {
+  candidateId: string;
+  key: string;
+};
+
+export type ReleaseActive = {
+  id: string;
+};
+
 export type ReleasePreview = {
   currentId?: string;
   candidateId?: string;
