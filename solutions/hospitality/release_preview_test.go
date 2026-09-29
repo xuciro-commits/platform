@@ -96,8 +96,17 @@ func TestHotelObjectPreviewRejectsAnInstalledPageWithRemovedField(t *testing.T) 
 		!strings.Contains(preview.Diagnostic, "page deliverydesk: build.delivery has no field room") {
 		t.Fatalf("a dependent page lost its bound field without diagnosis: %+v, %v", preview, err)
 	}
-	if live, err := w.tenant.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "deliverydesk"}}); err != nil || live.ID == "" {
-		t.Fatalf("a rejected draft changed the installed page: %+v, %v", live, err)
+	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: "deliverydesk"}
+	before, err := w.tenant.ReleaseCandidate([]platform.AssetRef{ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome := w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-CLOSURE",
+		"closure-bad-publish", map[string]any{}); outcome != "ERROR_CODE_INVALID_ARGUMENT" {
+		t.Fatalf("actual publication bypassed the preview rejection: %s", outcome)
+	}
+	if live, err := w.tenant.ReleaseCandidate([]platform.AssetRef{ref}); err != nil || live.ID != before.ID {
+		t.Fatalf("rejected publication changed the installed page: %+v, %v", live, err)
 	}
 }
 
@@ -119,4 +128,64 @@ func TestHotelObjectPreviewChecksExplicitPageOverGeneratedName(t *testing.T) {
 		!strings.Contains(preview.Diagnostic, "page pickup: build.pickup has no field room") {
 		t.Fatalf("explicit page over generated name escaped validation: %+v, %v", preview, err)
 	}
+	if outcome := w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-SAME",
+		"same-bad-publish", map[string]any{}); outcome != "ERROR_CODE_INVALID_ARGUMENT" {
+		t.Fatalf("explicit page over generated name escaped publication validation: %s", outcome)
+	}
+}
+
+func TestHotelAutomaticPageFollowsCompatibleObjectChange(t *testing.T) {
+	w := newWorld(t, hotelProvider)
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".create", build.ObjectType, "O-AUTO", "auto-create",
+		map[string]any{"name": "handoff", "title": "Handoff", "fields": []map[string]any{
+			{"name": "guest", "title": "Guest", "type": "text"}, {"name": "optional", "title": "Optional", "type": "text"},
+		}}), "ok")
+	w.expect(w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-AUTO", "auto-publish", map[string]any{}), "ok")
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".edit", build.ObjectType, "O-AUTO", "auto-edit",
+		map[string]any{"fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}}}), "ok")
+	preview, err := w.tenant.PreviewRelease(w.members["manager"], platform.AssetObject, "O-AUTO")
+	if err != nil || preview.Diagnostic != "" || preview.CandidateID == "" {
+		t.Fatalf("automatic page could not follow object: %+v, %v", preview, err)
+	}
+	w.expect(w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-AUTO", "auto-republish", map[string]any{}), "ok")
+	installed, err := w.tenant.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "handoff"}})
+	if err != nil || installed.ID == "" {
+		t.Fatalf("updated automatic page is not installed: %+v, %v", installed, err)
+	}
+}
+
+func TestHotelExplicitPageSurvivesObjectRepublish(t *testing.T) {
+	w := newWorld(t, hotelProvider)
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".create", build.ObjectType, "O-EXPLICIT", "explicit-create",
+		map[string]any{"name": "pickup", "title": "Pickup", "fields": []map[string]any{
+			{"name": "guest", "title": "Guest", "type": "text"}, {"name": "room", "title": "Room", "type": "text"},
+		}}), "ok")
+	w.expect(w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-EXPLICIT", "explicit-publish", map[string]any{}), "ok")
+	w.expect(w.submit("manager", build.ID, build.PageType+".create", build.PageType, "P-EXPLICIT", "explicit-page",
+		map[string]any{"name": "pickup", "title": "Pickup desk", "object": "build.pickup",
+			"list": []string{"guest"}, "detail": []string{"room"}}), "ok")
+	w.expect(w.submit("manager", build.ID, build.SchemaRelease, build.PageType, "P-EXPLICIT", "explicit-page-publish", map[string]any{}), "ok")
+	w.expect(w.submit("manager", build.ID, build.ObjectType+".edit", build.ObjectType, "O-EXPLICIT", "explicit-edit",
+		map[string]any{"title": "Pickup revised"}), "ok")
+	w.expect(w.submit("manager", build.ID, build.SchemaPublish, build.ObjectType, "O-EXPLICIT", "explicit-republish", map[string]any{}), "ok")
+
+	handler := platformserver.NewHost(platformserver.Tokens(map[string]string{"desk-token": "desk"}), w.tenant).Handler()
+	request := httptest.NewRequest(http.MethodGet, "/v1/definitions", nil)
+	request.Header.Set("Authorization", "Bearer desk-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, request)
+	var definitions []platform.Definition
+	if err := json.Unmarshal(rec.Body.Bytes(), &definitions); rec.Code != http.StatusOK || err != nil {
+		t.Fatalf("operator could not read installed definitions: %d %s (%v)", rec.Code, rec.Body.String(), err)
+	}
+	for _, definition := range definitions {
+		if definition.Ref == (platform.AssetRef{App: build.ID, Kind: platform.AssetPage, Name: "pickup"}) {
+			if definition.Page == nil || definition.Page.Title != "Pickup desk" ||
+				len(definition.Page.DetailFields) != 1 || definition.Page.DetailFields[0] != "room" {
+				t.Fatalf("object republish overwrote the explicit operator page: %+v", definition)
+			}
+			return
+		}
+	}
+	t.Fatal("operator lost the explicit page after object republish")
 }

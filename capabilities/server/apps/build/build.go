@@ -106,8 +106,7 @@ func (b *Build) objectEntity() platform.Entity {
 						if err := b.check(*object, object.ID); err != nil {
 							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 						}
-						entity := Entity(*object)
-						if err := b.host.ValidateInstall(entity, platform.EntityActions(entity), page(*object)); err != nil {
+						if err := b.validateObjectInstallation(*object); err != nil {
 							return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 						}
 					} else if err := b.install(c, *object); err != nil {
@@ -218,13 +217,21 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
-	entity, actions, pages, app, err := b.publicationImage(schema, image)
+	_, _, pages, app, err := b.publicationImage(schema, image)
 	if err != nil {
 		return err
 	}
 	switch schema {
 	case SchemaPublish:
-		return b.host.ValidateInstall(entity, actions, pages...)
+		var record Object
+		if err := json.Unmarshal(image, &record); err != nil {
+			return err
+		}
+		published, ok := wasPublished[Object](record.Published)
+		if !ok {
+			return fmt.Errorf("accepted object has no published definition")
+		}
+		return b.validateObjectInstallation(published)
 	case SchemaRelease:
 		return b.host.ValidateInstallPage(pages[0])
 	case SchemaHandOver:
@@ -242,6 +249,18 @@ func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
 	}
 	switch schema {
 	case SchemaPublish:
+		var record Object
+		if err := json.Unmarshal(image, &record); err != nil {
+			return err
+		}
+		published, ok := wasPublished[Object](record.Published)
+		if !ok {
+			return fmt.Errorf("accepted object has no published definition")
+		}
+		pages, _, err = b.objectInstallationPages(published)
+		if err != nil {
+			return err
+		}
 		if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
 			return fmt.Errorf("extend accepted object: %w", err)
 		}
@@ -410,12 +429,22 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	if err := b.check(o, o.ID); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
+	// The in-memory development path has no accepted-result staging. Validate
+	// before extending the ledger, or a refused publication leaves new
+	// authority/actions in the running tenant.
+	if err := b.validateObjectInstallation(o); err != nil {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+	}
 	entity := Entity(o)
 	actions := platform.EntityActions(entity)
+	pages, _, err := b.objectInstallationPages(o)
+	if err != nil {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
+	}
 	if err := b.ledger.Extend([]string{entity.Type}, actions); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	if err := b.host.Install(c, entity, actions, page(o)); err != nil {
+	if err := b.host.Install(c, entity, actions, pages...); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	b.installed[entity.Type] = entity

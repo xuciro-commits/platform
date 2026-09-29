@@ -55,6 +55,9 @@ type Host interface {
 	// data class and schemas first (Ledger.Extend).
 	Install(c platform.Caller, e platform.Entity, actions []platform.Action, pages ...platform.Page) error
 	ValidateInstall(e platform.Entity, actions []platform.Action, pages ...platform.Page) error
+	// The named automatic page may be replaced; other installed pages must
+	// still validate against this object's new fields and actions.
+	ValidateInstallDependents(e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error
 	// InstallPage offers a page someone composed in this tenant (ADR-0034): the
 	// same descriptor a manifest declares, checked against what is installed and
 	// served to the members who may read its object. Composed again, it replaces

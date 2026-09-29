@@ -72,8 +72,7 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 		}
 		next = platform.AssetRef{App: ID, Kind: kind, Name: TypeOf(record.Name)}
 		if err = b.check(record, record.ID); err == nil {
-			entity := Entity(record)
-			err = b.host.ValidateInstall(entity, platform.EntityActions(entity), page(record))
+			err = b.validateObjectInstallation(record)
 		}
 		if err == nil {
 			objects[i].Published = published(record)
@@ -122,20 +121,6 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 	return before, after, prior, next, hadPrior, err
 }
 
-// DraftEntity gives the host's existing installation validator the actual
-// typed shape of one saved draft; it does not return a member-filtered view or
-// install the entity. The caller must already have checked builder authority.
-func (b *Build) DraftEntity(id string) (platform.Entity, error) {
-	if b.host == nil {
-		return platform.Entity{}, fmt.Errorf("builder has no host")
-	}
-	record, found := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), id)
-	if !found || record.Archived {
-		return platform.Entity{}, fmt.Errorf("draft object %q not found", id)
-	}
-	return Entity(record), nil
-}
-
 // PublishedPage reports whether the generated page of an object was
 // intentionally replaced by an explicit installed page of the same name.
 func (b *Build) PublishedPage(name string) (bool, error) {
@@ -156,6 +141,28 @@ func (b *Build) PublishedPage(name string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (b *Build) validateObjectInstallation(record Object) error {
+	entity := Entity(record)
+	pages, generated, err := b.objectInstallationPages(record)
+	if err != nil {
+		return err
+	}
+	return b.host.ValidateInstallDependents(entity, platform.EntityActions(entity), generated, pages...)
+}
+
+// An explicitly published page owns its name after it replaces an object's
+// generated page. Updating the object must not silently overwrite that page.
+func (b *Build) objectInstallationPages(record Object) ([]platform.Page, string, error) {
+	explicit, err := b.PublishedPage(record.Name)
+	if err != nil {
+		return nil, "", err
+	}
+	if explicit {
+		return nil, "", nil
+	}
+	return []platform.Page{page(record)}, record.Name, nil
 }
 
 // releaseAssets uses the saved publication, never a later mutable draft. The

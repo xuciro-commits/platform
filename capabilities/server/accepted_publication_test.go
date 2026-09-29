@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"platformserver/apps/build"
 	"platformserver/platform"
 )
@@ -92,6 +93,79 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 			return d.Ref.Kind == platform.AssetApp && d.Ref.Name == "frontdesk"
 		}) {
 		t.Fatal("persisted publications did not restore the generated object, page and application")
+	}
+	CheckReplay(t, live, entries, compose)
+}
+
+func TestAcceptedBuilderPublicationRejectsBrokenDependentBeforeCommit(t *testing.T) {
+	const tenantID = "published-dependent"
+	compose := func() *Tenant {
+		seat := Seat{Subjects: []string{"dana"}, Member: platform.Member{ID: "dana",
+			Roles: map[string]string{build.ID: build.Builder}}}
+		tenant, err := NewTenant(tenantID, NewConsole(tenantID, seat), build.New(tenantID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tenant
+	}
+	live := compose()
+	member, _ := live.Member("dana")
+	at := time.Date(2026, 9, 28, 14, 0, 0, 0, time.UTC)
+	var entries []Entry
+	live.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+		entries = append(entries, e)
+		return e.Body, nil
+	}
+	submit := func(key, schema, typ, id string, payload any) *kernel.Error {
+		t.Helper()
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, refused := live.Submit(member, &pb.Submission{TenantId: tenantID, PrincipalId: member.ID,
+			Authority: build.ID, IdempotencyKey: key, Target: &pb.EntityRef{Type: typ, Id: id},
+			Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: raw}, at)
+		return refused
+	}
+	for _, step := range []struct {
+		key, schema, typ, id string
+		payload              any
+	}{
+		{"object", build.ObjectType + ".create", build.ObjectType, "O1", map[string]any{
+			"name": "visit", "title": "Visit", "fields": []map[string]any{
+				{"name": "guest", "title": "Guest", "type": "text"},
+				{"name": "room", "title": "Room", "type": "text"},
+			}}},
+		{"install", build.SchemaPublish, build.ObjectType, "O1", map[string]any{}},
+		{"page", build.PageType + ".create", build.PageType, "P1", map[string]any{
+			"name": "visitdesk", "title": "Visit desk", "object": "build.visit",
+			"list": []string{"guest"}, "detail": []string{"room"}}},
+		{"page-install", build.SchemaRelease, build.PageType, "P1", map[string]any{}},
+		{"edit", build.ObjectType + ".edit", build.ObjectType, "O1", map[string]any{
+			"fields": []map[string]any{{"name": "guest", "title": "Guest", "type": "text"}}}},
+	} {
+		if refusal := submit(step.key, step.schema, step.typ, step.id, step.payload); refusal != nil {
+			t.Fatalf("%s: %v", step.key, refusal)
+		}
+	}
+	root := []platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "visitdesk"}}
+	prior, err := live.ReleaseCandidate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := len(entries)
+	if refusal := submit("bad-install", build.SchemaPublish, build.ObjectType, "O1", map[string]any{}); refusal == nil ||
+		refusal.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+		t.Fatalf("accepted result did not refuse incompatible object installation: %v", refusal)
+	}
+	// A saved refusal may consume a journal row; it must never install the
+	// invalid object or change the prior closed page.
+	after, err := live.ReleaseCandidate(root)
+	if err != nil || after.ID != prior.ID {
+		t.Fatalf("refused result changed the published page: %v / %v", after, err)
+	}
+	if len(entries) < before || len(entries) > before+1 {
+		t.Fatalf("unexpected journal growth after refusal: %d -> %d", before, len(entries))
 	}
 	CheckReplay(t, live, entries, compose)
 }

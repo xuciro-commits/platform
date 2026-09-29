@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"time"
@@ -38,6 +39,50 @@ func (h hostView) installationDraft() *Tenant {
 
 func (h hostView) ValidateInstall(e platform.Entity, actions []platform.Action, pages ...platform.Page) error {
 	return h.installationDraft().Install(h.app, e, actions, pages...)
+}
+
+func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platform.Action, generatedPage string, pages ...platform.Page) error {
+	draft := h.installationDraft()
+	if err := draft.Install(h.app, e, actions, pages...); err != nil {
+		return err
+	}
+	for _, def := range h.t.definitions {
+		if def.Ref.App == h.app.Manifest().ID && def.Ref.Kind == platform.AssetAction &&
+			def.Action != nil && def.Action.Target == e.Type &&
+			!slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == def.Ref.Name }) {
+			return fmt.Errorf("published action %s would remain routed after removal", def.Ref.Name)
+		}
+		if def.Ref.Kind != platform.AssetPage || def.Page == nil ||
+			def.Ref.App == h.app.Manifest().ID && def.Ref.Name == generatedPage {
+			continue
+		}
+		p := *def.Page
+		if p.Object.Name != e.Type && !slices.ContainsFunc(p.Sections, func(s platform.Section) bool {
+			return s.Object.Name == e.Type
+		}) {
+			continue
+		}
+		for _, ref := range p.Actions {
+			if ref.App == h.app.Manifest().ID && !slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == ref.Name }) {
+				return fmt.Errorf("page %s: removed action %s", p.Name, ref.Name)
+			}
+		}
+		for _, section := range p.Sections {
+			for _, ref := range section.Actions {
+				if ref.App == h.app.Manifest().ID && !slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == ref.Name }) {
+					return fmt.Errorf("page %s: removed action %s", p.Name, ref.Name)
+				}
+			}
+		}
+		owner := draft.app(def.Ref.App)
+		if owner == nil {
+			return fmt.Errorf("page %s has no owner %s", def.Ref, def.Ref.App)
+		}
+		if err := draft.InstallPage(owner, p); err != nil {
+			return fmt.Errorf("release dependent %s: %w", def.Ref, err)
+		}
+	}
+	return nil
 }
 
 func (h hostView) OwnerOf(dataClass string) (string, bool) {
