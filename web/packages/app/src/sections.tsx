@@ -9,7 +9,7 @@ import {
 } from "@platform/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
-import { GeneratedForm, RecordDetail, newId, useHost, type Definition } from "./index";
+import { GeneratedForm, RecordDetail, findDefinition, newId, useHost, type Definition } from "./index";
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
@@ -41,11 +41,16 @@ const relatedField = (fields: { name: string; type: string; ref?: string; invers
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
 function TableWidget({ page, section, onSelect, selected, narrowed }: Bound) {
-  const { source } = useHost();
+  const { source, definitions } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === page.object.name;
   const info = source.entity(type);
-  const refField = !isMaster ? relatedField(info?.fields, page, section) : undefined;
+  // A named query (ADR-0040 21c): its declared conditions, run for the selected
+  // record through its reference; the list is still the member's own read.
+  const query = section.query?.name ? findDefinition(definitions, section.query)?.query : undefined;
+  const refField = !isMaster
+    ? (query?.by ? info?.fields.find((f) => f.name === query.by) : relatedField(info?.fields, page, section))
+    : undefined;
 
   if (refField && !selected) {
     return (
@@ -58,7 +63,8 @@ function TableWidget({ page, section, onSelect, selected, narrowed }: Bound) {
   }
 
   const relationDomain = refField && selected ? [[refField.name, "=", selected.id]] : [];
-  const domain = [...domainOf(narrowed, type), ...relationDomain];
+  const queryDomain = (query?.domain as unknown[] | undefined) ?? [];
+  const domain = [...queryDomain, ...domainOf(narrowed, type), ...relationDomain];
 
   return (
     <RecordList source={source} type={type} fields={section.fields} height={320} domain={domain}

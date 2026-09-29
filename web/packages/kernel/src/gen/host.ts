@@ -292,6 +292,7 @@ export type Definition = {
   action?: Action;
   page?: Page;
   application?: Application;
+  query?: NamedQuery;
 };
 
 export type Delivery = {
@@ -579,6 +580,17 @@ export type Model = {
   dailyTokens?: number;
 };
 
+export type NamedQuery = {
+  name: string;
+  title: string;
+  description: string;
+  object: string;
+  by?: string;
+  domain?: unknown;
+  sort?: string[];
+  limit?: number;
+};
+
 export type Note = {
   entity: string;
   by: string;
@@ -769,6 +781,7 @@ export type Section = {
   width?: string;
   object?: AssetRef;
   relation?: string;
+  query?: AssetRef;
   fields?: string[];
   actions?: AssetRef[];
   group?: string;

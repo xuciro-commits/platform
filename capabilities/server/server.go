@@ -373,6 +373,15 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseActive{ID: id})
 	})
+	handle(Route{Pattern: "GET /v1/queries/{app}/{name}", Summary: "Run a declared query as the caller: its conditions, and the record it is run for (ADR-0040 21c)",
+		Query: []Param{{"for", "the ID of the record it is run for, when it takes one"}}, Answer: RecordPage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		page, err := t.RunQuery(m, r.PathValue("app"), r.PathValue("name"), r.URL.Query().Get("for"), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, page)
+	})
 	handle(Route{Pattern: "GET /v1/releases/active", Summary: "The tenant's active release ID, readable by any member (ADR-0039 20b)", Answer: ReleaseActive{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, ReleaseActive{ID: t.ActiveRelease()})
 	})

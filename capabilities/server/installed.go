@@ -185,6 +185,21 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("%s: %s declares no relation %q from %s", where, info.Type, s.Relation, p.Object.Name)
 			}
 		}
+		if s.Query.Name != "" {
+			q, ok := t.namedQuery(s.Query.App, s.Query.Name)
+			switch {
+			case s.Widget != "table":
+				return fmt.Errorf("%s: only a table lists a query", where)
+			case !ok:
+				return fmt.Errorf("%s: no query %s", where, s.Query)
+			case q.Object != info.Type:
+				return fmt.Errorf("%s: query %s reads %s, not %s", where, s.Query, q.Object, info.Type)
+			case q.By != "" && (info.Type == p.Object.Name || !slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool {
+				return f.Name == q.By && f.Ref == p.Object.Name
+			})):
+				return fmt.Errorf("%s: query %s is run for a %s record, not this page's %s", where, s.Query, q.By, p.Object.Name)
+			}
+		}
 		field := func(name string) error {
 			if _, ok := info.Field(strings.Split(name, ":")[0]); !ok {
 				return fmt.Errorf("%s: %s has no field %s", where, info.Type, name)

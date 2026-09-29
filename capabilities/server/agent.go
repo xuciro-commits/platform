@@ -246,6 +246,19 @@ func (a *Agents) declare(app platform.App) error {
 				tool = agentTool{kind: "effect", schema: kind, tool: Tool{Description: m.Emits[i].Title + ": " + m.Emits[i].Description + " Waits for the receiver's answer.",
 					Properties: map[string]any{"message": map[string]any{"type": "string", "description": "What to ask or tell the receiver"}, "rationale": rationale()},
 					Required:   []string{"message", "rationale"}}}
+			case strings.HasPrefix(name, "query:"):
+				query := strings.TrimPrefix(name, "query:")
+				i := slices.IndexFunc(m.Queries, func(q platform.NamedQuery) bool { return q.Name == query })
+				if i < 0 {
+					return fmt.Errorf("agent %s runs %s, not a query of %s", id, query, m.ID)
+				}
+				q := m.Queries[i]
+				props, required := map[string]any{"rationale": rationale()}, []string{"rationale"}
+				if q.By != "" {
+					props["for"] = map[string]any{"type": "string", "description": "The ID of the record it is run for"}
+					required = append(required, "for")
+				}
+				tool = agentTool{kind: "query", schema: query, tool: Tool{Description: q.Title + ": " + q.Description, Properties: props, Required: required}}
 			case strings.HasPrefix(name, "read:"):
 				read := strings.TrimPrefix(name, "read:")
 				if !slices.Contains(m.Reads, read) {

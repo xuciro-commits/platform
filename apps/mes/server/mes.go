@@ -559,7 +559,7 @@ func (p *Plant) Restore(raw json.RawMessage) error {
 // connectors), its settings, its scheduled job (ADR-0013), its flow (ADR-0020),
 // and the protocol it reaches an ERP through (ADR-0024).
 func (p *Plant) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: "MES", Version: "1", Actions: p.ledger.Catalog, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
+	return platform.Manifest{Languages: languages, ID: ID, Title: "MES", Version: "1", Actions: p.ledger.Catalog, Queries: queries, Flows: []platform.Flow{p.confirmation()}, Agents: []platform.Agent{p.fixer(), p.planner()},
 		Pages: []platform.Page{{Name: "shop-orders", Title: "Shop orders", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: OrderType},
 			Layout: "list-detail", ListFields: []string{"product", "quantity", "status", "erp"},
 			DetailFields: []string{"product", "quantity", "status", "planned", "sfcs", "erp", "confirmation", "erpDetail"},
@@ -615,3 +615,8 @@ func (p *Plant) Input(c platform.Caller, name string, body []byte, now time.Time
 	}
 	return nil, fail(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA)
 }
+
+// queries are MES's named queries, shared by pages and agents (ADR-0040 21c).
+var queries = []platform.NamedQuery{{Name: "released-orders", Title: "Released orders",
+	Description: "Shop orders released to the floor and not yet completed.", Object: OrderType,
+	Domain: json.RawMessage(`[["status","=","released"]]`), Sort: []string{"id"}}}

@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -138,6 +139,30 @@ func (t *Tenant) registerDefinitions() error {
 			}
 		}
 	}
+	for _, app := range t.apps {
+		manifest := app.Manifest()
+		for _, query := range manifest.Queries {
+			q := query
+			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetQuery, Name: q.Name}
+			object, ok := objects[q.Object]
+			if !ok {
+				return fmt.Errorf("asset %s reads missing object %s", ref, q.Object)
+			}
+			if q.By != "" {
+				if f, ok := objectInfo[q.Object].Field(q.By); !ok || f.Type != "reference" {
+					return fmt.Errorf("asset %s is run for %s, not a reference of %s", ref, q.By, q.Object)
+				}
+			}
+			var terms []any
+			if len(q.Domain) > 0 && json.Unmarshal(q.Domain, &terms) != nil {
+				return fmt.Errorf("asset %s has a domain that is not a list of conditions", ref)
+			}
+			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
+				Requires: []platform.AssetRef{object}, Query: &q}); err != nil {
+				return err
+			}
+		}
+	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return nil
 }
@@ -181,6 +206,13 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 				continue
 			}
 			def.Action = &action
+		case platform.AssetQuery:
+			if def.Query == nil {
+				continue
+			}
+			if _, ok := entities[def.Query.Object]; !ok {
+				continue // it reads an object this member does not
+			}
 		case platform.AssetPage:
 			if m.Roles[def.Ref.App] == "" || def.Page == nil {
 				continue

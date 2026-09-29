@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -17,7 +18,24 @@ const (
 	// AssetApp is an application a tenant hands to its people: a name, an icon
 	// and the pages it holds (ADR-0036).
 	AssetApp AssetKind = "app"
+	// AssetQuery is a named, pure query an app declares once (ADR-0040 21c):
+	// pages and agent tools run the same declaration.
+	AssetQuery AssetKind = "query"
 )
+
+// NamedQuery reads records of one object: fixed conditions, and optionally
+// the record it is run for through a reference field (By). It runs through
+// the reader's own read of Object, so it never widens what anyone sees.
+type NamedQuery struct {
+	Name        string          `json:"name"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	Object      string          `json:"object"`
+	By          string          `json:"by,omitempty"`
+	Domain      json.RawMessage `json:"domain,omitempty"`
+	Sort        []string        `json:"sort,omitempty"`
+	Limit       int             `json:"limit,omitempty"`
+}
 
 // AssetRef is the stable identity shared by code and construction surfaces.
 // Its three parts avoid collisions between apps and between kinds. A published
@@ -31,7 +49,7 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp {
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -69,12 +87,15 @@ type Section struct {
 	// Relation is the named inverse (FieldInfo.Inverse) of Object's reference to
 	// the page's object: the section shows the selected record's related records
 	// through it (ADR-0040 21b D3). Empty: no declared relation.
-	Relation string     `json:"relation,omitempty"`
-	Fields   []string   `json:"fields,omitempty"`  // table, detail, filter, form
-	Actions  []AssetRef `json:"actions,omitempty"` // actions
-	Group    string     `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
-	Measure  string     `json:"measure,omitempty"` // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
-	Text     string     `json:"text,omitempty"`    // text
+	Relation string `json:"relation,omitempty"`
+	// Query is a named query (AssetQuery) the section lists instead of all of
+	// Object: its conditions, and the selected record when it takes one (21c).
+	Query   AssetRef   `json:"query,omitempty"`
+	Fields  []string   `json:"fields,omitempty"`  // table, detail, filter, form
+	Actions []AssetRef `json:"actions,omitempty"` // actions
+	Group   string     `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
+	Measure string     `json:"measure,omitempty"` // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
+	Text    string     `json:"text,omitempty"`    // text
 }
 
 // Widgets are the widget kinds a composed page may hold (ADR-0035 D2).
@@ -146,4 +167,5 @@ type Definition struct {
 	Action          *Action      `json:"action,omitempty"`
 	Page            *Page        `json:"page,omitempty"`
 	Application     *Application `json:"application,omitempty"`
+	Query           *NamedQuery  `json:"query,omitempty"`
 }

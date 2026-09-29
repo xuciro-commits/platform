@@ -204,6 +204,7 @@ type Manifest struct {
 	Emits      []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0014)
 	Entities   []Entity      // entity types whose records the host keeps (ADR-0016)
 	Pages      []Page        // bounded code page descriptors over those records/actions (ADR-0032 13b)
+	Queries    []NamedQuery  // named pure queries pages and agents share (ADR-0040 21c)
 	Flows      []Flow        // long-running processes the host runs for the app (ADR-0020)
 	Agents     []Agent       // AI agents the host runs for the app (ADR-0021)
 	Sequences  []Sequence    // numbers of its documents, without gaps (ADR-0024)

@@ -48,12 +48,14 @@ type Section struct {
 	Width  string `json:"width,omitempty" choices:"full,half"`
 	Object string `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
 	// Relation is the named relation from the page's object the section follows (ADR-0040 21b D3).
-	Relation string   `json:"relation,omitempty" title:"Through" help:"For a table, chart or metric of another object: the relation from the selected record it follows"`
-	Fields   []string `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
-	Actions  []string `json:"actions,omitempty" help:"For actions: the schemas it offers"`
-	Group    string   `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
-	Measure  string   `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
-	Text     string   `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
+	Relation string `json:"relation,omitempty" title:"Through" help:"For a table, chart or metric of another object: the relation from the selected record it follows"`
+	// Query is a named query "<app>.<name>" the section lists (ADR-0040 21c).
+	Query   string   `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like crm.open-opportunities"`
+	Fields  []string `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
+	Actions []string `json:"actions,omitempty" help:"For actions: the schemas it offers"`
+	Group   string   `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
+	Measure string   `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
+	Text    string   `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
 }
 
 func (b *Build) pageEntity() platform.Entity {
@@ -120,6 +122,10 @@ func descriptor(p Page) platform.Page {
 		if s.Object != "" {
 			owner, _, _ := strings.Cut(s.Object, ".")
 			section.Object = platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: s.Object}
+		}
+		if s.Query != "" {
+			owner, name, _ := strings.Cut(s.Query, ".")
+			section.Query = platform.AssetRef{App: owner, Kind: platform.AssetQuery, Name: name}
 		}
 		for _, schema := range s.Actions {
 			owner, _, _ := strings.Cut(schema, ".")

@@ -426,6 +426,24 @@ func (a *Agents) use(c platform.Caller, d *agentDef, run *AgentRunRecord, tool a
 		}
 		out, _ := json.Marshal(found)
 		return string(out), nil
+	case "query":
+		reader := a.reader(*run)
+		if reader == nil {
+			return "refused: a query reads as a member", nil
+		}
+		page, err := t.RunQuery(*reader, d.app, tool.schema, str("for"), now)
+		if err != nil {
+			return "refused: " + err.Error(), nil
+		}
+		q, _ := t.namedQuery(d.app, tool.schema)
+		raw, _ := json.Marshal(page.Records)
+		var ids []struct{ ID string }
+		_ = json.Unmarshal(raw, &ids)
+		for _, x := range ids {
+			step.Sources = append(step.Sources, q.Object+"/"+x.ID)
+		}
+		out, _ := json.Marshal(page)
+		return string(out), nil
 	case "remember":
 		about, _ := args["about_person"].(bool)
 		return a.remember(c, run, str("fact"), about && run.OnBehalf != "", now)

@@ -414,7 +414,7 @@ func (c *CRM) Snapshot() (json.RawMessage, error) { return c.ledger.Snapshot() }
 func (c *CRM) Restore(raw json.RawMessage) error { return c.ledger.Restore(raw) }
 
 func (c *CRM) Manifest() platform.Manifest {
-	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(),
+	return platform.Manifest{Languages: languages, ID: ID, Title: "CRM", Version: "1", Actions: c.ledger.Catalog, Entities: Entities(), Queries: queries,
 		Pages: []platform.Page{{Name: "opportunities", Title: "Opportunities", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: OpportunityType},
 			Layout: "list-detail", ListFields: []string{"title", "account", "stage", "rooms"},
 			DetailFields: []string{"title", "account", "owner", "stage", "margin", "rooms", "roomType", "arrive", "depart", "cutoff", "block", "stays"},
@@ -443,3 +443,8 @@ func Assistant() platform.Agent {
 		Tools:        []string{SchemaOpen, SchemaPlan, SchemaClose},
 		Budget:       platform.Budget{Steps: 8, Actions: 2}}
 }
+
+// queries are CRM's named queries, shared by pages and agents (ADR-0040 21c).
+var queries = []platform.NamedQuery{{Name: "open-opportunities", Title: "Open opportunities",
+	Description: "An account's opportunities still being worked on, newest first.", Object: OpportunityType, By: "account",
+	Domain: json.RawMessage(`[["stage","=","open"]]`), Sort: []string{"-id"}}}
