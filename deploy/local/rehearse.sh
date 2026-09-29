@@ -78,7 +78,8 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   for path in records/pms.reservation records/pms.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1 records/hcm.leave records/work.approval; do curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/$path"; done
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -c '[.[] | {id, bound}]'
   curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/ai-usage" | jq -c '.totals'
-  workflow_state; } |
+  workflow_state
+  function_state; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
 
 # Workflow probes add their private records and exact bindings to every state
@@ -101,6 +102,15 @@ workflow_state() {
       records/build.rehearsal$suffix records/flow.instance/build.review$suffix:WF-OLD \
       records/flow.instance/build.review$suffix:WF-NEW releases/active; do
       workflow_get "$actor" "$path" || fail "workflow state $suffix $path"
+    done
+  done
+}
+function_state() {
+  local SERVER actor suffix path
+  for suffix in plant hotel; do
+    if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
+    for path in records/build.function/FN-F records/build.page/FN-P records/build.function-call?limit=500; do
+      workflow_get "$actor" "$path" || fail "function state $suffix $path"
     done
   done
 }
@@ -156,6 +166,57 @@ workflow_setup() {
   jq -e '.error.code == "ERROR_CODE_INVALID_ARGUMENT"' <<<"$result" >/dev/null || fail "changed live workflow dependency"
   workflow_submit "$builder" wf-object-reset build.object.edit build.object WF-O '{"title":"Workflow recovery sample"}'
   jq -n --arg first "$first" --arg second "$second" '{first:$first,second:$second}' >"$backup/workflow-$suffix.json"
+}
+function_wait() {
+  local who=$1 id=$2 source=$3 release=$4 result
+  for _ in $(seq 30); do
+    result=$(workflow_get "$who" "records/build.function-call/$id" || true)
+    if jq -e --arg source "$source" --arg release "$release" \
+      '.record | .state == "ready" and .version == 1 and .source == $source and .release == $release and .model == "local/echo" and (.output | fromjson | .category == "routine")' \
+      <<<"$result" >/dev/null 2>&1; then return; fi
+    sleep 1
+  done
+  fail "function $id did not keep its source, version, release and strict answer"
+}
+function_setup() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 operator=$4 suffix=$5 operator_id=$6
+  local typ=build.rehearsal$suffix name=advice$suffix candidate definition page
+  if [[ $suffix == plant ]]; then
+    AUTHORITY=platform workflow_submit "$builder" fn-user platform.member.grant platform.member "$operator_id" '{"app":"build","role":"user"}'
+  fi
+  definition=$(jq -n --arg typ "$typ" --arg name "$name" '{name:$name,title:"Recovery advice",description:"A bounded suggestion for a person to review",object:$typ,fields:["note"],roles:["builder","user"],model:"local/echo",instructions:"Summarise only the provided record. Use category routine or review. Flag review when the record needs human attention; do not invent facts or propose executing actions.",maxInputBytes:4096,maxOutputBytes:1024,maxTokens:256,output:[{name:"summary",type:"string",required:true,description:"A short factual summary"},{name:"category",type:"string",required:true,description:"Routine or needs review",choices:["routine","review"]},{name:"review",type:"boolean",required:true,description:"Whether a person should review it"}]}')
+  workflow_submit "$builder" fn-create build.function.create build.function FN-F "$definition"
+  workflow_submit "$builder" fn-publish-1 build.function.publish build.function FN-F '{}'
+  page=$(jq -n --arg typ "$typ" --arg name "$name" --arg suffix "$suffix" '{name:("advicepage"+$suffix),title:"Recovery advice",object:$typ,sections:[{widget:"table",fields:["note"]},{widget:"function",function:{name:$name,version:1}}]}')
+  workflow_submit "$builder" fn-page build.page.create build.page FN-P "$page"
+  workflow_submit "$builder" fn-page-publish build.page.publish build.page FN-P '{}'
+  workflow_submit "$builder" fn-edit build.function.edit build.function FN-F '{"instructions":"Summarise only the provided record. This is the second retained version; do not execute actions."}'
+  workflow_submit "$builder" fn-publish-2 build.function.publish build.function FN-F '{}'
+  candidate=$(workflow_post "$builder" releases/preview '{"kind":"page","id":"FN-P"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "old function page preview"
+  workflow_post "$builder" releases/candidates "{\"kind\":\"page\",\"id\":\"FN-P\",\"candidateId\":\"$candidate\",\"key\":\"fn-save\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "old function page save"
+  workflow_post "$builder" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"fn-active\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "old function page activate"
+  workflow_submit "$operator" fn-call-old build.function-call.start build.function-call FN-CALL-OLD "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-OLD\"}"
+  function_wait "$operator" FN-CALL-OLD "$typ/WF-OLD" "$candidate"
+  jq -n --arg candidate "$candidate" --arg name "$name" '{candidate:$candidate,name:$name}' >"$backup/function-$suffix.json"
+}
+function_after_restart() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=build operator=$3 suffix=$4
+  local typ=build.rehearsal$suffix candidate name
+  candidate=$(jq -r .candidate "$backup/function-$suffix.json")
+  name=$(jq -r .name "$backup/function-$suffix.json")
+  function_wait "$operator" FN-CALL-OLD "$typ/WF-OLD" "$candidate"
+  workflow_submit "$operator" fn-call-new build.function-call.start build.function-call FN-CALL-NEW "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-NEW\"}"
+  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$candidate"
+}
+function_after_recovery() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=build operator=$3 suffix=$4
+  local typ=build.rehearsal$suffix candidate name
+  candidate=$(jq -r .candidate "$backup/function-$suffix.json")
+  name=$(jq -r .name "$backup/function-$suffix.json")
+  function_wait "$operator" FN-CALL-OLD "$typ/WF-OLD" "$candidate"
+  function_wait "$operator" FN-CALL-NEW "$typ/WF-NEW" "$candidate"
+  workflow_submit "$operator" fn-call-recovered build.function-call.start build.function-call FN-CALL-RECOVERED "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-NEW\"}"
+  function_wait "$operator" FN-CALL-RECOVERED "$typ/WF-NEW" "$candidate"
 }
 
 # Inputs of every kind the journal keeps: decisions and a push batch.
@@ -430,6 +491,9 @@ echo "ok   typed AI functions: CRM opportunity and MES order use the shared boun
 workflow_setup "$MANUFACTURING" plant-sz "$SUP" "$OP1" sup-1 op-l1 plant
 workflow_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" manager-1 sales-1 hotel
 echo "ok   workflows: fixed isolated plans, exact releases, old/new native asks, incompatible dependency publication refused in both industries"
+function_setup "$MANUFACTURING" plant-sz "$SUP" "$OP2" plant op-l2
+function_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel sales-1
+echo "ok   builder AI functions: both industries activate a page pinned to retained version 1 after publishing version 2; operators keep strict results in separate call records"
 before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
@@ -442,6 +506,9 @@ for host in manufacturing-server hospitality-server; do
   logged $host "saved a snapshot of" || fail "$host saved no snapshot at shutdown"
   logged $host "from the snapshot at" || fail "$host did not start from its snapshot"
 done
+function_after_restart "$MANUFACTURING" plant-sz "$OP2" plant
+function_after_restart "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
+echo "ok   builder AI functions: saved answers survived PostgreSQL restart and new calls retained the activated page's older function version"
 hosp crm "$SALES_TOKEN" f-3 crm.opportunity.close crm.opportunity OPP-9 '{"outcome":"won"}' | jq -e .record >/dev/null || fail "win the group after the restart"
 [[ $(blockstate) == "confirmed booked,booked" ]] || fail "group block after winning: $(blockstate)"
 echo "ok   decisions across apps: a group's rooms held at the provider until a cutoff survived the restart, and winning confirmed them, each answer on the opportunity"
@@ -547,3 +614,6 @@ workflow_finish() {
 workflow_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
 workflow_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
 echo "ok   workflows: PostgreSQL restart, backup restore and full mixed journal rebuild preserved plans, bindings, versions and inbox tasks; old/new asks continued along their original paths in both industries"
+function_after_recovery "$MANUFACTURING" plant-sz "$OP2" plant
+function_after_recovery "$HOSPITALITY" hotel-a "$SALES_TOKEN" hotel
+echo "ok   builder AI functions: both operators called the page's retained function again after backup restore and complete journal recovery"
