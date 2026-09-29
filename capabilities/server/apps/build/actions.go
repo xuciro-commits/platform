@@ -41,7 +41,22 @@ type Action struct {
 	// Roles are who may take it (ADR-0037 18b); empty: every role of the object.
 	Roles    []string        `json:"roles,omitempty" title:"Taken by"`
 	Approval *ActionApproval `json:"approval,omitempty" title:"Approval"`
+	// Creates are related records it makes in the same decision (ADR-0040 21c
+	// D2): all of them and the record's change commit together, or none does.
+	Creates []Create `json:"creates,omitempty" title:"What it creates"`
 }
+
+// Create is a record of another defined object made when an action is taken:
+// Via is that object's reference field back to this record.
+type Create struct {
+	Object string `json:"object" field:"required" help:"A defined object of this builder whose reference points at this one" example:"build.followup"`
+	Via    string `json:"via" field:"required" help:"That object's reference field to this record" example:"visit"`
+	Sets   []Set  `json:"sets,omitempty" title:"What it sets"`
+}
+
+// creator makes one related record inside the decision being taken; nil where
+// no host is attached (descriptors, validation), which refuses a Create.
+type creator func(c platform.Caller, cr Create, inputs map[string]any, parentType, parent, id string, now time.Time) (any, *kernel.Error)
 
 // ActionApproval uses the work app's approval chain for a tenant action.
 type ActionApproval struct {
@@ -316,7 +331,7 @@ func conditionValue(kind, raw string) (any, error) {
 // lifecycle is the object's states and actions as the platform's own lifecycle
 // (ADR-0037 D1): each action a transition whose Do checks its conditions and
 // sets its fields, inside the decision and again in replay.
-func lifecycle(o Object, roles []string) *platform.Lifecycle {
+func lifecycle(o Object, roles []string, creates creator) *platform.Lifecycle {
 	if len(o.States) == 0 {
 		return nil
 	}
@@ -352,15 +367,33 @@ func lifecycle(o Object, roles []string) *platform.Lifecycle {
 		l.Transitions = append(l.Transitions, platform.Transition{Name: a.Name, Title: a.Title, Description: a.Description,
 			From: slices.Clone(a.From), To: reach, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
-				return take(o, action, c, record, raw, now)
-			}})
+				return take(o, action, c, record, raw, now, creates)
+			}, After: stored(o, action, creates)})
 	}
 	return l
 }
 
+// stored puts an action's related records under the change that took it, as
+// Do built and checked them from the same inputs (ADR-0040 21c).
+func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.ChangeRecord, any, time.Time) {
+	if len(a.Creates) == 0 || creates == nil {
+		return nil
+	}
+	return func(c platform.Caller, r *pb.ChangeRecord, record any, now time.Time) {
+		var inputs map[string]any
+		_ = json.Unmarshal(r.GetSubmission().GetPayload(), &inputs)
+		rec := reflect.ValueOf(record).Elem().Field(0).Interface().(platform.Record)
+		for i, cr := range a.Creates {
+			if value, err := creates(c, cr, inputs, TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err == nil {
+				c.Put(r, value)
+			}
+		}
+	}
+}
+
 // take is one action on a record: its required inputs, its conditions, then
 // the fields it sets. A refusal says what the builder wrote.
-func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
+func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator) *kernel.Error {
 	var inputs map[string]any
 	if len(raw) > 0 && json.Unmarshal(raw, &inputs) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} takes an object of inputs", a.Title)
@@ -430,6 +463,18 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		}
 		if err := assign(v.FieldByName(goName(set.Field)), x); err != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} cannot set {field}: {why}", a.Title, set.Field, err.Error())
+		}
+	}
+	// Related records last: conditions and sets have already held. Each is
+	// built and checked now (its required fields and create roles apply); the
+	// transition's After stores it under the same change.
+	rec := v.Field(0).Interface().(platform.Record)
+	for i, cr := range a.Creates {
+		if creates == nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{action} cannot create records here", a.Title)
+		}
+		if _, err := creates(c, cr, inputs, TypeOf(o.Name), rec.ID, relatedID(rec, a, i), now); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -188,7 +188,7 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 			record.Name != published.Name || record.Installed != TypeOf(published.Name) {
 			return platform.Entity{}, nil, nil, nil, fmt.Errorf("accepted object has no matching published definition")
 		}
-		entity := Entity(published)
+		entity := b.entity(published)
 		actions := platform.EntityActions(entity)
 		return entity, actions, []platform.Page{page(published)}, nil, nil
 	case SchemaRelease:
@@ -347,6 +347,9 @@ func (b *Build) check(o Object, id string) error {
 	if err := checkProcess(o); err != nil {
 		return err
 	}
+	if err := b.checkCreates(o); err != nil {
+		return err
+	}
 	return checkAccess(o)
 }
 
@@ -432,7 +435,10 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	if c.Staging() {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
-	if err := b.check(o, o.ID); err != nil {
+	// A restore installs definitions that were already accepted, in ID order;
+	// objects that refer to each other (a visit creating follow-ups that refer
+	// back) cannot each pass the draft checks before the other is installed.
+	if err := b.check(o, o.ID); err != nil && !c.Replaying {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	// The in-memory development path has no accepted-result staging. Validate
@@ -441,7 +447,7 @@ func (b *Build) install(c platform.Caller, o Object) *kernel.Error {
 	if err := b.validateObjectInstallation(o); err != nil {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
-	entity := Entity(o)
+	entity := b.entity(o)
 	actions := platform.EntityActions(entity)
 	pages, _, err := b.objectInstallationPages(o)
 	if err != nil {
@@ -527,7 +533,13 @@ func (b *Build) Reinstall() error {
 
 // Entity is the declaration a defined object amounts to: a Go type built now,
 // with the tags a developer would have written (ADR-0034 D1).
-func Entity(o Object) platform.Entity {
+func Entity(o Object) platform.Entity { return entityWith(o, nil) }
+
+// entity is the declaration as installed: its actions may create related
+// records through this builder's host (ADR-0040 21c).
+func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b.create) }
+
+func entityWith(o Object, creates creator) platform.Entity {
 	fields := []reflect.StructField{{Name: "Record", Type: reflect.TypeFor[platform.Record](), Anonymous: true}}
 	for _, f := range o.Fields {
 		tag := fmt.Sprintf(`json:"%s,omitempty" title:"%s"`, f.Name, f.Title)
@@ -583,7 +595,7 @@ func Entity(o Object) platform.Entity {
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates)}
 }
 
 // page is the list and detail page a defined object comes with: the same
