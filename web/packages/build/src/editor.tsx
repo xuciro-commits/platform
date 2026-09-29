@@ -17,7 +17,7 @@ type Section = NonNullable<Api["sections"]>[number];
 type PageRecord = {
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
   list?: string[]; detail?: string[]; actions?: string[];
-  sections?: { widget: string; title?: string; width?: string; object?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string }[];
+  sections?: { widget: string; title?: string; width?: string; object?: string; relation?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
