@@ -99,6 +99,13 @@ type Listener interface {
 // step's run end.
 type Processes interface {
 	Declare(a platform.App) error
+	// Install registers a flow an app composed at runtime as its next version;
+	// Validate checks one without registering it (#132).
+	Install(a platform.App, fl platform.Flow) error
+	Validate(a platform.App, fl platform.Flow) error
+	// HasRunningSubject protects a composed flow's source definition while its
+	// instances are running, waiting, compensating or stuck.
+	HasRunningSubject(typ string) (bool, error)
 	// Check refuses to start when a running instance needs a version the code no longer declares.
 	Check() error
 	// Versions are those new instances took during the input being handled

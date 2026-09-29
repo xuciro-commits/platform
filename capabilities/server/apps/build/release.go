@@ -144,6 +144,28 @@ func (b *Build) PublishedPage(name string) (bool, error) {
 }
 
 func (b *Build) validateObjectInstallation(record Object) error {
+	if processes := b.host.Processes(); processes != nil {
+		current, exists := platform.Get[Object](b.host.Automation(platform.Caller{}, ID), record.ID)
+		if previous, ok := wasPublished[Object](current.Published); exists && ok {
+			oldBody, err := definitionBody(previous, TypeOf(previous.Name))
+			if err != nil {
+				return err
+			}
+			newBody, err := definitionBody(record, TypeOf(record.Name))
+			if err != nil {
+				return err
+			}
+			if string(oldBody) != string(newBody) {
+				running, err := processes.HasRunningSubject(TypeOf(previous.Name))
+				if err != nil {
+					return err
+				}
+				if running {
+					return fmt.Errorf("finish the running processes before changing their object definition")
+				}
+			}
+		}
+	}
 	entity := Entity(record)
 	pages, generated, err := b.objectInstallationPages(record)
 	if err != nil {

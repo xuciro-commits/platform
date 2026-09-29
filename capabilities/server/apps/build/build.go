@@ -86,7 +86,8 @@ func New(tenant string) *Build {
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType)
+	actions = append(actions, platform.EntityActions(b.processEntity())...)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType)
 	return b
 }
 
@@ -122,7 +123,7 @@ func (b *Build) objectEntity() platform.Entity {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -172,7 +173,7 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess}
 }
 
 // publicationImage reads and verifies the already committed record image
@@ -220,6 +221,16 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaProcess {
+		p, err := processImage(image)
+		if err != nil {
+			return err
+		}
+		if b.host.Processes() == nil {
+			return fmt.Errorf("tenant has no flow runtime")
+		}
+		return b.host.Processes().Validate(b, flowOf(p))
+	}
 	_, _, pages, app, err := b.publicationImage(schema, image)
 	if err != nil {
 		return err
@@ -246,6 +257,16 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // Installation reconstructs the runtime registry from the saved published
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaProcess {
+		p, err := processImage(image)
+		if err != nil {
+			return err
+		}
+		if b.host.Processes() == nil {
+			return fmt.Errorf("tenant has no flow runtime")
+		}
+		return b.host.Processes().Install(b, flowOf(p))
+	}
 	entity, actions, pages, app, err := b.publicationImage(schema, image)
 	if err != nil {
 		return err
@@ -327,7 +348,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -485,6 +506,10 @@ func published[T any](definition T) string {
 	case Application:
 		value.Published = ""
 		definition = any(value).(T)
+	case Process:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
 	}
 	raw, _ := json.Marshal(definition)
 	return string(raw)
@@ -534,7 +559,7 @@ func (b *Build) Reinstall() error {
 			return fmt.Errorf("application %s: %v", a.Name, err)
 		}
 	}
-	return nil
+	return b.installProcesses()
 }
 
 // Entity is the declaration a defined object amounts to: a Go type built now,

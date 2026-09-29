@@ -153,3 +153,5 @@ SAP 在 2026 年 6 月提出的“AI 原生北极星（AI-native North Star）�
   - 针对超时机制引入业务工作日历；
   - 超越目前步骤拓扑列表的自由拖拽关系图。
   - 由真正的 AI 智能代理自主执行的 Agent 步骤已在第五阶段正式构建（[ADR-0021](0021-agents.md)）。
+
+- **类型化租户定义后端准备 (Typed tenant definition preparation, 2026-09-29, #132)：** `flow.Install/Validate` 为租户构建器复用相同的声明/版本运行时；定义、恢复与尚未接通的编辑/发布旅程统一见 [ADR-0042 实际构建](0042-typed-workflow-composer.md#实际构建-as-built)，不改写上述历史验收范围。

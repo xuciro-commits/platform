@@ -353,7 +353,20 @@ func standard(c Caller, e Entity, verb string, s *pb.Submission) (func(*pb.Chang
 				return nil, invalid // unknown or read-only fields are never set by a generated action
 			}
 		}
-		if json.Unmarshal(s.GetPayload(), v.Interface()) != nil {
+		// A provided field is a replacement, including a slice/map/struct.
+		// Decoding a patch into the old struct reuses slice elements and maps,
+		// retaining nested values the caller explicitly removed.
+		base, err := json.Marshal(v.Interface())
+		var merged map[string]json.RawMessage
+		if err != nil || json.Unmarshal(base, &merged) != nil {
+			return nil, invalid
+		}
+		for name, value := range given {
+			merged[name] = value
+		}
+		raw, err := json.Marshal(merged)
+		v = reflect.New(t)
+		if err != nil || json.Unmarshal(raw, v.Interface()) != nil {
 			return nil, invalid
 		}
 		v.Elem().Field(0).Addr().Interface().(*Record).ID = id

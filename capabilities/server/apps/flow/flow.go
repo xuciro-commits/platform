@@ -184,82 +184,109 @@ func (f *Flows) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 func (f *Flows) Declare(a platform.App) error {
 	m := a.Manifest()
 	for _, fl := range m.Flows {
-		id := m.ID + "." + fl.Name
-		d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
-		byEvent, byState := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil
-		if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || byEvent == byState {
-			return fmt.Errorf("flow %s: name, title, version, steps and one start — on events, or on a record's state — are required", id)
+		d, err := f.check(m, fl)
+		if err != nil {
+			return err
 		}
-		if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) {
-			return fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
-		}
-		versions := f.defs[id]
-		if len(versions) > 0 && versions[len(versions)-1].Version >= fl.Version {
-			return fmt.Errorf("flow %s: versions must be declared in ascending order", id)
-		}
-		for _, on := range fl.Start.On {
-			if protocol, _, ok := strings.Cut(on, "#"); ok {
-				if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
-					return fmt.Errorf("flow %s starts on %s of a protocol %s does not consume", id, on, m.ID)
-				}
-			} else if _, own := m.Actions.Action(on); !own {
-				return fmt.Errorf("flow %s starts on %s, neither %s's action nor a protocol event", id, on, m.ID)
-			}
-		}
-		for i := range fl.Steps {
-			s := &fl.Steps[i]
-			if s.Name == "" || d.steps[s.Name] != nil || s.Name[0] == '@' {
-				return fmt.Errorf("flow %s: step %d needs a unique name", id, i+1)
-			}
-			d.steps[s.Name] = s
-			kinds := 0
-			for _, set := range []bool{s.Act != nil, s.Wait != nil, s.Ask != nil, s.Call != nil, len(s.All) > 0, len(s.Any) > 0, s.Agent != nil} {
-				if set {
-					kinds++
-				}
-			}
-			if kinds != 1 {
-				return fmt.Errorf("flow %s: step %s must be exactly one kind", id, s.Name)
-			}
-		}
-		for _, s := range fl.Steps {
-			refs := append(append([]string{s.Next, s.OnTimeout, s.Fault}, s.All...), s.Any...)
-			if s.Call != nil {
-				refs = nil
-				if _, ok := f.latest(m.ID + "." + s.Call.Flow); !ok && s.Call.Flow != fl.Name {
-					return fmt.Errorf("flow %s: step %s calls %s, not declared before it", id, s.Name, s.Call.Flow)
-				}
-				refs = append(refs, s.Next, s.OnTimeout)
-			}
-			for _, r := range refs {
-				if r != "" && r != Compensate && d.steps[r] == nil {
-					return fmt.Errorf("flow %s: step %s goes to %s, not a step", id, s.Name, r)
-				}
-			}
-			if (s.Timeout > 0 || s.WorkingDays > 0) && s.OnTimeout == "" {
-				return fmt.Errorf("flow %s: step %s times out to nowhere", id, s.Name)
-			}
-			if act := s.Act; act != nil && (act.Action == "" || act.Target == nil) {
-				return fmt.Errorf("flow %s: step %s acts without an action and a target", id, s.Name)
-			}
-			if w := s.Wait; w != nil && (w.On == "") != (w.Match == nil) {
-				return fmt.Errorf("flow %s: step %s waits for an event without matching it", id, s.Name)
-			}
-			if a := s.Ask; a != nil && (a.Title == nil || a.To == nil) {
-				return fmt.Errorf("flow %s: step %s asks without a title or people", id, s.Name)
-			}
-			if ag := s.Agent; ag != nil && (ag.Goal == nil || ag.To == nil || !slices.ContainsFunc(m.Agents, func(x platform.Agent) bool { return x.Name == ag.Agent })) {
-				return fmt.Errorf("flow %s: step %s gives a goal to %q, not an agent of %s, or without a goal and people", id, s.Name, ag.Agent, m.ID)
-			}
-		}
-		for from, to := range fl.From {
-			if d.steps[to] == nil || len(versions) == 0 || versions[len(versions)-1].steps[from] == nil {
-				return fmt.Errorf("flow %s: version %d moves %s to %s, not steps of both versions", id, fl.Version, from, to)
-			}
-		}
-		f.defs[id] = append(versions, d)
+		f.defs[m.ID+"."+fl.Name] = append(f.defs[m.ID+"."+fl.Name], d)
 	}
 	return nil
+}
+
+// Install registers a flow an app composed at runtime — a process a tenant
+// defined (ADR-0034, #132) — as its next version: running instances keep the
+// version they started on (ADR-0020 D6).
+func (f *Flows) Install(a platform.App, fl platform.Flow) error {
+	d, err := f.check(a.Manifest(), fl)
+	if err != nil {
+		return err
+	}
+	id := a.Manifest().ID + "." + fl.Name
+	f.defs[id] = append(f.defs[id], d)
+	return nil
+}
+
+// Validate checks a flow as Install would, registering nothing.
+func (f *Flows) Validate(a platform.App, fl platform.Flow) error {
+	_, err := f.check(a.Manifest(), fl)
+	return err
+}
+
+func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
+	id := m.ID + "." + fl.Name
+	d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
+	byEvent, byState := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil
+	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || byEvent == byState {
+		return nil, fmt.Errorf("flow %s: name, title, version, steps and one start — on events, or on a record's state — are required", id)
+	}
+	if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) {
+		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
+	}
+	versions := f.defs[id]
+	if len(versions) > 0 && versions[len(versions)-1].Version >= fl.Version {
+		return nil, fmt.Errorf("flow %s: versions must be declared in ascending order", id)
+	}
+	for _, on := range fl.Start.On {
+		if protocol, _, ok := strings.Cut(on, "#"); ok {
+			if !slices.ContainsFunc(m.Consumes, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
+				return nil, fmt.Errorf("flow %s starts on %s of a protocol %s does not consume", id, on, m.ID)
+			}
+		} else if _, own := m.Actions.Action(on); !own {
+			return nil, fmt.Errorf("flow %s starts on %s, neither %s's action nor a protocol event", id, on, m.ID)
+		}
+	}
+	for i := range fl.Steps {
+		s := &fl.Steps[i]
+		if s.Name == "" || d.steps[s.Name] != nil || s.Name[0] == '@' {
+			return nil, fmt.Errorf("flow %s: step %d needs a unique name", id, i+1)
+		}
+		d.steps[s.Name] = s
+		kinds := 0
+		for _, set := range []bool{s.Act != nil, s.Wait != nil, s.Ask != nil, s.Call != nil, len(s.All) > 0, len(s.Any) > 0, s.Agent != nil} {
+			if set {
+				kinds++
+			}
+		}
+		if kinds != 1 {
+			return nil, fmt.Errorf("flow %s: step %s must be exactly one kind", id, s.Name)
+		}
+	}
+	for _, s := range fl.Steps {
+		refs := append(append([]string{s.Next, s.OnTimeout, s.Fault}, s.All...), s.Any...)
+		if s.Call != nil {
+			refs = nil
+			if _, ok := f.latest(m.ID + "." + s.Call.Flow); !ok && s.Call.Flow != fl.Name {
+				return nil, fmt.Errorf("flow %s: step %s calls %s, not declared before it", id, s.Name, s.Call.Flow)
+			}
+			refs = append(refs, s.Next, s.OnTimeout)
+		}
+		for _, r := range refs {
+			if r != "" && r != Compensate && d.steps[r] == nil {
+				return nil, fmt.Errorf("flow %s: step %s goes to %s, not a step", id, s.Name, r)
+			}
+		}
+		if (s.Timeout > 0 || s.WorkingDays > 0) && s.OnTimeout == "" {
+			return nil, fmt.Errorf("flow %s: step %s times out to nowhere", id, s.Name)
+		}
+		if act := s.Act; act != nil && (act.Action == "" || act.Target == nil) {
+			return nil, fmt.Errorf("flow %s: step %s acts without an action and a target", id, s.Name)
+		}
+		if w := s.Wait; w != nil && (w.On == "") != (w.Match == nil) {
+			return nil, fmt.Errorf("flow %s: step %s waits for an event without matching it", id, s.Name)
+		}
+		if a := s.Ask; a != nil && (a.Title == nil || a.To == nil) {
+			return nil, fmt.Errorf("flow %s: step %s asks without a title or people", id, s.Name)
+		}
+		if ag := s.Agent; ag != nil && (ag.Goal == nil || ag.To == nil || !slices.ContainsFunc(m.Agents, func(x platform.Agent) bool { return x.Name == ag.Agent })) {
+			return nil, fmt.Errorf("flow %s: step %s gives a goal to %q, not an agent of %s, or without a goal and people", id, s.Name, ag.Agent, m.ID)
+		}
+	}
+	for from, to := range fl.From {
+		if d.steps[to] == nil || len(versions) == 0 || versions[len(versions)-1].steps[from] == nil {
+			return nil, fmt.Errorf("flow %s: version %d moves %s to %s, not steps of both versions", id, fl.Version, from, to)
+		}
+	}
+	return d, nil
 }
 
 func (f *Flows) latest(id string) (*flowDef, bool) {
@@ -306,6 +333,31 @@ func (f *Flows) running(c platform.Caller) []FlowInstance {
 	live, _ := json.Marshal([]any{"|", []any{"state", "=", "running"}, "|", []any{"state", "=", "waiting"}, "|", []any{"state", "=", "compensating"}, []any{"state", "=", "stuck"}})
 	out, _, _ := platform.Find[FlowInstance](c, platform.Query{Domain: live, Sort: []string{"id"}})
 	return out
+}
+
+// HasRunningSubject checks every live instance, beyond a single read page.
+// Terminal instances retain their history but no longer block source edits.
+func (f *Flows) HasRunningSubject(typ string) (bool, error) {
+	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
+	live, _ := json.Marshal([]any{"|", []any{"state", "=", "running"}, "|", []any{"state", "=", "waiting"}, "|", []any{"state", "=", "compensating"}, []any{"state", "=", "stuck"}})
+	for offset := 0; ; {
+		rows, total, err := platform.Find[FlowInstance](c, platform.Query{Domain: live, Sort: []string{"id"}, Limit: 1000, Offset: offset})
+		if err != nil {
+			return false, err
+		}
+		for _, row := range rows {
+			if strings.HasPrefix(row.Subject, typ+"/") {
+				return true, nil
+			}
+		}
+		offset += len(rows)
+		if offset >= total {
+			return false, nil
+		}
+		if len(rows) == 0 {
+			return false, fmt.Errorf("cannot read all running flow instances")
+		}
+	}
 }
 
 // Interested reports whether an event starts a flow or may end a wait.
