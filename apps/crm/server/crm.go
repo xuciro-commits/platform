@@ -59,7 +59,7 @@ type Account struct {
 
 type Opportunity struct {
 	platform.Record
-	Account platform.Ref[Account] `json:"account" field:"required"`
+	Account platform.Ref[Account] `json:"account" field:"required" inverse:"opportunities"`
 	Title   string                `json:"title" field:"required,search" help:"What is being sold, in the customer's words" example:"Board offsite, 12 rooms"`
 	Owner   string                `json:"owner" field:"readonly" help:"The salesperson who owns it; only they and managers may close it"`
 	// Margin is the expected margin: sales managers read and set it (ADR-0028 D3).

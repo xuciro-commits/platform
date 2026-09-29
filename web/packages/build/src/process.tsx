@@ -11,7 +11,7 @@ import {
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-type Field = { name: string; title: string; type: string; choices?: string; required?: boolean; search?: boolean; ref?: string; read?: string[]; write?: string[] };
+type Field = { name: string; title: string; type: string; choices?: string; required?: boolean; search?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 type State = { name: string; title: string; tone?: string; description?: string };
 type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean };
 type Set_ = { field: string; from: string };
@@ -258,6 +258,7 @@ function FieldProperties({ field, onChange }: { field: Field; onChange: (patch: 
     <Label text={t("Type")}><Select value={field.type} onChange={(e) => onChange({ type: e.target.value })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
     {field.type === "reference" && <Label text={t("Reference object")}><Input value={field.ref ?? ""} onChange={(e) => onChange({ ref: e.target.value })} /></Label>}
+    {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>
   </Card>;

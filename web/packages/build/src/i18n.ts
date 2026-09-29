@@ -166,6 +166,7 @@ register("zh-CN", {
   "Fields": "字段",
   "Add a field": "添加字段",
   "Reference object": "引用对象",
+  "Seen from there as": "在对方记录中显示为",
   "Searchable": "可搜索",
   "money": "金额",
   "datetime": "日期时间",

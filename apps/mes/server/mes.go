@@ -105,7 +105,7 @@ type Signature struct {
 // lifecycle is start, complete, nonconformance and signed disposition.
 type SFC struct {
 	platform.Record
-	Order      platform.Ref[Order] `json:"order" field:"readonly"`
+	Order      platform.Ref[Order] `json:"order" field:"readonly" inverse:"sfcs"`
 	Product    string              `json:"product" field:"readonly,search" help:"The product this lot becomes"`
 	Quantity   int                 `json:"quantity" field:"readonly" help:"Units in this lot: its order's quantity split over its SFCs"`
 	Step       int                 `json:"step" field:"readonly" help:"The index of its current operation in the product's routing"` // index into the product's operations
