@@ -290,6 +290,9 @@ func unknown() *kernel.Error { return &kernel.Error{Code: pb.ErrorCode_ERROR_COD
 
 // Submit routes a submission to the app declaring its action and records it when accepted.
 func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, err *kernel.Error) {
+	if err := t.admits(m); err != nil {
+		return nil, err
+	}
 	if t.quarantined() {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}

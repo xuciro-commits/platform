@@ -35,7 +35,8 @@ var seats = []platformserver.Seat{
 func TestProductionThroughTheProtocol(t *testing.T) {
 	var journal []platformserver.Entry
 	build := func() *platformserver.Tenant {
-		tn, err := NewTenant(tenant, erp.New(tenant), seats...)
+		members := append(slices.Clone(seats), Seat("clerk", "clerk", map[string]string{erp.ID: erp.Controller}, "plant-sz"))
+		tn, err := NewTenant(tenant, erp.New(tenant), members...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -152,7 +153,8 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	tn.Download(w, opL1, "PH-1", now)
 	expect("the line's operator downloads it", fmt.Sprint(w.Code, " ", w.Body.String()), "200 jpeg bytes")
 	w = httptest.NewRecorder()
-	tn.Download(w, platform.Member{ID: "clerk", Tenant: tenant, Roles: map[string]string{erp.ID: erp.Controller}}, "PH-1", now)
+	clerk, _ := tn.Member("clerk")
+	tn.Download(w, clerk, "PH-1", now)
 	expect("the ERP's clerk does not", fmt.Sprint(w.Code), "404")
 	// ADR-0028 D6: comments with mentions and followers on the shop order.
 	told := func(who, prefix string) bool {
@@ -170,11 +172,11 @@ func TestProductionThroughTheProtocol(t *testing.T) {
 	if v, _ := tn.RecordOf(sup, mes.OrderType, "SO-1", now); len(v.Comments) != 2 || !v.Following {
 		t.Fatalf("comments on SO-1: %d, following %v", len(v.Comments), v.Following)
 	}
-	clerk := platform.Member{ID: "clerk", Tenant: tenant, Roles: map[string]string{erp.ID: erp.Controller}}
 	if page, _ := tn.Records(clerk, relations.CommentType, platform.Query{}, now); page.Total != 0 {
 		t.Fatal("the ERP's clerk reads the plant's comments")
 	}
-	expect("the clerk cannot comment", do("clerk-x", relations.ID, relations.SchemaComment, relations.CommentType, "C-3", map[string]string{"target": mes.OrderType + "/SO-1", "text": "hi"}), "ERROR_CODE_POLICY_DENIED")
+	// A real ERP member cannot discover or comment on a MES record outside his scope.
+	expect("the clerk cannot comment", do("clerk", relations.ID, relations.SchemaComment, relations.CommentType, "C-3", map[string]string{"target": mes.OrderType + "/SO-1", "text": "hi"}), "ERROR_CODE_NOT_FOUND")
 	platformserver.CheckReplay(t, tn, journal, build)
 	_ = platform.Money{}
 }

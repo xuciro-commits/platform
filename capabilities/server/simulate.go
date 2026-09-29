@@ -21,6 +21,7 @@ type Simulation struct {
 	Accepted bool              `json:"accepted"`
 	Refusal  string            `json:"refusal,omitempty"`
 	Changes  []SimulatedChange `json:"changes"`
+	Matched  *bool             `json:"matched,omitempty"`
 }
 
 // SimulatedChange is one record the decision would write, as it would read.

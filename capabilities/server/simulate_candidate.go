@@ -28,12 +28,14 @@ type SimulationStep struct {
 	ID      string          `json:"id"`
 	Action  string          `json:"action"`
 	Payload json.RawMessage `json:"payload"`
+	Expect  string          `json:"expect,omitempty"`
 }
 
 type CandidateSimulation struct {
 	CandidateID string       `json:"candidateId"`
 	Steps       []Simulation `json:"steps"`
 	Recovered   bool         `json:"recovered"`
+	Passed      *bool        `json:"passed,omitempty"`
 }
 
 // SimulateCandidate installs a saved object draft in a fresh, bounded tenant.
@@ -80,10 +82,14 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
 	out := CandidateSimulation{CandidateID: candidate.ID, Steps: []Simulation{}}
+	passed, asserted := true, 0
 	for i, step := range request.Steps {
+		if step.Expect != "" && step.Expect != "accepted" && step.Expect != "refused" {
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose accepted or refused as the expected test outcome")
+		}
 		action := sandbox.owner["action:"+step.Action]
 		if action == nil || step.ID == "" || action.Manifest().ID != build.ID || !strings.HasPrefix(step.Type, build.ID+".") ||
-			step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType {
+			step.Type == build.ObjectType || step.Type == build.PageType || step.Type == build.AppType || step.Type == build.TestPlanType {
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Test step {step} must name an action and record of the candidate objects", fmt.Sprint(i+1))
 		}
 		payload := step.Payload
@@ -95,6 +101,12 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 			Schema: &pb.SchemaRef{Name: step.Action, Version: 1}, Payload: payload}
 		_, refusal := sandbox.Submit(m, sub, request.At)
 		result := Simulation{Accepted: refusal == nil, Changes: []SimulatedChange{}}
+		if step.Expect != "" {
+			matched := (step.Expect == "accepted") == result.Accepted
+			result.Matched = &matched
+			passed = passed && matched
+			asserted++
+		}
 		if refusal != nil {
 			result.Refusal = refusal.Message
 		} else {
@@ -119,6 +131,9 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 			}
 		}
 		out.Steps = append(out.Steps, result)
+	}
+	if asserted == len(request.Steps) {
+		out.Passed = &passed
 	}
 	saved, _, err := sandbox.Snapshot(func() int64 { return 0 })
 	if err == nil {

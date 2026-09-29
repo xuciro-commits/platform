@@ -192,6 +192,7 @@ export type CandidateSimulation = {
   candidateId: string;
   steps: Simulation[];
   recovered: boolean;
+  passed?: boolean;
 };
 
 export type CandidateSimulationRequest = {
@@ -836,6 +837,7 @@ export type Simulation = {
   accepted: boolean;
   refusal?: string;
   changes: SimulatedChange[];
+  matched?: boolean;
 };
 
 export type SimulationStep = {
@@ -843,6 +845,7 @@ export type SimulationStep = {
   id: string;
   action: string;
   payload: unknown;
+  expect?: string;
 };
 
 export type Stamp = {

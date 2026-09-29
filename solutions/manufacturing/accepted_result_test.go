@@ -1,6 +1,7 @@
 package manufacturing
 
 import (
+	"encoding/json"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -97,5 +98,35 @@ func TestAcceptedResultManufacturingProbe(t *testing.T) {
 	if len(entries) != 8 || entries[6].Kind != "accepted-result" {
 		t.Fatalf("builder publication was not committed: %+v", entries)
 	}
+
+	// The same fixed-plan record and isolated runtime work in either composition.
+	planPayload, _ := json.Marshal(map[string]any{"title": "Fixed sample", "object": "O1", "as": m.ID, "at": now, "steps": []build.TestStep{
+		{Type: build.TypeOf("batch"), ID: "SAMPLE", Action: build.TypeOf("batch") + ".create", Payload: `{"lot":"SAMPLE"}`, Expect: "accepted"},
+	}})
+	if _, err := tn.Submit(m, &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: "save-plan",
+		Target: &pb.EntityRef{Type: build.TestPlanType, Id: "PLAN"}, Schema: &pb.SchemaRef{Name: build.TestPlanType + ".create", Version: 1}, Payload: planPayload}, now); err != nil {
+		t.Fatal(err)
+	}
+	view, refusal := tn.RecordOf(m, build.TestPlanType, "PLAN", now)
+	if refusal != nil {
+		t.Fatal(refusal)
+	}
+	data, _ := json.Marshal(view.Record)
+	var saved build.TestPlan
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	input := platformserver.CandidateSimulationRequest{ObjectID: string(saved.Object), As: saved.As, At: saved.At}
+	for _, step := range saved.Steps {
+		input.Steps = append(input.Steps, platformserver.SimulationStep{Type: step.Type, ID: step.ID, Action: step.Action, Payload: json.RawMessage(step.Payload), Expect: step.Expect})
+	}
+	before, _, _ := tn.Snapshot(func() int64 { return 0 })
+	count := len(entries)
+	out, testError := tn.SimulateCandidate(m, input)
+	after, _, _ := tn.Snapshot(func() int64 { return 0 })
+	if testError != nil || out.Passed == nil || !*out.Passed || !out.Recovered || string(before) != string(after) || len(entries) != count {
+		t.Fatalf("saved plan changed production: %+v, %v", out, testError)
+	}
+
 	platformserver.CheckReplay(t, tn, entries, compose)
 }

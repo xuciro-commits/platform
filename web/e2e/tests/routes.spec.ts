@@ -1031,6 +1031,81 @@ test("route 40: a page lists a named query", async ({ page, request }, testInfo)
 
 // Route 41 (ADR-0040 21d): fixed samples exercise a saved candidate before
 // publication. Success, refusal and snapshot recovery never touch live rows.
+test("route 42: save, reload and rerun a fixed candidate plan", async ({ page, request }, testInfo) => {
+  const id = fresh("OBJ"), name = `plan${Date.now().toString(36).slice(-5)}`;
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id }, {
+    name, title: "Plan visit", fields: [{ name: "guest", title: "Guest", type: "text" }],
+    states: [{ name: "open", title: "Open" }, { name: "done", title: "Done" }],
+    actions: [{ name: "close", title: "Close", from: ["open"], to: "done" }],
+  });
+  await open(page, "manager", "/candidate-test");
+  await page.getByRole("combobox", { name: "Saved object draft" }).selectOption(id);
+  await page.getByRole("textbox", { name: "Test plan name" }).fill("Saved fixed visits");
+  await page.getByRole("textbox", { name: "Member ID (empty: you)" }).fill("desk-1");
+  await page.getByRole("group", { name: "Test step 1", exact: true }).getByRole("textbox", { name: "Test inputs (JSON)" }).fill('{"guest":"Sample Ada"}');
+  await page.getByRole("button", { name: "Add a test step" }).click();
+  await page.getByRole("group", { name: "Test step 3", exact: true }).getByRole("combobox", { name: "Expected outcome" }).selectOption("refused");
+  await page.getByRole("button", { name: "Save test plan", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Test plan saved." })).toBeVisible();
+  const planID = await page.getByRole("combobox", { name: "Saved test plan" }).inputValue();
+  expect(planID).not.toBe("");
+  await page.getByRole("button", { name: "Run isolated test" }).click();
+  await expect(page.getByText("All expected outcomes matched.", { exact: true })).toBeVisible();
+  const candidate = await page.getByText("Tested candidate:").locator("code").innerText();
+  await page.getByRole("combobox", { name: "Saved test plan" }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("saved-plan.png"), fullPage: true });
+  await page.getByText("All expected outcomes matched.", { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("saved-plan-results.png"), fullPage: true });
+  await page.reload();
+  await page.getByRole("combobox", { name: "Saved test plan" }).selectOption(planID);
+  await expect(page.getByRole("combobox", { name: "Saved object draft" })).toHaveValue(id);
+  await expect(page.getByRole("textbox", { name: "Member ID (empty: you)" })).toHaveValue("desk-1");
+  await expect(page.getByRole("group", { name: "Test step 1", exact: true }).getByRole("textbox", { name: "Test inputs (JSON)" })).toHaveValue('{"guest":"Sample Ada"}');
+  await page.getByRole("button", { name: "Run isolated test" }).click();
+  await expect(page.getByText("All expected outcomes matched.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Tested candidate:").locator("code")).toHaveText(candidate);
+  // A changed expectation clears the old pass and is evaluated on fresh data.
+  await page.getByRole("group", { name: "Test step 3", exact: true }).getByRole("combobox", { name: "Expected outcome" }).selectOption("accepted");
+  await expect(page.getByText("Tested candidate:")).not.toBeVisible();
+  await page.getByRole("button", { name: "Run isolated test" }).click();
+  await expect(page.getByText("Some expected outcomes did not match.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Reload saved plan" }).click();
+  await expect(page.getByRole("group", { name: "Test step 3", exact: true }).getByRole("combobox", { name: "Expected outcome" })).toHaveValue("refused");
+  // A concurrent save is refused; explicit reload obtains the new revision.
+  await decide(request, "manager", "build", "build.testplan.edit", { type: "build.testplan", id: planID }, { title: "Remote fixed visits" });
+  await page.getByRole("textbox", { name: "Test plan name" }).fill("Local stale visits");
+  await page.getByRole("button", { name: "Save test plan", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: /CONFLICT|changed|revision/i })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Test plan name" })).toHaveValue("Local stale visits");
+  await page.getByRole("button", { name: "Reload saved plan" }).click();
+  await expect(page.getByRole("textbox", { name: "Test plan name" })).toHaveValue("Remote fixed visits");
+  await page.getByRole("textbox", { name: "Test plan name" }).fill("Final fixed visits");
+  await page.getByRole("button", { name: "Save test plan", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Test plan saved." })).toBeVisible();
+  const privatePlan = await request.get(`/v1/records/build.testplan/${planID}`, { headers: { Authorization: "Bearer desk" } });
+  expect([403, 404]).toContain(privatePlan.status());
+  const sample = await request.get(`/v1/records/build.${name}/TEST-1`, { headers: { Authorization: "Bearer desk" } });
+  expect(sample.status()).toBe(404);
+  await page.reload();
+  await page.getByRole("combobox", { name: "Saved test plan" }).selectOption(planID);
+  await expect(page.getByRole("textbox", { name: "Test plan name" })).toHaveValue("Final fixed visits");
+  await page.setViewportSize({ width: 390, height: 780 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.getByRole("combobox", { name: "Saved test plan" }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("saved-plan-narrow.png"), fullPage: true });
+  const chinese = await page.context().newPage();
+  await chinese.addInitScript(() => localStorage.setItem("platform.language", "zh-CN"));
+  await open(chinese, "manager", "/candidate-test");
+  await chinese.getByRole("combobox", { name: "已保存测试计划" }).selectOption(planID);
+  await expect(chinese.getByRole("textbox", { name: "测试计划名称" })).toHaveValue("Final fixed visits");
+  await chinese.getByRole("button", { name: "运行隔离测试" }).click();
+  await expect(chinese.getByText("所有预期结果均匹配。", { exact: true })).toBeVisible();
+  await chinese.getByRole("combobox", { name: "已保存测试计划" }).scrollIntoViewIfNeeded();
+  await chinese.screenshot({ path: testInfo.outputPath("saved-plan-chinese.png"), fullPage: true });
+  await chinese.close();
+});
+
 test("route 41: test a candidate, publish and operate", async ({ page, request }, testInfo) => {
   const id = fresh("OBJ"), name = `test${Date.now().toString(36).slice(-5)}`, type = `build.${name}`;
   await decide(request, "manager", "build", "build.object.create", { type: "build.object", id }, {
@@ -1048,6 +1123,7 @@ test("route 41: test a candidate, publish and operate", async ({ page, request }
   const first = page.getByRole("group", { name: "Test step 1", exact: true });
   await first.getByRole("textbox", { name: "Test inputs (JSON)" }).fill('{"guest":"Sample Ada"}');
   await page.getByRole("button", { name: "Add a test step" }).click();
+  await page.getByRole("group", { name: "Test step 3", exact: true }).getByRole("combobox", { name: "Expected outcome" }).selectOption("refused");
   await page.getByRole("button", { name: "Run isolated test" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("Test step 2 · Accepted", { exact: true })).toBeVisible();

@@ -85,7 +85,8 @@ func New(tenant string) *Build {
 	b := &Build{installed: map[string]platform.Entity{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType)
+	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType)
 	return b
 }
 
@@ -121,7 +122,7 @@ func (b *Build) objectEntity() platform.Entity {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -293,6 +294,11 @@ func (b *Build) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 // Submit takes the builder's own actions and those generated for every object
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if name := s.GetSchema().GetName(); (name == TestPlanType+".create" || name == TestPlanType+".edit") && !c.Replaying {
+		if err := checkTestPlanFields(s.GetPayload()); err != nil {
+			return nil, err
+		}
+	}
 	if name := s.GetSchema().GetName(); (name == ObjectType+".create" || name == ObjectType+".edit") && !c.Replaying {
 		// What the payload carries is checked while it is still a draft, so the
 		// person is told at once; publishing checks the whole definition again.
@@ -321,7 +327,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
