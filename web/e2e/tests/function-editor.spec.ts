@@ -49,8 +49,8 @@ for (const fixture of [
       expect(fn.fields).toEqual(["note"]);
       expect(fn.output[1]).toMatchObject({ name: "review", type: "boolean", required: true });
       // Conflicts preserve local edits; explicit reload restores saved state.
-      await decide(request, fixture.builder, "build", "build.function.edit", { type: "build.function", id: fn.id }, { description: "Remote revision" });
       await properties.getByRole("textbox", { name: "Function description" }).fill("Local conflicting revision");
+      await decide(request, fixture.builder, "build", "build.function.edit", { type: "build.function", id: fn.id }, { description: "Remote revision" });
       await page.getByRole("button", { name: "Save function", exact: true }).click();
       await expect(page.getByRole("alert").filter({ hasText: /CONFLICT|changed|revision/i })).toBeVisible();
       await expect(properties.getByRole("textbox", { name: "Function description" })).toHaveValue("Local conflicting revision");
