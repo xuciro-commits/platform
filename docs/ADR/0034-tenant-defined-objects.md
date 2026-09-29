@@ -76,3 +76,5 @@
 - **UI 套件扩展了组合器所需的编辑器**（`field.tags`，`packages/ui`）：没有预设列表供选择的标签字段现在支持用户手动输入词语——Enter 或逗号添加一项，chip 标签移除一项，Backspace 移除最后一项。在此之前，任何应用中都没有此类字段的编辑器。
 - **验证通过**：`TestTenantDefinedObject`（已定义对象之上的页面、被拒绝的组合不会干扰运行中页面、重放与快照）、`TestTheHotelDefinesItsOwnObject`（CRM 商机之上的页面及 CRM 的关闭动作；不向没有 CRM 权限的成员提供）、UI 套件的 `tags` 测试，以及浏览器路由 30（在 `crm.opportunity` 上组合并对真实记录执行动作）。`scripts/verify.sh ci capabilities web` 通过。
 - **未构建内容**：租户编写的动作、流程与 AI 逻辑；除 `list-detail` 之外的布局；从列表中选取字段而非手动输入名称；按对象的角色与范围；不可变修订版与发布。
+
+- **分页清单与恢复 (Paged inventory and restoration, 2026-09-29)：** 名称校验与恢复安装复用发布归属方的完整有界读取，分页缺陷与回归证据归 [ADR-0039](0039-minimal-definition-release.md#构建器资产清单分页-builder-inventory-pagination-2026-09-29-132136)。

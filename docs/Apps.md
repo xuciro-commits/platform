@@ -85,7 +85,7 @@ go run ./cmd/new-app -id purchasing -entity request -title "Purchase request" -z
 
 `platform.Flow`（ADR-0020）是由特定动作或状态触发的长周期运行业务流程：包含要求人处理的审批任务节点 `Ask`（进入成员工作收件箱，附带处理选项）、由流程代为执行的动作节点 `Act`（以流程本身为主体执行当前应用或跨协议动作）、等待特定事件或时间的挂起节点 `Wait`、调用当前应用另一个子流程的嵌套节点 `Call`、调度执行指定智能体的 `Agent` 节点、并行分支汇聚（`All`、`Any`），以及附带明确理由的分支路由选择节点。流程实例全程记录入账并支持确定性重放；应用测试中的 `platformserver.CheckReplay` 对此予以严格验证。智能体（`platform.Agent`，ADR-0021）在应用需要具备专属 AI 代理时以相同规范进行声明。
 
-原生流程定义后端 (Native process definition backend, ADR-0042 23a) 已可由开发者通过同一 `POST /v1/submit` 提交路径验证：宿主同时编排 `build`、`flow` 和 `work`，以 `build.builder` 身份先发布带状态/无必填输入动作的构建器对象，再用 `build.process.create/edit` 保存 `name/title/object/when/steps`，最后用 `build.process.publish` 安装下一版本。每个步骤选择 `ask` 或 `act`；人工步骤的 `answers` 列出答复，`branches` 是答案到步骤名的映射，`next` 是默认后续或空终点。普通成员在对象记录进入触发状态后从原生收件箱回答；不新建运行器。可执行例子与权限/版本/恢复断言见 `capabilities/server/process_test.go`。这仅是开发者后端准备，专用可视化编辑器、隔离流程用例和候选发布依赖尚待接通；不要用通用表单宣称已能完整编写流程。
+原生流程定义后端 (Native process definition backend, ADR-0042 23a) 已可由开发者通过同一 `POST /v1/submit` 提交路径验证：宿主同时编排 `build`、`flow` 和 `work`，以 `build.builder` 身份先发布带状态/无必填输入动作的构建器对象，再用 `build.process.create/edit` 保存 `name/title/object/when/steps`，最后用 `build.process.publish` 安装下一版本。每个步骤选择 `ask` 或 `act`；人工步骤的 `answers` 列出答复，`branches` 是答案到步骤名的映射，`next` 是默认后续或空终点。普通成员在对象记录进入触发状态后从原生收件箱回答；不新建运行器。可执行例子与权限/版本/恢复断言见 `capabilities/server/process_test.go`。构建器候选/恢复清单沿原有每类 1000 定义上限逐页读取，超界或读取错误失败封闭（ADR-0039）。这仅是开发者后端准备，专用可视化编辑器、隔离流程用例和候选发布依赖尚待接通；不要用通用表单宣称已能完整编写流程。
 
 ## 5. 添加多语言翻译
 

@@ -25,22 +25,41 @@ func (b *Build) releaseInventory() ([]Object, []Page, []Application, error) {
 		return nil, nil, nil, fmt.Errorf("builder has no host")
 	}
 	c := b.host.Automation(platform.Caller{}, ID)
-	objects, objectCount, err := platform.Find[Object](c, platform.Query{Limit: 1001, Sort: []string{"id"}})
+	objects, err := readDefinitionInventory[Object](c)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("read builder objects: %w", err)
 	}
-	pages, pageCount, err := platform.Find[Page](c, platform.Query{Limit: 1001, Sort: []string{"id"}})
+	pages, err := readDefinitionInventory[Page](c)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("read builder pages: %w", err)
 	}
-	apps, appCount, err := platform.Find[Application](c, platform.Query{Limit: 1001, Sort: []string{"id"}})
+	apps, err := readDefinitionInventory[Application](c)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("read builder applications: %w", err)
 	}
-	if objectCount > 1000 || pageCount > 1000 || appCount > 1000 {
-		return nil, nil, nil, fmt.Errorf("builder release inventory exceeds 1000 definitions of one kind")
-	}
 	return objects, pages, apps, nil
+}
+
+// The host caps one read page at 500; the existing release bound is 1000.
+// Read the complete bounded inventory or fail, never silently omit assets.
+func readDefinitionInventory[T any](c platform.Caller) ([]T, error) {
+	var all []T
+	for {
+		rows, count, err := platform.Find[T](c, platform.Query{Limit: 500, Offset: len(all), Sort: []string{"id"}})
+		if err != nil {
+			return nil, err
+		}
+		if count > 1000 {
+			return nil, fmt.Errorf("builder release inventory exceeds 1000 definitions of one kind")
+		}
+		all = append(all, rows...)
+		if len(all) >= count {
+			return all, nil
+		}
+		if len(rows) == 0 {
+			return nil, fmt.Errorf("builder definition inventory is incomplete")
+		}
+	}
 }
 
 // DraftReleaseAssets substitutes precisely one saved draft in the owner's

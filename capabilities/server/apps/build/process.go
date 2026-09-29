@@ -279,19 +279,5 @@ func (b *Build) installProcesses() error {
 }
 
 func (b *Build) processInventory() ([]Process, error) {
-	c := b.host.Automation(platform.Caller{}, ID)
-	var all []Process
-	for {
-		rows, count, err := platform.Find[Process](c, platform.Query{Limit: 500, Offset: len(all), Sort: []string{"id"}})
-		if err != nil || count > 1000 {
-			return nil, fmt.Errorf("process inventory unavailable or too large")
-		}
-		all = append(all, rows...)
-		if len(all) >= count {
-			return all, nil
-		}
-		if len(rows) == 0 {
-			return nil, fmt.Errorf("process inventory incomplete")
-		}
-	}
+	return readDefinitionInventory[Process](b.host.Automation(platform.Caller{}, ID))
 }

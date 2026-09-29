@@ -385,7 +385,11 @@ func (b *Build) checkName(name, id string) error {
 	if !named(name) {
 		return fmt.Errorf("the name %q is not lower-case letters and digits", name)
 	}
-	if other, taken := b.taken(name, id); taken {
+	other, taken, err := b.taken(name, id)
+	if err != nil {
+		return err
+	}
+	if taken {
 		return fmt.Errorf("the name %q is already %s", name, other)
 	}
 	return nil
@@ -426,20 +430,23 @@ func checkFields(fields []Field, h host.Host) error {
 var fieldTypes = []string{"text", "longtext", "integer", "decimal", "money", "date", "datetime", "boolean", "choice", "reference"}
 
 // taken says whether another object, or an app's own type, holds the name.
-func (b *Build) taken(name, id string) (string, bool) {
+func (b *Build) taken(name, id string) (string, bool, error) {
 	if b.host == nil {
-		return "", false
+		return "", false, nil
 	}
 	if _, mine := b.installed[TypeOf(name)]; !mine && b.host.Declares(TypeOf(name)) {
-		return "an app's own type", true
+		return "an app's own type", true, nil
 	}
-	objects, _, _ := platform.Find[Object](b.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 500})
+	objects, err := readDefinitionInventory[Object](b.host.Automation(platform.Caller{}, ID))
+	if err != nil {
+		return "", false, err
+	}
 	for _, o := range objects {
 		if o.Name == name && o.ID != id && !o.Archived {
-			return "the object " + o.Title, true
+			return "the object " + o.Title, true, nil
 		}
 	}
-	return "", false
+	return "", false, nil
 }
 
 func named(s string) bool {
@@ -529,7 +536,10 @@ func wasPublished[T any](raw string) (T, bool) {
 // of the types they define (ADR-0034 D4). It installs what was published, so a
 // draft written since stays a draft.
 func (b *Build) Reinstall() error {
-	objects, _, _ := platform.Find[Object](b.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 1000, Sort: []string{"id"}})
+	objects, pages, applications, err := b.releaseInventory()
+	if err != nil {
+		return err
+	}
 	for _, o := range objects {
 		was, ok := wasPublished[Object](o.Published)
 		if !ok || o.Archived {
@@ -539,7 +549,6 @@ func (b *Build) Reinstall() error {
 			return fmt.Errorf("object %s: %v", o.Name, err)
 		}
 	}
-	pages, _, _ := platform.Find[Page](b.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 1000, Sort: []string{"id"}})
 	for _, p := range pages { // after the objects they show
 		was, ok := wasPublished[Page](p.Published)
 		if !ok || p.Archived {
@@ -549,7 +558,6 @@ func (b *Build) Reinstall() error {
 			return fmt.Errorf("page %s: %v", p.Name, err)
 		}
 	}
-	applications, _, _ := platform.Find[Application](b.host.Automation(platform.Caller{}, ID), platform.Query{Limit: 1000, Sort: []string{"id"}})
 	for _, a := range applications { // after the pages they hold
 		was, ok := wasPublished[Application](a.Published)
 		if !ok || a.Archived {

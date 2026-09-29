@@ -740,5 +740,7 @@
  "Process answers must be nonempty and unique": "流程回答必须非空且唯一",
  "The process path {path} does not name a step": "流程路径 {path} 未指向有效步骤",
  "The process branch {answer} must name an allowed answer and step": "流程分支 {answer} 必须指定有效回答及步骤",
- "finish the running processes before changing their object definition": "请先结束正在运行的流程，再修改其对象定义"
+ "finish the running processes before changing their object definition": "请先结束正在运行的流程，再修改其对象定义",
+ "builder release inventory exceeds 1000 definitions of one kind": "构建器发布清单中同类定义超过 1000 个",
+ "builder definition inventory is incomplete": "构建器定义清单不完整"
 }
