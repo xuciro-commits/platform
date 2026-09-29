@@ -190,7 +190,9 @@ func (a *functionStock) Submit(c platform.Caller, s *pb.Submission, at time.Time
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
 		if s.GetSchema().GetName() == "stock.item.advise" {
-			return func(r *pb.ChangeRecord) { c.RequestFunction(r, "record-advice", "stock.item.advice-answer") }, nil
+			return func(r *pb.ChangeRecord) {
+				c.RequestFunction(r, platform.FunctionRequest{Name: "record-advice", Reply: "stock.item.advice-answer"})
+			}, nil
 		}
 		var answer platform.Answer
 		json.Unmarshal(s.GetPayload(), &answer)

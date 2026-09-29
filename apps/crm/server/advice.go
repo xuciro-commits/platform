@@ -28,7 +28,7 @@ func advice(c platform.Caller, s *pb.Submission, o Opportunity) (func(*pb.Change
 			return nil, fail(pb.ErrorCode_ERROR_CODE_CONFLICT)
 		}
 		return func(r *pb.ChangeRecord) {
-			call, err := c.RequestFunction(r, "record-advice", SchemaAdviceAnswer)
+			call, err := c.RequestFunction(r, platform.FunctionRequest{Name: "record-advice", Reply: SchemaAdviceAnswer})
 			if err != nil {
 				return
 			}

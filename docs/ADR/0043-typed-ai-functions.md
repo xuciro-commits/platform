@@ -33,6 +33,8 @@
 5. **一条可操作旅程。** 代码、页面和 Flow 调用同一具名函数，查看输入、授权来源、类型验证与保存结果。构建者在共享编写器修改定义、保存固定案例、测试精确候选后发布；操作员复核建议，通过原有业务动作作决定。展示调用阶段和拒绝原因，不展示模型私有思维链。
 6. **评测与隔离。** 固定样本/身份/时钟及替身回答复用候选测试机制，不复制生产数据或凭据、不派发生产效果。模型方差另用明确模型配置的多次评测；保存案例与精确版本相关联。无权、错误输入、无模型、禁用、超预算、非法输出、持久化失败和恢复都属于交付条件。不可逆协议动作仍以 F-29 为前置门禁。
 
+**24c 实施细化（2026-09-29，目标旅程尚未交付）。** Build 的 `build.function` 保存同一 `AIFunction` 声明及最多 64 个已发布版本；首批来源仍限其自身已发布对象，输出不写源对象。`build.function-call` 保存人员、来源、阶段、类型化回答、拒绝和绑定，由已有模型效果及自动 Reply 处理。调用 API 显式区分源记录和回答目标；人员不能指定另一个人员，受管流程只使用原生实例已保留的 `OnBehalf`，派发仍检查此人的当前源权限。页面和流程采用同一发布函数；流程版本固定其引用的函数版本，等待/重试/人工复核仍由原生 Flow/work 承担。函数候选及固定案例沿现有候选闭包、隔离租户和测试计划扩展，不复用生产记录或网络绑定。编写器在共享节点画布呈现来源→模型→严格输出及右侧属性，操作页面展示公开输入/输出与拒绝；只有两行业保存→测试→发布→调用/复核→恢复及浏览器走查完成后才能关闭 24c。
+
 ## 供负责人抉择的决策点 (Decision points for the owner)
 
 以下均为本会话持续推进授权内的实施选择，没有新增待负责人选择的产品方向。
@@ -74,4 +76,10 @@
 
 `TestFunctionOutputIsStrictAndBounded`/`TestFunctionScalarNumbersDoNotCoerce` 验证输出语义；`TestAIFunctionUsesAcceptedInputAndStrictOutput` 覆盖记录/租户拒绝、提交与结算追加失败、输入改变与代码提示词升级后的旧待发请求、非法回答、输出预算、来源授权撤销及结果 `CheckReplay`；`TestAIFunctionRefusalsAndModelGates` 覆盖私有字段、输入超限、无模型、禁用及应用配额；`TestAIFunctionDiscoveryAndDependencyBinding` 覆盖按源字段授权的发现和完整候选依赖。`TestTypedFunctionOnOpportunity`/`TestTypedFunctionOnOrder` 在实际行业装配中通过替身线路取得结构化建议，核查业务状态未变、自动 Reply 不可伪造、待发与已完成 `CheckReplay`，恢复不请求模型。
 
-当前树执行 `scripts/verify.sh format capabilities mes composition web deploy` 通过；新增函数边界测试另通过 `go test -race`。部署演练以实际 OIDC 身份和本地模型替身完成两行业建议调用，来源/定义/模型/回答与用量纳入快照重启、新 PostgreSQL 卷备份恢复及隔离后全量重建比较；同轮 PostgreSQL 条件测试 `TestJournalAcceptedFunctionCrashBeforeApplication` 在回答结果追加后、应用前注入崩溃，证明回答、自动 Reply 与用量一同恢复且不重新调用模型。`web` 验证现有路线，未新增或人工走通函数 UI；模型替身只验证协议与治理，不验证真实模型质量。代码升级探针只修改提示词，源对象和 Reply 保持兼容；不兼容数据类别/Reply 迁移及完整客户升级矩阵仍属于 #136 的交付边界。24c 的 Build 编写、固定案例评测、页面/Flow 显式绑定及测试→候选发布旅程仍未实现；负责人体验未验收。
+当前树执行 `scripts/verify.sh format capabilities mes composition web deploy` 通过；新增函数边界测试另通过 `go test -race`。部署演练以实际 OIDC 身份和本地模型替身完成两行业建议调用，来源/定义/模型/回答与用量纳入快照重启、新 PostgreSQL 卷备份恢复及隔离后全量重建比较；同轮 PostgreSQL 条件测试 `TestJournalAcceptedFunctionCrashBeforeApplication` 在回答结果追加后、应用前注入崩溃，证明回答、自动 Reply 与用量一同恢复且不重新调用模型。`web` 验证现有路线，未新增或人工走通函数 UI；模型替身只验证协议与治理，不验证真实模型质量。代码升级探针只修改提示词，源对象和 Reply 保持兼容；不兼容数据类别/Reply 迁移及完整客户升级矩阵仍属于 #136 的交付边界。24b 收尾时，24c 的 Build 编写、固定案例评测、页面/Flow 显式绑定及测试→候选发布旅程仍未实现；负责人体验未验收。
+
+**24c 后端检查点：Build 版本与独立结果记录（2026-09-29，整项仍在进行）。** `build.function` 以标准动作保存可编辑声明，发布时在已接受结果中安装平坦版本，最多保留 64 个；草稿和旧版本不改变已安装函数。定义仍由同一个 `platform.AIFunction` 校验与执行。函数是 `AssetFunction`，其闭包包含源对象，草稿能产生不同候选标识；已保存的活跃发布若含函数根，新调用要求精确匹配该发布。当前还没有函数固定案例/正式激活门禁，因此候选标识不等于可发布的评测证明。
+
+`build.function-call.start` 保存独立的人员、源记录、函数版本、模型、定义/输入/依赖摘要和待处理阶段；函数仍沿已有模型效果与自动 `answer` 动作将严格校验的回答或拒绝留在该记录，不修改源业务记录。源对象限同一 Build 的已发布对象，来源/回答目标分离；人员不能代入别人的身份，自动化必须显式保留有效人员并按当前权限取材。已保存回答由 `Entity.Derived` 在读时重新检查源字段，撤权时隐去内容。函数字段与源对象定义冲突的重新发布会被阻止；代码应用仍使用同一 `RequestFunction` 路径。此处完成的是后端动作入口，不把它当成页面或 Flow 的已发布节点；人工操作仍缺可视编写、固定评测、两行业构建者/操作员旅程与负责人验收。
+
+`TestBuilderFunctionVersionsCallsAndRecovery` 以实际 Build 对象、声明、模型设置与替身回答覆盖追加失败不安装/不派发、草稿不替换安装版本、旧版本与接受时提示/输入保留、来源与回复目标分离、冒充和人工伪造 Reply 拒绝、私有字段不外送、源字段撤权后派生结果收窄、源对象字段被依赖时拒绝移除及四个快照点的 `CheckReplay`。`TestFunctionImageRetainsOnlyValidPublishedVersions` 拒绝断号、递归、改名改来源及坏预算；`TestJournalAcceptedBuilderPublicationRecovery` 把两版函数及第三版在 PostgreSQL 追加后应用前崩溃的恢复纳入既有发布测试。`scripts/verify.sh format capabilities mes composition web deploy` 通过；新增 UI、隔离评测、正式候选激活、Flow 节点、实际两行业 Build 端到端浏览器路线和真实模型质量均未验证，不能据此关闭 24c。

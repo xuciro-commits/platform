@@ -65,8 +65,25 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if journal.Position(id) != 6 {
-		t.Fatalf("six generated decisions did not occupy six journal positions: %d", journal.Position(id))
+	function := platform.RecordAdviceFunction("build.visit", []string{"guest"}, []string{build.Builder, build.User})
+	function.Name = "advice"
+	for i, action := range []struct {
+		schema  string
+		payload any
+	}{
+		{build.FunctionType + ".create", function},
+		{build.SchemaFunction, struct{}{}},
+		{build.FunctionType + ".edit", map[string]string{"instructions": "Second published prompt"}},
+		{build.SchemaFunction, struct{}{}},
+	} {
+		if _, refusal := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: build.ID,
+			IdempotencyKey: fmt.Sprint("function-", i), Target: &pb.EntityRef{Type: build.FunctionType, Id: "F1"},
+			Schema: &pb.SchemaRef{Name: action.schema, Version: 1}, Payload: platform.Raw(action.payload)}, at); refusal != nil {
+			t.Fatal(refusal)
+		}
+	}
+	if journal.Position(id) != 10 {
+		t.Fatalf("ten generated decisions did not occupy ten journal positions: %d", journal.Position(id))
 	}
 	if object, ok := platform.Get[build.Object](live.caller(member, live.app(build.ID), false), "O1"); !ok ||
 		object.State != "published" || object.Published == "" {
@@ -78,7 +95,7 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 	}
 	defer reopened.Close()
 	entries, err := reopened.Entries(ctx, id, 0)
-	if err != nil || len(entries) != 6 {
+	if err != nil || len(entries) != 10 {
 		t.Fatalf("publication was not recovered from PostgreSQL: %d entries, %v", len(entries), err)
 	}
 	recovered := compose()
@@ -94,7 +111,52 @@ func TestJournalAcceptedBuilderPublicationRecovery(t *testing.T) {
 		}) {
 		t.Fatal("persisted publications did not restore the generated object, page and application")
 	}
+	functions := recovered.app(build.ID).(*build.Build)
+	if f, version, ok := functions.FunctionDefinition("advice", 1); !ok || version != 1 || f.Instructions != function.Instructions {
+		t.Fatal("PostgreSQL recovery lost the first function version")
+	}
+	if f, version, ok := functions.FunctionDefinition("advice", 0); !ok || version != 2 || f.Instructions != "Second published prompt" {
+		t.Fatal("PostgreSQL recovery did not install the latest function version")
+	}
 	CheckReplay(t, live, entries, compose)
+	// A function publication uses the same append-before-install boundary as
+	// objects/pages/apps. A committed third version survives a pre-apply crash.
+	if _, refusal := live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: build.ID,
+		IdempotencyKey: "function-third-draft", Target: &pb.EntityRef{Type: build.FunctionType, Id: "F1"},
+		Schema: &pb.SchemaRef{Name: build.FunctionType + ".edit", Version: 1}, Payload: platform.Raw(map[string]string{"instructions": "Third published prompt"})}, at); refusal != nil {
+		t.Fatal(refusal)
+	}
+	live.AcceptResult = func(e Entry, key, hash string) ([]byte, error) {
+		if _, err := journal.AppendAccepted(ctx, id, e, key, hash); err != nil {
+			t.Fatal(err)
+		}
+		panic("crash after function publication append")
+	}
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("publication crash was not injected")
+			}
+		}()
+		live.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID, Authority: build.ID,
+			IdempotencyKey: "function-third-publish", Target: &pb.EntityRef{Type: build.FunctionType, Id: "F1"},
+			Schema: &pb.SchemaRef{Name: build.SchemaFunction, Version: 1}, Payload: []byte(`{}`)}, at)
+	}()
+	if _, version, _ := live.app(build.ID).(*build.Build).FunctionDefinition("advice", 0); version != 2 {
+		t.Fatal("publication became installed before committed application")
+	}
+	entries, err = reopened.Entries(ctx, id, 0)
+	if err != nil || len(entries) != 12 {
+		t.Fatalf("third publication was not durable: %d %v", len(entries), err)
+	}
+	restarted := compose()
+	if err := restarted.Replay(entries); err != nil {
+		t.Fatal(err)
+	}
+	if f, version, ok := restarted.app(build.ID).(*build.Build).FunctionDefinition("advice", 0); !ok || version != 3 || f.Instructions != "Third published prompt" {
+		t.Fatal("post-append publication did not recover")
+	}
+	CheckReplay(t, restarted, entries, compose)
 }
 
 func TestAcceptedBuilderPublicationRejectsBrokenDependentBeforeCommit(t *testing.T) {

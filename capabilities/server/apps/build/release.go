@@ -22,7 +22,15 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	if err != nil {
 		return nil, err
 	}
-	return releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
+	assets, err := releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
+	if err != nil {
+		return nil, err
+	}
+	functions, err := b.functionAssets()
+	if err != nil {
+		return nil, err
+	}
+	return append(assets, functions...), nil
 }
 
 // FlowReleaseAsset reads a retained native version, not the current draft or
@@ -97,6 +105,9 @@ func readDefinitionInventory[T any](c platform.Caller) ([]T, error) {
 // so the host can compare identical code dependencies under one tenant lock.
 // Only the authenticated builder-facing host path may call this method.
 func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	if kind == platform.AssetFunction {
+		return b.functionDraftAssets(id)
+	}
 	objects, pages, apps, err := b.releaseInventory()
 	if err != nil {
 		return nil, nil, prior, next, false, err
@@ -109,6 +120,11 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 	if err != nil {
 		return nil, nil, prior, next, false, err
 	}
+	functions, functionErr := b.functionAssets()
+	if functionErr != nil {
+		return before, nil, prior, next, false, functionErr
+	}
+	before = append(before, functions...)
 	if id == "" {
 		return before, nil, prior, next, false, fmt.Errorf("draft record id is empty")
 	}
@@ -198,6 +214,9 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 		return before, nil, prior, next, hadPrior, err
 	}
 	after, err = releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
+	if err == nil {
+		after = append(after, functions...)
+	}
 	return before, after, prior, next, hadPrior, err
 }
 

@@ -22,6 +22,9 @@ func TestPublishedImageKeepsOnlyTheCurrentDefinition(t *testing.T) {
 		{"application", func(previous string) string {
 			return published(Application{Name: "frontdesk", Published: previous})
 		}},
+		{"function", func(previous string) string {
+			return published(Function{Name: "advice", Published: previous, Versions: []string{previous}})
+		}},
 		{"process", func(previous string) string {
 			return published(Process{Name: "review", Published: previous, Versions: []string{previous}})
 		}},

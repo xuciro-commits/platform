@@ -47,6 +47,13 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 		return err
 	}
 	for _, def := range h.t.definitions {
+		if def.Function != nil && def.Function.Object == e.Type {
+			if err := (hostView{t: draft, app: h.t.app(def.Ref.App)}).ValidateInstallFunction(*def.Function); err != nil {
+				return err
+			}
+		}
+	}
+	for _, def := range h.t.definitions {
 		if def.Ref.App == h.app.Manifest().ID && def.Ref.Kind == platform.AssetAction &&
 			def.Action != nil && def.Action.Target == e.Type &&
 			!slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == def.Ref.Name }) {

@@ -69,6 +69,10 @@ type Host interface {
 	// against what is installed. Handed over again, it replaces the one before.
 	InstallApplication(c platform.Caller, a platform.Application) error
 	ValidateInstallApplication(a platform.Application) error
+	// Function installation updates only the definition registry. The owner
+	// retains its publication family; inference still uses the model effect.
+	ValidateInstallFunction(f platform.AIFunction) error
+	InstallFunction(c platform.Caller, f platform.AIFunction, version int) error
 	// Entity is an entity type's declaration, for an app composing over it.
 	Entity(typ string) (platform.EntityInfo, bool)
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.

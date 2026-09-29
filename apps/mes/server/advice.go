@@ -30,7 +30,7 @@ func advice(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *kerne
 			return nil, conflict
 		}
 		return func(r *pb.ChangeRecord) {
-			call, err := c.RequestFunction(r, "record-advice", SchemaAdviceAnswer)
+			call, err := c.RequestFunction(r, platform.FunctionRequest{Name: "record-advice", Reply: SchemaAdviceAnswer})
 			if err != nil {
 				return
 			}

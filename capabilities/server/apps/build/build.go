@@ -75,6 +75,7 @@ type Build struct {
 	// installed are the objects published in this tenant, by entity type: their
 	// declarations, so generated actions of a defined object reach the record store.
 	installed map[string]platform.Entity
+	functions map[string]Function
 }
 
 // Attach is called by the host when a tenant is composed.
@@ -82,12 +83,14 @@ func (b *Build) Attach(h host.Host) { b.host = h }
 
 // New is a tenant's builder app.
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}}
+	b := &Build{installed: map[string]platform.Entity{}, functions: map[string]Function{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
 	actions = append(actions, platform.EntityActions(b.processEntity())...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType)
+	actions = append(actions, platform.EntityActions(b.functionEntity())...)
+	actions = append(actions, functionCallActions([]string{Builder, User})...)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, FunctionCallType)
 	return b
 }
 
@@ -123,7 +126,7 @@ func (b *Build) objectEntity() platform.Entity {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.functionEntity(), b.functionCallEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -138,7 +141,7 @@ func (b *Build) Manifest() platform.Manifest {
 		}
 	}
 	slices.Sort(roles)
-	return platform.Manifest{ID: ID, Title: "Builder", Version: "1", Actions: b.ledger.Catalog, Entities: entities, Roles: roles,
+	return platform.Manifest{ID: ID, Title: "Builder", Version: "1", Actions: b.ledger.Catalog, Entities: entities, Roles: roles, Functions: b.functionDeclarations(),
 		Pages: []platform.Page{{Name: "objects", Title: "Objects", Description: "The objects this organisation defines. Publish one to install it.",
 			Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: ObjectType},
 			ListFields:   []string{"title", "name", "state", "installed"},
@@ -173,7 +176,7 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaFunction}
 }
 
 // publicationImage reads and verifies the already committed record image
@@ -221,6 +224,13 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaFunction {
+		f, err := functionImage(image)
+		if err != nil {
+			return err
+		}
+		return b.host.ValidateInstallFunction(f.definition())
+	}
 	if schema == SchemaProcess {
 		p, err := processImage(image)
 		if err != nil {
@@ -257,6 +267,13 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // Installation reconstructs the runtime registry from the saved published
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaFunction {
+		f, err := functionImage(image)
+		if err != nil {
+			return err
+		}
+		return b.installFunction(platform.Caller{Replaying: true}, f)
+	}
 	if schema == SchemaProcess {
 		p, err := processImage(image)
 		if err != nil {
@@ -329,6 +346,9 @@ func (b *Build) checkObjectArchive(c platform.Caller, id string) *kernel.Error {
 // Submit takes the builder's own actions and those generated for every object
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if name := s.GetSchema().GetName(); name == SchemaFunctionCall || name == SchemaFunctionAnswer {
+		return b.submitFunctionCall(c, s, now)
+	}
 	if s.GetSchema().GetName() == ObjectType+".archive" && !c.Replaying {
 		if err := b.checkObjectArchive(c, s.GetTarget().GetId()); err != nil {
 			return nil, err
@@ -367,7 +387,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.functionEntity(), b.functionCallEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -532,6 +552,10 @@ func published[T any](definition T) string {
 	case Application:
 		value.Published = ""
 		definition = any(value).(T)
+	case Function:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
 	case Process:
 		value.Published = ""
 		value.Versions = nil
@@ -584,6 +608,23 @@ func (b *Build) Reinstall() error {
 		}
 		if err := b.hand(platform.Caller{Replaying: true}, was); err != nil {
 			return fmt.Errorf("application %s: %v", a.Name, err)
+		}
+	}
+	functions, err := b.functionInventory()
+	if err != nil {
+		return err
+	}
+	for _, record := range functions {
+		if record.Published == "" {
+			continue
+		}
+		raw, _ := json.Marshal(record)
+		f, err := functionImage(raw)
+		if err != nil {
+			return err
+		}
+		if err := b.installFunction(platform.Caller{Replaying: true}, f); err != nil {
+			return err
 		}
 	}
 	return b.installProcesses()

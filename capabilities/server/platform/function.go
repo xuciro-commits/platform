@@ -40,16 +40,31 @@ type FunctionCall struct {
 	Model        string   `json:"model"`
 	InputHash    string   `json:"inputHash"`
 	Sources      []string `json:"sources"`
+	Source       string   `json:"source"`
+	Version      int      `json:"version,omitempty"`
+	Release      string   `json:"release,omitempty"`
+}
+
+// FunctionRequest separates the readable source record from the decision's
+// reply target. An automation must explicitly retain the member it runs for;
+// a person cannot substitute somebody else's grants. Version zero selects the
+// installed version at acceptance, never at later dispatch.
+type FunctionRequest struct {
+	Name     string `json:"name"`
+	Reply    string `json:"reply"`
+	Source   string `json:"source,omitempty"` // source ID; type is declared by the function
+	OnBehalf string `json:"onBehalf,omitempty"`
+	Version  int    `json:"version,omitempty"`
 }
 
 // RequestFunction plans this application's declared function over the target
 // of its accepted decision. It uses the same model effect and Reply path as
 // Request; a refusal also invalidates the enclosing staged decision.
-func (c Caller) RequestFunction(r *pb.ChangeRecord, name, reply string) (FunctionCall, *kernel.Error) {
+func (c Caller) RequestFunction(r *pb.ChangeRecord, request FunctionRequest) (FunctionCall, *kernel.Error) {
 	if rt, ok := c.rt.(interface {
-		RequestFunction(Caller, *pb.ChangeRecord, string, string) (FunctionCall, *kernel.Error)
+		RequestFunction(Caller, *pb.ChangeRecord, FunctionRequest) (FunctionCall, *kernel.Error)
 	}); ok {
-		return rt.RequestFunction(c, r, name, reply)
+		return rt.RequestFunction(c, r, request)
 	}
 	return FunctionCall{}, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "AI functions require an accepted decision")
 }
