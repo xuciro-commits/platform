@@ -490,12 +490,12 @@ test("route 37: review a saved draft and its dependencies", async ({ page, reque
   await page.getByRole("button", { name: "Check draft and dependencies" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("Candidate ready for review")).toBeVisible();
-  await expect(page.getByText(`build/page/${name}`)).toBeVisible();
-  await expect(page.getByText(`build/object/build.${name}`)).toBeVisible();
+  await expect(page.getByText(`build/page/${name}`).first()).toBeVisible();
+  await expect(page.getByText(`build/object/build.${name}`).first()).toBeVisible();
   await expect(page.getByText("Installed candidate:", { exact: false })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("release-review.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 780 });
-  await expect(page.getByText(`build/page/${name}`)).toBeVisible();
+  await expect(page.getByText(`build/page/${name}`).first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("release-review-narrow.png"), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 720 });
   // Saving freezes the reviewed bytes; it neither installs nor activates them.
@@ -537,8 +537,8 @@ test("route 37: review a saved draft and its dependencies", async ({ page, reque
   await page.getByRole("combobox", { name: "Definition kind" }).selectOption("flow");
   await page.getByRole("combobox", { name: "Saved draft" }).selectOption(process);
   await page.getByRole("button", { name: "Check draft and dependencies" }).click();
-  await expect(page.getByText(`build/flow/build.${flowName}`, { exact: true })).toBeVisible();
-  await expect(page.getByText(`build/action/build.${name}.close`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`build/flow/build.${flowName}`, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(`build/action/build.${name}.close`, { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Save immutable candidate" }).click();
   await page.getByRole("button", { name: "Activate release" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "differs from the running definitions" })).toBeVisible();

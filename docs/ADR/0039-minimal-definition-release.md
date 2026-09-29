@@ -76,6 +76,8 @@
 
 **构建者入口的租户边界（2026-09-29，#130）。** `PreviewRelease`、`SaveReleaseCandidate` 与 `ActivateRelease` 在检查构建者角色前统一调用 `Tenant.admits`，其他租户中即使同名、同角色的成员也不能读取候选、走已保存候选的幂等返回分支或移动活跃指针。`TestAcceptedReleaseCandidateCommitRetryAndRecovery` 覆盖外租户预览/保存拒绝；`TestActivateReleaseMatchesRunningDefinitions` 覆盖外租户激活拒绝且快照与日志未变。HTTP 身份解析仍复用既有租户目录；宿主直接调用与 HTTP 路径具有相同的成员边界。
 
+**共同候选的审查可见性（2026-09-29，#133）。** 现有构建者专用 `ReleasePreview` 在候选校验通过后，还返回候选实际包含的全部 `AssetRef`，与新增/变更/移除差异分列；不返回描述符正文。`ReleaseReview` 展示有界滚动清单，使已安装定义未发生差异时也能核对该对象候选是否真的包含函数、页面和原生 Flow。`TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery` 比对预览清单与规范候选资产顺序，双行业 `function-release.spec.ts` 核对 UI 清单及共同候选激活后的双路径调用。此项沿用既有预览与发布治理，不新增发布格式或激活语义；开发宿主为易失内存态，共同候选的 PostgreSQL 故障恢复仍待验证。
+
 ### 构建器资产清单分页 (Builder inventory pagination, 2026-09-29, #132/#136)
 
 `apps/build/readDefinitionInventory` 在原有每类 1000 个定义的发布上限内，按宿主每页 500 条完整读取；对象名称校验、对象/页面/应用候选清单与恢复安装共用它，流程清单也沿同一路径读取。此前单次查询的 1000/1001 限制仍被宿主裁至 500，导致后半页资产被静默遗漏。现在读取失败、缺页或超过既有发布上限均失败封闭；不以部分清单构造候选或恢复注册表。`TestBuilderInventoryRestoresAssetsBeyondFirstReadPage` 将对象、页面与应用的唯一已发布记录置于第 501 条，核对完整资产、快照一致、恢复后对象可创建业务记录、跨页重复名称拒绝，以及 1001 条清单拒绝。该回归是代码层证据，不增加不可变激活/升级或 Docker 演练保证。

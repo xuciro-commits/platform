@@ -223,6 +223,79 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 		}
 	}
 	CheckReplay(t, tn, entries, compose)
+	// The source object underlies both operator surfaces. Its affected closure
+	// must include their shared pinned function, page and native workflow.
+	joint, err := tn.PreviewRelease(member("builder"), platform.AssetObject, "O")
+	if err != nil || joint.Diagnostic != "" || joint.CandidateID == "" {
+		t.Fatalf("shared function candidate: %+v %v", joint, err)
+	}
+	keys++
+	jointID, err := tn.SaveReleaseCandidate(member("builder"), platform.AssetObject, "O", joint.CandidateID, fmt.Sprint(keys), at)
+	if err != nil || jointID != joint.CandidateID {
+		t.Fatalf("save shared candidate: %s %v", jointID, err)
+	}
+	closed, err := platform.ReadCandidate(jointID, tn.releaseCandidates[jointID])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(joint.Included) != len(closed.Assets) {
+		t.Fatalf("review concealed candidate assets: %+v", joint.Included)
+	}
+	seen := map[platform.AssetKind]bool{}
+	for i, asset := range closed.Assets {
+		if joint.Included[i] != asset.Ref {
+			t.Fatalf("review changed candidate asset order: %+v", joint.Included)
+		}
+		if asset.Ref.Name == "advice" && asset.Ref.Kind == platform.AssetFunction {
+			seen[platform.AssetFunction] = true
+			if asset.SourceVersion != "1.function-2" {
+				t.Fatalf("shared candidate changed the function pin: %+v", asset)
+			}
+		}
+		if asset.Ref.Name == "intakeadvice" || asset.Ref.Name == "build.review" {
+			seen[asset.Ref.Kind] = true
+		}
+	}
+	if !seen[platform.AssetFunction] || !seen[platform.AssetPage] || !seen[platform.AssetFlow] {
+		t.Fatalf("shared candidate omitted function, page or workflow: %+v", closed.Assets)
+	}
+	keys++
+	if active, err := tn.ActivateRelease(member("builder"), jointID, fmt.Sprint(keys), at); err != nil || active != jointID {
+		t.Fatalf("activate shared function candidate: %s %v", active, err)
+	}
+	must("operator", build.ID, build.SchemaFunctionCall, build.FunctionCallType, "JOINT-CALL", map[string]any{"name": "advice", "version": 2, "source": "OLD"})
+	pending := pendingFunctionEffects(tn)
+	if len(pending) != 1 {
+		t.Fatalf("page function call after shared activation: %+v", pending)
+	}
+	var jointAsk modelAsk
+	if err := json.Unmarshal([]byte(pending[0].Body), &jointAsk); err != nil || jointAsk.Function == nil ||
+		jointAsk.Function.Call.Version != 2 || jointAsk.Function.Call.Release != jointID {
+		t.Fatalf("page function lost shared release: %+v %v", jointAsk.Function, err)
+	}
+	matched, err := settleFunctionFixture(tn, member("operator"), build.FunctionFixture{Output: `{"summary":"Check source","category":"review","review":true}`, InputTokens: 4, OutputTokens: 8, ExpectState: "ready"}, at)
+	if err != nil || !matched {
+		t.Fatalf("shared page function answer: %v %v", matched, err)
+	}
+	tick()
+	must("operator", build.ID, "build.intake.create", "build.intake", "JOINT-FLOW", map[string]string{"note": "Shared release"})
+	tick()
+	answer("JOINT-FLOW", "continue")
+	pending = pendingFunctionEffects(tn)
+	if len(pending) != 1 {
+		t.Fatalf("workflow function call after shared activation: %+v", pending)
+	}
+	if err := json.Unmarshal([]byte(pending[0].Body), &jointAsk); err != nil || jointAsk.Function == nil ||
+		jointAsk.Function.Call.Version != 2 || jointAsk.Function.Call.Release != jointID {
+		t.Fatalf("workflow function lost shared release: %+v %v", jointAsk.Function, err)
+	}
+	matched, err = settleFunctionFixture(tn, member("operator"), build.FunctionFixture{Output: `{"summary":"Check source","category":"review","review":true}`, InputTokens: 4, OutputTokens: 8, ExpectState: "ready"}, at)
+	if err != nil || !matched {
+		t.Fatalf("shared workflow function answer: %v %v", matched, err)
+	}
+	tick()
+	answer("JOINT-FLOW", "approve")
+	CheckReplay(t, tn, entries, compose)
 	// Pure candidate reading must reject a mismatched pinned dependency.
 	saved, err := platform.ReadCandidate(first, tn.releaseCandidates[first])
 	if err != nil {

@@ -214,6 +214,7 @@ register("zh-CN", {
   "Added": "新增",
   "Changed": "变更",
   "Removed": "移除",
+  "Included assets": "包含的资产",
   "Pages this organisation published": "本组织发布的页面",
   "Compose a page": "组合页面",
   "The pages this organisation composes. Open one to compose it, publish it to put it in the workspace.": "本组织组合的页面。打开一个开始组合，发布后放进工作区。",

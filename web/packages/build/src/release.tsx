@@ -117,6 +117,12 @@ export function ReleaseReview() {
         {changed("Changed", review.changed)}
         {changed("Removed", review.removed)}
       </div>}
+      {!review.diagnostic && <div>
+        <h3 className="text-xs font-semibold">{t("Included assets")} · {review.included.length}</h3>
+        <ul className="mt-1 grid max-h-52 gap-1 overflow-y-auto rounded border border-border p-2 font-mono text-xs sm:grid-cols-2">
+          {review.included.map((ref) => <li className="break-all" key={`${ref.app}/${ref.kind}/${ref.name}`}>{ref.app}/{ref.kind}/{ref.name}</li>)}
+        </ul>
+      </div>}
       {!review.diagnostic && review.candidateId && <div className="grid gap-2">
         <Button disabled={busy || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>
         {savedID && !activeID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}

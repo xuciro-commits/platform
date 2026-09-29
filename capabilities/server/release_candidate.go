@@ -161,6 +161,7 @@ func (t *Tenant) previewCandidateLocked(ref platform.AssetRef, builderAssets []p
 type ReleasePreview struct {
 	CurrentID   string              `json:"currentId,omitempty"`
 	CandidateID string              `json:"candidateId,omitempty"`
+	Included    []platform.AssetRef `json:"included"`
 	Added       []platform.AssetRef `json:"added"`
 	Removed     []platform.AssetRef `json:"removed"`
 	Changed     []platform.AssetRef `json:"changed"`
@@ -219,7 +220,7 @@ func (t *Tenant) previewReleaseLocked(kind platform.AssetKind, id string) (Relea
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
 	before, after, oldRoot, newRoot, hadPrior, diagnostic := owner.DraftReleaseAssets(kind, id)
-	reply := ReleasePreview{Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
+	reply := ReleasePreview{Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
 	var current platform.ReleaseCandidate
 	var oldOwners []platform.AssetRef
 	if hadPrior {
@@ -249,6 +250,9 @@ func (t *Tenant) previewReleaseLocked(kind platform.AssetKind, id string) (Relea
 		return reply, platform.ReleaseCandidate{}, nil
 	}
 	reply.CandidateID = candidate.ID
+	for _, asset := range candidate.Assets {
+		reply.Included = append(reply.Included, asset.Ref)
+	}
 	if !hadPrior {
 		for _, asset := range candidate.Assets {
 			reply.Added = append(reply.Added, asset.Ref)

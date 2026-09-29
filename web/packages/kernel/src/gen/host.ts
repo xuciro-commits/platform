@@ -803,6 +803,7 @@ export type ReleaseActive = {
 export type ReleasePreview = {
   currentId?: string;
   candidateId?: string;
+  included: AssetRef[];
   added: AssetRef[];
   removed: AssetRef[];
   changed: AssetRef[];
