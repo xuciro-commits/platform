@@ -3,6 +3,7 @@ package build
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"strings"
 	"time"
 
@@ -16,14 +17,33 @@ const TestPlanType = "build.testplan"
 // TestPlan stores fixed inputs, not test state or a claim about the next draft.
 type TestPlan struct {
 	platform.Record
-	Title    string                 `json:"title" field:"required,search" title:"Test plan name"`
-	Object   platform.Ref[Object]   `json:"object,omitempty" title:"Saved object draft"`
-	Process  platform.Ref[Process]  `json:"process,omitempty" title:"Saved workflow draft"`
-	Function platform.Ref[Function] `json:"function,omitempty" title:"Saved function draft"`
-	Model    string                 `json:"model,omitempty" title:"Fixture model identifier"`
-	As       string                 `json:"as,omitempty" title:"Member ID (empty: you)"`
-	At       time.Time              `json:"at" field:"required" title:"Fixed test time"`
-	Steps    []TestStep             `json:"steps" field:"required,aside" title:"Test steps"`
+	Title      string                 `json:"title" field:"required,search" title:"Test plan name"`
+	Object     platform.Ref[Object]   `json:"object,omitempty" title:"Saved object draft"`
+	Process    platform.Ref[Process]  `json:"process,omitempty" title:"Saved workflow draft"`
+	Function   platform.Ref[Function] `json:"function,omitempty" title:"Saved function draft"`
+	Model      string                 `json:"model,omitempty" title:"Model identifier"`
+	As         string                 `json:"as,omitempty" title:"Member ID (empty: you)"`
+	At         time.Time              `json:"at" field:"required" title:"Fixed test time"`
+	Steps      []TestStep             `json:"steps" field:"required,aside" title:"Test steps"`
+	Evaluation []EvaluationPolicy     `json:"evaluation,omitempty" field:"aside" title:"Release evaluation thresholds"`
+}
+
+// EvaluationPolicy is a task-specific gate for three real-model runs of each
+// synthetic function case. Cost is the total reported USD amount; latency is
+// a per-call ceiling. Missing provider cost can never satisfy this policy.
+type EvaluationPolicy struct {
+	MinQuality       float64          `json:"minQuality"`
+	MaxCostUSD       float64          `json:"maxCostUsd"`
+	MaxLatencyMillis int64            `json:"maxLatencyMillis"`
+	Cases            []EvaluationCase `json:"cases"`
+}
+
+// EvaluationCase fixes only synthetic input and a strict typed reference; it
+// never copies a production record into an external model request.
+type EvaluationCase struct {
+	Name     string          `json:"name"`
+	Input    json.RawMessage `json:"input"`
+	Expected json.RawMessage `json:"expected"`
 }
 
 type TestStep struct {
@@ -74,6 +94,14 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 		var at time.Time
 		if json.Unmarshal(given, &at) != nil || at.IsZero() {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a valid fixed test time")
+		}
+	}
+	if given, ok := fields["evaluation"]; ok && !bytes.Equal(bytes.TrimSpace(given), []byte("null")) {
+		var policy []EvaluationPolicy
+		decoder := json.NewDecoder(bytes.NewReader(given))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&policy) != nil || len(policy) != 1 || decoder.Decode(new(any)) != io.EOF {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Function evaluation needs quality, total USD cost and per-call latency thresholds")
 		}
 	}
 	if given, ok := fields["steps"]; ok {
@@ -130,6 +158,29 @@ func (b *Build) checkTestPlan(c platform.Caller, s *pb.Submission) *kernel.Error
 	}
 	if roots != 1 || len(plan.Model) > 256 {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose exactly one saved object, workflow or function draft for the test plan")
+	}
+	if len(plan.Evaluation) != 0 {
+		if len(plan.Evaluation) != 1 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Function evaluation needs quality, total USD cost and per-call latency thresholds")
+		}
+		policy := plan.Evaluation[0]
+		if plan.Function == "" || policy.MinQuality <= 0 || policy.MinQuality > 1 ||
+			policy.MaxCostUSD <= 0 || policy.MaxCostUSD > 1000 || policy.MaxLatencyMillis < 1 || policy.MaxLatencyMillis > 300000 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Function evaluation needs quality, total USD cost and per-call latency thresholds")
+		}
+		if len(policy.Cases) == 0 || len(policy.Cases) > 5 {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A function evaluation needs 1–5 bounded cases")
+		}
+		seen := map[string]bool{}
+		for _, test := range policy.Cases {
+			var input, expected map[string]json.RawMessage
+			if !named(test.Name) || seen[test.Name] || len(test.Input) > 32<<10 || len(test.Expected) > 32<<10 ||
+				json.Unmarshal(test.Input, &input) != nil || input == nil ||
+				json.Unmarshal(test.Expected, &expected) != nil || expected == nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Each evaluated function case needs a named synthetic input and expected typed answer")
+			}
+			seen[test.Name] = true
+		}
 	}
 	return nil
 }

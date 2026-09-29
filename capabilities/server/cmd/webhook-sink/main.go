@@ -168,7 +168,7 @@ func main() {
 			strings.HasPrefix(req.Messages[0].Content, "Summarise only the provided record.") && json.Valid([]byte(last)) {
 			content, _ := json.Marshal(map[string]any{"summary": "Record: " + last, "category": "routine", "review": false})
 			json.NewEncoder(w).Encode(map[string]any{"model": "echo", "choices": []map[string]any{{"message": map[string]string{"role": "assistant", "content": string(content)}}},
-				"usage": map[string]int{"prompt_tokens": len(strings.Fields(last)), "completion_tokens": 20}})
+				"usage": map[string]any{"prompt_tokens": len(strings.Fields(last)), "completion_tokens": 20, "cost": 0.01}})
 			return
 		}
 		if len(req.Tools) > 0 { // an agent (ADR-0021): read first, then propose the first ID read that the goal does not name

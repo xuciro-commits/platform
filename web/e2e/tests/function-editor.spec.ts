@@ -70,7 +70,7 @@ for (const fixture of [
       await page.getByRole("button", { name: "Check draft and dependencies" }).click();
       await expect(page.getByText("Draft candidate:").locator("code")).toHaveText(candidate);
       await page.getByRole("button", { name: "Save immutable candidate" }).click();
-      await expect(page.getByRole("button", { name: "Activate release" })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Activate release" })).toBeDisabled();
       await open(page, fixture.builder, `/function?id=${fn.id}`);
       await page.getByRole("button", { name: "Publish function", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "Installed function version 1." })).toBeVisible();

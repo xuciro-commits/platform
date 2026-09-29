@@ -310,7 +310,7 @@ func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (rec
 	defer func() { end(outcomeOf(err)) }()
 	if t.AcceptResult != nil {
 		if resultApp, ok := a.(platform.ResultApp); ok && t.acceptsGenerated(a, s) {
-			return t.submitAccepted(resultApp, m, s, now)
+			return t.submitAccepted(resultApp, m, s, now, false)
 		}
 	}
 	if m.Agent && t.suspended(m.ID) { // an agent an administrator switched off (ADR-0029 D4)
@@ -394,7 +394,7 @@ func acceptsPureTransition(a platform.App, schema string) bool {
 	return false
 }
 
-func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
+func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	// A malformed transport identity cannot reserve a durable key for another
 	// tenant, authority or member. The kernel still supplies its ordinary
 	// refusal, but no result under this tenant can represent that submission.
@@ -433,7 +433,7 @@ func (t *Tenant) submitAccepted(a platform.ResultApp, m platform.Member, s *pb.S
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The agent {agent} is suspended", m.ID)
 	}
 	draft := t.newStagedDecision()
-	record, refusal = decideAccepted(a, draft, m, s, now)
+	record, refusal = decideAcceptedAs(a, draft, m, s, now, automation)
 	var raw []byte
 	if refusal != nil {
 		refusal = explained(refusal, a, s.GetSchema().GetName(), target(s))
@@ -557,6 +557,10 @@ func (t *Tenant) finishCommittedResult(a platform.ResultApp, m platform.Member, 
 // Only decision evaluation may turn an unsupported-effect panic into a
 // refusal. A panic after the journal commit must escape so the tenant stops.
 func decideAccepted(a platform.ResultApp, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time) (record *pb.ChangeRecord, refusal *kernel.Error) {
+	return decideAcceptedAs(a, draft, m, s, now, false)
+}
+
+func decideAcceptedAs(a platform.ResultApp, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *kernel.Error) {
 	defer func() {
 		if p := recover(); p != nil {
 			if _, ok := p.(stagedEffectPanic); !ok {
@@ -570,7 +574,7 @@ func decideAccepted(a platform.ResultApp, draft *stagedDecision, m platform.Memb
 		draft.tenant.owner["action:"+work.SchemaRequest] != nil {
 		record, refusal = draft.requestApproval(a, m, s, now)
 	} else {
-		record, refusal = platform.Decide(platform.NewCaller(draft, m, a.Manifest().ID, false, false), a, s, now)
+		record, refusal = platform.Decide(platform.NewCaller(draft, m, a.Manifest().ID, false, automation), a, s, now)
 	}
 	if refusal == nil {
 		refusal = draft.answerRequests(now)

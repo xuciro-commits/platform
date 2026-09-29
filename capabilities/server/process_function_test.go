@@ -3,6 +3,8 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -99,9 +101,62 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 		t.Fatalf("rejected model answer did not reach human review: %+v %v", rejected, problem)
 	}
 	must("builder", build.ID, build.SchemaProcess, build.ProcessType, "P", struct{}{})
-	must("builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": "http://candidate.invalid"})
+	reportCost := true
+	reportInvalid := false
+	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		usage := map[string]any{"prompt_tokens": 4, "completion_tokens": 8}
+		if reportCost {
+			usage["cost"] = 0.01
+		}
+		answer := `{"summary":"Check source","category":"review","review":true}`
+		if reportInvalid {
+			answer = `not JSON`
+			reportInvalid = false
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": answer}}}, "usage": usage})
+	}))
+	defer model.Close()
+	must("builder", ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": model.URL})
 	must("builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "users"})
 	must("builder", PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": "fixture/probe"})
+	must("builder", build.ID, build.TestPlanType+".create", build.TestPlanType, "EVAL", map[string]any{
+		"title": "Synthetic advice quality", "function": "F", "model": "fixture/probe", "at": at,
+		"steps": []build.TestStep{{Type: "build.intake", ID: "SAMPLE", Action: "build.intake.create", Payload: `{"note":"Synthetic"}`, Expect: "accepted"}},
+		"evaluation": []build.EvaluationPolicy{{MinQuality: 0.5, MaxCostUSD: 0.05, MaxLatencyMillis: 300000,
+			Cases: []build.EvaluationCase{{Name: "synthetic", Input: json.RawMessage(`{"note":"Synthetic"}`), Expected: json.RawMessage(`{"summary":"Check source","category":"review","review":true}`)}}}},
+	})
+	firstEvaluation := true
+	evaluate := func(id, want string) {
+		t.Helper()
+		if _, err := tn.ActivateRelease(member("builder"), id, "before-evaluation", at); err == nil {
+			t.Fatal("function candidate activated without a measured evaluation")
+		}
+		keys++
+		reportID, err := tn.EvaluateRelease(member("builder"), ReleaseEvaluationRequest{CandidateID: id, PlanID: "EVAL", Key: fmt.Sprint(keys)}, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		attempts := 0
+		for _, effect := range tn.Effects(at) {
+			var ask modelAsk
+			if json.Unmarshal([]byte(effect.Body), &ask) != nil || !ask.Evaluation || !strings.HasPrefix(ask.Call, reportID+":") {
+				continue
+			}
+			outcome, usage := tn.sendModel(effect, at)
+			if (outcome.Result != "delivered" && outcome.Result != "rejected") || want == "passed" && outcome.Result != "delivered" || usage == nil || usage.CostReported != reportCost {
+				t.Fatalf("evaluation model call: %+v %+v", outcome, usage)
+			}
+			tn.settleWithUsage(effect.ID, outcome, usage, at)
+			attempts++
+		}
+		if attempts != build.EvaluationRepeats {
+			t.Fatalf("evaluated %d times", attempts)
+		}
+		report, ok := platform.Get[build.Evaluation](tn.automation(build.ID, false), reportID)
+		if !ok || report.State != want || report.CostComplete != reportCost {
+			t.Fatalf("evaluation did not pass: %+v", report)
+		}
+	}
 	activate := func() string {
 		t.Helper()
 		preview, err := tn.PreviewRelease(member("builder"), platform.AssetFlow, "P")
@@ -113,6 +168,29 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if _, err := tn.EvaluateRelease(member("operator"), ReleaseEvaluationRequest{CandidateID: id, PlanID: "EVAL", Key: "unauthorised"}, at); err == nil {
+			t.Fatal("operator started a private function evaluation")
+		}
+		if firstEvaluation {
+			firstEvaluation = false
+			reportCost = false
+			evaluate(id, "failed")
+			if _, err := tn.ActivateRelease(member("builder"), id, "missing-cost", at); err == nil {
+				t.Fatal("unreported provider cost passed the release gate")
+			}
+			reportCost = true
+			reportInvalid = true
+			evaluate(id, "failed")
+			if _, err := tn.ActivateRelease(member("builder"), id, "invalid-answer", at); err == nil {
+				t.Fatal("one malformed model answer passed the release gate")
+			}
+		}
+		evaluate(id, "passed")
+		must("builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "everyone"})
+		if _, err := tn.ActivateRelease(member("builder"), id, "changed-config", at); err == nil {
+			t.Fatal("changed model configuration passed the release gate")
+		}
+		must("builder", ai.ID, ai.SchemaModelEnable, ai.ModelType, "fixture/probe", map[string]string{"access": "users"})
 		keys++
 		if _, err := tn.ActivateRelease(member("builder"), id, fmt.Sprint(keys), at); err != nil {
 			t.Fatal(err)
@@ -144,6 +222,7 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("save retained page: %v", err)
 	}
+	evaluate(pageRelease, "passed")
 	keys++
 	if activated, err := tn.ActivateRelease(member("builder"), pageRelease, fmt.Sprint(keys), at); err != nil || activated != firstPage.ID {
 		t.Fatalf("activate page pinned to old function: %s %v", activated, err)
@@ -259,6 +338,7 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	if !seen[platform.AssetFunction] || !seen[platform.AssetPage] || !seen[platform.AssetFlow] {
 		t.Fatalf("shared candidate omitted function, page or workflow: %+v", closed.Assets)
 	}
+	evaluate(jointID, "passed")
 	keys++
 	if active, err := tn.ActivateRelease(member("builder"), jointID, fmt.Sprint(keys), at); err != nil || active != jointID {
 		t.Fatalf("activate shared function candidate: %s %v", active, err)

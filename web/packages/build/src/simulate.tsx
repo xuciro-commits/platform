@@ -7,7 +7,9 @@ import { useEffect, useState } from "react";
 type ObjectDraft = WorkflowObject;
 type FunctionDraft = { id: string; name: string; title: string; object: string };
 type Step = { type: string; id: string; action: string; payload: string; expect: "accepted" | "refused"; as?: string; advanceSeconds?: number; flow?: string; step?: string; answer?: string; function?: Api.FunctionFixture };
-type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[] };
+type EvaluationCase = { name: string; input: string; expected: string };
+type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
+type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
 export function CandidateTest({ processId = "", functionId = "" }: { processId?: string; functionId?: string }) {
@@ -27,6 +29,11 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
   const [member, setMember] = useState("");
   const [at, setAt] = useState("2026-01-01T09:00:00Z");
   const [steps, setSteps] = useState<Step[]>([]);
+  const [evaluationEnabled, setEvaluationEnabled] = useState(false);
+  const [minQuality, setMinQuality] = useState(1);
+  const [maxCostUsd, setMaxCostUsd] = useState(0.1);
+  const [maxLatencyMillis, setMaxLatencyMillis] = useState(30000);
+  const [cases, setCases] = useState<EvaluationCase[]>([{ name: "synthetic", input: "{}", expected: "{}" }]);
   const [result, setResult] = useState<Api.CandidateSimulation>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,6 +65,10 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
     clear(); setPlanID(plan.id); setRevision(plan.revision);
     setTitle(plan.title); setKind(plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.function || plan.process || plan.object || ""); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
     setSteps(plan.steps); setDirty(false);
+    const policy = plan.evaluation?.[0];
+    setEvaluationEnabled(Boolean(policy));
+    setMinQuality(policy?.minQuality ?? 1); setMaxCostUsd(policy?.maxCostUsd ?? 0.1); setMaxLatencyMillis(policy?.maxLatencyMillis ?? 30000);
+    setCases(policy?.cases.map((item) => ({ name: item.name, input: JSON.stringify(item.input, null, 2), expected: JSON.stringify(item.expected, null, 2) })) ?? [{ name: "synthetic", input: "{}", expected: "{}" }]);
   };
   const reload = async () => {
     setBusy(true);
@@ -77,11 +88,22 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
   const save = async () => {
     setError(""); setSaved(false);
     try { inputs(); } catch { setError(t("Use a valid fixed time and JSON inputs for every step.")); return; }
+    let evaluation: EvaluationPolicy[] | null = null;
+    if (kind === "function" && evaluationEnabled) {
+      try {
+        const parsed = cases.map((item) => ({ name: item.name.trim(), input: JSON.parse(item.input), expected: JSON.parse(item.expected) }));
+        if (!Number.isFinite(minQuality) || minQuality <= 0 || minQuality > 1 || !Number.isFinite(maxCostUsd) || maxCostUsd <= 0 ||
+          !Number.isInteger(maxLatencyMillis) || maxLatencyMillis < 1 || parsed.length < 1 || parsed.length > 5 ||
+          parsed.some((item) => !item.name || !item.input || Array.isArray(item.input) || typeof item.input !== "object" ||
+            !item.expected || Array.isArray(item.expected) || typeof item.expected !== "object")) throw new Error("invalid evaluation");
+        evaluation = [{ minQuality, maxCostUsd, maxLatencyMillis, cases: parsed }];
+      } catch { setError(t("Use bounded thresholds and JSON objects for every evaluation case.")); return; }
+    }
     const target = planID || crypto.randomUUID();
     setBusy(true);
     try {
       if (await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target },
-        { title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps },
+        { title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps, evaluation },
         { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) {
         const refreshed = await plans.refetch();
         const record = refreshed.data?.records.find((plan) => plan.id === target);
@@ -158,9 +180,27 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
         </label>
         }
         {kind !== "object" && <>
-          <label className="grid gap-1 text-xs">{t("Fixture model identifier")}<Input value={model} onChange={(e) => { setModel(e.target.value); clear(); }} /></label>
+          <label className="grid gap-1 text-xs">{t("Model identifier")}<Input value={model} onChange={(e) => { setModel(e.target.value); clear(); }} /></label>
           <p className="text-xs text-muted">{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</p>
         </>}
+        {kind === "function" && <div className="grid gap-3 rounded border border-border p-3">
+          <Checkbox checked={evaluationEnabled} onChange={(enabled) => { setEvaluationEnabled(enabled); clear(); }}>{t("Require a measured release evaluation")}</Checkbox>
+          {evaluationEnabled && <>
+            <p className="text-xs text-muted">{t("These synthetic cases run three times each against the enabled model. Reported USD cost and per-call latency must stay within the limits.")}</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <label className="grid gap-1 text-xs">{t("Minimum exact-match quality")}<Input type="number" min={0.01} max={1} step={0.01} value={minQuality} onChange={(e) => { setMinQuality(Number(e.target.value)); clear(); }} /></label>
+              <label className="grid gap-1 text-xs">{t("Maximum total USD cost")}<Input type="number" min={0.000001} step={0.01} value={maxCostUsd} onChange={(e) => { setMaxCostUsd(Number(e.target.value)); clear(); }} /></label>
+              <label className="grid gap-1 text-xs">{t("Maximum latency per call (ms)")}<Input type="number" min={1} max={300000} value={maxLatencyMillis} onChange={(e) => { setMaxLatencyMillis(Number(e.target.value)); clear(); }} /></label>
+            </div>
+            {cases.map((item, index) => <Card key={index} className="grid gap-2 p-2">
+              <div className="flex items-center justify-between"><span className="text-xs font-medium">{t("Evaluation case {n}", { n: index + 1 })}</span><Button disabled={cases.length === 1} onClick={() => { setCases((old) => old.filter((_, i) => i !== index)); clear(); }}>{t("Remove")}</Button></div>
+              <label className="grid gap-1 text-xs">{t("Case name")}<Input value={item.name} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, name: e.target.value } : c)); clear(); }} /></label>
+              <label className="grid gap-1 text-xs">{t("Synthetic input (JSON object)")}<Textarea rows={3} value={item.input} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, input: e.target.value } : c)); clear(); }} className="font-mono" /></label>
+              <label className="grid gap-1 text-xs">{t("Expected typed answer (JSON object)")}<Textarea rows={3} value={item.expected} onChange={(e) => { setCases((old) => old.map((c, i) => i === index ? { ...c, expected: e.target.value } : c)); clear(); }} className="font-mono" /></label>
+            </Card>)}
+            <Button disabled={cases.length >= 5} onClick={() => { setCases((old) => [...old, { name: `synthetic${old.length + 1}`, input: "{}", expected: "{}" }]); clear(); }}>{t("Add an evaluation case")}</Button>
+          </>}
+        </div>}
         {(objects.isError || processes.isError || functions.isError) && <p role="alert" className="text-sm text-danger">{t("The candidate test could not be run.")}</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">{t("Member ID (empty: you)")}

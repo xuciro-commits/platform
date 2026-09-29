@@ -109,7 +109,7 @@ function_state() {
   local SERVER actor suffix path
   for suffix in plant hotel; do
     if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
-    for path in records/build.function/FN-F records/build.page/FN-P records/build.function-call?limit=500; do
+    for path in records/build.function/FN-F records/build.page/FN-P records/build.testplan/FN-PLAN records/build.function-call?limit=500 records/build.evaluation?limit=500; do
       workflow_get "$actor" "$path" || fail "function state $suffix $path"
     done
   done
@@ -174,7 +174,7 @@ function_wait() {
     if jq -e --arg source "$source" --arg release "$release" \
       '.record | .state == "ready" and .version == 1 and .source == $source and .release == $release and .model == "local/echo" and
         .metered == true and .tokensReported == true and .inputTokens > 0 and .outputTokens == 20 and
-        .costReported != true and (.latencyMillis // 0) >= 0 and (.output | fromjson | .category == "routine")' \
+        .costReported == true and .costUsd == 0.01 and (.latencyMillis // 0) >= 0 and (.output | fromjson | .category == "routine")' \
       <<<"$result" >/dev/null 2>&1; then return; fi
     sleep 1
   done
@@ -196,6 +196,18 @@ function_setup() {
   workflow_submit "$builder" fn-publish-2 build.function.publish build.function FN-F '{}'
   candidate=$(workflow_post "$builder" releases/preview '{"kind":"page","id":"FN-P"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "old function page preview"
   workflow_post "$builder" releases/candidates "{\"kind\":\"page\",\"id\":\"FN-P\",\"candidateId\":\"$candidate\",\"key\":\"fn-save\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "old function page save"
+  local policy
+  policy=$(jq -n --arg suffix "$suffix" '{title:("Recovery evaluation "+$suffix),function:"FN-F",model:"local/echo",at:"2026-09-29T00:00:00Z",steps:[{type:("build.rehearsal"+$suffix),id:"SAMPLE",action:("build.rehearsal"+$suffix+".create"),payload:"{\"note\":\"Synthetic\"}",expect:"accepted"}],evaluation:[{minQuality:1,maxCostUsd:0.05,maxLatencyMillis:300000,cases:[{name:"synthetic",input:{note:"Synthetic"},expected:{summary:"Record: {\"note\":\"Synthetic\"}",category:"routine",review:false}}]}]}')
+  workflow_submit "$builder" fn-eval-plan build.testplan.create build.testplan FN-PLAN "$policy"
+  local report
+  report=$(workflow_post "$builder" releases/evaluations "{\"candidateId\":\"$candidate\",\"planId\":\"FN-PLAN\",\"key\":\"fn-eval\"}" | jq -er .id) || fail "start function evaluation"
+  local report_state
+  for _ in $(seq 30); do
+    report_state=$(workflow_get "$builder" "records/build.evaluation/$report" | jq -r .record.state) || true
+    [[ $report_state == passed ]] && break
+    sleep 1
+  done
+  [[ $report_state == passed ]] || fail "measured function evaluation: $report_state"
   workflow_post "$builder" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"fn-active\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "old function page activate"
   workflow_submit "$operator" fn-call-old build.function-call.start build.function-call FN-CALL-OLD "{\"name\":\"$name\",\"version\":1,\"source\":\"WF-OLD\"}"
   function_wait "$operator" FN-CALL-OLD "$typ/WF-OLD" "$candidate"

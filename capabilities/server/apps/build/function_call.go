@@ -63,7 +63,7 @@ func functionCallActions(roles []string) []platform.Action {
 }
 
 func (*Build) AcceptedActionSchemas() []string {
-	return []string{SchemaFunctionCall, SchemaFunctionAnswer}
+	return []string{SchemaFunctionCall, SchemaFunctionAnswer, SchemaEvaluationStart, SchemaEvaluationAnswer}
 }
 
 func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {

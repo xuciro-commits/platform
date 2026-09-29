@@ -52,6 +52,17 @@ for (const fixture of [
           { kind: "local", baseUrl: `http://127.0.0.1:${address.port}/v1` });
         await decide(request, fixture.builder, "ai", "ai.model.enable", { type: "ai.model", id: `${provider}/probe` }, { access: "users" });
 
+        await open(page, fixture.builder, "/candidate-test");
+        await page.getByRole("combobox", { name: "Candidate kind" }).selectOption("function");
+        await page.getByRole("combobox", { name: "Saved function draft" }).selectOption(functionID);
+        await page.getByRole("textbox", { name: "Test plan name" }).fill(`${fixture.title} evaluation`);
+        await page.getByRole("textbox", { name: "Model identifier" }).fill(`${provider}/probe`);
+        await page.getByRole("checkbox", { name: "Require a measured release evaluation" }).check();
+        await page.getByRole("textbox", { name: "Synthetic input (JSON object)" }).fill('{"note":"Synthetic review"}');
+        await page.getByRole("textbox", { name: "Expected typed answer (JSON object)" }).fill('{"summary":"Review the source"}');
+        await page.getByRole("button", { name: "Save test plan" }).click();
+        await expect(page.getByRole("status").filter({ hasText: "Test plan saved." })).toBeVisible();
+
         await open(page, fixture.builder, "/release-review");
         await page.getByRole("combobox", { name: "Saved draft" }).selectOption(objectID);
         await page.getByRole("button", { name: "Check draft and dependencies" }).click();
@@ -62,6 +73,15 @@ for (const fixture of [
         const preview = await (await request.post("/v1/releases/preview", { headers, data: { kind: "object", id: objectID } })).json();
         expect(preview.candidateId).toMatch(/^sha256-v1:/);
         await page.getByRole("button", { name: "Save immutable candidate" }).click();
+        await expect(page.getByRole("button", { name: "Activate release" })).toBeDisabled();
+        await page.getByRole("combobox", { name: "Evaluation plan" }).selectOption({ label: `${fixture.title} evaluation` });
+        await page.getByRole("button", { name: "Run measured evaluation" }).click();
+        await expect.poll(async () => {
+          const reports = await (await request.get("/v1/records/build.evaluation?limit=500", { headers })).json();
+          return reports.records.find((report: { candidate: string; state: string }) => report.candidate === preview.candidateId)?.state;
+        }).toBe("passed");
+        await page.getByRole("button", { name: "Refresh evaluation reports" }).click();
+        await expect(page.getByRole("status").filter({ hasText: "Report state: passed" })).toBeVisible();
         await page.getByRole("button", { name: "Activate release" }).click();
         await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
         const active = await (await request.get("/v1/releases/active", { headers })).json();

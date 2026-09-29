@@ -78,11 +78,14 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 // the decision, outside its lock and as the app, within the app's limits, and
 // submits the Answer — its Text the model's — to Reply; a replay asks nothing.
 type Request struct {
-	Protocol, Action string
-	Model            string
-	Target           string // the provider's record the action is about
-	Payload          any
-	Reply            string // the app's own action that receives the Answer; a member may take it too (D5)
+	Protocol, Action   string
+	Model              string
+	Target             string // the provider's record the action is about
+	Payload            any
+	Reply              string      // the app's own action that receives the Answer; a member may take it too (D5)
+	Evaluation         bool        // this model answer belongs to a measured function evaluation
+	EvaluationConfig   string      // accepted digest of the provider/model configuration, for evaluation only
+	EvaluationFunction *AIFunction // pinned function contract for evaluation output and budget checks
 }
 
 // Prompt is what an app asks a model: instructions and the question.

@@ -808,6 +808,16 @@ export type ReleaseActive = {
   id: string;
 };
 
+export type ReleaseEvaluationRequest = {
+  candidateId: string;
+  planId: string;
+  key: string;
+};
+
+export type ReleaseEvaluationStarted = {
+  id: string;
+};
+
 export type ReleasePreview = {
   currentId?: string;
   candidateId?: string;

@@ -517,12 +517,15 @@ const modelEndpoint = "model"
 
 // modelAsk is a model request as the outbound queue keeps it.
 type modelAsk struct {
-	Model    string           `json:"model"`
-	Prompt   platform.Prompt  `json:"prompt"`
-	Reply    string           `json:"reply"`
-	Record   string           `json:"record"` // the decision's target, "<type>/<id>", which the reply is on
-	Call     string           `json:"call"`
-	Function *functionBinding `json:"function,omitempty"`
+	Model              string               `json:"model"`
+	Prompt             platform.Prompt      `json:"prompt"`
+	Reply              string               `json:"reply"`
+	Record             string               `json:"record"` // the decision's target, "<type>/<id>", which the reply is on
+	Call               string               `json:"call"`
+	Function           *functionBinding     `json:"function,omitempty"`
+	Evaluation         bool                 `json:"evaluation,omitempty"`
+	EvaluationConfig   string               `json:"evaluationConfig,omitempty"`
+	EvaluationFunction *platform.AIFunction `json:"evaluationFunction,omitempty"`
 }
 
 func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Request) {
@@ -542,7 +545,7 @@ func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q pla
 	// request must not switch models when settings change before dispatch or
 	// retry. An empty binding stays empty and is refused without provider I/O.
 	model := cmp.Or(q.Model, t.setting(t.automation(ai.ID, false), ai.SettingAppModel))
-	body, _ := json.Marshal(modelAsk{Model: model, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target})
+	body, _ := json.Marshal(modelAsk{Model: model, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target, Evaluation: q.Evaluation, EvaluationConfig: q.EvaluationConfig, EvaluationFunction: q.EvaluationFunction})
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	n := 0
@@ -598,6 +601,18 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "rejected", "the model "+model+" is not enabled"
 		return out, nil
 	}
+	if ask.Evaluation {
+		if ask.EvaluationFunction == nil || ask.EvaluationFunction.Check() != nil || ask.Prompt.System != ask.EvaluationFunction.SystemPrompt() ||
+			ask.Prompt.MaxTokens != ask.EvaluationFunction.MaxTokens || len(ask.Prompt.User) > ask.EvaluationFunction.MaxInputBytes {
+			out.Result, out.Detail = "rejected", "the evaluation function binding changed"
+			return out, nil
+		}
+		config, digestErr := canonicalDigest([]any{enabled, pv})
+		if digestErr != nil || ask.EvaluationConfig == "" || ask.EvaluationConfig != config {
+			out.Result, out.Detail = "rejected", "the evaluation model configuration changed"
+			return out, nil
+		}
+	}
 	if !t.breakers.allow("ai:"+pv.ID, now) {
 		out.Result, out.Detail = "retry", "the provider "+pv.ID+" failed repeatedly"
 		return out, nil
@@ -614,8 +629,12 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 		out.Result, out.Detail = "rejected", failure.Detail
 	default:
 		out.Result, out.Answer = "delivered", json.RawMessage(strconv.Quote(answer.Content))
-		if ask.Function != nil && (len(answer.ToolCalls) != 0 || answer.Usage.Output > ask.Function.Definition.MaxTokens ||
-			ask.Function.Definition.ValidateOutput([]byte(answer.Content)) != nil) {
+		definition := ask.EvaluationFunction
+		if ask.Function != nil {
+			definition = &ask.Function.Definition
+		}
+		if definition != nil && (len(answer.ToolCalls) != 0 || answer.Usage.Output > definition.MaxTokens ||
+			definition.ValidateOutput([]byte(answer.Content)) != nil) {
 			out.Result, out.Detail, out.Answer = "rejected", "The AI function answer failed its type or budget checks", nil
 		}
 	}
@@ -645,7 +664,7 @@ func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, us
 		return nil, nil
 	}
 	answer := platform.Answer{Call: ask.Call, Action: "ask", Outcome: "accepted"}
-	if ask.Function != nil && usage != nil {
+	if (ask.Function != nil || ask.Evaluation) && usage != nil {
 		answer.Metered, answer.TokensReported = true, usage.TokensReported
 		answer.InputTokens, answer.OutputTokens = usage.Input, usage.Output
 		answer.CostReported, answer.CostUSD = usage.CostReported, usage.Cost

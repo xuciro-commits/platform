@@ -192,6 +192,9 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 		if err := t.pendingWorkFitsLocked(candidateID, raw); err != nil {
 			return "", err
 		}
+		if err := t.evaluationsReadyLocked(candidateID, raw); err != nil {
+			return "", err
+		}
 	}
 	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
 		Member: m.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidateID,

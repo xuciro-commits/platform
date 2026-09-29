@@ -349,6 +349,26 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseSaved{ID: id})
 	})
+	handle(Route{Pattern: "POST /v1/releases/evaluations", Summary: "Run real measured model calls against synthetic cases for one saved function candidate (ADR-0043 24c)", Body: ReleaseEvaluationRequest{}, Answer: ReleaseEvaluationStarted{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		var request ReleaseEvaluationRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&request) != nil || decoder.Decode(new(any)) != io.EOF ||
+			request.CandidateID == "" || request.PlanID == "" || request.Key == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		id, err := t.EvaluateRelease(m, request, h.Now())
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, ReleaseEvaluationStarted{ID: id})
+	})
 	handle(Route{Pattern: "POST /v1/releases/active", Summary: "Builder-only activation of a saved candidate that equals the running definitions (ADR-0039 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder {
 			w.WriteHeader(http.StatusForbidden)
