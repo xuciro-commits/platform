@@ -138,6 +138,7 @@ export type ApprovalRequest = {
   state: "pending" | "approved" | "rejected" | "refused" | "withdrawn";
   outcome?: string;
   rejectedBy?: string;
+  release?: string;
 };
 
 export type ApprovalStep = {
