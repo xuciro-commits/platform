@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"platformserver/apps/build"
+	"platformserver/apps/work"
 	"platformserver/platform"
 )
 
@@ -182,6 +183,9 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 		if err := t.runningMatchesLocked(candidateID, raw); err != nil {
 			return "", err
 		}
+		if err := t.pendingWorkFitsLocked(candidateID, raw); err != nil {
+			return "", err
+		}
 	}
 	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
 		Member: m.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidateID,
@@ -221,6 +225,44 @@ func (t *Tenant) runningMatchesLocked(candidateID string, raw []byte) error {
 		return err
 	}
 	return fmt.Errorf("release differs from the running definitions: changed %v, missing %v, extra %v", changed, removed, added)
+}
+
+// pendingWorkFitsLocked refuses an activation that would change the action a
+// pending approval holds: the approval must run under the release it opened
+// in (ADR-0039 D4). There is no migration; decide or withdraw it first.
+func (t *Tenant) pendingWorkFitsLocked(candidateID string, raw []byte) error {
+	if t.app(work.ID) == nil {
+		return nil
+	}
+	candidate, err := platform.ReadCandidate(candidateID, raw)
+	if err != nil {
+		return err
+	}
+	actionIn := func(c platform.ReleaseCandidate, name string) []byte {
+		for _, a := range c.Assets {
+			if a.Ref.Kind == platform.AssetAction && a.Ref.Name == name {
+				out, _ := json.Marshal(a)
+				return out
+			}
+		}
+		return nil
+	}
+	pending, _, _ := platform.Find[work.ApprovalRequest](t.automation(work.ID, false),
+		platform.Query{Domain: json.RawMessage(`[["state","=","pending"]]`), Sort: []string{"id"}})
+	for _, request := range pending {
+		next := actionIn(candidate, request.Action)
+		if next == nil || request.Release == candidateID {
+			continue
+		}
+		if saved := t.releaseCandidates[request.Release]; saved != nil {
+			started, err := platform.ReadCandidate(request.Release, saved)
+			if err == nil && bytes.Equal(actionIn(started, request.Action), next) {
+				continue
+			}
+		}
+		return fmt.Errorf("pending approval %s holds %s under another release; decide or withdraw it before activating", request.ID, request.Action)
+	}
+	return nil
 }
 
 // ActiveRelease is the tenant's active release ID, empty before any activation.

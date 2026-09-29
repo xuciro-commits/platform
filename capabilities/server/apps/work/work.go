@@ -51,6 +51,9 @@ type ApprovalRequest struct {
 	State      string         `json:"state" field:"readonly" choices:"pending,approved,rejected,refused,withdrawn"`
 	Outcome    string         `json:"outcome,omitempty" field:"readonly"` // why a request was refused when it ran, or rejected
 	RejectedBy string         `json:"rejectedBy,omitempty" field:"readonly" title:"Rejected by"`
+	// Release is the tenant's active release when the request opened; a later
+	// activation may not change the held action under it (ADR-0039 D4).
+	Release string `json:"release,omitempty" field:"readonly"`
 }
 
 // ApprovalStep is one level: who may approve, and who did.
@@ -280,7 +283,7 @@ func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func
 	}
 	raw, _ := protojson.Marshal(held)
 	request := ApprovalRequest{Record: platform.Record{ID: s.GetTarget().GetId()}, Action: declared.Schema, Title: declared.Title, App: app,
-		Target: held.GetTarget().GetType() + "/" + held.GetTarget().GetId(), Requester: requester.ID, Submission: string(raw), Levels: steps, State: "pending"}
+		Target: held.GetTarget().GetType() + "/" + held.GetTarget().GetId(), Requester: requester.ID, Submission: string(raw), Levels: steps, State: "pending", Release: w.host.ActiveRelease()}
 	if _, known := platform.Get[ApprovalRequest](c, request.ID); known {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}

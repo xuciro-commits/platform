@@ -82,6 +82,9 @@ type Host interface {
 	Tasks() Tasks
 	Runs() Runs
 	Processes() Processes
+	// ActiveRelease is the tenant's active release ID, empty before any
+	// activation; the caller already holds the tenant (ADR-0039 D4).
+	ActiveRelease() string
 }
 
 // Listener is a platform app delivered other apps' events as owned work, with
