@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|capabilities|web|pms|mes|composition|drills|deploy|format|ci]...   (default: everything; several steps run in turn)
+# Platform verification. Usage: scripts/verify.sh [contract|formal|capabilities|web|pms|mes|composition|deploy|format|ci]...   (default: everything; several steps run in turn)
 # The web step needs node and pnpm (brew install node pnpm); deploy needs a running Docker (orb start), curl and jq.
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
@@ -21,13 +21,17 @@ step() {
 # The kernel is domain-neutral: no domain vocabulary in the contract (Platform.md §4).
 vocabulary() {
   ! grep -rniE '\b(music|track|album|artist|playlist|song|lyric|subsonic|openverse|hotel|room|reservation|guest)s?\b' \
-      contract --exclude-dir=.build --exclude-dir=gen
+      contract --exclude-dir=.build --exclude-dir=.lake --exclude-dir=gen
 }
 
 contract() {
   step contract-vocabulary vocabulary
   step contract-schema bash -c 'cd contract/proto && export PATH="$(go env GOPATH)/bin:$PATH" && gen() { find ../go/gen -type f -exec shasum {} + | sort; } && before=$(gen) && buf lint && buf generate && { [ "$before" = "$(gen)" ] || { echo "generated code was stale; buf generate updated contract/go/gen"; exit 1; }; }'
   step contract-go bash -c 'cd contract/go && go vet ./... && go test -count=1 ./...'
+}
+
+formal() {
+  step kernel-proofs scripts/formal.sh
 }
 
 web() {
@@ -90,6 +94,7 @@ pms() {
 for target in "${@:-all}"; do
 case "$target" in
   contract) contract ;;
+  formal) formal ;;
   web) web ;;
   pms) web; pms ;;
   capabilities) capabilities ;;
@@ -97,10 +102,10 @@ case "$target" in
   mes) mes ;;
   composition) composition ;;
   deploy) deploy ;;
-  all) contract; format; capabilities; web; pms; mes; composition; deploy ;;
+  all) contract; formal; format; capabilities; web; pms; mes; composition; deploy ;;
   # What CI runs on Linux: the rehearsal needs Docker, so it stays on the owner's Mac.
-  ci) contract; format; capabilities; mes; composition ;;
-  *) echo "usage: $0 [contract|capabilities|web|pms|mes|composition|deploy|format|ci]..."; exit 2 ;;
+  ci) contract; formal; format; capabilities; mes; composition ;;
+  *) echo "usage: $0 [contract|formal|capabilities|web|pms|mes|composition|deploy|format|ci]..."; exit 2 ;;
 esac
 done
 

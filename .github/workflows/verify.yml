@@ -16,7 +16,7 @@ env:
 
 jobs:
   go:
-    name: contract, format, host, apps
+    name: contract, proofs, format, host, apps
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +28,12 @@ jobs:
         with:
           setup_only: true
       - run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+      - name: Proof archive and source-check tools
+        run: sudo apt-get update && sudo apt-get install -y zstd ripgrep
+      - uses: actions/cache@v4
+        with:
+          path: .build/formal-tools/*.tar.zst
+          key: lean-archive-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('contract/lean/lean-toolchain', 'scripts/formal.sh') }}
       - run: scripts/verify.sh ci
 
   web:
@@ -78,4 +84,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/pms/client/src-tauri
+      - run: cd web && pnpm install --frozen-lockfile && pnpm --filter @platform/e2e exec playwright install --with-deps chromium
       - run: scripts/verify.sh pms

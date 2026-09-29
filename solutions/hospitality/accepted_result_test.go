@@ -2,6 +2,8 @@ package hospitality
 
 import (
 	"testing"
+
+	"google.golang.org/protobuf/proto"
 	"time"
 
 	"crm"
@@ -54,10 +56,27 @@ func TestAcceptedResultHospitalityProbe(t *testing.T) {
 		`{"name":"visit","title":"Visit","fields":[{"name":"guest","title":"Guest","type":"text"}]}`},
 		{"publish-visit", build.SchemaPublish, build.ObjectType, "O1", `{}`},
 		{"visit-guest", build.TypeOf("visit") + ".create", build.TypeOf("visit"), "V1", `{"guest":"Ada"}`}} {
-		if _, err := tn.Submit(m, &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: build.ID,
+		request := &pb.Submission{TenantId: tn.ID, PrincipalId: m.ID, Authority: build.ID,
 			IdempotencyKey: action.key, Target: &pb.EntityRef{Type: action.typ, Id: action.target},
-			Schema: &pb.SchemaRef{Name: action.schema, Version: 1}, Payload: []byte(action.payload)}, now); err != nil {
+			Schema: &pb.SchemaRef{Name: action.schema, Version: 1}, Payload: []byte(action.payload)}
+		accepted, err := tn.Submit(m, request, now)
+		if err != nil {
 			t.Fatalf("%s: %v", action.schema, err)
+		}
+		before, _, _ := tn.Snapshot(func() int64 { return 0 })
+		count := len(entries)
+		replayed, err := tn.Submit(m, proto.Clone(request).(*pb.Submission), now.Add(time.Hour))
+		if err != nil || !proto.Equal(replayed, accepted) || len(entries) != count {
+			t.Fatalf("%s replay changed receipt or journal: %v", action.schema, err)
+		}
+		changed := proto.Clone(request).(*pb.Submission)
+		changed.Payload = []byte(`{"different":true}`)
+		if _, refusal := tn.Submit(m, changed, now); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT || len(entries) != count {
+			t.Fatalf("%s conflicting retry changed journal: %v", action.schema, refusal)
+		}
+		after, _, _ := tn.Snapshot(func() int64 { return 0 })
+		if string(before) != string(after) {
+			t.Fatalf("%s replay/conflict changed state", action.schema)
 		}
 	}
 	if len(entries) != 5 || entries[3].Kind != "accepted-result" {

@@ -2,11 +2,11 @@
 
 ## 状态 (Status)
 
-Proposed (2026-09-29, #137; gate, owner decision)。ADR-0031 D6 已接受首轮引入 Lean；本 ADR 仅提交具体工具链与首个证明范围，尚未下载工具或声称完成证明。
+Accepted (2026-09-29, #137)。负责人明确授权由实现者选择 Lean 工具链；D1 采用官方 Lean 4.34.1 核心库。D2/D3 沿用 ADR-0031 D6 与 #137 已授权的首项证明/CI 方向，选定现有 K4 幂等分支作为有界实施范围。具体检查证据见“实际构建”。
 
 ## 背景上下文 (Context)
 
-W1 的对象测试与最小发布闭环已交付。下一步将一项现有契约不变量与机器证明对应，不扩大为整套业务运行时的形式化验证。[K4 C4/C5/C9/C10](../../contract/spec/K4-change-record.md) 规定相同租户/幂等键上的完全相同提交返回原收据、不同提交拒绝、拒绝不入账、重放不重新判定业务规则。[ChangeLog.SubmitChecked](../../contract/go/kernel/change.go) 已实现这些分支；[K4 向量](../../contract/vectors/k4-change-record.json) 覆盖 `k4.idempotent-replay` 与 `k4.idempotency-conflict`，[结果恢复测试](../../contract/go/kernel/change_result_test.go) 覆盖重复应用和已保存收据。仓库目前没有 Lean 源文件或 CI 证明步骤，本机也未安装 Lean/Lake/Elan。
+W1 的对象测试与最小发布闭环已交付。下一步将一项现有契约不变量与机器证明对应，不扩大为整套业务运行时的形式化验证。[K4 C4/C5/C9/C10](../../contract/spec/K4-change-record.md) 规定相同租户/幂等键上的完全相同提交返回原收据、不同提交拒绝、拒绝不入账、重放不重新判定业务规则。[ChangeLog.SubmitChecked](../../contract/go/kernel/change.go) 已实现这些分支；[K4 向量](../../contract/vectors/k4-change-record.json) 覆盖 `k4.idempotent-replay` 与 `k4.idempotency-conflict`，[结果恢复测试](../../contract/go/kernel/change_result_test.go) 覆盖重复应用和已保存收据。本 ADR 提案时仓库没有 Lean 源文件或 CI 证明步骤，本机未安装 Lean/Lake/Elan；该句描述决策前的基线。
 
 2026-09-29 查阅的一手来源：
 
@@ -14,7 +14,7 @@ W1 的对象测试与最小发布闭环已交付。下一步将一项现有契�
 |---|---|---|
 | [Lean 官方工具链文档](https://lean-lang.org/doc/reference/latest/Build-Tools-and-Distribution/Managing-Toolchains-with-Elan/) | 以具体版本的 `lean-toolchain` 随项目管理工具链 | 锁定版本，禁止浮动 `stable`/nightly |
 | [Lake 官方文档](https://lean-lang.org/doc/reference/latest/Build-Tools-and-Distribution/Lake/) | 标准构建工具与声明式项目配置，外部依赖独立声明 | 使用随 Lean 提供的 Lake；第一批不引入 Mathlib |
-| [Lean v4.34.1 官方发布](https://github.com/leanprover/lean4/releases/tag/v4.34.1) | 当前稳定版本提供官方发布制品 | 推荐锁定此版本及下载校验；后续升级作为显式变更 |
+| [Lean v4.34.1 官方发布](https://github.com/leanprover/lean4/releases/tag/v4.34.1) | 当前稳定版本提供官方发布制品 | 锁定此版本及下载校验；后续升级作为显式变更 |
 
 共同原则是可重复的证明检查与显式依赖。工具文档不提供本项目的运行正确性保证。
 
@@ -28,14 +28,14 @@ W1 的对象测试与最小发布闭环已交付。下一步将一项现有契�
 
 ## 设计方案 (Design)
 
-1. **归属与工具链。** 拟在 `contract/lean/` 建立 Lake 项目，`lean-toolchain` 锁定 `leanprover/lean4:v4.34.1`，只用随工具链提供的核心库。`scripts/verify.sh formal` 是唯一检查入口；`ci` 包含该步骤。安装脚本按平台选择官方制品并检查固定摘要，不静默切换版本。
+1. **归属与工具链。** 在 `contract/lean/` 建立 Lake 项目，`lean-toolchain` 锁定 `leanprover/lean4:v4.34.1`，只用随工具链提供的核心库。`scripts/verify.sh formal` 是唯一检查入口；`ci` 包含该步骤。安装脚本按平台选择官方制品并检查固定摘要，不静默切换版本。
 2. **首个有界模型。** 将提交作为具备相等判定的不可变值，收据保留原提交与身份/时间，状态记录租户内的已接受日志。先假设 K4 C1/C2 已通过，再按租户/键查收据：相同提交返回原收据；不同提交拒绝；未使用键才执行业务检查。检查被拒时状态保持不变；成功时只追加一条新收据。模型显式记录业务检查是否执行，不能用“返回同值”掩盖业务检查被重跑。
 3. **证明与实现映射。** 首批证明：重放保持原收据和状态且不执行业务检查；冲突保持状态；业务拒绝不占用键；已接受键的重复重放保持日志长度。映射表引用规则、定理名、向量 ID 与 Go 性质测试。Go 使用同一批生成的请求序列核查不同租户、重复、冲突与拒绝重试；酒店/制造现有提交链的重复请求作为编排证据。CI 拒绝未完成证明与项目自加公理，并输出实际用到的公理。
-4. **可信前提与边界。** 借助 Lean 内核检查证明项；工具链/标准库、构建制品校验、执行环境为可信计算基。Go 的 `proto.Equal` 必须与模型中提交相等的抽象一致，提交与收据需保持不可变，`byKey` 索引与日志一致，调用串行化且没有整数溢出；第一批不证明这些实现前提。性质测试提供对应证据，不等于精化证明。暂不证明 C12 修订号、持久化原子性、崩溃恢复、授权闭包或外部“恰好一次”。
+4. **可信前提与边界。** 借助 Lean 内核检查证明项；工具链/标准库、构建制品校验、执行环境为可信计算基。Go 的 `proto.Equal` 必须与模型中提交相等的抽象一致，提交与收据需保持不可变，`byKey` 索引与日志一致，调用串行化、检查回调不修改或重入 ChangeLog 且没有整数溢出；第一批不证明这些实现前提。性质测试提供对应证据，不等于精化证明。暂不证明 C12 修订号、持久化原子性、崩溃恢复、授权闭包或外部“恰好一次”。
 
-## 供负责人抉择的决策点 (Decision points for the owner)
+## 决策点与授权 (Decisions and authorization)
 
-| # | 抉择问题 | 备选选项 | 推荐建议 |
+| # | 抉择问题 | 备选选项 | 采用 |
 |---|---|---|---|
 | D1 | 第一批工具链及依赖 | 官方 Lean 4.34.1 + 核心库；Lean + Mathlib；暂缓工具接入 | 官方固定版本 + 核心库，后续需求触发时再单独审议数学库 |
 | D2 | 首个证明对象 | K4 有界幂等分支；候选 Hash 身份；整套提交/恢复模型 | K4 C4/C5/C9/C10，范围窄、现有规则和向量能逐项对应 |
@@ -43,11 +43,11 @@ W1 的对象测试与最小发布闭环已交付。下一步将一项现有契�
 
 拒绝浮动版本、第一批大规模数学依赖、通过未完成证明占位符消除检查，以及把有限模型证明表述为整个运行时已证明。
 
-## 决策后的构建任务批次 (Build items after the decisions)
+## 构建任务批次 (Build items)
 
 | 批次 | 任务项 | 完成标准 (Done when) |
 |---|---|---|
-| 22a | 固定工具链与 K4 模型 | `formal` 在本机及 Linux CI 检查无占位证明；输出公理与前提；规范—定理—向量—Go 性质测试映射齐全。`contract`、`format` 通过。下载只在实际批准后进行 |
+| 22a | 固定工具链与 K4 模型 | `formal` 在本机及 Linux CI 检查无占位证明；输出公理与前提；规范—定理—向量—Go 性质测试映射齐全。`contract`、`format` 通过。下载依据负责人对工具链选择的授权进行 |
 | 22b | 实现对应与双行业探针 | 酒店/制造既有对象/发布提交的重复请求返回同收据且无额外记录，冲突/拒绝不产生部分状态；各自 `CheckReplay`、`capabilities`、`composition` 通过。没有持久化新类别；`rehearse.sh` 不新增阶段，已有恢复证据只按原范围引用 |
 
 本批不改前端。现有构建者测试→发布→操作员路线 41 是提交路径的产品证据；不将其当作负责人对证明模型或完整 FDE 旅程的验收。
@@ -58,4 +58,8 @@ W1 的对象测试与最小发布闭环已交付。下一步将一项现有契�
 
 ## 实际构建 (As built)
 
-仅有设计提案和当前代码/向量对应关系；尚无工具下载、Lean 编译结果、机器证明或 CI 运行证据。
+2026-09-29：已接入固定工具链、K4 模型及 CI 检查。规范—定理—向量—测试与未证明前提的唯一技术映射位于 [contract/lean/README.md](../../contract/lean/README.md)。`TestIdempotencySequences` 检查 200 组、每组 128 请求；字段相等测试覆盖已接受提交的完整输入变化。双行业既有接受结果探针补充对象草稿/发布/生成记录的重复及冲突，核对原收据、无额外日志、快照不变与恢复。`formal`（macOS ARM64）、`contract`、`format`、`capabilities`、`composition` 已运行通过；8 个定理均由固定工具链检查，实际公理依赖仅有核心库 `propext`。未完成证明源码的临时负向检查已验证拒绝并清理；构建及公理审计即使命中缓存也必须检查成功。`ci` 已包含 `formal`，Linux x86-64 的运行证据尚待推送后取得。
+
+核对远端既有 CI 发现 PMS 作业调用浏览器路线却未安装 Playwright Chromium，路线停在启动阶段；已补齐与 Web 作业相同的浏览器安装前置步骤，完整 CI 结果待本批推送后核对。
+
+K4 拒绝不占用变更键；宿主已接受结果日志记忆拒绝答复的行为属于 ADR-0038 的另一层，未纳入本次模型。没有变更内核语义、运行时或持久化类别；未重新运行 Docker 演练，也没有新增负责人验收。

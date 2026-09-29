@@ -13,6 +13,7 @@
 | 路径 | 包含内容 |
 |---|---|
 | `contract/` | 内核契约 `v1alpha1`：Protobuf 数据契约 (`proto/`)、附带错误码的语义规则 ([spec/](contract/spec/README.md))、一致性测试向量 (`vectors/`)、Go 参考实现 (`go/`)；Rust（PMS 前台发件箱）与 TypeScript (`@platform/kernel`) 运行 K5 系列测试向量 |
+| `contract/lean/` | 固定 Lean 4.34.1 核心库的 K4 幂等性模型与定理；规范/向量/Go 测试映射及未证明前提见其 README；不进入业务运行时 (ADR-0041) |
 | `capabilities/server/` | Go 模块 `platformserver`。`platform/` 是应用 API，应用与协议唯一导入的包：`Caller`、`Manifest`、各类声明、`Ledger` 以及宿主实现的 `Runtime`。`internal/host` 是宿主在应用 API 之外向自身应用提供的能力（其检测到的角色，ADR-0025 D4），`apps/<id>` 存放已迁移至此的平台级应用（`relations`、`org`、`work`、`flow`、`ai`、`knowledge`、`files`、`build`：租户定义并发布的对象，ADR-0034）。其余为宿主运行时 (ADR-0010)——来自清单的每租户应用、路由、平台应用（`Console`：各应用的成员与角色，以及管理员按领域的决策）、记录存储与通用读取 (ADR-0016)、工作应用（审批、任务、收件箱；ADR-0017）、工作流应用（已声明的长流程；ADR-0020）、智能体应用（作为受管主体的已声明智能体、上下文图谱与搜索、记忆、评估；ADR-0021）、知识库与 A2A (ADR-0022)、组织架构（随时间演进的单元、架构与成员从属）、受属工作（带重试的事件分发、定时作业）、连接器、通知与应用设置 (ADR-0013)、带用量计量的 AI 提供商与模型 (ADR-0015)、出站效果（Webhook、通知邮件、AI 智能体行为的审批；ADR-0014；`cmd/webhook-sink` 是本地 Webhook 与邮件接收端、模型服务器与供应商智能体替身）、协议、链接与时间线、MCP、OIDC、带快照与投影的 PostgreSQL 日志、聚合 (ADR-0019)、动作目录、应用包账本、部署标志位 |
 | `apps/pms/` | PMS，酒店物业管理 (ADR-0025; #79, OPERA 模型)：来自前台或渠道 (`cmd/channel-sim`) 的房型与预订，其提供的住宿协议；Tauri 桌面客户端，其 Rust K5 发件箱运行内核契约的 K5 测试向量 (`client/`)；复现超时、离线、冲突与拒绝流程的 `flows.sh` |
 | `apps/mes/` | MES，制造执行系统 (ADR-0025; #83, Opcenter/SAP ME 模型)：车间工单、经由工艺路线流转的 SFC、附带签署处置的不合格品、源自网关推送的停机时间 (`cmd/gateway-sim`)、通过 `production.orders/1` 向 ERP 确认的流转，以及智能体适配器 `cmd/mes-agent` (ADR-0008) |
@@ -60,6 +61,7 @@
 ```sh
 scripts/verify.sh           # 全部检查
 scripts/verify.sh contract  # 契约词汇检查、buf lint + 生成代码校验、Go vet/test
+scripts/verify.sh formal    # 固定官方 Lean 工具链、Lake 构建与公理检查（首次需下载制品及 curl/zstd/rg/Python 3）
 scripts/verify.sh web       # UI 库测试、每个 Web 应用的类型检查与构建、浏览器真实路由测试（依赖 node, pnpm, Go, Chrome）
 scripts/verify.sh pms       # Web 构建、PMS 服务端测试、Rust K5 向量测试、端到端流程（依赖 cargo）
 scripts/verify.sh mes       # MES 测试（F-5 至 F-9 判定）
@@ -67,5 +69,5 @@ scripts/verify.sh composition  # 应用边界与布局检查 (scripts/boundaries
 scripts/verify.sh capabilities  # 服务端能力测试
 scripts/verify.sh deploy    # 生产路径全量演练（依赖通过 OrbStack 运行的 Docker：orb start）
 scripts/verify.sh format    # 所有 Go 文件的 gofmt 格式化
-scripts/verify.sh ci        # Linux CI 运行的检查：contract、format、capabilities、mes、composition
+scripts/verify.sh ci        # Linux CI 运行的检查：contract、formal、format、capabilities、mes、composition
 ```

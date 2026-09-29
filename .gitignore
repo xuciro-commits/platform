@@ -1,5 +1,6 @@
 .build/
 **/.build/
+contract/lean/.lake/
 .DS_Store
 target/
 apps/pms/client/src-tauri/gen/
