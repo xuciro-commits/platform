@@ -58,8 +58,8 @@ W1 的对象测试与最小发布闭环已交付。下一步将一项现有契�
 
 ## 实际构建 (As built)
 
-2026-09-29：已接入固定工具链、K4 模型及 CI 检查。规范—定理—向量—测试与未证明前提的唯一技术映射位于 [contract/lean/README.md](../../contract/lean/README.md)。`TestIdempotencySequences` 检查 200 组、每组 128 请求；字段相等测试覆盖已接受提交的完整输入变化。双行业既有接受结果探针补充对象草稿/发布/生成记录的重复及冲突，核对原收据、无额外日志、快照不变与恢复。`formal`（macOS ARM64）、`contract`、`format`、`capabilities`、`composition` 已运行通过；8 个定理均由固定工具链检查，实际公理依赖仅有核心库 `propext`。未完成证明源码的临时负向检查已验证拒绝并清理；构建及公理审计即使命中缓存也必须检查成功。`ci` 已包含 `formal`，Linux x86-64 的运行证据尚待推送后取得。
+2026-09-29：已接入固定工具链、K4 模型及 CI 检查。规范—定理—向量—测试与未证明前提的唯一技术映射位于 [contract/lean/README.md](../../contract/lean/README.md)。`TestIdempotencySequences` 检查 200 组、每组 128 请求；字段相等测试覆盖已接受提交的完整输入变化。双行业既有接受结果探针补充对象草稿/开发发布/生成记录的重复及冲突，核对原收据、无额外日志、快照不变与恢复。`formal`（macOS ARM64）、`contract`、`format`、`capabilities`、`composition` 已运行通过；8 个定理均由固定工具链检查，实际公理依赖仅有核心库 `propext`。未完成证明源码的临时负向检查已验证拒绝并清理；构建及公理审计即使命中缓存也必须检查成功。`ci` 已包含 `formal`；实现提交 `57bec77` 的 [Linux CI](https://github.com/xuciro-commits/platform/actions/runs/36569792175) 中契约/证明/宿主/应用、Web、PMS 三个作业均通过，22a–22b 的本批完成标准已取得运行证据。成功的 `formal` 入口也打印工具链版本与实际公理依赖，便于在 CI 日志中直接审查。
 
-核对远端既有 CI 发现 PMS 作业调用浏览器路线却未安装 Playwright Chromium，路线停在启动阶段；已补齐与 Web 作业相同的浏览器安装前置步骤，完整 CI 结果待本批推送后核对。
+核对远端既有 CI 发现 PMS 作业调用浏览器路线却未安装 Playwright Chromium，路线停在启动阶段；已补齐与 Web 作业相同的浏览器安装前置步骤，本批完整 CI 已通过。
 
 K4 拒绝不占用变更键；宿主已接受结果日志记忆拒绝答复的行为属于 ADR-0038 的另一层，未纳入本次模型。没有变更内核语义、运行时或持久化类别；未重新运行 Docker 演练，也没有新增负责人验收。
