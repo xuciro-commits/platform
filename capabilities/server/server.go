@@ -324,6 +324,31 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, answer)
 	})
+	handle(Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it (ADR-0039 20a)", Body: ReleaseSaveRequest{}, Answer: ReleaseSaved{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		var request ReleaseSaveRequest
+		decoder := json.NewDecoder(io.LimitReader(r.Body, 4097))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || request.ID == "" ||
+			request.CandidateID == "" || request.Key == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		id, err := t.SaveReleaseCandidate(m, request.Kind, request.ID, request.CandidateID, request.Key, h.Now())
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, ReleaseSaved{ID: id})
+	})
 	handle(Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names with an id column; each row is the type's generated create or edit as the caller (ADR-0028)",
 		Query: []Param{{"preview", "true: check each row and apply none"}}, Body: []byte{}, Answer: []ImportRow{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 16<<20))

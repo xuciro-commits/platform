@@ -1,5 +1,5 @@
-// A builder-only read of one saved draft and the development definition it
-// would replace. This does not activate a release or run a preview sandbox.
+// A builder-only review and immutable candidate save. Saving does not install
+// a definition, activate a release or run a preview sandbox.
 import { useHost, useReadQuery } from "@platform/app";
 import { Button, Card, PageHeader, Select, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
@@ -18,6 +18,8 @@ export function ReleaseReview() {
   const [kind, setKind] = useState<Kind>("object");
   const [id, setId] = useState("");
   const [review, setReview] = useState<Api.ReleasePreview>();
+  const [candidateKey, setCandidateKey] = useState("");
+  const [savedID, setSavedID] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const selected = kinds.find((item) => item.kind === kind)!;
@@ -30,12 +32,31 @@ export function ReleaseReview() {
     setBusy(true);
     setError("");
     setReview(undefined);
+    setSavedID("");
     try {
       const result = await client.call<Api.ReleasePreview>("POST", "/v1/releases/preview", { kind, id });
       if (!result.ok) setError((result.body as Api.ReleasePreview & { error?: string }).error ?? t("Release review could not be loaded."));
-      else setReview(result.body);
+      else {
+        setReview(result.body);
+        setCandidateKey(crypto.randomUUID());
+      }
     } catch {
       setError(t("Release review could not be loaded."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const save = async () => {
+    if (!review?.candidateId || !candidateKey) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await client.call<Api.ReleaseSaved>("POST", "/v1/releases/candidates",
+        { kind, id, candidateId: review.candidateId, key: candidateKey } satisfies Api.ReleaseSaveRequest);
+      if (!result.ok) setError((result.body as Api.ReleaseSaved & { error?: string }).error ?? t("Candidate could not be saved."));
+      else setSavedID(result.body.id);
+    } catch {
+      setError(t("Candidate could not be saved."));
     } finally {
       setBusy(false);
     }
@@ -49,15 +70,15 @@ export function ReleaseReview() {
     </div>
   );
   return <div className="grid gap-3">
-    <PageHeader title={t("Release review")} description={t("Compare one saved draft with its installed development definition. This is not an immutable release or activation.")} />
+    <PageHeader title={t("Release review")} description={t("Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.")} />
     <Card className="grid gap-3 p-3">
       <label className="grid gap-1 text-xs">{t("Definition kind")}
-        <Select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setId(""); setReview(undefined); setError(""); }}>
+        <Select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setId(""); setReview(undefined); setSavedID(""); setError(""); }}>
           {kinds.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
         </Select>
       </label>
       <label className="grid gap-1 text-xs">{t("Saved draft")}
-        <Select value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setError(""); }}>
+        <Select value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setSavedID(""); setError(""); }}>
           <option value="">{t("Choose a saved draft")}</option>
           {records.map((record) => <option key={record.id} value={record.id}>{record.title || record.name} · {record.state}</option>)}
         </Select>
@@ -75,6 +96,10 @@ export function ReleaseReview() {
         {changed("Added", review.added)}
         {changed("Changed", review.changed)}
         {changed("Removed", review.removed)}
+      </div>}
+      {!review.diagnostic && review.candidateId && <div className="grid gap-2">
+        <Button disabled={busy || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>
+        {savedID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
       </div>}
     </Card>}
   </div>;

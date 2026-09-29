@@ -171,6 +171,11 @@ func acceptedIdentity(raw []byte) (resultIdentity, error) {
 		identity.Scope = "effect"
 		return identity, err
 	}
+	if envelope.Kind == "release-result" {
+		result, err := decodeAcceptedRelease(raw)
+		identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, result.Key, result.RequestHash
+		return identity, err
+	}
 	result, receipt, err := decodeAcceptedResult(raw)
 	identity.Tenant, identity.App, identity.Key, identity.Hash = result.Tenant, result.App, receipt.GetSubmission().GetIdempotencyKey(), result.RequestHash
 	return identity, err

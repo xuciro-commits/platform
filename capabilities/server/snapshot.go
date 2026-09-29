@@ -23,29 +23,31 @@ import (
 // CheckReplay holds every composition to that. A snapshot is only a shortcut:
 // the journal stays the truth, and a snapshot of other code is never used.
 type tenantState struct {
-	Apps            map[string]json.RawMessage `json:"apps"`
-	Records         map[string][]recordState   `json:"records"`
-	Audit           []AuditEntry               `json:"audit"`
-	Refusals        map[string]refusedResult   `json:"refusals,omitempty"`
-	AcceptedAnswers map[string]json.RawMessage `json:"acceptedAnswers,omitempty"`
-	AcceptedInputs  map[string]json.RawMessage `json:"acceptedInputs,omitempty"`
-	Deliveries      []Delivery                 `json:"deliveries"`
-	Acted           int                        `json:"acted"`
-	Bindings        map[string]string          `json:"bindings"` // protocol → provider app
-	Works           json.RawMessage            `json:"works"`
-	Queues          map[string][]string        `json:"queues"` // subscriber → task IDs, head first
-	Failed          []string                   `json:"failed"`
-	Tasks           []taskState                `json:"tasks"` // every delivery task, by ID
-	Jobs            []Task                     `json:"jobs"`
-	Connectors      json.RawMessage            `json:"connectors"`
-	Marks           []kernel.ConnectorMark     `json:"marks"`
-	LastError       map[string]ConnectorError  `json:"lastError"`
-	Notices         []platform.Notification    `json:"notices"`
-	NoticeSeq       int                        `json:"noticeSeq"`
-	Settings        map[string]string          `json:"settings"`
-	Endpoints       []*Endpoint                `json:"endpoints"`
-	Outbound        []effectState              `json:"outbound"`
-	Sequences       map[string]int             `json:"sequences,omitempty"`
+	Apps              map[string]json.RawMessage `json:"apps"`
+	Records           map[string][]recordState   `json:"records"`
+	Audit             []AuditEntry               `json:"audit"`
+	Refusals          map[string]refusedResult   `json:"refusals,omitempty"`
+	AcceptedAnswers   map[string]json.RawMessage `json:"acceptedAnswers,omitempty"`
+	AcceptedInputs    map[string]json.RawMessage `json:"acceptedInputs,omitempty"`
+	ReleaseCandidates map[string]json.RawMessage `json:"releaseCandidates,omitempty"`
+	ActiveRelease     string                     `json:"activeRelease,omitempty"`
+	Deliveries        []Delivery                 `json:"deliveries"`
+	Acted             int                        `json:"acted"`
+	Bindings          map[string]string          `json:"bindings"` // protocol → provider app
+	Works             json.RawMessage            `json:"works"`
+	Queues            map[string][]string        `json:"queues"` // subscriber → task IDs, head first
+	Failed            []string                   `json:"failed"`
+	Tasks             []taskState                `json:"tasks"` // every delivery task, by ID
+	Jobs              []Task                     `json:"jobs"`
+	Connectors        json.RawMessage            `json:"connectors"`
+	Marks             []kernel.ConnectorMark     `json:"marks"`
+	LastError         map[string]ConnectorError  `json:"lastError"`
+	Notices           []platform.Notification    `json:"notices"`
+	NoticeSeq         int                        `json:"noticeSeq"`
+	Settings          map[string]string          `json:"settings"`
+	Endpoints         []*Endpoint                `json:"endpoints"`
+	Outbound          []effectState              `json:"outbound"`
+	Sequences         map[string]int             `json:"sequences,omitempty"`
 }
 
 type recordState struct {
@@ -127,6 +129,8 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	s.Refusals = maps.Clone(t.refusals)
 	s.AcceptedAnswers = maps.Clone(t.acceptedAnswers)
 	s.AcceptedInputs = maps.Clone(t.acceptedInputs)
+	s.ReleaseCandidates = maps.Clone(t.releaseCandidates)
+	s.ActiveRelease = t.activeRelease
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	s.Deliveries, s.Acted, s.Failed = slices.Clone(t.deliveries), t.acted, []string{}
@@ -286,6 +290,16 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		}
 	}
 	t.acceptedInputs = maps.Clone(s.AcceptedInputs)
+	for id, raw := range s.ReleaseCandidates {
+		if _, err := platform.ReadCandidate(id, raw); err != nil {
+			return fmt.Errorf("tenant %s: release snapshot %s is incompatible: %w", t.ID, id, err)
+		}
+	}
+	if s.ActiveRelease != "" && s.ReleaseCandidates[s.ActiveRelease] == nil {
+		return fmt.Errorf("tenant %s: active release snapshot has no saved candidate", t.ID)
+	}
+	t.releaseCandidates = maps.Clone(s.ReleaseCandidates)
+	t.activeRelease = s.ActiveRelease
 	for protocol, provider := range s.Bindings {
 		if !t.rebind(protocol, provider) {
 			return fmt.Errorf("tenant %s: %s is not a provider of %s", t.ID, provider, protocol)

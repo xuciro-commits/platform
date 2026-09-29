@@ -1,0 +1,196 @@
+package platformserver
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"slices"
+	"time"
+
+	"platformserver/apps/build"
+	"platformserver/platform"
+)
+
+// acceptedRelease saves one immutable candidate, not an activation. It is
+// committed as one journal result before the tenant may expose the saved
+// revision. Its bytes are never reconstructed from a later mutable draft.
+type acceptedRelease struct {
+	Version     int       `json:"version"`
+	Kind        string    `json:"kind"`
+	Tenant      string    `json:"tenant"`
+	App         string    `json:"app"`
+	Member      string    `json:"member"`
+	Key         string    `json:"key"`
+	At          time.Time `json:"at"`
+	CandidateID string    `json:"candidateId"`
+	Bytes       []byte    `json:"bytes"`
+	// Active marks an activation: the tenant's single release pointer moves to
+	// this saved candidate (ADR-0039 D2). A save leaves the pointer alone.
+	Active      bool   `json:"active,omitempty"`
+	RequestHash string `json:"requestHash"`
+	Digest      string `json:"digest"`
+}
+
+func releaseRequestHash(tenant, member, key, id string, active bool) (string, error) {
+	return canonicalDigest(struct {
+		Tenant, Member, Key, CandidateID string
+		Active                           bool
+	}{tenant, member, key, id, active})
+}
+
+func encodeAcceptedRelease(saved acceptedRelease) ([]byte, error) {
+	var err error
+	saved.Digest, err = releaseDigest(saved)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(saved)
+	if err != nil {
+		return nil, err
+	}
+	_, err = decodeAcceptedRelease(raw)
+	return raw, err
+}
+
+func releaseDigest(saved acceptedRelease) (string, error) {
+	saved.Digest = ""
+	return canonicalDigest(saved)
+}
+
+func decodeAcceptedRelease(raw []byte) (acceptedRelease, error) {
+	var saved acceptedRelease
+	if len(raw) == 0 || len(raw) > 24<<20 {
+		return saved, fmt.Errorf("release result is empty or too large")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&saved); err != nil {
+		return saved, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return saved, fmt.Errorf("release result has trailing data")
+	}
+	hash, err := releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active)
+	if err != nil || saved.Version != 1 || saved.Kind != "release-result" || saved.App != build.ID ||
+		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
+		saved.RequestHash != hash {
+		return saved, fmt.Errorf("invalid release result identity")
+	}
+	digest, err := releaseDigest(saved)
+	if err != nil || saved.Digest != digest {
+		return saved, fmt.Errorf("release result digest differs")
+	}
+	if _, err := platform.ReadCandidate(saved.CandidateID, saved.Bytes); err != nil {
+		return saved, fmt.Errorf("release result candidate: %w", err)
+	}
+	return saved, nil
+}
+
+func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
+	saved, err := decodeAcceptedRelease(raw)
+	if err != nil {
+		return saved, err
+	}
+	if saved.Tenant != t.ID || t.app(build.ID) == nil {
+		return saved, fmt.Errorf("release result belongs to another tenant or unavailable builder")
+	}
+	if prior, ok := t.releaseCandidates[saved.CandidateID]; ok && !bytes.Equal(prior, saved.Bytes) {
+		return saved, fmt.Errorf("immutable release candidate %s changed", saved.CandidateID)
+	}
+	if t.releaseCandidates == nil {
+		t.releaseCandidates = make(map[string]json.RawMessage)
+	}
+	t.releaseCandidates[saved.CandidateID] = slices.Clone(saved.Bytes)
+	if saved.Active {
+		t.activeRelease = saved.CandidateID
+	}
+	return saved, nil
+}
+
+// SaveReleaseCandidate freezes a previously previewed saved draft. The
+// builder's private definitions are read under the tenant lock; a stale
+// preview cannot be persisted by submitting its ID alone. A retry of an
+// already-saved ID remains possible even after the editor changes the draft.
+func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind, draftID, candidateID, key string, now time.Time) (string, error) {
+	if m.Roles[build.ID] != build.Builder {
+		return "", fmt.Errorf("builder role required")
+	}
+	if candidateID == "" || key == "" || len(key) > 200 || now.IsZero() {
+		return "", fmt.Errorf("candidate ID and idempotency key are required")
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.quarantined() {
+		return "", fmt.Errorf("tenant is quarantined")
+	}
+	var candidateBytes []byte
+	if prior := t.releaseCandidates[candidateID]; prior != nil {
+		if t.AcceptResult == nil { // in memory: already saved, nothing new to record
+			return candidateID, nil
+		}
+		candidateBytes = slices.Clone(prior)
+	} else {
+		preview, candidate, err := t.previewReleaseLocked(kind, draftID)
+		if err != nil {
+			return "", err
+		}
+		if preview.Diagnostic != "" {
+			return "", fmt.Errorf("release candidate: %s", preview.Diagnostic)
+		}
+		if candidate.ID != candidateID {
+			return "", fmt.Errorf("release candidate changed since preview")
+		}
+		candidateBytes = candidate.Bytes
+	}
+	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
+		Member: m.ID, Key: "release:" + key, At: now.UTC(), CandidateID: candidateID,
+		Bytes: candidateBytes}
+	// The idempotency key has a separate namespace from builder submissions.
+	var err error
+	saved.RequestHash, err = releaseRequestHash(t.ID, m.ID, saved.Key, candidateID, false)
+	if err != nil {
+		return "", err
+	}
+	return t.commitReleaseLocked(m, saved)
+}
+
+// commitReleaseLocked appends one release result and applies only what the
+// journal returned; the caller holds the tenant lock.
+func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedRelease) (string, error) {
+	candidateID := saved.CandidateID
+	raw, err := encodeAcceptedRelease(saved)
+	if err != nil {
+		return "", err
+	}
+	principal, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	entry := Entry{App: build.ID, Kind: "accepted-result", Principal: principal, Body: raw, At: saved.At}
+	if t.AcceptResult == nil {
+		// The in-memory development host journals through Record, like its
+		// other inputs; replay applies the same saved bytes.
+		if _, err := t.applyAcceptedRelease(raw); err != nil {
+			return "", err
+		}
+		if t.Record != nil {
+			t.Record(entry)
+		}
+		t.changed()
+		return candidateID, nil
+	}
+	committed, err := t.AcceptResult(entry, saved.Key, saved.RequestHash)
+	if err != nil {
+		return "", err
+	}
+	applied, err := t.applyAcceptedRelease(committed)
+	if err != nil || applied.Key != saved.Key || applied.RequestHash != saved.RequestHash ||
+		applied.Member != m.ID || applied.CandidateID != candidateID {
+		// Once appended, an invalid result is a tenant recovery fault, not a
+		// transient error that may permit further writes over uncertain state.
+		t.quarantine(fmt.Errorf("committed release result differs: %v", err))
+		return "", fmt.Errorf("committed release result differs: %v", err)
+	}
+	return applied.CandidateID, nil
+}

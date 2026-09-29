@@ -496,6 +496,10 @@ test("route 37: review a saved draft and its dependencies", async ({ page, reque
   await expect(page.getByText(`build/page/${name}`)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("release-review-narrow.png"), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 720 });
+  // Saving freezes the reviewed bytes; it neither installs nor activates them.
+  await page.getByRole("button", { name: "Save immutable candidate" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Candidate saved; not active for operators." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save immutable candidate" })).toBeDisabled();
   // Preview reads only: publication is a separate accepted action.
   await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id }, {});
   await page.getByRole("button", { name: "Check draft and dependencies" }).click();

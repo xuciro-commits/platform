@@ -152,6 +152,17 @@ type ReleasePreviewRequest struct {
 	ID   string             `json:"id"`
 }
 
+type ReleaseSaveRequest struct {
+	Kind        platform.AssetKind `json:"kind"`
+	ID          string             `json:"id"`
+	CandidateID string             `json:"candidateId"`
+	Key         string             `json:"key"`
+}
+
+type ReleaseSaved struct {
+	ID string `json:"id"`
+}
+
 // PreviewRelease checks authority before looking up the owner's unfiltered
 // records and before computing any digest or error path. It never changes the
 // installed definitions, persistent records, or active operator work.
@@ -161,9 +172,17 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	reply, _, err := t.previewReleaseLocked(kind, id)
+	return reply, err
+}
+
+// The candidate returned here is exactly what the builder saw in the
+// comparison. A later save must recompute it under the tenant lock and reject
+// a stale candidate ID rather than trusting bytes supplied by the browser.
+func (t *Tenant) previewReleaseLocked(kind platform.AssetKind, id string) (ReleasePreview, platform.ReleaseCandidate, error) {
 	owner, ok := t.app(build.ID).(*build.Build)
 	if !ok {
-		return ReleasePreview{}, fmt.Errorf("tenant has no builder")
+		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
 	before, after, oldRoot, newRoot, hadPrior, diagnostic := owner.DraftReleaseAssets(kind, id)
 	reply := ReleasePreview{Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
@@ -173,12 +192,12 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 		var err error
 		available, err := t.releaseAssetsLocked(before, true)
 		if err != nil {
-			return ReleasePreview{}, err
+			return ReleasePreview{}, platform.ReleaseCandidate{}, err
 		}
 		oldOwners = dependentRoots(oldRoot, available)
 		current, err = platform.Candidate(oldOwners, available)
 		if err != nil {
-			return ReleasePreview{}, fmt.Errorf("installed definition: %w", err)
+			return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
 		}
 		reply.CurrentID = current.ID
 		// Renames must still check surviving pages/apps that pointed at the
@@ -188,22 +207,22 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 	}
 	if diagnostic != nil {
 		reply.Diagnostic = diagnostic.Error()
-		return reply, nil
+		return reply, platform.ReleaseCandidate{}, nil
 	}
 	candidate, err := t.previewCandidateLocked(newRoot, after, oldOwners)
 	if err != nil {
 		reply.Diagnostic = err.Error()
-		return reply, nil
+		return reply, platform.ReleaseCandidate{}, nil
 	}
 	reply.CandidateID = candidate.ID
 	if !hadPrior {
 		for _, asset := range candidate.Assets {
 			reply.Added = append(reply.Added, asset.Ref)
 		}
-		return reply, nil
+		return reply, candidate, nil
 	}
 	reply.Added, reply.Removed, reply.Changed, err = platform.CandidateDiff(current, candidate)
-	return reply, err
+	return reply, candidate, err
 }
 
 // Code behavior is pinned by Manifest.Version rather than serialized Go

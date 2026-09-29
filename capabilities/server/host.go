@@ -63,8 +63,13 @@ type Tenant struct {
 	refusals        map[string]refusedResult   // "<app>/<key>" → committed effect-free answer
 	acceptedAnswers map[string]json.RawMessage // original input → approval answer, not the held action's later receipt
 	acceptedInputs  map[string]json.RawMessage // connector input identity → saved answer and owned effects
-	definitions     []platform.Definition      // installed code assets; member views are derived on read
-	owner           map[string]platform.App    // "action:", "read:" and "input:" names → app
+	// releaseCandidates contains exact, validated candidate bytes. activeRelease
+	// is a movable pointer; neither is derived from the mutable development
+	// definition registry (ADR-0039 20b).
+	releaseCandidates map[string]json.RawMessage
+	activeRelease     string
+	definitions       []platform.Definition   // installed code assets; member views are derived on read
+	owner             map[string]platform.App // "action:", "read:" and "input:" names → app
 	// audit holds accepted top-level inputs, newest last, rebuilt by replay; its
 	// own lock, because reads run inside other apps' submissions.
 	auditMu    sync.Mutex
@@ -824,6 +829,14 @@ func (t *Tenant) Replay(entries []Entry) error {
 			var envelope struct{ Kind string }
 			if err := json.Unmarshal(e.Body, &envelope); err != nil {
 				return fmt.Errorf("entry %d: unreadable result envelope: %w", i+1, err)
+			}
+			if envelope.Kind == "release-result" {
+				saved, err := t.applyAcceptedRelease(e.Body)
+				if err != nil || saved.App != e.App || saved.Member != m.ID ||
+					!sameJournalTime(saved.At, e.At) {
+					return fmt.Errorf("entry %d: immutable release result: %v", i+1, err)
+				}
+				continue
 			}
 			if envelope.Kind == "input-result" {
 				saved, applied, err := t.applyAcceptedInput(e.Body)

@@ -119,7 +119,7 @@ func snapshot(t *Tenant) string {
 	t.records.mu.Unlock()
 	// Include the installed catalog: matching record bytes alone do not prove
 	// that a recovered publication offers the same pages and actions.
-	raw, err := json.Marshal([]any{records, t.definitions, t.Audit(), t.refusals, t.acceptedAnswers, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
+	raw, err := json.Marshal([]any{records, t.definitions, t.Audit(), t.refusals, t.acceptedAnswers, t.releaseCandidates, t.activeRelease, t.Deliveries(), tasks, t.Effects(at), endpoints, notices, connectors, t.Settings(), bindings, reads})
 	if err != nil {
 		panic(err)
 	}

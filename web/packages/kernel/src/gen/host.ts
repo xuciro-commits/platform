@@ -718,6 +718,17 @@ export type ReleasePreviewRequest = {
   id: string;
 };
 
+export type ReleaseSaveRequest = {
+  kind: string;
+  id: string;
+  candidateId: string;
+  key: string;
+};
+
+export type ReleaseSaved = {
+  id: string;
+};
+
 export type RunStep = {
   at: string;
   tool: string;
