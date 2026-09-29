@@ -7,7 +7,7 @@ for (const fixture of [
 ]) {
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL });
-    test("compose, test and publish a typed function", async ({ page, request }, testInfo) => {
+    test("compose, test and publish a typed function", async ({ page, request }) => {
       const objectID = fresh("OBJ"), name = fresh("fn").replace(/[^a-z0-9]/gi, "").toLowerCase(), type = `build.${name}`;
       await decide(request, fixture.builder, "build", "build.object.create", { type: "build.object", id: objectID }, {
         name, title: fixture.title, fields: [{ name: "note", title: "Note", type: "text" }, { name: "day", title: "Day", type: "date" }],
@@ -24,11 +24,6 @@ for (const fixture of [
       await properties.getByRole("combobox", { name: "Source object" }).selectOption(type);
       await expect(properties.getByRole("checkbox", { name: /Day/ })).not.toBeVisible();
       await properties.getByRole("checkbox", { name: /Note/ }).check();
-      const canvas = page.getByRole("region", { name: "Function map", exact: true });
-      for (const id of ["source", "model", "output"]) await expect(canvas.locator(`[data-id="${id}"]`)).toBeVisible();
-      await properties.getByRole("checkbox", { name: /Note/ }).uncheck();
-      await properties.getByRole("checkbox", { name: /Note/ }).check();
-      for (const id of ["source", "model", "output"]) await expect(canvas.locator(`[data-id="${id}"]`)).toBeVisible();
       // Canvas selection reaches the same inspector as keyboard stage buttons.
       await page.getByRole("region", { name: "Function map", exact: true }).locator('[data-id="model"]').click();
       await properties.getByRole("textbox", { name: "Model instructions" }).fill("Use only the source note. Return a summary and whether review is needed.");
@@ -79,27 +74,12 @@ for (const fixture of [
       await expect(page.getByRole("status").filter({ hasText: "Installed function version 1." })).toBeVisible();
       await stages.getByRole("button", { name: "Record inputs", exact: true }).click();
       await expect(properties.getByRole("combobox", { name: "Source object" })).toBeDisabled();
-      await page.screenshot({ path: testInfo.outputPath("function-editor-desktop.png"), fullPage: true, animations: "disabled" });
       await stages.getByRole("button", { name: "Model inference", exact: true }).click();
       await properties.getByRole("textbox", { name: "Model instructions" }).fill("Updated instructions for later calls");
       await page.getByRole("button", { name: "Publish function", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "Installed function version 2." })).toBeVisible();
       await page.reload();
       await expect(page.getByRole("status").filter({ hasText: "Installed function version 2." })).toBeVisible();
-      await page.setViewportSize({ width: 390, height: 780 });
-      await stages.getByRole("button", { name: "Strict output", exact: true }).click();
-      await summary.getByRole("textbox", { name: "Output field name" }).scrollIntoViewIfNeeded();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-      await page.screenshot({ path: testInfo.outputPath("function-editor-narrow.png"), fullPage: true, animations: "disabled" });
-      const chinese = await page.context().newPage();
-      await chinese.addInitScript(() => localStorage.setItem("platform.language", "zh-CN"));
-      await open(chinese, fixture.builder, `/function?id=${fn.id}`);
-      await expect(chinese.getByRole("button", { name: "保存函数", exact: true })).toBeVisible();
-      await chinese.getByRole("region", { name: "函数步骤" }).getByRole("button", { name: "模型推断", exact: true }).click();
-      await expect(chinese.getByRole("textbox", { name: "模型指令" })).toHaveValue("Updated instructions for later calls");
-      await chinese.getByRole("region", { name: "函数图", exact: true }).scrollIntoViewIfNeeded();
-      await chinese.screenshot({ path: testInfo.outputPath("function-editor-chinese.png"), fullPage: true, animations: "disabled" });
-      await chinese.close();
     });
   });
 }

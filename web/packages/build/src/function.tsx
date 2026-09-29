@@ -5,7 +5,7 @@ import { type Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace,
   type CanvasNode, type NodeCatalog } from "@platform/ui";
 import { useEffect, useState } from "react";
-import { installedObjects, type WorkflowObject } from "./workflow";
+import { installedObjects, type WorkflowObject } from "./workflow-model";
 
 type FunctionDraft = { id: string; revision: number; name: string; title: string; description: string; object: string; fields: string[];
   instructions: string; output: Api.Field[]; model?: string; maxInputBytes: number; maxOutputBytes: number; maxTokens: number;

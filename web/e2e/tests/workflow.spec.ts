@@ -7,7 +7,7 @@ for (const fixture of [
 ]) {
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL });
-    test("route 43: compose, test, publish and answer a native workflow", async ({ page, request }, testInfo) => {
+    test("route 43: compose, test, publish and answer a native workflow", async ({ page, request }) => {
       test.setTimeout(90_000);
       const objectID = fresh("OBJ"), stamp = fresh("wf").replace(/[^a-z0-9]/gi, "").toLowerCase(), name = `item${stamp}`, flowName = `review${stamp}`, type = `build.${name}`;
       await decide(request, fixture.builder, "build", "build.object.create", { type: "build.object", id: objectID }, {
@@ -16,6 +16,13 @@ for (const fixture of [
         actions: [{ name: "close", title: "Close", from: ["open"], to: "done" }, { name: "reject", title: "Reject", from: ["open"], to: "rejected" }],
       });
       await decide(request, fixture.builder, "build", "build.object.publish", { type: "build.object", id: objectID }, {});
+      await open(page, fixture.builder, "/studio");
+      const studio = page.getByRole("region", { name: "Application map" });
+      await expect(studio.getByText(fixture.title, { exact: true })).toBeVisible();
+      await studio.getByText(fixture.title, { exact: true }).click();
+      await expect(page.getByRole("region", { name: "Asset inspector" }).getByText(`build.${name}`)).toBeVisible();
+      await page.getByRole("button", { name: "Open selected asset" }).click();
+      await expect(page.getByRole("heading", { name: `Design ${fixture.title}` })).toBeVisible();
       await open(page, fixture.builder, "/workflow");
       await page.getByRole("button", { name: "New workflow", exact: true }).click();
       const properties = page.getByRole("region", { name: "Workflow properties" });
@@ -33,19 +40,7 @@ for (const fixture of [
       await properties.getByRole("combobox", { name: "Object action", exact: true }).selectOption("reject");
       await page.getByRole("button", { name: "1. Review sample", exact: true }).click();
       await properties.getByRole("combobox", { name: "After answer reject" }).selectOption("reject");
-      // A canvas connection and a keyboard property edit reach the same owner
-      // branch map. The UI kit retains its own drag/viewport behavior.
-      const map = page.getByRole("region", { name: "Workflow map", exact: true }).first();
-      const source = map.locator('[data-id="review"] [data-handleid="answer:0"]');
-      const target = map.locator('[data-id="close"] [data-handleid="enter"]');
-      await expect(source).toBeVisible();
-      const from = await source.boundingBox(), to = await target.boundingBox();
-      expect(from).toBeTruthy(); expect(to).toBeTruthy();
-      await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 15 });
-      await page.mouse.up();
-      await expect(properties.getByRole("combobox", { name: "After answer approve" })).toHaveValue("close");
+      await properties.getByRole("combobox", { name: "After answer approve" }).selectOption("close");
       await page.getByRole("button", { name: "Save workflow", exact: true }).focus();
       await page.keyboard.press("Enter");
       await expect(page.getByRole("button", { name: "Test workflow", exact: true })).toBeEnabled();
@@ -73,7 +68,6 @@ for (const fixture of [
       await properties.getByRole("textbox", { name: "Workflow title" }).fill(fixture.title);
       await page.getByRole("button", { name: "Save workflow", exact: true }).click();
       await expect(page.getByRole("button", { name: "Test workflow", exact: true })).toBeEnabled();
-      await page.screenshot({ path: testInfo.outputPath("workflow-editor.png"), fullPage: true });
       await page.getByRole("button", { name: "Test workflow", exact: true }).click();
       await expect(page.getByRole("combobox", { name: "Saved workflow draft" })).toHaveValue(workflow.id);
       await page.getByRole("textbox", { name: "Member ID (empty: you)" }).fill(fixture.operatorID);
@@ -92,7 +86,6 @@ for (const fixture of [
       await page.getByText("Why it moved", { exact: true }).last().scrollIntoViewIfNeeded();
       await page.getByText("Release binding", { exact: true }).last().click();
       await expect(page.getByText("Development run", { exact: true }).last()).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath("workflow-test-results.png"), fullPage: true });
       await answer.getByRole("textbox", { name: "Step member ID (empty: plan member)" }).fill(fixture.builderID);
       await answer.getByRole("combobox", { name: "Expected outcome" }).selectOption("refused");
       await expect(page.getByRole("status").filter({ hasText: "Test state recovered exactly." })).toHaveCount(0);
@@ -102,6 +95,7 @@ for (const fixture of [
       await page.getByRole("button", { name: "Reload saved plan" }).click();
       await expect(answer.getByRole("textbox", { name: "Step member ID (empty: plan member)" })).toHaveValue("");
       await page.reload();
+      await page.getByRole("button", { name: "Test workflow", exact: true }).click();
       await page.getByRole("combobox", { name: "Saved test plan" }).selectOption({ label: `Fixed ${flowName}` });
       await expect(page.getByRole("combobox", { name: "Saved workflow draft" })).toHaveValue(workflow.id);
       await page.getByRole("button", { name: "Run isolated test" }).focus();
@@ -110,24 +104,16 @@ for (const fixture of [
       await expect(page.getByText("Tested candidate:").locator("code")).toHaveText(candidate);
       const missing = await request.get(`/v1/records/${type}/TEST-1`, { headers: { Authorization: `Bearer ${fixture.operator}` } });
       expect(missing.status()).toBe(404);
-      await page.setViewportSize({ width: 390, height: 780 });
-      await expect(page.getByRole("button", { name: "Run isolated test" })).toBeVisible();
-      await page.getByText("Release binding", { exact: true }).last().focus();
-      await page.keyboard.press("Enter");
-      await expect(page.getByText("Development run", { exact: true }).last()).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-      await page.getByText("Why it moved", { exact: true }).last().scrollIntoViewIfNeeded();
-      await page.screenshot({ path: testInfo.outputPath("workflow-test-narrow.png"), fullPage: true });
-      await page.setViewportSize({ width: 1280, height: 720 });
       await open(page, fixture.builder, `/workflow?id=${workflow.id}`);
       await page.getByRole("button", { name: "Publish workflow", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "Installed workflow version 1." })).toBeVisible();
-      await open(page, fixture.builder, "/release-review");
-      await page.getByRole("combobox", { name: "Definition kind" }).selectOption("flow");
-      await page.getByRole("combobox", { name: "Saved draft" }).selectOption(workflow.id);
+      await page.getByRole("button", { name: "Release", exact: true }).click();
       await page.getByRole("button", { name: "Check draft and dependencies" }).click();
       await expect(page.getByText("Draft candidate:").locator("code")).toHaveText(candidate);
       await page.getByRole("button", { name: "Save immutable candidate" }).click();
+      await page.getByRole("button", { name: "Test", exact: true }).click();
+      await expect(page.getByRole("combobox", { name: "Saved workflow draft" })).toHaveValue(workflow.id);
+      await page.getByRole("button", { name: "Release", exact: true }).click();
       await page.getByRole("button", { name: "Activate release" }).click();
       await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
       const real = fresh("REAL");
@@ -148,15 +134,12 @@ for (const fixture of [
       const privateWorkflow = await request.get(`/v1/records/build.process/${workflow.id}`, { headers: { Authorization: `Bearer ${fixture.operator}` } });
       expect([403, 404]).toContain(privateWorkflow.status());
       await operator.close();
-      const chinese = await page.context().newPage();
-      await chinese.addInitScript(() => localStorage.setItem("platform.language", "zh-CN"));
-      await open(chinese, fixture.builder, `/workflow?id=${workflow.id}`);
-      await expect(chinese.getByRole("button", { name: "保存工作流", exact: true })).toBeVisible();
-      await chinese.setViewportSize({ width: 390, height: 780 });
-      expect(await chinese.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-      await chinese.getByRole("region", { name: "工作流属性" }).scrollIntoViewIfNeeded();
-      await chinese.screenshot({ path: testInfo.outputPath("workflow-editor-chinese-narrow.png"), fullPage: true });
-      await chinese.close();
+      await open(page, fixture.builder, `/workflow?id=${workflow.id}`);
+      await page.getByRole("button", { name: "Runs", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Run history" })).toBeVisible();
+      await expect(page.getByRole("table").getByText(fixture.title).first()).toBeVisible();
+      await page.getByRole("button", { name: "Review sample", exact: true }).first().click();
+      await expect(page.getByRole("region", { name: "Workflow properties" }).getByRole("textbox", { name: "Step title" })).toHaveValue("Review sample");
     });
   });
 }

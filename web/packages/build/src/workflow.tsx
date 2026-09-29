@@ -1,23 +1,13 @@
 // The owner definition is build.process. Canvas and keyboard properties edit
 // its Steps/Next/Branches directly; Flow/Work owns all execution and testing.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, canvasNodeHeight, layout, t, useWorkspace,
+import { Button, Card, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Tag, Textarea, canvasNodeHeight, layout, t, useWorkspace,
   type CanvasEdge, type CanvasNode, type NodeCatalog } from "@platform/ui";
-import { useEffect, useState } from "react";
-
-export type WorkflowStep = { name: string; title?: string; ask?: string; answers?: string[]; act?: string; function?: { name: string; version: number }; next?: string; branches?: Record<string, string> };
-export type WorkflowDraft = { id: string; revision: number; name: string; title: string; object: string; when: string; steps: WorkflowStep[]; version?: number; published?: string };
-export type WorkflowObject = { id: string; name: string; title: string; published?: string; states?: { name: string; title: string }[];
-  actions?: { name: string; title: string; inputs?: { required?: boolean }[]; approval?: unknown }[]; access?: { role: string; read: string }[] };
-
-/** Pickers use the installed source semantics, even while its draft changes. */
-export function installedObjects<T extends WorkflowObject>(records: T[]): T[] {
-  return records.flatMap((record) => {
-    if (!record.published) return [];
-    try { const installed = JSON.parse(record.published) as T; return [installed]; }
-    catch { return []; }
-  });
-}
+import { useEffect, useRef, useState } from "react";
+import { installedObjects, type WorkflowDraft, type WorkflowObject, type WorkflowStep } from "./workflow-model";
+import { CandidateTest } from "./simulate";
+import { ReleaseReview } from "./release";
+import { WorkflowRuns } from "./workflow-runs";
 type WorkflowFunction = { name: string; title: string; object: string; version: number; versions?: string[] };
 const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", steps: [] });
 const nextName = (steps: WorkflowStep[], base: string) => {
@@ -49,6 +39,10 @@ export function WorkflowEditor({ id }: { id: string }) {
   const [chosen, setChosen] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [stage, setStage] = useState<"design" | "test" | "runs" | "release">("design");
+  const [visited, setVisited] = useState<string[]>([]);
+  const designRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (query.data?.record && !dirty) setDraft(query.data.record); }, [query.data, dirty]);
   const object = objects.find((o) => `build.${o.name}` === draft.object);
   const functions = (functionRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
@@ -109,23 +103,41 @@ export function WorkflowEditor({ id }: { id: string }) {
     const steps = [...draft.steps]; [steps[chosen], steps[next]] = [steps[next]!, steps[chosen]!];
     change({ steps }); setChosen(next);
   };
+  const show = (next: typeof stage) => {
+    setStage(next);
+    if (next !== "design") setVisited((old) => old.includes(next) ? old : [...old, next]);
+    requestAnimationFrame(() => (next === "design" ? designRef : dockRef).current?.scrollIntoView({ block: "start" }));
+  };
+  const inspectStep = (name: string) => {
+    const index = draft.steps.findIndex((item) => item.name === name);
+    if (index >= 0) { setChosen(index); show("design"); }
+  };
   if (role("build") !== "builder") return <PageHeader title={t("Workflows")} description={t("Only a builder can edit workflows.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("Workflows")} description={query.isError ? t("The workflow could not be loaded.") : t("Loading…")} />;
   return <div className="flex flex-col gap-3 lg:min-h-0">
-    <PageHeader title={draft.title || t("New workflow")} description={t("Save the draft, test fixed samples, then publish its next native version.")}
-      actions={<div className="flex flex-wrap gap-2">
-        <Button onClick={() => open({ view: "workflow" })}>{t("Workflows")}</Button>
-        <Button disabled={busy || !draft.id} onClick={() => void perform(reload)}>{t("Reload saved workflow")}</Button>
-        <Button disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
-        <Button disabled={busy || !draft.id || dirty} onClick={() => open({ view: "candidate-test", params: { processId: draft.id } })}>{t("Test workflow")}</Button>
-        <Button variant="primary" disabled={busy || !draft.id} onClick={() => void perform(publish)}>{t("Publish workflow")}</Button>
-      </div>} />
+    <PageHeader title={draft.title || t("New workflow")} description={t("Edit, test and release this workflow in one workspace.")} />
+    <Panel role="toolbar" aria-label={t("Workflow actions")} className="flex flex-wrap items-center gap-2 p-2">
+      <Button variant="ghost" onClick={() => open({ view: "studio" })}>{t("Studio overview")}</Button>
+      <Button variant="ghost" onClick={() => open({ view: "workflow" })}>{t("Workflows")}</Button>
+      <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
+      <Button disabled={busy || !draft.id} onClick={() => void perform(reload)}>{t("Reload saved workflow")}</Button>
+      <Button disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
+      <Button disabled={busy || !draft.id || dirty} onClick={() => show("test")}>{t("Test workflow")}</Button>
+      <Button variant="primary" disabled={busy || !draft.id} onClick={() => void perform(publish)}>{t("Publish workflow")}</Button>
+      <span className="ml-auto"><Tag label={dirty ? t("Unsaved") : draft.version ? t("Published") : t("Draft")} tone={dirty ? "warning" : draft.version ? "success" : "neutral"} /></span>
+    </Panel>
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed workflow version {version}. Existing instances keep their starting version.", { version: draft.version })}</Panel> : null}
     {dirty && <Panel role="status" className="text-xs">{t("Not saved yet. Publishing saves first.")}</Panel>}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {(dirty || draft.id) && issues.length > 0 && <Panel className="text-xs text-danger" aria-live="polite">{issues.join(" ")}</Panel>}
     {(sources.isError || functionRecords.isError) && <Panel role="alert">{t("The workflow sources could not be loaded.")}</Panel>}
-    <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-[14rem_minmax(0,1fr)_20rem]">
+    <nav aria-label={t("Workflow workspace")} className="flex flex-wrap gap-1 rounded-md border border-border bg-surface p-1">
+      {([ ["design", t("Design")], ["test", t("Test")], ["runs", t("Runs")], ["release", t("Release")] ] as const).map(([key, label]) =>
+        <Button key={key} variant={stage === key ? "primary" : "ghost"} aria-pressed={stage === key}
+          disabled={key !== "design" && (!draft.id || dirty)} onClick={() => show(key)}>{label}</Button>)}
+    </nav>
+    <div ref={designRef}>
+    <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-[12rem_minmax(0,1fr)_17rem] 2xl:grid-cols-[14rem_minmax(0,1fr)_20rem]">
       <Panel role="region" aria-label={t("Workflow steps")} className="grid content-start gap-2 p-3">
         <Button variant={chosen === -1 ? "primary" : "ghost"} onClick={() => setChosen(-1)}>{t("Workflow settings")}</Button>
         <p className="text-xs text-muted">{t("The first step starts the workflow. Connections choose what follows.")}</p>
@@ -189,6 +201,18 @@ export function WorkflowEditor({ id }: { id: string }) {
         </>}
       </Panel>
     </fieldset>
+    </div>
+    {draft.id && <div ref={dockRef} className={stage === "design" ? "hidden" : "grid gap-3 rounded-md border border-border bg-background p-3"}>
+      {visited.includes("test") && <div className={stage === "test" ? "" : "hidden"}>
+        <CandidateTest processId={draft.id} embedded onStepSelect={inspectStep} />
+      </div>}
+      {visited.includes("runs") && <div className={stage === "runs" ? "" : "hidden"}>
+        <WorkflowRuns name={draft.name} onStepSelect={inspectStep} />
+      </div>}
+      {visited.includes("release") && <div className={stage === "release" ? "" : "hidden"}>
+        <ReleaseReview flowId={draft.id} embedded />
+      </div>}
+    </div>}
   </div>;
 }
 
@@ -208,7 +232,7 @@ function WorkflowMap({ draft, chosen, onChoose, onChange }: { draft: WorkflowDra
     ...draft.steps.map((s, i) => ({ id: s.name, kind: `step:${i}`, label: s.title || s.name, detail: s.ask || s.act || (s.function ? `${s.function.name} · ${t("Version")} ${s.function.version}` : undefined), position: places.get(s.name) ?? { x: 0, y: 0 } }))];
   return <Card className="grid gap-2 p-3">
     <p className="text-xs text-muted">{t("Connect outputs to steps, or use the properties with your keyboard. Select a line and Delete to remove its path.")}</p>
-    <NodeCanvas label={t("Workflow map")} catalog={catalog} nodes={nodes} edges={edges} selected={chosen < 0 ? "@start" : draft.steps[chosen]?.name}
+    <NodeCanvas label={t("Workflow map")} catalog={catalog} nodes={nodes} edges={edges} height={460} selected={chosen < 0 ? "@start" : draft.steps[chosen]?.name}
       onSelect={(name) => onChoose(draft.steps.findIndex((s) => s.name === name))}
       onConnect={(c) => {
         if (c.source === "@start") {

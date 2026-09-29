@@ -18,7 +18,7 @@
 
 ## 快速验证
 
-阅读顺序：Intent → Platform §10 → WorkQueue。当前能力证据、目标设计与任务完成状态各自拥有唯一归宿；规划中的构建器不代表已可用的产品特性。
+AI 的阅读与批次规则见 AGENTS；当前项只看 WorkQueue，检查按 [Testing 的影响面选择表](docs/Testing.md#检查选择与停止)。下方是常用入口，不要求每批全部运行。
 
 ```sh
 scripts/verify.sh ci          # 持续集成测试套件

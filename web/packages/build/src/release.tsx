@@ -17,10 +17,10 @@ const kinds: { kind: Kind; type: string; label: string }[] = [
   { kind: "function", type: "build.function", label: "AI functions" },
 ];
 
-export function ReleaseReview() {
+export function ReleaseReview({ flowId = "", embedded = false }: { flowId?: string; embedded?: boolean } = {}) {
   const { client, role } = useHost();
-  const [kind, setKind] = useState<Kind>("object");
-  const [id, setId] = useState("");
+  const [kind, setKind] = useState<Kind>(flowId ? "flow" : "object");
+  const [id, setId] = useState(flowId);
   const [review, setReview] = useState<Api.ReleasePreview>();
   const [candidateKey, setCandidateKey] = useState("");
   const [savedID, setSavedID] = useState("");
@@ -114,19 +114,19 @@ export function ReleaseReview() {
     </div>
   );
   return <div className="grid gap-3">
-    <PageHeader title={t("Release review")} description={t("Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.")} />
+    {!embedded && <PageHeader title={t("Release review")} description={t("Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.")} />}
     <Card className="grid gap-3 p-3">
-      <label className="grid gap-1 text-xs">{t("Definition kind")}
+      {!embedded && <label className="grid gap-1 text-xs">{t("Definition kind")}
         <Select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setId(""); setReview(undefined); setSavedID(""); setActiveID(""); setPlanID(""); setReportID(""); setError(""); }}>
           {kinds.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
         </Select>
-      </label>
-      <label className="grid gap-1 text-xs">{t("Saved draft")}
+      </label>}
+      {!embedded && <label className="grid gap-1 text-xs">{t("Saved draft")}
         <Select value={id} onChange={(event) => { setId(event.target.value); setReview(undefined); setSavedID(""); setActiveID(""); setPlanID(""); setReportID(""); setError(""); }}>
           <option value="">{t("Choose a saved draft")}</option>
           {records.map((record) => <option key={record.id} value={record.id}>{record.title || record.name} · {record.state}</option>)}
         </Select>
-      </label>
+      </label>}
       {query.isError && <p role="alert" className="text-sm text-danger">{t("Release review could not be loaded.")}</p>}
       <Button disabled={!id || busy} onClick={inspect}>{busy ? t("Checking…") : t("Check draft and dependencies")}</Button>
     </Card>

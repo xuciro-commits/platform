@@ -12,7 +12,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   // On a Mac the installed Google Chrome runs the tests; CI installs Playwright's Chromium.
-  use: { baseURL: `http://127.0.0.1:${port}`, locale: "en-US", trace: "retain-on-failure", channel: process.env.CI ? undefined : "chrome" },
+  use: { baseURL: `http://127.0.0.1:${port}`, locale: "en-US", trace: "retain-on-failure", screenshot: process.env.PLATFORM_SCREENSHOTS ? "on" : "only-on-failure", channel: process.env.CI ? undefined : "chrome" },
   webServer: [{
     command: `go run ./cmd/hospitality-server -addr 127.0.0.1:${port} -web ../../web/apps/workspace/dist`,
     cwd: "../../solutions/hospitality",

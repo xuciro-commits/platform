@@ -9,5 +9,5 @@ export default defineConfig({
   workers: 1,
   outputDir: `test-results/deploy-${process.env.PLATFORM_DEPLOY_PHASE ?? "unset"}`,
   reporter: [["list"]],
-  use: { locale: "en-US", trace: "retain-on-failure", channel: process.env.CI ? undefined : "chrome" },
+  use: { locale: "en-US", trace: "retain-on-failure", screenshot: process.env.PLATFORM_SCREENSHOTS ? "on" : "only-on-failure", channel: process.env.CI ? undefined : "chrome" },
 });

@@ -11,6 +11,7 @@ import { WorkflowEditor, Workflows } from "./workflow";
 import { FunctionEditor, Functions } from "./function";
 import { ReleaseReview } from "./release";
 import { CandidateTest } from "./simulate";
+import { StudioOverview } from "./studio";
 import { t, type NavSection } from "@platform/ui";
 import { AppWindow, Boxes, GitBranch, Hammer, LayoutList } from "lucide-react";
 
@@ -21,8 +22,9 @@ export default defineApp({
   id: "build",
   title: t("Application Studio"),
   icon: <Hammer />,
-  home: page("objects"),
+  home: { view: "studio" },
   views: [
+    { id: "studio", title: () => t("Application Studio"), render: () => <StudioOverview /> },
     { id: "pages", title: () => t("Pages"), render: () => <PagesList /> },
     { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
     { id: "process", title: () => t("Object design"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
@@ -38,6 +40,7 @@ export default defineApp({
       {
         label: t("Application Studio"),
         items: [
+          { label: t("Overview"), icon: <Boxes />, route: { view: "studio" } },
           { label: t("Objects"), icon: <Hammer />, route: page("objects") },
           { label: t("Process and access"), icon: <GitBranch />, route: { view: "process" } },
           { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },

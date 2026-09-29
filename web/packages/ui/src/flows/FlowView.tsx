@@ -55,8 +55,9 @@ export function FlowGraph({ definition, instance, height = 260 }: { definition: 
 }
 
 /** A flow instance: its graph, where it waits and what can be done there, and why it moved. */
-export function FlowView({ definition, instance, actions }: {
+export function FlowView({ definition, instance, actions, onStepSelect }: {
   definition?: FlowDefinition; instance: FlowInstanceData; actions?: (token: FlowToken) => React.ReactNode;
+  onStepSelect?: (step: string) => void;
 }) {
   const trace = instance.trace ?? [];
   const tokens = instance.tokens ?? [];
@@ -98,7 +99,9 @@ export function FlowView({ definition, instance, actions }: {
             {trace.map((t, i) => (
               <tr key={i} className="border-b border-border align-top">
                 <td className="w-40 py-1 pr-2 text-xs text-muted tabular-nums">{new Date(t.at).toLocaleString()}</td>
-                <td className="w-28 py-1 pr-2 font-mono text-xs">{t.step ?? ""}</td>
+                <td className="w-28 py-1 pr-2 font-mono text-xs">{t.step && onStepSelect
+                  ? <button type="button" className="text-left text-primary underline-offset-2 hover:underline focus-visible:underline" onClick={() => onStepSelect(t.step!)}>{title(t.step)}</button>
+                  : t.step ?? ""}</td>
                 <td className="w-28 py-1 pr-2">{t.what}</td>
                 <td className="py-1 pr-2">{t.detail}</td>
                 <td className="w-28 py-1 text-xs text-muted">{t.by}</td>

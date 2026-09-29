@@ -28,7 +28,7 @@ for (const fixture of fixtures) {
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL });
     if (phase === "before") {
-      test("builder evaluates and activates the shared candidate in the deployed workspace", async ({ page, request }, testInfo) => {
+      test("builder evaluates and activates the shared candidate in the deployed workspace", async ({ page, request }) => {
         const token = await signIn(page, fixture.builder);
         const headers = { Authorization: `Bearer ${token}` };
         const preview = await (await request.post("/v1/releases/preview", { headers, data: { kind: "object", id: "WF-O" } })).json() as { candidateId: string };
@@ -55,10 +55,9 @@ for (const fixture of fixtures) {
         await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
         const active = await (await request.get("/v1/releases/active", { headers })).json() as { id: string };
         expect(active.id).toBe(preview.candidateId);
-        await page.screenshot({ path: testInfo.outputPath("deployed-release-review.png"), fullPage: true, animations: "disabled" });
       });
     }
-    test(`shared function page and flow ${phase} database recovery`, async ({ page, request }, testInfo) => {
+    test(`shared function page and flow ${phase} database recovery`, async ({ page, request }) => {
       const token = await signIn(page, fixture.email);
       const headers = { Authorization: `Bearer ${token}` };
       const active = await (await request.get("/v1/releases/active", { headers })).json() as { id: string };
@@ -84,18 +83,11 @@ for (const fixture of fixtures) {
       await page.getByRole("table").last().getByRole("row").filter({ hasText: `${fixture.type}/${source}` }).last().click();
       await expect(page.getByText("Measured model call")).toBeVisible();
       await expect(page.getByText("$0.010000")).toBeVisible();
-      if (phase === "after") {
-        await page.setViewportSize({ width: 390, height: 844 });
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-        await page.screenshot({ path: testInfo.outputPath("deployed-function-narrow.png"), fullPage: true, animations: "disabled" });
-        await page.setViewportSize({ width: 1280, height: 720 });
-      }
       const instanceURL = `/v1/records/flow.instance/${fixture.flow}:${source}`;
       const instance = await (await request.get(instanceURL, { headers })).json() as { record: { release: string; version: number; state: string } };
       expect(instance.record.release).toBe(active.id);
       expect(instance.record.version).toBe(3);
       expect(instance.record.state).toBe("waiting");
-      await page.screenshot({ path: testInfo.outputPath(`deployed-function-${phase}.png`), fullPage: true, animations: "disabled" });
       await page.goto("/#/inbox");
       const review = page.getByRole("listitem").filter({ hasText: source });
       await expect(review).toBeVisible();

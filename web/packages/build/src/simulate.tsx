@@ -1,7 +1,7 @@
 import { useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, Checkbox, FlowView, Input, PageHeader, Select, Textarea, t } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { installedObjects, type WorkflowDraft, type WorkflowObject } from "./workflow";
+import { installedObjects, type WorkflowDraft, type WorkflowObject } from "./workflow-model";
 import { useEffect, useState } from "react";
 
 type ObjectDraft = WorkflowObject;
@@ -12,7 +12,9 @@ type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMill
 type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
-export function CandidateTest({ processId = "", functionId = "" }: { processId?: string; functionId?: string }) {
+export function CandidateTest({ processId = "", functionId = "", embedded = false, onStepSelect }: {
+  processId?: string; functionId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
+}) {
   const { client, role, decide } = useHost();
   const objects = useRecordInventory<ObjectDraft>("build.object");
   const plans = useRecordInventory<TestPlan>("build.testplan");
@@ -132,7 +134,7 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
   };
   if (role("build") !== "builder") return <PageHeader title={t("Test a candidate")} description={t("Only a builder can test saved definitions.")} />;
   return <div className="grid gap-3">
-    <PageHeader title={t("Test a candidate")} description={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")} />
+    {!embedded && <PageHeader title={t("Test a candidate")} description={t("Try saved definitions with fixed sample actions and human answers. Every run starts empty; production records and effects are never used.")} />}
     <Card className="p-3">
       <fieldset disabled={busy} className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -143,7 +145,7 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
               if (plan) load(plan);
             }}>
               <option value="">{t("New test plan")}</option>
-              {(plans.data?.records ?? []).map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}
+              {(plans.data?.records ?? []).filter((plan) => !embedded || !processId || plan.process === processId).map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}
             </Select>
           </label>
           <label className="grid gap-1 text-xs">{t("Test plan name")}
@@ -151,11 +153,11 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
           </label>
         </div>
         {plans.isError && <p role="alert" className="text-sm text-danger">{t("The saved test plans could not be loaded.")}</p>}
-        <label className="grid gap-1 text-xs">{t("Candidate kind")}
+        {!embedded && <label className="grid gap-1 text-xs">{t("Candidate kind")}
           <Select value={kind} onChange={(e) => { setKind(e.target.value as typeof kind); setID(""); setSteps([]); clear(); }}>
             <option value="object">{t("Objects")}</option><option value="flow">{t("Workflows")}</option><option value="function">{t("AI functions")}</option>
           </Select>
-        </label>
+        </label>}
         {kind === "function" ? <>
           <label className="grid gap-1 text-xs">{t("Saved function draft")}
             <Select value={id} onChange={(e) => { setID(e.target.value); clear(); const chosen = functions.data?.records.find((f) => f.id === e.target.value); setSteps(chosen ? functionSteps(chosen) : []); }}>
@@ -164,7 +166,7 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
           </label>
 
         </> : kind === "flow" ? <label className="grid gap-1 text-xs">{t("Saved workflow draft")}
-          <Select value={id} onChange={(e) => { setID(e.target.value); clear(); const chosen = processes.data?.records.find((p) => p.id === e.target.value); setSteps(chosen ? workflowSteps(chosen) : []); }}>
+          <Select value={id} disabled={embedded} onChange={(e) => { setID(e.target.value); clear(); const chosen = processes.data?.records.find((p) => p.id === e.target.value); setSteps(chosen ? workflowSteps(chosen) : []); }}>
             <option value="">{t("Choose a saved draft")}</option>{processes.data?.records.map((p) => <option key={p.id} value={p.id}>{p.title || p.name}</option>)}
           </Select>
         </label> : <label className="grid gap-1 text-xs">{t("Saved object draft")}
@@ -291,7 +293,7 @@ export function CandidateTest({ processId = "", functionId = "" }: { processId?:
         </Card>)}
         {step.refusal && <p className="text-sm text-danger">{step.refusal}</p>}
         {step.flows?.map((flow) => <Card key={flow.id} className="min-w-0 overflow-x-auto p-2">
-          <FlowView instance={{ ...flow, title: process?.title ?? flow.flow, key: flow.id, undo: null }} />
+          <FlowView instance={{ ...flow, title: process?.title ?? flow.flow, key: flow.id, undo: null }} onStepSelect={onStepSelect} />
         </Card>)}
         {step.tasks?.map((task) => <p key={task.id} className="text-xs">{t("Human task")}: {task.title}</p>)}
         {step.changes.map((change) => <div key={`${change.type}/${change.id}`} className="min-w-0 text-xs">
