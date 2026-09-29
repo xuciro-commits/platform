@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
 	"platformserver/platform"
@@ -51,7 +53,7 @@ func TestSimulateIsDiscarded(t *testing.T) {
 	before, entries := snapshot(tn), len(journal)
 
 	out, kerr := tn.Simulate(member("dana"), "eli", sub("eli", visit+".close", visit, "V1", map[string]any{}), now)
-	if err != nil {
+	if kerr != nil {
 		t.Fatalf("dry run error: %v", kerr)
 	}
 	if !out.Accepted || len(out.Changes) != 1 || !strings.Contains(string(out.Changes[0].Record), `"state":"done"`) {
@@ -66,5 +68,42 @@ func TestSimulateIsDiscarded(t *testing.T) {
 	}
 	if snapshot(tn) != before || len(journal) != entries {
 		t.Fatal("a dry run left records, notices or journal entries behind")
+	}
+}
+
+func TestSimulationResultsUseBuilderReadPermissions(t *testing.T) {
+	tn := stockTenant(t, build.New("t-1"))
+	console := tn.app(PlatformApp).(*Console)
+	console.members["op"].Roles[build.ID] = build.Builder
+	builder, _ := tn.Member("op") // reads only line L1, without the lead-only secret
+	now := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	before := snapshot(tn)
+	for _, line := range []string{"L1", "L2"} {
+		payload, _ := json.Marshal(map[string]string{"name": "Private part", "line": line, "secret": "lead-only value"})
+		sub := &pb.Submission{TenantId: "original", PrincipalId: "original", Authority: "original",
+			Target: &pb.EntityRef{Type: "stock.item", Id: "TEST"}, Schema: &pb.SchemaRef{Name: "stock.item.create", Version: 1}, Payload: payload}
+		original := proto.Clone(sub)
+		out, err := tn.Simulate(builder, "lead", sub, now)
+		if err != nil || !out.Accepted {
+			t.Fatalf("simulate %s: %+v, %v", line, out, err)
+		}
+		if !proto.Equal(original, sub) {
+			t.Fatal("simulation altered the supplied submission")
+		}
+		if line == "L1" {
+			if len(out.Changes) != 1 || strings.Contains(string(out.Changes[0].Record), "lead-only value") {
+				t.Fatalf("field read mask not applied: %+v", out)
+			}
+		} else if len(out.Changes) != 0 {
+			t.Fatalf("out-of-scope test record leaked: %+v", out)
+		}
+	}
+	foreign := builder
+	foreign.Tenant = "foreign"
+	if _, err := tn.Simulate(foreign, "lead", nil, now); err == nil {
+		t.Fatal("foreign builder simulated this tenant")
+	}
+	if snapshot(tn) != before {
+		t.Fatal("simulation changed production records or audit state")
 	}
 }
