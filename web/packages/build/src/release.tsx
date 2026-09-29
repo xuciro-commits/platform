@@ -118,7 +118,7 @@ export function ReleaseReview() {
       {!review.diagnostic && review.candidateId && <div className="grid gap-2">
         <Button disabled={busy || Boolean(savedID)} onClick={save}>{busy ? t("Saving…") : t("Save immutable candidate")}</Button>
         {savedID && !activeID && <p className="break-all text-sm" role="status">{t("Candidate saved; not active for operators.")} <code>{savedID}</code></p>}
-        {savedID && <Button variant="secondary" disabled={busy || activeID === savedID} onClick={activate}>{t("Activate release")}</Button>}
+        {savedID && <Button variant="default" disabled={busy || activeID === savedID} onClick={activate}>{t("Activate release")}</Button>}
         {activeID && <p className="break-all text-sm" role="status">{t("Release active for operators.")} <code>{activeID}</code></p>}
       </div>}
     </Card>}
