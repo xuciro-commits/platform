@@ -37,6 +37,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		if section.Object.Name != "" {
 			requires = append(requires, section.Object)
 		}
+		if section.Query.Name != "" {
+			requires = append(requires, section.Query)
+		}
 		requires = append(requires, section.Actions...)
 	}
 	slices.SortFunc(requires, compareRef)
@@ -228,6 +231,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		for _, section := range page.Sections {
 			if section.Object.Name != "" {
 				required = append(required, section.Object)
+			}
+			if section.Query.Name != "" {
+				required = append(required, section.Query)
 			}
 			required = append(required, section.Actions...)
 		}

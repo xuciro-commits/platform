@@ -64,6 +64,7 @@ func TestReleaseCandidateRefusesUnclosedAndAmbiguousAssets(t *testing.T) {
 	}{
 		{"missing", []AssetRef{page}, []ReleaseAsset{{Ref: page, ContractVersion: 1, SourceVersion: "1", Requires: []AssetRef{object}, Body: json.RawMessage(`{"name":"orders","object":{"app":"mes","kind":"object","name":"mes.order"}}`)}}, "missing asset"},
 		{"omitted page dependency", []AssetRef{page}, []ReleaseAsset{valid, {Ref: page, ContractVersion: 1, SourceVersion: "1", Body: json.RawMessage(`{"name":"orders","object":{"app":"mes","kind":"object","name":"mes.order"}}`)}}, "omits bound dependency"},
+		{"omitted query dependency", []AssetRef{page}, []ReleaseAsset{valid, {Ref: page, ContractVersion: 1, SourceVersion: "1", Requires: []AssetRef{object}, Body: json.RawMessage(`{"name":"orders","object":{"app":"mes","kind":"object","name":"mes.order"},"sections":[{"widget":"table","query":{"app":"mes","kind":"query","name":"released-orders"}}]}`)}}, "omits bound dependency mes/query/released-orders"},
 		{"cycle", []AssetRef{object}, []ReleaseAsset{{Ref: object, ContractVersion: 1, SourceVersion: "1", Requires: []AssetRef{object}, Body: json.RawMessage(`{"type":"mes.order"}`)}}, "cycle"},
 		{"duplicate", []AssetRef{object}, []ReleaseAsset{valid, valid}, "declared twice"},
 		{"duplicate JSON key", []AssetRef{object}, []ReleaseAsset{{Ref: object, ContractVersion: 1, SourceVersion: "1", Body: json.RawMessage(`{"type":"mes.order","scope":{"role":"a","role":"b"}}`)}}, "duplicate JSON key"},

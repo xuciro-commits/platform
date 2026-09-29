@@ -986,3 +986,45 @@ test("route 39: an action creates a related record", async ({ page, request }, t
   await expect(page.getByText("Call back tomorrow")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("action-creates-record.png"), fullPage: true });
 });
+
+// Route 40 (ADR-0040 21c): a composed page lists a named query of its object
+// or a related object. Opening the page and selecting an account lists only its
+// open opportunities, while closed opportunities are not shown.
+test("route 40: a page lists a named query", async ({ page, request }, testInfo) => {
+  const acc = fresh("ACC"), otherAcc = fresh("ACC");
+  const openOpp = fresh("OPP"), closedOpp = fresh("OPP"), otherOpp = fresh("OPP");
+  const name = `qpage${Date.now().toString(36).slice(-5)}`, id = fresh("P");
+
+  // Create accounts
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: acc }, { name: "Target " + acc, kind: "company" });
+  await decide(request, "sales", "crm", "crm.account.create", { type: "crm.account", id: otherAcc }, { name: "Other " + otherAcc, kind: "company" });
+
+  // Create opportunities: open on acc, closed on acc, open on otherAcc
+  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: openOpp }, { account: acc, title: "Open deal " + openOpp });
+  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: closedOpp }, { account: acc, title: "Closed deal " + closedOpp });
+  await decide(request, "sales", "crm", "crm.opportunity.close", { type: "crm.opportunity", id: closedOpp }, { outcome: "lost" });
+  await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: otherOpp }, { account: otherAcc, title: "Other deal " + otherOpp });
+
+  // Compose page on crm.account with second table section on crm.opportunity with query "crm.open-opportunities"
+  await decide(request, "manager", "build", "build.page.create", { type: "build.page", id },
+    { name, title: "Query deals", object: "crm.account", list: ["name"], detail: ["name"] });
+  await open(page, "manager", `/compose?id=${id}`);
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  const inspector = page.getByRole("region", { name: "The widget in hand" });
+  await inspector.getByRole("combobox", { name: "Object" }).selectOption("crm.opportunity");
+  await inspector.getByRole("combobox", { name: "Query" }).selectOption("crm.open-opportunities");
+  await inspector.getByRole("textbox", { name: "Title" }).fill("Open opportunities");
+  await inspector.getByRole("group", { name: "Fields it shows" }).getByRole("button", { name: "Title" }).click();
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("The page is in the workspace.")).toBeVisible();
+
+  // Open the page, select the account, expect only its open opportunity rows
+  await open(page, "manager", `/page?app=build&kind=page&name=${name}`);
+  await expect(page.getByText("Select a record to see related opportunities.")).toBeVisible();
+  await page.getByRole("row").filter({ hasText: "Target " + acc }).click();
+  await expect(page.getByRole("row").filter({ hasText: "Open deal " + openOpp })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "Closed deal " + closedOpp })).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: "Other deal " + otherOpp })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("named-query-page.png"), fullPage: true });
+});
