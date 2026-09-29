@@ -90,6 +90,8 @@ for (const fixture of [
       await expect(page.getByText("Why it moved", { exact: true }).first()).toBeVisible();
       const candidate = await page.getByText("Tested candidate:").locator("code").innerText();
       await page.getByText("Why it moved", { exact: true }).last().scrollIntoViewIfNeeded();
+      await page.getByText("Release binding", { exact: true }).last().click();
+      await expect(page.getByText("Development run", { exact: true }).last()).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath("workflow-test-results.png"), fullPage: true });
       await answer.getByRole("textbox", { name: "Step member ID (empty: plan member)" }).fill(fixture.builderID);
       await answer.getByRole("combobox", { name: "Expected outcome" }).selectOption("refused");
@@ -110,6 +112,9 @@ for (const fixture of [
       expect(missing.status()).toBe(404);
       await page.setViewportSize({ width: 390, height: 780 });
       await expect(page.getByRole("button", { name: "Run isolated test" })).toBeVisible();
+      await page.getByText("Release binding", { exact: true }).last().focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByText("Development run", { exact: true }).last()).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
       await page.getByText("Why it moved", { exact: true }).last().scrollIntoViewIfNeeded();
       await page.screenshot({ path: testInfo.outputPath("workflow-test-narrow.png"), fullPage: true });
@@ -131,6 +136,11 @@ for (const fixture of [
       await open(operator, fixture.operator, "/inbox");
       const task = operator.getByRole("listitem").filter({ hasText: real });
       await expect(task).toBeVisible();
+      const bound = await request.get(`/v1/records/flow.instance/build.${flowName}:${real}`, { headers: { Authorization: `Bearer ${fixture.builder}` } });
+      expect(bound.ok()).toBeTruthy();
+      const binding = (await bound.json()).record;
+      expect(binding.dependencies).toMatch(/^sha256-v1:/);
+      expect(binding.release).toBe(candidate);
       await task.getByRole("button", { name: fixture.answer, exact: true }).click();
       await open(operator, fixture.operator, `/record?type=${type}&id=${real}`);
       await expect(operator.getByText(fixture.state, { exact: true }).first()).toBeVisible();

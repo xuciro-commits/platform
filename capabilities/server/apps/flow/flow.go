@@ -41,20 +41,22 @@ const (
 // FlowInstance is one run of a flow.
 type FlowInstance struct {
 	platform.Record
-	Flow     string      `json:"flow" field:"readonly,search"` // "<app>.<name>"
-	Title    string      `json:"title" field:"readonly,search"`
-	Version  int         `json:"version" field:"readonly"`
-	Key      string      `json:"key" field:"readonly,search"`
-	Subject  string      `json:"subject,omitempty" field:"readonly"` // "<type>/<key>" when the flow declares its subject
-	State    string      `json:"state" field:"readonly" choices:"running,waiting,done,compensating,compensated,canceled,stuck"`
-	OnBehalf string      `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
-	Data     string      `json:"data,omitempty" field:"readonly" type:"longtext"`
-	Answer   string      `json:"answer,omitempty" field:"readonly"`
-	Parent   string      `json:"parent,omitempty" field:"readonly"` // the instance that called it
-	Tokens   []Token     `json:"tokens" field:"readonly" title:"Where it stands"`
-	Undo     []UndoEntry `json:"undo" field:"readonly" title:"To undo"`
-	Trace    []TraceLine `json:"trace" field:"readonly"`
-	Seq      int         `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
+	Flow         string      `json:"flow" field:"readonly,search"` // "<app>.<name>"
+	Title        string      `json:"title" field:"readonly,search"`
+	Version      int         `json:"version" field:"readonly"`
+	Dependencies string      `json:"dependencies,omitempty" field:"readonly" title:"Dependency release"`
+	Release      string      `json:"release,omitempty" field:"readonly" title:"Active release"`
+	Key          string      `json:"key" field:"readonly,search"`
+	Subject      string      `json:"subject,omitempty" field:"readonly"` // "<type>/<key>" when the flow declares its subject
+	State        string      `json:"state" field:"readonly" choices:"running,waiting,done,compensating,compensated,canceled,stuck"`
+	OnBehalf     string      `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
+	Data         string      `json:"data,omitempty" field:"readonly" type:"longtext"`
+	Answer       string      `json:"answer,omitempty" field:"readonly"`
+	Parent       string      `json:"parent,omitempty" field:"readonly"` // the instance that called it
+	Tokens       []Token     `json:"tokens" field:"readonly" title:"Where it stands"`
+	Undo         []UndoEntry `json:"undo" field:"readonly" title:"To undo"`
+	Trace        []TraceLine `json:"trace" field:"readonly"`
+	Seq          int         `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
 }
 
 // Token is where a path of the instance stands (BPMN's token): a step it is at
@@ -321,43 +323,72 @@ func (f *Flows) Pin(versions map[string]int) { f.pins = versions }
 
 func (f *Flows) Check() error {
 	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
-	for _, x := range f.running(c) {
-		if f.def(x.Flow, x.Version) == nil {
-			return fmt.Errorf("flow instance %s runs %s version %d, which the code no longer declares", x.ID, x.Flow, x.Version)
-		}
+	return f.eachRunning(c, f.checkBinding)
+}
+
+func (f *Flows) checkBinding(x FlowInstance) error {
+	_, err := f.binding(x)
+	return err
+}
+
+func (f *Flows) binding(x FlowInstance) (host.FlowBinding, error) {
+	d := f.def(x.Flow, x.Version)
+	if d == nil {
+		return host.FlowBinding{}, fmt.Errorf("flow instance %s runs %s version %d, which the code no longer declares", x.ID, x.Flow, x.Version)
 	}
-	return nil
+	bound, err := f.host.BindFlow(d.app, d.Name, d.Version, host.FlowBinding{Dependencies: x.Dependencies, Release: x.Release})
+	if err != nil {
+		return bound, fmt.Errorf("flow instance %s: %w", x.ID, err)
+	}
+	if bound.Dependencies != x.Dependencies || bound.Release != x.Release {
+		return bound, fmt.Errorf("flow instance %s has no exact starting release binding", x.ID)
+	}
+	return bound, nil
 }
 
-func (f *Flows) running(c platform.Caller) []FlowInstance {
-	live, _ := json.Marshal([]any{"|", []any{"state", "=", "running"}, "|", []any{"state", "=", "waiting"}, "|", []any{"state", "=", "compensating"}, []any{"state", "=", "stuck"}})
-	out, _, _ := platform.Find[FlowInstance](c, platform.Query{Domain: live, Sort: []string{"id"}})
-	return out
-}
-
-// HasRunningSubject checks every live instance, beyond a single read page.
-// Terminal instances retain their history but no longer block source edits.
-func (f *Flows) HasRunningSubject(typ string) (bool, error) {
-	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
+func (f *Flows) eachRunning(c platform.Caller, visit func(FlowInstance) error) error {
 	live, _ := json.Marshal([]any{"|", []any{"state", "=", "running"}, "|", []any{"state", "=", "waiting"}, "|", []any{"state", "=", "compensating"}, []any{"state", "=", "stuck"}})
 	for offset := 0; ; {
-		rows, total, err := platform.Find[FlowInstance](c, platform.Query{Domain: live, Sort: []string{"id"}, Limit: 1000, Offset: offset})
+		rows, total, err := platform.Find[FlowInstance](c, platform.Query{Domain: live, Sort: []string{"id"}, Limit: 500, Offset: offset})
 		if err != nil {
-			return false, err
+			return err
 		}
 		for _, row := range rows {
-			if strings.HasPrefix(row.Subject, typ+"/") {
-				return true, nil
+			if err := visit(row); err != nil {
+				return err
 			}
 		}
 		offset += len(rows)
 		if offset >= total {
-			return false, nil
+			return nil
 		}
 		if len(rows) == 0 {
-			return false, fmt.Errorf("cannot read all running flow instances")
+			return fmt.Errorf("cannot read all running flow instances")
 		}
 	}
+}
+
+func (f *Flows) running(c platform.Caller) ([]FlowInstance, *kernel.Error) {
+	var out []FlowInstance
+	if err := f.eachRunning(c, func(x FlowInstance) error { out = append(out, x); return nil }); err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
+	}
+	return out, nil
+}
+
+// HasRunningDependency checks every live instance, beyond a single read page.
+// Terminal instances retain their history but no longer block source edits.
+func (f *Flows) HasRunningDependency(typ string) (bool, error) {
+	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
+	found := false
+	err := f.eachRunning(c, func(row FlowInstance) error {
+		binding, err := f.binding(row)
+		found = found || strings.HasPrefix(row.Subject, typ+"/") || slices.ContainsFunc(binding.Assets, func(ref platform.AssetRef) bool {
+			return ref.Kind == platform.AssetObject && ref.Name == typ
+		})
+		return err
+	})
+	return found, err
 }
 
 // Interested reports whether an event starts a flow or may end a wait.
@@ -425,7 +456,11 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 			return err
 		}
 	}
-	for _, x := range f.running(c) {
+	running, readErr := f.running(c)
+	if readErr != nil {
+		return readErr
+	}
+	for _, x := range running {
 		d := f.def(x.Flow, x.Version)
 		if d == nil {
 			continue
@@ -475,7 +510,11 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 
 // Run takes what is due: retries, timeouts, times and conditions.
 func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
-	for _, x := range f.running(c) {
+	running, readErr := f.running(c)
+	if readErr != nil {
+		return readErr
+	}
+	for _, x := range running {
 		d := f.def(x.Flow, x.Version)
 		if d == nil {
 			continue

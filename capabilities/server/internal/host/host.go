@@ -85,6 +85,17 @@ type Host interface {
 	// ActiveRelease is the tenant's active release ID, empty before any
 	// activation; the caller already holds the tenant (ADR-0039 D4).
 	ActiveRelease() string
+	// BindFlow closes the exact native version over current owner assets. A
+	// prior binding must still match; an empty prior captures a new run.
+	BindFlow(app, name string, version int, prior FlowBinding) (FlowBinding, error)
+}
+
+// FlowBinding exposes hashes and asset paths, never private definition bytes.
+// Release is empty for development without a matching activated flow asset.
+type FlowBinding struct {
+	Dependencies string
+	Release      string
+	Assets       []platform.AssetRef
 }
 
 // Listener is a platform app delivered other apps' events as owned work, with
@@ -103,9 +114,9 @@ type Processes interface {
 	// Validate checks one without registering it (#132).
 	Install(a platform.App, fl platform.Flow) error
 	Validate(a platform.App, fl platform.Flow) error
-	// HasRunningSubject protects a composed flow's source definition while its
-	// instances are running, waiting, compensating or stuck.
-	HasRunningSubject(typ string) (bool, error)
+	// HasRunningDependency protects a composed flow's source and transitive
+	// object dependencies while its instances are running, waiting, compensating or stuck.
+	HasRunningDependency(typ string) (bool, error)
 	// Check refuses to start when a running instance needs a version the code no longer declares.
 	Check() error
 	// Versions are those new instances took during the input being handled

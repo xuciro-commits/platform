@@ -211,7 +211,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 				raw, _ := json.Marshal(record)
 				var instance flow.FlowInstance
 				_ = json.Unmarshal(raw, &instance)
-				result.Flows = append(result.Flows, SimulatedFlow{ID: instance.ID, Flow: instance.Flow, Version: instance.Version, State: instance.State, Tokens: instance.Tokens, Trace: instance.Trace})
+				result.Flows = append(result.Flows, SimulatedFlow{ID: instance.ID, Flow: instance.Flow, Version: instance.Version, Dependencies: instance.Dependencies, Release: instance.Release, State: instance.State, Tokens: instance.Tokens, Trace: instance.Trace})
 			}
 			if inbox, err := sandbox.Read(actor, "inbox"); err == nil {
 				result.Tasks = inbox.([]work.WorkTask)
@@ -228,6 +228,9 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		restored, err = compose()
 		if err == nil {
 			err = restored.Restore(saved)
+		}
+		if err == nil && restored.procs != nil {
+			err = restored.procs.Check()
 		}
 		if err == nil {
 			var after json.RawMessage

@@ -170,6 +170,9 @@ func (f *Flows) step(c platform.Caller, id string, now time.Time, change func(*s
 	if !ok {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
+	if err := f.checkBinding(x); err != nil {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
+	}
 	_, err := f.decide(c, SchemaFlowStep, id, fmt.Sprintf("%s:%d", id, x.Revision+1), now, func(ss *session) *kernel.Error {
 		in := ss.load(id)
 		change(ss, in)
@@ -193,9 +196,15 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 		}
 		id = fmt.Sprintf("%s:%s#%d", flow, key, n)
 	}
+	bound, bindingErr := f.host.BindFlow(d.app, d.Name, d.Version, host.FlowBinding{})
+	if bindingErr != nil {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: bindingErr.Error()}
+	}
 	_, err := f.decide(c, SchemaFlowStart, id, "start:"+id, now, func(ss *session) *kernel.Error {
 		ss.event = e
-		ss.advance(ss.create(d, id, key, data, onBehalf, parent))
+		x := ss.create(d, id, key, data, onBehalf, parent)
+		x.Dependencies, x.Release = bound.Dependencies, bound.Release
+		ss.advance(x)
 		return nil
 	})
 	return err
@@ -598,6 +607,11 @@ func (f *Flows) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 		}
 		if ended(x.State) {
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		if schema != SchemaFlowStop {
+			if err := f.checkBinding(*x); err != nil {
+				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
+			}
 		}
 		switch schema {
 		case SchemaFlowRetry:

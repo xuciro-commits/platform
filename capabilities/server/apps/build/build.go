@@ -312,9 +312,28 @@ func (b *Build) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
+// Archiving removes an object from restore, while its installed data class
+// remains in records/history. Safe retirement is not implemented; retain the
+// published definition, including dependencies of retained workflows.
+func (b *Build) checkObjectArchive(c platform.Caller, id string) *kernel.Error {
+	if c.Role() != Builder {
+		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	record, exists := platform.Get[Object](c, id)
+	if !exists || record.Published == "" {
+		return nil
+	}
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published object cannot be archived; its installed definition must be retained")
+}
+
 // Submit takes the builder's own actions and those generated for every object
 // it has installed: a defined object's records are decided like any other's.
 func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if s.GetSchema().GetName() == ObjectType+".archive" && !c.Replaying {
+		if err := b.checkObjectArchive(c, s.GetTarget().GetId()); err != nil {
+			return nil, err
+		}
+	}
 	if name := s.GetSchema().GetName(); (name == TestPlanType+".create" || name == TestPlanType+".edit") && !c.Replaying {
 		if err := b.checkTestPlan(c, s); err != nil {
 			return nil, err

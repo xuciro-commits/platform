@@ -111,6 +111,9 @@ func TestProcessCandidateClosesNativeBindingsAndRecovers(t *testing.T) {
 			if len(result.Steps[0].Flows) != 1 || result.Steps[0].Flows[0].State != "waiting" || len(result.Steps[0].Tasks) != 1 {
 				t.Fatalf("native ask not exposed: %+v", result.Steps[0])
 			}
+			if result.Steps[0].Flows[0].Dependencies != preview.CandidateID || result.Steps[0].Flows[0].Release != "" {
+				t.Fatalf("candidate run did not bind exact development dependencies: %+v", result.Steps[0].Flows[0])
+			}
 			last := result.Steps[2]
 			if len(last.Flows) != 1 || last.Flows[0].State != "done" || len(last.Changes) != 1 || !bytes.Contains(last.Changes[0].Record, []byte(`"state":"`+expectedState+`"`)) {
 				t.Fatalf("native answer branch did not act: %+v", last)

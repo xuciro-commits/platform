@@ -76,8 +76,86 @@ state() { { for path in "records/mes.order?limit=500" "records/mes.sfc?limit=500
   curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/connectors" | jq -c '[.[] | {id, disabled}]'
   curl -s -H "Authorization: Bearer $SUP" "$MANUFACTURING/v1/ai-usage" | jq -c '.totals'
   for path in records/pms.reservation records/pms.room-type members links timeline records/crm.account records/crm.opportunity records/crm.opportunity/OPP-1 records/hcm.leave records/work.approval; do curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/$path"; done
-  curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -c '[.[] | {id, bound}]'; } |
+  curl -s -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/protocols" | jq -c '[.[] | {id, bound}]'
+  workflow_state; } |
   jq -cS 'walk(if type == "object" then del(.changed, .created) else . end)'; } # when the host accepted a record is not state: a resent decision is accepted again
+
+# Workflow probes add their private records and exact bindings to every state
+# comparison below. Defined here; called after both OIDC builders are ready.
+workflow_get() { curl -sf -H "Authorization: Bearer $1" "$SERVER/v1/$2"; }
+workflow_post() { curl -sf -H "Authorization: Bearer $1" -H 'Content-Type: application/json' "$SERVER/v1/$2" -d "$3"; }
+workflow_submit() {
+  local result
+  result=$(submit "$@")
+  if ! jq -e .record <<<"$result" >/dev/null; then
+    jq -c '{error}' <<<"$result" >&2 || true
+    fail "workflow decision: $3"
+  fi
+}
+workflow_state() {
+  local SERVER actor suffix path
+  for suffix in plant hotel; do
+    if [[ $suffix == plant ]]; then SERVER=$MANUFACTURING; actor=$SUP; else SERVER=$HOSPITALITY; actor=$MGR; fi
+    for path in records/build.object/WF-O records/build.process/WF-P records/build.testplan/WF-PLAN \
+      records/build.rehearsal$suffix records/flow.instance/build.review$suffix:WF-OLD \
+      records/flow.instance/build.review$suffix:WF-NEW releases/active; do
+      workflow_get "$actor" "$path" || fail "workflow state $suffix $path"
+    done
+  done
+}
+workflow_wait() {
+  local who=$1 id=$2 version=$3 release=$4 result
+  for _ in $(seq 30); do
+    result=$(workflow_get "$who" "records/flow.instance/$id" || true)
+    if jq -e --arg r "$release" --argjson v "$version" \
+      '.record | .state == "waiting" and .version == $v and .release == $r and (.dependencies | startswith("sha256-v1:"))' <<<"$result" >/dev/null 2>&1; then return; fi
+    sleep 1
+  done
+  fail "workflow $id did not wait with its exact release"
+}
+workflow_activate() {
+  local who=$1 n=$2 candidate
+  candidate=$(workflow_post "$who" releases/preview '{"kind":"flow","id":"WF-P"}' | jq -er 'select(.diagnostic == null or .diagnostic == "") | .candidateId') || fail "workflow preview"
+  workflow_post "$who" releases/candidates "{\"kind\":\"flow\",\"id\":\"WF-P\",\"candidateId\":\"$candidate\",\"key\":\"wf-save-$n\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "workflow save"
+  workflow_post "$who" releases/active "{\"candidateId\":\"$candidate\",\"key\":\"wf-active-$n\"}" | jq -e --arg id "$candidate" '.id == $id' >/dev/null || fail "workflow activate"
+  printf %s "$candidate"
+}
+workflow_setup() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 operator=$4 builder_id=$5 operator_id=$6 suffix=$7
+  local typ=build.rehearsal$suffix flow=build.review$suffix plan first second result
+  # Grants belong to this disposable project, through the existing Console.
+  AUTHORITY=platform workflow_submit "$builder" wf-builder platform.member.grant platform.member "$builder_id" '{"app":"build","role":"builder"}'
+  AUTHORITY=platform workflow_submit "$builder" wf-user platform.member.grant platform.member "$operator_id" '{"app":"build","role":"user"}'
+  workflow_submit "$builder" wf-object build.object.create build.object WF-O \
+    "{\"name\":\"rehearsal$suffix\",\"title\":\"Workflow recovery sample\",\"fields\":[{\"name\":\"note\",\"title\":\"Note\",\"type\":\"text\"}],\"states\":[{\"name\":\"open\",\"title\":\"Open\"},{\"name\":\"done\",\"title\":\"Done\"},{\"name\":\"rejected\",\"title\":\"Rejected\"}],\"actions\":[{\"name\":\"close\",\"title\":\"Close\",\"from\":[\"open\"],\"to\":\"done\"},{\"name\":\"reject\",\"title\":\"Reject\",\"from\":[\"open\"],\"to\":\"rejected\"}]}"
+  workflow_submit "$builder" wf-object-publish build.object.publish build.object WF-O '{}'
+  workflow_submit "$builder" wf-process build.process.create build.process WF-P \
+    "{\"name\":\"review$suffix\",\"title\":\"Recovery review\",\"object\":\"$typ\",\"when\":\"open\",\"steps\":[{\"name\":\"review\",\"ask\":\"user\",\"answers\":[\"approve\"],\"branches\":{\"approve\":\"close\"}},{\"name\":\"close\",\"act\":\"close\"}]}"
+  plan=$(jq -n --arg typ "$typ" --arg flow "$flow" --arg who "$operator_id" \
+    '{process:"WF-P",title:"Fixed workflow recovery plan",as:$who,at:"2026-10-01T09:00:00Z",steps:[{type:$typ,id:"WF-TEST",action:($typ+".create"),payload:"{\"note\":\"isolated\"}",expect:"accepted",advanceSeconds:2},{type:$typ,id:"WF-TEST",flow:$flow,step:"review",answer:"approve",payload:"{}",expect:"accepted",advanceSeconds:2}]}')
+  workflow_submit "$builder" wf-plan build.testplan.create build.testplan WF-PLAN "$plan"
+  workflow_post "$builder" simulate/candidate "$(jq '.processId=.process | del(.process,.title) | .steps |= map(.payload |= (if . == null then {} else fromjson end))' <<<"$plan")" | \
+    jq -e '.passed and .recovered and (.steps[0].flows[0].dependencies | startswith("sha256-v1:"))' >/dev/null || fail "isolated workflow candidate"
+  [[ $(workflow_get "$builder" "records/$typ" | jq .total) == 0 ]] || fail "workflow sample reached formal rows"
+  workflow_submit "$builder" wf-publish-1 build.process.publish build.process WF-P '{}'
+  first=$(workflow_activate "$builder" 1)
+  workflow_submit "$operator" wf-old "$typ.create" "$typ" WF-OLD '{"note":"old native path"}'
+  workflow_wait "$builder" "$flow:WF-OLD" 1 "$first"
+  workflow_submit "$builder" wf-edit build.process.edit build.process WF-P \
+    '{"steps":[{"name":"review","ask":"user","answers":["approve"],"branches":{"approve":"reject"}},{"name":"reject","act":"reject"}]}'
+  workflow_submit "$builder" wf-publish-2 build.process.publish build.process WF-P '{}'
+  second=$(workflow_activate "$builder" 2)
+  [[ $first != "$second" ]] || fail "workflow branch change kept release ID"
+  workflow_submit "$operator" wf-new "$typ.create" "$typ" WF-NEW '{"note":"new native path"}'
+  workflow_wait "$builder" "$flow:WF-NEW" 2 "$second"
+  result=$(submit "$builder" wf-archive-denied build.object.archive build.object WF-O '{}')
+  jq -e '.error.code == "ERROR_CODE_CONFLICT"' <<<"$result" >/dev/null || fail "archived an installed workflow dependency"
+  workflow_submit "$builder" wf-object-edit build.object.edit build.object WF-O '{"title":"Changed while waiting"}'
+  result=$(submit "$builder" wf-object-denied build.object.publish build.object WF-O '{}')
+  jq -e '.error.code == "ERROR_CODE_INVALID_ARGUMENT"' <<<"$result" >/dev/null || fail "changed live workflow dependency"
+  workflow_submit "$builder" wf-object-reset build.object.edit build.object WF-O '{"title":"Workflow recovery sample"}'
+  jq -n --arg first "$first" --arg second "$second" '{first:$first,second:$second}' >"$backup/workflow-$suffix.json"
+}
 
 # Inputs of every kind the journal keeps: decisions and a push batch.
 (cd ../../apps/mes/server && MES_GATEWAY_SECRET=gatewayLocalOnly000000000000000000000000000000000000000000000000 \
@@ -335,6 +413,9 @@ a2a=$(curl -s -H "Authorization: Bearer $MGR" -H 'A2A-Version: 1.0' -H 'Content-
   -d '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"messageId":"ext-1","role":"ROLE_USER","parts":[{"text":"Triage and answer ticket T-1 from anna@acme.test (account ACME).\nSubject: Wifi keeps dropping"}]}}}')
 [[ $(jq -r .result.task.status.state <<<"$a2a") == TASK_STATE_COMPLETED ]] || fail "A2A task: $a2a"
 echo "ok   CSM: summarised by the model for apps; published over A2A and answered a client outside; the triage agent found the house rules (knowledge, embedded on the local model), triaged and replied citing them; its transcripts kept; its reply's mail held, approved by the manager, and sent to the mail gateway"
+workflow_setup "$MANUFACTURING" plant-sz "$SUP" "$OP1" sup-1 op-l1 plant
+workflow_setup "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" manager-1 sales-1 hotel
+echo "ok   workflows: fixed isolated plans, exact releases, old/new native asks, incompatible dependency publication refused in both industries"
 before=$(state) calls=$(curl -s "$SINK/received" | jq .calls)
 [[ $(jq -s '.[1].total' <<<"$before") == 5 && $(jq -s '.[2] | length' <<<"$before") -gt 0 ]] || fail "rehearsal data missing"
 
@@ -421,3 +502,34 @@ compose restart manufacturing-server >/dev/null 2>&1
 for _ in $(seq 30); do [[ $(code "$SUP") == 200 ]] && break; sleep 1; done
 [[ $(code "$SUP") == 200 && $(state) == "$now" ]] || fail "repaired checkpoint failed on the next restart"
 echo "ok   operator recovery: quarantine, healthy neighbor, in-place journal rebuild, durable replacement checkpoint"
+
+# The hotel also replays the full mixed journal, without a checkpoint. The
+# plant's in-place recovery above already exercised that path with live asks.
+compose stop hospitality-server >/dev/null 2>&1
+sql "delete from snapshots where tenant='hotel-a'" >/dev/null
+compose start hospitality-server >/dev/null 2>&1
+for _ in $(seq 30); do [[ $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MGR" "$HOSPITALITY/v1/me") == 200 ]] && break; sleep 1; done
+[[ $(state) == "$now" ]] || fail "hotel mixed journal replay changed the bound workflow state"
+
+workflow_finish() {
+  local SERVER=$1 TENANT=$2 AUTHORITY=work builder=$3 operator=$4 suffix=$5
+  local flow=build.review$suffix typ=build.rehearsal$suffix task id expected release version result
+  for id in WF-OLD WF-NEW; do
+    if [[ $id == WF-OLD ]]; then expected=done; version=1; release=$(jq -r .first "$backup/workflow-$suffix.json");
+    else expected=rejected; version=2; release=$(jq -r .second "$backup/workflow-$suffix.json"); fi
+    workflow_wait "$builder" "$flow:$id" "$version" "$release"
+    task=$(workflow_get "$builder" "records/flow.instance/$flow:$id" | jq -er '.record.tokens[] | select(.waits == "ask") | .task') || fail "recovered native task absent"
+    workflow_submit "$operator" "wf-answer-$id" work.task.complete work.task "$task" '{"answer":"approve"}'
+    for _ in $(seq 30); do
+      result=$(workflow_get "$builder" "records/$typ/$id")
+      [[ $(jq -r .record.state <<<"$result") == "$expected" ]] && break
+      sleep 1
+    done
+    [[ $(jq -r .record.state <<<"$result") == "$expected" ]] || fail "recovered workflow $id took a different version's path"
+    workflow_get "$builder" "records/flow.instance/$flow:$id" | jq -e --arg r "$release" --argjson v "$version" \
+      '.record | .state == "done" and .version == $v and .release == $r' >/dev/null || fail "completed workflow lost its starting release"
+  done
+}
+workflow_finish "$MANUFACTURING" plant-sz "$SUP" "$OP1" plant
+workflow_finish "$HOSPITALITY" hotel-a "$MGR" "$SALES_TOKEN" hotel
+echo "ok   workflows: PostgreSQL restart, backup restore and full mixed journal rebuild preserved plans, bindings, versions and inbox tasks; old/new asks continued along their original paths in both industries"

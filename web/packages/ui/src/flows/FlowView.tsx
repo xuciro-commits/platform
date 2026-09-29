@@ -12,6 +12,7 @@ export type FlowToken = { id: number; step: string; branch?: string; waits?: str
 export type FlowTrace = { at: string; step?: string; what: string; detail?: string; by?: string };
 export type FlowInstanceData = {
   id: string; flow: string; title: string; version: number; key: string; state: string; onBehalf?: string; answer?: string; parent?: string;
+  dependencies?: string; release?: string;
   tokens: FlowToken[] | null; undo: { step: string; action: string; target: string }[] | null; trace: FlowTrace[] | null;
 };
 
@@ -67,6 +68,13 @@ export function FlowView({ definition, instance, actions }: {
         <span className="font-semibold">{instance.title}</span>
         <span className="text-xs text-muted">{instance.flow} {t("· version")} {instance.version}{instance.onBehalf ? ` · ${t("on behalf of")} ${instance.onBehalf}` : ""}{instance.parent ? ` · ${t("called by")} ${instance.parent}` : ""}</span>
       </div>
+      {instance.dependencies && <details className="min-w-0 text-xs text-muted">
+        <summary className="cursor-pointer">{t("Release binding")}</summary>
+        <dl className="mt-2 grid gap-1 break-all">
+          <dt className="font-semibold">{t("Dependency release")}</dt><dd>{instance.dependencies}</dd>
+          <dt className="font-semibold">{t("Active release")}</dt><dd>{instance.release || t("Development run")}</dd>
+        </dl>
+      </details>}
       {definition && <FlowGraph definition={definition} instance={instance} />}
       {tokens.length > 0 && (
         <ul className="grid gap-1.5" aria-label={t("Where it stands")}>

@@ -25,6 +25,31 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	return releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
 }
 
+// FlowReleaseAsset reads a retained native version, not the current draft or
+// latest installed version. The host closes its bindings through all owners.
+func (b *Build) FlowReleaseAsset(name string, version int) (platform.ReleaseAsset, error) {
+	processes, err := b.processInventory()
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	for _, record := range processes {
+		if record.Published == "" {
+			continue
+		}
+		image, _ := json.Marshal(record)
+		if _, err := processImage(image); err != nil {
+			return platform.ReleaseAsset{}, err
+		}
+		for _, raw := range record.Versions {
+			p, ok := wasPublished[Process](raw)
+			if ok && p.Name == name && p.Version == version {
+				return processReleaseAsset(p, b.Manifest().Version)
+			}
+		}
+	}
+	return platform.ReleaseAsset{}, fmt.Errorf("process %s version %d is not retained", name, version)
+}
+
 func (b *Build) releaseInventory() ([]Object, []Page, []Application, error) {
 	if b.host == nil {
 		return nil, nil, nil, fmt.Errorf("builder has no host")
@@ -211,7 +236,7 @@ func (b *Build) validateObjectInstallation(record Object) error {
 				return err
 			}
 			if string(oldBody) != string(newBody) {
-				running, err := processes.HasRunningSubject(TypeOf(previous.Name))
+				running, err := processes.HasRunningDependency(TypeOf(previous.Name))
 				if err != nil {
 					return err
 				}

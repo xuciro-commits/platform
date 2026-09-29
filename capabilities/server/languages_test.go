@@ -79,6 +79,8 @@ func TestLanguages(t *testing.T) {
 		{"Overdue: Approve: Grant role platform.member/bo", "逾期：审批：授予角色 platform.member/bo"},
 		{"Settings", "设置"},
 		{"Something no dictionary knows", "Something no dictionary knows"},
+		{"flow build/flow/build.review version 2 differs from its activated release", "流程 build/flow/build.review 版本 2 与其激活发布不一致"},
+		{"flow instance build.review:V1: flow build/flow/build.review version 1 dependency release changed", "流程实例 build.review:V1：流程 build/flow/build.review 版本 1 的依赖发布已改变"},
 		{"Move a task from open or done to canceled.", "把任务从进行中或已完成改为已取消。"}, // a generated sentence, by its words
 		{"Create saved view", "新建已保存视图"},
 		// A field whose help holds ": " is said through the split whose every value is known (F-25).

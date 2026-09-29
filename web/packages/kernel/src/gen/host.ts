@@ -838,6 +838,8 @@ export type SimulatedFlow = {
   id: string;
   flow: string;
   version: number;
+  dependencies?: string;
+  release?: string;
   state: string;
   tokens: Token[];
   trace: TraceLine[];

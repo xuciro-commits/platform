@@ -61,7 +61,7 @@
 | C37 | 具名反向关系（ADR-0040 21b D1） | 引用字段声明反向关系名称（如商机之于客户为 `opportunities`，SFC 之于工单为 `sfcs`，自定义对象反向为 `visits`）；宿主校验名称格式为小写字母与数字；被引记录页在 Related 中以具名关系列出其子记录，非本应用且未声明具名关系的引用保持私有；关联列表严格遵守当前成员的读取权限，无权读取的子记录或主记录不泄露给无权成员。反向关系通过日志重放与快照恢复保持一致 | 自动：制造 MES 工单关联 SFC 测试（`TestNamedRelationOnShopOrder`）、酒店 CRM 客户关联商机与大写名称拒绝测试、日志重放校验（`CheckReplay`）；浏览器路线 38（经理定义带反向 `visits` 引用的对象、发布并建记录指向客户，客户详情页包含 `visits` 分组标题，无权前台不可见） | `platform.FieldInfo.Inverse`、`build.Field.Inverse`、`Tenant.RecordOf`、`Related` |
 | C38 | 动作原子创建关联记录（ADR-0040 21c D2） | 自定义动作声明在同一决断中创建同构建器的关联记录（Via 必须为对方指向本记录的引用）；Do 阶段完成构建与校验（必填字段与创建权限不满足时拒绝整个父动作，父记录状态不变更且无关联记录生成），After 阶段由宿主在同一变更记录下写入（单决断原子入账，无部分结果与二次提交死锁风险）；发布时校验创建对象归属、自引用、Via 引用与字段存在性；日志重放具有幂等确定性 | 自动：`build_creates_test.go`（非法归属/自建/Via/未知字段四类发布拒绝、无创建权限成员执行被拒、必填项缺失全量回滚、日志追加失败无泄露、原子创建与具名关系验证、`CheckReplay`）、制造解决方案测试（`TestInspectionActionCreatesFinding`：巡检 fail 动作原子创建异常发现并关联工单与重放）；浏览器路线 39（经理定义拜访与待跟进对象，执行关闭动作输入备注，拜访变 Done 且页面关联列表即时呈现待跟进记录） | `Action.Creates`、`build.checkCreates`、`build.create`、`stored`、`c.Put` |
 | C40 | 固定数据候选测试（ADR-0040 21d） | 构建者进入应用设计台 → 测试候选，选择已保存对象草稿，指定实际成员、固定时间及 JSON 动作输入；以新建样本开始，先执行成功动作，再重复同一状态动作看到拒绝；给各步设置预期接受/拒绝，结果显示匹配与恢复校验。命名并保存计划，刷新后选回并重跑；修改输入清除旧结果，错误预期显示不匹配。并发修改时本地保存被拒绝且保留输入，重载最新计划后可再次保存。重复运行从空记录开始，前台操作生产记录不包含这些样本。随后开发期发布对象，审查/保存不可变候选并激活一致闭包，由前台打开真实记录完成动作 | 自动：`TestCandidateSimulationUsesOnlyFixedData`（生产未变、重复确定性、草稿规则、关联创建、权限/脱敏、审批拒绝）、`TestSavedCandidatePlansUseRecordsAndAcceptedRecovery`（追加失败/重试、恢复、修订冲突、非法输入、无权/跨租户及变更候选重跑）、双行业探针与重放；浏览器路线 41–42（键盘保存/运行、刷新重载、冲突恢复、390×780、中文、预期匹配/不匹配及测试→发布→操作员；真实结构化依赖错误显示诊断且页面仍可操作）。界面已实际运行并检查截图，负责人体验未验收；进程内隔离，不证明物理沙箱、激活即安装或页面/AI 测试 | `Tenant.SimulateCandidate`、`CandidateTest`、`/v1/simulate/candidate` |
-| C41 | 原生工作流编写与固定计划（ADR-0042 23b） | 构建者选择已发布源对象/状态，添加人工任务/动作并连答案分支；保存后测试样本和人工答案、保存计划/刷新重载；无效发布/过期修订给出诊断，冲突保留本地输入。开发期发布后保存/激活一致候选，操作员在收件箱回答并看到业务结果 | 自动：`TestProcessCandidateClosesNativeBindingsAndRecovers`；路线 43 分别运行酒店/制造开发宿主内部样本，含拖线、键盘保存/运行、人工身份拒绝、冲突/重载、候选 ID、无正式样本行、中文及 390×780；截图已检查。23c 精确运行绑定、新 Docker 演练及负责人体验待完成 | `WorkflowEditor`、`CandidateTest`、`build.Process/TestPlan`、原生 Flow/Work |
+| C41 | 原生工作流编写、计划与运行绑定（ADR-0042 23a–23c） | 构建者选择已发布源对象/状态，添加人工任务/动作并连答案分支；保存后测试样本和人工答案、保存计划/刷新重载；无效发布/过期修订给出诊断，冲突保留本地输入。开发期发布后保存/激活一致候选，操作员在收件箱回答并看到业务结果 | 自动：`TestProcessCandidateClosesNativeBindingsAndRecovers`；路线 43 分别运行酒店/制造开发宿主内部样本，含拖线、键盘保存/运行、人工身份拒绝、冲突/重载、候选 ID、无正式样本行、中文及 390×780；截图已检查。23c 精确启动绑定、旧/新版本兼容及新 Docker/PostgreSQL 重启/备份/完整重建探针通过；负责人体验待验收 | `WorkflowEditor`、`CandidateTest`、`build.Process/TestPlan`、原生 Flow/Work |
 | C39 | 具名查询被页面与智能体复用（ADR-0040 21c） | 应用仅声明一次纯查询（如 CRM 的 open-opportunities、MES 的 released-orders），由页面分区、智能体工具与成员读取共用；页面分区通过 Query 绑定具名查询并随选定记录自动过滤；智能体声明未知查询工具时在租户组合阶段被拒；成员仅能通过查询读取自身权限允许的对象记录，无权成员执行查询被拒；查询在定义发现中以 query 种类呈现 | 自动：制造业 MES 具名查询工单探针（`TestNamedQueryOnShopOrders`：下达两单完成一单，总数验证为 1，无 MES 权限被拒，定义发现验证）、酒店 CRM 具名查询测试（`TestNamedQuerySharedByPageAndMember`）、HTTP 端点测试（`TestNamedQueryHTTP`：带参 200、漏参 400、未知 404、无权成员 403/404）、智能体未知查询校验（`TestAgentUnknownQueryFailsComposition`）、页面候选包含查询资产（`TestReleaseCandidateIncludesQueryAsset`）及遗漏查询依赖拒绝；浏览器路线 40（本机已运行通过）（经理组合商机具名查询表格分区并发布，选中客户后仅展示其进行中商机，已关闭及其他客户商机不显示） | `platform.NamedQuery`、`Tenant.RunQuery`、`/v1/queries/{app}/{name}`、`TableWidget`、`queriesOf` |
 
 | C28 | 知识检索的规模与新鲜度（ADR-0033 14b） | 索引只在第一次读整个租户，之后跟着变化的记录重切（按文本指纹判断，应用自动化写入也算），归档或不再是知识的记录其段落随即消失；检索只给问题里出现过的词所在段落打分。所有者机器上 20 000 个知识字段：首次约 1 秒，问题用词人人都有约 45 毫秒，少见词约微秒级，改一条记录后约 0.7 毫秒 | 自动：`TestKnowledgeAtScale`（时延上限由 `PLATFORM_TIMING` 控制，CI 关闭）；`TestKnowledgeAndContextScope`、`TestKnowledgeIndexesPastFirstPage` 保证范围与分页 | `knowledge.go`（`sync`、`sourcesOf`、`index.postings`）、`recordStore.dirty` |
@@ -91,7 +91,7 @@
 
 N5 的受限结果边界可先由代码层复核：在酒店提交 `crm.account.create/edit`、在制造提交 `erp.account.create/edit`，并让构建器创建对象、发布、用生成动作创建和编辑其记录。检查 PostgreSQL 的 `accepted-result`、相同幂等键不增加行数、已提交拒绝重试返回原答复而不产生记录或事件，以及不同请求不能复用已占用键；在追加前失败与追加后应用前崩溃后重启，比较账本收据、记录历史、订阅工作与发件箱意图。`TestTenantDefinedObject`、`TestAcceptedResultPreservesWorkAndEffectIntents`（包括订阅/端点变动后的快照）、`TestAcceptedResultLegacyVersionAndInvalidWorkIntent`、`TestAcceptedGeneratedArchivePreservesReceiptAndHistory`、`TestAcceptedRefusalIsDurableAndImmutableOnRetry`、`TestJournalAcceptedRefusalAfterCrashAndRestart`（需 PostgreSQL）、ERP 的 `TestAcceptedPeriodTransitionCommitRetryAndRecovery` 与 `TestJournalAcceptedPeriodTransitionCrashAndRestart`（后者需 PostgreSQL）、其他受限结果测试、两个解决方案的 `TestAcceptedResult*Probe` 以及 `deploy/local/rehearse.sh` 是自动探针，不代替 N5 的构建者/操作员界面、原子发布和多入口验收。
 
-流程编写的后端准备按 [ADR-0042 23a](ADR/0042-typed-workflow-composer.md) 的代码探针复核，可运行 `cd capabilities/server && go test -count=1 -run 'TestTenantProcessPublicationAndRunningVersionsRecover|TestProcessChecksBeyondFirstReadPage|TestBuilderInventoryRestoresAssetsBeyondFirstReadPage' .`。N1/N5 的新流程编辑→隔离测试→候选发布→操作员任务路线仍待实现；既有 C7、状态/动作编辑路线与浏览器检查不代替这条旅程，也不代替新流程的 PostgreSQL/Docker 恢复演练。
+流程编写的后端准备按 [ADR-0042 23a](ADR/0042-typed-workflow-composer.md) 的代码探针复核，可运行 `cd capabilities/server && go test -count=1 -run 'TestTenantProcessPublicationAndRunningVersionsRecover|TestProcessChecksBeyondFirstReadPage|TestBuilderInventoryRestoresAssetsBeyondFirstReadPage' .`。N1/N5 的首批流程编辑→隔离测试→候选发布→操作员任务已由路线 43 在两行业开发宿主执行；本批 `scripts/verify.sh deploy` 实际验证两个 OIDC/PostgreSQL 解决方案的旧/新等待任务、重启、备份恢复、完整日志重建及原路径继续。证据限内部样本，负责人体验与客户升级未验收。
 
 构建器发布的受限结果探针 `TestAcceptedBuilderPublicationIsInvisibleUntilCommitAndRestores` 分别让对象、页面、应用的发布在日志追加处失败，核查现有记录、定义目录和权限声明仍未改变；随后用原幂等键重试，验证已提交结果在重启后安装同一描述符，不兼容的已入账映像隔离租户。PostgreSQL 条件测试 `TestJournalAcceptedBuilderPublicationRecovery` 另核查重新打开日志后仍可应用发布；这只证明三个既有构建器入口的提交顺序，不证明 #136 的不可变版本或 N5 的完整交付/升级路线。
 
@@ -241,7 +241,7 @@ N5 的租户隔离代码探针：向一个租户注入缺号日志、损坏快�
 
 ## 原生流程候选的开发者检查（ADR-0042 23b）
 
-在 `capabilities/server` 运行 `go test -run TestProcessCandidateClosesNativeBindingsAndRecovers .`，检查固定时钟/成员创建样本、无权答复拒绝、两种人工答案分支、候选依赖篡改拒绝、生产未变及快照/混合日志恢复。两个行业名称的夹具变体不代表实际解决方案旅程。浏览器路线 37 已实际运行工作流候选审查/保存/拒绝提前激活/发布后激活；节点编写/固定计划/双行业人工收件箱实证见路线 43；未执行本增量 Docker 演练。
+在 `capabilities/server` 运行 `go test -run TestProcessCandidateClosesNativeBindingsAndRecovers .`，检查固定时钟/成员创建样本、无权答复拒绝、两种人工答案分支、候选依赖篡改拒绝、生产未变及快照/混合日志恢复。两个行业名称的夹具变体不代表实际解决方案旅程。浏览器路线 37 已实际运行工作流候选审查/保存/拒绝提前激活/发布后激活；节点编写/固定计划/双行业人工收件箱实证见路线 43；23c 新 Docker/PostgreSQL 演练已实际执行，范围见下方恢复路线。
 
 ## 工作流编写到人工协同（路线 43，内部双行业实证）
 
@@ -249,6 +249,12 @@ N5 的租户隔离代码探针：向一个租户注入缺号日志、损坏快�
 
 1. 发布带“待审核 → 完成/拒绝”状态与无必填输入/审批动作的极简对象。在应用设计台 → 工作流 → 新工作流填唯一小写名称、标题、源对象/状态，添加人工步骤（`user`、`approve/reject`）与两种对象动作。
 2. 画布连答案分支，或用右侧答案/默认后续选择器配置同一语义。保存；无效步骤名有编写提示，发布由服务端拒绝。另一构建者修改后，旧修订保存被拒绝且保留本地输入；重载后继续。
-3. 点测试工作流，填操作员成员、固定时间和 JSON 样本输入；创建样本后推进时钟 2 秒，下一步回答任务并再推进 2 秒，设置接受预期。命名保存计划，检查候选标识、FlowView 等待/选择/动作追踪和恢复。把回答步骤成员改为构建者并预期拒绝；重载正向计划，刷新重跑。`TEST-1` 不应出现在正式记录中。
-4. 返回编辑器开发期发布；审查工作流，核对候选 ID 与测试一致后保存/激活。操作员新建正式记录，从收件箱回答 `approve`（酒店）或 `reject`（制造），记录进入业务终态；普通成员不能直接读取流程定义。
+3. 点测试工作流，填操作员成员、固定时间和 JSON 样本输入；创建样本后推进时钟 2 秒，下一步回答任务并再推进 2 秒，设置接受预期。命名保存计划，检查候选标识、FlowView 等待/选择/动作追踪和恢复；展开“发布绑定（Release binding）”核对依赖摘要与“开发期运行（Development run）”，窄屏可用键盘展开。把回答步骤成员改为构建者并预期拒绝；重载正向计划，刷新重跑。`TEST-1` 不应出现在正式记录中。
+4. 返回编辑器开发期发布；审查工作流，核对候选 ID 与测试一致后保存/激活。操作员新建正式记录，从收件箱回答 `approve`（酒店）或 `reject`（制造），记录进入业务终态；流程实例的 `dependencies` 是其精确启动闭包，`release` 是覆盖它的已激活候选；普通成员不能直接读取流程定义。
 5. 用键盘保存/启动测试，切换简体中文及 390×780 检查属性、选择器与结果；画布可展开/缩放。自动路线和截图检查已完成，负责人未走查。仍先安装后激活一致闭包，不代表精确实例发布绑定、激活即安装、物理隔离或完整升级恢复。
+
+### 首批流程的 PostgreSQL 恢复检查（ADR-0042 23c）
+
+执行 `scripts/verify.sh deploy`，使用独立 `platform-rehearsal` Compose 项目及专用端口，结束后移除该项目；不复用负责人日常容器。脚本通过 Console 给两行业现有 OIDC 人员授予本探针的 Build 角色，再保存/运行固定流程计划、发布/激活 A 并开启 v1 人工任务，改变答案路径发布/激活 B 并开启 v2 任务。两个等待实例必须分别保留 A/B 的发布 ID；在途对象变更发布被拒绝，归档已发布源对象也被拒绝；已安装定义的安全退役不在首批。
+
+重启、备份恢复至新卷、制造租户隔离后原地完整日志重建，以及酒店移除派生快照后的完整日志重放均比较定义/计划/实例/任务/活跃发布；最后两行业操作员答复同一 `approve`，旧实例进入 `done`、新实例进入 `rejected`，实例仍保留各自启动版本/发布。这一内部演练已通过，负责人操作体验、广义代码流程描述符、未绑定旧实例迁移及客户升级仍未验收。
