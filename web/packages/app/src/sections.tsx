@@ -5,7 +5,7 @@
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, Markdown, Panel, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
+  Button, Card, Chart, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
 } from "@platform/ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
@@ -224,9 +224,16 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [measured, setMeasured] = useState<EntityRecord>();
   const name = section.function?.ref.name ?? "";
   const version = Number(section.function?.sourceVersion.match(/\.function-(\d+)$/)?.[1] ?? 0);
   useEffect(() => { setCallID(""); setError(""); }, [selected?.id, name, version]);
+  useEffect(() => {
+    if (!live || !callID) { setMeasured(undefined); return; }
+    let current = true;
+    source.get("build.function-call", callID).then((view) => { if (current) setMeasured(view.record); }, () => { if (current) setMeasured(undefined); });
+    return () => { current = false; };
+  }, [source, live, callID, reload]);
   if (!name || !version) return <p role="alert" className="text-sm text-danger">{t("Choose a published function for this page.")}</p>;
   return <div className="grid gap-3">
     <p className="text-xs text-muted">{name} · {t("Version")} {version}</p>
@@ -247,6 +254,19 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
       {live && <RecordList key={reload} source={source} type="build.function-call" fields={["function", "version", "state", "source"]}
         domain={[["source", "=", `${page.object.name}/${selected.id}`], ["function", "=", name], ["version", "=", version]]}
         onOpen={(record) => setCallID(record.id)} />}
+      {live && callID && measured?.metered === true && <Card className="grid gap-2 p-3">
+        <h3 className="text-sm font-semibold">{t("Measured model call")}</h3>
+        <PropertyList items={[
+          [t("Input tokens"), measured.tokensReported ? String(measured.inputTokens ?? 0) : t("Not reported")],
+          [t("Output tokens"), measured.tokensReported ? String(measured.outputTokens ?? 0) : t("Not reported")],
+          [t("Model latency"), `${measured.latencyMillis ?? 0} ms`],
+          [t("Reported USD cost"), measured.costReported ? `$${Number(measured.costUsd ?? 0).toFixed(6)}` : t("Not reported")],
+          [t("Requested model"), String(measured.model ?? t("Not reported"))],
+          [t("Served model"), measured.servedModel ? String(measured.servedModel) : t("Not reported")],
+        ]} />
+      </Card>}
+      {live && callID && measured?.state !== "pending" && measured?.metered === false &&
+        <p className="text-xs text-muted">{t("No model call was measured for this result.")}</p>}
       {live && callID && <RecordPage source={source} type="build.function-call" id={callID} fields={["state", "output", "code", "reason"]} reload={reload} />}
     </>}
   </div>;

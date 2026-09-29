@@ -102,6 +102,16 @@ type Answer struct {
 	Reason  string `json:"reason,omitempty"` // why, as the provider said it (F-23): a person reads it at the consumer
 	Ref     string `json:"ref,omitempty"`    // "<type>/<id>" of the provider's record
 	Text    string `json:"text,omitempty"`   // a model's answer (ADR-0029 D3)
+	// Model effect callbacks alone supply these measurements. A missing meter
+	// is distinct from a measured zero; providers may omit tokens or price.
+	Metered        bool    `json:"metered,omitempty"`
+	TokensReported bool    `json:"tokensReported,omitempty"`
+	InputTokens    int     `json:"inputTokens,omitempty"`
+	OutputTokens   int     `json:"outputTokens,omitempty"`
+	CostReported   bool    `json:"costReported,omitempty"`
+	CostUSD        float64 `json:"costUsd,omitempty"`
+	LatencyMillis  int64   `json:"latencyMillis,omitempty"`
+	ServedModel    string  `json:"servedModel,omitempty"`
 }
 
 // AnswerFields are the payload fields of a Reply action.
@@ -113,6 +123,20 @@ func AnswerFields() []Field {
 		{Name: "reason", Type: "string", Description: "Why it was refused, as the provider said"},
 		{Name: "ref", Type: "string", Description: "The provider's record"},
 		{Name: "text", Type: "string", Description: "A model's answer"}}
+}
+
+// FunctionAnswerFields adds measured model data only to AI function replies;
+// ordinary protocol and manually recorded answers keep their smaller shape.
+func FunctionAnswerFields() []Field {
+	return append(AnswerFields(),
+		Field{Name: "metered", Type: "boolean", Description: "The provider was called"},
+		Field{Name: "tokensReported", Type: "boolean", Description: "The provider reported token counts"},
+		Field{Name: "inputTokens", Type: "integer", Description: "Reported input tokens"},
+		Field{Name: "outputTokens", Type: "integer", Description: "Reported output tokens"},
+		Field{Name: "costReported", Type: "boolean", Description: "The provider reported a USD cost"},
+		Field{Name: "costUsd", Type: "decimal", Description: "Reported USD cost"},
+		Field{Name: "latencyMillis", Type: "integer", Description: "Model call latency in milliseconds"},
+		Field{Name: "servedModel", Type: "string", Description: "Provider-reported model when different"})
 }
 
 // Request asks for a protocol action once the decision r is accepted: made in

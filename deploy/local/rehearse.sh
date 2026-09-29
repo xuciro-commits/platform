@@ -172,11 +172,13 @@ function_wait() {
   for _ in $(seq 30); do
     result=$(workflow_get "$who" "records/build.function-call/$id" || true)
     if jq -e --arg source "$source" --arg release "$release" \
-      '.record | .state == "ready" and .version == 1 and .source == $source and .release == $release and .model == "local/echo" and (.output | fromjson | .category == "routine")' \
+      '.record | .state == "ready" and .version == 1 and .source == $source and .release == $release and .model == "local/echo" and
+        .metered == true and .tokensReported == true and .inputTokens > 0 and .outputTokens == 20 and
+        .costReported != true and (.latencyMillis // 0) >= 0 and (.output | fromjson | .category == "routine")' \
       <<<"$result" >/dev/null 2>&1; then return; fi
     sleep 1
   done
-  fail "function $id did not keep its source, version, release and strict answer"
+  fail "function $id did not keep its source, version, release, measured usage and strict answer"
 }
 function_setup() {
   local SERVER=$1 TENANT=$2 AUTHORITY=build builder=$3 operator=$4 suffix=$5 operator_id=$6

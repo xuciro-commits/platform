@@ -13,7 +13,7 @@ for (const fixture of [
       const model = createServer((_request, response) => {
         response.setHeader("Content-Type", "application/json");
         response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ summary: "Review the source" }) } }],
-          usage: { prompt_tokens: 4, completion_tokens: 8 } }));
+          usage: { prompt_tokens: 4, completion_tokens: 8, cost: 0.0125 } }));
       });
       model.listen(0, "127.0.0.1");
       await once(model, "listening");
@@ -80,12 +80,17 @@ for (const fixture of [
         const operatorHeaders = { Authorization: `Bearer ${fixture.operator}` };
         await expect.poll(async () => {
           const calls = await (await request.get("/v1/records/build.function-call?limit=500", { headers: operatorHeaders })).json();
-          return calls.records.filter((r: { source: string; function: string; state: string; version: number; release: string }) =>
-            r.source === `${type}/${source}` && r.function === name && r.state === "ready" && r.version === 1 && r.release === active.id).length;
+          return calls.records.filter((r: { source: string; function: string; state: string; version: number; release: string;
+            metered?: boolean; tokensReported?: boolean; inputTokens?: number; outputTokens?: number; costReported?: boolean; costUsd?: number }) =>
+            r.source === `${type}/${source}` && r.function === name && r.state === "ready" && r.version === 1 &&
+            r.release === active.id && r.metered && r.tokensReported && r.inputTokens === 4 && r.outputTokens === 8 &&
+            r.costReported && r.costUsd === 0.0125).length;
         }).toBe(2);
         await task.getByRole("button", { name: "Refresh advice" }).click();
         const answer = task.getByText('{"summary":"Review the source"}', { exact: true }).first();
         await expect(answer).toBeVisible();
+        await expect(task.getByText("Measured model call")).toBeVisible();
+        await expect(task.getByText("$0.012500")).toBeVisible();
         await task.setViewportSize({ width: 390, height: 844 });
         await answer.scrollIntoViewIfNeeded();
         expect(await task.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();

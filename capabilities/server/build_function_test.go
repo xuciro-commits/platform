@@ -161,7 +161,7 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	restored.AIClient = func(r *http.Request) (*http.Response, error) {
 		body, _ := io.ReadAll(r.Body)
 		wire = string(body)
-		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"{\"summary\":\"Saved advice\",\"category\":\"review\",\"review\":true}"}}],"usage":{"prompt_tokens":4,"completion_tokens":8}}`)), Header: make(http.Header)}, nil
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"{\"summary\":\"Saved advice\",\"category\":\"review\",\"review\":true}"}}],"usage":{"prompt_tokens":4,"completion_tokens":8,"cost":0.0125}}`)), Header: make(http.Header)}, nil
 	}
 	effect := restored.outbound[0].Effect
 	out, usage := restored.sendModel(effect, at.Add(time.Second))
@@ -171,17 +171,26 @@ func TestBuilderFunctionVersionsCallsAndRecovery(t *testing.T) {
 	tn.AIClient = restored.AIClient
 	effect = tn.outbound[0].Effect
 	out, usage = tn.sendModel(effect, at.Add(time.Second))
+	fail = true
+	tn.settleWithUsage(effect.ID, out, usage, at.Add(time.Second))
+	eli, _ := tn.Member("eli")
+	view, refusal := tn.RecordOf(eli, build.FunctionCallType, "R1", at)
+	if refusal != nil || view.Record.(build.FunctionRun).Metered || len(tn.ai.Usage()) != 0 {
+		t.Fatal("failed effect append exposed uncommitted function metrics")
+	}
+	fail = false
 	tn.settleWithUsage(effect.ID, out, usage, at.Add(time.Second))
 	if tn.quarantined() {
 		t.Fatal(tn.fault.Load())
 	}
-	eli, _ := tn.Member("eli")
-	view, refusal := tn.RecordOf(eli, build.FunctionCallType, "R1", at)
+	view, refusal = tn.RecordOf(eli, build.FunctionCallType, "R1", at)
 	if refusal != nil {
 		t.Fatal(refusal)
 	}
 	run := view.Record.(build.FunctionRun)
-	if run.State != "ready" || run.Output == "" || run.Version != 1 || run.Model != "local/probe" {
+	if run.State != "ready" || run.Output == "" || run.Version != 1 || run.Model != "local/probe" ||
+		!run.Metered || !run.TokensReported || run.InputTokens != 4 || run.OutputTokens != 8 ||
+		!run.CostReported || run.CostUSD != 0.0125 || run.LatencyMillis < 0 {
 		t.Fatalf("answer not retained: %+v", run)
 	}
 	bo, _ := tn.Member("bo")

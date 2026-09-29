@@ -440,12 +440,12 @@ func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *ai.Us
 	if p := t.app(PlatformApp); p != nil {
 		t.record(p, "effect", t.automation(PlatformApp, false).Member, body, now)
 	}
-	t.apply(o, now, false)
+	t.apply(o, now, false, usage)
 }
 
 // apply records an outcome on its effect and, once the effect is settled, tells
 // the app that emitted it; replay calls it with the journaled outcome.
-func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
+func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool, measured ...*ai.Usage) bool {
 	x, ok := t.mark(o, at)
 	if !ok {
 		return false
@@ -455,7 +455,11 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 	}
 	if x.Endpoint == modelEndpoint { // an app's model request: its answer goes to the app's reply action, once
 		if settled(x.State) && !replaying {
-			t.answerModel(x, o, at)
+			var usage *ai.Usage
+			if len(measured) != 0 {
+				usage = measured[0]
+			}
+			t.answerModel(x, o, usage, at)
 			t.enqueue(at)
 		}
 		return true
@@ -478,7 +482,7 @@ func (t *Tenant) apply(o platform.Outcome, at time.Time, replaying bool) bool {
 func (t *Tenant) told(x platform.Effect, o platform.Outcome, now time.Time, replaying bool) {
 	if x.Endpoint == modelEndpoint { // a model request answers its app's reply action, refused
 		if !replaying {
-			t.answerModel(x, o, now)
+			t.answerModel(x, o, nil, now)
 		}
 		return
 	}

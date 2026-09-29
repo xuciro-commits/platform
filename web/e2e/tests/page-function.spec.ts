@@ -70,6 +70,8 @@ for (const fixture of [
         await operatorPage.getByRole("button", { name: "Refresh advice" }).click();
         const savedAnswer = operatorPage.getByText('{"summary":"Human review requested"}', { exact: true }).first();
         await expect(savedAnswer).toBeVisible();
+        await expect(operatorPage.getByText("Measured model call")).toBeVisible();
+        await expect(operatorPage.getByText("Not reported", { exact: true }).first()).toBeVisible();
         await savedAnswer.scrollIntoViewIfNeeded();
         await operatorPage.screenshot({ path: testInfo.outputPath("function-page.png"), fullPage: true, animations: "disabled" });
         await operatorPage.setViewportSize({ width: 390, height: 844 });

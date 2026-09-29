@@ -98,7 +98,8 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 	if result.Usage != nil {
 		if result.Before.Endpoint != modelEndpoint || result.UsageBefore == "" ||
 			result.Usage.Member != "app:"+result.Before.App || result.Usage.Model == "" ||
-			!result.Usage.At.Equal(result.At) || result.Usage.Input < 0 || result.Usage.Output < 0 {
+			!result.Usage.At.Equal(result.At) || result.Usage.Input < 0 || result.Usage.Output < 0 ||
+			result.Usage.Cost < 0 || result.Usage.Millis < 0 {
 			return result, fmt.Errorf("effect result has an invalid model usage")
 		}
 	} else if result.UsageBefore != "" {
@@ -266,7 +267,7 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage
 			Key:  "failed:" + after.ID}, at, platform.Recipient{AppRole: Admin})
 	}
 	if settled(after.State) && before.State != "discarded" {
-		if err := t.stageEffectAnswer(draft, after.Effect, out, at); err != nil {
+		if err := t.stageEffectAnswer(draft, after.Effect, out, usage, at); err != nil {
 			if t.quarantined() {
 				return
 			}
@@ -390,7 +391,7 @@ func captureDirectEffectRows(d *stagedDecision, owner string, eventRows map[stri
 	return rows, nil
 }
 
-func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, at time.Time) (err error) {
+func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out platform.Outcome, usage *ai.Usage, at time.Time) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			// An unsupported staged effect must never masquerade as a durable
@@ -400,7 +401,7 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 		}
 	}()
 	if x.Endpoint == modelEndpoint {
-		app, reply := t.modelAnswerSubmission(x, out)
+		app, reply := t.modelAnswerSubmission(x, out, usage)
 		if app == nil || reply == nil {
 			return nil
 		}

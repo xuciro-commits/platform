@@ -17,21 +17,29 @@ const SchemaFunctionAnswer = FunctionCallType + ".answer"
 // person's ordinary business action remains the only way to adopt it.
 type FunctionRun struct {
 	platform.Record
-	Function     string   `json:"function" field:"readonly"`
-	Version      int      `json:"version" field:"readonly"`
-	Member       string   `json:"member" field:"readonly"`
-	Source       string   `json:"source" field:"readonly"`
-	State        string   `json:"state" field:"readonly" choices:"pending,ready,rejected"`
-	Output       string   `json:"output,omitempty" field:"readonly" type:"longtext" title:"Typed answer"`
-	Code         string   `json:"code,omitempty" field:"readonly" title:"Refusal code"`
-	Reason       string   `json:"reason,omitempty" field:"readonly" type:"longtext" title:"Refusal reason"`
-	Definition   string   `json:"definition" field:"readonly"`
-	Dependencies string   `json:"dependencies" field:"readonly"`
-	Model        string   `json:"model" field:"readonly"`
-	InputHash    string   `json:"inputHash" field:"readonly" title:"Input hash"`
-	Release      string   `json:"release,omitempty" field:"readonly"`
-	Sources      []string `json:"sources" field:"readonly"`
-	Withheld     bool     `json:"withheld,omitempty" field:"readonly" title:"Some sources cannot be read"`
+	Function       string   `json:"function" field:"readonly"`
+	Version        int      `json:"version" field:"readonly"`
+	Member         string   `json:"member" field:"readonly"`
+	Source         string   `json:"source" field:"readonly"`
+	State          string   `json:"state" field:"readonly" choices:"pending,ready,rejected"`
+	Output         string   `json:"output,omitempty" field:"readonly" type:"longtext" title:"Typed answer"`
+	Code           string   `json:"code,omitempty" field:"readonly" title:"Refusal code"`
+	Reason         string   `json:"reason,omitempty" field:"readonly" type:"longtext" title:"Refusal reason"`
+	Definition     string   `json:"definition" field:"readonly"`
+	Dependencies   string   `json:"dependencies" field:"readonly"`
+	Model          string   `json:"model" field:"readonly"`
+	InputHash      string   `json:"inputHash" field:"readonly" title:"Input hash"`
+	Release        string   `json:"release,omitempty" field:"readonly"`
+	Metered        bool     `json:"metered,omitempty" field:"readonly" title:"Model call measured"`
+	TokensReported bool     `json:"tokensReported,omitempty" field:"readonly" title:"Token counts reported"`
+	InputTokens    int      `json:"inputTokens,omitempty" field:"readonly" title:"Input tokens"`
+	OutputTokens   int      `json:"outputTokens,omitempty" field:"readonly" title:"Output tokens"`
+	CostReported   bool     `json:"costReported,omitempty" field:"readonly" title:"USD cost reported"`
+	CostUSD        float64  `json:"costUsd,omitempty" field:"readonly" title:"Reported USD cost"`
+	LatencyMillis  int64    `json:"latencyMillis,omitempty" field:"readonly" title:"Model latency in milliseconds"`
+	ServedModel    string   `json:"servedModel,omitempty" field:"readonly" title:"Served model"`
+	Sources        []string `json:"sources" field:"readonly"`
+	Withheld       bool     `json:"withheld,omitempty" field:"readonly" title:"Some sources cannot be read"`
 }
 
 func (b *Build) functionCallEntity() platform.Entity {
@@ -51,7 +59,7 @@ func functionCallActions(roles []string) []platform.Action {
 			{Name: "release", Type: "string", Description: "Retained release for a native automation; empty keeps a development run"},
 			{Name: "onBehalf", Type: "string", Description: "Retained member for a native automation"}}},
 		{Schema: SchemaFunctionAnswer, Target: FunctionCallType, Capability: "functions", Title: "Record AI function answer",
-			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.AnswerFields()}}
+			Description: "Keep the validated suggestion or refusal on its call record.", Automation: true, Payload: platform.FunctionAnswerFields()}}
 }
 
 func (*Build) AcceptedActionSchemas() []string {
@@ -94,6 +102,10 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
 		run.State, run.Code, run.Reason = "rejected", answer.Code, answer.Reason
+		run.Metered, run.TokensReported = answer.Metered, answer.TokensReported
+		run.InputTokens, run.OutputTokens = answer.InputTokens, answer.OutputTokens
+		run.CostReported, run.CostUSD = answer.CostReported, answer.CostUSD
+		run.LatencyMillis, run.ServedModel = answer.LatencyMillis, answer.ServedModel
 		if answer.Outcome == "accepted" {
 			definition, _, ok := b.FunctionDefinition(run.Function, run.Version)
 			if !ok || definition.ValidateOutput([]byte(answer.Text)) != nil {

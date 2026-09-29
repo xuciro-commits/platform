@@ -79,7 +79,7 @@ func (t *Tenant) completeAnthropic(pv ai.Provider, model string, req ChatRequest
 	if err != nil {
 		return ChatAnswer{}, ai.Usage{}, anthropicFailure(err)
 	}
-	u := ai.Usage{Input: int(resp.Usage.InputTokens), Output: int(resp.Usage.OutputTokens)}
+	u := ai.Usage{Input: int(resp.Usage.InputTokens), Output: int(resp.Usage.OutputTokens), TokensReported: true}
 	if string(resp.Model) != model {
 		u.Served = string(resp.Model)
 	}

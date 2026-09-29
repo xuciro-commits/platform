@@ -257,10 +257,10 @@ func completion(status int, answer []byte, model string) (ChatAnswer, ai.Usage, 
 				} `json:"tool_calls"`
 			} `json:"message"`
 		} `json:"choices"`
-		Usage struct {
-			Prompt     int     `json:"prompt_tokens"`
-			Completion int     `json:"completion_tokens"`
-			Cost       float64 `json:"cost"` // OpenRouter reports it
+		Usage *struct {
+			Prompt     *int     `json:"prompt_tokens"`
+			Completion *int     `json:"completion_tokens"`
+			Cost       *float64 `json:"cost"` // OpenRouter reports it
 		} `json:"usage"`
 		Error *struct {
 			Message string `json:"message"`
@@ -276,7 +276,20 @@ func completion(status int, answer []byte, model string) (ChatAnswer, ai.Usage, 
 		}
 		return ChatAnswer{}, ai.Usage{}, &AIError{Status: status, Detail: detail}
 	}
-	u := ai.Usage{Input: out.Usage.Prompt, Output: out.Usage.Completion, Cost: out.Usage.Cost}
+	if out.Usage != nil && (out.Usage.Prompt != nil && *out.Usage.Prompt < 0 ||
+		out.Usage.Completion != nil && *out.Usage.Completion < 0 ||
+		out.Usage.Cost != nil && *out.Usage.Cost < 0) {
+		return ChatAnswer{}, ai.Usage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
+	}
+	u := ai.Usage{}
+	if out.Usage != nil {
+		if out.Usage.Prompt != nil && out.Usage.Completion != nil {
+			u.Input, u.Output, u.TokensReported = *out.Usage.Prompt, *out.Usage.Completion, true
+		}
+		if out.Usage.Cost != nil {
+			u.Cost, u.CostReported = *out.Usage.Cost, true
+		}
+	}
 	if out.Model != "" && out.Model != model {
 		u.Served = out.Model
 	}
@@ -326,9 +339,9 @@ func (t *Tenant) completeStream(pv ai.Provider, model string, body map[string]an
 				} `json:"delta"`
 			} `json:"choices"`
 			Usage *struct {
-				Prompt     int     `json:"prompt_tokens"`
-				Completion int     `json:"completion_tokens"`
-				Cost       float64 `json:"cost"`
+				Prompt     *int     `json:"prompt_tokens"`
+				Completion *int     `json:"completion_tokens"`
+				Cost       *float64 `json:"cost"`
 			} `json:"usage"`
 		}
 		if json.Unmarshal([]byte(data), &chunk) != nil {
@@ -339,7 +352,17 @@ func (t *Tenant) completeStream(pv ai.Provider, model string, body map[string]an
 			delta(chunk.Choices[0].Delta.Content)
 		}
 		if chunk.Usage != nil {
-			u.Input, u.Output, u.Cost = chunk.Usage.Prompt, chunk.Usage.Completion, chunk.Usage.Cost
+			if chunk.Usage.Prompt != nil && *chunk.Usage.Prompt < 0 ||
+				chunk.Usage.Completion != nil && *chunk.Usage.Completion < 0 ||
+				chunk.Usage.Cost != nil && *chunk.Usage.Cost < 0 {
+				return ChatAnswer{Content: content.String()}, ai.Usage{}, &AIError{Status: http.StatusBadGateway, Detail: "the provider reported invalid model usage"}
+			}
+			if chunk.Usage.Prompt != nil && chunk.Usage.Completion != nil {
+				u.Input, u.Output, u.TokensReported = *chunk.Usage.Prompt, *chunk.Usage.Completion, true
+			}
+			if chunk.Usage.Cost != nil {
+				u.Cost, u.CostReported = *chunk.Usage.Cost, true
+			}
 		}
 		if chunk.Model != "" && chunk.Model != model {
 			u.Served = chunk.Model
@@ -601,8 +624,8 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 
 // answerModel submits a settled model request's answer to the app's Reply
 // action, as the app, and journals it; a replay has it in the journal.
-func (t *Tenant) answerModel(x platform.Effect, o platform.Outcome, now time.Time) {
-	app, reply := t.modelAnswerSubmission(x, o)
+func (t *Tenant) answerModel(x platform.Effect, o platform.Outcome, usage *ai.Usage, now time.Time) {
+	app, reply := t.modelAnswerSubmission(x, o, usage)
 	if app == nil || reply == nil {
 		return
 	}
@@ -614,7 +637,7 @@ func (t *Tenant) answerModel(x platform.Effect, o platform.Outcome, now time.Tim
 	t.journal(app, c.Member, reply, now)
 }
 
-func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome) (platform.App, *pb.Submission) {
+func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome, usage *ai.Usage) (platform.App, *pb.Submission) {
 	var ask modelAsk
 	json.Unmarshal([]byte(x.Body), &ask)
 	app := t.app(x.App)
@@ -622,6 +645,12 @@ func (t *Tenant) modelAnswerSubmission(x platform.Effect, o platform.Outcome) (p
 		return nil, nil
 	}
 	answer := platform.Answer{Call: ask.Call, Action: "ask", Outcome: "accepted"}
+	if ask.Function != nil && usage != nil {
+		answer.Metered, answer.TokensReported = true, usage.TokensReported
+		answer.InputTokens, answer.OutputTokens = usage.Input, usage.Output
+		answer.CostReported, answer.CostUSD = usage.CostReported, usage.Cost
+		answer.LatencyMillis, answer.ServedModel = usage.Millis, usage.Served
+	}
 	if x.State == "delivered" {
 		json.Unmarshal(o.Answer, &answer.Text)
 	} else {

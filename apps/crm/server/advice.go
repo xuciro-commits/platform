@@ -16,7 +16,7 @@ func adviceActions() []platform.Action {
 	return []platform.Action{{Schema: SchemaAdvice, Target: OpportunityType, Capability: "opportunities", Title: "Request review advice",
 		Description: "Ask the declared AI function for a suggestion; business actions still require your decision.", Payload: []platform.Field{}, Roles: []string{string(Sales), string(Manager)}},
 		{Schema: SchemaAdviceAnswer, Target: OpportunityType, Capability: "opportunities", Title: "Record review advice",
-			Description: "Keep the validated function answer or refusal on its source record.", Payload: platform.AnswerFields(), Automation: true}}
+			Description: "Keep the validated function answer or refusal on its source record.", Payload: platform.FunctionAnswerFields(), Automation: true}}
 }
 
 func advice(c platform.Caller, s *pb.Submission, o Opportunity) (func(*pb.ChangeRecord), *kernel.Error) {

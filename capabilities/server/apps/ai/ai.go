@@ -91,16 +91,18 @@ func (m Model) Name() string { return m.Provider + "/" + m.Model }
 
 // Usage is one call's meter reading.
 type Usage struct {
-	At      time.Time `json:"at"`
-	Member  string    `json:"member"`
-	Agent   bool      `json:"agent,omitempty"`
-	Model   string    `json:"model"`            // "<provider>/<model>"
-	Served  string    `json:"served,omitempty"` // the model that answered, when the provider routes
-	Input   int       `json:"input"`
-	Output  int       `json:"output"`
-	Cost    float64   `json:"cost,omitempty"` // USD, when the provider reports it
-	Millis  int64     `json:"millis"`
-	Outcome string    `json:"outcome"` // ok, or why it failed
+	At             time.Time `json:"at"`
+	Member         string    `json:"member"`
+	Agent          bool      `json:"agent,omitempty"`
+	Model          string    `json:"model"`            // "<provider>/<model>"
+	Served         string    `json:"served,omitempty"` // the model that answered, when the provider routes
+	Input          int       `json:"input"`
+	Output         int       `json:"output"`
+	TokensReported bool      `json:"tokensReported,omitempty"`
+	Cost           float64   `json:"cost,omitempty"` // USD, when the provider reports it
+	CostReported   bool      `json:"costReported,omitempty"`
+	Millis         int64     `json:"millis"`
+	Outcome        string    `json:"outcome"` // ok, or why it failed
 }
 
 const usageKept = 5000

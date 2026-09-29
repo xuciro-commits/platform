@@ -520,6 +520,14 @@ export type FunctionRun = {
   model: string;
   inputHash: string;
   release?: string;
+  metered?: boolean;
+  tokensReported?: boolean;
+  inputTokens?: number;
+  outputTokens?: number;
+  costReported?: boolean;
+  costUsd?: number;
+  latencyMillis?: number;
+  servedModel?: string;
   sources: string[];
   withheld?: boolean;
 };
@@ -1080,7 +1088,9 @@ export type Usage = {
   served?: string;
   input: number;
   output: number;
+  tokensReported?: boolean;
   cost?: number;
+  costReported?: boolean;
   millis: number;
   outcome: string;
 };

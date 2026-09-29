@@ -76,7 +76,9 @@ func TestCandidateFunctionFixtures(t *testing.T) {
 		t.Fatalf("fixture: %+v %v", result, refusal)
 	}
 	call := result.Steps[1].Functions[0]
-	if call.Version != 2 || call.Model != request.Model || call.Output != answer || call.State != "ready" || call.Member != "operator" {
+	if call.Version != 2 || call.Model != request.Model || call.Output != answer || call.State != "ready" || call.Member != "operator" ||
+		!call.Metered || !call.TokensReported || call.InputTokens != 4 || call.OutputTokens != 8 ||
+		call.CostReported || call.LatencyMillis != 0 {
 		t.Fatalf("wrong binding: %+v", call)
 	}
 	if !reflect.DeepEqual(before, snapshot(tn)) {

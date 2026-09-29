@@ -87,6 +87,11 @@ func settleFunctionFixture(t *Tenant, actor platform.Member, fixture build.Funct
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(response))}, nil
 	}
 	outcome, usage := t.sendModel(effect, now)
+	// Fixed fixtures replay the same logical input; wall-clock transport time
+	// from this in-process stand-in must not change their deterministic result.
+	if usage != nil {
+		usage.Millis = 0
+	}
 	t.settleWithUsage(effect.ID, outcome, usage, now)
 	if t.quarantined() {
 		return false, fmt.Errorf("fixture settlement failed")

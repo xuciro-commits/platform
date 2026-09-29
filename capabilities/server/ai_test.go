@@ -57,6 +57,29 @@ func fakeModels(t *testing.T, calls *atomic.Int32) *httptest.Server {
 	return s
 }
 
+func TestModelUsageDistinguishesUnreportedAndZeroCost(t *testing.T) {
+	for _, test := range []struct {
+		name, body   string
+		tokens, cost bool
+	}{
+		{"unreported", `{"choices":[{"message":{"content":"ok"}}]}`, false, false},
+		{"tokens only", `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":0,"completion_tokens":0}}`, true, false},
+		{"cost only", `{"choices":[{"message":{"content":"ok"}}],"usage":{"cost":0}}`, false, true},
+		{"reported free", `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":2,"cost":0}}`, true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, usage, failure := completion(200, []byte(test.body), "probe")
+			if failure != nil || usage.TokensReported != test.tokens || usage.CostReported != test.cost {
+				t.Fatalf("provider usage presence changed: %+v %v", usage, failure)
+			}
+		})
+	}
+	_, _, failure := completion(200, []byte(`{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"cost":-1}}`), "probe")
+	if failure == nil {
+		t.Fatal("negative provider cost was accepted as a release measurement")
+	}
+}
+
 // ADR-0015: an administrator adds a local provider and enables models, each
 // with its access; members call them through the host, and every call's usage
 // is journaled and replayed without calling the model again.
