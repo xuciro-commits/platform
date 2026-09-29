@@ -1028,11 +1028,13 @@ type RecordView struct {
 }
 
 type Related struct {
-	Type    string `json:"type"`
-	Field   string `json:"field"`
-	Title   string `json:"title"`
-	Records []any  `json:"records"`
-	Total   int    `json:"total"`
+	Type  string `json:"type"`
+	Field string `json:"field"`
+	// Relation is the reference field's declared inverse name, when it has one (ADR-0040 21b).
+	Relation string `json:"relation,omitempty"`
+	Title    string `json:"title"`
+	Records  []any  `json:"records"`
+	Total    int    `json:"total"`
 }
 
 func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (RecordView, *kernel.Error) {
@@ -1107,7 +1109,11 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 	s.mu.Lock()
 	var referring []*entityType
 	for _, other := range s.types {
-		if other.info.App == et.info.App {
+		// The same app's referring types, and any type whose reference names an
+		// inverse relation: those are declared to be seen from here (21b). The
+		// member's own read of each type still decides what is listed.
+		named := slices.ContainsFunc(other.info.Fields, func(f platform.FieldInfo) bool { return f.Ref == typ && f.Inverse != "" })
+		if other.info.App == et.info.App || named {
 			referring = append(referring, other)
 		}
 	}
@@ -1123,7 +1129,11 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 			if err != nil {
 				continue // the member may not read that type
 			}
-			view.Related = append(view.Related, Related{Type: other.info.Type, Field: f.Name, Title: other.info.Plural, Records: page.Records, Total: page.Total})
+			if other.info.App != et.info.App && f.Inverse == "" {
+				continue // another app's reference without a declared relation stays private to it
+			}
+			view.Related = append(view.Related, Related{Type: other.info.Type, Field: f.Name, Relation: f.Inverse,
+				Title: other.info.Plural, Records: page.Records, Total: page.Total})
 		}
 	}
 	return view, nil

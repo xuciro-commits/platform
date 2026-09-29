@@ -423,7 +423,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         const relEntity = relInfo && entityFrom(relInfo);
         return relEntity && (
           <section key={`${rel.type}.${rel.field}`}>
-            <h2 className="mb-1 text-sm font-semibold">{relInfo.plural} <span className="font-normal text-muted">({rel.total}{rel.field === "link" ? t(", linked") : <>{t(", by")} {rel.field}</>})</span></h2>
+            <h2 className="mb-1 text-sm font-semibold">{relInfo.plural} <span className="font-normal text-muted">({rel.total}{rel.field === "link" ? t(", linked") : rel.relation ? <>{" · "}{rel.relation}</> : <>{t(", by")} {rel.field}</>})</span></h2>
             <DataTable data={rel.records} columns={[{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 } }, ...columnsFor(relEntity, listed(relEntity))] as never}
               getRowId={(x: EntityRecord) => x.id} height={Math.min(40 + rel.records.length * 28, 260)} searchable={false}
               onRowClick={onOpen && ((x: EntityRecord) => onOpen(rel.type, x))} empty={t("None")} />

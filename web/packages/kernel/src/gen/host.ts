@@ -416,6 +416,7 @@ export type FieldInfo = {
   choices?: string[];
   choiceTitles?: string[];
   ref?: string;
+  inverse?: string;
   knowledge?: boolean;
   read?: string[];
   write?: string[];
@@ -700,6 +701,7 @@ export type RecordView = {
 export type Related = {
   type: string;
   field: string;
+  relation?: string;
   title: string;
   records: unknown[];
   total: number;

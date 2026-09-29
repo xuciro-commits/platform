@@ -54,11 +54,13 @@ type Object struct {
 
 // Field is one field of a defined object, as a person describes it.
 type Field struct {
-	Name     string `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
-	Title    string `json:"title" field:"required" title:"Label" example:"Visited on"`
-	Type     string `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
-	Choices  string `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
-	Ref      string `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
+	Name    string `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
+	Title   string `json:"title" field:"required" title:"Label" example:"Visited on"`
+	Type    string `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
+	Choices string `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
+	Ref     string `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
+	// Inverse names the relation seen from the referenced record (ADR-0040 21b).
+	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
 	Required bool   `json:"required,omitempty"`
 	Search   bool   `json:"search,omitempty" title:"Searchable"`
 	// Read and Write, when set, are the roles that read and set it (ADR-0028 D3).
@@ -381,6 +383,10 @@ func checkFields(fields []Field, h host.Host) error {
 			return fmt.Errorf("the reference field %q says nothing it refers to", f.Name)
 		case f.Type == "reference" && h != nil && !h.Declares(f.Ref):
 			return fmt.Errorf("the field %q refers to %q, which this tenant has no object for", f.Name, f.Ref)
+		case f.Inverse != "" && f.Type != "reference":
+			return fmt.Errorf("the field %q names how it is seen from elsewhere but refers to nothing", f.Name)
+		case f.Inverse != "" && !named(f.Inverse):
+			return fmt.Errorf("the relation name %q of field %q is not lower-case letters and digits", f.Inverse, f.Name)
 		}
 		seen[f.Name] = true
 	}
@@ -532,6 +538,9 @@ func Entity(o Object) platform.Entity {
 			tag += fmt.Sprintf(` choices:"%s"`, strings.Join(choices(f.Choices), ","))
 		case "reference":
 			tag += fmt.Sprintf(` ref:"%s"`, f.Ref)
+			if f.Inverse != "" {
+				tag += fmt.Sprintf(` inverse:"%s"`, f.Inverse)
+			}
 		}
 		var marks []string
 		if f.Required {

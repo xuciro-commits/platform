@@ -642,5 +642,8 @@
  "calendar": "日历",
  "wrench": "工具",
  "map": "地图",
- "sparkles": "星光"
+ "sparkles": "星光",
+ "Seen from there as": "在对方记录中显示为",
+ "For a reference: what the referenced record calls these records": "引用类字段：被引用的记录如何称呼这些记录",
+ "the field %q names how it is seen from elsewhere but refers to nothing": "字段 %q 声明了反向名称，但它不是引用字段"
 }

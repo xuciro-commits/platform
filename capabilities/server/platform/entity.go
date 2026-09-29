@@ -243,6 +243,9 @@ type FieldInfo struct {
 	// records hold; the host fills them when it translates (ADR-0023).
 	ChoiceTitles []string `json:"choiceTitles,omitempty"`
 	Ref          string   `json:"ref,omitempty"` // the entity type a reference points to
+	// Inverse names the relation from the referenced record back to this one
+	// ("opportunities" on an account), tag inverse:"…" (ADR-0040 21b D1).
+	Inverse string `json:"inverse,omitempty"`
 	// Knowledge marks a text field agents and members find through the
 	// knowledge app (ADR-0022 D1), tag knowledge:"true".
 	Knowledge bool `json:"knowledge,omitempty"`
@@ -629,6 +632,9 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		}
 		if (f.Type == "reference" || f.Type == "references") && f.Ref == "" {
 			return nil, fmt.Errorf("entity %s: field %s refers to a struct that is not an entity type of the app", e.Type, name)
+		}
+		if f.Inverse = sf.Tag.Get("inverse"); f.Inverse != "" && f.Type != "reference" {
+			return nil, fmt.Errorf("entity %s: field %s names an inverse but is not a reference", e.Type, name)
 		}
 		out = append(out, f)
 	}
