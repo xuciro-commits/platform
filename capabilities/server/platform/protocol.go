@@ -72,7 +72,8 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 // submits the provider's Answer to the app's Reply action on the decision's target.
 //
 // A request of a model (ADR-0029 D3) names no protocol: Model is
-// "<provider>/<model>", or empty for the tenant's model for apps; Payload is a
+// "<provider>/<model>", or empty for the tenant's model for apps resolved when
+// the decision is accepted (later settings cannot change it); Payload is a
 // Prompt; Target is what the answer is about. The host asks the model after
 // the decision, outside its lock and as the app, within the app's limits, and
 // submits the Answer — its Text the model's — to Reply; a replay asks nothing.

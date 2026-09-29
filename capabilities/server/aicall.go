@@ -514,7 +514,11 @@ func (t *Tenant) askModel(c platform.Caller, rec *pb.ChangeRecord, q platform.Re
 func (t *Tenant) planModelRequest(c platform.Caller, rec *pb.ChangeRecord, q platform.Request, pending []platform.Effect) platform.Effect {
 	prompt, _ := q.Payload.(platform.Prompt)
 	s := rec.GetSubmission()
-	body, _ := json.Marshal(modelAsk{Model: q.Model, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target})
+	// Resolve the administrator's default in the accepted decision. A queued
+	// request must not switch models when settings change before dispatch or
+	// retry. An empty binding stays empty and is refused without provider I/O.
+	model := cmp.Or(q.Model, t.setting(t.automation(ai.ID, false), ai.SettingAppModel))
+	body, _ := json.Marshal(modelAsk{Model: model, Prompt: prompt, Reply: q.Reply, Record: s.GetTarget().GetType() + "/" + s.GetTarget().GetId(), Call: q.Target})
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	n := 0
@@ -539,7 +543,7 @@ func (t *Tenant) sendModel(x platform.Effect, now time.Time) (platform.Outcome, 
 	out := platform.Outcome{Effect: x.ID}
 	var ask modelAsk
 	json.Unmarshal([]byte(x.Body), &ask)
-	model := cmp.Or(ask.Model, t.setting(t.automation(ai.ID, false), ai.SettingAppModel))
+	model := ask.Model
 	if model == "" {
 		out.Result, out.Detail = "rejected", "no model is set for apps"
 		return out, nil

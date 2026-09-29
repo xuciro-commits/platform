@@ -247,7 +247,7 @@ func TestAcceptedEffectCommitsOutcomeAndCallbackTogether(t *testing.T) {
 func TestAcceptedModelEffectKeepsAnswerInSameResult(t *testing.T) {
 	compose := func() *Tenant {
 		source := newRequestsTenant(t, false)
-		tn, err := NewTenant("t", NewConsole("t"), &modelResultCart{resultCart{source.app("cart").(*cart)}})
+		tn, err := NewTenant("t", NewConsole("t"), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: "local/chosen"})
 		if err != nil {
 			t.Fatal(err)
 		}

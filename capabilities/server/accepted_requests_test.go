@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,10 +14,14 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/ai"
 	"platformserver/platform"
 )
 
-type modelResultCart struct{ resultCart }
+type modelResultCart struct {
+	resultCart
+	model string
+}
 
 func (a *modelResultCart) Submit(c platform.Caller, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if s.GetSchema().GetName() == "cart.line.answer" {
@@ -26,7 +31,7 @@ func (a *modelResultCart) Submit(c platform.Caller, s *pb.Submission, at time.Ti
 		return func(r *pb.ChangeRecord) {
 			c.Put(r, Cart{Record: platform.Record{ID: s.GetTarget().GetId()}, Item: "pen", Status: "asked"})
 			for _, target := range []string{"first", "second"} {
-				c.Request(r, platform.Request{Model: "local/chosen", Target: target,
+				c.Request(r, platform.Request{Model: a.model, Target: target,
 					Payload: platform.Prompt{System: "Only classify.", User: target, MaxTokens: 12}, Reply: "cart.line.answer"})
 			}
 		}, nil
@@ -234,7 +239,7 @@ func TestJournalAcceptedProtocolCrashBeforeApplication(t *testing.T) {
 func TestAcceptedModelRequestsPersistWithoutCallingProvider(t *testing.T) {
 	compose := func() *Tenant {
 		source := newRequestsTenant(t, false)
-		tn, err := NewTenant("t", NewConsole("t"), &modelResultCart{resultCart{source.app("cart").(*cart)}})
+		tn, err := NewTenant("t", NewConsole("t"), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: "local/chosen"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -277,5 +282,98 @@ func TestAcceptedModelRequestsPersistWithoutCallingProvider(t *testing.T) {
 	CheckReplay(t, tn, entries, compose)
 	if _, err := tn.Submit(member, sub, at.Add(time.Hour)); err != nil || len(entries) != 1 || len(tn.outbound) != 2 {
 		t.Fatalf("retry duplicated model work: %v", err)
+	}
+}
+
+// A model choice is an accepted input, not a setting read by a later worker.
+// Replay and retry retain it, while disabling that model still stops I/O.
+func TestAcceptedModelDefaultIsPinnedBeforeDispatch(t *testing.T) {
+	for _, tc := range []struct {
+		name, explicit, initial, want string
+	}{
+		{"default", "", "local/echo", "local/echo"},
+		{"explicit", "local/echo", "local/busy", "local/echo"},
+		{"unset", "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int32
+			server := fakeModels(t, &calls)
+			at := time.Date(2026, 9, 29, 9, 0, 0, 0, time.UTC)
+			compose := func() *Tenant {
+				source := newRequestsTenant(t, false)
+				tn, err := NewTenant("t", NewConsole("t", Seat{Subjects: []string{"buyer"}, Member: platform.Member{
+					ID: "buyer", Roles: map[string]string{"cart": "buyer", PlatformApp: Admin, ai.ID: ai.Admin}}}),
+					ai.New("t"), &modelResultCart{resultCart: resultCart{source.app("cart").(*cart)}, model: tc.explicit})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return tn
+			}
+			tn := compose()
+			member, _ := tn.Member("buyer")
+			var entries []Entry
+			tn.Record = func(e Entry) { entries = append(entries, e) }
+			tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+				entries = append(entries, e)
+				return e.Body, nil
+			}
+			key := 0
+			submit := func(app, schema, typ, id string, payload any) {
+				t.Helper()
+				key++
+				_, refusal := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID,
+					Authority: app, IdempotencyKey: fmt.Sprint("pin-", key), Target: &pb.EntityRef{Type: typ, Id: id},
+					Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}, at)
+				if refusal != nil {
+					t.Fatal(refusal)
+				}
+			}
+			setting := func(value string) {
+				submit(PlatformApp, SchemaSettingSet, SettingType, "ai/app-model", map[string]string{"value": value})
+			}
+			submit(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "local", map[string]string{"kind": "local", "baseUrl": server.URL + "/v1"})
+			for _, name := range []string{"echo", "busy"} {
+				submit(ai.ID, ai.SchemaModelEnable, ai.ModelType, "local/"+name, map[string]string{"access": "users"})
+			}
+			setting(tc.initial)
+			submit("cart", "cart.line.ask", "cart.line", "L1", map[string]string{"item": "pen"})
+			setting("local/busy")
+			if tc.want == "" {
+				setting("local/echo")
+			}
+			if len(tn.outbound) != 2 || calls.Load() != 0 {
+				t.Fatal("accepting the request called a provider or lost work")
+			}
+			for _, x := range tn.outbound {
+				var ask modelAsk
+				if json.Unmarshal([]byte(x.Body), &ask) != nil || ask.Model != tc.want {
+					t.Fatalf("accepted intent did not pin %q: %+v", tc.want, ask)
+				}
+			}
+			CheckReplay(t, tn, entries, compose)
+			x := tn.outbound[0].Effect
+			out, usage := tn.sendModel(x, at.Add(time.Second))
+			if tc.want == "" {
+				if out.Result != "rejected" || usage != nil || calls.Load() != 0 {
+					t.Fatalf("unbound request acquired a later default: %+v", out)
+				}
+			} else if out.Result != "delivered" || usage == nil || usage.Model != tc.want || calls.Load() != 1 {
+				t.Fatalf("dispatch followed the changed default: %+v, %+v", out, usage)
+			}
+			tn.settleWithUsage(x.ID, out, usage, at.Add(time.Second))
+			if tn.quarantined() || tn.outbound[0].State != out.Result {
+				t.Fatal("model result and reply did not settle together")
+			}
+			CheckReplay(t, tn, entries, compose)
+			if tc.want != "" {
+				submit(ai.ID, ai.SchemaModelDisable, ai.ModelType, tc.want, map[string]string{})
+				out, usage = tn.sendModel(tn.outbound[1].Effect, at.Add(2*time.Second))
+				if out.Result != "rejected" || usage != nil || calls.Load() != 1 {
+					t.Fatal("pinned model bypassed current enablement or fell back")
+				}
+				tn.settleWithUsage(out.Effect, out, usage, at.Add(2*time.Second))
+				CheckReplay(t, tn, entries, compose)
+			}
+		})
 	}
 }
