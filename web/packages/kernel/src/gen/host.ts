@@ -818,6 +818,12 @@ export type ReleaseEvaluationStarted = {
   id: string;
 };
 
+export type ReleasePage = {
+  candidates: ReleaseSummary[];
+  total: number;
+  activeId: string;
+};
+
 export type ReleasePreview = {
   currentId?: string;
   candidateId?: string;
@@ -844,6 +850,12 @@ export type ReleaseSaved = {
   id: string;
 };
 
+export type ReleaseSummary = {
+  id: string;
+  title: string;
+  assets: number;
+};
+
 export type RunStep = {
   at: string;
   tool: string;
@@ -852,6 +864,13 @@ export type RunStep = {
   outcome: string;
   tokens?: number;
   sources?: string[];
+};
+
+export type SavedReleaseReview = {
+  preview: ReleasePreview;
+  active: boolean;
+  runningMatches: boolean;
+  runningDiagnostic?: string;
 };
 
 export type SavedView = {

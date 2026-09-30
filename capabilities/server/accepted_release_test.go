@@ -98,6 +98,10 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if !bytes.Equal(recovered.releaseCandidates[savedID], live.releaseCandidates[savedID]) {
 		t.Fatal("recovery did not use the committed candidate bytes")
 	}
+	page, err := recovered.SavedReleases(member, 0, 20)
+	if err != nil || page.Total != 1 || len(page.Candidates) != 1 || page.Candidates[0].ID != savedID {
+		t.Fatalf("recovered candidate could not be resumed: %+v, %v", page, err)
+	}
 	raw, _, err := live.Snapshot(func() int64 { return int64(len(entries)) })
 	if err != nil {
 		t.Fatal(err)
@@ -161,6 +165,76 @@ func TestSaveReleaseCandidateRouteChecksBuilderBeforeReadingDraft(t *testing.T) 
 	if rec := post("builder", preview.CandidateID); rec.Code != http.StatusOK ||
 		!bytes.Contains(rec.Body.Bytes(), []byte(preview.CandidateID)) {
 		t.Fatalf("builder could not save reviewed bytes: %d %s", rec.Code, rec.Body.String())
+	}
+	get := func(token, path string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	for _, path := range []string{"/v1/releases/candidates", "/v1/releases/candidates/" + preview.CandidateID} {
+		if rec := get("reader", path); rec.Code != http.StatusForbidden || rec.Body.Len() != 0 {
+			t.Fatalf("non-builder read private release metadata: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+	var page ReleasePage
+	rec := get("builder", "/v1/releases/candidates?limit=1")
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &page) != nil || page.Total != 1 ||
+		len(page.Candidates) != 1 || page.Candidates[0].ID != preview.CandidateID || page.Candidates[0].Title != "Visit" {
+		t.Fatalf("saved release inventory: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = get("builder", "/v1/releases/candidates?offset=1&limit=1")
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &page) != nil || len(page.Candidates) != 0 || page.Total != 1 {
+		t.Fatalf("release page omitted its total or repeated candidates: %s", rec.Body.String())
+	}
+	if rec = get("builder", "/v1/releases/candidates?limit=-1"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid release page: %d", rec.Code)
+	}
+	var review SavedReleaseReview
+	readReview := func() {
+		t.Helper()
+		review = SavedReleaseReview{}
+		rec = get("builder", "/v1/releases/candidates/"+preview.CandidateID)
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &review) != nil ||
+			review.Preview.CandidateID != preview.CandidateID || len(review.Preview.Included) != len(preview.Included) {
+			t.Fatalf("saved candidate review: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+	readReview()
+	if review.RunningMatches || review.RunningDiagnostic == "" || review.Active {
+		t.Fatalf("uninstalled saved draft was reported as running: %+v", review)
+	}
+	if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
+		Authority: build.ID, IdempotencyKey: "publish", Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+		Schema: &pb.SchemaRef{Name: build.ObjectType + ".publish", Version: 1}, Payload: []byte(`{}`)}, at); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tenant.ActivateRelease(member, preview.CandidateID, "activate", at); err != nil {
+		t.Fatal(err)
+	}
+	readReview()
+	if !review.Active || !review.RunningMatches || review.RunningDiagnostic != "" || len(review.Preview.Changed) != 0 {
+		t.Fatalf("installed active release was not recognized: %+v", review)
+	}
+	for _, change := range []struct{ schema, payload string }{
+		{"edit", `{"title":"Changed draft"}`}, {"publish", `{}`},
+	} {
+		if _, err := tenant.Submit(member, &pb.Submission{TenantId: id, PrincipalId: member.ID,
+			Authority: build.ID, IdempotencyKey: "changed-" + change.schema, Target: &pb.EntityRef{Type: build.ObjectType, Id: "O1"},
+			Schema: &pb.SchemaRef{Name: build.ObjectType + "." + change.schema, Version: 1}, Payload: []byte(change.payload)}, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	readReview()
+	if !review.Active || review.RunningMatches || len(review.Preview.Changed) == 0 {
+		t.Fatalf("active pointer concealed changed running definitions: %+v", review)
+	}
+	foreign := member
+	foreign.Tenant = "another-tenant"
+	if _, err := tenant.ReviewSavedRelease(foreign, preview.CandidateID); err == nil {
+		t.Fatal("foreign builder read saved release")
 	}
 }
 

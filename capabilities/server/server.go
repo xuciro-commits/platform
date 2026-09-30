@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -294,6 +295,45 @@ func (h *Host) Handler() http.Handler {
 	})
 	handle(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Definitions(m), t.Language(m, r)))
+	})
+	handle(Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder-only saved release inventory from committed candidate bytes", Query: []Param{{"offset", "Candidates to skip"}, {"limit", "Candidates in the page, 1 to 100 (default 20)"}}, Answer: ReleasePage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		offset, limit := 0, 20
+		for name, target := range map[string]*int{"offset": &offset, "limit": &limit} {
+			if raw := r.URL.Query().Get(name); raw != "" {
+				value, err := strconv.Atoi(raw)
+				if err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				*target = value
+			}
+		}
+		if offset < 0 || limit < 1 || limit > 100 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		answer, err := t.SavedReleases(m, offset, limit)
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+	handle(Route{Pattern: "GET /v1/releases/candidates/{id}", Summary: "Builder-only saved candidate review against actual running definitions", Answer: SavedReleaseReview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		answer, err := t.ReviewSavedRelease(m, r.PathValue("id"))
+		if err != nil {
+			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
 	})
 	handle(Route{Pattern: "POST /v1/releases/preview", Summary: "Builder-only read-only comparison of one saved draft with its installed development definition (ADR-0039 20a)", Body: ReleasePreviewRequest{}, Answer: ReleasePreview{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder {

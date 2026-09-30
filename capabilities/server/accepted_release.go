@@ -212,17 +212,7 @@ func (t *Tenant) runningMatchesLocked(candidateID string, raw []byte) error {
 	if err != nil {
 		return err
 	}
-	available, err := t.releaseAssetsLocked(nil, false)
-	if err != nil {
-		return err
-	}
-	// Rebuild the same closure from what runs now: equal content yields the
-	// same canonical ID; anything else is reported by asset path.
-	roots := make([]platform.AssetRef, 0, len(saved.Assets))
-	for _, asset := range saved.Assets {
-		roots = append(roots, asset.Ref)
-	}
-	running, err := t.candidateWithFunctions(roots, available, nil)
+	running, err := t.runningReleaseLocked(saved)
 	if err != nil {
 		return fmt.Errorf("release differs from the running definitions: %w", err)
 	}
@@ -234,6 +224,21 @@ func (t *Tenant) runningMatchesLocked(candidateID string, raw []byte) error {
 		return err
 	}
 	return fmt.Errorf("release differs from the running definitions: changed %v, missing %v, extra %v", changed, removed, added)
+}
+
+// Read-side status and activation compare the same owner-resolved closure.
+func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform.ReleaseCandidate, error) {
+	available, err := t.releaseAssetsLocked(nil, false)
+	if err != nil {
+		return platform.ReleaseCandidate{}, err
+	}
+	// Rebuild the same closure from what runs now: equal content yields the
+	// same canonical ID; anything else is reported by asset path.
+	roots := make([]platform.AssetRef, 0, len(saved.Assets))
+	for _, asset := range saved.Assets {
+		roots = append(roots, asset.Ref)
+	}
+	return t.candidateWithFunctions(roots, available, nil)
 }
 
 // pendingWorkFitsLocked refuses an activation that would change the action a

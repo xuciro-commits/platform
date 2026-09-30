@@ -9,7 +9,7 @@ for (const fixture of [
 ]) {
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL });
-    test("activate one candidate for a page and workflow using the same typed function", async ({ browser, page, request }) => {
+    test("activate one candidate for a page and workflow using the same typed function", async ({ browser, page, request }, testInfo) => {
       const model = createServer((_request, response) => {
         response.setHeader("Content-Type", "application/json");
         response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ summary: "Review the source" }) } }],
@@ -74,6 +74,10 @@ for (const fixture of [
         expect(preview.candidateId).toMatch(/^sha256-v1:/);
         await page.getByRole("button", { name: "Save immutable candidate" }).click();
         await expect(page.getByRole("button", { name: "Activate release" })).toBeDisabled();
+        await page.reload();
+        await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(preview.candidateId);
+        await expect(page.getByText("Saved candidate review", { exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Activate release" })).toBeDisabled();
         await page.getByRole("combobox", { name: "Evaluation plan" }).selectOption({ label: `${fixture.title} evaluation` });
         await page.getByRole("button", { name: "Run measured evaluation" }).click();
         await expect.poll(async () => {
@@ -86,6 +90,17 @@ for (const fixture of [
         await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
         const active = await (await request.get("/v1/releases/active", { headers })).json();
         expect(active.id).toBe(preview.candidateId);
+        await page.reload();
+        await page.getByRole("button", { name: "Review active release", exact: true }).click();
+        await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
+        await expect(page.getByText("Running definitions match this saved release.", { exact: true })).toBeVisible();
+        if (process.env.PLATFORM_SCREENSHOTS) {
+          await page.screenshot({ path: testInfo.outputPath("release-workspace.png"), fullPage: true });
+          await page.setViewportSize({ width: 390, height: 780 });
+          await page.waitForTimeout(300);
+          await page.screenshot({ path: testInfo.outputPath("release-workspace-narrow.png"), fullPage: true });
+        }
+
 
         await decide(request, fixture.operator, "build", `${type}.create`, { type, id: source }, { note: "Needs human review" });
         const operator = await browser.newContext({ baseURL: fixture.baseURL, locale: "en-US" });

@@ -2,6 +2,23 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Previous": "上一页",
+  "Next": "下一页",
+  "Saved": "已保存",
+  "Saved releases": "已保存发布",
+  "Refresh releases": "刷新发布",
+  "Current active release": "当前活跃发布",
+  "No active release yet.": "尚未激活发布。",
+  "Saved releases could not be loaded.": "无法加载已保存发布。",
+  "Saved candidate": "已保存候选",
+  "Choose a saved candidate": "选择已保存候选",
+  "assets": "项资产",
+  "Showing {shown} of {total} candidates": "显示 {shown}/{total} 个候选",
+  "Review active release": "审查活跃发布",
+  "Saved candidate review": "已保存候选审查",
+  "Running definitions match this saved release.": "运行定义与此已保存发布一致。",
+  "Running definitions differ from this saved release. Publish the matching definitions before activation.": "运行定义与此已保存发布不同。请先发布匹配的定义，再激活。",
+  "Active release differs from running definitions.": "活跃发布与运行定义已不一致。",
   "Build with the capabilities already available in this workspace.": "用工作区已有能力构建应用。",
   "Studio capabilities": "工坊能力入口",
   "Objects and relationships": "对象与关系",
