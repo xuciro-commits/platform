@@ -2,6 +2,7 @@ package platformserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -21,13 +22,14 @@ import (
 // CandidateSimulationRequest fixes all business inputs of an isolated run.
 // Create actions establish its sample data; nothing is copied from live rows.
 type CandidateSimulationRequest struct {
-	ObjectID   string           `json:"objectId,omitempty"`
-	ProcessID  string           `json:"processId,omitempty"`
-	FunctionID string           `json:"functionId,omitempty"`
-	Model      string           `json:"model,omitempty"`
-	As         string           `json:"as,omitempty"`
-	At         time.Time        `json:"at"`
-	Steps      []SimulationStep `json:"steps"`
+	ObjectID   string             `json:"objectId,omitempty"`
+	ProcessID  string             `json:"processId,omitempty"`
+	FunctionID string             `json:"functionId,omitempty"`
+	Model      string             `json:"model,omitempty"`
+	As         string             `json:"as,omitempty"`
+	At         time.Time          `json:"at"`
+	Steps      []SimulationStep   `json:"steps"`
+	Samples    []SimulationSample `json:"samples,omitempty"`
 }
 
 type SimulationStep struct {
@@ -44,6 +46,7 @@ type SimulationStep struct {
 	Step     string                 `json:"step,omitempty"`
 	Answer   string                 `json:"answer,omitempty"`
 	Function *build.FunctionFixture `json:"function,omitempty"`
+	Compute  *build.ComputeFixture  `json:"compute,omitempty"`
 }
 
 type CandidateSimulation struct {
@@ -92,6 +95,10 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	}
 	members := []platform.Member{m}
 	for _, step := range request.Steps {
+		if step.Compute != nil && !step.Compute.Check() {
+			t.mu.Unlock()
+			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded compute fixture with a completed or failed outcome")
+		}
 		if step.Function != nil && !step.Function.Check() {
 			t.mu.Unlock()
 			return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded function fixture with a ready or rejected outcome")
@@ -122,6 +129,10 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		selected, _ := platform.Get[build.Function](t.automation(build.ID, false), request.FunctionID)
 		functionName = selected.Name
 	}
+	environment, environmentErr := t.simulationEnvironment(candidate, request.Samples)
+	if err == nil {
+		err = environmentErr
+	}
 	t.mu.Unlock()
 	if err == nil && review.Diagnostic != "" {
 		err = fmt.Errorf("%s", review.Diagnostic)
@@ -129,10 +140,26 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if err != nil {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
+	modules := environment.Modules
+	for _, asset := range candidate.Assets {
+		if asset.Ref.Kind == platform.AssetCompute {
+			var operation platform.Operation
+			if json.Unmarshal(asset.Body, &operation) != nil {
+				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Candidate compute descriptor is invalid")
+			}
+			if operation.Binding.Kind == "wasm" {
+				raw, err := t.readArtifact(context.Background(), operation.Binding.Module)
+				if err != nil {
+					return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Candidate module bytes are unavailable")
+				}
+				modules[operation.Binding.Module] = raw
+			}
+		}
+	}
 	// The constructor takes exact owner-produced bytes, not callbacks closing
 	// over the production Build or its host. Each invocation owns every app.
 	compose := func() (*Tenant, error) {
-		sandbox, err := candidateTestTenant(candidate, m, members[1:]...)
+		sandbox, err := candidateTestTenantWithEnvironment(candidate, m, environment, members[1:]...)
 		if err == nil && sandbox.ai != nil {
 			err = configureFunctionFixtureModel(sandbox, request.Model, request.At)
 		}
@@ -143,6 +170,10 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The candidate cannot be tested: {why}", err.Error())
 	}
 	out := CandidateSimulation{CandidateID: candidate.ID, Steps: []Simulation{}}
+	out.TestID, err = canonicalDigest([]any{candidate.ID, request, members})
+	if err != nil {
+		return empty, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
 	if sandbox.ai != nil {
 		out.TestID, err = canonicalDigest([]any{candidate.ID, request, members})
 		if err != nil {
@@ -199,6 +230,31 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 				payload, _ := json.Marshal(map[string]string{"answer": step.Answer})
 				sub = &pb.Submission{Authority: work.ID, Target: &pb.EntityRef{Type: work.TaskType, Id: taskID}, Schema: &pb.SchemaRef{Name: "work.task.complete", Version: 1}, Payload: payload}
 			}
+		} else if step.Type == build.ProcessType && step.Action == build.SchemaProcessRun && step.ID == request.ProcessID {
+			processID := ""
+			for _, asset := range candidate.Assets {
+				if asset.Ref.Kind == platform.AssetFlow {
+					var definition platform.FlowReleaseDescriptor
+					json.Unmarshal(asset.Body, &definition)
+					processID = definition.Name
+					break
+				}
+			}
+			sub = &pb.Submission{Authority: build.ID, Target: &pb.EntityRef{Type: step.Type, Id: processID}, Schema: &pb.SchemaRef{Name: step.Action, Version: 1}, Payload: step.Payload}
+		} else if step.Type == build.ProcessType && step.Action == "" && step.AdvanceSeconds > 0 && request.ProcessID != "" {
+			var instanceExists bool
+			for _, asset := range candidate.Assets {
+				if asset.Ref.Kind == platform.AssetFlow {
+					var definition platform.FlowReleaseDescriptor
+					json.Unmarshal(asset.Body, &definition)
+					if _, ok := platform.Get[flow.FlowInstance](sandbox.automation(flow.ID, false), definition.Name+":"+step.ID); ok {
+						instanceExists = true
+					}
+				}
+			}
+			if !instanceExists {
+				refusal = platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The manual test has no run with this key")
+			}
 		} else if step.Action == "" && step.AdvanceSeconds > 0 && step.Flow == "" && step.Step == "" {
 			if !slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool {
 				return a.Ref.Kind == platform.AssetObject && a.Ref.Name == step.Type
@@ -228,6 +284,15 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 			sandbox.Work(now)
 		}
 		result := Simulation{Accepted: refusal == nil, Changes: []SimulatedChange{}}
+		if step.Compute != nil {
+			matched, err := settleComputeFixture(sandbox, actor, *step.Compute, now)
+			if err != nil {
+				return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The compute fixture cannot run: {why}", err.Error())
+			}
+			result.ComputeMatched = &matched
+			passed = passed && matched
+			out.Fixture = true
+		}
 		if step.Function != nil {
 			matched, err := settleFunctionFixture(sandbox, actor, *step.Function, now)
 			if err != nil {
@@ -279,7 +344,7 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 				raw, _ := json.Marshal(record)
 				var instance flow.FlowInstance
 				_ = json.Unmarshal(raw, &instance)
-				result.Flows = append(result.Flows, SimulatedFlow{ID: instance.ID, Flow: instance.Flow, Version: instance.Version, Dependencies: instance.Dependencies, Release: instance.Release, State: instance.State, Tokens: instance.Tokens, Trace: instance.Trace})
+				result.Flows = append(result.Flows, SimulatedFlow{ID: instance.ID, Flow: instance.Flow, Version: instance.Version, Dependencies: instance.Dependencies, Release: instance.Release, State: instance.State, Tokens: instance.Tokens, Trace: instance.Trace, Outputs: instance.Outputs})
 			}
 			if inbox, err := sandbox.Read(actor, "inbox"); err == nil {
 				result.Tasks = inbox.([]work.WorkTask)
@@ -290,11 +355,17 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 	if request.FunctionID != "" && !functionAttempted {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A function test must call the selected candidate function")
 	}
+	if len(pendingComputeEffects(sandbox)) != 0 {
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Provide a fixed answer for every pending compute call")
+	}
 	if len(pendingFunctionEffects(sandbox)) != 0 {
 		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Provide a fixed answer for every pending function call")
 	}
 	if asserted == len(request.Steps) {
 		out.Passed = &passed
+	}
+	if fault := sandbox.fault.Load(); fault != nil {
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Candidate execution failed: {why}", fault.Reason)
 	}
 	saved, _, err := sandbox.Snapshot(func() int64 { return 0 })
 	if err == nil {
@@ -313,12 +384,15 @@ func (t *Tenant) SimulateCandidate(builder platform.Member, request CandidateSim
 		}
 	}
 	if err != nil || !out.Recovered {
-		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The test state did not recover exactly")
+		return empty, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The test state did not recover exactly: {why}", fmt.Sprint(err))
 	}
 	return out, nil
 }
 
 func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Member, others ...platform.Member) (*Tenant, error) {
+	return candidateTestTenantWithEnvironment(candidate, member, simulationEnvironment{}, others...)
+}
+func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, member platform.Member, environment simulationEnvironment, others ...platform.Member) (*Tenant, error) {
 	b := build.New(member.Tenant)
 	member.Roles = maps.Clone(member.Roles)
 	seats := []Seat{{Subjects: []string{member.ID}, Member: member}}
@@ -334,15 +408,27 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 	if slices.ContainsFunc(candidate.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFlow }) {
 		apps = append(apps, work.New(member.Tenant), flow.New(member.Tenant))
 	}
+	for _, manifest := range environment.Manifests {
+		apps = append(apps, newSampleOwner(member.Tenant, manifest))
+	}
 	apps = append(apps, b)
 	sandbox, err := NewTenant(member.Tenant, apps...)
 	if err != nil {
 		return nil, err
 	}
+	sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	for digest, raw := range environment.Modules {
+		if err := sandbox.files().Put(context.Background(), artifactKey(sandbox.ID, digest), raw, "application/wasm"); err != nil {
+			return nil, err
+		}
+	}
 	definitions := map[string][]recordState{build.ObjectType: {}}
 	processes := map[string][]recordState{}
 	for _, asset := range candidate.Assets {
-		if asset.Ref.Kind == platform.AssetFunction {
+		if asset.Ref.App != build.ID {
+			continue
+		}
+		if asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute {
 			continue // compiled after its source objects below
 		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {
@@ -389,13 +475,20 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 	}
 	if hasFunctions {
 		for _, asset := range candidate.Assets {
-			if asset.Ref.Kind == platform.AssetFunction {
+			if asset.Ref.Kind == platform.AssetFunction && asset.Ref.App == build.ID {
 				if err := b.InstallFunctionAsset(asset); err != nil {
 					return nil, err
 				}
 			}
 		}
 		sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.Kind == platform.AssetCompute && asset.Ref.App == build.ID {
+			if err := b.InstallOperationAsset(asset); err != nil {
+				return nil, err
+			}
+		}
 	}
 	// Functions must exist before process validation resolves their pinned versions.
 	if len(processes) != 0 {
@@ -428,6 +521,21 @@ func candidateTestTenant(candidate platform.ReleaseCandidate, member platform.Me
 			if err := sandbox.InstallApplication(b, application); err != nil {
 				return nil, err
 			}
+		}
+	}
+	rows := map[string][]recordState{}
+	for _, sample := range environment.Samples {
+		for _, raw := range sample.Records {
+			rows[sample.Type] = append(rows[sample.Type], recordState{Value: raw})
+		}
+	}
+	if len(rows) > 0 {
+		held, err := sandbox.restoreRecords(rows)
+		if err != nil {
+			return nil, err
+		}
+		if len(held) > 0 {
+			return nil, fmt.Errorf("sample records have no candidate schema")
 		}
 	}
 	return sandbox, nil

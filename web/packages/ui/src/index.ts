@@ -20,7 +20,8 @@ export { Workspace, useWorkspace, notify, type Launcher, type View, type NavSect
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
 export { Graph, layout, type GraphNode, type GraphEdge } from "./graph/Graph";
-export { NodeCanvas, canvasNodeHeight, validateCanvasConnection, type NodeCatalog, type NodeKind, type NodePort, type CanvasNode, type CanvasEdge } from "./graph/NodeCanvas";
+export { NodeCanvas, canvasNodeHeight, canvasNodeWidth, canvasPlacement, validateCanvasConnection, type NodeCatalog, type NodeKind, type NodePort, type CanvasNode, type CanvasEdge, type CanvasPosition, type CanvasAddContext, type CanvasHistory, type BlockStatus, type BlockDiagnostic } from "./graph/NodeCanvas";
+export { BlockCanvas, type BlockCanvasProps } from "./graph/BlockCanvas";
 export { FlowView, FlowGraph, flowStates, type FlowDefinition, type FlowInstanceData, type FlowStep, type FlowToken, type FlowTrace } from "./flows/FlowView";
 export { Chart, useChartData, type ChartSource } from "./charts/Chart";
 export { Pivot, groupDomain } from "./charts/Pivot";
@@ -29,4 +30,3 @@ export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, R
 export { RecordWorkspace } from "./records/RecordWorkspace";
 export { RecordLookup } from "./records/RecordLookup";
 export { humanizeKernelError } from "./lib/errors";
-

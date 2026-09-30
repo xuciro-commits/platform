@@ -1,0 +1,39 @@
+package platform
+
+import (
+	"encoding/json"
+	"time"
+
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
+)
+
+// ReadQuery projects the owner query through the caller's current member scope.
+// Unlike an app's internal Find, this is suitable for page/flow data bindings.
+func (c Caller) ReadQuery(app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	if rt, ok := c.rt.(interface {
+		ReadQuery(Caller, string, string, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
+	}); ok {
+		return rt.ReadQuery(c, app, name, inputs, now)
+	}
+	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Named queries require the host read path")
+}
+
+func (c Caller) ReadRecord(typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
+	if rt, ok := c.rt.(interface {
+		ReadRecord(Caller, string, string, time.Time) (json.RawMessage, *kernel.Error)
+	}); ok {
+		return rt.ReadRecord(c, typ, id, now)
+	}
+	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Record bindings require the host read path")
+}
+
+// RequestApproval stays in the existing Work request/accepted-result boundary.
+func (c Caller) RequestApproval(app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
+	if rt, ok := c.rt.(interface {
+		RequestApproval(Caller, string, *pb.Submission, time.Time) (*pb.ChangeRecord, *kernel.Error)
+	}); ok {
+		return rt.RequestApproval(c, app, s, now)
+	}
+	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval requests require an accepted decision")
+}

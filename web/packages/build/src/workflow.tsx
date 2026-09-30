@@ -1,247 +1,356 @@
-// The owner definition is build.process. Canvas and keyboard properties edit
-// its Steps/Next/Branches directly; Flow/Work owns all execution and testing.
-import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, Card, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Tag, Textarea, canvasNodeHeight, layout, t, useWorkspace,
-  type CanvasEdge, type CanvasNode, type NodeCatalog } from "@platform/ui";
-import { useEffect, useRef, useState } from "react";
-import { installedObjects, type WorkflowDraft, type WorkflowObject, type WorkflowStep } from "./workflow-model";
+// Logic Studio edits the one build.process definition. Its native Flow owner
+// compiles, executes and accepts outcomes; React Flow remains presentation.
+import { useHost, useReadQuery } from "@platform/app";
+import { apiErrorMessage } from "@platform/kernel";
+import { Button, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Tag, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useWorkspace,
+  type BlockStatus, type CanvasAddContext, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
+import { Blocks, Braces, Brain, ChevronDown, ChevronUp, Database, GitBranch, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Plus, Search, Settings2, Workflow, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { DataField, JSONEditor, WorkflowFormProblems, schemaIssue } from "./workflow-binding";
+import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
+import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, replaceReferences, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle,
+  type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
 import { CandidateTest } from "./simulate";
 import { ReleaseReview } from "./release";
-import { WorkflowRuns } from "./workflow-runs";
-type WorkflowFunction = { name: string; title: string; object: string; version: number; versions?: string[] };
-const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", steps: [] });
-const nextName = (steps: WorkflowStep[], base: string) => {
-  let name = base, n = 2;
-  while (steps.some((step) => step.name === name)) name = `${base}${n++}`;
-  return name;
+import { WorkflowRuns, type WorkflowRun } from "./workflow-runs";
+
+const empty = (): WorkflowDraft => ({ id: "", revision: 0, name: "", title: "", object: "", when: "", manual: true, input: {}, inputSchema: { type: "object", properties: {} }, steps: [], layout: {} });
+type Edit = Partial<WorkflowDraft> | ((draft: WorkflowDraft) => WorkflowDraft);
+type EditorState = { draft: WorkflowDraft; dirty: boolean; past: WorkflowDraft[]; future: WorkflowDraft[] };
+function reducer(state: EditorState, action: { type: "load"; draft: WorkflowDraft } | { type: "edit"; edit: Edit } | { type: "undo" } | { type: "redo" }): EditorState {
+  if (action.type === "load") return { draft: action.draft, dirty: false, past: [], future: [] };
+  if (action.type === "undo") { const draft = state.past.at(-1); return draft ? { draft, dirty: true, past: state.past.slice(0, -1), future: [state.draft, ...state.future] } : state; }
+  if (action.type === "redo") { const draft = state.future[0]; return draft ? { draft, dirty: true, past: [...state.past, state.draft], future: state.future.slice(1) } : state; }
+  const draft = typeof action.edit === "function" ? action.edit(state.draft) : { ...state.draft, ...action.edit };
+  return JSON.stringify(draft) === JSON.stringify(state.draft) ? state : { draft, dirty: true, past: [...state.past.slice(-79), state.draft], future: [] };
+}
+const icons: Record<string, ReactNode> = { action: <Zap />, query: <Database />, compute: <Braces />, ai: <Brain />, branch: <GitBranch />, switch: <GitBranch />, foreach: <Workflow />, while: <Workflow />, fork: <GitBranch />, payload: <Play /> };
+const translatedPort = (port: string) => t(({ in: "In", In: "In", next: "Continue", Next: "Continue", error: "Error", Error: "Error", body: "Loop", Loop: "Loop", true: "True", false: "False" } as Record<string, string>)[port] ?? port);
+const definitionKind = (capability: Capability): NodeKind => {
+  const inputs: NodePort[] = capability.ports.filter((port) => port.direction === "input").map((port) => ({ id: port.id, label: translatedPort(port.title), type: port.type, channel: port.channel }));
+  if (capability.kind === "compute") inputs.push({ id: "binding:value", label: t("Input"), type: capability.input?.type ?? "json", channel: "data", limit: 1 });
+  if (capability.kind === "ai" || capability.kind === "action") inputs.push({ id: "binding:target", label: t("Record ID"), type: "string", channel: "data", limit: 1 });
+  if (capability.kind !== "ai") {
+    for (const [name, schema] of Object.entries(commonSchemaProperties(capability.input))) inputs.push({ id: `input:${name}`, label: name, type: schema.type, channel: "data", limit: 1 });
+    for (const field of capability.parameters ?? []) if (!inputs.some((port) => port.id === `input:${field.name}`)) inputs.push({ id: `input:${field.name}`, label: field.name, type: parameterSchema(field)?.type ?? "json", channel: "data", limit: 1 });
+  }
+  const outputs: NodePort[] = capability.ports.filter((port) => port.direction === "output").map((port) => ({ id: port.id === "true" || port.id === "false" ? `case:${port.id}` : port.id, label: translatedPort(port.title), type: port.type, channel: port.channel, limit: 1 }));
+  if (capability.output) {
+    outputs.push({ id: dataPort([]), label: t("Result"), type: capability.output.type, channel: "data" });
+    for (const [name, schema] of Object.entries(commonSchemaProperties(capability.output))) outputs.push({ id: dataPort([name]), label: name, type: schema.type, channel: "data" });
+  }
+  return { id: capabilityKey(capability), title: t(capability.title), description: t(capability.description), category: t(capability.group), tone: capability.tone, icon: icons[capability.kind] ?? <Blocks />, inputs, outputs };
 };
+function pathSchema(schema: ValueSchema | undefined, path: string[] = []): ValueSchema | undefined {
+  for (const name of path) schema = commonSchemaProperties(schema)[name];
+  return schema;
+}
+function bindingSchema(binding: Binding, draft: WorkflowDraft, capabilities: Capability[], seen: Set<string>): ValueSchema | undefined {
+  let schema: ValueSchema | undefined;
+  if (binding.source === "input") schema = draft.inputSchema;
+  else if (binding.source === "index") schema = { type: "integer" };
+  else if (binding.source === "answer") schema = { type: "string" };
+  else if (binding.source === "literal") {
+    const value = binding.value;
+    schema = Array.isArray(value) ? { type: "array" } : value !== null && typeof value === "object" ? { type: "object" } : typeof value === "boolean" ? { type: "boolean" } : typeof value === "number" ? { type: Number.isInteger(value) ? "integer" : "number" } : typeof value === "string" ? { type: "string" } : undefined;
+  } else if (binding.source === "step" && binding.step) {
+    const step = draft.steps.find((item) => item.name === binding.step);
+    if (step && !seen.has(step.name)) schema = outputSchema(step, draft, capabilities, new Set([...seen, step.name]));
+  }
+  return pathSchema(schema, binding.path);
+}
+function outputSchema(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capability[], seen = new Set<string>([step.name])): ValueSchema | undefined {
+  if (step.kind === "payload") return draft.inputSchema;
+  if ((step.kind === "transform" || step.kind === "end" || step.kind === "join") && step.value) return bindingSchema(step.value, draft, capabilities, seen);
+  if (step.kind === "transform") return { type: "object", properties: Object.fromEntries(Object.entries(step.inputs ?? {}).flatMap(([name, value]) => {
+    const schema = bindingSchema(value, draft, capabilities, seen); return schema ? [[name, schema]] : [];
+  })) };
+  if (step.kind === "ask") return { type: "object", properties: { answer: { type: "string", enum: step.answers } } };
+  return sourceCapability(step, capabilities)?.output;
+}
+function nodeKind(step: WorkflowStep, draft: WorkflowDraft, capabilities: Capability[]): NodeKind {
+  const capability = sourceCapability(step, capabilities);
+  const root = capability ? definitionKind(capability) : { id: step.kind, title: workflowKindTitle(step.kind), category: t("Flow"), inputs: [] as NodePort[], outputs: [] as NodePort[] };
+  const outputs: NodePort[] = [];
+  if (!["end", "join", "break", "continue", "fail", "branch"].includes(step.kind)) outputs.push({ id: "next", label: t(step.kind === "switch" ? "Default" : step.kind === "foreach" || step.kind === "while" ? "Done" : "Continue"), type: "flow", channel: "control", limit: 1 });
+  if (step.kind === "branch") outputs.push(...["true", "false"].map((key) => ({ id: `case:${key}`, label: t(key === "true" ? "True" : "False"), type: "flow", channel: "control" as const, limit: 1 })));
+  else if (step.kind === "ask" || step.kind === "switch") outputs.push(...Object.keys(step.cases ?? {}).map((key) => ({ id: `case:${encodeURIComponent(key)}`, label: key, type: "flow", channel: "control" as const, limit: 1 })));
+  if (step.kind === "foreach" || step.kind === "while") outputs.push({ id: "body", label: t("Loop"), type: "flow", channel: "control", limit: 1 });
+  if (step.kind === "fork") for (let i = 0; i <= (step.branches?.length ?? 0); i++) outputs.push({ id: `branch:${i}`, label: t("Path {n}", { n: i + 1 }), type: "flow", channel: "control", limit: 1 });
+  if (!["end", "join", "break", "continue"].includes(step.kind)) outputs.push({ id: "error", label: t("Error"), type: "flow", channel: "control", limit: 1 });
+  const schema = outputSchema(step, draft, capabilities);
+  if (schema) {
+    outputs.push({ id: dataPort([]), label: t("Result"), type: schema.type, channel: "data" });
+    for (const [name, property] of Object.entries(commonSchemaProperties(schema)).slice(0, 6)) outputs.push({ id: dataPort([name]), label: name, type: property.type, channel: "data" });
+  }
+  // Bindings made in the inspector still have a real socket, even when their
+  // field is deeper than the compact top-level preview shown by default.
+  for (const item of draft.steps) for (const value of [...Object.values(item.inputs ?? {}), ...[item.value, item.target, item.collection].filter((binding): binding is Binding => !!binding)]) {
+    if (value.source !== "step" || value.step !== step.name) continue;
+    const path = value.path ?? [], id = dataPort(path);
+    if (!outputs.some((port) => port.id === id)) outputs.push({ id, label: path.join(".") || t("Result"), type: pathSchema(schema, path)?.type ?? "object", channel: "data" });
+  }
+  const fields = step.kind === "ai" || step.kind === "compute" && step.value ? [] : [...new Set([...Object.keys(capability?.input?.properties ?? {}), ...(capability?.parameters ?? []).map((field) => field.name), ...Object.keys(step.inputs ?? {})])];
+  const inputs: NodePort[] = step.kind === "payload" ? [] : [{ id: "in", label: t("In"), type: "flow", channel: "control" }];
+  if (step.kind === "compute") inputs.push({ id: "binding:value", label: t("Input"), type: capability?.input?.type ?? "json", channel: "data", limit: 1 });
+  if (step.kind === "ai" || step.kind === "action") inputs.push({ id: "binding:target", label: t("Record ID"), type: "string", channel: "data", limit: 1 });
+  if (step.kind === "foreach") inputs.push({ id: "binding:collection", label: t("Collection"), type: "array", channel: "data", limit: 1 });
+  if (["transform", "end", "join", "continue", "switch", "while"].includes(step.kind)) inputs.push({ id: "binding:value", label: t("Value"), type: "json", channel: "data", limit: 1 });
+  for (const name of fields) {
+    const parameter = capability?.parameters?.find((field) => field.name === name);
+    const type = capability?.input?.properties?.[name]?.type ?? (parameter ? parameterSchema(parameter)?.type ?? "json" : undefined) ?? (step.inputs?.[name] ? bindingSchema(step.inputs[name], draft, capabilities, new Set([step.name]))?.type : undefined) ?? "json";
+    inputs.push({ id: `input:${name}`, label: name, type, channel: "data", limit: 1 });
+  }
+  return { ...root, id: `node:${step.name}`, addable: false, inputs, outputs };
+}
 
 export function Workflows() {
-  const { source, role } = useHost();
-  const { open } = useWorkspace();
-  return <div className="grid gap-3">
-    <PageHeader title={t("Workflows")} description={t("Start on an object state, ask people, then take governed actions.")}
-      actions={role("build") === "builder" && <Button onClick={() => open({ view: "workflow", params: { id: "new" } })}>{t("New workflow")}</Button>} />
-    <RecordList source={source} type="build.process" fields={["title", "name", "object", "version"]}
-      onOpen={(record) => open({ view: "workflow", params: { id: record.id } })} />
-  </div>;
+  const { source, role } = useHost(), { open } = useWorkspace();
+  return <div className="grid gap-3"><PageHeader title={t("Logic Studio")} description={t("Assemble native capabilities, typed code, human tasks and AI in one workflow.")}
+    actions={role("build") === "builder" && <Button onClick={() => open({ view: "workflow", params: { id: "new" } })}>{t("New workflow")}</Button>} />
+    <RecordList source={source} type="build.process" fields={["title", "name", "object", "version"]} onOpen={(record) => open({ view: "workflow", params: { id: record.id } })} /></div>;
 }
 
 export function WorkflowEditor({ id }: { id: string }) {
-  const { decide, role } = useHost();
-  const { open } = useWorkspace();
+  const { decide, role, client, entities } = useHost(), { open, close } = useWorkspace();
   const query = useReadQuery<{ record?: WorkflowDraft }>(`/v1/records/build.process/${encodeURIComponent(id)}`);
-  const functionRecords = useRecordInventory<WorkflowFunction>("build.function");
-  const sources = useRecordInventory<WorkflowObject>("build.object");
-  const objects = installedObjects(sources.data?.records ?? []).filter((object) => object.states?.length);
-  const [draft, setDraft] = useState<WorkflowDraft>(empty);
-  const [dirty, setDirty] = useState(false);
-  const [chosen, setChosen] = useState(-1);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [stage, setStage] = useState<"design" | "test" | "runs" | "release">("design");
-  const [visited, setVisited] = useState<string[]>([]);
-  const designRef = useRef<HTMLDivElement>(null);
-  const dockRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (query.data?.record && !dirty) setDraft(query.data.record); }, [query.data, dirty]);
-  const object = objects.find((o) => `build.${o.name}` === draft.object);
-  const functions = (functionRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
-    try { const version = JSON.parse(raw) as WorkflowFunction; return version.object === draft.object ? [version] : []; } catch { return []; }
-  }));
-  const actions = (object?.actions ?? []).filter((a) => !a.approval && !a.inputs?.some((input) => input.required));
-  const roles = [...new Set(["builder", ...(object?.access?.length ? object.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])])];
-  // Authoring hints only; the owner compiler remains the publication gate.
-  const issues: string[] = [];
-  const named = (name: string) => /^\p{Ll}[\p{Ll}\p{Nd}]*$/u.test(name);
-  if (!object || !object.states?.some((s) => s.name === draft.when)) issues.push(t("Choose a published source and one of its states."));
-  if (!draft.steps.length) issues.push(t("Add at least one human task or object action."));
-  if (draft.steps.some((s) => !named(s.name)) || new Set(draft.steps.map((s) => s.name)).size !== draft.steps.length)
-    issues.push(t("Each step needs a unique lower-case name."));
-  if (draft.steps.some((s) => s.ask !== undefined ? !roles.includes(s.ask) : s.function ? !functions.some((f) => f.name === s.function?.name && f.version === s.function.version) : !actions.some((a) => a.name === s.act)))
-    issues.push(t("Choose a readable human role, supported object action or retained function version."));
-  if (draft.steps.some((s) => s.answers?.some((answer) => !answer.trim()) || new Set(s.answers ?? []).size !== (s.answers?.length ?? 0)))
-    issues.push(t("Human answers must be nonempty and unique."));
-  if (draft.steps.some((s) => (s.next && !draft.steps.some((to) => to.name === s.next)) || Object.entries(s.branches ?? {}).some(([answer, to]) => !s.answers?.includes(answer) || !draft.steps.some((step) => step.name === to))))
-    issues.push(t("Choose an existing step for every path."));
-  const change = (patch: Partial<WorkflowDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); };
-  const update = (patch: Partial<WorkflowStep>) => change({ steps: draft.steps.map((step, i) => i === chosen ? { ...step, ...patch } : step) });
-  const add = (kind: "ask" | "act" | "function") => {
-    const step: WorkflowStep = { name: nextName(draft.steps, kind === "ask" ? "review" : kind === "function" ? "infer" : "action"), title: kind === "ask" ? t("Human task") : kind === "function" ? t("Call AI function") : t("Object action"),
-      ...(kind === "ask" ? { ask: "user", answers: ["approve", "reject"] } : kind === "function" ? { function: { name: functions[0]?.name ?? "", version: functions[0]?.version ?? 1 } } : { act: actions[0]?.name ?? "" }) };
-    setChosen(draft.steps.length); change({ steps: [...draft.steps, step] });
-  };
-  const save = async (): Promise<number | undefined> => {
-    setError("");
-    const target = draft.id || crypto.randomUUID();
-    const payload = { name: draft.name, title: draft.title, object: draft.object, when: draft.when, steps: draft.steps };
-    if (await decide(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: target }, payload,
-      { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) {
-      const revision = draft.id ? draft.revision + 1 : 1;
-      if (!draft.id) open({ view: "workflow", params: { id: target } });
-      else {
-        const refreshed = await query.refetch();
-        if (refreshed.data?.record) setDraft(refreshed.data.record);
-        setDirty(false);
+  const catalogQuery = useReadQuery<Capability[]>("/v1/capabilities");
+  const flowQuery = useReadQuery<{ id: string; title: string; version: number }[]>("/v1/flows");
+  const [{ draft, dirty, past, future }, dispatch] = useReducer(reducer, undefined, () => ({ draft: empty(), dirty: false, past: [], future: [] }));
+  const [chosen, setChosen] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [leftOpen, setLeftOpen] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1600px)").matches), [rightOpen, setRightOpen] = useState(true), [dockOpen, setDockOpen] = useState(false);
+  const [dock, setDock] = useState<"run" | "history" | "test" | "release">("run");
+  const [mountedDocks, setMountedDocks] = useState<Partial<Record<typeof dock, true>>>({});
+  const [search, setSearch] = useState(""), [filter, setFilter] = useState("all");
+  const [run, setRun] = useState<WorkflowRun>();
+  const [runInput, setRunInput] = useState<unknown>({}), [runKey, setRunKey] = useState("");
+  const [formProblems, setFormProblems] = useState<Record<string, string>>({});
+  const [validation, setValidation] = useState<{ valid: boolean; issues: { node?: string; message: string }[] }>();
+  const reportProblem = useCallback((key: string, problem: string) => setFormProblems((previous) => {
+    if ((previous[key] ?? "") === problem) return previous;
+    const next = { ...previous }; if (problem) next[key] = problem; else delete next[key]; return next;
+  }), []);
+  useEffect(() => { if (query.data?.record && !dirty) dispatch({ type: "load", draft: query.data.record }); }, [query.data, dirty]);
+  useEffect(() => { setRunInput(draft.input ?? {}); }, [draft.id, draft.input]);
+  useEffect(() => { if (dockOpen) setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock, dockOpen]);
+  const change = useCallback((edit: Edit) => { dispatch({ type: "edit", edit }); setError(""); setValidation(undefined); }, []);
+  const capabilities = catalogQuery.data ?? [];
+  const publishedObjects = entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states }));
+  const diagnostics = useMemo(() => {
+    const result = workflowDiagnostics(draft);
+    if (validation) for (const issue of validation.issues) if (issue.node) (result[issue.node] ??= []).push({ message: issue.message, severity: "error" });
+    return result;
+  }, [draft, validation]);
+  const kinds = useMemo(() => draft.steps.map((step) => nodeKind(step, draft, capabilities)), [draft, capabilities]);
+  const catalog: NodeCatalog = [...capabilities.map(definitionKind), ...kinds];
+  const edges = [...controlEdges(draft), ...dataEdges(draft)];
+  const positioned = layout(draft.steps.map((step) => ({ id: step.name })), controlEdges(draft).map((edge) => ({ from: edge.source, to: edge.target })), "right",
+    { width: canvasNodeWidth, height: Math.max(120, ...kinds.map((kind) => canvasNodeHeight(kind))), gapX: 80, gapY: 40 });
+  const nodes: CanvasNode[] = draft.steps.map((step) => {
+    const tokens = run?.tokens?.filter((token) => token.step === step.name) ?? [];
+    const accepted = run?.outputs && Object.hasOwn(run.outputs, step.name);
+    const visited = run?.trace?.some((trace) => trace.step === step.name);
+    const status: BlockStatus | undefined = run && !dirty && run.version === draft.version ? tokens.some((token) => token.error || token.waits === "stuck") ? "error" : tokens.length ? "waiting" : accepted || visited ? "success" : "idle" : undefined;
+    return { id: step.name, kind: `node:${step.name}`, label: step.title || step.name, detail: step.name === draft.steps[0]?.name ? t("Entry block") : sourceCapability(step, capabilities)?.ref.app ?? t("Platform control"),
+      version: step.operation ? step.operation.version > 0 ? `v${step.operation.version}` : sourceCapability(step, capabilities)?.version : step.function ? step.function.version > 0 ? `v${step.function.version}` : sourceCapability(step, capabilities)?.version : undefined,
+      position: draft.layout?.[step.name] ?? positioned.get(step.name) ?? { x: 0, y: 0 }, status, diagnostics: diagnostics[step.name], current: tokens.length > 0 };
+  });
+  const node = draft.steps.find((step) => step.name === chosen);
+  const saved = query.data?.record;
+  const installed = useMemo(() => { try { return draft.published ? JSON.parse(draft.published) as WorkflowDraft : undefined; } catch { return undefined; } }, [draft.published]);
+  const runIssue = installed?.inputSchema ? schemaIssue(installed.inputSchema, runInput) : undefined;
+  const brokenForm = Object.values(formProblems).filter(Boolean);
+
+  const add = (kind: string, context?: CanvasAddContext) => {
+    const capability = capabilities.find((item) => capabilityKey(item) === kind); if (!capability) return;
+    const step = initialStep(capability, draft.steps);
+    if ((step.kind === "action" || step.kind === "ai") && draft.object) step.target = { source: "subject", path: ["id"] };
+    change((current) => {
+      let steps = current.steps;
+      if (context?.source) {
+        const path = portPath(context.source.port);
+        if (path) {
+          const from = current.steps.find((item) => item.name === context.source!.node);
+          const type = from ? pathSchema(outputSchema(from, current, capabilities), path)?.type : undefined;
+          const into = definitionKind(capability).inputs.find((port) => port.channel === "data" && (port.type === type || port.type === "json"));
+          const binding: Binding = { source: "step", step: context.source.node, path };
+          if (into?.id === "binding:value") { step.value = binding; step.inputs = undefined; }
+          else if (into?.id === "binding:target") step.target = binding;
+          else if (into?.id.startsWith("input:")) step.inputs = { [into.id.slice(6)]: binding };
+        } else steps = steps.map((item) => item.name === context.source!.node ? withPath(item, context.source!.port, step.name) : item);
       }
-      return revision;
+      if (context?.target) {
+        if (context.target.port === "in") step.next = context.target.node;
+        else {
+          const target = current.steps.find((item) => item.name === context.target!.node);
+          const inputPort = target ? nodeKind(target, current, capabilities).inputs.find((port) => port.id === context.target!.port) : undefined;
+          const out = definitionKind(capability).outputs.find((port) => port.channel === "data" && (port.type === inputPort?.type || inputPort?.type === "json"));
+          const path = out ? portPath(out.id) : undefined;
+          if (path) steps = steps.map((item) => {
+            if (item.name !== context.target!.node) return item;
+            const binding: Binding = { source: "step", step: step.name, path };
+            return context.target!.port.startsWith("binding:") ? { ...item, [context.target!.port.slice(8)]: binding } : { ...item, inputs: { ...item.inputs, [context.target!.port.slice(6)]: binding } };
+          });
+        }
+      }
+      const position = canvasPlacement(context?.position ?? { x: 80 + current.steps.length * (canvasNodeWidth + 80), y: 140 }, canvasNodeHeight(definitionKind(capability)),
+        nodes.map((item) => ({ position: item.position, width: canvasNodeWidth, height: canvasNodeHeight(catalog.find((kind) => kind.id === item.kind)!) })));
+      return { ...current, steps: [...steps, step], layout: { ...current.layout, [step.name]: position } };
+    });
+    setChosen(step.name); setRightOpen(true);
+  };
+  const insert = (edge: CanvasEdge, kind: string, context: CanvasAddContext) => {
+    const capability = capabilities.find((item) => capabilityKey(item) === kind); if (!capability) return;
+    const step = initialStep(capability, draft.steps);
+    if (["end", "join", "break", "continue", "fail", "branch"].includes(step.kind)) { setError(t("Choose a block with a next path for insertion.")); return; }
+    step.next = edge.target;
+    change((current) => ({ ...current, steps: [...current.steps.map((item) => item.name === edge.source ? withPath(item, edge.sourcePort, step.name) : item), step],
+      layout: { ...current.layout, ...context.positions, [step.name]: context.position } }));
+    setChosen(step.name); setRightOpen(true);
+  };
+  const connect = (connection: { source: string; sourceHandle: string | null; target: string; targetHandle: string | null }) => {
+    if ((connection.targetHandle?.startsWith("input:") || connection.targetHandle?.startsWith("binding:")) && connection.sourceHandle) {
+      const path = portPath(connection.sourceHandle); if (!path) return;
+      const handle = connection.targetHandle, binding: Binding = { source: "step", step: connection.source, path };
+      change((current) => ({ ...current, steps: current.steps.map((step) => step.name !== connection.target ? step : handle.startsWith("binding:")
+        ? { ...step, [handle.slice(8)]: binding, ...(step.kind === "compute" && handle === "binding:value" ? { inputs: undefined } : {}) }
+        : { ...step, inputs: { ...step.inputs, [handle.slice(6)]: binding } }) }));
+    } else if (connection.sourceHandle) change((current) => ({ ...current, steps: current.steps.map((step) => step.name === connection.source ? withPath(step, connection.sourceHandle!, connection.target) : step) }));
+  };
+  const disconnect = (removed: CanvasEdge[]) => change((current) => ({ ...current, steps: current.steps.map((step) => removed.reduce((item, edge) => {
+    if (edge.channel === "data" && edge.target === item.name) {
+      if (edge.targetPort.startsWith("binding:")) return { ...item, [edge.targetPort.slice(8)]: undefined };
+      const inputs = { ...item.inputs }; delete inputs[edge.targetPort.slice(6)]; return { ...item, inputs };
     }
+    return edge.source === item.name ? withPath(item, edge.sourcePort, "") : item;
+  }, step)) }));
+  const deleteNodes = (removed: CanvasNode[]) => {
+    const ids = new Set(removed.map((item) => item.id));
+    change((current) => ({ ...current, steps: current.steps.filter((step) => !ids.has(step.name)).map((step) => [...ids].reduce((result, id) => replaceReferences(result, id, ""), step)),
+      layout: Object.fromEntries(Object.entries(current.layout ?? {}).filter(([name]) => !ids.has(name))) }));
+    if (ids.has(chosen)) setChosen("");
+  };
+  const duplicate = (selected: CanvasNode[]) => {
+    const copies: WorkflowStep[] = [], renamed = new Map<string, string>();
+    for (const item of selected) { const old = draft.steps.find((step) => step.name === item.id); if (!old) continue; const name = nextStepName([...draft.steps, ...copies], old.name); renamed.set(old.name, name); copies.push({ ...structuredClone(old), name, title: `${old.title || old.name} ${t("copy")}` }); }
+    const steps = copies.map((step) => {
+      let result = step; for (const [old, next] of renamed) result = replaceReferences(result, old, next);
+      return { ...result, next: renamed.has(step.next ?? "") ? result.next : undefined, error: renamed.has(step.error ?? "") ? result.error : undefined, body: renamed.has(step.body ?? "") ? result.body : undefined,
+        branches: step.branches?.filter((name) => renamed.has(name)).map((name) => renamed.get(name)!), cases: Object.fromEntries(Object.entries(step.cases ?? {}).map(([key, name]) => [key, renamed.get(name) ?? ""])) };
+    });
+    change((current) => ({ ...current, steps: [...current.steps, ...steps], layout: { ...current.layout, ...Object.fromEntries(selected.flatMap((item) => renamed.has(item.id) ? [[renamed.get(item.id)!, { x: item.position.x + 40, y: item.position.y + 60 }]] : [])) } }));
+    if (steps[0]) setChosen(steps[0].name);
+  };
+  const save = async () => {
+    const target = draft.id || crypto.randomUUID();
+    const { name, title, object, when, manual, input, inputSchema, steps, layout: positions } = draft;
+    if (!await decide(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: target }, { name, title, object, when, manual, input, inputSchema, steps, layout: positions },
+      { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
+    if (!draft.id) {
+      open({ view: "workflow", params: { id: target } });
+      close({ view: "workflow", params: { id } });
+      return target;
+    }
+    const fresh = await query.refetch(); if (fresh.data?.record) dispatch({ type: "load", draft: fresh.data.record });
+    return target;
+  };
+  const check = async () => {
+    const response = await client.call<{ valid: boolean; issues: { node?: string; message: string }[] }>("POST", "/v1/build/process/check", draft);
+    if (!response.ok) { setError(apiErrorMessage(response.body) ?? t("Workflow validation failed.")); return; }
+    setValidation(response.body);
   };
   const publish = async () => {
-    const revision = dirty ? await save() : draft.revision;
-    if (revision === undefined) return;
-    if (await decide("build.process.publish", { type: "build.process", id: draft.id }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) await query.refetch();
+    if (dirty && !await save()) return;
+    const revision = dirty ? draft.revision + 1 : draft.revision;
+    if (await decide("build.process.publish", { type: "build.process", id: draft.id }, {}, { expectedRevision: revision, quiet: true, onRefused: setError })) {
+      const fresh = await query.refetch(); if (fresh.data?.record) dispatch({ type: "load", draft: fresh.data.record }); await catalogQuery.refetch();
+    }
   };
-  const perform = async (action: () => Promise<unknown>) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
-  const reload = async () => {
-    const fresh = await query.refetch();
-    if (fresh.data?.record) { setDraft(fresh.data.record); setDirty(false); setError(""); }
+  const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch { setError(t("The workflow request could not be completed.")); } finally { setBusy(false); } };
+  const start = async () => {
+    const key = runKey || crypto.randomUUID(); setRunKey(key);
+    if (await decide("build.process.run", { type: "build.process", id: draft.id }, { key, input: JSON.stringify(runInput) }, { quiet: true, onRefused: setError })) { setDock("history"); setDockOpen(true); }
   };
-  const step = draft.steps[chosen];
-  const move = (by: number) => {
-    const next = chosen + by;
-    if (next < 0 || next >= draft.steps.length) return;
-    const steps = [...draft.steps]; [steps[chosen], steps[next]] = [steps[next]!, steps[chosen]!];
-    change({ steps }); setChosen(next);
+  const rename = (name: string) => {
+    if (!node || !/^[a-z][a-z0-9]*$/.test(name) || draft.steps.some((step) => step.name === name && step !== node)) return;
+    const old = node.name;
+    change((current) => ({ ...current, steps: current.steps.map((step) => ({ ...replaceReferences(step, old, name), name: step.name === old ? name : step.name })),
+      layout: Object.fromEntries(Object.entries(current.layout ?? {}).map(([id, point]) => [id === old ? name : id, point])) }));
+    setChosen(name);
   };
-  const show = (next: typeof stage) => {
-    setStage(next);
-    if (next !== "design") setVisited((old) => old.includes(next) ? old : [...old, next]);
-    requestAnimationFrame(() => (next === "design" ? designRef : dockRef).current?.scrollIntoView({ block: "start" }));
-  };
-  const inspectStep = (name: string) => {
-    const index = draft.steps.findIndex((item) => item.name === name);
-    if (index >= 0) { setChosen(index); show("design"); }
-  };
-  if (role("build") !== "builder") return <PageHeader title={t("Workflows")} description={t("Only a builder can edit workflows.")} />;
-  if (id !== "new" && !draft.id) return <PageHeader title={t("Workflows")} description={query.isError ? t("The workflow could not be loaded.") : t("Loading…")} />;
-  return <div className="flex flex-col gap-3 lg:min-h-0">
-    <PageHeader title={draft.title || t("New workflow")} description={t("Edit, test and release this workflow in one workspace.")} />
-    <Panel role="toolbar" aria-label={t("Workflow actions")} className="flex flex-wrap items-center gap-2 p-2">
-      <Button variant="ghost" onClick={() => open({ view: "studio" })}>{t("Studio overview")}</Button>
-      <Button variant="ghost" onClick={() => open({ view: "workflow" })}>{t("Workflows")}</Button>
-      <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
-      <Button disabled={busy || !draft.id} onClick={() => void perform(reload)}>{t("Reload saved workflow")}</Button>
-      <Button disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
-      <Button disabled={busy || !draft.id || dirty} onClick={() => show("test")}>{t("Test workflow")}</Button>
-      <Button variant="primary" disabled={busy || !draft.id} onClick={() => void perform(publish)}>{t("Publish workflow")}</Button>
-      <span className="ml-auto"><Tag label={dirty ? t("Unsaved") : draft.version ? t("Published") : t("Draft")} tone={dirty ? "warning" : draft.version ? "success" : "neutral"} /></span>
-    </Panel>
-    {draft.version ? <Panel role="status" className="text-xs">{t("Installed workflow version {version}. Existing instances keep their starting version.", { version: draft.version })}</Panel> : null}
-    {dirty && <Panel role="status" className="text-xs">{t("Not saved yet. Publishing saves first.")}</Panel>}
-    {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
-    {(dirty || draft.id) && issues.length > 0 && <Panel className="text-xs text-danger" aria-live="polite">{issues.join(" ")}</Panel>}
-    {(sources.isError || functionRecords.isError) && <Panel role="alert">{t("The workflow sources could not be loaded.")}</Panel>}
-    <Panel role="navigation" aria-label={t("Workflow workspace")} className="flex flex-wrap gap-1 p-1">
-      {([ ["design", t("Design")], ["test", t("Test")], ["runs", t("Runs")], ["release", t("Release")] ] as const).map(([key, label]) =>
-        <Button key={key} variant={stage === key ? "primary" : "ghost"} aria-pressed={stage === key}
-          disabled={key !== "design" && (!draft.id || dirty)} onClick={() => show(key)}>{label}</Button>)}
-    </Panel>
-    <div ref={designRef}>
-    <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-[12rem_minmax(0,1fr)_17rem] 2xl:grid-cols-[14rem_minmax(0,1fr)_20rem]">
-      <Panel role="region" aria-label={t("Workflow steps")} className="grid content-start gap-2 p-3">
-        <Button variant={chosen === -1 ? "primary" : "ghost"} onClick={() => setChosen(-1)}>{t("Workflow settings")}</Button>
-        <p className="text-xs text-muted">{t("The first step starts the workflow. Connections choose what follows.")}</p>
-        {draft.steps.map((s, i) => <Button key={i} variant={chosen === i ? "primary" : "ghost"} onClick={() => setChosen(i)}>{i + 1}. {s.title || s.name}</Button>)}
-        <Button onClick={() => add("ask")}>{t("Add human task")}</Button>
-        <Button disabled={!actions.length} onClick={() => add("act")}>{t("Add object action")}</Button>
-        <Button disabled={!functions.length} onClick={() => add("function")}>{t("Add AI function")}</Button>
-      </Panel>
-      <div className="min-w-0" role="region" aria-label={t("Workflow map")}>
-        {issues.includes(t("Each step needs a unique lower-case name."))
-          ? <Card className="p-3 text-sm text-danger">{t("Fix step names to draw the workflow map.")}</Card>
-          : <WorkflowMap key={id} draft={draft} chosen={chosen} onChoose={setChosen} onChange={(steps) => change({ steps })} />}
-      </div>
-      <Panel role="region" aria-label={t("Workflow properties")} className="grid content-start gap-3 p-3">
-        {chosen === -1 ? <>
-          <label className="grid gap-1 text-xs">{t("Workflow name")}<Input disabled={!!draft.published} value={draft.name} onChange={(e) => change({ name: e.target.value })} /></label>
-          <label className="grid gap-1 text-xs">{t("Workflow title")}<Input value={draft.title} onChange={(e) => change({ title: e.target.value })} /></label>
-          <label className="grid gap-1 text-xs">{t("Source object")}<Select disabled={!!draft.published} value={draft.object} onChange={(e) => {
-            const source = objects.find((o) => `build.${o.name}` === e.target.value);
-            change({ object: e.target.value, when: source?.states?.[0]?.name ?? "" });
-          }}><option value="">{t("Choose a published object")}</option>{objects.map((o) => <option key={o.id} value={`build.${o.name}`}>{o.title}</option>)}</Select></label>
-          <label className="grid gap-1 text-xs">{t("Start state")}<Select value={draft.when} onChange={(e) => change({ when: e.target.value })}>
-            <option value="">{t("Choose a state")}</option>{object?.states?.map((s) => <option key={s.name} value={s.name}>{s.title}</option>)}</Select></label>
-        </> : step && <>
-          <label className="grid gap-1 text-xs">{t("Step name")}<Input value={step.name} onChange={(e) => {
-            const name = e.target.value, old = step.name;
-            change({ steps: draft.steps.map((s, i) => ({ ...s, name: i === chosen ? name : s.name,
-              next: s.next === old ? name : s.next, branches: Object.fromEntries(Object.entries(s.branches ?? {}).map(([answer, to]) => [answer, to === old ? name : to])) })) });
-          }} /></label>
-          <label className="grid gap-1 text-xs">{t("Step title")}<Input value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} /></label>
-          <label className="grid gap-1 text-xs">{t("Step kind")}<Select value={step.ask !== undefined ? "ask" : step.function ? "function" : "act"} onChange={(e) => update(e.target.value === "ask"
-            ? { ask: "user", answers: ["approve", "reject"], act: undefined, function: undefined } : e.target.value === "function"
-            ? { function: { name: functions[0]?.name ?? "", version: functions[0]?.version ?? 1 }, act: undefined, ask: undefined, answers: undefined, branches: undefined } : { function: undefined, act: actions[0]?.name ?? "", ask: undefined, answers: undefined, branches: undefined })}>
-            <option value="ask">{t("Human task")}</option><option value="act">{t("Object action")}</option><option value="function">{t("Call AI function")}</option></Select></label>
-          {step.ask !== undefined ? <>
-            <label className="grid gap-1 text-xs">{t("Human role")}<Select value={step.ask} onChange={(e) => update({ ask: e.target.value })}>
-              {!roles.includes(step.ask) && <option value={step.ask}>{step.ask}</option>}{roles.map((r) => <option key={r} value={r}>{r}</option>)}</Select></label>
-            <label className="grid gap-1 text-xs">{t("Answers (one per line)")}<Textarea rows={3} value={(step.answers ?? []).join("\n")} onChange={(e) => {
-              const answers = e.target.value.split("\n");
-              update({ answers, branches: Object.fromEntries(Object.entries(step.branches ?? {}).filter(([answer]) => answers.includes(answer))) });
-            }} /></label>
-            {(step.answers ?? []).map((answer, i) => <label key={i} className="grid gap-1 text-xs">{t("After answer {answer}", { answer })}
-              <Select value={step.branches?.[answer] ?? ""} onChange={(e) => {
-                const branches = { ...step.branches }; if (e.target.value) branches[answer] = e.target.value; else delete branches[answer]; update({ branches });
-              }}><option value="">{t("Use default next step")}</option>{draft.steps.filter((s) => s.name !== step.name).map((s) => <option key={s.name} value={s.name}>{s.title || s.name}</option>)}</Select>
-            </label>)}
-          </> : step.function ? <>
-            <label className="grid gap-1 text-xs">{t("Published function version")}<Select value={`${step.function.name}:${step.function.version}`} onChange={(e) => {
-              const selected = functions.find((f) => `${f.name}:${f.version}` === e.target.value);
-              if (selected) update({ function: { name: selected.name, version: selected.version } });
-            }}><option value="">{t("Choose a published function")}</option>{functions.map((f) => <option key={`${f.name}:${f.version}`} value={`${f.name}:${f.version}`}>{f.title} · {t("Version")} {f.version}</option>)}</Select></label>
-            <p className="text-xs text-muted">{t("Waits for a typed answer or refusal. The next step keeps its own permissions; add a human task to review the result.")}</p>
-          </> : <label className="grid gap-1 text-xs">{t("Object action")}<Select value={step.act ?? ""} onChange={(e) => update({ act: e.target.value })}>
-            <option value="">{t("Choose an action")}</option>{actions.map((a) => <option key={a.name} value={a.name}>{a.title}</option>)}</Select></label>}
-          <label className="grid gap-1 text-xs">{t("Default next step")}<Select value={step.next ?? ""} onChange={(e) => update({ next: e.target.value })}>
-            <option value="">{t("End workflow")}</option>{draft.steps.filter((s) => s.name !== step.name).map((s) => <option key={s.name} value={s.name}>{s.title || s.name}</option>)}</Select></label>
-          <div className="flex flex-wrap gap-2"><Button disabled={chosen === 0} onClick={() => move(-1)}>{t("Move up")}</Button>
-            <Button disabled={chosen === draft.steps.length - 1} onClick={() => move(1)}>{t("Move down")}</Button>
-            <Button onClick={() => { change({ steps: draft.steps.filter((_, i) => i !== chosen).map((s) => ({ ...s, next: s.next === step.name ? "" : s.next,
-              branches: Object.fromEntries(Object.entries(s.branches ?? {}).filter(([, to]) => to !== step.name)) })) }); setChosen(-1); }}>{t("Remove step")}</Button></div>
-        </>}
-      </Panel>
-    </fieldset>
-    </div>
-    {draft.id && <div ref={dockRef} className={stage === "design" ? "hidden" : "grid gap-3 rounded-md border border-border bg-background p-3"}>
-      {visited.includes("test") && <div className={stage === "test" ? "" : "hidden"}>
-        <CandidateTest processId={draft.id} embedded onStepSelect={inspectStep} />
-      </div>}
-      {visited.includes("runs") && <div className={stage === "runs" ? "" : "hidden"}>
-        <WorkflowRuns name={draft.name} onStepSelect={inspectStep} />
-      </div>}
-      {visited.includes("release") && <div className={stage === "release" ? "" : "hidden"}>
-        <ReleaseReview initialKind="flow" initialID={draft.id} embedded />
-      </div>}
-    </div>}
-  </div>;
-}
+  const filtered = capabilities.filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
+    && [capability.title, t(capability.title), capability.description, capability.ref.app, capability.ref.name].some((value) => value.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
+  const groups = [...new Set(filtered.map((capability) => capability.group))];
+  if (role("build") !== "builder") return <PageHeader title={t("Logic Studio")} description={t("Only a builder can edit workflows.")} />;
+  if (id !== "new" && !draft.id) return <PageHeader title={t("Logic Studio")} description={query.isError ? t("The workflow could not be loaded.") : t("Loading…")} />;
 
-function WorkflowMap({ draft, chosen, onChoose, onChange }: { draft: WorkflowDraft; chosen: number; onChoose: (i: number) => void; onChange: (steps: WorkflowStep[]) => void }) {
-  const catalog: NodeCatalog = [{ id: "@start", title: t("Start state"), category: "workflow", inputs: [], outputs: [{ id: "next", label: t("Starts"), type: "flow", limit: 1 }] },
-    ...draft.steps.map((s, i) => ({ id: `step:${i}`, title: s.ask !== undefined ? t("Human task") : s.function ? t("Call AI function") : t("Object action"), category: "workflow",
-      inputs: [{ id: "enter", label: t("Arrives here"), type: "flow" }], outputs: [{ id: "next", label: t("Default"), type: "flow", limit: 1 },
-        ...(s.ask !== undefined ? (s.answers ?? []).map((answer, n) => ({ id: `answer:${n}`, label: answer, type: "flow", limit: 1 })) : [])] }))];
-  const edges: CanvasEdge[] = draft.steps.flatMap((s, i) => [
-    ...(i === 0 ? [{ id: "@start", source: "@start", sourcePort: "next", target: s.name, targetPort: "enter" }] : []),
-    ...(s.next ? [{ id: `next:${s.name}`, source: s.name, sourcePort: "next", target: s.next, targetPort: "enter" }] : []),
-    ...Object.entries(s.branches ?? {}).map(([answer, to]) => ({ id: `answer:${s.name}:${answer}`, source: s.name, sourcePort: `answer:${s.answers?.indexOf(answer)}`, target: to, targetPort: "enter" })),
-  ]);
-  const places = layout([{ id: "@start", label: draft.when }, ...draft.steps.map((s) => ({ id: s.name, label: s.title ?? s.name }))], edges.map((e) => ({ from: e.source, to: e.target })), "right",
-    { width: 160, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 40, gapY: 30 });
-  const nodes: CanvasNode[] = [{ id: "@start", kind: "@start", label: draft.when || t("Choose a state"), position: places.get("@start") ?? { x: 0, y: 0 } },
-    ...draft.steps.map((s, i) => ({ id: s.name, kind: `step:${i}`, label: s.title || s.name, detail: s.ask || s.act || (s.function ? `${s.function.name} · ${t("Version")} ${s.function.version}` : undefined), position: places.get(s.name) ?? { x: 0, y: 0 } }))];
-  return <Card className="grid gap-2 p-3">
-    <p className="text-xs text-muted">{t("Connect outputs to steps, or use the properties with your keyboard. Select a line and Delete to remove its path.")}</p>
-    <NodeCanvas label={t("Workflow map")} catalog={catalog} nodes={nodes} edges={edges} height={460} selected={chosen < 0 ? "@start" : draft.steps[chosen]?.name}
-      onSelect={(name) => onChoose(draft.steps.findIndex((s) => s.name === name))}
-      onConnect={(c) => {
-        if (c.source === "@start") {
-          const target = draft.steps.find((s) => s.name === c.target);
-          if (target) onChange([target, ...draft.steps.filter((s) => s !== target)]);
-        } else onChange(draft.steps.map((s) => s.name !== c.source ? s : c.sourceHandle === "next" ? { ...s, next: c.target }
-          : { ...s, branches: { ...s.branches, [s.answers?.[Number(c.sourceHandle?.split(":")[1])] ?? ""]: c.target } }));
-      }}
-      onDisconnect={(gone) => onChange(draft.steps.map((s) => ({ ...s, next: gone.some((e) => e.source === s.name && e.sourcePort === "next") ? "" : s.next,
-        branches: Object.fromEntries(Object.entries(s.branches ?? {}).filter(([answer]) => !gone.some((e) => e.id === `answer:${s.name}:${answer}`))) })))} />
-  </Card>;
+  return <WorkflowFormProblems.Provider value={reportProblem}><div className="flex min-h-0 flex-col gap-2">
+    <PageHeader title={draft.title || t("New workflow")} description={t("Logic Studio · Native flow, one capability library")}
+      actions={<div className="flex items-center gap-1"><Tag label={dirty ? t("Unsaved") : draft.version ? `v${draft.version}` : t("Draft")} tone={dirty ? "warning" : draft.version ? "success" : "neutral"} />
+        <Button variant="ghost" onClick={() => open({ view: "studio" })}>{t("Studio overview")}</Button></div>} />
+    <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface px-2 py-1.5" role="toolbar" aria-label={t("Workflow actions")}>
+      <Button variant="ghost" onClick={() => setLeftOpen(!leftOpen)} aria-label={t("Toggle block library")}>{leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}</Button>
+      <Button variant="ghost" onClick={() => { setChosen(""); setRightOpen(true); }}><Settings2 className="mr-1 size-3.5" />{t("Settings")}</Button>
+      {draft.id && <Button disabled={busy} variant="ghost" onClick={() => void perform(async () => { const fresh = await query.refetch(); if (fresh.data?.record) { dispatch({ type: "load", draft: fresh.data.record }); setError(""); setValidation(undefined); } })}>{t("Reload saved workflow")}</Button>}
+      <Button disabled={busy || brokenForm.length > 0 || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
+      <Button disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate workflow")}</Button>
+      <Button disabled={busy || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)}>{t("Publish workflow")}</Button>
+      <span className="mx-1 h-5 w-px bg-border" />
+      <Button variant="primary" disabled={busy || !installed?.manual || dirty} onClick={() => { setDock("run"); setDockOpen(true); }}><Play className="mr-1 size-3" />{t("Run")}</Button>
+      <Button variant="ghost" onClick={() => { setDock("history"); setDockOpen(true); }}>{t("Runs")}</Button>
+      <Button variant="ghost" disabled={!draft.id || dirty} onClick={() => { setDock("release"); setDockOpen(true); }}>{t("Release")}</Button>
+      <Button variant="ghost" className="ml-auto" onClick={() => setRightOpen(!rightOpen)} aria-label={t("Toggle inspector")}>{rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</Button>
+    </div>
+    {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
+    {validation && <Panel role="status" className={`text-xs ${validation.valid ? "text-success" : "text-danger"}`}>{validation.valid ? t("The native compiler accepted this draft.") : validation.issues.map((issue) => issue.message).join(" ")}</Panel>}
+    {catalogQuery.isError && <Panel role="alert" className="text-xs text-danger">{t("The capability library could not be loaded.")} <Button onClick={() => void catalogQuery.refetch()}>{t("Retry")}</Button></Panel>}
+    <fieldset disabled={busy} className="grid min-h-0 gap-2" style={{ gridTemplateColumns: `${leftOpen ? "240px " : ""}minmax(360px,1fr)${rightOpen ? " 320px" : ""}`, height: "clamp(520px, calc(100vh - 220px), 900px)" }}>
+      {leftOpen && <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-surface" aria-label={t("Block library")}>
+        <div className="border-b border-border p-3"><h3 className="mb-2 text-xs font-semibold">{t("Block library")}</h3><div className="relative"><Search className="pointer-events-none absolute left-2 top-2 size-3.5 text-muted" /><Input className="pl-7" aria-label={t("Search capabilities")} placeholder={t("Search capabilities")} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+          <div className="mt-2 flex gap-1">{["all", "native", "code", "control"].map((kind) => <Button variant="ghost" key={kind} type="button" className={`rounded px-2 py-1 text-[10px] ${filter === kind ? "bg-row-selected text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => setFilter(kind)}>{t(({ all: "All", native: "Native", code: "Code", control: "Logic" })[kind as "all"])}</Button>)}</div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto pb-2">{groups.map((group) => <div key={group}><h4 className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted">{t(group)}</h4>{filtered.filter((capability) => capability.group === group).map((capability) => <Button variant="row" key={capabilityKey(capability)} type="button" draggable className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-row-selected"
+          onClick={() => add(capabilityKey(capability))} title={capability.description} onDragStart={(event) => { event.dataTransfer.setData("application/platform-block", capabilityKey(capability)); event.dataTransfer.effectAllowed = "copy"; }}>
+          <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded border border-border text-primary">{icons[capability.kind] ?? <Blocks className="size-3.5" />}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{t(capability.title)}</span><span className="block truncate text-[10px] text-muted">{capability.ref.app} · {t(capability.source)}</span></span><Plus className="mt-1 size-3 shrink-0 text-muted" />
+        </Button>)}</div>)}</div>
+        <Disclosure className="max-h-[40%] overflow-auto border-t border-border p-2" defaultOpen summary={<span className="text-xs font-medium">{t("Available data")}</span>}><DataField title={t("Workflow input")} schema={draft.inputSchema} binding={{ source: "input" }} />
+          {draft.steps.filter((step) => step.name !== chosen).map((step) => <DataField key={step.name} title={step.title || step.name} schema={outputSchema(step, draft, capabilities)} binding={{ source: "step", step: step.name }} />)}
+          {draft.object && <DataField title={t("Source record")} binding={{ source: "subject" }} />}
+        </Disclosure>
+      </aside>}
+      <div className="min-h-0 min-w-0" aria-label={t("Workflow map")}><NodeCanvas label={t("Workflow map")} catalog={catalog} nodes={nodes} edges={edges} mode={busy ? "view" : "edit"} selected={chosen || undefined} height="100%"
+        onSelect={(name) => { setChosen(name); setRightOpen(true); }} onOpen={(name) => { setChosen(name); setRightOpen(true); }} onAdd={add} onInsert={insert} onConnect={connect} onDisconnect={disconnect}
+        onPositionsChange={(positions) => change((current) => ({ ...current, layout: { ...current.layout, ...positions } }))} onLayout={(positions) => change({ layout: positions })}
+        onDelete={deleteNodes} onDuplicate={duplicate} history={{ canUndo: past.length > 0, canRedo: future.length > 0, onUndo: () => { dispatch({ type: "undo" }); setValidation(undefined); }, onRedo: () => { dispatch({ type: "redo" }); setValidation(undefined); } }}
+        canConnect={(connection) => {
+          if (connection.sourceHandle?.startsWith("data:")) return true;
+          const successors = new Map(draft.steps.map((step) => [step.name, controlEdges(draft).filter((edge) => edge.source === step.name).map((edge) => edge.target)]));
+          const seen = new Set<string>(), pending = [connection.target];
+          while (pending.length) { const next = pending.pop()!; if (next === connection.source) return false; if (seen.has(next)) continue; seen.add(next); pending.push(...(successors.get(next) ?? [])); }
+          return true;
+        }} /></div>
+      {rightOpen && (node ? <WorkflowInspector step={node} steps={draft.steps} capabilities={capabilities} flows={flowQuery.data ?? []} output={run?.outputs?.[node.name]}
+        onChange={(patch) => change((current) => ({ ...current, steps: current.steps.map((step) => step.name === chosen ? { ...step, ...patch } : step) }))} onRename={rename}
+        onMakeEntry={() => change((current) => ({ ...current, steps: [current.steps.find((step) => step.name === chosen)!, ...current.steps.filter((step) => step.name !== chosen)] }))} onClose={() => setRightOpen(false)} />
+        : <WorkflowSettings draft={draft} onChange={change} objects={publishedObjects} onClose={() => setRightOpen(false)} />)}
+    </fieldset>
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="flex items-center gap-1 p-1.5"><Button variant="ghost" type="button" onClick={() => setDockOpen(!dockOpen)} className="rounded p-1 text-muted hover:bg-row-hover" aria-label={t(dockOpen ? "Collapse execution panel" : "Expand execution panel")}>{dockOpen ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}</Button>
+        {([ ["run", "Run input"], ["history", "Executions"], ["test", "Isolated test"], ["release", "Release"] ] as const).map(([key, label]) => <Button variant="ghost" key={key} type="button" className={`rounded px-3 py-1 text-xs ${dock === key && dockOpen ? "bg-row-selected text-primary" : "text-muted hover:bg-row-hover"}`} onClick={() => { setDock(key); setDockOpen(true); }}>{t(label)}</Button>)}
+        {run && <span className="ml-auto flex items-center gap-2 px-2 text-[10px] text-muted">{run.id} · v{run.version}<Button variant="ghost" type="button" className="text-primary" onClick={() => setRun(undefined)}>{t("Clear run overlay")}</Button></span>}
+      </div>
+      <div hidden={!dockOpen} className="max-h-[60vh] overflow-auto border-t border-border p-3">
+        {mountedDocks.run && <div hidden={dock !== "run"}><div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px]"><JSONEditor label={t("Run input (JSON)")} value={runInput} schema={installed?.inputSchema} onChange={setRunInput} rows={5} />
+          <div className="grid content-start gap-2"><h4 className="text-xs font-medium">{t("Run published workflow")}</h4><p className="text-[11px] leading-5 text-muted">{t("Runs use the published version and real permissions. Actions and effects can change your platform data.")}</p>
+            <Input aria-label={t("Stable run key")} placeholder={t("Stable run key (generated on first run)")} value={runKey} onChange={(event) => setRunKey(event.target.value)} />
+            <Button variant="primary" disabled={busy || dirty || !installed?.manual || !!runIssue || brokenForm.length > 0} onClick={() => void perform(start)}><Play className="mr-1 size-3" />{t("Run published version")}</Button>
+            <Button variant="ghost" onClick={() => setRunKey(crypto.randomUUID())}>{t("New run key")}</Button>{!installed?.manual && <p className="text-xs text-muted">{t("Save and publish a manual workflow before running it here.")}</p>}{dirty && <p className="text-xs text-muted">{t("Save or undo draft changes before running the published version.")}</p>}
+          </div></div></div>}
+        {mountedDocks.history && <div hidden={dock !== "history"}><WorkflowRuns name={draft.name} versions={saved?.versions ?? draft.versions} onStepSelect={(name) => { setChosen(name); setRightOpen(true); }} onRunSelect={setRun} /></div>}
+        {mountedDocks.test && <div hidden={dock !== "test"}>{draft.id && !dirty ? <CandidateTest processId={draft.id} embedded onStepSelect={(name) => { setChosen(name); setRightOpen(true); }} /> : <p className="text-xs text-muted">{t("Save the workflow before isolated testing.")}</p>}</div>}
+        {mountedDocks.release && <div hidden={dock !== "release"}>{draft.id && !dirty ? <ReleaseReview initialKind="flow" initialID={draft.id} embedded /> : <p className="text-xs text-muted">{t("Save the workflow before release review.")}</p>}</div>}
+      </div>
+    </div>
+  </div></WorkflowFormProblems.Provider>;
 }

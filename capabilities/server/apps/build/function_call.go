@@ -1,7 +1,9 @@
 package build
 
 import (
+	"cmp"
 	"encoding/json"
+	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -17,29 +19,31 @@ const SchemaFunctionAnswer = FunctionCallType + ".answer"
 // person's ordinary business action remains the only way to adopt it.
 type FunctionRun struct {
 	platform.Record
-	Function       string   `json:"function" field:"readonly"`
-	Version        int      `json:"version" field:"readonly"`
-	Member         string   `json:"member" field:"readonly"`
-	Source         string   `json:"source" field:"readonly"`
-	State          string   `json:"state" field:"readonly" choices:"pending,ready,rejected"`
-	Output         string   `json:"output,omitempty" field:"readonly" type:"longtext" title:"Typed answer"`
-	Code           string   `json:"code,omitempty" field:"readonly" title:"Refusal code"`
-	Reason         string   `json:"reason,omitempty" field:"readonly" type:"longtext" title:"Refusal reason"`
-	Definition     string   `json:"definition" field:"readonly"`
-	Dependencies   string   `json:"dependencies" field:"readonly"`
-	Model          string   `json:"model" field:"readonly"`
-	InputHash      string   `json:"inputHash" field:"readonly" title:"Input hash"`
-	Release        string   `json:"release,omitempty" field:"readonly"`
-	Metered        bool     `json:"metered,omitempty" field:"readonly" title:"Model call measured"`
-	TokensReported bool     `json:"tokensReported,omitempty" field:"readonly" title:"Token counts reported"`
-	InputTokens    int      `json:"inputTokens,omitempty" field:"readonly" title:"Input tokens"`
-	OutputTokens   int      `json:"outputTokens,omitempty" field:"readonly" title:"Output tokens"`
-	CostReported   bool     `json:"costReported,omitempty" field:"readonly" title:"USD cost reported"`
-	CostUSD        float64  `json:"costUsd,omitempty" field:"readonly" title:"Reported USD cost"`
-	LatencyMillis  int64    `json:"latencyMillis,omitempty" field:"readonly" title:"Model latency in milliseconds"`
-	ServedModel    string   `json:"servedModel,omitempty" field:"readonly" title:"Served model"`
-	Sources        []string `json:"sources" field:"readonly"`
-	Withheld       bool     `json:"withheld,omitempty" field:"readonly" title:"Some sources cannot be read"`
+	Function       string              `json:"function" field:"readonly"`
+	App            string              `json:"app,omitempty" field:"readonly"`
+	Contract       platform.AIFunction `json:"contract" type:"json" field:"readonly"`
+	Version        int                 `json:"version" field:"readonly"`
+	Member         string              `json:"member" field:"readonly"`
+	Source         string              `json:"source" field:"readonly"`
+	State          string              `json:"state" field:"readonly" choices:"pending,ready,rejected"`
+	Output         string              `json:"output,omitempty" field:"readonly" type:"longtext" title:"Typed answer"`
+	Code           string              `json:"code,omitempty" field:"readonly" title:"Refusal code"`
+	Reason         string              `json:"reason,omitempty" field:"readonly" type:"longtext" title:"Refusal reason"`
+	Definition     string              `json:"definition" field:"readonly"`
+	Dependencies   string              `json:"dependencies" field:"readonly"`
+	Model          string              `json:"model" field:"readonly"`
+	InputHash      string              `json:"inputHash" field:"readonly" title:"Input hash"`
+	Release        string              `json:"release,omitempty" field:"readonly"`
+	Metered        bool                `json:"metered,omitempty" field:"readonly" title:"Model call measured"`
+	TokensReported bool                `json:"tokensReported,omitempty" field:"readonly" title:"Token counts reported"`
+	InputTokens    int                 `json:"inputTokens,omitempty" field:"readonly" title:"Input tokens"`
+	OutputTokens   int                 `json:"outputTokens,omitempty" field:"readonly" title:"Output tokens"`
+	CostReported   bool                `json:"costReported,omitempty" field:"readonly" title:"USD cost reported"`
+	CostUSD        float64             `json:"costUsd,omitempty" field:"readonly" title:"Reported USD cost"`
+	LatencyMillis  int64               `json:"latencyMillis,omitempty" field:"readonly" title:"Model latency in milliseconds"`
+	ServedModel    string              `json:"servedModel,omitempty" field:"readonly" title:"Served model"`
+	Sources        []string            `json:"sources" field:"readonly"`
+	Withheld       bool                `json:"withheld,omitempty" field:"readonly" title:"Some sources cannot be read"`
 }
 
 func (b *Build) functionCallEntity() platform.Entity {
@@ -52,8 +56,8 @@ func (b *Build) functionCallEntity() platform.Entity {
 func functionCallActions(roles []string) []platform.Action {
 	return []platform.Action{{Schema: SchemaFunctionCall, Target: FunctionCallType, New: true, Capability: "functions", Title: "Call AI function",
 		Description: "Request a published function over a readable source; retain the suggestion for human review.",
-		Roles:       roles, Automation: true,
-		Payload: []platform.Field{{Name: "name", Type: "string", Required: true, Description: "Published function name"},
+		Roles:       append(slices.Clone(roles), platform.AnyMember), Automation: true,
+		Payload: []platform.Field{{Name: "app", Type: "string", Description: "Registered function owner"}, {Name: "name", Type: "string", Required: true, Description: "Published function name"},
 			{Name: "source", Type: "string", Required: true, Description: "Source record ID"},
 			{Name: "version", Type: "integer", Description: "Published version; zero selects the installed version"},
 			{Name: "release", Type: "string", Description: "Retained release for a native automation; empty keeps a development run"},
@@ -63,7 +67,7 @@ func functionCallActions(roles []string) []platform.Action {
 }
 
 func (*Build) AcceptedActionSchemas() []string {
-	return []string{SchemaFunctionCall, SchemaFunctionAnswer, SchemaEvaluationStart, SchemaEvaluationAnswer}
+	return []string{SchemaFunctionCall, SchemaFunctionAnswer, SchemaEvaluationStart, SchemaEvaluationAnswer, SchemaCodeCompile, SchemaCodeCompiled}
 }
 
 func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
@@ -91,7 +95,11 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 				if c.Automation {
 					member = request.OnBehalf
 				}
-				c.Put(r, FunctionRun{Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
+				definition, _, ok := b.host.Function(cmp.Or(request.App, ID), request.Name, call.Version)
+				if !ok {
+					return
+				}
+				c.Put(r, FunctionRun{App: cmp.Or(request.App, ID), Contract: definition, Record: platform.Record{ID: id}, Function: request.Name, Version: call.Version, Member: member,
 					Source: call.Source, State: "pending", Definition: call.Definition, Dependencies: call.Dependencies,
 					Model: call.Model, InputHash: call.InputHash, Release: call.Release, Sources: call.Sources})
 			}, nil
@@ -107,8 +115,7 @@ func (b *Build) submitFunctionCall(c platform.Caller, s *pb.Submission, now time
 		run.CostReported, run.CostUSD = answer.CostReported, answer.CostUSD
 		run.LatencyMillis, run.ServedModel = answer.LatencyMillis, answer.ServedModel
 		if answer.Outcome == "accepted" {
-			definition, _, ok := b.FunctionDefinition(run.Function, run.Version)
-			if !ok || definition.ValidateOutput([]byte(answer.Text)) != nil {
+			if run.Contract.ValidateOutput([]byte(answer.Text)) != nil {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 			}
 			run.Output, run.State, run.Code, run.Reason = answer.Text, "ready", "", ""

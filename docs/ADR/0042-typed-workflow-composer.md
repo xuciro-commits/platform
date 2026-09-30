@@ -4,6 +4,8 @@
 
 Accepted (2026-09-29, #132/#123)。类型化可视化编排沿用唯一 Flow/Work 运行时；FDE 工作流编辑的可见操作闭环以 Retool Workflows IDE 为 1:1 交互标杆。实现证据仅在“实际构建”记录。
 
+**前向扩展设计：** [ADR-0044](0044-capability-fabric.md) 一次统一 Process/Step 的类型化绑定、控制块与普通/Wasm 计算，继续由原生 Flow/Work 执行；不新增外部引擎或第二恢复历史。下文首批限制及 As built 仍为当前事实。
+
 ## 背景上下文 (Context)
 
 代码声明的 `platform.Flow` 已由 `apps/flow` 执行，人工任务由 `apps/work` 执行，受支持工作通过已接受结果恢复。构建器已拥有标准记录、对象动作、页面、固定样本测试及候选发布。实施前 `apps/build/process.go` 是未登记的在途草稿，没有编辑器、结果发布恢复或候选资产；不以该草稿充当租户可用流程。

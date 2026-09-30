@@ -18,36 +18,38 @@ import (
 // stagedDecision owns the private record, ledger and intent views for supported
 // ADR-0038 transactions. Unlike runtime, it never falls back to live mutators.
 type stagedDecision struct {
-	tenant        *Tenant
-	records       *recordStore
-	logs          map[*platform.Ledger]*kernel.ChangeLog
-	events        []platform.Event
-	sequences     map[string]int // private counters, copied before any decision code
-	allocated     map[string]int // counters actually consumed by this decision
-	sequenceBases map[string]int
-	failure       *kernel.Error
-	active        map[string]bool // reject cycles before re-entering an app/ledger lock
-	at            time.Time
-	probing       bool
-	notices       []platform.Notification
-	noticeBase    int
-	noticeSeq     int
-	noticeBefore  string
-	noticeEffects []platform.Effect
-	noticeChanged bool
-	writers       map[string][]string
-	changed       map[string][]string
-	publications  map[string]*acceptedPublication
-	intents       []platform.Effect
-	observations  []acceptedObservation
-	observed      bool
-	hops          int
-	requests      []request
-	requestCounts map[string]int
-	states        map[string]platform.AcceptedStateApp
-	stateBases    map[string]json.RawMessage
-	connectors    *kernel.Connectors
-	deliveries    []acceptedConnectorDelivery
+	tenant           *Tenant
+	records          *recordStore
+	logs             map[*platform.Ledger]*kernel.ChangeLog
+	events           []platform.Event
+	sequences        map[string]int // private counters, copied before any decision code
+	allocated        map[string]int // counters actually consumed by this decision
+	sequenceBases    map[string]int
+	failure          *kernel.Error
+	active           map[string]bool // reject cycles before re-entering an app/ledger lock
+	at               time.Time
+	probing          bool
+	notices          []platform.Notification
+	noticeBase       int
+	noticeSeq        int
+	noticeBefore     string
+	noticeEffects    []platform.Effect
+	noticeChanged    bool
+	writers          map[string][]string
+	changed          map[string][]string
+	publications     map[string]*acceptedPublication
+	intents          []platform.Effect
+	observations     []acceptedObservation
+	observed         bool
+	hops             int
+	requests         []request
+	requestCounts    map[string]int
+	states           map[string]platform.AcceptedStateApp
+	stateBases       map[string]json.RawMessage
+	connectors       *kernel.Connectors
+	deliveries       []acceptedConnectorDelivery
+	operationAnswers map[string]platform.OperationResult
+	operationCancels map[string]bool
 }
 
 var _ platform.Runtime = (*stagedDecision)(nil)

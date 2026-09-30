@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { decide, fresh, open } from "./host";
+import { addBlock, chooseBlock } from "./workflow-helpers";
 
 for (const fixture of [
   { industry: "hospitality", baseURL: "http://127.0.0.1:18496", builder: "manager", member: "desk-1", title: "Guest advice review" },
@@ -30,25 +31,27 @@ for (const fixture of [
       await properties.getByRole("textbox", { name: "Workflow name", exact: true }).fill(name);
       await properties.getByRole("textbox", { name: "Workflow title" }).fill(fixture.title);
       await properties.getByRole("combobox", { name: "Source object" }).selectOption(type);
-      await page.getByRole("button", { name: "Add AI function", exact: true }).focus();
-      await page.keyboard.press("Enter");
-      await properties.getByRole("combobox", { name: "Published function version" }).selectOption(`${name}:1`);
-      await page.getByRole("button", { name: "Add human task" }).click();
-      await page.getByRole("button", { name: "Add object action" }).click();
-      await page.getByRole("button", { name: "2. Human task", exact: true }).click();
-      await properties.getByRole("combobox", { name: "After answer approve" }).selectOption("action");
-      await page.getByRole("button", { name: "1. Call AI function", exact: true }).click();
-      await properties.getByRole("combobox", { name: "Default next step" }).selectOption("review");
+      await properties.getByRole("checkbox", { name: "Manual or API start" }).uncheck();
+      await addBlock(page, `build/function/${name}`);
+      await properties.getByRole("spinbutton", { name: "Retained AI version" }).fill("1");
+      await addBlock(page, "flow/control/ask");
+      await addBlock(page, `build/action/${type}.close`);
+      await chooseBlock(page, "ask");
+      await properties.getByRole("combobox", { name: "After approve", exact: true }).selectOption("close");
+      await chooseBlock(page, name, true);
+      await properties.getByText("Control paths", { exact: true }).click();
+      await properties.getByRole("combobox", { name: "Next path", exact: true }).selectOption("ask");
       await page.getByRole("button", { name: "Save workflow", exact: true }).click();
-      await expect(page.getByRole("button", { name: "Test workflow", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Save workflow", exact: true })).toBeDisabled();
       const inventory = await (await request.get("/v1/records/build.process?limit=500", { headers: { Authorization: `Bearer ${fixture.builder}` } })).json();
       const workflow = inventory.records.find((p: { name: string }) => p.name === name);
-      expect(workflow.steps[0].function).toEqual({ name, version: 1 });
+      expect(workflow.steps[0].kind).toBe("ai");
+      expect(workflow.steps[0].function).toEqual({ app: "build", name, version: 1 });
       await page.getByRole("button", { name: "Publish workflow", exact: true }).click();
-      await expect(page.getByRole("status").filter({ hasText: "Installed workflow version 1." })).toBeVisible();
+      await expect.poll(async () => (await (await request.get(`/v1/records/build.process/${workflow.id}`, { headers: { Authorization: `Bearer ${fixture.builder}` } })).json()).record.version).toBe(1);
       await page.reload();
-      await page.getByRole("button", { name: "1. Call AI function", exact: true }).click();
-      await expect(properties.getByRole("combobox", { name: "Published function version" })).toHaveValue(`${name}:1`);
+      await chooseBlock(page, name);
+      await expect(properties.getByRole("spinbutton", { name: "Retained AI version" })).toHaveValue("1");
     });
   });
 }

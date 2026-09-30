@@ -22,7 +22,7 @@ AI 编程助手从这里开始。`CLAUDE.md` 仅引用本文件；`.agents/skill
 2. `contract/` 不含领域词汇；参考应用不能为自己的业务修改内核。摩擦力记入 WorkQueue。
 3. 内核变更先改规范与向量，再改 Go 及受影响的 Rust/TypeScript 边缘实现。`v1alpha1` 列出破坏性变更，`v1` 变更须 ADR。
 4. 保持代码最简，不保留永久重复路径或临时垫片。生成文件不得手改，包括 `contract/go/gen` 和 `web/packages/kernel/src/gen/host.ts`；宿主 API 类型改变时，在 `capabilities/server` 运行 `go run ./cmd/api-types` 更新后者。
-5. 客户端使用 `@platform/ui` 与 `@platform/app`。代码与受控定义共享语义绑定、授权与发布；不运行任意租户代码。构建体验参考与采纳边界由 Platform §10.1 维护。
+5. 客户端使用 `@platform/ui` 与 `@platform/app`。代码与受控定义共享语义绑定、授权与发布；租户代码扩展只走受控编译、隔离执行及版本化制品路径，设计见 [ADR-0044](docs/ADR/0044-capability-fabric.md)，不直接进入宿主执行。构建体验参考与采纳边界由 Platform §10.1 维护。
 6. 文档各司其职：Intent 管宗旨；Platform 管架构与能力摘要；ADR 管决策和实现边界；WorkQueue 管即时顺序与状态；Testing 管验证方法；Apps 管可执行用法。文档只保留长期决策、当前边界、用法与近期待办；实现摘要直接合并更新，不追加检查点日记。过程留在会话与 Git，不新增总结、控制文档或第二队列。
 7. 外部建议需对照本仓库证据判断。只将采纳内容放入其归属文档；历史审计、已接受目标、当前实现和未验证结果应能区分。
 8. 批次按 `close-out` 收尾：检查方法以 Testing 为准，旧 ADR 的检查日志不自动成为新批次要求；运行适用检查，仅更新本批改变事实的文档。无需为小修复改齐所有文档；实现证据不在能力地图、队列和测试指南中反复复制。未运行的测试或未观察的 UI 不得报为通过。

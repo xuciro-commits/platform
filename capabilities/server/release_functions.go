@@ -39,7 +39,7 @@ func (t *Tenant) candidateWithFunctions(roots []platform.AssetRef, available []p
 			if err := json.Unmarshal(asset.Body, &flow); err != nil {
 				return err
 			}
-			bindings = flow.Functions
+			bindings = append(slices.Clone(flow.Functions), flow.Operations...)
 		} else if ref.Kind == platform.AssetPage {
 			var page platform.Page
 			if err := json.Unmarshal(asset.Body, &page); err != nil {
@@ -49,11 +49,14 @@ func (t *Tenant) candidateWithFunctions(roots []platform.AssetRef, available []p
 				if section.Function != nil {
 					bindings = append(bindings, *section.Function)
 				}
+				if section.Operation != nil {
+					bindings = append(bindings, *section.Operation)
+				}
 			}
 		}
 		for _, binding := range bindings {
-			if binding.Ref.Kind != platform.AssetFunction || binding.SourceVersion == "" {
-				return fmt.Errorf("%s has an invalid function binding", ref)
+			if binding.Ref.Kind != platform.AssetFunction && binding.Ref.Kind != platform.AssetCompute || binding.SourceVersion == "" {
+				return fmt.Errorf("%s has an invalid callable binding", ref)
 			}
 			if prior := pins[binding.Ref]; prior != "" && prior != binding.SourceVersion {
 				return fmt.Errorf("release binds conflicting versions of function %s", binding.Ref)
@@ -84,13 +87,25 @@ func (t *Tenant) candidateWithFunctions(roots []platform.AssetRef, available []p
 		if slices.Contains(fixed, ref) {
 			return platform.ReleaseCandidate{}, fmt.Errorf("function %s differs from the version pinned by its dependents", ref)
 		}
-		owner, ok := t.app(ref.App).(interface {
-			FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
-		})
-		if !ok {
-			return platform.ReleaseCandidate{}, fmt.Errorf("function %s has no retained version owner", ref)
+		var asset platform.ReleaseAsset
+		var err error
+		if ref.Kind == platform.AssetCompute {
+			owner, ok := t.app(ref.App).(interface {
+				OperationReleaseAsset(string, string) (platform.ReleaseAsset, error)
+			})
+			if !ok {
+				return platform.ReleaseCandidate{}, fmt.Errorf("compute %s has no retained version owner", ref)
+			}
+			asset, err = owner.OperationReleaseAsset(ref.Name, version)
+		} else {
+			owner, ok := t.app(ref.App).(interface {
+				FunctionReleaseAsset(string, string) (platform.ReleaseAsset, error)
+			})
+			if !ok {
+				return platform.ReleaseCandidate{}, fmt.Errorf("function %s has no retained version owner", ref)
+			}
+			asset, err = owner.FunctionReleaseAsset(ref.Name, version)
 		}
-		asset, err := owner.FunctionReleaseAsset(ref.Name, version)
 		if err != nil {
 			return platform.ReleaseCandidate{}, err
 		}

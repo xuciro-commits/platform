@@ -35,7 +35,7 @@ type Entry struct {
 // retains Go's nanoseconds. Compare the durable precision, not the transient
 // sub-microsecond fraction, when replaying a saved result from a real journal.
 func sameJournalTime(result, entry time.Time) bool {
-	return result.Truncate(time.Microsecond).Equal(entry)
+	return result.Equal(entry) || result.Truncate(time.Microsecond).Equal(entry)
 }
 
 // Journal keeps entries in PostgreSQL. Each tenant's entries are numbered; an

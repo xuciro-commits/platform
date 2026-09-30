@@ -25,7 +25,9 @@ for (const fixture of [
       await expect(properties.getByRole("checkbox", { name: /Day/ })).not.toBeVisible();
       await properties.getByRole("checkbox", { name: /Note/ }).check();
       // Canvas selection reaches the same inspector as keyboard stage buttons.
-      await page.getByRole("region", { name: "Function map", exact: true }).locator('[data-id="model"]').click();
+      const modelNode = page.getByRole("figure", { name: "Function map", exact: true }).locator('[data-id="model"]');
+      await modelNode.focus();
+      await modelNode.press("Enter");
       await properties.getByRole("textbox", { name: "Model instructions" }).fill("Use only the source note. Return a summary and whether review is needed.");
       await stages.getByRole("button", { name: "Strict output", exact: true }).focus();
       await page.keyboard.press("Enter");

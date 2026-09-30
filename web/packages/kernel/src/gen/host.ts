@@ -188,6 +188,21 @@ export type AuditEntry = {
 /** The kernel contract's AuthorityDeclaration (contract/proto). */
 export type AuthorityDeclaration = AuthorityDeclarationJson;
 
+export type Binding = {
+  source: "literal" | "input" | "subject" | "step" | "item" | "index" | "answer";
+  step?: string;
+  path?: string[];
+  value?: unknown;
+};
+
+export type BlockPort = {
+  id: string;
+  title: string;
+  direction: string;
+  channel: string;
+  type: string;
+};
+
 export type Breaker = {
   destination: string;
   state: string;
@@ -226,12 +241,52 @@ export type CandidateSimulationRequest = {
   as?: string;
   at: string;
   steps: SimulationStep[];
+  samples?: SimulationSample[];
+};
+
+export type CapabilityDescriptor = {
+  ref: AssetRef;
+  kind: string;
+  title: string;
+  description: string;
+  group: string;
+  icon: string;
+  tone: string;
+  source: string;
+  version: string;
+  revision?: number;
+  target?: string;
+  input?: ValueSchema;
+  output?: ValueSchema;
+  config?: ValueSchema;
+  parameters?: Field[];
+  effects: string[];
+  ports: BlockPort[];
 };
 
 export type CapabilityInfo = {
   name: string;
   enabled: boolean;
   actions: string[];
+};
+
+export type CapabilityInvocation = {
+  ref: AssetRef;
+  key: string;
+  inputs: unknown;
+  target?: string;
+  version?: number;
+  expectedRevision?: number;
+  sources?: string[];
+  record?: string;
+  bindings?: Record<string, Binding>;
+};
+
+export type CapabilityResult = {
+  ref: AssetRef;
+  state: string;
+  call?: string;
+  result?: unknown;
 };
 
 export type CatalogModel = {
@@ -293,6 +348,24 @@ export type Column = {
   money?: boolean;
 };
 
+export type ComputeFixture = {
+  app?: string;
+  name: string;
+  output?: string;
+  error?: string;
+  expectState: "completed" | "failed";
+  expectOutput?: string;
+};
+
+export type ComputeSDK = {
+  source: string;
+};
+
+export type ComputeSDKRequest = {
+  input: ValueSchema;
+  output: ValueSchema;
+};
+
 export type ConnectorError = {
   at: string;
   input: string;
@@ -334,6 +407,7 @@ export type Definition = {
   application?: Application;
   query?: NamedQuery;
   function?: AIFunction;
+  operation?: Operation;
 };
 
 export type Delivery = {
@@ -383,6 +457,9 @@ export type Effect = {
   error?: string;
   digest?: string;
   body?: string;
+  generation?: number;
+  output?: unknown;
+  millis?: number;
 };
 
 export type EffectKind = {
@@ -481,7 +558,7 @@ export type FlowDefinition = {
 export type FlowStep = {
   name: string;
   title: string;
-  kind: "act" | "wait" | "ask" | "call" | "all" | "any" | "agent";
+  kind: "action" | "wait" | "ask" | "subflow" | "fork" | "agent" | "transform" | "branch" | "foreach" | "compute" | "ai" | "end" | "break" | "continue";
   next: string[];
   chooses?: boolean;
 };
@@ -493,12 +570,24 @@ export type FlowSummary = {
   trace: TraceLine[];
 };
 
+export type Frame = {
+  node: string;
+  index: number;
+  item?: unknown;
+};
+
 export type FunctionFixture = {
   output: string;
   inputTokens: number;
   outputTokens: number;
   expectState: "ready" | "rejected";
   expectOutput?: string;
+};
+
+export type FunctionRef = {
+  app?: string;
+  name: string;
+  version: number;
 };
 
 export type FunctionRun = {
@@ -508,6 +597,8 @@ export type FunctionRun = {
   changed: Stamp;
   archived?: boolean;
   function: string;
+  app?: string;
+  contract: AIFunction;
   version: number;
   member: string;
   source: string;
@@ -592,6 +683,15 @@ export type Link = {
   at: string;
 };
 
+export type LoopFrame = {
+  items?: unknown[];
+  outer?: string[];
+  next: number;
+  results?: Record<string, unknown>;
+  state?: unknown;
+  while?: boolean;
+};
+
 export type MeView = {
   tenantId: string;
   principalId: string;
@@ -671,6 +771,11 @@ export type NamedQuery = {
   limit?: number;
 };
 
+export type NodePosition = {
+  x: number;
+  y: number;
+};
+
 export type Note = {
   entity: string;
   by: string;
@@ -689,6 +794,45 @@ export type Notification = {
   key?: string;
   at: string;
   read: boolean;
+};
+
+export type Operation = {
+  name: string;
+  title: string;
+  description: string;
+  input: ValueSchema;
+  output: ValueSchema;
+  roles: string[];
+  binding: OperationBinding;
+  limits: OperationLimits;
+};
+
+export type OperationBinding = {
+  kind: string;
+  module?: string;
+  abi?: string;
+};
+
+export type OperationLimits = {
+  timeoutMillis: number;
+  memoryPages: number;
+  maxInputBytes: number;
+  maxOutputBytes: number;
+};
+
+export type OperationRef = {
+  app?: string;
+  name: string;
+  version: number;
+};
+
+export type OperationResult = {
+  id: string;
+  state: string;
+  output?: unknown;
+  error?: string;
+  generation: number;
+  millis?: number;
 };
 
 export type OrgSeed = {
@@ -725,6 +869,76 @@ export type PersonalRead = {
   type: string;
   ids: string[];
   fields: string[];
+};
+
+export type Predicate = {
+  op: "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "contains" | "exists" | "all" | "any" | "not";
+  left?: Binding;
+  right?: Binding;
+  terms?: Predicate[];
+};
+
+export type Process = {
+  id: string;
+  revision: number;
+  created: Stamp;
+  changed: Stamp;
+  archived?: boolean;
+  name: string;
+  title: string;
+  object?: string;
+  when?: string;
+  manual?: boolean;
+  input?: unknown;
+  inputSchema?: ValueSchema;
+  steps: ProcessStep[];
+  layout?: Record<string, NodePosition>;
+  state: "draft" | "published";
+  version?: number;
+  published?: string;
+  versions?: string[];
+};
+
+export type ProcessDiagnostic = {
+  node?: string;
+  code: string;
+  message: string;
+};
+
+export type ProcessDiagnostics = {
+  valid: boolean;
+  issues: ProcessDiagnostic[];
+};
+
+export type ProcessStep = {
+  name: string;
+  title?: string;
+  kind: "payload" | "query" | "action" | "transform" | "branch" | "switch" | "foreach" | "while" | "fork" | "join" | "ask" | "wait" | "subflow" | "ai" | "compute" | "end" | "fail" | "break" | "continue";
+  inputs?: Record<string, Binding>;
+  value?: Binding;
+  target?: Binding;
+  condition?: Predicate;
+  collection?: Binding;
+  cases?: Record<string, string>;
+  branches?: string[];
+  next?: string;
+  error?: string;
+  ask?: string;
+  answers?: string[];
+  act?: string;
+  protocol?: string;
+  app?: string;
+  query?: string;
+  function?: FunctionRef;
+  operation?: OperationRef;
+  body?: string;
+  maxIterations?: number;
+  concurrency?: number;
+  mode?: "all" | "any";
+  timeoutSeconds?: number;
+  untilSeconds?: number;
+  flow?: string;
+  flowVersion?: number;
 };
 
 export type ProtocolCall = {
@@ -900,6 +1114,8 @@ export type Section = {
   measure?: string;
   text?: string;
   function?: AssetBinding;
+  operation?: AssetBinding;
+  inputs?: Record<string, Binding>;
 };
 
 export type SettingValue = {
@@ -941,6 +1157,7 @@ export type SimulatedFlow = {
   state: string;
   tokens: Token[];
   trace: TraceLine[];
+  outputs?: Record<string, unknown>;
 };
 
 export type Simulation = {
@@ -951,7 +1168,13 @@ export type Simulation = {
   flows?: SimulatedFlow[];
   tasks?: WorkTask[];
   functions?: FunctionRun[];
+  computeMatched?: boolean;
   functionMatched?: boolean;
+};
+
+export type SimulationSample = {
+  type: string;
+  records: unknown[];
 };
 
 export type SimulationStep = {
@@ -966,6 +1189,7 @@ export type SimulationStep = {
   step?: string;
   answer?: string;
   function?: FunctionFixture;
+  compute?: ComputeFixture;
 };
 
 export type Stamp = {
@@ -1040,6 +1264,12 @@ export type Token = {
   task?: string;
   child?: string;
   error?: string;
+  parent?: number;
+  frames?: Frame[];
+  outputs?: Record<string, unknown>;
+  operation?: string;
+  loop?: LoopFrame;
+  results?: Record<string, unknown>;
 };
 
 export type Tool = {
@@ -1124,6 +1354,20 @@ export type Usage = {
   costReported?: boolean;
   millis: number;
   outcome: string;
+};
+
+export type ValueSchema = {
+  type: string;
+  nullable?: boolean;
+  discriminator?: string;
+  variants?: Record<string, ValueSchema>;
+  properties?: Record<string, ValueSchema>;
+  required?: string[];
+  items?: ValueSchema;
+  enum?: string[];
+  description?: string;
+  maxLength?: number;
+  maxItems?: number;
 };
 
 export type Vendor = {

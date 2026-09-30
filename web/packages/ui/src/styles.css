@@ -7,6 +7,70 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* Capability blocks share a visual contract in editing and run observation. */
+.platform-block-canvas {
+  --xy-background-color: var(--background);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--row-hover);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-selection-background-color: color-mix(in oklch, var(--primary), transparent 92%);
+  --xy-selection-border: 1px solid var(--primary);
+}
+.platform-block-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.platform-block-canvas .react-flow__node { border-radius: 12px; }
+.platform-block-canvas .react-flow__node:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.platform-block {
+  position: relative; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); text-align: left; color: var(--foreground);
+  box-shadow: 0 2px 5px #00000008, 0 6px 18px #00000005;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.platform-block:hover { border-color: color-mix(in oklch, var(--block-color), var(--border) 60%); box-shadow: 0 4px 18px #00000012; }
+.platform-block-selected { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary), transparent 78%), 0 4px 18px #00000012; }
+.platform-block-current { box-shadow: 0 0 0 3px color-mix(in oklch, var(--tone-info), transparent 75%); }
+.platform-block-accent { position: absolute; inset: 12px auto 12px 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--block-color); }
+.platform-block-heading { display: flex; align-items: center; gap: 9px; height: 53px; padding: 10px 10px 0 13px; }
+.platform-block-icon { display: flex; align-items: center; justify-content: center; width: 31px; height: 31px; flex-shrink: 0; border: 1px solid color-mix(in oklch, var(--block-color), transparent 80%); border-radius: 8px; color: var(--block-color); background: color-mix(in oklch, var(--block-color), transparent 94%); }
+.platform-block-icon svg { width: 17px; height: 17px; }
+.platform-block-kind { display: flex; justify-content: space-between; gap: 6px; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.platform-block-kind span { max-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }
+.platform-block-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; line-height: 20px; }
+.platform-block-detail { color: var(--muted); font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 18px; }
+.platform-block-collapse { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: var(--muted); border-radius: 4px; flex-shrink: 0; }
+.platform-block-collapse:hover { background: var(--row-hover); color: var(--foreground); }
+.platform-block-collapse svg { width: 13px; height: 13px; }
+.platform-block-port { width: 10px !important; height: 10px !important; border: 2px solid var(--surface) !important; box-shadow: 0 0 0 1px var(--border); transition: box-shadow 120ms, width 120ms, height 120ms; }
+.platform-block-port::after { content: ""; position: absolute; inset: -8px; }
+.platform-block-port:hover { width: 13px !important; height: 13px !important; box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary), transparent 70%); }
+.platform-block-port-data { border-radius: 3px !important; }
+.platform-block-port-label { position: absolute; display: flex; flex-direction: column; width: 45%; padding: 0 12px; height: 27px; color: var(--muted); font-size: 10px; line-height: 13px; }
+.platform-block-port-label-input { left: 0; }
+.platform-block-port-label-output { right: 0; text-align: right; }
+.platform-block-port-label span, .platform-block-port-label code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.platform-block-port-label code { font-family: var(--font-mono); font-size: 8px; opacity: 0.7; }
+.platform-block-status { position: absolute; inset: auto 10px 4px 13px; display: flex; align-items: center; font-size: 9px; }
+.platform-block-status span { display: inline-flex; align-items: center; gap: 4px; }
+.platform-block-status svg { width: 10px; height: 10px; }
+.platform-block-compact { border-radius: 8px; border: 2px solid var(--block-color); }
+.platform-block-compact .platform-block-heading { height: 54px; padding: 0 10px; }
+.platform-block-toolbar { position: absolute; z-index: 10; left: 12px; top: 12px; display: flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 4px; box-shadow: 0 2px 8px #00000008; }
+.platform-block-tool { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px; min-width: 28px; padding: 0 6px; border-radius: 5px; color: var(--muted); font-size: 11px; }
+.platform-block-tool svg { width: 14px; height: 14px; }
+.platform-block-tool:hover { background: var(--row-hover); color: var(--foreground); }
+.platform-block-tool:disabled { opacity: 0.35; pointer-events: none; }
+.platform-block-tool-primary { color: var(--primary); font-weight: 600; }
+.platform-block-tool:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.platform-block-palette { display: flex; flex-direction: column; position: absolute; left: 12px; top: 58px; bottom: 12px; width: 280px; max-width: calc(100% - 24px); z-index: 30; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 8px 32px #00000018; }
+.platform-block-palette-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 12px; font-size: 12px; }
+.platform-block-palette-item:hover, .platform-block-palette-item:focus-visible, .platform-block-palette-item[aria-selected="true"] { background: var(--row-selected); outline: none; }
+.platform-block-palette-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border); color: var(--primary); }
+.platform-block-palette-icon svg { width: 15px; height: 15px; }
+.platform-block-edge-label { position: absolute; padding: 2px 5px; border-radius: 4px; background: var(--surface); color: var(--muted); font-size: 10px; pointer-events: none; }
+.platform-block-edge-add { position: absolute; display: flex; align-items: center; justify-content: center; pointer-events: all; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); opacity: 0.7; transition: opacity 120ms, border-color 120ms; }
+.platform-block-edge-add:hover { opacity: 1; color: var(--primary); border-color: var(--primary); }
+@media (prefers-reduced-motion: reduce) { .platform-block, .platform-block-port, .platform-block-edge-add { transition: none; } }
+
 :root {
   --background: oklch(0.99 0 0);
   --surface: oklch(1 0 0);

@@ -98,8 +98,8 @@ func TestJournalAcceptedJointFunctionActivationCrash(t *testing.T) {
 	submit(build.ID, build.SchemaRelease, build.PageType, "PAGE", struct{}{})
 	submit(build.ID, build.ProcessType+".create", build.ProcessType, "P", map[string]any{
 		"name": "review", "title": "Review intake", "object": "build.intake", "when": "open",
-		"steps": []build.ProcessStep{{Name: "infer", Function: &platform.FunctionRef{Name: "advice", Version: 1}, Next: "review"},
-			{Name: "review", Ask: build.User, Answers: []string{"approve"}, Next: "close"}, {Name: "close", Act: "close"}},
+		"steps": []build.ProcessStep{{Name: "infer", Kind: "ai", Function: &platform.FunctionRef{Name: "advice", Version: 1}, Next: "review"},
+			{Name: "review", Kind: "ask", Ask: build.User, Answers: []string{"approve"}, Next: "close"}, {Name: "close", Kind: "action", Act: "close"}},
 	})
 	submit(build.ID, build.SchemaProcess, build.ProcessType, "P", struct{}{})
 	submit(ai.ID, ai.SchemaProviderAdd, ai.ProviderType, "fixture", map[string]string{"kind": "local", "baseUrl": provider.URL})

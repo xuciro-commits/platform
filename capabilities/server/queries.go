@@ -27,6 +27,10 @@ func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
 // and the record it is run for through its reference. It is the member's own
 // read of the object, so a page and an agent tool see exactly what m may.
 func (t *Tenant) RunQuery(m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
+	return t.runQueryFrom(t.records, m, app, name, of, now)
+}
+
+func (t *Tenant) runQueryFrom(store *recordStore, m platform.Member, app, name, of string, now time.Time) (RecordPage, *kernel.Error) {
 	q, ok := t.namedQuery(app, name)
 	if !ok {
 		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -48,5 +52,5 @@ func (t *Tenant) RunQuery(m platform.Member, app, name, of string, now time.Time
 	if len(terms) > 0 {
 		query.Domain, _ = json.Marshal(terms)
 	}
-	return t.Records(m, q.Object, query, now)
+	return t.recordsFrom(store, m, q.Object, query, now)
 }

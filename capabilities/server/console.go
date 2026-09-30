@@ -78,13 +78,13 @@ func ConsoleActions() *platform.Catalog {
 		platform.Action{Schema: SchemaLanguage, Target: MemberType, Capability: "language", Title: "Choose language",
 			Description: "Choose the language a member reads the platform in: your own, or anyone's as an administrator.",
 			Payload:     []platform.Field{{Name: "language", Type: "string", Description: "A language the tenant speaks, such as zh-CN; empty: the tenant's default"}}, Roles: []string{platform.AnyMember}},
-	}, append(operationsActions(), effectActions()...)...)...)
+	}, append(append(operationsActions(), effectActions()...), operationActions()...)...)...)
 }
 
 // NewConsole seeds a tenant's directory of members; changes recorded later replay on top.
 func NewConsole(tenant string, seats ...Seat) *Console {
 	d := &Console{tenant: tenant, members: map[string]*platform.Member{}, subjects: map[string]string{},
-		ledger: platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType)}
+		ledger: platform.NewLedger(tenant, PlatformApp, ConsoleActions(), MemberType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType)}
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -209,7 +209,7 @@ func (d *Console) Declarations() []*pb.AuthorityDeclaration { return d.ledger.De
 // remain outside this path until their respective owners can be staged too.
 func (d *Console) AcceptedLedger() *platform.Ledger { return d.ledger }
 func (*Console) AcceptedActionSchemas() []string {
-	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage}
+	return []string{SchemaAdd, SchemaGrant, SchemaRevoke, SchemaLanguage, SchemaOperationCall}
 }
 
 func (d *Console) ForkAcceptedState() (platform.App, error) {
@@ -271,6 +271,9 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	return d.ledger.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *kernel.Error) {
 		declared, _ := d.ledger.Catalog.Action(s.GetSchema().GetName())
+		if declared.Target == OperationType {
+			return d.decideOperation(c, s, now)
+		}
 		if declared.Target == MemberType {
 			d.mu.Lock()
 			apply, err := d.decideMember(c, s)

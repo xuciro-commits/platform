@@ -296,6 +296,116 @@ func (h *Host) Handler() http.Handler {
 	handle(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Definitions(m), t.Language(m, r)))
 	})
+	handle(Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities (ADR-0044)", Answer: []platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, t.Translate(t.Capabilities(m), t.Language(m, r)))
+	})
+	handle(Route{Pattern: "GET /v1/capabilities/{app}/{kind}/{name}", Summary: "Read a callable owner's exact retained input/output schema", Query: []Param{{"version", "Retained compute ordinal; zero selects the installed version"}}, Answer: platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		version := 0
+		if text := r.URL.Query().Get("version"); text != "" {
+			var err error
+			version, err = strconv.Atoi(text)
+			if err != nil || version < 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		answer, err := t.DescribeCapability(m, platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetKind(r.PathValue("kind")), Name: r.PathValue("name")}, version)
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, t.Translate(answer, t.Language(m, r)))
+	})
+	handle(Route{Pattern: "POST /v1/capabilities/invoke", Summary: "Route a typed call to its canonical query, action, AI or compute owner", Body: platform.CapabilityInvocation{}, Answer: platform.CapabilityResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var q platform.CapabilityInvocation
+		if !readCapabilityBody(w, r, &q) {
+			return
+		}
+		answer, err := t.InvokeCapability(m, q, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+	handle(Route{Pattern: "GET /v1/capabilities/calls/compute/{id}", Summary: "Read a retained compute result after rechecking member and protected sources", Answer: platform.OperationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.ReadOperation(m, r.PathValue("id"))
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+	handle(Route{Pattern: "GET /v1/capabilities/calls/ai/{id}", Summary: "Read the original typed AI call result after member and source checks", Answer: platform.OperationResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		answer, err := t.ReadCapabilityAI(m, r.PathValue("id"), h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
+	handle(Route{Pattern: "POST /v1/build/code/sdk", Summary: "Generate the Go/TinyGo input, output and command wrapper from the same bounded schema", Body: ComputeSDKRequest{}, Answer: ComputeSDK{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, _ *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		var q ComputeSDKRequest
+		if !readCapabilityBody(w, r, &q) {
+			return
+		}
+		source, err := GenerateComputeSDK(q.Input, q.Output)
+		if err != nil {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error()))
+			return
+		}
+		WriteJSON(w, http.StatusOK, ComputeSDK{Source: string(source)})
+	})
+	handle(Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Body: build.Process{}, Answer: ProcessDiagnostics{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if m.Roles[build.ID] != build.Builder {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		var p build.Process
+		raw, err := io.ReadAll(io.LimitReader(r.Body, (128<<10)+1))
+		if err != nil || len(raw) > 128<<10 {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		if _, err = platform.DecodeValue(raw, 128<<10); err != nil {
+			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		decoder := json.NewDecoder(strings.NewReader(string(raw)))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&p) != nil || decoder.Decode(new(any)) != io.EOF {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		owner, ok := t.app(build.ID).(*build.Build)
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		answer := ProcessDiagnostics{Valid: true, Issues: []ProcessDiagnostic{}}
+		if refusal := owner.CheckProcess(p); refusal != nil {
+			answer.Valid = false
+			message := refusal.Message
+			node := ""
+			parts := strings.SplitN(message, ": ", 2)
+			if len(parts) == 2 {
+				if strings.HasPrefix(parts[0], "step ") {
+					node = strings.TrimPrefix(parts[0], "step ")
+				}
+				if strings.HasPrefix(parts[0], "Node ") {
+					node = strings.TrimPrefix(parts[0], "Node ")
+				}
+			}
+			answer.Issues = append(answer.Issues, ProcessDiagnostic{Node: node, Code: refusal.Code.String(), Message: message})
+		}
+		WriteJSON(w, http.StatusOK, answer)
+	})
 	handle(Route{Pattern: "GET /v1/releases/candidates", Summary: "Builder-only saved release inventory from committed candidate bytes", Query: []Param{{"offset", "Candidates to skip"}, {"limit", "Candidates in the page, 1 to 100 (default 20)"}}, Answer: ReleasePage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder {
 			w.WriteHeader(http.StatusForbidden)

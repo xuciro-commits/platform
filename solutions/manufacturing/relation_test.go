@@ -236,8 +236,8 @@ func TestInspectionActionCreatesFinding(t *testing.T) {
 		{Type: inspectionType, ID: "INSP-1", Action: inspectionType + ".fail", Payload: json.RawMessage(`{"detail":"test tolerance"}`)},
 	}}
 	// A production MES reference cannot acquire live rows as test fixtures.
-	if _, kerr := tn.SimulateCandidate(sup, plan); kerr == nil {
-		t.Fatal("test silently acquired a live MES dependency")
+	if simulated, kerr := tn.SimulateCandidate(sup, plan); kerr == nil && len(simulated.Steps) > 0 && simulated.Steps[0].Accepted {
+		t.Fatal("test acquired a live MES record instead of empty dependency metadata")
 	}
 	// Save a self-contained test candidate; the installed MES binding stays
 	// intact. Its fixed inputs are plain identifiers, not production records.

@@ -41,36 +41,56 @@ const (
 // FlowInstance is one run of a flow.
 type FlowInstance struct {
 	platform.Record
-	Flow         string      `json:"flow" field:"readonly,search"` // "<app>.<name>"
-	Title        string      `json:"title" field:"readonly,search"`
-	Version      int         `json:"version" field:"readonly"`
-	Dependencies string      `json:"dependencies,omitempty" field:"readonly" title:"Dependency release"`
-	Release      string      `json:"release,omitempty" field:"readonly" title:"Active release"`
-	Key          string      `json:"key" field:"readonly,search"`
-	Subject      string      `json:"subject,omitempty" field:"readonly"` // "<type>/<key>" when the flow declares its subject
-	State        string      `json:"state" field:"readonly" choices:"running,waiting,done,compensating,compensated,canceled,stuck"`
-	OnBehalf     string      `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
-	Data         string      `json:"data,omitempty" field:"readonly" type:"longtext"`
-	Answer       string      `json:"answer,omitempty" field:"readonly"`
-	Parent       string      `json:"parent,omitempty" field:"readonly"` // the instance that called it
-	Tokens       []Token     `json:"tokens" field:"readonly" title:"Where it stands"`
-	Undo         []UndoEntry `json:"undo" field:"readonly" title:"To undo"`
-	Trace        []TraceLine `json:"trace" field:"readonly"`
-	Seq          int         `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
+	Flow         string                     `json:"flow" field:"readonly,search"` // "<app>.<name>"
+	Title        string                     `json:"title" field:"readonly,search"`
+	Version      int                        `json:"version" field:"readonly"`
+	Dependencies string                     `json:"dependencies,omitempty" field:"readonly" title:"Dependency release"`
+	Release      string                     `json:"release,omitempty" field:"readonly" title:"Active release"`
+	Key          string                     `json:"key" field:"readonly,search"`
+	Subject      string                     `json:"subject,omitempty" field:"readonly"` // "<type>/<key>" when the flow declares its subject
+	State        string                     `json:"state" field:"readonly" choices:"running,waiting,done,compensating,compensated,canceled,stuck"`
+	OnBehalf     string                     `json:"onBehalf,omitempty" field:"readonly" title:"On behalf of"`
+	Data         string                     `json:"data,omitempty" field:"readonly" type:"longtext"`
+	Outputs      map[string]json.RawMessage `json:"outputs,omitempty" field:"readonly" type:"json"`
+	Sources      []string                   `json:"sources,omitempty" field:"readonly"`
+	Withheld     bool                       `json:"withheld,omitempty" field:"readonly"`
+	Answer       string                     `json:"answer,omitempty" field:"readonly"`
+	Parent       string                     `json:"parent,omitempty" field:"readonly"` // the instance that called it
+	Tokens       []Token                    `json:"tokens" field:"readonly" title:"Where it stands"`
+	Undo         []UndoEntry                `json:"undo" field:"readonly" title:"To undo"`
+	Trace        []TraceLine                `json:"trace" field:"readonly"`
+	Seq          int                        `json:"seq" field:"readonly"` // tokens and tasks made, for their IDs
 }
 
 // Token is where a path of the instance stands (BPMN's token): a step it is at
 // or waits in. Parallel branches have one each.
 type Token struct {
-	ID       int       `json:"id"`
-	Step     string    `json:"step"`
-	Branch   string    `json:"branch,omitempty"` // the All or Any step it runs in
-	Waits    string    `json:"waits,omitempty"`  // ready, retry, wait, ask, call, join, undo, stuck
-	Attempts int       `json:"attempts,omitempty"`
-	Due      time.Time `json:"due,omitzero"` // a retry, a timeout, or a wait's time
-	Task     string    `json:"task,omitempty"`
-	Child    string    `json:"child,omitempty"`
-	Error    string    `json:"error,omitempty"`
+	ID        int                        `json:"id"`
+	Step      string                     `json:"step"`
+	Branch    string                     `json:"branch,omitempty"` // the All or Any step it runs in
+	Waits     string                     `json:"waits,omitempty"`  // ready, retry, wait, ask, call, join, undo, stuck
+	Attempts  int                        `json:"attempts,omitempty"`
+	Due       time.Time                  `json:"due,omitzero"` // a retry, a timeout, or a wait's time
+	Task      string                     `json:"task,omitempty"`
+	Child     string                     `json:"child,omitempty"`
+	Error     string                     `json:"error,omitempty"`
+	Parent    int                        `json:"parent,omitempty"`
+	Frames    []platform.Frame           `json:"frames,omitempty"`
+	Outputs   map[string]json.RawMessage `json:"outputs,omitempty"`
+	Operation string                     `json:"operation,omitempty"`
+	Loop      *LoopFrame                 `json:"loop,omitempty"`
+	Results   map[string]json.RawMessage `json:"results,omitempty"`
+}
+
+// LoopFrame belongs to the existing durable token, not a separate graph run.
+// Frozen items, assigned cursor and indexed results survive suspended bodies.
+type LoopFrame struct {
+	Items   []json.RawMessage       `json:"items,omitempty"`
+	Outer   []string                `json:"outer,omitempty"`
+	Next    int                     `json:"next"`
+	Results map[int]json.RawMessage `json:"results,omitempty"`
+	State   json.RawMessage         `json:"state,omitempty"`
+	While   bool                    `json:"while,omitempty"`
 }
 
 // UndoEntry is a completed act's compensation, built when it completed.
@@ -158,7 +178,8 @@ func New(tenant string) *Flows {
 
 func flowEntities() []platform.Entity {
 	return []platform.Entity{{Type: InstanceType, Title: "Flow instance", Model: FlowInstance{}, Display: "title",
-		Scope: platform.Scope{Participants: func(record any) []string { return []string{record.(FlowInstance).OnBehalf} }}}}
+		Scope:   platform.Scope{Participants: func(record any) []string { return []string{record.(FlowInstance).OnBehalf} }},
+		Derived: []platform.Derivation{{From: "sources", Fields: []string{"data", "outputs", "tokens", "trace", "answer"}}}, Withheld: "withheld"}}
 }
 
 func (f *Flows) Manifest() platform.Manifest {
@@ -218,10 +239,10 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	id := m.ID + "." + fl.Name
 	d := &flowDef{app: m.ID, Flow: fl, steps: map[string]*platform.Step{}}
 	byEvent, byState := len(fl.Start.On) > 0 && fl.Start.Begin != nil, fl.Start.Type != "" && fl.Start.When != nil
-	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || byEvent == byState {
+	if fl.Name == "" || fl.Title == "" || fl.Version < 1 || len(fl.Steps) == 0 || boolCount(byEvent, byState, fl.Start.Manual) != 1 {
 		return nil, fmt.Errorf("flow %s: name, title, version, steps and one start — on events, or on a record's state — are required", id)
 	}
-	if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) {
+	if byState && !slices.ContainsFunc(m.Entities, func(e platform.Entity) bool { return e.Type == fl.Start.Type }) && (m.ID != "build" || f.host == nil || !f.host.Declares(fl.Start.Type)) {
 		return nil, fmt.Errorf("flow %s starts on the state of %s, not an entity type of %s", id, fl.Start.Type, m.ID)
 	}
 	versions := f.defs[id]
@@ -244,7 +265,7 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 		}
 		d.steps[s.Name] = s
 		kinds := 0
-		for _, set := range []bool{s.Act != nil, s.Wait != nil, s.Ask != nil, s.Call != nil, len(s.All) > 0, len(s.Any) > 0, s.Agent != nil} {
+		for _, set := range []bool{s.Act != nil, s.Wait != nil, s.Ask != nil, s.Call != nil, len(s.All) > 0, len(s.Any) > 0, s.Agent != nil, s.Evaluate != nil, s.Branch != nil, s.Loop != nil, s.Operation != nil, s.Invoke != nil, s.End, s.LoopControl != ""} {
 			if set {
 				kinds++
 			}
@@ -255,6 +276,12 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 	}
 	for _, s := range fl.Steps {
 		refs := append(append([]string{s.Next, s.OnTimeout, s.Fault}, s.All...), s.Any...)
+		if s.Branch != nil {
+			refs = append(refs, s.Branch.Paths...)
+		}
+		if s.Loop != nil {
+			refs = append(refs, s.Loop.Body)
+		}
 		if s.Call != nil {
 			refs = nil
 			if _, ok := f.latest(m.ID + "." + s.Call.Flow); !ok && s.Call.Flow != fl.Name {
@@ -269,6 +296,15 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 		}
 		if (s.Timeout > 0 || s.WorkingDays > 0) && s.OnTimeout == "" {
 			return nil, fmt.Errorf("flow %s: step %s times out to nowhere", id, s.Name)
+		}
+		if s.Evaluate != nil && s.Evaluate.Run == nil || s.Branch != nil && s.Branch.Choose == nil || s.Operation != nil && s.Operation.Request == nil {
+			return nil, fmt.Errorf("flow %s: step %s lacks its native implementation", id, s.Name)
+		}
+		if loop := s.Loop; loop != nil && (loop.Body == "" || boolCount(loop.Items != nil, loop.While != nil) != 1 || loop.MaxIterations < 1 || loop.MaxIterations > 10000 || loop.Concurrency < 1 || loop.Concurrency > 32 || loop.While != nil && loop.Concurrency != 1) {
+			return nil, fmt.Errorf("flow %s: loop %s needs a bounded child scope", id, s.Name)
+		}
+		if invoke := s.Invoke; invoke != nil && (invoke.Act.Action == "" || invoke.Act.Target == nil || invoke.Result == nil) {
+			return nil, fmt.Errorf("flow %s: invocation %s needs an existing action and durable reply", id, s.Name)
 		}
 		if act := s.Act; act != nil && (act.Action == "" || act.Target == nil) {
 			return nil, fmt.Errorf("flow %s: step %s acts without an action and a target", id, s.Name)
@@ -441,6 +477,9 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 			}
 			continue
 		}
+		if latest.Start.Manual {
+			continue
+		}
 		if !slices.ContainsFunc(latest.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			continue
 		}
@@ -466,8 +505,11 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 			continue
 		}
 		run := f.run(&x)
+		run.Now = now
 		for i := range x.Tokens {
 			tok := &x.Tokens[i]
+			run.Outputs = maps.Clone(tok.Outputs)
+			run.Frames = slices.Clone(tok.Frames)
 			step := d.steps[tok.Step]
 			app := f.host.Automation(c, d.app)
 			switch {
@@ -520,10 +562,19 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 			continue
 		}
 		run := f.run(&x)
+		run.Now = now
 		for _, tok := range x.Tokens {
+			run.Outputs = maps.Clone(tok.Outputs)
+			run.Frames = slices.Clone(tok.Frames)
 			step := d.steps[tok.Step]
 			due := !tok.Due.IsZero() && !tok.Due.After(now)
 			holds := tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.Until != nil && step.Wait.Until(f.host.Automation(c, d.app), run)
+			if tok.Waits == "operation" || tok.Waits == "invocation" || tok.Waits == "approval" {
+				if err := f.resumeInvocation(c, x.ID, tok.ID, now); err != nil {
+					return err
+				}
+				continue
+			}
 			if !due && !holds {
 				continue
 			}
@@ -534,9 +585,9 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 					ss.trace(in, tok.Step, "condition", "it holds", "")
 					ss.next(in, tok.ID, "")
 				})
-			case tok.Waits == "retry" || tok.Waits == "undo":
+			case tok.Waits == "retry" || tok.Waits == "undo" || tok.Waits == "yield":
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) { ss.token(in, tok.ID).Waits = "ready" })
-			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.At != nil && tok.Due.Equal(step.Wait.At(f.host.Automation(c, d.app), run)):
+			case tok.Waits == "wait" && step != nil && step.Wait != nil && step.Wait.At != nil && due:
 				err = f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
 					ss.trace(in, tok.Step, "time", "reached", "")
 					ss.next(in, tok.ID, "")
@@ -560,7 +611,7 @@ func (f *Flows) Run(c platform.Caller, _ string, now time.Time) *kernel.Error {
 }
 
 func (f *Flows) run(x *FlowInstance) *platform.Run {
-	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, OnBehalf: x.OnBehalf, Release: x.Release, Sequence: x.Seq, Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
+	return &platform.Run{ID: x.ID, Flow: x.Flow, Version: x.Version, Key: x.Key, OnBehalf: x.OnBehalf, Release: x.Release, Sequence: x.Seq, Sources: slices.Clone(x.Sources), Outputs: maps.Clone(x.Outputs), Data: json.RawMessage(cmp.Or(x.Data, "null")), Answer: x.Answer}
 }
 
 // Read "flows": the declared flows, for the workspace to draw.
@@ -577,7 +628,7 @@ type FlowDefinition struct {
 type FlowStep struct {
 	Name  string   `json:"name"`
 	Title string   `json:"title"`
-	Kind  string   `json:"kind" enum:"act,wait,ask,call,all,any,agent"`
+	Kind  string   `json:"kind" enum:"action,wait,ask,subflow,fork,agent,transform,branch,foreach,compute,ai,end,break,continue"`
 	Next  []string `json:"next"`
 	// Chooses: the step's code picks the next one as the instance runs.
 	Chooses bool `json:"chooses,omitempty"`
@@ -609,17 +660,148 @@ func (f *Flows) Read(c platform.Caller, _ string) (any, *kernel.Error) {
 func kindOf(s platform.Step) string {
 	switch {
 	case s.Act != nil:
-		return "act"
+		return "action"
+	case s.Evaluate != nil:
+		return "transform"
+	case s.Branch != nil:
+		return "branch"
+	case s.Loop != nil:
+		return "foreach"
+	case s.Operation != nil:
+		return "compute"
+	case s.Invoke != nil:
+		return "ai"
+	case s.LoopControl != "":
+		return s.LoopControl
+	case s.End:
+		return "end"
 	case s.Wait != nil:
 		return "wait"
 	case s.Ask != nil:
 		return "ask"
 	case s.Call != nil:
-		return "call"
+		return "subflow"
 	case len(s.All) > 0:
-		return "all"
+		return "fork"
 	case len(s.Any) > 0:
-		return "any"
+		return "fork"
 	}
 	return "agent"
+}
+
+func boolCount(values ...bool) int {
+	n := 0
+	for _, v := range values {
+		if v {
+			n++
+		}
+	}
+	return n
+}
+
+// OperationEnded continues the same flow token in the host's accepted effect
+// settlement. The host provides the staged, already validated result here.
+func (f *Flows) OperationEnded(c platform.Caller, call string, now time.Time) *kernel.Error {
+	c = f.host.Automation(c, ID)
+	running, err := f.running(c)
+	if err != nil {
+		return err
+	}
+	for _, x := range running {
+		for _, tok := range x.Tokens {
+			if tok.Waits == "operation" && tok.Operation == call {
+				if err := f.resumeInvocation(c, x.ID, tok.ID, now); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (f *Flows) resumeInvocation(c platform.Caller, id string, token int, now time.Time) *kernel.Error {
+	c = f.host.Automation(c, ID)
+	x, ok := platform.Get[FlowInstance](c, id)
+	if !ok || ended(x.State) {
+		return nil
+	}
+	tok := f.session(c, now).token(&x, token)
+	if tok.ID < 0 {
+		return nil
+	}
+	step := f.def(x.Flow, x.Version).steps[tok.Step]
+	var output json.RawMessage
+	var failure string
+	var sources []string
+	if tok.Waits == "operation" {
+		result, err := c.OperationResult(tok.Operation)
+		if err != nil {
+			failure = cmp.Or(err.Message, "Operation result is unavailable")
+		} else if result.State == "pending" || result.State == "running" {
+			return nil
+		} else if result.State != "completed" {
+			failure = cmp.Or(result.Error, "Operation "+result.State)
+		} else {
+			output = result.Output
+		}
+	} else if tok.Waits == "approval" {
+		approval, ok := platform.Get[work.ApprovalRequest](f.host.Automation(c, work.ID), tok.Child)
+		if !ok || approval.State == "pending" {
+			return nil
+		}
+		if approval.State != "approved" {
+			failure = cmp.Or(approval.Outcome, "Approval "+approval.State)
+		} else {
+			output = platform.Raw(map[string]string{"state": approval.State, "target": approval.Target, "receipt": approval.ID})
+		}
+	} else if tok.Waits == "invocation" && step != nil && step.Invoke != nil {
+		run := f.run(&x)
+		run.Now = now
+		run.Outputs = maps.Clone(tok.Outputs)
+		run.Frames = slices.Clone(tok.Frames)
+		var done bool
+		var err *kernel.Error
+		output, done, err = step.Invoke.Result(f.host.Automation(c, f.def(x.Flow, x.Version).app), run, tok.Child)
+		sources = run.Sources
+		if !done && err == nil {
+			return nil
+		}
+		if err != nil {
+			failure = err.Error()
+		}
+	} else {
+		return nil
+	}
+	return f.step(c, id, now, func(ss *session, in *FlowInstance) {
+		if failure != "" {
+			// An accepted refusal is terminal for this call; retrying the block with
+			// the same identity must not masquerade as a new model/compute request.
+			ss.token(in, token).Attempts = stepAttempts
+			ss.failed(in, token, step, failure)
+			return
+		}
+		if !ss.output(in, token, output) {
+			ss.outputRefused(in, token)
+			return
+		}
+		ss.sources(in, sources)
+		ss.trace(in, tok.Step, "answered", "saved typed output", "")
+		ss.next(in, token, "")
+	})
+}
+
+// StartManual is the one existing flow start decision, called from an
+// authorised owner action. It cannot create an instance of a non-manual flow.
+func (f *Flows) StartManual(c platform.Caller, app, name string, version int, key string, input json.RawMessage, now time.Time) *kernel.Error {
+	d := f.def(app+"."+name, version)
+	if d == nil || !d.Start.Manual || key == "" || len(key) > 256 || len(input) > 64<<10 || !json.Valid(input) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Choose an installed manual flow, bounded key and JSON input")
+	}
+	return f.start(f.host.Automation(c, ID), d, key, input, c.ID, nil, "", now, true)
+}
+
+// HasDefinition is a registry lookup for snapshot reconstruction. A sandbox
+// already seeded with the same immutable version must not install it twice.
+func (f *Flows) HasDefinition(app, name string, version int) bool {
+	return f.def(app+"."+name, version) != nil
 }

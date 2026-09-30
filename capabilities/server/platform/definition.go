@@ -24,6 +24,7 @@ const (
 	// AssetFlow is a versioned definition executed by the existing flow app.
 	AssetFlow     AssetKind = "flow"
 	AssetFunction AssetKind = "function"
+	AssetCompute  AssetKind = "compute"
 )
 
 // NamedQuery reads records of one object: fixed conditions, and optionally
@@ -52,7 +53,7 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery && r.Kind != AssetFlow && r.Kind != AssetFunction {
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery && r.Kind != AssetFlow && r.Kind != AssetFunction && r.Kind != AssetCompute {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -93,19 +94,21 @@ type Section struct {
 	Relation string `json:"relation,omitempty"`
 	// Query is a named query (AssetQuery) the section lists instead of all of
 	// Object: its conditions, and the selected record when it takes one (21c).
-	Query    AssetRef      `json:"query,omitempty"`
-	Fields   []string      `json:"fields,omitempty"`   // table, detail, filter, form
-	Actions  []AssetRef    `json:"actions,omitempty"`  // actions
-	Group    string        `json:"group,omitempty"`    // chart: the field it groups by, or "<field>:month"
-	Measure  string        `json:"measure,omitempty"`  // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
-	Text     string        `json:"text,omitempty"`     // text
-	Function *AssetBinding `json:"function,omitempty"` // exact published function
+	Query     AssetRef           `json:"query,omitempty"`
+	Fields    []string           `json:"fields,omitempty"`    // table, detail, filter, form
+	Actions   []AssetRef         `json:"actions,omitempty"`   // actions
+	Group     string             `json:"group,omitempty"`     // chart: the field it groups by, or "<field>:month"
+	Measure   string             `json:"measure,omitempty"`   // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
+	Text      string             `json:"text,omitempty"`      // text
+	Function  *AssetBinding      `json:"function,omitempty"`  // exact published function
+	Operation *AssetBinding      `json:"operation,omitempty"` // exact compute owner revision
+	Inputs    map[string]Binding `json:"inputs,omitempty"`
 }
 
 // Widgets are the widget kinds a composed page may hold (ADR-0035 D2).
 // A filter outputs the page's second variable — the records it narrows to —
 // which the table, chart and metric over the same object read (16b).
-var Widgets = []string{"table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function"}
+var Widgets = []string{"table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function", "compute"}
 
 // Filterable are the field types a filter widget offers: values that repeat.
 var Filterable = []string{"choice", "boolean", "reference"}
@@ -173,4 +176,5 @@ type Definition struct {
 	Application     *Application `json:"application,omitempty"`
 	Query           *NamedQuery  `json:"query,omitempty"`
 	Function        *AIFunction  `json:"function,omitempty"`
+	Operation       *Operation   `json:"operation,omitempty"`
 }

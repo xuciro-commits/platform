@@ -194,6 +194,16 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 		} else if s.Function != nil {
 			return fmt.Errorf("%s: only a function widget may bind a function", where)
 		}
+		if s.Widget == "compute" {
+			if s.Object.Name != "" || len(s.Fields) != 0 || len(s.Actions) != 0 || s.Query.Name != "" || s.Relation != "" {
+				return fmt.Errorf("%s: compute binds its typed inputs, not another widget's configuration", where)
+			}
+			if err := t.checkPageOperation(s, page); err != nil {
+				return fmt.Errorf("%s: %w", where, err)
+			}
+		} else if s.Operation != nil || len(s.Inputs) != 0 {
+			return fmt.Errorf("%s: only a compute widget may bind compute inputs", where)
+		}
 		info := page
 		if s.Object.Name != "" && s.Object.Name != p.Object.Name {
 			shown, known := t.entity(s.Object.Name)

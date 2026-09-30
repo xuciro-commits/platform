@@ -25,6 +25,7 @@ type TestPlan struct {
 	As         string                 `json:"as,omitempty" title:"Member ID (empty: you)"`
 	At         time.Time              `json:"at" field:"required" title:"Fixed test time"`
 	Steps      []TestStep             `json:"steps" field:"required,aside" title:"Test steps"`
+	Samples    []TestSample           `json:"samples,omitempty" field:"aside" type:"json"`
 	Evaluation []EvaluationPolicy     `json:"evaluation,omitempty" field:"aside" title:"Release evaluation thresholds"`
 }
 
@@ -46,6 +47,11 @@ type EvaluationCase struct {
 	Expected json.RawMessage `json:"expected"`
 }
 
+type TestSample struct {
+	Type    string            `json:"type"`
+	Records []json.RawMessage `json:"records"`
+}
+
 type TestStep struct {
 	Type           string           `json:"type"`
 	ID             string           `json:"id"`
@@ -58,6 +64,22 @@ type TestStep struct {
 	Step           string           `json:"step,omitempty"`
 	Answer         string           `json:"answer,omitempty"`
 	Function       *FunctionFixture `json:"function,omitempty"`
+	Compute        *ComputeFixture  `json:"compute,omitempty" type:"json"`
+}
+
+// ComputeFixture fixes only a computation answer. Input admission, Schema,
+// K9 generation and Flow continuation still use the ordinary host path.
+type ComputeFixture struct {
+	App          string `json:"app,omitempty"`
+	Name         string `json:"name"`
+	Output       string `json:"output,omitempty"`
+	Error        string `json:"error,omitempty"`
+	ExpectState  string `json:"expectState" enum:"completed,failed"`
+	ExpectOutput string `json:"expectOutput,omitempty"`
+}
+
+func (f ComputeFixture) Check() bool {
+	return f.Name != "" && len(f.Name) <= 64 && len(f.Output) <= 48<<10 && len(f.Error) <= 1024 && len(f.ExpectOutput) <= 48<<10 && (f.ExpectState == "completed" && json.Valid([]byte(f.Output)) || f.ExpectState == "failed" && f.Error != "") && (f.ExpectOutput == "" || json.Valid([]byte(f.ExpectOutput)))
 }
 
 // FunctionFixture fixes a provider answer for the ordinary model effect path.
@@ -113,10 +135,13 @@ func checkTestPlanFields(raw []byte) *kernel.Error {
 		}
 		for _, step := range steps {
 			var payload map[string]json.RawMessage
-			if !strings.HasPrefix(step.Type, ID+".") || step.Type == ObjectType || step.Type == PageType || step.Type == AppType || step.Type == TestPlanType || step.Type == ProcessType || step.Type == FunctionType ||
+			if !strings.HasPrefix(step.Type, ID+".") || step.Type == ObjectType || step.Type == PageType || step.Type == AppType || step.Type == TestPlanType || step.Type == ProcessType && step.Action != SchemaProcessRun && step.AdvanceSeconds == 0 || step.Type == FunctionType ||
 				strings.TrimSpace(step.ID) == "" || step.AdvanceSeconds < 0 || step.AdvanceSeconds > 86400 ||
 				(step.Expect != "accepted" && step.Expect != "refused") || json.Unmarshal([]byte(step.Payload), &payload) != nil || payload == nil {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Every test step needs a candidate action or answer, record ID, JSON object, bounded time and expected outcome")
+			}
+			if step.Compute != nil && !step.Compute.Check() {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded compute fixture with a completed or failed outcome")
 			}
 			if step.Function != nil && !step.Function.Check() {
 				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Use a bounded function fixture with a ready or rejected outcome")

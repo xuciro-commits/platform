@@ -1,15 +1,15 @@
 import { useHost, useRecordInventory } from "@platform/app";
-import { Button, Card, Checkbox, FlowView, Input, PageHeader, Select, Textarea, t } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, FlowView, Input, PageHeader, Select, Textarea, t } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { installedObjects, type WorkflowDraft, type WorkflowObject } from "./workflow-model";
 import { useEffect, useState } from "react";
 
 type ObjectDraft = WorkflowObject;
 type FunctionDraft = { id: string; name: string; title: string; object: string };
-type Step = { type: string; id: string; action: string; payload: string; expect: "accepted" | "refused"; as?: string; advanceSeconds?: number; flow?: string; step?: string; answer?: string; function?: Api.FunctionFixture };
+type Step = Omit<Api.SimulationStep, "payload" | "expect"> & { payload: string; expect: "accepted" | "refused" };
 type EvaluationCase = { name: string; input: string; expected: string };
 type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMillis: number; cases: { name: string; input: Record<string, unknown>; expected: Record<string, unknown> }[] };
-type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; evaluation?: EvaluationPolicy[] };
+type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; samples?: Api.SimulationSample[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
 export function CandidateTest({ processId = "", functionId = "", objectId = "", embedded = false, onStepSelect }: {
@@ -31,6 +31,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
   const [member, setMember] = useState("");
   const [at, setAt] = useState("2026-01-01T09:00:00Z");
   const [steps, setSteps] = useState<Step[]>([]);
+  const [samples, setSamples] = useState("[]");
   const [evaluationEnabled, setEvaluationEnabled] = useState(false);
   const [minQuality, setMinQuality] = useState(1);
   const [maxCostUsd, setMaxCostUsd] = useState(0.1);
@@ -52,6 +53,11 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
   useEffect(() => { if (fn && steps.length === 0) setSteps(functionSteps(fn)); }, [fn, steps.length]);
   const workflowSteps = (workflow: WorkflowDraft): Step[] => {
     const ask = workflow.steps.find((step) => step.ask !== undefined);
+    if (workflow.manual) return [
+      { type: "build.process", id: workflow.id, action: "build.process.run", payload: JSON.stringify({ key: "sample", input: JSON.stringify(workflow.input ?? {}) }), expect: "accepted", advanceSeconds: 1 },
+      { type: "build.process", id: "sample", action: "", payload: "{}", expect: "accepted", advanceSeconds: 2 },
+      ...(ask ? [{ type: "build.process", id: "sample", action: "", payload: "{}", flow: `build.${workflow.name}`, step: ask.name, answer: ask.answers?.[0] ?? "", expect: "accepted" as const, advanceSeconds: 2 }] : []),
+    ];
     return [{ type: workflow.object, id: "TEST-1", action: `${workflow.object}.create`, payload: "{}", expect: "accepted", advanceSeconds: 2 },
       ...(ask ? [{ type: workflow.object, id: "TEST-1", action: "", payload: "{}", flow: `build.${workflow.name}`, step: ask.name, answer: ask.answers?.[0] ?? "", expect: "accepted" as const, advanceSeconds: 2 }] : [])];
   };
@@ -71,7 +77,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
   const load = (plan: TestPlan) => {
     clear(); setPlanID(plan.id); setRevision(plan.revision);
     setTitle(plan.title); setKind(plan.function ? "function" : plan.process ? "flow" : "object"); setID(plan.function || plan.process || plan.object || ""); setModel(plan.model ?? "fixture/probe"); setMember(plan.as ?? ""); setAt(plan.at);
-    setSteps(plan.steps); setDirty(false);
+    setSteps(plan.steps); setSamples(JSON.stringify(plan.samples ?? [], null, 2)); setDirty(false);
     const policy = plan.evaluation?.[0];
     setEvaluationEnabled(Boolean(policy));
     setMinQuality(policy?.minQuality ?? 1); setMaxCostUsd(policy?.maxCostUsd ?? 0.1); setMaxLatencyMillis(policy?.maxLatencyMillis ?? 30000);
@@ -90,7 +96,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
   const inputs = (): Api.CandidateSimulationRequest => ({
     ...(kind === "function" ? { functionId: id, model } : kind === "flow" ? { processId: id, model } : { objectId: id }), as: member, at: new Date(at).toISOString(), steps: steps.map((step) => ({
       ...step, payload: JSON.parse(step.payload),
-    })),
+    })), samples: JSON.parse(samples) as Api.SimulationSample[],
   });
   const save = async () => {
     setError(""); setSaved(false);
@@ -110,7 +116,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
     setBusy(true);
     try {
       if (await decide(`build.testplan.${planID ? "edit" : "create"}`, { type: "build.testplan", id: target },
-        { title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps, evaluation },
+        { title, object: kind === "object" ? id : "", process: kind === "flow" ? id : "", function: kind === "function" ? id : "", model: kind !== "object" ? model : "", as: member, at: new Date(at).toISOString(), steps, samples: JSON.parse(samples), evaluation },
         { expectedRevision: planID ? revision : undefined, quiet: true, onRefused: setError })) {
         const refreshed = await plans.refetch();
         const record = refreshed.data?.records.find((plan) => plan.id === target);
@@ -121,7 +127,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
     finally { setBusy(false); }
   };
   const run = async () => {
-    if (!object) return;
+    if (!object && !process?.manual) return;
     setResult(undefined); setError("");
     let plan: Api.CandidateSimulationRequest;
     try { plan = inputs(); }
@@ -157,6 +163,10 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
             <Input value={title} onChange={(event) => { setTitle(event.target.value); clear(); }} />
           </label>
         </div>
+        {kind === "flow" && <Disclosure summary={<span className="text-xs font-medium">{t("Synthetic query samples")}</span>}><div className="mt-2 grid gap-2">
+          <p className="text-[11px] leading-5 text-muted">{t("Declare sample datasets as [{type, records}]. Tests never copy production records or send native business actions to live owners.")}</p>
+          <Textarea aria-label={t("Synthetic query samples (JSON)")} rows={4} className="font-mono text-[11px]" value={samples} onChange={(event) => { setSamples(event.target.value); clear(); }} />
+        </div></Disclosure>}
         {plans.isError && <p role="alert" className="text-sm text-danger">{t("The saved test plans could not be loaded.")}</p>}
         {!embedded && <label className="grid gap-1 text-xs">{t("Candidate kind")}
           <Select value={kind} onChange={(e) => { setKind(e.target.value as typeof kind); setID(""); setSteps([]); clear(); }}>
@@ -186,7 +196,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
           </Select>
         </label>
         }
-        {kind !== "object" && <>
+        {(kind === "function" || process?.steps.some((step) => step.kind === "ai")) && <>
           <label className="grid gap-1 text-xs">{t("Model identifier")}<Input value={model} onChange={(e) => { setModel(e.target.value); clear(); }} /></label>
           <p className="text-xs text-muted">{t("Fixed model answers test permissions and typed results. They do not measure real model quality.")}</p>
         </>}
@@ -225,17 +235,21 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
             <label className="grid gap-1 text-xs">{t("Test record ID")}<Input value={step.id} onChange={(event) => update(index, { id: event.target.value })} /></label>
             {kind === "flow" && <label className="grid gap-1 text-xs">{t("Test step kind")}<Select value={step.answer !== undefined ? "answer" : step.action ? "action" : "clock"} onChange={(e) => update(index, e.target.value === "answer"
               ? { action: "", flow: `build.${process?.name}`, step: askSteps[0]?.name, answer: askSteps[0]?.answers?.[0] ?? "", payload: "{}" }
-              : { action: e.target.value === "clock" ? "" : `${object ? `build.${object.name}` : step.type}.create`, advanceSeconds: e.target.value === "clock" ? 2 : step.advanceSeconds, flow: undefined, step: undefined, answer: undefined })}>
-              <option value="action">{t("Object action")}</option><option value="answer">{t("Human answer")}</option><option value="clock">{t("Advance clock")}</option></Select></label>}
+              : { action: e.target.value === "clock" ? "" : process?.manual ? "build.process.run" : `${object ? `build.${object.name}` : step.type}.create`,
+                type: process?.manual ? "build.process" : step.type, id: process?.manual && e.target.value !== "clock" ? process.id : step.id,
+                payload: process?.manual && e.target.value !== "clock" ? JSON.stringify({ key: "sample", input: JSON.stringify(process.input ?? {}) }) : step.payload,
+                advanceSeconds: e.target.value === "clock" ? 2 : step.advanceSeconds, flow: undefined, step: undefined, answer: undefined })}>
+              <option value="action">{t(process?.manual ? "Start workflow" : "Object action")}</option><option value="answer" disabled={!askSteps.length}>{t("Human answer")}</option><option value="clock">{t("Advance clock")}</option></Select></label>}
             {step.answer !== undefined ? <>
               <label className="grid gap-1 text-xs">{t("Human task step")}<Select value={step.step ?? ""} onChange={(e) => update(index, { step: e.target.value, answer: askSteps.find((s) => s.name === e.target.value)?.answers?.[0] ?? "" })}>
                 {askSteps.map((ask) => <option key={ask.name} value={ask.name}>{ask.title || ask.name}</option>)}</Select></label>
               <label className="grid gap-1 text-xs">{t("Human answer")}<Select value={step.answer} onChange={(e) => update(index, { answer: e.target.value })}>
                 {askSteps.find((ask) => ask.name === step.step)?.answers?.map((answer) => <option key={answer} value={answer}>{answer}</option>)}</Select></label>
-            </> : step.action ? <label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={(event) => update(index, { action: event.target.value, type: event.target.value === "build.function-call.start" ? "build.function-call" : `build.${object?.name}`, function: event.target.value === "build.function-call.start" ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>
+            </> : step.action ? <label className="grid gap-1 text-xs">{t("Action")}<Select value={step.action} onChange={(event) => update(index, { action: event.target.value, type: event.target.value === "build.process.run" ? "build.process" : event.target.value === "build.function-call.start" ? "build.function-call" : `build.${object?.name}`, function: event.target.value === "build.function-call.start" ? { output: "{}", inputTokens: 0, outputTokens: 0, expectState: "ready" } : undefined })}>
+              {process?.manual && <option value="build.process.run">{t("Start workflow")}</option>}
               {kind === "function" && <option value="build.function-call.start">{t("Call AI function")}</option>}
-              {step.action !== "build.function-call.start" && !actions.some((action) => `build.${object?.name}.${action.name}` === step.action) && <option value={step.action}>{step.action}</option>}
-              {actions.map((action) => <option key={action.name} value={`build.${object?.name}.${action.name}`}>{action.title}</option>)}
+              {step.action !== "build.function-call.start" && step.action !== "build.process.run" && !actions.some((action) => `build.${object?.name}.${action.name}` === step.action) && <option value={step.action}>{step.action}</option>}
+              {object && actions.map((action) => <option key={action.name} value={`build.${object.name}.${action.name}`}>{action.title}</option>)}
             </Select></label> : null}
           </div>
           {(kind === "flow" || kind === "function") && <div className="grid gap-2 sm:grid-cols-2">
@@ -263,13 +277,27 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
             </Select></label>
             {step.function.expectState === "ready" && <label className="grid gap-1 text-xs">{t("Expected typed answer (JSON, optional)")}<Textarea rows={3} value={step.function.expectOutput ?? ""} onChange={(e) => update(index, { function: { ...step.function!, expectOutput: e.target.value } })} className="font-mono" /></label>}
           </fieldset>}
+          {kind === "flow" && <Checkbox checked={!!step.compute} onChange={(enabled) => {
+            const computation = process?.steps.find((node) => node.kind === "compute")?.operation;
+            update(index, { compute: enabled ? { app: computation?.app, name: computation?.name ?? "", output: "{}", expectState: "completed" } : undefined });
+          }}>{t("Supply a fixed computation result")}</Checkbox>}
+          {step.compute && <fieldset className="grid gap-2 rounded border border-border p-2"><legend className="px-1 text-xs">{t("Fixed computation result")}</legend>
+            <div className="grid gap-2 sm:grid-cols-2"><label className="grid gap-1 text-xs">{t("Capability owner")}<Input value={step.compute.app ?? "build"} onChange={(event) => update(index, { compute: { ...step.compute!, app: event.target.value } })} /></label>
+              <label className="grid gap-1 text-xs">{t("Computation name")}<Input value={step.compute.name} onChange={(event) => update(index, { compute: { ...step.compute!, name: event.target.value } })} /></label></div>
+            <label className="grid gap-1 text-xs">{t("Expected computation state")}<Select value={step.compute.expectState} onChange={(event) => update(index, { compute: { ...step.compute!, expectState: event.target.value as Api.ComputeFixture["expectState"] } })}><option value="completed">{t("Completed")}</option><option value="failed">{t("Failed")}</option></Select></label>
+            {step.compute.expectState === "completed" ? <label className="grid gap-1 text-xs">{t("Fixed output (JSON)")}<Textarea rows={3} className="font-mono" value={step.compute.output ?? "{}"} onChange={(event) => update(index, { compute: { ...step.compute!, output: event.target.value } })} /></label>
+              : <label className="grid gap-1 text-xs">{t("Fixed computation error")}<Input value={step.compute.error ?? ""} onChange={(event) => update(index, { compute: { ...step.compute!, error: event.target.value } })} /></label>}
+            <label className="grid gap-1 text-xs">{t("Expected output (JSON, optional)")}<Textarea rows={2} className="font-mono" value={step.compute.expectOutput ?? ""} onChange={(event) => update(index, { compute: { ...step.compute!, expectOutput: event.target.value || undefined } })} /></label>
+          </fieldset>}
         </Card>)}
         <div className="flex flex-wrap gap-2">
-          <Button disabled={!object || steps.length >= 20} onClick={() => { clear(); setSteps((old) => [...old, { type: `build.${object?.name}`, id: "TEST-1", action: `build.${object?.name}.${object?.actions?.[0]?.name ?? "edit"}`, payload: "{}", expect: "accepted" }]); }}>{t("Add a test step")}</Button>
-          <Button disabled={!object || !steps.length || !title.trim()} onClick={save}>{t("Save test plan")}</Button>
+          <Button disabled={(!object && !process?.manual) || steps.length >= 20} onClick={() => { clear(); setSteps((old) => [...old, process?.manual
+            ? { type: "build.process", id: "sample", action: "", payload: "{}", expect: "accepted", advanceSeconds: 2 }
+            : { type: `build.${object?.name}`, id: "TEST-1", action: `build.${object?.name}.${object?.actions?.[0]?.name ?? "edit"}`, payload: "{}", expect: "accepted" }]); }}>{t("Add a test step")}</Button>
+          <Button disabled={(!object && !process?.manual) || !steps.length || !title.trim()} onClick={save}>{t("Save test plan")}</Button>
           <Button disabled={!planID} onClick={reload}>{t("Reload saved plan")}</Button>
           <Button onClick={() => { clear(); setPlanID(""); setRevision(0); setTitle(""); }}>{t("New test plan")}</Button>
-          <Button variant="primary" disabled={!object || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
+          <Button variant="primary" disabled={(!object && !process?.manual) || !steps.length} onClick={run}>{busy ? t("Running test…") : t("Run isolated test")}</Button>
         </div>
       </fieldset>
     </Card>
@@ -289,6 +317,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
         <p className="text-sm font-medium">{t("Test step {n}", { n: index + 1 })} · {step.accepted ? t("Accepted") : t("Refused")}</p>
         {step.matched !== undefined && <p className="text-xs">{step.matched ? t("Expected outcome matched") : t("Expected outcome did not match")}</p>}
         {step.functionMatched !== undefined && <p className="text-xs">{step.functionMatched ? t("Function expectation matched") : t("Function expectation did not match")}</p>}
+        {step.computeMatched !== undefined && <p className="text-xs">{step.computeMatched ? t("Computation expectation matched") : t("Computation expectation did not match")}</p>}
         {step.functions?.map((call) => <Card key={call.id} className="min-w-0 grid gap-1 p-2 text-xs">
           <p>{call.function} · {t("Version")} {call.version} · {call.state === "ready" ? t("Ready") : call.state === "rejected" ? t("Rejected") : t("Pending")}</p>
           <p className="break-all">{call.source} · {call.model}</p>
@@ -299,6 +328,7 @@ export function CandidateTest({ processId = "", functionId = "", objectId = "", 
         {step.refusal && <p className="text-sm text-danger">{step.refusal}</p>}
         {step.flows?.map((flow) => <Card key={flow.id} className="min-w-0 overflow-x-auto p-2">
           <FlowView instance={{ ...flow, title: process?.title ?? flow.flow, key: flow.id, undo: null }} onStepSelect={onStepSelect} />
+          {flow.outputs && <Disclosure summary={<span className="text-xs font-medium">{t("Accepted block outputs")}</span>}><pre className="mt-2 overflow-auto rounded bg-background p-2 text-[11px]">{JSON.stringify(flow.outputs, null, 2)}</pre></Disclosure>}
         </Card>)}
         {step.tasks?.map((task) => <p key={task.id} className="text-xs">{t("Human task")}: {task.title}</p>)}
         {step.changes.map((change) => <div key={`${change.type}/${change.id}`} className="min-w-0 text-xs">

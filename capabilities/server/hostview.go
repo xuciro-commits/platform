@@ -33,7 +33,7 @@ func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platfo
 // record store; a failed or refused publication cannot change live metadata.
 func (h hostView) installationDraft() *Tenant {
 	draft := &Tenant{ID: h.t.ID, apps: h.t.apps, owner: maps.Clone(h.t.owner),
-		records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions)}
+		records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions), Files: h.t.files()}
 	return draft
 }
 
@@ -143,16 +143,26 @@ func (h hostView) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 	if a == nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
+	if declared, ok := a.Manifest().Actions.Action(s.GetSchema().GetName()); ok && declared.Approval != nil && !c.Automation {
+		return c.RequestApproval(a.Manifest().ID, s, now)
+	}
 	return platform.Decide(c, a, s, now)
 }
 
 func (h hostView) Attempt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
-	if c.Staging() {
-		return platform.Attempt(c, func() (*pb.ChangeRecord, *kernel.Error) {
-			return h.Submit(c, s, now)
-		})
+	// Work uses Attempt after its approval has completed. Re-entering public
+	// Submit here would hold the very same approved submission again.
+	decide := func() (*pb.ChangeRecord, *kernel.Error) {
+		a := h.t.owner["action:"+s.GetSchema().GetName()]
+		if a == nil {
+			return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+		}
+		return platform.Decide(c, a, s, now)
 	}
-	return h.Submit(c, s, now)
+	if c.Staging() {
+		return platform.Attempt(c, decide)
+	}
+	return decide()
 }
 
 func (h hostView) Recipients(c platform.Caller, now time.Time, to []platform.Recipient) []string {

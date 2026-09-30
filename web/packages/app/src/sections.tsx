@@ -10,6 +10,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
 import { GeneratedForm, RecordDetail, findDefinition, newId, useHost, type Definition } from "./index";
+import { ComputeCall } from "./capability";
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
@@ -289,6 +290,7 @@ export function SectionView(bound: Bound & Composing) {
       case "timeline": return <TimelineWidget {...bound} />;
       case "tasks": return <TasksWidget {...bound} />;
       case "function": return <FunctionWidget {...bound} />;
+      case "compute": return <ComputeCall binding={section.operation} bindings={section.inputs} record={bound.selected} recordType={bound.page.object.name} live={bound.live} />;
       default: return <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
     }
   })();

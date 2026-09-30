@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -190,6 +191,25 @@ func (t *Tenant) registerDefinitions() error {
 				return err
 			}
 		}
+		for _, operation := range manifest.Operations {
+			o := operation
+			if err := o.Check(); err != nil {
+				return fmt.Errorf("operation %s: %w", o.Name, err)
+			}
+			for _, role := range o.Roles {
+				if !slices.Contains(manifest.AllRoles(), role) {
+					return fmt.Errorf("operation %s names an undeclared role", o.Name)
+				}
+			}
+			if o.Binding.Kind == "native" {
+				if _, ok := app.(platform.OperationExecutor); !ok {
+					return fmt.Errorf("operation %s has no native executor", o.Name)
+				}
+			}
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetCompute, Name: o.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: []platform.AssetRef{}, Operation: &o}); err != nil {
+				return err
+			}
+		}
 	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return nil
@@ -252,6 +272,10 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			}) {
 				continue
 			}
+		case platform.AssetCompute:
+			if def.Operation == nil || !slices.Contains(def.Operation.Roles, m.Roles[def.Ref.App]) {
+				continue
+			}
 		case platform.AssetPage:
 			if m.Roles[def.Ref.App] == "" || def.Page == nil {
 				continue
@@ -305,6 +329,18 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					}
 					if _, creates := actions[shown.Type+".create"]; section.Widget == "form" && !creates {
 						continue // a form this member could not submit is not on their page
+					}
+					if section.Operation != nil {
+						op, _, err := t.pageOperation(section.Operation)
+						if err != nil || !slices.Contains(op.Roles, m.Roles[section.Operation.Ref.App]) || slices.ContainsFunc(slices.Collect(maps.Values(section.Inputs)), func(binding platform.Binding) bool {
+							if binding.Source != "subject" || len(binding.Path) == 0 {
+								return false
+							}
+							_, ok := shown.Field(binding.Path[0])
+							return !ok
+						}) {
+							continue
+						}
 					}
 					sections = append(sections, section)
 				}

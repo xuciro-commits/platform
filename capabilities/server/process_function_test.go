@@ -71,7 +71,7 @@ func TestProcessFunctionsKeepVersionsAndReleaseAcrossRecovery(t *testing.T) {
 	if len(firstPage.Assets) != 3 {
 		t.Fatalf("page omitted source or function: %+v", firstPage.Assets)
 	}
-	steps := []build.ProcessStep{{Name: "gate", Ask: build.User, Answers: []string{"continue"}, Next: "infer"}, {Name: "infer", Function: &platform.FunctionRef{Name: "advice", Version: 1}, Next: "review"}, {Name: "review", Ask: build.User, Answers: []string{"approve"}, Next: "close"}, {Name: "close", Act: "close"}}
+	steps := []build.ProcessStep{{Name: "gate", Kind: "ask", Ask: build.User, Answers: []string{"continue"}, Next: "infer"}, {Name: "infer", Kind: "ai", Function: &platform.FunctionRef{Name: "advice", Version: 1}, Next: "review"}, {Name: "review", Kind: "ask", Ask: build.User, Answers: []string{"approve"}, Next: "close"}, {Name: "close", Kind: "action", Act: "close"}}
 	must("builder", build.ID, build.ProcessType+".create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Review intake", "object": "build.intake", "when": "open", "steps": steps})
 
 	before := snapshot(tn)

@@ -5,7 +5,7 @@
 // everything again when the object is published.
 import { PayloadFields, useHost, useReadQuery } from "@platform/app";
 import {
-  Button, Card, Checkbox, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, cn, defineStatuses, layout, notify, t, useWorkspace,
+  Button, Card, Checkbox, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, canvasNodeWidth, cn, defineStatuses, layout, notify, t, useWorkspace,
   type CanvasEdge, type CanvasNode, type NodeCatalog,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
@@ -201,7 +201,7 @@ function ProcessGraph({ process, chosen, onChoose, onChange, onAddState, onAddAc
   const places = layout([
     ...process.states.map((s) => ({ id: `state:${s.name}`, label: s.title })),
     ...process.actions.map((a) => ({ id: `action:${a.name}`, label: a.title })),
-  ], links, "right", { width: 160, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 40, gapY: 30 });
+  ], links, "right", { width: canvasNodeWidth, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 40, gapY: 30 });
   const nodes: CanvasNode[] = [
     ...process.states.map((s) => ({ id: `state:${s.name}`, kind: "state", label: s.title || s.name, detail: s.name, position: places.get(`state:${s.name}`) ?? { x: 0, y: 0 } })),
     ...process.actions.map((a) => ({ id: `action:${a.name}`, kind: "action", label: a.title || a.name, detail: a.name, position: places.get(`action:${a.name}`) ?? { x: 0, y: 0 } })),

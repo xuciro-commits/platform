@@ -9,6 +9,7 @@ import { PageEditor, PagesList } from "./editor";
 import { ProcessEditor, ProcessPicker } from "./process";
 import { WorkflowEditor, Workflows } from "./workflow";
 import { FunctionEditor, Functions } from "./function";
+import { CodeEditor, CodeFunctions } from "./code";
 import { ReleaseReview, type ReleaseKind } from "./release";
 import { CandidateTest } from "./simulate";
 import { StudioOverview } from "./studio";
@@ -30,10 +31,11 @@ export default defineApp({
     { id: "process", title: () => t("Object design"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
     { id: "workflow", title: () => t("Workflows"), render: (p) => p.id ? <WorkflowEditor key={p.id} id={p.id} /> : <Workflows /> },
     { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <Functions /> },
-    { id: "release-review", title: () => t("Release review"), render: (p) => <ReleaseReview key={`${p.kind}:${p.id}`} initialKind={["object", "page", "app", "flow", "function"].includes(p.kind ?? "") ? p.kind as ReleaseKind : "object"} initialID={p.id} /> },
+    { id: "code", title: () => t("Code functions"), render: (p) => p.id ? <CodeEditor key={p.id} id={p.id} /> : <CodeFunctions /> },
+    { id: "release-review", title: () => t("Release review"), render: (p) => <ReleaseReview key={`${p.kind}:${p.id}`} initialKind={["object", "page", "app", "flow", "function", "compute"].includes(p.kind ?? "") ? p.kind as ReleaseKind : "object"} initialID={p.id} /> },
     { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <CandidateTest key={p.functionId ?? p.processId ?? p.objectId ?? "object"} processId={p.processId} functionId={p.functionId} objectId={p.objectId} /> },
   ],
-  opens: { "build.page": "compose", "build.object": "process", "build.process": "workflow", "build.function": "function" }, // open a semantic asset in its editor
+  opens: { "build.page": "compose", "build.object": "process", "build.process": "workflow", "build.function": "function", "build.code": "code" }, // open a semantic asset in its editor
   nav: (host): NavSection[] => {
     const own = host.definitions.filter((d) => d.ref.kind === "page" && d.ref.app === "build" && d.source === "tenant");
     return [
@@ -48,6 +50,7 @@ export default defineApp({
           ...(host.role("build") === "builder" ? [
             { label: t("Workflows"), icon: <GitBranch />, route: { view: "workflow" } },
             { label: t("AI functions"), icon: <Boxes />, route: { view: "function" } },
+            { label: t("Code functions"), icon: <Boxes />, route: { view: "code" } },
             { label: t("Test a candidate"), icon: <Boxes />, route: { view: "candidate-test" } },
             { label: t("Release review"), icon: <Boxes />, route: { view: "release-review" } },
           ] : []),

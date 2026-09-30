@@ -142,6 +142,26 @@ func maskedHistory(h []RecordChange, hidden []platform.FieldInfo) []RecordChange
 type row struct {
 	value   reflect.Value // the entity struct, a private copy
 	history []RecordChange
+	// Recovery bytes preserve an accepted predecessor's identity when typed
+	// decoding normalises its definition. The next mutation writes only the
+	// current format; these bytes have no writable or executable API.
+	original json.RawMessage
+}
+
+func (r *row) image() (json.RawMessage, error) {
+	if len(r.original) > 0 {
+		return slices.Clone(r.original), nil
+	}
+	return json.Marshal(r.value.Interface())
+}
+
+func (r *row) retainOriginal(raw json.RawMessage) {
+	decoded, err := json.Marshal(r.value.Interface())
+	before, beforeErr := canonicalDigest(raw)
+	after, afterErr := canonicalDigest(json.RawMessage(decoded))
+	if err == nil && beforeErr == nil && afterErr == nil && before != after {
+		r.original = slices.Clone(raw)
+	}
 }
 
 // RecordChange is one decision's change to a record: the fields it set.
@@ -176,7 +196,7 @@ func (s *recordStore) forkRecords() *recordStore {
 	for typ, et := range s.types {
 		copied := &entityType{info: et.info, knowledge: et.knowledge, rows: make(map[string]*row, len(et.rows))}
 		for id, r := range et.rows {
-			copied.rows[id] = &row{value: copyOf(et.info.Go, r.value.Interface()), history: copyHistory(r.history)}
+			copied.rows[id] = &row{value: copyOf(et.info.Go, r.value.Interface()), history: copyHistory(r.history), original: slices.Clone(r.original)}
 		}
 		draft.types[typ] = copied
 		draft.byGo[et.info.Go] = copied
@@ -465,6 +485,14 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 		}
 		switch f.Type {
 		case "":
+		case "json":
+			raw, err := json.Marshal(fv.Interface())
+			if err != nil {
+				return invalid
+			}
+			if _, err := platform.DecodeValue(raw, 64<<10); err != nil {
+				return invalid
+			}
 		case "date":
 			if _, err := time.Parse(time.DateOnly, fv.String()); !fv.IsZero() && err != nil {
 				return invalid
@@ -971,17 +999,23 @@ type RecordPage struct {
 
 // Records serves a member's query over a type, within the member's scope.
 func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+	return t.recordsFrom(t.records, m, typ, q, now)
+}
+
+// recordsFrom is the same member projection over a staged or installed store.
+// Flow queries must see prior accepted-decision writes without acquiring a
+// second live runtime or widening the member's record/field scope.
+func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return RecordPage{}, err
 	}
-	s := t.records
 	s.mu.Lock()
 	et := s.types[typ]
 	s.mu.Unlock()
 	if et == nil {
 		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	visible, err := t.visible(m, et, now)
+	visible, err := t.visibleIn(s, m, et, now)
 	if err != nil {
 		return RecordPage{}, err
 	}
@@ -997,7 +1031,7 @@ func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now ti
 	}
 	out := RecordPage{Records: make([]any, len(page)), Total: total}
 	var ids []string
-	w := t.narrower(m, now, true)
+	w := t.narrowerIn(s, m, now, true)
 	for i, v := range page {
 		out.Records[i] = masked(et, v, hidden)
 		if len(et.info.Derived) > 0 { // checked against its sources again (ADR-0033)

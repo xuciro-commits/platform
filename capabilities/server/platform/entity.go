@@ -405,7 +405,7 @@ func EntityActions(e Entity) []Action {
 			continue
 		}
 		typ := map[string]string{"integer": "integer", "decimal": "number", "boolean": "boolean", "date": "date", "datetime": "datetime",
-			"references": "string[]", "tags": "string[]", "money": "money"}[f.Type]
+			"references": "string[]", "tags": "string[]", "money": "money", "json": "json"}[f.Type]
 		if typ == "" {
 			typ = "string"
 		}
@@ -594,6 +594,8 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 			ft = ft.Elem() // optional scalar values retain their declared field kind
 		}
 		switch {
+		case refined == "json" && (ft.Kind() == reflect.Map || ft.Kind() == reflect.Struct || ft == reflect.TypeOf(json.RawMessage{})):
+			f.Type = "json" // governed structured definitions; each owner validates its schema
 		case ft.Implements(refIface):
 			f.Type = "reference"
 			f.Ref = typeOf(reflect.Zero(ft).Interface().(reference).refType())

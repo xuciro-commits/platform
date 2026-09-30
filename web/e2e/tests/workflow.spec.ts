@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { decide, fresh, open } from "./host";
+import { addBlock, chooseBlock } from "./workflow-helpers";
 
 for (const fixture of [
   { industry: "hospitality", baseURL: "http://127.0.0.1:18496", builder: "manager", builderID: "manager-1", operator: "desk", operatorID: "desk-1", title: "Guest service review", answer: "approve", state: "Done" },
@@ -21,7 +22,7 @@ for (const fixture of [
       for (const title of ["Objects and relationships", "Pages", "Workflows", "AI functions", "Applications", "Test and release", "Release review"])
         await expect(capabilities.getByRole("button", { name: title, exact: true })).toBeVisible();
       await page.getByRole("textbox", { name: "Find an asset" }).fill(fixture.title);
-      const studio = page.getByRole("region", { name: "Application map" });
+      const studio = page.getByRole("figure", { name: "Application map" });
       await expect(studio.getByText(fixture.title, { exact: true })).toBeVisible();
       await studio.getByText(fixture.title, { exact: true }).click();
       await expect(page.getByRole("region", { name: "Asset inspector" }).getByText(`build.${name}`)).toBeVisible();
@@ -44,35 +45,31 @@ for (const fixture of [
       await properties.getByRole("textbox", { name: "Workflow name", exact: true }).fill(flowName);
       await properties.getByRole("textbox", { name: "Workflow title" }).fill(fixture.title);
       await properties.getByRole("combobox", { name: "Source object" }).selectOption(type);
-      await page.getByRole("button", { name: "Add human task" }).click();
+      await properties.getByRole("checkbox", { name: "Manual or API start" }).uncheck();
+      await addBlock(page, "flow/control/ask");
+      await properties.getByRole("tab", { name: "Settings", exact: true }).click();
       await properties.getByRole("textbox", { name: "Step title" }).fill("Review sample");
-      await page.getByRole("button", { name: "Add object action" }).click();
-      await properties.getByRole("textbox", { name: "Step name" }).fill("close");
+      await addBlock(page, `build/action/${type}.close`);
+      await properties.getByRole("tab", { name: "Settings", exact: true }).click();
       await properties.getByRole("textbox", { name: "Step title" }).fill("Close sample");
-      await page.getByRole("button", { name: "Add object action" }).click();
-      await properties.getByRole("textbox", { name: "Step name" }).fill("reject");
+      await addBlock(page, `build/action/${type}.reject`);
+      await properties.getByRole("tab", { name: "Settings", exact: true }).click();
       await properties.getByRole("textbox", { name: "Step title" }).fill("Reject sample");
-      await properties.getByRole("combobox", { name: "Object action", exact: true }).selectOption("reject");
-      await page.getByRole("button", { name: "1. Review sample", exact: true }).click();
-      await properties.getByRole("combobox", { name: "After answer reject" }).selectOption("reject");
-      await properties.getByRole("combobox", { name: "After answer approve" }).selectOption("close");
-      await page.getByRole("button", { name: "Save workflow", exact: true }).focus();
-      await page.keyboard.press("Enter");
-      await expect(page.getByRole("button", { name: "Test workflow", exact: true })).toBeEnabled();
-      const records = await (await request.get("/v1/records/build.process?limit=500", { headers: { Authorization: `Bearer ${fixture.builder}` } })).json();
-      const workflow = records.records.find((p: { name: string }) => p.name === flowName);
-      expect(workflow.steps[0].branches).toEqual({ approve: "close", reject: "reject" });
-      // Publication errors remain editable. Save is allowed to retain an
-      // unfinished draft; publish checks the owner graph again.
-      await page.getByRole("button", { name: "1. Review sample", exact: true }).click();
-      await properties.getByRole("textbox", { name: "Step name" }).fill("InvalidName");
-      await page.getByRole("button", { name: "Publish workflow", exact: true }).click();
-      await expect(page.getByRole("alert").filter({ hasText: "unique lower-case name" })).toBeVisible();
-      await properties.getByRole("textbox", { name: "Step name" }).fill("review");
+      await chooseBlock(page, "ask");
+      await properties.getByRole("combobox", { name: "After reject", exact: true }).selectOption("reject");
+      await properties.getByRole("combobox", { name: "After approve", exact: true }).selectOption("close");
       await page.getByRole("button", { name: "Save workflow", exact: true }).click();
       await expect(page.getByRole("button", { name: "Save workflow", exact: true })).toBeDisabled();
+      const records = await (await request.get("/v1/records/build.process?limit=500", { headers: { Authorization: `Bearer ${fixture.builder}` } })).json();
+      const workflow = records.records.find((p: { name: string }) => p.name === flowName);
+      expect(workflow.steps[0].kind).toBe("ask");
+      expect(workflow.steps[0].cases).toEqual({ approve: "close", reject: "reject" });
+      // Canvas hints and publishing use the same owner compiler.
+      const invalid = await request.post("/v1/build/process/check", { headers: { Authorization: `Bearer ${fixture.builder}` },
+        data: { ...workflow, steps: [{ ...workflow.steps[0], name: "InvalidName" }, ...workflow.steps.slice(1)] } });
+      expect((await invalid.json()).valid).toBe(false);
       // Concurrent editing refuses a stale revision and retains local input.
-      await page.getByRole("button", { name: "Workflow settings", exact: true }).click();
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
       await properties.getByRole("textbox", { name: "Workflow title" }).fill("Local edit");
       await decide(request, fixture.builder, "build", "build.process.edit", { type: "build.process", id: workflow.id }, { title: "Remote edit" });
       await page.getByRole("button", { name: "Save workflow", exact: true }).click();
@@ -82,8 +79,8 @@ for (const fixture of [
       await expect(properties.getByRole("textbox", { name: "Workflow title" })).toHaveValue("Remote edit");
       await properties.getByRole("textbox", { name: "Workflow title" }).fill(fixture.title);
       await page.getByRole("button", { name: "Save workflow", exact: true }).click();
-      await expect(page.getByRole("button", { name: "Test workflow", exact: true })).toBeEnabled();
-      await page.getByRole("button", { name: "Test workflow", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Isolated test", exact: true })).toBeEnabled();
+      await page.getByRole("button", { name: "Isolated test", exact: true }).click();
       await expect(page.getByRole("combobox", { name: "Saved workflow draft" })).toHaveValue(workflow.id);
       await page.getByRole("textbox", { name: "Member ID (empty: you)" }).fill(fixture.operatorID);
       await page.getByRole("textbox", { name: "Test plan name" }).fill(`Fixed ${flowName}`);
@@ -110,7 +107,7 @@ for (const fixture of [
       await page.getByRole("button", { name: "Reload saved plan" }).click();
       await expect(answer.getByRole("textbox", { name: "Step member ID (empty: plan member)" })).toHaveValue("");
       await page.reload();
-      await page.getByRole("button", { name: "Test workflow", exact: true }).click();
+      await page.getByRole("button", { name: "Isolated test", exact: true }).click();
       await page.getByRole("combobox", { name: "Saved test plan" }).selectOption({ label: `Fixed ${flowName}` });
       await expect(page.getByRole("combobox", { name: "Saved workflow draft" })).toHaveValue(workflow.id);
       await page.getByRole("button", { name: "Run isolated test" }).focus();
@@ -121,14 +118,14 @@ for (const fixture of [
       expect(missing.status()).toBe(404);
       await open(page, fixture.builder, `/workflow?id=${workflow.id}`);
       await page.getByRole("button", { name: "Publish workflow", exact: true }).click();
-      await expect(page.getByRole("status").filter({ hasText: "Installed workflow version 1." })).toBeVisible();
-      await page.getByRole("button", { name: "Release", exact: true }).click();
+      await expect.poll(async () => (await (await request.get(`/v1/records/build.process/${workflow.id}`, { headers: { Authorization: `Bearer ${fixture.builder}` } })).json()).record.version).toBe(1);
+      await page.getByRole("button", { name: "Release", exact: true }).first().click();
       await page.getByRole("button", { name: "Check draft and dependencies" }).click();
       await expect(page.getByText("Draft candidate:").locator("code")).toHaveText(candidate);
       await page.getByRole("button", { name: "Save immutable candidate" }).click();
-      await page.getByRole("button", { name: "Test", exact: true }).click();
+      await page.getByRole("button", { name: "Isolated test", exact: true }).click();
       await expect(page.getByRole("combobox", { name: "Saved workflow draft" })).toHaveValue(workflow.id);
-      await page.getByRole("button", { name: "Release", exact: true }).click();
+      await page.getByRole("button", { name: "Release", exact: true }).first().click();
       await page.getByRole("button", { name: "Activate release" }).click();
       await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
       const real = fresh("REAL");
@@ -159,9 +156,9 @@ for (const fixture of [
       await operator.close();
       await open(page, fixture.builder, `/workflow?id=${workflow.id}`);
       await page.getByRole("button", { name: "Runs", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Run history" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Execution history" })).toBeVisible();
       await expect(page.getByRole("table").getByText(fixture.title).first()).toBeVisible();
-      await page.getByRole("button", { name: "Review sample", exact: true }).first().click();
+      await chooseBlock(page, "ask", true);
       await expect(page.getByRole("region", { name: "Workflow properties" }).getByRole("textbox", { name: "Step title" })).toHaveValue("Review sample");
     });
   });

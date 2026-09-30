@@ -109,10 +109,10 @@ const orderFlowDef: FlowDefinition = {
   version: 1,
   start: ["order.placed"],
   steps: [
-    { name: "reserve", title: "Reserve Inventory", kind: "act", next: ["credit_check"], chooses: false },
+    { name: "reserve", title: "Reserve Inventory", kind: "action", next: ["credit_check"], chooses: false },
     { name: "credit_check", title: "Credit Approval", kind: "ask", next: ["dispatch"], chooses: false },
-    { name: "dispatch", title: "Warehouse Pick & Pack", kind: "act", next: ["delivery"], chooses: false },
-    { name: "delivery", title: "Carrier Handover", kind: "act", next: [], chooses: false },
+    { name: "dispatch", title: "Warehouse Pick & Pack", kind: "action", next: ["delivery"], chooses: false },
+    { name: "delivery", title: "Carrier Handover", kind: "action", next: [], chooses: false },
   ],
 };
 

@@ -171,6 +171,8 @@ func (d *stagedDecision) Attempt(decide func() (*pb.ChangeRecord, *kernel.Error)
 
 func (d *stagedDecision) privateFork() *stagedDecision {
 	fork := *d
+	fork.operationCancels = maps.Clone(d.operationCancels)
+	fork.operationAnswers = maps.Clone(d.operationAnswers)
 	fork.records = d.records.forkRecords()
 	fork.records.parent, fork.records.baseGeneration = d.records.parent, d.records.baseGeneration
 	fork.records.writes = maps.Clone(d.records.writes)

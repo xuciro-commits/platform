@@ -62,19 +62,19 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 	must("builder", build.SchemaPublish, build.ObjectType, "GROUP", map[string]any{})
 	must("builder", build.ObjectType+".create", build.ObjectType, "O", map[string]any{"name": "visit", "title": "Visit", "fields": []build.Field{{Name: "guest", Title: "Guest", Type: "text"}, {Name: "group", Title: "Group", Type: "reference", Ref: "build.group"}}, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}, {Name: "rejected", Title: "Rejected"}}, "actions": []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done"}, {Name: "reject", Title: "Reject", From: []string{"open"}, To: "rejected"}}})
 	must("builder", build.SchemaPublish, build.ObjectType, "O", map[string]any{})
-	steps := []build.ProcessStep{{Name: "check", Title: "Check visit", Ask: build.User, Answers: []string{"approve", "reject"}, Branches: map[string]string{"approve": "close", "reject": "reject"}}, {Name: "close", Act: "close"}, {Name: "reject", Act: "reject"}}
+	steps := []build.ProcessStep{{Name: "check", Title: "Check visit", Kind: "ask", Ask: build.User, Answers: []string{"approve", "reject"}, Cases: map[string]string{"approve": "close", "reject": "reject"}}, {Name: "close", Kind: "action", Act: "close"}, {Name: "reject", Kind: "action", Act: "reject"}}
 	must("builder", build.ProcessType+".create", build.ProcessType, "P", map[string]any{"name": "review", "title": "Visit review", "object": "build.visit", "when": "open", "steps": steps})
 	// Standard edit replaces supplied nested maps/slices and keeps omitted
 	// top-level fields. The old decoder retained the removed reject branch.
 	patchedSteps := []build.ProcessStep{steps[0], steps[1], steps[2]}
-	patchedSteps[0].Branches = map[string]string{"approve": "close"}
+	patchedSteps[0].Cases = map[string]string{"approve": "close"}
 	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": patchedSteps})
 	patched, err := tn.RecordOf(member("builder"), build.ProcessType, "P", at)
 	if err != nil {
 		t.Fatal(err)
 	}
 	draft := patched.Record.(build.Process)
-	if draft.Title != "Visit review" || len(draft.Steps[0].Branches) != 1 || draft.Steps[0].Branches["approve"] != "close" {
+	if draft.Title != "Visit review" || len(draft.Steps[0].Cases) != 1 || draft.Steps[0].Cases["approve"] != "close" {
 		t.Fatalf("standard edit retained a removed branch or lost an omitted field: %+v", draft)
 	}
 	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": steps})
@@ -182,7 +182,7 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 	must("builder", build.ObjectType+".edit", build.ObjectType, "O", map[string]any{"actions": originalActions})
 	must("builder", build.SchemaPublish, build.ObjectType, "O", map[string]any{})
 	// Publishing a different path leaves the already waiting instance on v1.
-	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": []build.ProcessStep{{Name: "reject", Act: "reject"}}})
+	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": []build.ProcessStep{{Name: "reject", Kind: "action", Act: "reject"}}})
 	must("builder", build.SchemaProcess, build.ProcessType, "P", map[string]any{})
 	if _, err := (hostView{t: tn}).BindFlow(build.ID, "review", 2, host.FlowBinding{}); err == nil {
 		t.Fatal("started a changed flow under the old active release")
@@ -224,7 +224,7 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 			t.Fatal("recovery accepted a missing or forged flow binding")
 		}
 	}
-	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"name": "review", "object": "build.visit", "steps": []build.ProcessStep{{Name: "reject", Act: "reject"}}})
+	must("builder", build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"name": "review", "object": "build.visit", "steps": []build.ProcessStep{{Name: "reject", Kind: "action", Act: "reject"}}})
 	must("user", "work.task.complete", work.TaskType, tasks[0].ID, map[string]string{"answer": "approve"})
 	tick()
 	state := func(id string) string {
@@ -263,12 +263,12 @@ func TestTenantProcessPublicationAndRunningVersionsRecover(t *testing.T) {
 	definitions, _ := tn.Read(member("builder"), "flows")
 	encodedDefinitions, _ := json.Marshal(definitions)
 	for index, bad := range []map[string]any{
-		{"name": "badbranch", "steps": []build.ProcessStep{{Name: "ask", Ask: build.User, Answers: []string{"yes"}, Branches: map[string]string{"no": "ask"}}}},
-		{"name": "badrole", "steps": []build.ProcessStep{{Name: "ask", Ask: "outsider"}}},
-		{"name": "badaction", "steps": []build.ProcessStep{{Name: "act", Act: "missing"}}},
-		{"name": "badpath", "steps": []build.ProcessStep{{Name: "act", Act: "close", Next: "missing"}}},
-		{"name": "duplicate", "steps": []build.ProcessStep{{Name: "act", Act: "close"}, {Name: "act", Act: "reject"}}},
-		{"name": "review", "steps": []build.ProcessStep{{Name: "act", Act: "close"}}},
+		{"name": "badbranch", "steps": []build.ProcessStep{{Name: "ask", Kind: "ask", Ask: build.User, Answers: []string{"yes"}, Cases: map[string]string{"no": "ask"}}}},
+		{"name": "badrole", "steps": []build.ProcessStep{{Name: "ask", Kind: "ask", Ask: "outsider"}}},
+		{"name": "badaction", "steps": []build.ProcessStep{{Name: "act", Kind: "action", Act: "missing"}}},
+		{"name": "badpath", "steps": []build.ProcessStep{{Name: "act", Kind: "action", Act: "close", Next: "missing"}}},
+		{"name": "duplicate", "steps": []build.ProcessStep{{Name: "act", Kind: "action", Act: "close"}, {Name: "act", Kind: "action", Act: "reject"}}},
+		{"name": "review", "steps": []build.ProcessStep{{Name: "act", Kind: "action", Act: "close"}}},
 	} {
 		id := fmt.Sprint("BAD", index)
 		bad["title"], bad["object"], bad["when"] = "Bad review", "build.visit", "open"

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -22,11 +23,43 @@ type ReleaseDeclaration struct {
 	Actions     []platform.Action
 	Pages       []platform.Page
 	Application *platform.Application
+	Operation   *platform.Operation
+	Flow        *platform.Flow
+	Function    *platform.AIFunction
+	Version     int
 }
 
 func (b *Build) ReleaseDeclaration(p ReleasePublication) (ReleaseDeclaration, error) {
+	if p.Schema == SchemaCodePublish {
+		code, err := codeImage(p.Image)
+		if err != nil {
+			return ReleaseDeclaration{}, err
+		}
+		installed, ok := wasPublished[Code](code.Published)
+		if !ok {
+			return ReleaseDeclaration{}, fmt.Errorf("compute has no frozen publication")
+		}
+		op := installed.definition()
+		return ReleaseDeclaration{Operation: &op, Version: installed.Version}, nil
+	}
+	if p.Schema == SchemaProcess {
+		saved, err := processImage(p.Image)
+		if err != nil {
+			return ReleaseDeclaration{}, err
+		}
+		flow := b.flowOf(saved)
+		return ReleaseDeclaration{Flow: &flow, Version: saved.Version}, nil
+	}
+	if p.Schema == SchemaFunction {
+		saved, err := functionImage(p.Image)
+		if err != nil {
+			return ReleaseDeclaration{}, err
+		}
+		f := saved.definition()
+		return ReleaseDeclaration{Function: &f, Version: saved.Version}, nil
+	}
 	e, actions, pages, app, err := b.publicationImage(p.Schema, p.Image)
-	return ReleaseDeclaration{e, actions, pages, app}, err
+	return ReleaseDeclaration{Entity: e, Actions: actions, Pages: pages, Application: app}, err
 }
 
 // PrepareReleasePublications compiles frozen owner descriptors. It neither
@@ -34,6 +67,10 @@ func (b *Build) ReleaseDeclaration(p ReleasePublication) (ReleaseDeclaration, er
 // supported: the candidate has logical identities rather than editor row IDs.
 func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]ReleasePublication, []platform.ReleaseAsset, error) {
 	objects, pages, apps, err := b.releaseInventory()
+	if err != nil {
+		return nil, nil, err
+	}
+	processes, err := b.processInventory()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -87,7 +124,7 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			}
 			for _, s := range pageDescriptor.Sections {
 				section := Section{Widget: s.Widget, Title: s.Title, Width: s.Width, Object: s.Object.Name, Relation: s.Relation,
-					Fields: s.Fields, Group: s.Group, Measure: s.Measure, Text: s.Text}
+					Fields: s.Fields, Group: s.Group, Measure: s.Measure, Text: s.Text, Operation: s.Operation, Inputs: s.Inputs}
 				if s.Query.Name != "" {
 					section.Query = s.Query.App + "." + s.Query.Name
 				}
@@ -121,18 +158,65 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			if err := add(SchemaHandOver, apps[i]); err != nil {
 				return nil, nil, err
 			}
+		case platform.AssetFlow:
+			i := slices.IndexFunc(processes, func(p Process) bool { return !p.Archived && TypeOf(p.Name) == asset.Ref.Name })
+			if i < 0 {
+				return nil, nil, fmt.Errorf("saved flow %s has no matching owner", asset.Ref)
+			}
+			frozen, err := ProcessFromReleaseAsset(asset)
+			if err != nil {
+				return nil, nil, err
+			}
+			if prior, ok := wasPublished[Process](processes[i].Published); ok {
+				priorAsset, err := processReleaseAsset(prior, asset.SourceVersion)
+				if err == nil {
+					var a, z any
+					_ = json.Unmarshal(priorAsset.Body, &a)
+					_ = json.Unmarshal(asset.Body, &z)
+					if reflect.DeepEqual(a, z) {
+						continue
+					}
+				}
+			}
+			if processes[i].Version >= 64 {
+				return nil, nil, fmt.Errorf("flow version family is full")
+			}
+			frozen.Record, frozen.Version, frozen.State = processes[i].Record, processes[i].Version+1, "published"
+			frozen.Layout = processes[i].Layout
+			processes[i].Version, processes[i].State = frozen.Version, "published"
+			processes[i].Published = published(frozen)
+			processes[i].Versions = append(slices.Clone(processes[i].Versions), processes[i].Published)
+			if err := add(SchemaProcess, processes[i]); err != nil {
+				return nil, nil, err
+			}
 		}
-	}
-	processes, err := b.processInventory()
-	if err != nil {
-		return nil, nil, err
 	}
 	available, err := releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
 	if err != nil {
 		return nil, nil, err
 	}
 	functions, err := b.functionAssets()
-	return publications, append(available, functions...), err
+	if err != nil {
+		return nil, nil, err
+	}
+	available = append(available, functions...)
+	codePublications, err := b.PrepareCodeReleasePublications(assets)
+	if err != nil {
+		return nil, nil, err
+	}
+	publications = append(publications, codePublications...)
+	code, err := b.CodeReleaseAssets()
+	if err != nil {
+		return nil, nil, err
+	}
+	available = append(available, code...)
+	for _, asset := range assets {
+		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetCompute {
+			available = slices.DeleteFunc(available, func(prior platform.ReleaseAsset) bool { return prior.Ref == asset.Ref })
+			available = append(available, asset)
+		}
+	}
+	return publications, available, nil
 }
 
 func pageFunctionBindings(p platform.Page) map[string]string {
@@ -140,6 +224,9 @@ func pageFunctionBindings(p platform.Page) map[string]string {
 	for _, section := range p.Sections {
 		if section.Function != nil {
 			bindings[section.Function.Ref.String()] = section.Function.SourceVersion
+		}
+		if section.Operation != nil {
+			bindings[section.Operation.Ref.String()] = section.Operation.SourceVersion
 		}
 	}
 	return bindings
@@ -149,7 +236,7 @@ func pageFunctionBindings(p platform.Page) map[string]string {
 func PublicationRecord(p ReleasePublication) (string, string, error) {
 	typ, _, ok := strings.Cut(p.Schema, ".publish")
 	var record platform.Record
-	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
+	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, FunctionType, CodeType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
 		return "", "", fmt.Errorf("invalid release publication row")
 	}
 	return typ, record.ID, nil

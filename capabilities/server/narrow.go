@@ -32,6 +32,10 @@ func (t *Tenant) admits(m platform.Member) *kernel.Error {
 // record ("<type>/<id>"), one field of it ("<type>/<id>#<field>") or a named
 // app read ("read:<name>"). held says the record store's lock is already held.
 func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref string) bool {
+	return t.mayReadIn(t.records, m, now, held)
+}
+
+func (t *Tenant) mayReadIn(store *recordStore, m platform.Member, now time.Time, held bool) func(ref string) bool {
 	seen := map[string]bool{}
 	return func(ref string) bool {
 		if ref == "" {
@@ -47,13 +51,22 @@ func (t *Tenant) mayRead(m platform.Member, now time.Time, held bool) func(ref s
 		}
 		record, field, _ := strings.Cut(ref, "#")
 		ok := false
-		if held {
-			ok = t.readableLocked(m, record, now)
-		} else {
-			ok = t.Readable(m, record, now)
+		if !held {
+			store.mu.Lock()
 		}
+		ok = t.readableIn(store, m, record, now)
 		if ok && field != "" {
-			ok = t.readsField(m, record, field, held)
+			typ, _, _ := strings.Cut(record, "/")
+			et := store.types[typ]
+			if et == nil {
+				ok = false
+			} else {
+				f, found := et.info.Field(field)
+				ok = found && f.Reads(m.Roles[et.info.App])
+			}
+		}
+		if !held {
+			store.mu.Unlock()
 		}
 		seen[ref] = ok
 		return ok
@@ -135,11 +148,16 @@ func (t *Tenant) narrowed(m platform.Member, v any, now time.Time, held bool) an
 // narrower narrows what leaves for one member at one moment, remembering each
 // answer about a record and each type's restricted fields.
 func (t *Tenant) narrower(m platform.Member, now time.Time, held bool) *narrower {
-	return &narrower{t: t, m: m, may: t.mayRead(m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}}
+	return t.narrowerIn(t.records, m, now, held)
+}
+
+func (t *Tenant) narrowerIn(store *recordStore, m platform.Member, now time.Time, held bool) *narrower {
+	return &narrower{t: t, store: store, m: m, may: t.mayReadIn(store, m, now, held), held: held, hidden: map[reflect.Type][]platform.FieldInfo{}}
 }
 
 type narrower struct {
 	t      *Tenant
+	store  *recordStore
 	m      platform.Member
 	may    func(ref string) bool
 	held   bool
@@ -149,10 +167,10 @@ type narrower struct {
 // entity is the declared type of a Go struct type, or nil.
 func (w *narrower) entity(typ reflect.Type) *entityType {
 	if !w.held {
-		w.t.records.mu.Lock()
-		defer w.t.records.mu.Unlock()
+		w.store.mu.Lock()
+		defer w.store.mu.Unlock()
 	}
-	return w.t.records.byGo[typ]
+	return w.store.byGo[typ]
 }
 
 // value narrows what it finds inside v — records in slices, maps, pointers,

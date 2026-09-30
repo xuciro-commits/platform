@@ -1,11 +1,11 @@
 import { useHost, useRecordInventory } from "@platform/app";
-import { Button, Card, Input, NodeCanvas, PageHeader, Panel, StatusTag, canvasNodeHeight, defineStatuses, layout, t, useWorkspace,
+import { Button, Card, Input, NodeCanvas, PageHeader, Panel, StatusTag, canvasNodeHeight, canvasNodeWidth, defineStatuses, layout, t, useWorkspace,
   type CanvasEdge, type CanvasNode, type NodeCatalog, type Route } from "@platform/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Asset = { id: string; name: string; title: string; object?: string; pages?: string[]; fields?: { name: string; type: string; ref?: string }[];
   state?: string; version?: number; published?: string };
-type Kind = "object" | "page" | "workflow" | "function" | "application" | "source";
+type Kind = "object" | "page" | "workflow" | "function" | "compute" | "application" | "source";
 type StudioAsset = { key: string; kind: Kind; label: string; detail: string; record?: Asset; route?: Route };
 
 const states = defineStatuses({
@@ -18,6 +18,7 @@ const catalog: NodeCatalog = [
   { id: "page", title: t("Page"), category: "asset", inputs: [{ id: "source", label: t("Object"), type: "asset" }], outputs: [{ id: "app", label: t("Application"), type: "asset" }] },
   { id: "workflow", title: t("Workflow"), category: "asset", inputs: [{ id: "source", label: t("Object"), type: "asset" }], outputs: [] },
   { id: "function", title: t("AI function"), category: "asset", inputs: [{ id: "source", label: t("Object"), type: "asset" }], outputs: [] },
+  { id: "compute", title: t("Code function"), category: "asset", inputs: [], outputs: [{ id: "used", label: t("Used by"), type: "asset" }] },
   { id: "application", title: t("Application"), category: "asset", inputs: [{ id: "page", label: t("Pages"), type: "asset" }], outputs: [] },
 ];
 
@@ -28,6 +29,7 @@ function StudioInventory() {
   const pages = useRecordInventory<Asset>("build.page");
   const workflows = useRecordInventory<Asset>("build.process");
   const functions = useRecordInventory<Asset>("build.function");
+  const computes = useRecordInventory<Asset>("build.code");
   const applications = useRecordInventory<Asset>("build.app");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string>();
@@ -70,6 +72,7 @@ function StudioInventory() {
     for (const [kind, records, view] of [
       ["page", pages.data?.records ?? [], "compose"], ["workflow", workflows.data?.records ?? [], "workflow"],
       ["function", functions.data?.records ?? [], "function"],
+      ["compute", computes.data?.records ?? [], "code"],
     ] as const) {
       for (const record of records) {
         const key = `${kind}:${record.id}`;
@@ -89,7 +92,7 @@ function StudioInventory() {
       }
     }
     return { assets, edges };
-  }, [applications.data, functions.data, objects.data, pages.data, workflows.data, definitions]);
+  }, [applications.data, functions.data, computes.data, objects.data, pages.data, workflows.data, definitions]);
   const visible = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
     const matches = q ? all.assets.filter((asset) => `${asset.label} ${asset.detail}`.toLocaleLowerCase().includes(q)) : all.assets;
@@ -98,7 +101,7 @@ function StudioInventory() {
     const assets = all.assets.filter((asset) => keys.has(asset.key));
     const edges = all.edges.filter((edge) => keys.has(edge.source) && keys.has(edge.target));
     const places = layout(assets.map((asset) => ({ id: asset.key, label: asset.label })), edges.map((edge) => ({ from: edge.source, to: edge.target })), "right",
-      { width: 160, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 58, gapY: 32 });
+      { width: canvasNodeWidth, height: Math.max(...catalog.map(canvasNodeHeight)), gapX: 58, gapY: 32 });
     const nodes: CanvasNode[] = assets.map((asset) => ({ id: asset.key, kind: asset.kind, label: asset.label, detail: asset.detail,
       position: places.get(asset.key) ?? { x: 0, y: 0 } }));
     return { assets, edges, nodes, matches: matches.length };
@@ -107,16 +110,17 @@ function StudioInventory() {
   const connections = all.edges.filter((edge) => edge.source === selected || edge.target === selected)
     .map((edge) => all.assets.find((asset) => asset.key === (edge.source === selected ? edge.target : edge.source)))
     .filter((asset): asset is StudioAsset => Boolean(asset));
-  const loading = [objects, pages, workflows, functions, applications].some((query) => query.isLoading);
-  const failed = [objects, pages, workflows, functions, applications].some((query) => query.isError);
+  const loading = [objects, pages, workflows, functions, computes, applications].some((query) => query.isLoading);
+  const failed = [objects, pages, workflows, functions, computes, applications].some((query) => query.isError);
   return <div className="grid gap-4">
     <PageHeader title={t("Application Studio")} description={t("Build with the capabilities already available in this workspace.")} />
-    <Panel aria-label={t("Studio capabilities")} className="grid gap-3 border-0 bg-transparent p-0 sm:grid-cols-2 xl:grid-cols-3">
+    <Panel role="region" aria-label={t("Studio capabilities")} className="grid gap-3 border-0 bg-transparent p-0 sm:grid-cols-2 xl:grid-cols-3">
       {[
         { title: "Objects and relationships", detail: "Define fields, relationships, actions and access.", route: { view: "page", params: { app: "build", kind: "page", name: "objects" } }, query: objects },
         { title: "Pages", detail: "Compose an interface over your business objects.", route: { view: "pages" }, query: pages },
         { title: "Workflows", detail: "Connect actions, people and published functions.", route: { view: "workflow" }, query: workflows },
         { title: "AI functions", detail: "Configure typed advice and review its results.", route: { view: "function" }, query: functions },
+        { title: "Code functions", detail: "Compile typed Go or TinyGo algorithms for pages and workflows.", route: { view: "code" }, query: computes },
         { title: "Applications", detail: "Give published pages to the people who use them.", route: { view: "page", params: { app: "build", kind: "page", name: "applications" } }, query: applications },
         { title: "Test and release", detail: "Try saved drafts, review dependencies and activate a candidate.", route: { view: "candidate-test" } },
       ].map((capability) => <Card key={capability.title} className="grid gap-2 p-4">

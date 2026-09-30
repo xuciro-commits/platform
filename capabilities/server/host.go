@@ -122,12 +122,15 @@ type Tenant struct {
 	agents    *Agents         // AI agents (ADR-0021)
 	ctx       context.Context // the span of the work being done under mu (telemetry.go)
 	// Files keeps file bytes (ADR-0028 D1); nil: memory, for development and tests.
-	Files    FileStore
-	memFiles memoryFiles
-	uploads  map[string]time.Time // hashes uploaded and when, until attached or swept (volatile)
-	personal []PersonalRead       // reads of personal data (ADR-0028 D4), volatile
-	probing  bool                 // a submission for approval is being checked, not applied
-	requests []request            // accepted decisions' requests of other apps, run with their events (ADR-0026)
+	Files          FileStore
+	ComputeWorker  WasmWorker
+	Compiler       CodeCompiler
+	computeCancels map[string]context.CancelFunc // volatile handles, never ownership
+	memFiles       memoryFiles
+	uploads        map[string]time.Time // hashes uploaded and when, until attached or swept (volatile)
+	personal       []PersonalRead       // reads of personal data (ADR-0028 D4), volatile
+	probing        bool                 // a submission for approval is being checked, not applied
+	requests       []request            // accepted decisions' requests of other apps, run with their events (ADR-0026)
 }
 
 // AuditEntry is one accepted input: who, when, through which app, what.
@@ -864,6 +867,20 @@ func (t *Tenant) Replay(entries []Entry) error {
 					return fmt.Errorf("entry %d: effect result: %v (applied=%t)", i+1, err, applied)
 				}
 				t.enqueue(saved.At)
+				continue
+			}
+			if envelope.Kind == "operation-claim" {
+				saved, err := t.applyOperationClaim(e.Body)
+				if err != nil || saved.App != e.App || m.ID != "app:"+PlatformApp || !sameJournalTime(saved.At, e.At) {
+					return fmt.Errorf("entry %d: operation claim: %v", i+1, err)
+				}
+				t.opsMu.Lock()
+				for _, x := range t.outbound {
+					if x.ID == saved.Before.ID {
+						x.sending = false
+					}
+				}
+				t.opsMu.Unlock()
 				continue
 			}
 			ra, ok := a.(platform.ResultApp)

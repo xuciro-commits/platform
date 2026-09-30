@@ -5,6 +5,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 )
 
 // Flow is a long-running process an app declares (ADR-0020): a trigger, then
@@ -36,8 +37,11 @@ type Flow struct {
 // starts an instance, with the instance's key (one running instance per key)
 // and its first data.
 type Start struct {
-	On    []string
-	Begin func(c Caller, e Event) (key string, data any, ok bool)
+	// Manual is a typed, explicitly submitted entry point. It shares the
+	// same instance, tokens and accepted-result path as state/event starts.
+	Manual bool
+	On     []string
+	Begin  func(c Caller, e Event) (key string, data any, ok bool)
 	// Type and When start an instance the first time a decision brings a
 	// record of Type into a state When accepts, whichever record the decision
 	// named (ADR-0028 D8); its key is the record's ID. Either this or On.
@@ -58,7 +62,19 @@ type Step struct {
 	All   []string // branches, by their first step: the flow goes on when all have ended
 	Any   []string // branches: the flow goes on when the first has ended; the others are canceled
 	Agent *AgentStep
-	Next  string
+	// Evaluate performs bounded native data mapping/reads. Its output is
+	// captured in the instance; accepted-result recovery never evaluates it.
+	Evaluate  *Evaluate
+	Branch    *Branch
+	Loop      *Loop
+	Operation *OperationStep
+	Invoke    *Invocation
+	// End explicitly ends the current scope (an iteration, branch or flow).
+	End         bool
+	LoopControl string // break or continue, in the innermost explicit loop scope
+	// Output captures an Ask/Wait/Call's result before its control edge runs.
+	Output func(c Caller, r *Run) (json.RawMessage, *kernel.Error)
+	Next   string
 	// Choose picks the next step and gives the reason kept in the trace; data
 	// it sets on the run is kept.
 	Choose func(c Caller, r *Run) (next, reason string)
@@ -70,8 +86,9 @@ type Step struct {
 	WorkingDays int
 	// Fault is where an Act goes once its retries are spent; without it the
 	// flow compensates: each completed Act's Undo runs, newest first.
-	Fault string
-	Undo  *Act
+	NoRetry bool // a declared terminal failure, without another invocation
+	Fault   string
+	Undo    *Act
 }
 
 // Compensate, as a next step, undoes what the flow did: each completed Act's
@@ -82,6 +99,12 @@ const Compensate = "@compensate"
 type Act struct {
 	Protocol string // empty: the app's own action
 	Action   string
+	// AsMember is a builder's explicit reference to an exposed native action.
+	// Its caller is the retained initiating member, with current owner grants;
+	// it does not borrow the declaring app's automation authority.
+	AsMember    bool
+	Inputs      func(Caller, *Run) (json.RawMessage, *kernel.Error)
+	TargetValue func(Caller, *Run) (string, *kernel.Error)
 	// Target and Payload build the submission from the instance.
 	Target  func(c Caller, r *Run) string
 	Payload func(c Caller, r *Run) any
@@ -119,8 +142,9 @@ type Ask struct {
 // Call runs another of the app's flows and waits for it to end; its end state
 // ("done", "compensated", "canceled") is the Answer.
 type Call struct {
-	Flow string
-	Data func(c Caller, r *Run) any
+	Flow    string
+	Version int // zero takes the installed version at start; builders pin it
+	Data    func(c Caller, r *Run) any
 }
 
 // AgentStep gives one of the app's agents a goal (ADR-0021) and waits for its
@@ -136,6 +160,7 @@ type AgentStep struct {
 // Run is an instance as a step's functions see it.
 type Run struct {
 	ID       string
+	Now      time.Time // the current accepted decision time, never wall-clock business logic
 	Flow     string
 	Version  int
 	Key      string
@@ -143,8 +168,50 @@ type Run struct {
 	Release  string // the activation retained when this instance started
 	Sequence int    // the next native action sequence within this instance
 	Data     json.RawMessage
-	Answer   string // the last Ask's or Call's
-	Event    *Event // the event that started it or ended the last wait
+	Answer   string                     // the last Ask's or Call's
+	Event    *Event                     // the event that started it or ended the last wait
+	Sources  []string                   // protected inputs retained across downstream nodes
+	Outputs  map[string]json.RawMessage // completed nodes visible in this token's scope
+	Frames   []Frame                    // durable enclosing iteration scopes, outermost first
+}
+
+// Evaluate and Branch are native step semantics, not a second interpreter.
+// Declarative bindings compile to these callbacks in their definition owner.
+type Evaluate struct {
+	Run func(Caller, *Run) (json.RawMessage, *kernel.Error)
+}
+
+type Branch struct {
+	Choose func(Caller, *Run) (string, string, *kernel.Error)
+	Paths  []string // every statically checked control destination
+}
+
+// Loop names an explicit child scope. Its cursor/items/results are persisted
+// on the existing flow Token, including while loops that suspend in a body.
+type Loop struct {
+	Initial       func(Caller, *Run) (json.RawMessage, *kernel.Error)
+	Body          string
+	Items         func(Caller, *Run) ([]json.RawMessage, *kernel.Error)
+	While         func(Caller, *Run) (bool, *kernel.Error)
+	MaxIterations int
+	Concurrency   int
+}
+
+type Frame struct {
+	Node  string          `json:"node"`
+	Index int             `json:"index"`
+	Item  json.RawMessage `json:"item,omitempty"`
+}
+
+type OperationStep struct {
+	Request func(Caller, *Run) (OperationRequest, *kernel.Error)
+}
+
+// Invocation submits an existing owner action once, then reads its durable
+// reply without creating another process or inventing an effect mechanism.
+type Invocation struct {
+	Act    Act
+	Result func(Caller, *Run, string) (json.RawMessage, bool, *kernel.Error)
 }
 
 // Set replaces the instance's data.

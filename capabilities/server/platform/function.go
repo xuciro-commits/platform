@@ -50,6 +50,7 @@ type FunctionCall struct {
 // a person cannot substitute somebody else's grants. Version zero selects the
 // installed version at acceptance, never at later dispatch.
 type FunctionRequest struct {
+	App      string `json:"app,omitempty"` // definition owner; reply stays with the requesting app
 	Name     string `json:"name"`
 	Reply    string `json:"reply"`
 	Source   string `json:"source,omitempty"` // source ID; type is declared by the function
@@ -63,6 +64,7 @@ type FunctionRequest struct {
 
 // FunctionRef pins a native published function of the declaring app.
 type FunctionRef struct {
+	App     string `json:"app,omitempty"`
 	Name    string `json:"name"`
 	Version int    `json:"version"`
 }

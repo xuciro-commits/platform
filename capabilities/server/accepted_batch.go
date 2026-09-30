@@ -24,24 +24,25 @@ import (
 // One top-level input, not one row or one nested decision. Before validates
 // the predecessor image/history before any authoritative ledger is advanced.
 type acceptedBatch struct {
-	Version       int                         `json:"version"`
-	Kind          string                      `json:"kind"`
-	Tenant        string                      `json:"tenant"`
-	App           string                      `json:"app"`
-	At            time.Time                   `json:"at"`
-	RequestHash   string                      `json:"requestHash"`
-	Digest        string                      `json:"digest"`
-	Receipt       json.RawMessage             `json:"receipt"`              // top-level answer/key
-	Submission    json.RawMessage             `json:"submission,omitempty"` // original input, when answer is an approval receipt
-	Rows          []acceptedBatchRow          `json:"rows"`
-	Decisions     []acceptedDecision          `json:"decisions"`
-	Sequences     map[string]int              `json:"sequences,omitempty"`
-	SequenceBases map[string]int              `json:"sequenceBases,omitempty"`
-	Notices       *acceptedNotices            `json:"notices,omitempty"`
-	Intents       []platform.Effect           `json:"intents,omitempty"`
-	Observations  []acceptedObservation       `json:"observations,omitempty"`
-	States        []acceptedState             `json:"states,omitempty"`
-	Deliveries    []acceptedConnectorDelivery `json:"deliveries,omitempty"`
+	Version       int                             `json:"version"`
+	Kind          string                          `json:"kind"`
+	Tenant        string                          `json:"tenant"`
+	App           string                          `json:"app"`
+	At            time.Time                       `json:"at"`
+	RequestHash   string                          `json:"requestHash"`
+	Digest        string                          `json:"digest"`
+	Receipt       json.RawMessage                 `json:"receipt"`              // top-level answer/key
+	Submission    json.RawMessage                 `json:"submission,omitempty"` // original input, when answer is an approval receipt
+	Rows          []acceptedBatchRow              `json:"rows"`
+	Decisions     []acceptedDecision              `json:"decisions"`
+	Sequences     map[string]int                  `json:"sequences,omitempty"`
+	SequenceBases map[string]int                  `json:"sequenceBases,omitempty"`
+	Notices       *acceptedNotices                `json:"notices,omitempty"`
+	Intents       []platform.Effect               `json:"intents,omitempty"`
+	Observations  []acceptedObservation           `json:"observations,omitempty"`
+	States        []acceptedState                 `json:"states,omitempty"`
+	Deliveries    []acceptedConnectorDelivery     `json:"deliveries,omitempty"`
+	Operations    []acceptedOperationCancellation `json:"operations,omitempty"`
 }
 
 type acceptedBatchRow struct {
@@ -82,7 +83,7 @@ func canonicalDigest(v any) (string, error) {
 }
 
 func acceptedRowOf(typ, id string, r *row) (acceptedRow, error) {
-	value, err := json.Marshal(r.value.Interface())
+	value, err := r.image()
 	return acceptedRow{Type: typ, ID: id, Value: value, History: copyHistory(r.history)}, err
 }
 
@@ -95,6 +96,10 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 		Notices: d.savedNotices(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
 		Deliveries: slices.Clone(d.deliveries)}
 	var err error
+	result.Operations, err = d.savedOperationCancellations()
+	if err != nil {
+		return nil, err
+	}
 	result.States, err = d.savedStates()
 	if err != nil {
 		return nil, err
@@ -405,6 +410,9 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 	if err := t.validateAcceptedStates(result.States); err != nil {
 		return false, err
 	}
+	if err := t.validateOperationCancellations(result.Operations); err != nil {
+		return false, err
+	}
 	if err := t.validateAcceptedDeliveries(result.Deliveries); err != nil {
 		return false, err
 	}
@@ -457,7 +465,7 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 			baseHistory, revision = len(prior.history), recordOf(prior.value).Revision
 		}
 		prefixEqual := true
-		if prior != nil && len(image.History) >= baseHistory {
+		if prior != nil && baseHistory > 0 && len(image.History) >= baseHistory {
 			oldDigest, oldErr := canonicalDigest(prior.history)
 			savedDigest, savedErr := canonicalDigest(image.History[:baseHistory])
 			prefixEqual = oldErr == nil && savedErr == nil && oldDigest == savedDigest
@@ -513,7 +521,9 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 			draft.mu.Unlock()
 			return false, fmt.Errorf("record batch image differs from its decisions")
 		}
-		et.rows[rec.ID] = &row{value: value, history: copyHistory(image.History)}
+		recovered := &row{value: value, history: copyHistory(image.History)}
+		recovered.retainOriginal(image.Value)
+		et.rows[rec.ID] = recovered
 		draft.writes[image.Type+"/"+rec.ID] = true
 		for _, change := range image.History[baseHistory:] {
 			draft.remember(image.App+"/"+change.Change, image.Type+"/"+rec.ID)
@@ -551,6 +561,9 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 		return false, err
 	}
 	if err := t.applyAcceptedStates(result.States); err != nil {
+		return false, err
+	}
+	if err := t.applyOperationCancellations(result.Operations); err != nil {
 		return false, err
 	}
 	if err := t.applyAcceptedDeliveries(result.Deliveries); err != nil {

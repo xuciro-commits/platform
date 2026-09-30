@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
 	"io"
 	"maps"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformkernel/kernel"
 	"reflect"
 	"slices"
 	"strconv"
@@ -41,6 +44,8 @@ type acceptedEffect struct {
 	Notices       *acceptedNotices   `json:"notices,omitempty"`
 	Intents       []platform.Effect  `json:"intents,omitempty"`
 	States        []acceptedState    `json:"states,omitempty"`
+	WorkBefore    json.RawMessage    `json:"workBefore,omitempty"`
+	Work          json.RawMessage    `json:"work,omitempty"`
 }
 
 func effectResultKey(before effectState) string {
@@ -105,6 +110,17 @@ func decodeAcceptedEffect(raw []byte) (acceptedEffect, error) {
 	} else if result.UsageBefore != "" {
 		return result, fmt.Errorf("effect result has a meter predecessor without usage")
 	}
+	if result.Before.Endpoint == operationEndpoint {
+		var prior, work pb.Work
+		if result.Outcome.Generation == 0 || result.Outcome.Generation != result.Before.Generation ||
+			protojson.Unmarshal(result.WorkBefore, &prior) != nil || protojson.Unmarshal(result.Work, &work) != nil ||
+			prior.GetWorkId() != result.Before.ID || prior.GetGeneration() != result.Before.Generation || prior.GetState() != pb.WorkState_WORK_STATE_RUNNING ||
+			work.GetWorkId() != prior.GetWorkId() || work.GetGeneration() != prior.GetGeneration() {
+			return result, fmt.Errorf("operation result has invalid ownership")
+		}
+	} else if len(result.WorkBefore) > 0 || len(result.Work) > 0 {
+		return result, fmt.Errorf("external effect has compute ownership")
+	}
 	return result, nil
 }
 
@@ -135,6 +151,19 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 	savedHash, savedErr := canonicalDigest(result.Before)
 	if current == nil || err != nil || savedErr != nil || beforeHash != savedHash {
 		return result, false, fmt.Errorf("effect result predecessor differs")
+	}
+	works, priorWork, savedWork, err := t.prepareOperationFinish(result.Before.Effect, result.Outcome)
+	if err != nil {
+		return result, false, err
+	}
+	if works != nil {
+		priorHash, _ := canonicalDigest(priorWork)
+		expectedPrior, _ := canonicalDigest(result.WorkBefore)
+		workHash, _ := canonicalDigest(savedWork)
+		expectedWork, _ := canonicalDigest(result.Work)
+		if priorHash != expectedPrior || workHash != expectedWork {
+			return result, false, fmt.Errorf("operation result ownership differs")
+		}
 	}
 	if result.Usage != nil {
 		if t.ai == nil {
@@ -206,6 +235,18 @@ func (t *Tenant) applyAcceptedEffect(raw []byte) (acceptedEffect, bool, error) {
 	t.opsMu.Lock()
 	current.Effect, current.since, current.sending = result.After.Effect, result.After.Since, false
 	t.opsMu.Unlock()
+	if works != nil {
+		// The child may have cancelled other computation generations. Promote
+		// only this work's frozen completion, never overwrite that child state.
+		finished, _ := works.Get(result.Before.ID)
+		all := t.works.All()
+		for i, work := range all {
+			if work.GetWorkId() == finished.GetWorkId() {
+				all[i] = finished
+			}
+		}
+		t.works.Restore(all)
+	}
 	if result.Usage != nil {
 		t.ai.Meter(*result.Usage)
 	}
@@ -239,6 +280,10 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage
 		Key: effectResultKey(before), At: at.UTC(), Before: before,
 		After: effectState{Effect: after.Effect, Since: after.since}, Outcome: out, Usage: usage}
 	var err error
+	_, result.WorkBefore, result.Work, err = t.prepareOperationFinish(before.Effect, out)
+	if err != nil {
+		return
+	}
 	if usage != nil {
 		if t.ai == nil {
 			t.quarantine(fmt.Errorf("effect %s has usage without an AI meter", id))
@@ -335,8 +380,12 @@ func (t *Tenant) settleAccepted(id string, out platform.Outcome, usage *ai.Usage
 		return
 	}
 	principal, _ := json.Marshal(t.automation(PlatformApp, false).Member)
-	committed, err := t.AcceptResult(Entry{App: PlatformApp, Kind: "accepted-result",
-		Principal: principal, Body: raw, At: at}, result.Key, result.RequestHash)
+	committed := raw
+	if t.AcceptResult != nil {
+		committed, err = t.AcceptResult(Entry{App: PlatformApp, Kind: "accepted-result", Principal: principal, Body: raw, At: at}, result.Key, result.RequestHash)
+	} else if app := t.app(PlatformApp); app != nil {
+		t.record(app, "accepted-result", t.automation(PlatformApp, false).Member, raw, at)
+	}
 	if err != nil {
 		if errors.Is(err, errAcceptedConflict) {
 			t.quarantine(fmt.Errorf("effect %s conflicts with a previously committed outcome", id))
@@ -414,6 +463,17 @@ func (t *Tenant) stageEffectAnswer(draft *stagedDecision, x platform.Effect, out
 	}
 	if x.App == "" {
 		return nil
+	}
+	if x.Endpoint == operationEndpoint {
+		draft.operationAnswers = map[string]platform.OperationResult{x.ID: operationResultOf(x)}
+		if processes, ok := t.procs.(interface {
+			OperationEnded(platform.Caller, string, time.Time) *kernel.Error
+		}); ok {
+			c := platform.NewCaller(draft, platform.Member{ID: "app:" + "flow", Tenant: t.ID}, "flow", false, true)
+			if err := processes.OperationEnded(c, x.ID, at); err != nil {
+				return err
+			}
+		}
 	}
 	c := platform.NewCaller(draft, platform.Member{ID: "app:" + x.App, Tenant: t.ID}, x.App, false, true)
 	if app, ok := t.app(x.App).(platform.Answerer); ok {

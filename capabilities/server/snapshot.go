@@ -84,7 +84,7 @@ func (t *Tenant) Snapshot(position func() int64) (json.RawMessage, int64, error)
 	for typ, list := range rows {
 		saved := make([]recordState, len(list))
 		for i, r := range list {
-			raw, err := json.Marshal(r.value.Interface())
+			raw, err := r.image()
 			if err != nil {
 				return nil, 0, err
 			}
@@ -203,7 +203,9 @@ func (t *Tenant) restoreRecords(saved map[string][]recordState) (map[string][]re
 				return nil, err
 			}
 			emptyLists(v) // a snapshot of older code may hold null lists
-			et.rows[recordOf(v).ID] = &row{value: v, history: r.History}
+			recovered := &row{value: v, history: r.History}
+			recovered.retainOriginal(r.Value)
+			et.rows[recordOf(v).ID] = recovered
 		}
 		t.records.generation++
 	}
@@ -240,7 +242,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		return err
 	}
 	needsDefinitions := len(held) > 0
-	for typ, kind := range map[string]platform.AssetKind{build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp} {
+	for typ, kind := range map[string]platform.AssetKind{build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute} {
 		for _, row := range s.Records[typ] {
 			var meta struct {
 				Published string `json:"published"`
@@ -249,15 +251,29 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 				continue
 			}
 			var saved struct {
-				Name string `json:"name"`
+				Name    string `json:"name"`
+				Version int    `json:"version"`
 			}
 			if json.Unmarshal([]byte(meta.Published), &saved) != nil {
 				continue
 			}
 			name := saved.Name
-			if kind == platform.AssetObject {
+			if kind == platform.AssetObject || kind == platform.AssetFlow {
 				name = build.TypeOf(name)
 			}
+			if kind == platform.AssetFlow {
+				var state struct {
+					Name    string `json:"name"`
+					Version int    `json:"version"`
+				}
+				json.Unmarshal([]byte(meta.Published), &state)
+				owner, ok := t.procs.(interface {
+					HasDefinition(string, string, int) bool
+				})
+				needsDefinitions = needsDefinitions || !ok || !owner.HasDefinition(build.ID, state.Name, state.Version)
+				continue
+			}
+
 			ref := platform.AssetRef{App: build.ID, Kind: kind, Name: name}
 			needsDefinitions = needsDefinitions || !slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref && d.Source == "tenant" })
 		}

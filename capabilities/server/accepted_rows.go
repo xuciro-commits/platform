@@ -71,7 +71,9 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedInputRow, member strin
 			last.Schema == "" {
 			return nil, fmt.Errorf("direct record image differs from history")
 		}
-		et.rows[image.ID] = &row{value: value, history: copyHistory(image.History)}
+		recovered := &row{value: value, history: copyHistory(image.History)}
+		recovered.retainOriginal(image.Value)
+		et.rows[image.ID] = recovered
 		draft.writes[image.Type+"/"+image.ID] = true
 		if et.knowledge {
 			draft.dirty[image.Type+"/"+image.ID] = true

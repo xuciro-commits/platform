@@ -47,9 +47,9 @@ export function Form({ onSubmit, ...props }: Omit<FormHTMLAttributes<HTMLFormEle
 }
 
 /** A row that opens to show more: a run's step, a citation's passage. */
-export function Disclosure({ summary, children, open, onToggle, className }:
-  { summary: ReactNode; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; className?: string }) {
-  const [own, setOwn] = useState(false);
+export function Disclosure({ summary, children, open, defaultOpen = false, onToggle, className }:
+  { summary: ReactNode; children: ReactNode; open?: boolean; defaultOpen?: boolean; onToggle?: (open: boolean) => void; className?: string }) {
+  const [own, setOwn] = useState(defaultOpen);
   const shown = open ?? own;
   return (
     <div className={className}>

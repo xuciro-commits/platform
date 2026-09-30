@@ -16,6 +16,7 @@ import (
 // The accepted effect owns the complete bounded definition and input. Dispatch
 // must never obtain a newer prompt/schema from the current manifest.
 type functionBinding struct {
+	Owner      string                `json:"owner,omitempty"`
 	Definition platform.AIFunction   `json:"definition"`
 	Call       platform.FunctionCall `json:"call"`
 	Member     string                `json:"member"`
@@ -51,20 +52,27 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 			return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "AI functions need an explicit authorised member")
 		}
 	}
-	app := t.app(c.App)
+	owner := request.App
+	if owner == "" {
+		owner = c.App
+	}
+	app := t.app(owner)
 	if app == nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function is not declared")
 	}
-	manifest := app.Manifest()
 	f, version, found := functionDefinition(app, request.Name, request.Version)
 	if !found {
 		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function is not declared")
 	}
-	if f.Check() != nil || !slices.Contains(f.Roles, member.Roles[c.App]) {
+	if f.Check() != nil || !slices.Contains(f.Roles, member.Roles[owner]) {
 		return refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "This member cannot call the AI function")
 	}
 	target := r.GetSubmission().GetTarget()
-	action, ok := manifest.Actions.Action(request.Reply)
+	replyOwner := t.app(c.App)
+	if replyOwner == nil {
+		return refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The AI function reply owner is not installed")
+	}
+	action, ok := replyOwner.Manifest().Actions.Action(request.Reply)
 	if !ok || action.Target != target.GetType() || t.authorityOf(target.GetType()) != c.App || action.Approval != nil || !action.Automation {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The AI function needs an automatic reply on its owner's target object")
 	}
@@ -104,11 +112,11 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if err != nil || len(raw) > f.MaxInputBytes {
 		return refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The AI function input exceeds its byte budget")
 	}
-	definition, err := canonicalDigest([]any{c.App, f})
+	definition, err := canonicalDigest([]any{owner, f})
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function definition cannot be bound")
 	}
-	candidate, release, err := t.functionClosure(c.App, f, version, request.Release)
+	candidate, release, err := t.functionClosure(owner, f, version, request.Release)
 	if err != nil {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function dependencies cannot be bound")
 	}
@@ -122,7 +130,7 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 	if ask.Model == "" {
 		return refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The AI function needs a bound model")
 	}
-	ask.Function = &functionBinding{Definition: f, Call: call, Member: member.ID}
+	ask.Function = &functionBinding{Owner: owner, Definition: f, Call: call, Member: member.ID}
 	body, _ := json.Marshal(ask)
 	x.Body = string(body)
 	return call, x, nil
@@ -133,7 +141,11 @@ func (t *Tenant) planFunction(c platform.Caller, r *pb.ChangeRecord, request pla
 func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	binding := ask.Function
 	f := binding.Definition
-	definition, err := canonicalDigest([]any{app, f})
+	owner := binding.Owner
+	if owner == "" {
+		owner = app
+	}
+	definition, err := canonicalDigest([]any{owner, f})
 	hash, hashErr := canonicalDigest(ask.Prompt.User)
 	member, ok := t.Member(binding.Member)
 	sourceType, sourceID, sourceOK := strings.Cut(binding.Call.Source, "/")
@@ -141,7 +153,7 @@ func (t *Tenant) functionAllowed(app string, ask modelAsk, at time.Time) bool {
 	if !ok || member.Tenant != t.ID || f.Check() != nil || err != nil || hashErr != nil ||
 		definition != binding.Call.Definition || hash != binding.Call.InputHash || ask.Model != binding.Call.Model ||
 		ask.Prompt.System != f.SystemPrompt() || ask.Prompt.MaxTokens != f.MaxTokens || len(ask.Prompt.User) > f.MaxInputBytes ||
-		!sourceOK || sourceID == "" || sourceType != f.Object || !replyOK || replyID != ask.Call || t.authorityOf(replyType) != app || !slices.Contains(f.Roles, member.Roles[app]) ||
+		!sourceOK || sourceID == "" || sourceType != f.Object || !replyOK || replyID != ask.Call || t.authorityOf(replyType) != app || !slices.Contains(f.Roles, member.Roles[owner]) ||
 		member.Agent && t.suspended(member.ID) || len(binding.Call.Sources) != len(f.Fields) {
 		return false
 	}
@@ -218,6 +230,9 @@ func (h hostView) InstallFunction(c platform.Caller, f platform.AIFunction, vers
 // Only the definition owner can resolve retained versions. Code declarations
 // have their manifest version and cannot invent a native publication ordinal.
 func functionDefinition(app platform.App, name string, version int) (platform.AIFunction, int, bool) {
+	if app == nil {
+		return platform.AIFunction{}, 0, false
+	}
 	if owner, ok := app.(interface {
 		FunctionDefinition(string, int) (platform.AIFunction, int, bool)
 	}); ok {
@@ -234,48 +249,20 @@ func functionDefinition(app platform.App, name string, version int) (platform.AI
 	return platform.AIFunction{}, 0, false
 }
 
+// Function exposes the installed owner's declaration without executing a model.
+// The accepting call still checks the actual member/source/fields at runtime.
+func (h hostView) Function(app, name string, version int) (platform.AIFunction, int, bool) {
+	return functionDefinition(h.t.app(app), name, version)
+}
+
 func (t *Tenant) functionClosure(app string, f platform.AIFunction, version int, retained *string) (platform.ReleaseCandidate, string, error) {
-	ref := platform.AssetRef{App: app, Kind: platform.AssetFunction, Name: f.Name}
-	available, err := t.releaseAssetsLocked(nil, false)
-	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
-	}
-	i := slices.IndexFunc(available, func(a platform.ReleaseAsset) bool { return a.Ref == ref })
-	if i < 0 {
-		return platform.ReleaseCandidate{}, "", fmt.Errorf("function %s has no release owner", ref)
-	}
 	body, err := json.Marshal(f)
 	if err != nil {
 		return platform.ReleaseCandidate{}, "", err
 	}
-	available[i].Body = body
+	sourceVersion := ""
 	if version > 0 {
-		available[i].SourceVersion = t.app(app).Manifest().Version + ".function-" + strconv.Itoa(version)
+		sourceVersion = t.app(app).Manifest().Version + ".function-" + strconv.Itoa(version)
 	}
-	candidate, err := platform.Candidate([]platform.AssetRef{ref}, available)
-	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
-	}
-	release := t.activeRelease
-	if retained != nil {
-		release = *retained
-	}
-	if release == "" {
-		return candidate, "", nil
-	}
-	saved, err := platform.ReadCandidate(release, t.releaseCandidates[release])
-	if err != nil {
-		return platform.ReleaseCandidate{}, "", err
-	}
-	if !slices.ContainsFunc(saved.Assets, func(a platform.ReleaseAsset) bool { return a.Ref == ref }) {
-		if retained != nil {
-			return platform.ReleaseCandidate{}, "", fmt.Errorf("function %s is missing from its retained release", ref)
-		}
-		return candidate, "", nil
-	}
-	active, err := platform.Candidate([]platform.AssetRef{ref}, saved.Assets)
-	if err != nil || active.ID != candidate.ID {
-		return platform.ReleaseCandidate{}, "", fmt.Errorf("function %s differs from its active release", ref)
-	}
-	return candidate, release, nil
+	return t.capabilityClosure(platform.AssetRef{App: app, Kind: platform.AssetFunction, Name: f.Name}, body, sourceVersion, retained)
 }

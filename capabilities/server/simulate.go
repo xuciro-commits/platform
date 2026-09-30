@@ -27,19 +27,21 @@ type Simulation struct {
 	Flows           []SimulatedFlow     `json:"flows,omitempty"`
 	Tasks           []work.WorkTask     `json:"tasks,omitempty"`
 	Functions       []build.FunctionRun `json:"functions,omitempty"`
+	ComputeMatched  *bool               `json:"computeMatched,omitempty"`
 	FunctionMatched *bool               `json:"functionMatched,omitempty"`
 }
 
 // SimulatedFlow exposes native progress/trace, never its raw source Data.
 type SimulatedFlow struct {
-	ID           string           `json:"id"`
-	Flow         string           `json:"flow"`
-	Version      int              `json:"version"`
-	Dependencies string           `json:"dependencies,omitempty"`
-	Release      string           `json:"release,omitempty"`
-	State        string           `json:"state"`
-	Tokens       []flow.Token     `json:"tokens"`
-	Trace        []flow.TraceLine `json:"trace"`
+	ID           string                     `json:"id"`
+	Flow         string                     `json:"flow"`
+	Version      int                        `json:"version"`
+	Dependencies string                     `json:"dependencies,omitempty"`
+	Release      string                     `json:"release,omitempty"`
+	State        string                     `json:"state"`
+	Tokens       []flow.Token               `json:"tokens"`
+	Trace        []flow.TraceLine           `json:"trace"`
+	Outputs      map[string]json.RawMessage `json:"outputs,omitempty"`
 }
 
 // SimulatedChange is one record the decision would write, as it would read.

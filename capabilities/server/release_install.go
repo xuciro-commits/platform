@@ -50,6 +50,10 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 			return 0
 		case build.SchemaRelease:
 			return 1
+		case build.SchemaCodePublish, build.SchemaFunction:
+			return 1
+		case build.SchemaProcess:
+			return 2
 		default:
 			return 2
 		}
@@ -63,7 +67,8 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 		}
 		t.records.mu.Lock()
 		row := t.records.types[typ].rows[rowID]
-		before, err := canonicalDigest(row.value.Interface())
+		image, err := row.image()
+		before, err := canonicalDigest(image)
 		t.records.mu.Unlock()
 		if err != nil {
 			return nil, err
@@ -99,7 +104,11 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 		if et == nil || et.rows[id] == nil {
 			return nil, fmt.Errorf("release metadata needs its predecessor %s/%s", typ, id)
 		}
-		before, err := canonicalDigest(et.rows[id].value.Interface())
+		image, err := et.rows[id].image()
+		if err != nil {
+			return nil, err
+		}
+		before, err := canonicalDigest(image)
 		if err != nil || before != installation.Before {
 			return nil, fmt.Errorf("release metadata predecessor differs for %s/%s", typ, id)
 		}
@@ -110,6 +119,8 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 		// Publication is derived metadata; the mutable draft and its revision
 		// are preserved. Its history is not another generated edit decision.
 		et.rows[id].value = value
+		et.rows[id].original = nil
+		et.rows[id].retainOriginal(installation.Image)
 		draft.records.writes[typ+"/"+id] = true
 		decl, err := owner.ReleaseDeclaration(installation.ReleasePublication)
 		if err != nil {
@@ -144,6 +155,23 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 			}
 		case build.SchemaHandOver:
 			if err := draft.InstallApplication(owner, *decl.Application); err != nil {
+				return nil, err
+			}
+		case build.SchemaCodePublish:
+			view := hostView{t: draft, app: owner}
+			if err := view.InstallOperation(platform.Caller{Replaying: true}, *decl.Operation, decl.Version); err != nil {
+				return nil, err
+			}
+		case build.SchemaFunction:
+			view := hostView{t: draft, app: owner}
+			if err := view.InstallFunction(platform.Caller{Replaying: true}, *decl.Function, decl.Version); err != nil {
+				return nil, err
+			}
+		case build.SchemaProcess:
+			if t.procs == nil {
+				return nil, fmt.Errorf("flow runtime is unavailable")
+			}
+			if err := t.procs.Validate(owner, *decl.Flow); err != nil {
 				return nil, err
 			}
 		}

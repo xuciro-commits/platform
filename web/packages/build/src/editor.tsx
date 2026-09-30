@@ -9,7 +9,9 @@ import {
   type EntityInfo,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Settings2, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Api as HostApi } from "@platform/kernel";
+import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
 
 type Api = NonNullable<Definition["page"]>;
 type Section = NonNullable<Api["sections"]>[number];
@@ -17,18 +19,19 @@ type Section = NonNullable<Api["sections"]>[number];
 type PageRecord = {
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
   list?: string[]; detail?: string[]; actions?: string[];
-  sections?: { widget: string; title?: string; width?: string; object?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number } }[];
+  sections?: { widget: string; title?: string; width?: string; object?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
 const pageStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" }, published: { label: t("Published"), tone: "success" } });
 
-const widgets = ["table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function"] as const;
+const widgets = ["table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function", "compute"] as const;
 const widgetTitles: Record<string, () => string> = {
   table: () => t("Table"), detail: () => t("Detail"), actions: () => t("Actions"),
   chart: () => t("Chart"), metric: () => t("Metric"), text: () => t("Text"),
   filter: () => t("Filter"), form: () => t("Form"), timeline: () => t("Timeline"), tasks: () => t("Tasks"),
   function: () => t("AI function"),
+  compute: () => t("Code function"),
 };
 /** The field types a filter offers: values that repeat (the host's platform.Filterable). */
 const filterable = ["choice", "boolean", "reference"];
@@ -42,6 +45,7 @@ const asPage = (record: PageRecord, sections: Draft[]): Api => ({
     widget: s.widget, title: s.title, width: s.width, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
     function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,
+    operation: s.operation, inputs: s.inputs,
     actions: (s.actions ?? []).map((schema) => ({ app: schema.split(".")[0] ?? "", kind: "action", name: schema })),
   })) as Section[],
 });
@@ -74,6 +78,9 @@ export function PageEditor({ id }: { id: string }) {
   const [refused, setRefused] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [formProblems, setFormProblems] = useState<Record<string, string>>({});
+  const report = useCallback((id: string, problem: string) => setFormProblems((old) => old[id] === problem ? old : { ...old, [id]: problem }), []);
+  const invalid = Object.values(formProblems).some(Boolean);
   const relatedObjects = useMemo(() => {
     return (definitions ?? [])
       .filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
@@ -122,6 +129,7 @@ export function PageEditor({ id }: { id: string }) {
     setDirty(true);
   };
   const save = async () => {
+    if (invalid) return false;
     setRefused(undefined);
     setSaving(true);
     try {
@@ -147,12 +155,12 @@ export function PageEditor({ id }: { id: string }) {
   // Nothing to publish: no widget laid out and no list/detail from the simple form.
   const nothing = sections.length === 0 && (page.list ?? []).length === 0;
   return (
-    <div className="flex flex-col gap-3 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
+    <WorkflowFormProblems.Provider value={report}><div className="flex flex-col gap-3 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
       <PageHeader title={settings?.title || page.title} description={t("Compose what people see. Save keeps your work; publish puts it in the workspace.")}
         actions={<div className="flex items-center gap-2">
           <StatusTag status={page.state} registry={pageStates} />
-          <Button onClick={() => void save()} disabled={!dirty || saving || publishing}>{saving ? t("Saving…") : t("Save")}</Button>
-          <Button variant="primary" onClick={() => void publish()} disabled={nothing || publishing || saving}
+          <Button onClick={() => void save()} disabled={!dirty || saving || publishing || invalid}>{saving ? t("Saving…") : t("Save")}</Button>
+          <Button variant="primary" onClick={() => void publish()} disabled={nothing || publishing || saving || invalid}
             title={nothing ? t("Add at least one widget before publishing.") : undefined}>
             {publishing ? t("Publishing…") : t("Publish")}
           </Button>
@@ -179,7 +187,7 @@ export function PageEditor({ id }: { id: string }) {
             object={page.object} relatedObjects={relatedObjects} relationsOf={relationsOf} onChange={(patch) => change(chosen, patch)} />}
         </div>
       </div>
-    </div>
+    </div></WorkflowFormProblems.Provider>
   );
 }
 
@@ -236,6 +244,13 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
 }) {
   const { definitions } = useHost();
   const functionRecords = useRecordInventory<{ name: string; title: string; object: string; versions?: string[] }>("build.function");
+  const codeRecords = useRecordInventory<{ versions?: string[] }>("build.code");
+  const computations = (codeRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
+    try { const code = JSON.parse(raw) as { name: string; title: string; version: number; input: HostApi.ValueSchema };
+      return [{ binding: { ref: { app: "build", kind: "compute" as const, name: code.name }, sourceVersion: `1.compute-${code.version}` }, ...code }]; } catch { return []; }
+  })).concat(definitions.filter((item) => item.ref.kind === "compute" && item.source === "code" && item.operation).map((item) => ({
+    binding: { ref: { ...item.ref, kind: "compute" as const }, sourceVersion: item.version }, name: item.ref.name, title: item.operation!.title, version: 0, input: item.operation!.input,
+  })));
   const functions = (functionRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
     try { const version = JSON.parse(raw) as { name: string; title: string; object: string; version: number };
       return version.object === object ? [version] : []; } catch { return []; }
@@ -293,6 +308,22 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
             {functions.map((f) => <option key={`${f.name}:${f.version}`} value={`${f.name}:${f.version}`}>{f.title} · {t("Version")} {f.version}</option>)}
           </Select></label>
         <p className="text-xs text-muted">{t("The selected record supplies the function input. Its typed answer stays in a separate call record.")}</p>
+      </>}
+      {section.widget === "compute" && <>
+        <label className="grid gap-1 text-xs">{t("Published code function version")}
+          <Select value={section.operation ? `${section.operation.ref.app}/${section.operation.ref.name}:${section.operation.sourceVersion}` : ""} onChange={(event) => {
+            const selected = computations.find((item) => `${item.binding.ref.app}/${item.name}:${item.binding.sourceVersion}` === event.target.value);
+            onChange({ operation: selected?.binding, inputs: undefined });
+          }}><option value="">{t("Choose a published code function")}</option>{computations.map((item) => <option key={`${item.binding.ref.app}/${item.name}:${item.binding.sourceVersion}`} value={`${item.binding.ref.app}/${item.name}:${item.binding.sourceVersion}`}>{item.title} · {item.binding.ref.app} · {item.binding.sourceVersion}</option>)}</Select>
+        </label>
+        {(() => {
+          const schema = computations.find((item) => item.binding.sourceVersion === section.operation?.sourceVersion && item.name === section.operation?.ref.name && item.binding.ref.app === section.operation?.ref.app)?.input;
+          if (schema?.type !== "object") return <p className="text-xs text-muted">{t("The operator supplies the complete typed input.")}</p>;
+          return <><Button size="sm" onClick={() => onChange({ inputs: section.inputs ? undefined : Object.fromEntries(Object.keys(schema.properties ?? {}).map((name) => [name, { source: "input", path: [name] }])) })}>{section.inputs ? t("Use operator input") : t("Bind calculation inputs")}</Button>
+            {section.inputs && Object.entries(schema.properties ?? {}).map(([name, field]) => <BindingEditor key={name} label={name} schema={field} value={section.inputs?.[name]} steps={[]} sources={["literal", "input", "subject"]} optional={!schema.required?.includes(name)}
+              onChange={(value) => { const inputs = { ...section.inputs }; if (value) inputs[name] = value; else delete inputs[name]; onChange({ inputs }); }} />)}</>;
+        })()}
+        <p className="text-xs text-muted">{t("Record inputs are read by the host with the operator's permissions and retain their sources.")}</p>
       </>}
       {section.widget === "filter" && (
         <fieldset className="grid gap-1 text-xs">

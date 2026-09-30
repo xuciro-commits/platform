@@ -4,12 +4,14 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/work"
 	"platformserver/internal/host"
 	"platformserver/platform"
 )
@@ -17,17 +19,28 @@ import (
 // A session is one decision of the flow app: it loads instances, moves them
 // until each waits, and applies what changed as that decision.
 type session struct {
-	f       *Flows
-	c       platform.Caller // the flow app, automated
-	now     time.Time
-	changed map[string]*FlowInstance
-	order   []string
-	assigns []flowTask
-	runs    []host.RunStart // agent runs its steps start (ADR-0021)
-	signals []runSignal     // what people made of their proposals
-	close   []string
-	event   *platform.Event
-	moves   int
+	f                *Flows
+	c                platform.Caller // the flow app, automated
+	now              time.Time
+	changed          map[string]*FlowInstance
+	order            []string
+	assigns          []flowTask
+	runs             []host.RunStart // agent runs its steps start (ADR-0021)
+	signals          []runSignal     // what people made of their proposals
+	close            []string
+	event            *platform.Event
+	moves            int
+	operations       []operationStart
+	cancelOperations []string
+	withdrawals      []approvalWithdrawal
+}
+
+type approvalWithdrawal struct{ app, id, member string }
+
+type operationStart struct {
+	instance string
+	token    int
+	request  platform.OperationRequest
 }
 
 type runSignal struct {
@@ -70,6 +83,27 @@ func (ss *session) load(id string) *FlowInstance {
 }
 
 func (ss *session) apply(r *pb.ChangeRecord) {
+	for _, withdrawal := range ss.withdrawals {
+		if _, err := ss.act(withdrawal.app, "", "work.approval.withdraw", withdrawal.id, json.RawMessage("{}"), "flow-withdraw:"+withdrawal.id, withdrawal.member); err != nil {
+			return
+		}
+	}
+	for _, id := range ss.cancelOperations {
+		if err := ss.c.CancelOperation(r, id); err != nil {
+			return
+		}
+	}
+	for _, op := range ss.operations {
+		token := ss.token(ss.changed[op.instance], op.token)
+		if token.ID < 0 || token.Waits != "operation" {
+			continue
+		}
+		call, err := ss.c.RequestOperation(r, op.request)
+		if err != nil {
+			return
+		}
+		ss.token(ss.changed[op.instance], op.token).Operation = call.ID
+	}
 	for _, id := range ss.order {
 		ss.c.Put(r, *ss.changed[id])
 	}
@@ -145,9 +179,15 @@ func (ss *session) app(x *FlowInstance) platform.Caller {
 	return ss.f.host.Automation(ss.c, ss.def(x).app)
 }
 
-func (ss *session) run(x *FlowInstance) *platform.Run {
+func (ss *session) run(x *FlowInstance, token ...int) *platform.Run {
 	r := ss.f.run(x)
 	r.Event = ss.event
+	r.Now = ss.now
+	if len(token) > 0 {
+		tok := ss.token(x, token[0])
+		r.Outputs = maps.Clone(tok.Outputs)
+		r.Frames = slices.Clone(tok.Frames)
+	}
 	return r
 }
 
@@ -183,7 +223,7 @@ func (f *Flows) step(c platform.Caller, id string, now time.Time, change func(*s
 }
 
 // start opens an instance unless one with its key runs, and moves it on.
-func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBehalf string, e *platform.Event, parent string, now time.Time) *kernel.Error {
+func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBehalf string, e *platform.Event, parent string, now time.Time, deferAdvance ...bool) *kernel.Error {
 	flow := d.app + "." + d.Name
 	id := flow + ":" + key
 	for n := 2; ; n++ {
@@ -204,7 +244,13 @@ func (f *Flows) start(c platform.Caller, d *flowDef, key string, data any, onBeh
 		ss.event = e
 		x := ss.create(d, id, key, data, onBehalf, parent)
 		x.Dependencies, x.Release = bound.Dependencies, bound.Release
-		ss.advance(x)
+		if len(deferAdvance) > 0 && deferAdvance[0] {
+			x.Tokens[0].Waits = "yield"
+			x.Tokens[0].Due = now
+			x.State = "waiting"
+		} else {
+			ss.advance(x)
+		}
 		return nil
 	})
 	return err
@@ -218,9 +264,10 @@ func (ss *session) create(d *flowDef, id, key string, data any, onBehalf, parent
 	raw, _ := json.Marshal(data)
 	x := &FlowInstance{Record: platform.Record{ID: id}, Flow: d.app + "." + d.Name, Title: fmt.Sprintf("%s %s", d.Title, key), Version: d.Version, Key: key,
 		State: "running", OnBehalf: onBehalf, Data: string(raw), Parent: parent, Tokens: []Token{{ID: 1, Step: d.Steps[0].Name, Waits: "ready", Attempts: 0}},
-		Undo: []UndoEntry{}, Seq: 1}
+		Undo: []UndoEntry{}, Seq: 1, Outputs: map[string]json.RawMessage{}}
 	if d.Subject != "" {
 		x.Subject = d.Subject + "/" + key
+		x.Sources = []string{x.Subject}
 	}
 	ss.changed[id], ss.order = x, append(ss.order, id)
 	ss.trace(x, "", "started", fmt.Sprintf("version %d, key %s", d.Version, key), onBehalf)
@@ -232,17 +279,28 @@ func (ss *session) next(x *FlowInstance, token int, to string) {
 	tok := ss.token(x, token)
 	if to == "" {
 		if step := ss.def(x).steps[tok.Step]; step != nil {
+			if step.Output != nil {
+				output, err := step.Output(ss.app(x), ss.run(x, token))
+				if err != nil {
+					ss.failed(x, token, step, err.Error())
+					return
+				}
+				if !ss.output(x, token, output) {
+					ss.outputRefused(x, token)
+					return
+				}
+			}
 			to = step.Next
 			if step.Choose != nil { // it may keep what it read: the run's data is saved
 				var reason string
-				r := ss.run(x)
+				r := ss.run(x, token)
 				to, reason = step.Choose(ss.app(x), r)
 				x.Data = string(r.Data)
 				ss.trace(x, tok.Step, "chose", cmp.Or(to, "the end")+": "+reason, "")
 			}
 		}
 	}
-	*tok = Token{ID: tok.ID, Step: to, Branch: tok.Branch, Waits: "ready"}
+	*tok = Token{ID: tok.ID, Step: to, Branch: tok.Branch, Parent: tok.Parent, Frames: tok.Frames, Outputs: tok.Outputs, Waits: "ready"}
 	if x.State == "waiting" {
 		x.State = "running"
 	}
@@ -256,7 +314,13 @@ func (ss *session) advance(x *FlowInstance) {
 			break
 		}
 		if ss.moves++; ss.moves > movesPerDecision {
-			ss.stuck(x, x.Tokens[i].ID, fmt.Sprintf("more than %d steps without waiting", movesPerDecision))
+			for j := range x.Tokens {
+				if x.Tokens[j].Waits == "ready" {
+					x.Tokens[j].Waits = "yield"
+					x.Tokens[j].Due = ss.now
+				}
+			}
+			ss.trace(x, "", "yielded", "the next owned timer continues saved tokens", "")
 			break
 		}
 		ss.take(x, x.Tokens[i].ID)
@@ -282,16 +346,121 @@ func (ss *session) take(x *FlowInstance, token int) {
 		return
 	}
 	step := d.steps[tok.Step]
-	app, run := ss.app(x), ss.run(x)
+	app, run := ss.app(x), ss.run(x, token)
 	switch {
-	case step.Act != nil:
-		target := step.Act.Target(app, run)
-		ref, err := ss.act(d.app, step.Act.Protocol, step.Act.Action, target, payloadOf(step.Act.Payload, app, run), fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq))
+	case step.LoopControl != "":
+		ss.controlLoop(x, token, step)
+	case step.End:
+		if step.Output != nil {
+			raw, err := step.Output(app, run)
+			if err != nil {
+				ss.failed(x, token, step, err.Error())
+				return
+			}
+			if !ss.output(x, token, raw) {
+				ss.outputRefused(x, token)
+				return
+			}
+			ss.sources(x, run.Sources)
+		}
+		ss.endPath(x, token)
+	case step.Evaluate != nil:
+		output, err := step.Evaluate.Run(app, run)
+		if err != nil {
+			ss.failed(x, token, step, err.Error())
+			return
+		}
+		if !ss.output(x, token, output) {
+			ss.outputRefused(x, token)
+			return
+		}
+		ss.sources(x, run.Sources)
+		ss.trace(x, tok.Step, "evaluated", "saved typed output", "")
+		ss.next(x, token, "")
+	case step.Branch != nil:
+		to, reason, err := step.Branch.Choose(app, run)
+		if err != nil {
+			ss.failed(x, token, step, err.Error())
+			return
+		}
+		x.Data = string(run.Data)
+		if !ss.output(x, token, platform.Raw(map[string]string{"case": reason})) {
+			ss.outputRefused(x, token)
+			return
+		}
+		ss.sources(x, run.Sources)
+		ss.trace(x, tok.Step, "chose", cmp.Or(to, "the end")+": "+reason, "")
+		ss.next(x, token, to)
+	case step.Loop != nil:
+		ss.beginLoop(x, token, step, app, run)
+	case step.Operation != nil:
+		request, err := step.Operation.Request(app, run)
+		if err != nil {
+			ss.failed(x, token, step, err.Error())
+			return
+		}
+		request.Key = fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq)
+		request.OnBehalf = x.OnBehalf
+		request.Release = &x.Release
+		request.Target = InstanceType + "/" + x.ID
+		request.Sources = slices.Compact(slices.Sorted(slices.Values(append(append(slices.Clone(x.Sources), run.Sources...), request.Sources...))))
+		x.Seq++
+		tok.Waits = "operation"
+		ss.operations = append(ss.operations, operationStart{instance: x.ID, token: token, request: request})
+		ss.trace(x, tok.Step, "computing", request.Name, "")
+	case step.Invoke != nil:
+		a := step.Invoke.Act
+		ref, err := ss.act(d.app, a.Protocol, a.Action, a.Target(app, run), payloadOf(a.Payload, app, run), fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq))
 		if err != nil {
 			ss.failed(x, token, step, err.Error())
 			return
 		}
 		x.Seq++
+		tok.Waits = "invocation"
+		tok.Child = ref.GetId()
+		ss.trace(x, tok.Step, "requested", a.Action, "")
+	case step.Act != nil:
+		target := step.Act.Target(app, run)
+		payload := payloadOf(step.Act.Payload, app, run)
+		if step.Act.TargetValue != nil {
+			value, err := step.Act.TargetValue(app, run)
+			if err != nil {
+				ss.failed(x, token, step, err.Error())
+				return
+			}
+			target = value
+		}
+		if step.Act.Inputs != nil {
+			value, err := step.Act.Inputs(app, run)
+			if err != nil {
+				ss.failed(x, token, step, err.Error())
+				return
+			}
+			payload = value
+		}
+		ss.sources(x, run.Sources)
+		member := ""
+		if step.Act.AsMember {
+			member = x.OnBehalf
+		}
+		ref, err := ss.act(d.app, step.Act.Protocol, step.Act.Action, target, payload, fmt.Sprintf("flow:%s:%s:%d", x.ID, tok.Step, x.Seq), member)
+		if err != nil {
+			ss.failed(x, token, step, err.Error())
+			return
+		}
+		x.Seq++
+		if ref.GetType() == work.ApprovalType {
+			tok.Waits, tok.Child = "approval", ref.GetId()
+			if due, ok := ss.timeout(x, step); ok {
+				tok.Due = due
+			}
+			ss.trace(x, tok.Step, "approval requested", ref.GetId(), x.OnBehalf)
+			return
+		}
+		if !ss.output(x, token, platform.Raw(map[string]string{"type": ref.GetType(), "id": ref.GetId()})) {
+			ss.outputRefused(x, token)
+			return
+		}
 		ss.trace(x, tok.Step, "acted", strings.TrimPrefix(step.Act.Protocol+" ", " ")+step.Act.Action+" "+target, app.ID)
 		if step.Act.Done != nil {
 			step.Act.Done(app, run, ref)
@@ -358,6 +527,14 @@ func (ss *session) take(x *FlowInstance, token int) {
 		ss.trace(x, tok.Step, "asked", a.Title, "")
 	case step.Call != nil:
 		child, err := ss.f.version(ss.c, d.app+"."+step.Call.Flow)
+		if step.Call.Version > 0 {
+			child = ss.f.def(d.app+"."+step.Call.Flow, step.Call.Version)
+			if child == nil {
+				err = &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+			} else {
+				err = nil
+			}
+		}
 		if err != nil {
 			ss.failed(x, token, step, "calling "+step.Call.Flow+": "+err.Error())
 			return
@@ -373,11 +550,18 @@ func (ss *session) take(x *FlowInstance, token int) {
 			tok.Due = due
 		}
 		ss.trace(x, tok.Step, "called", child.Title+" "+id, "")
-		ss.advance(ss.create(child, id, id, data, x.OnBehalf, x.ID))
+		in := ss.create(child, id, id, data, x.OnBehalf, x.ID)
+		bound, bindingErr := ss.f.host.BindFlow(child.app, child.Name, child.Version, host.FlowBinding{})
+		if bindingErr != nil {
+			ss.failed(x, token, step, bindingErr.Error())
+			return
+		}
+		in.Dependencies, in.Release = bound.Dependencies, bound.Release
+		ss.advance(in)
 	case len(step.All) > 0 || len(step.Any) > 0:
 		tok.Waits = "join"
 		for _, branch := range append(slices.Clone(step.All), step.Any...) {
-			x.Tokens = append(x.Tokens, Token{ID: ss.tokenID(x), Step: branch, Branch: step.Name, Waits: "ready"})
+			x.Tokens = append(x.Tokens, Token{ID: ss.tokenID(x), Step: branch, Branch: branch, Parent: token, Frames: slices.Clone(tok.Frames), Outputs: maps.Clone(tok.Outputs), Waits: "ready"})
 		}
 		ss.trace(x, step.Name, "branched", strings.Join(append(slices.Clone(step.All), step.Any...), ", "), "")
 	}
@@ -410,15 +594,22 @@ func payloadOf(build func(platform.Caller, *platform.Run) any, c platform.Caller
 }
 
 // act submits an action as the app: its own, or a protocol's through the host.
-func (ss *session) act(appID, protocol, action, target string, payload json.RawMessage, key string) (*pb.EntityRef, *kernel.Error) {
+func (ss *session) act(appID, protocol, action, target string, payload json.RawMessage, key string, onBehalf ...string) (*pb.EntityRef, *kernel.Error) {
 	h := ss.f.host
 	c := h.Automation(ss.c, appID)
 	if protocol != "" {
 		return h.Invoke(c, protocol, action, target, payload, key, key, ss.now)
 	}
 	owner, declared, ok := h.Action(action)
-	if !ok || owner != appID {
+	if !ok || owner != appID && (len(onBehalf) == 0 || onBehalf[0] == "") {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+	}
+	if len(onBehalf) > 0 && onBehalf[0] != "" {
+		member, ok := h.Member(onBehalf[0])
+		if !ok {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
+		}
+		c = h.Caller(ss.c, member, owner)
 	}
 	authority, _ := h.OwnerOf(declared.Target)
 	s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: authority, IdempotencyKey: key,
@@ -433,6 +624,9 @@ func (ss *session) act(appID, protocol, action, target string, payload json.RawM
 // failed retries a step's act with backoff, then takes its fault path, then compensates.
 func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why string) {
 	tok := ss.token(x, token)
+	if step.NoRetry {
+		tok.Attempts = stepAttempts
+	}
 	tok.Attempts++
 	tok.Error = why
 	switch {
@@ -440,9 +634,13 @@ func (ss *session) failed(x *FlowInstance, token int, step *platform.Step, why s
 		tok.Waits, tok.Due = "retry", ss.now.Add(backoff(tok.Attempts))
 		ss.trace(x, tok.Step, "retry", why, "")
 	case step.Fault != "":
+		ss.output(x, token, platform.Raw(map[string]string{"error": why}))
 		ss.trace(x, tok.Step, "fault", why, "")
 		ss.next(x, token, step.Fault)
 	default:
+		if ss.raceFailure(x, token, why) {
+			return
+		}
 		ss.failedUnhandled(x, tok.Step, why)
 		ss.compensate(x, tok.Step+": "+why)
 	}
@@ -482,6 +680,12 @@ func (ss *session) compensate(x *FlowInstance, why string) {
 
 func (ss *session) stopPaths(x *FlowInstance) {
 	for _, t := range x.Tokens {
+		if t.Waits == "approval" && t.Child != "" {
+			ss.withdrawals = append(ss.withdrawals, approvalWithdrawal{app: ss.def(x).app, id: t.Child, member: x.OnBehalf})
+		}
+		if t.Operation != "" {
+			ss.cancelOperations = append(ss.cancelOperations, t.Operation)
+		}
 		if t.Task != "" {
 			ss.close = append(ss.close, t.Task)
 		}
@@ -537,31 +741,212 @@ func (ss *session) stuck(x *FlowInstance, token int, why string) {
 func (ss *session) endPath(x *FlowInstance, token int) {
 	tok := *ss.token(x, token)
 	x.Tokens = slices.DeleteFunc(x.Tokens, func(t Token) bool { return t.ID == token })
-	if tok.Branch == "" {
+	if tok.Parent == 0 {
 		if len(x.Tokens) == 0 {
 			ss.finish(x, "done")
 		}
 		return
 	}
-	join := slices.IndexFunc(x.Tokens, func(t Token) bool { return t.Step == tok.Branch && t.Waits == "join" })
-	if join < 0 {
+	parent := ss.token(x, tok.Parent)
+	if parent.ID < 0 {
 		return
 	}
-	siblings := slices.ContainsFunc(x.Tokens, func(t Token) bool { return t.Branch == tok.Branch })
-	if len(ss.def(x).steps[tok.Branch].Any) > 0 {
+	if parent.Waits == "loop" {
+		frame := parent.Loop
+		if frame == nil || len(tok.Frames) == 0 {
+			return
+		}
+		index := tok.Frames[len(tok.Frames)-1].Index
+		if frame.Results == nil {
+			frame.Results = map[int]json.RawMessage{}
+		}
+		bodyOutputs := maps.Clone(tok.Outputs)
+		for name := range parent.Outputs {
+			delete(bodyOutputs, name)
+		}
+		next := platform.Raw(bodyOutputs)
+		frame.Results[index] = next
+		savedResults, _ := json.Marshal(frame.Results)
+		if len(savedResults) > 60<<10 {
+			delete(frame.Results, index)
+			parent.Loop = nil
+			ss.outputRefused(x, parent.ID)
+			return
+		}
+		if frame.While {
+			if ss.def(x).steps[tok.Step].Output != nil {
+				frame.State = tok.Outputs[tok.Step]
+			}
+			parent.Outputs = maps.Clone(tok.Outputs)
+		}
+		ss.fillLoop(x, parent.ID)
+		return
+	}
+	if parent.Waits != "join" {
+		return
+	}
+	if parent.Results == nil {
+		parent.Results = map[string]json.RawMessage{}
+	}
+	parent.Results[tok.Branch] = platform.Raw(tok.Outputs)
+	// Every branch has a stable first-step key. Parallel completion order is
+	// not an output order or a reason to repeat an already accepted action.
+	if len(ss.def(x).steps[parent.Step].Any) > 0 {
 		var others []Token
 		for _, t := range x.Tokens {
-			if t.Branch == tok.Branch {
+			if t.Parent == parent.ID {
 				others = append(others, t)
 			}
 		}
-		ss.stopPaths(&FlowInstance{Tokens: others})
-		x.Tokens = slices.DeleteFunc(x.Tokens, func(t Token) bool { return t.Branch == tok.Branch })
-		siblings = false
+		ss.stopPaths(&FlowInstance{ID: x.ID, Flow: x.Flow, Version: x.Version, OnBehalf: x.OnBehalf, Tokens: others})
+		x.Tokens = slices.DeleteFunc(x.Tokens, func(t Token) bool { return t.Parent == parent.ID })
 	}
-	if !siblings {
-		ss.trace(x, tok.Branch, "joined", "", "")
-		ss.next(x, x.Tokens[slices.IndexFunc(x.Tokens, func(t Token) bool { return t.Step == tok.Branch && t.Waits == "join" })].ID, "")
+	if !slices.ContainsFunc(x.Tokens, func(t Token) bool { return t.Parent == tok.Parent }) {
+		parent = ss.token(x, tok.Parent)
+		if !ss.output(x, parent.ID, platform.Raw(parent.Results)) {
+			ss.outputRefused(x, parent.ID)
+			return
+		}
+		ss.trace(x, parent.Step, "joined", "saved branch results", "")
+		ss.next(x, parent.ID, "")
+	}
+}
+
+func (ss *session) sources(x *FlowInstance, sources []string) {
+	x.Sources = slices.Compact(slices.Sorted(slices.Values(append(x.Sources, sources...))))
+}
+
+func (ss *session) output(x *FlowInstance, token int, raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		raw = json.RawMessage("null")
+	}
+	if len(raw) > 48<<10 || !json.Valid(raw) {
+		return false
+	}
+	tok := ss.token(x, token)
+	if tok.Outputs == nil {
+		tok.Outputs = map[string]json.RawMessage{}
+	}
+	if x.Outputs == nil {
+		x.Outputs = map[string]json.RawMessage{}
+	}
+	proposed := maps.Clone(x.Outputs)
+	proposed[tok.Step] = raw
+	encoded, _ := json.Marshal(proposed)
+	if len(encoded) > 60<<10 {
+		return false
+	}
+	tok.Outputs[tok.Step], x.Outputs[tok.Step] = slices.Clone(raw), slices.Clone(raw)
+	return true
+}
+func (ss *session) outputRefused(x *FlowInstance, token int) {
+	tok := ss.token(x, token)
+	step := ss.def(x).steps[tok.Step]
+	var canceled []Token
+	for _, candidate := range x.Tokens {
+		if candidate.ID != token && ss.descendant(x, candidate.ID, token) {
+			canceled = append(canceled, candidate)
+		}
+	}
+	ss.stopPaths(&FlowInstance{ID: x.ID, Flow: x.Flow, Version: x.Version, OnBehalf: x.OnBehalf, Tokens: canceled})
+	ids := map[int]bool{}
+	for _, candidate := range canceled {
+		ids[candidate.ID] = true
+	}
+	x.Tokens = slices.DeleteFunc(x.Tokens, func(candidate Token) bool { return ids[candidate.ID] })
+	tok = ss.token(x, token)
+	tok.Attempts = stepAttempts
+	ss.failed(x, token, step, "flow output exceeds its bounded saved-result budget")
+}
+
+func (ss *session) beginLoop(x *FlowInstance, token int, step *platform.Step, app platform.Caller, run *platform.Run) {
+	tok := ss.token(x, token)
+	frame := &LoopFrame{Results: map[int]json.RawMessage{}, While: step.Loop.While != nil, Outer: slices.Collect(maps.Keys(tok.Outputs))}
+	if frame.While && step.Loop.Initial != nil {
+		state, err := step.Loop.Initial(app, run)
+		if err != nil {
+			ss.failed(x, token, step, err.Error())
+			return
+		}
+		frame.State = state
+	}
+	if step.Loop.Items != nil {
+		items, err := step.Loop.Items(app, run)
+		if err != nil {
+			ss.failed(x, token, step, err.Error())
+			return
+		}
+		if len(items) > step.Loop.MaxIterations {
+			ss.failed(x, token, step, "collection exceeds maximum iterations")
+			return
+		}
+		rawItems, _ := json.Marshal(items)
+		if len(rawItems) > 48<<10 {
+			ss.outputRefused(x, token)
+			return
+		}
+		frame.Items = items
+	}
+	tok.Waits, tok.Loop = "loop", frame
+	ss.fillLoop(x, token)
+}
+
+func (ss *session) fillLoop(x *FlowInstance, token int) {
+	parent := ss.token(x, token)
+	if parent.ID < 0 || parent.Loop == nil {
+		return
+	}
+	step := ss.def(x).steps[parent.Step]
+	loop, frame := step.Loop, parent.Loop
+	active := 0
+	for _, tok := range x.Tokens {
+		if tok.Parent == token {
+			active++
+		}
+	}
+	for active < loop.Concurrency {
+		parent = ss.token(x, token)
+		if frame.While {
+			run := ss.run(x, token)
+			run.Frames = append(run.Frames, platform.Frame{Node: step.Name, Index: frame.Next, Item: frame.State})
+			holds, err := loop.While(ss.app(x), run)
+			if err != nil {
+				ss.failed(x, token, step, err.Error())
+				return
+			}
+			if !holds {
+				break
+			}
+			if frame.Next >= loop.MaxIterations {
+				ss.failed(x, token, step, "while exceeded maximum iterations")
+				return
+			}
+		} else if frame.Next >= len(frame.Items) {
+			break
+		}
+		index := frame.Next
+		frame.Next++
+		var item json.RawMessage
+		if !frame.While {
+			item = frame.Items[index]
+		} else {
+			item = frame.State
+		}
+		child := Token{ID: ss.tokenID(x), Step: loop.Body, Parent: token, Waits: "ready", Frames: append(slices.Clone(parent.Frames), platform.Frame{Node: step.Name, Index: index, Item: item}), Outputs: maps.Clone(parent.Outputs)}
+		x.Tokens = append(x.Tokens, child)
+		active++
+	}
+	if active == 0 {
+		result := make([]json.RawMessage, frame.Next)
+		for i := range result {
+			result[i] = frame.Results[i]
+		}
+		if !ss.output(x, token, platform.Raw(map[string]any{"items": result, "count": frame.Next})) {
+			ss.outputRefused(x, token)
+			return
+		}
+		ss.trace(x, parent.Step, "iterated", fmt.Sprintf("%d saved results", frame.Next), "")
+		ss.next(x, token, "")
 	}
 }
 
@@ -582,6 +967,10 @@ func (ss *session) finish(x *FlowInstance, state string) {
 		return
 	}
 	parent.Answer = state
+	if !ss.output(parent, parent.Tokens[i].ID, platform.Raw(map[string]any{"state": state, "outputs": x.Outputs, "data": json.RawMessage(x.Data)})) {
+		ss.outputRefused(parent, parent.Tokens[i].ID)
+		return
+	}
 	ss.trace(parent, parent.Tokens[i].Step, "returned", x.ID+" "+state, "")
 	ss.next(parent, parent.Tokens[i].ID, "")
 	ss.advance(parent)
@@ -706,4 +1095,132 @@ func (ss *session) timeout(x *FlowInstance, step *platform.Step) (time.Time, boo
 		return cal.After(ss.now, step.WorkingDays), true
 	}
 	return ss.now.Add(step.Timeout), step.Timeout > 0
+}
+
+// descendants are existing scheduler tokens, including nested forks/calls.
+func (ss *session) descendant(x *FlowInstance, token, parent int) bool {
+	for token != 0 {
+		if token == parent {
+			return true
+		}
+		current := ss.token(x, token)
+		if current.ID < 0 {
+			return false
+		}
+		token = current.Parent
+	}
+	return false
+}
+func (ss *session) controlLoop(x *FlowInstance, token int, step *platform.Step) {
+	current := ss.token(x, token)
+	ancestor := current.Parent
+	for ancestor != 0 {
+		parent := ss.token(x, ancestor)
+		if parent.ID < 0 {
+			break
+		}
+		if parent.Waits == "loop" {
+			break
+		}
+		ancestor = parent.Parent
+	}
+	parent := ss.token(x, ancestor)
+	if ancestor == 0 || parent.Loop == nil {
+		ss.stuck(x, token, "loop control has no enclosing scope")
+		return
+	}
+	iteration := token
+	for ss.token(x, iteration).Parent != ancestor {
+		iteration = ss.token(x, iteration).Parent
+	}
+	if step.Output != nil {
+		raw, err := step.Output(ss.app(x), ss.run(x, token))
+		if err != nil {
+			ss.failed(x, token, step, err.Error())
+			return
+		}
+		if !ss.output(x, token, raw) {
+			ss.outputRefused(x, token)
+			return
+		}
+	}
+	value := maps.Clone(ss.token(x, token).Outputs)
+	var stop []Token
+	for _, candidate := range x.Tokens {
+		if candidate.ID != ancestor && (step.LoopControl == "break" && ss.descendant(x, candidate.ID, ancestor) || step.LoopControl == "continue" && candidate.ID != iteration && ss.descendant(x, candidate.ID, iteration)) {
+			stop = append(stop, candidate)
+		}
+	}
+	ss.stopPaths(&FlowInstance{ID: x.ID, Flow: x.Flow, Version: x.Version, OnBehalf: x.OnBehalf, Tokens: stop})
+	ids := map[int]bool{}
+	for _, candidate := range stop {
+		ids[candidate.ID] = true
+	}
+	x.Tokens = slices.DeleteFunc(x.Tokens, func(candidate Token) bool { return ids[candidate.ID] })
+	if step.LoopControl == "continue" {
+		root := ss.token(x, iteration)
+		root.Outputs = value
+		root.Step = step.Name
+		ss.trace(x, step.Name, "continued", "the enclosing iteration", "")
+		ss.endPath(x, iteration)
+		return
+	}
+	parent = ss.token(x, ancestor)
+	results := []json.RawMessage{}
+	for _, index := range slices.Sorted(maps.Keys(parent.Loop.Results)) {
+		results = append(results, parent.Loop.Results[index])
+	}
+	if !ss.output(x, ancestor, platform.Raw(map[string]any{"items": results, "count": len(results), "stopped": true})) {
+		ss.outputRefused(x, ancestor)
+		return
+	}
+	ss.trace(x, step.Name, "broke", "pending iterations canceled; accepted actions retained", "")
+	ss.next(x, ancestor, "")
+}
+
+// Any is a race for the first successful path. A refused candidate does not
+// win or rerun other branches; all candidates failing uses the fork's handler.
+func (ss *session) raceFailure(x *FlowInstance, token int, why string) bool {
+	current := ss.token(x, token)
+	ancestor := current.Parent
+	for ancestor != 0 {
+		parent := ss.token(x, ancestor)
+		if parent.ID < 0 {
+			return false
+		}
+		if parent.Waits == "join" && len(ss.def(x).steps[parent.Step].Any) > 0 {
+			break
+		}
+		ancestor = parent.Parent
+	}
+	if ancestor == 0 {
+		return false
+	}
+	branch := token
+	for ss.token(x, branch).Parent != ancestor {
+		branch = ss.token(x, branch).Parent
+	}
+	parent := ss.token(x, ancestor)
+	if parent.Results == nil {
+		parent.Results = map[string]json.RawMessage{}
+	}
+	parent.Results[ss.token(x, branch).Branch] = platform.Raw(map[string]string{"error": why})
+	var canceled []Token
+	for _, candidate := range x.Tokens {
+		if ss.descendant(x, candidate.ID, branch) {
+			canceled = append(canceled, candidate)
+		}
+	}
+	ss.stopPaths(&FlowInstance{ID: x.ID, Flow: x.Flow, Version: x.Version, OnBehalf: x.OnBehalf, Tokens: canceled})
+	ids := map[int]bool{}
+	for _, candidate := range canceled {
+		ids[candidate.ID] = true
+	}
+	x.Tokens = slices.DeleteFunc(x.Tokens, func(candidate Token) bool { return ids[candidate.ID] })
+	if !slices.ContainsFunc(x.Tokens, func(candidate Token) bool { return candidate.Parent == ancestor }) {
+		parent = ss.token(x, ancestor)
+		parent.Attempts = stepAttempts
+		ss.failed(x, ancestor, ss.def(x).steps[parent.Step], "all race paths failed: "+why)
+	}
+	return true
 }

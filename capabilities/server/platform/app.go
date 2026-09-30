@@ -206,6 +206,7 @@ type Manifest struct {
 	Pages      []Page        // bounded code page descriptors over those records/actions (ADR-0032 13b)
 	Queries    []NamedQuery  // named pure queries pages and agents share (ADR-0040 21c)
 	Functions  []AIFunction  // typed, bounded inference through existing model effects (ADR-0043)
+	Operations []Operation   // typed native or controlled Wasm computation (ADR-0044)
 	Flows      []Flow        // long-running processes the host runs for the app (ADR-0020)
 	Agents     []Agent       // AI agents the host runs for the app (ADR-0021)
 	Sequences  []Sequence    // numbers of its documents, without gaps (ADR-0024)

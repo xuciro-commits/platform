@@ -66,7 +66,7 @@ func TestProcessCandidateClosesNativeBindingsAndRecovers(t *testing.T) {
 			// their runtime Go identity or their records.
 			submit(build.ObjectType+".create", build.ObjectType, "OTHER", map[string]any{"name": name + "other", "title": object.Title, "fields": object.Fields, "states": object.States, "actions": object.Actions})
 			submit(build.SchemaPublish, build.ObjectType, "OTHER", map[string]any{})
-			steps := []build.ProcessStep{{Name: "review", Ask: build.User, Answers: []string{"approve", "reject"}, Branches: map[string]string{"approve": "close", "reject": "reject"}}, {Name: "close", Act: "close"}, {Name: "reject", Act: "reject"}}
+			steps := []build.ProcessStep{{Name: "review", Kind: "ask", Ask: build.User, Answers: []string{"approve", "reject"}, Cases: map[string]string{"approve": "close", "reject": "reject"}}, {Name: "close", Kind: "action", Act: "close"}, {Name: "reject", Kind: "action", Act: "reject"}}
 			submit(build.ProcessType+".create", build.ProcessType, "P", map[string]any{"name": "review", "title": title + " review", "object": typ, "when": "open", "steps": steps})
 			submit(typ+".create", typ, "TEST", map[string]string{"note": "PRODUCTION"})
 			before, count := snapshot(tn), len(journal)
@@ -196,8 +196,8 @@ func TestProcessCandidateClosesNativeBindingsAndRecovers(t *testing.T) {
 			if !found {
 				t.Fatal("candidate omitted the workflow")
 			}
-			if _, err := tn.ActivateRelease(builder, saved, "early", at); err == nil {
-				t.Fatal("activated an uninstalled workflow")
+			if _, err := tn.ActivateRelease(builder, saved, "early", at); err != nil {
+				t.Fatalf("saved candidate did not install its frozen workflow: %v", err)
 			}
 			submit(build.SchemaProcess, build.ProcessType, "P", map[string]any{})
 			if _, err := tn.ActivateRelease(builder, saved, "active", at); err != nil {
@@ -209,7 +209,7 @@ func TestProcessCandidateClosesNativeBindingsAndRecovers(t *testing.T) {
 			if err != nil || again.CandidateID != saved {
 				t.Fatalf("unchanged flow changed semantic candidate: %+v %v", again, err)
 			}
-			submit(build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": []build.ProcessStep{{Name: "reject", Act: "reject"}}})
+			submit(build.ProcessType+".edit", build.ProcessType, "P", map[string]any{"steps": []build.ProcessStep{{Name: "reject", Kind: "action", Act: "reject"}}})
 			changed, err := tn.PreviewRelease(builder, platform.AssetFlow, "P")
 			if err != nil || changed.Diagnostic != "" || changed.CandidateID == saved {
 				t.Fatalf("branch/action change was not reviewed: %+v %v", changed, err)

@@ -58,13 +58,16 @@ services:
       - -project
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${MANUFACTURING_PORT:-8490}:8490"]
-    volumes: [./manufacturing/directory.json:/etc/manufacturing/directory.json:ro]
+    volumes: [./manufacturing/directory.json:/etc/manufacturing/directory.json:ro, compute-sockets:/run/platform-compute]
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
-      PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only }
+      PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
+      PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }
       rustfs: { condition: service_started }
+      wasm-worker: { condition: service_healthy }
+      code-builder: { condition: service_healthy }
     restart: on-failure
 
   hospitality-server:
@@ -79,14 +82,60 @@ services:
       - -project
       - -files=http://rustfs:9000/platform
     ports: ["127.0.0.1:${HOSPITALITY_PORT:-8495}:8495"]
-    volumes: [./hospitality/directory.json:/etc/hospitality/directory.json:ro]
+    volumes: [./hospitality/directory.json:/etc/hospitality/directory.json:ro, compute-sockets:/run/platform-compute]
     # Webhook signing secrets, referenced by name from endpoints (ADR-0014 D5); local-only.
     environment: { PLATFORM_SECRET_SINK: sinkLocalOnly0000000000000000000000000000000000000000000000000000, PLATFORM_SECRET_OPENROUTER: "${OPENROUTER_API_KEY:-}",
-      PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only }
+      PLATFORM_S3_ACCESS_KEY: platform, PLATFORM_S3_SECRET_KEY: platform-files-local-only,
+      PLATFORM_WASM_WORKER_SOCKET: /run/platform-compute/worker.sock, PLATFORM_CODE_BUILDER_SOCKET: /run/platform-compute/builder.sock }
     depends_on:
       postgres: { condition: service_healthy }
       rauthy: { condition: service_started }
       rustfs: { condition: service_started }
+      wasm-worker: { condition: service_healthy }
+      code-builder: { condition: service_healthy }
+    restart: on-failure
+
+  # Stateless compute execution and fixed-profile build drivers (ADR-0044).
+  # Compiler images are pulled once by the owner; every tenant build is offline.
+  wasm-worker:
+    build: { context: ../.., dockerfile: capabilities/server/cmd/compute/Dockerfile, target: worker }
+    command: ["-socket=/run/platform-compute/worker.sock", "-concurrency=4"]
+
+    healthcheck:
+      test: ["CMD", "wasm-worker", "-check", "-socket=/run/platform-compute/worker.sock"]
+      interval: 2s
+      retries: 15
+    volumes: [compute-sockets:/run/platform-compute]
+    read_only: true
+    network_mode: none
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
+    stop_grace_period: 15s
+    restart: on-failure
+
+  code-builder:
+    build: { context: ../.., dockerfile: capabilities/server/cmd/compute/Dockerfile, target: builder }
+    command: ["-socket=/run/platform-compute/builder.sock"]
+
+    healthcheck:
+      test: ["CMD", "code-builder", "-check", "-socket=/run/platform-compute/builder.sock"]
+      interval: 2s
+      retries: 15
+    volumes: [compute-sockets:/run/platform-compute, /var/run/docker.sock:/var/run/docker.sock]
+    environment:
+      PLATFORM_GO_WASM_IMAGE: golang@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414
+      PLATFORM_TINYGO_WASM_IMAGE: ghcr.io/tinygo-org/tinygo@sha256:52907162ca3ba807c3c0914e07daffc1fe0c50ce91445ec43a0428337dc1b901
+    read_only: true
+    network_mode: none
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+    stop_grace_period: 15s
     restart: on-failure
 
   # A webhook receiver, mail server, model server and supplier's agent for local endpoints and the rehearsal (ADR-0014).
@@ -99,3 +148,4 @@ volumes:
   pgdata:
   rauthy:
   files:
+  compute-sockets:

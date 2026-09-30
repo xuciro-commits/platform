@@ -28,11 +28,13 @@ type ReleaseAsset struct {
 // bindings extracted from its compiled native flow. It is a release format,
 // not an interpreter; the flow and definition owners still validate/run it.
 type FlowReleaseDescriptor struct {
-	Name       string          `json:"name"`
-	Subject    AssetRef        `json:"subject"`
-	Actions    []AssetRef      `json:"actions"`
-	Definition json.RawMessage `json:"definition"`
-	Functions  []AssetBinding  `json:"functions,omitempty"`
+	Name         string          `json:"name"`
+	Subject      AssetRef        `json:"subject"`
+	Actions      []AssetRef      `json:"actions"`
+	Definition   json.RawMessage `json:"definition"`
+	Functions    []AssetBinding  `json:"functions,omitempty"`
+	Operations   []AssetBinding  `json:"operations,omitempty"`
+	Dependencies []AssetRef      `json:"dependencies,omitempty"`
 }
 
 // AssetBinding fixes the owner's exact source version at a dependency edge.
@@ -53,6 +55,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 	for _, section := range page.Sections {
 		if section.Function != nil {
 			requires = append(requires, section.Function.Ref)
+		}
+		if section.Operation != nil {
+			requires = append(requires, section.Operation.Ref)
 		}
 		if section.Object.Name != "" {
 			requires = append(requires, section.Object)
@@ -160,7 +165,7 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 				if err := json.Unmarshal(body, &flow); err != nil {
 					return err
 				}
-				bindings = flow.Functions
+				bindings = append(slices.Clone(flow.Functions), flow.Operations...)
 			} else {
 				var page Page
 				if err := json.Unmarshal(body, &page); err != nil {
@@ -170,12 +175,15 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 					if section.Function != nil {
 						bindings = append(bindings, *section.Function)
 					}
+					if section.Operation != nil {
+						bindings = append(bindings, *section.Operation)
+					}
 				}
 			}
 			seen := map[AssetRef]bool{}
 			for _, binding := range bindings {
 				dependency, ok := lookup[binding.Ref]
-				if !ok || seen[binding.Ref] && ref.Kind == AssetFlow || binding.Ref.Kind != AssetFunction || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
+				if !ok || seen[binding.Ref] && ref.Kind == AssetFlow || binding.Ref.Kind != AssetFunction && binding.Ref.Kind != AssetCompute || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
 					return fmt.Errorf("%s needs exact function dependency %s at %s", ref, binding.Ref, binding.SourceVersion)
 				}
 				seen[binding.Ref] = true
@@ -278,18 +286,38 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 			return err
 		}
 		required = append(required, AssetRef{App: ref.App, Kind: AssetObject, Name: function.Object})
+	case AssetCompute:
+		var operation Operation
+		if err := json.Unmarshal(body, &operation); err != nil {
+			return err
+		}
+		if operation.Name != ref.Name {
+			return fmt.Errorf("compute descriptor identity differs")
+		}
+		if err := operation.Check(); err != nil {
+			return err
+		}
 	case AssetFlow:
 		var flow FlowReleaseDescriptor
 		if err := json.Unmarshal(body, &flow); err != nil {
 			return fmt.Errorf("release flow %s: %w", ref, err)
 		}
-		if flow.Subject.Kind != AssetObject || !json.Valid(flow.Definition) || len(flow.Definition) == 0 || flow.Definition[0] != '{' {
-			return fmt.Errorf("release flow %s needs a subject object and complete definition", ref)
+		if flow.Subject.Name != "" && flow.Subject.Kind != AssetObject || !json.Valid(flow.Definition) || len(flow.Definition) == 0 || flow.Definition[0] != '{' {
+			return fmt.Errorf("release flow %s needs a valid optional subject and complete definition", ref)
 		}
-		required = append(required, flow.Subject)
+		if flow.Subject.Name != "" {
+			required = append(required, flow.Subject)
+		}
 		for _, binding := range flow.Functions {
 			required = append(required, binding.Ref)
 		}
+		for _, binding := range flow.Operations {
+			if binding.Ref.Kind != AssetCompute || binding.SourceVersion == "" {
+				return fmt.Errorf("release flow %s has an invalid compute binding", ref)
+			}
+			required = append(required, binding.Ref)
+		}
+		required = append(required, flow.Dependencies...)
 		for _, action := range flow.Actions {
 			if action.Kind != AssetAction {
 				return fmt.Errorf("release flow %s binds a non-action", ref)
@@ -306,6 +334,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		for _, section := range page.Sections {
 			if section.Function != nil {
 				required = append(required, section.Function.Ref)
+			}
+			if section.Operation != nil {
+				required = append(required, section.Operation.Ref)
 			}
 			if section.Object.Name != "" {
 				required = append(required, section.Object)

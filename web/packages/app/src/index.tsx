@@ -3,7 +3,7 @@
 // reaches the host only through useHost, as a server-side app reaches it only
 // through its Caller. The workspace signs in once, for every app.
 import "./i18n";
-import type { ActionDeclaration, Api, EdgeClient, Entry } from "@platform/kernel";
+import { apiErrorMessage, type ActionDeclaration, type Api, type EdgeClient, type Entry } from "@platform/kernel";
 import {
   Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
@@ -11,6 +11,7 @@ import {
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { NewActions, RecordActions, useTransition } from "./actions";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+export { ComputeCall } from "./capability";
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
 export type AppEntry = Api.AppEntry;
@@ -61,9 +62,9 @@ export function useHost(): Host {
 }
 
 /** A read of the host (`/v1/...`) for the signed-in member, refreshed while shown. */
-export function useReadQuery<T>(path: string, refetchInterval?: number): UseQueryResult<T> {
+export function useReadQuery<T>(path: string, refetchInterval?: number, enabled = true): UseQueryResult<T> {
   const { client } = useHost();
-  return useQuery({ queryKey: [client.connection.token, client.connection.tenant, path], queryFn: () => client.get<T>(path), refetchInterval });
+  return useQuery({ queryKey: [client.connection.token, client.connection.tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled });
 }
 
 export function useRead<T>(path: string, refetchInterval?: number): T | undefined {
@@ -81,6 +82,22 @@ export function useRecordInventory<T>(type: string, limit = 1000): UseQueryResul
 /** The member's installed semantic assets, through the host's one registry. */
 export function useDefinitions(): UseQueryResult<Definition[]> {
   return useReadQuery<Definition[]>("/v1/definitions");
+}
+
+/** Block metadata is derived by the owners from this member's definitions. */
+export function useCapabilities(): UseQueryResult<Api.CapabilityDescriptor[]> {
+  return useReadQuery<Api.CapabilityDescriptor[]>("/v1/capabilities");
+}
+
+/** Page, editor and tool callers use the same owner route. Keep the request key
+ * when retrying a submission whose response was lost. */
+export function useInvokeCapability(): (request: Api.CapabilityInvocation) => Promise<Api.CapabilityResult> {
+  const { client } = useHost();
+  return async (request) => {
+    const answer = await client.call<Api.CapabilityResult>("POST", "/v1/capabilities/invoke", request);
+    if (!answer.ok) throw new Error(apiErrorMessage(answer.body) ?? t("The capability call was refused."));
+    return answer.body;
+  };
 }
 
 export const assetKey = (ref: AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;

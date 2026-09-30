@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Enter an integer the browser can represent exactly, or bind a source record.": "请输入浏览器可精确表示的整数，或绑定来源记录。",
+  "Choose a published code function for this page.": "请为此页面选择已发布的代码函数。",
+  "Calculations run when this page is opened by its operator.": "操作员打开页面后，可运行此计算。",
+  "Select a record to calculate its result.": "请选择一条记录来计算结果。",
+  "Calculation input": "计算输入",
+  "The calculation could not be started.": "无法开始计算。",
+  "Calculating…": "计算中…",
+  "Calculate": "计算",
+  "Calculation state": "计算状态",
+  "Calculation result": "计算结果",
+  "The calculation result could not be read.": "无法读取计算结果。",
+  "The published calculation is unavailable.": "已发布的计算当前不可用。",
+  "The capability call was refused.": "能力调用被拒绝。",
   "AI review advice": "AI 审核建议",
   "Request advice for this record. Business actions remain your decision.": "为此记录请求建议；业务操作仍由你决定。",
 

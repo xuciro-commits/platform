@@ -109,7 +109,7 @@
 | 发布候选审查与活跃闭包（ADR-0039 20a–20b） | 应用 API、平台应用 `build`、宿主、`@pkg/build` | 规范候选、差异/依赖校验、持久字节、可续接发布工作台与活跃/运行一致性；有界对象/页面/应用闭包提交后一起安装并激活。 | platform.Candidate, Build.DraftReleaseAssets；[ADR-0039](ADR/0039-minimal-definition-release.md) |
 | 具名查询 (ADR-0040 21c) | 应用 API、宿主运行时、共享页面与智能体工具 | 成员、页面和 AI 共用受权纯查询；候选包含查询依赖。 | platform.NamedQuery, Tenant.RunQuery；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 应用工坊总览 | 平台应用 `build`、`@pkg/build` | 能力卡片与资产图、搜索/状态、编辑器入口、选中资产测试/发布和返回上下文。 | `StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 租户原生流程编写 (ADR-0042 23a–23c) | 平台应用 `build`、`flow`、`work`、宿主 | 同一工作流工作区的编写/测试/历史/发布；原生 Flow/Work、固定计划/模拟及精确启动绑定。 | build.Process/TestPlan, WorkflowEditor；[ADR-0042](ADR/0042-typed-workflow-composer.md) |
+| 租户原生流程编写 | 平台应用 `build`、`flow`、`work`、宿主 | 共享 Block IDE、类型化输入/绑定、分支/集合/并发、原生调用、固定测试及只读运行；原 Flow/Work 与精确版本绑定。 | build.Process/TestPlan；[ADR-0044](ADR/0044-capability-fabric.md) |
 | 固定数据候选测试 (ADR-0040 21d) | 宿主、平台应用 `build`、共享 UI | 空内存租户的固定样本/预期/恢复核对；非物理沙箱。 | build.TestPlan, Tenant.SimulateCandidate；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户交付的应用 (ADR-0036) | 平台应用 `build`、宿主运行时、`web/apps/workspace` | 已发布页面编组为应用，按成员可见页面进入启动器，不增加权限。 | platform.Application, Tenant.InstallApplication；[ADR-0036](ADR/0036-an-application-a-tenant-hands-to-its-people.md) |
 | 由组件布局的页面 (ADR-0035) | `@platform/app`、`@platform/ui`、平台应用 `build`、宿主运行时 | 组件绑定与选中/过滤变量、只读实时画布、保存/发布及依赖拒绝。 | platform.Section, Tenant.checkSections；[ADR-0035](ADR/0035-a-page-is-a-layout-of-bound-widgets.md) |
@@ -140,9 +140,10 @@
 | 图谱呈现 (#122, ADR-0040 D4 第一批次) | `@platform/ui`、`build` 中的语义适配器 | 共享 Graph/NodeCanvas 交互与语义适配，不新增图执行器或持久布局。 | CanvasFrame, Graph；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 通知系统 | 宿主、`platform` 中的读取状态 | 成员/角色通知、去重、邮件与任务关联已读。 | Caller.Notify |
 | 生命周期、审批、任务、收件箱 (ADR-0017) | 应用 API、平台应用 `work` | 状态迁移、多级/代办审批、任务/升级与收件箱。 | platform.Lifecycle, platform.Approval；[ADR-0017](ADR/0017-lifecycles-approvals-tasks.md) |
-| 工作流 (ADR-0020) | 应用 API、平台应用 `flow` | 原生动作/等待/人工/并行/子流程/AI、超时/补偿与追踪。 | platform.Flow, flow.go；[ADR-0020](ADR/0020-flows.md) |
+| 工作流 | 应用 API、平台应用 `flow` | 原生动作/等待/人工/并行/子流程/AI/计算、持久 scope/frame、超时/补偿、取消与追踪。 | platform.Flow；[ADR-0044](ADR/0044-capability-fabric.md) |
 | AI 提供商与模型 (ADR-0015, ADR-0029) | 平台应用 `ai` | 多供应商、受权模型、预算/熔断、SSE 及接受时模型绑定。 | capabilities/server/apps/ai/ai.go, aicall.go；[ADR-0015](ADR/0015-ai-providers.md), [ADR-0029](ADR/0029-ai-control-plane.md) |
 | 类型化 AI 函数 (ADR-0043 24b–24c 部分实现) | 应用 API、宿主 AI 模型效果路径 | 强类型建议、Build 版本/独立结果、页面/Flow 复用与评测门禁；真实模型质量未验收。 | platform.AIFunction, Caller.RequestFunction；[ADR-0043](ADR/0043-typed-ai-functions.md) |
+| 能力装配与代码计算 | 应用 API、宿主、Build、FileStore、独立 Go worker | 原生目录投影/共同调用，Go/TinyGo 隔离编译、候选制品、wazero、页面/Flow 复用；原接受结果及来源权限。 | platform.Operation/ValueSchema、build.code；[ADR-0044 §12](ADR/0044-capability-fabric.md#12-实际构建边界) |
 | 智能体 (ADR-0021, 0022) | 应用 API、平台应用 `agent` | 受管主体、交集权限、工具、草稿确认、追踪/记忆/评估和暂停。 | platform.Agent, agent*.go；[ADR-0021](ADR/0021-agents.md) |
 | 知识库 (ADR-0022) | 平台应用 `knowledge` | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。 | knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |
 | 协议 (ADR-0011) | 协议 | 版本化跨应用动作/读取/应答；住宿暂留与生产确认。 | platform.Protocol, Caller.Probe；[ADR-0011](ADR/0011-apps-interoperate-through-protocols.md) |
@@ -172,7 +173,7 @@
 | **类型化 AI 函数 (Typed AI function)** | 具名、受权、有预算的单记录推断声明；输出是类型化建议，不授予业务动作权限 | 应用 API 定义声明，代码应用拥有函数，宿主 AI 路径执行 | 代码或 Build 发布版本；完整声明与接受时输入/来源/模型绑定保存在模型效果意图，回答/Reply/用量保存在同一已接受结果 |
 | **函数调用记录 (Function call record)** | 独立保存已发布函数的请求主体、源记录、阶段、严格校验后的建议或拒绝和接受时绑定；不修改源业务记录 | 平台应用 `build` | `build.function-call` 标准记录及已接受模型效果/Reply；`Entity.Derived` 按当前来源视野收窄结果 |
 | **生命周期 (Lifecycle)** | 实体类型上的状态与迁移；每次迁移为一个动作 | 应用 | 代码 |
-| **节点目录 / 画布 (Node catalog / canvas)** | 用于编辑语义定义的已注册视觉节点类型和类型化端口；节点与边属于视图/适配器，绝非独立的执行引擎 | `@platform/ui` 拥有交互与端口校验；资产所有者将编辑映射为其规范定义 | 当前为 UI 表现状态；未来持久化的布局遵循资产的版本契约 |
+| **节点目录 / 画布 (Node catalog / canvas)** | 从 owner 能力投影的节点与类型化端口，节点与边是视图/适配器 | `@platform/ui` 共用 BlockCanvas；资产 owner 拥有定义/校验/执行 | Process 保存布局元数据；布局不进入语义摘要、不决定执行次序 |
 | **审批请求 (Approval request)** | 暂留的提交，直至各级审批人达成一致；最后一级审批通过后以申请人身份执行之 | `work` | 决策 |
 | **任务 (Task)** | 分配给成员、角色或单元的工作，附带截止时间与回答操作 | `work`，由审批、工作流、智能体与应用开启 | 决策 |
 | **事件 (Event)** | 提交后被接受的决策，以其动作模式或协议事件命名（`<protocol>#<event>`） | 宿主 | 从决策中重建 |
@@ -235,7 +236,7 @@
 
 | 分录类别 | 写入时机 | 重放时的行为 |
 |---|---|---|
-| `accepted-result` | 已选择的生成动作（含构建器固定测试计划的记录映像：对象/流程/函数根、样本、身份、模型及固定回答）/生命周期转移、构建器可变发布（含函数定义）、函数调用记录、审批、多记录嵌套、关系链接和 Console 成员目录在正式状态可见前单行入账；ERP 适配器轮询、MES 设备状态及 PMS 渠道预订的 `input-result` 独立保存输入/答复、游标、事实/记录及应用私有状态；受属 `work-result` 独立占用工作键命名空间，原生构建器流程记录映像含启动依赖/发布绑定（ADR-0042），函数步骤以 Run.Data 保留调用 ID，模型意图继承实例的保留发布（ADR-0043）；出站尝试的 `effect-result` 在同一封套中保存效果结果、受支持的回调状态和模型请求用量（含已校验类型化函数回答、自动 Reply 及 Build 函数逐调用度量）；`release-result` 格式 1 保存不可变候选/指针，格式 2 同时提交冻结发布元数据与有界安装闭包；同路径的拒绝以无变更封套入账 | 校验版本、摘要、权威、前序及收据，纯应用记录/历史、编号、通知、观察投影、出站与模型请求意图（含接受时已解析的模型；类型化函数另含完整声明、输入、来源、发布版本及定义/依赖摘要）、受支持的回调及用量、部分应用归属状态、受限动作及三个已接入应用输入的连接器标记和工作 generation；发布恢复安装保存的定义映像、保留草稿并恢复指针/已应用键；拒绝直接返回已保存答复，不重新运行规则或发送效果 |
+| `accepted-result` | 已选择的生成动作（含构建器固定测试计划的记录映像：对象/流程/函数根、样本、身份、模型及固定回答）/生命周期转移、构建器可变发布（含函数定义）、函数调用记录、审批、多记录嵌套、关系链接和 Console 成员目录在正式状态可见前单行入账；ERP 适配器轮询、MES 设备状态及 PMS 渠道预订的 `input-result` 独立保存输入/答复、游标、事实/记录及应用私有状态；受属 `work-result` 独立占用工作键命名空间，原生构建器流程记录映像含启动依赖/发布绑定（ADR-0042），类型化步骤以 Token 保存调用 ID，模型/计算意图继承实例的保留发布（ADR-0044）；出站尝试的 `effect-result` 在同一封套中保存效果结果、受支持的回调状态和模型请求用量（含已校验类型化函数回答、自动 Reply 及 Build 函数逐调用度量）；`release-result` 格式 1 保存不可变候选/指针，格式 2 同时提交冻结发布元数据与有界安装闭包；普通计算/编译沿同一 Work/Effect 封套保存占用 generation、固定输入/模块、取消与完成结果；同路径的拒绝以无变更封套入账 | 校验版本、摘要、权威、前序及收据，纯应用记录/历史、编号、通知、观察投影、出站与模型请求意图（含接受时已解析的模型；类型化函数另含完整声明、输入、来源、发布版本及定义/依赖摘要）、受支持的回调及用量、部分应用归属状态、受限动作及三个已接入应用输入的连接器标记和工作 generation；发布恢复安装保存的定义映像、保留草稿并恢复指针/已应用键；拒绝直接返回已保存答复，不重新运行规则或发送效果 |
 | `submission` | 顶级决策被接受时 | 运行相同的应用规则而不重新鉴权；重新将其事件排队；重新生成 Webhook 效果 |
 | `<input>`（旧连接器批次或页面） | 旧式持久输入曾被接受时；新声明输入在正式结果宿主中必须接入 `input-result` | 历史分录仍运行当前的应用代码（包含游标校验），尚未完成版本化历史迁移 |
 | `delivery` | 为订阅者尝试分发事件的每一次 | 再次尝试，必须达到完全相同的结果，否则重放终止 |
@@ -410,7 +411,7 @@
 
 最终目标是打造这样一个业务平台：FDE（前线部署工程师）能够在其上连接行业既有系统、清晰表达其业务含义与规则、拼装出高品质的操作级 UI、注入受管的 AI 智能体，并交付出客户能够安全自行演进修改的企业级应用。三层构建体系共享统一底座：平台开发者编写通用底层能力；FDE 编排并扩展特定行业解决方案；客户侧构建者在受控范围内编排允许的模型、页面、流程与 AI 逻辑。AI 通过相同的开放 API 协助各个层级的构建工作。业务操作人员获得清晰易懂的现代化业务软件，而无需面对平台底层的晦涩实现概念。
 
-**构建体验对标 Retool 与 Appsmith，组件的语义绑定对标 Palantir Workshop。** 工作流编辑以 [Retool Workflows IDE](https://docs.retool.com/workflows/quickstart) 的可见操作闭环为 1:1 交互标杆：节点目录与画布编排、选中配置、连线与分支、运行/逐节点结果、历史诊断、草稿与发布版本在同一工作上下文完成。1:1 指 FDE 的操作体验与反馈完整度；定义、权限与执行始终使用本平台类型化契约和原生 Flow/Work，且不引入 Retool 的任意 JavaScript 或资源查询执行模型。页面与工作区遵循相同的导航和反馈语言。
+**构建体验对标 Retool 与 Appsmith，组件的语义绑定对标 Palantir Workshop。** 工作流编辑以 [Retool Workflows IDE](https://docs.retool.com/workflows/quickstart) 的可见操作闭环为 1:1 交互标杆：节点目录与画布编排、选中配置、连线与分支、运行/逐节点结果、历史诊断、草稿与发布版本在同一工作上下文完成。1:1 指 FDE 的操作体验与反馈完整度；定义、权限与执行使用本平台类型化契约及原生 Flow/Work，不引入 Retool 的任意 JavaScript 或资源查询执行模型。[ADR-0044](ADR/0044-capability-fabric.md) 设计共享 React Flow IDE、统一原生/Wasm Block 和 Go/wazero 计算；不搬 Retool 的执行栈，不新增外部编排引擎。页面与工作区遵循相同的导航和反馈语言。
 
 “达到与 AIP 相当的水准”意味着提供一条端到端无缝衔接的完整闭环体验：**连接 (connect) → 语义对齐 (ground) → 组装构建 (construct) → 测试仿真 (test) → 正式发布 (publish) → 运维运营 (operate) → 持续优化 (improve)**。AIP Logic 是官方针对可组合 AI 函数能力的产品命名。模型接入、智能体运行和可视化执行追踪只是该体验的部分组成拼图；仅靠其中任何一块都不足以建立对等竞争力。
 
@@ -427,7 +428,7 @@
 | Odoo [Studio 字段系统](https://www.odoo.com/documentation/19.0/applications/studio/fields.html), Frappe [DocTypes](https://docs.frappe.io/framework/user/en/basics/doctypes) 与 [Studio](https://docs.frappe.io/studio/introduction) | 从对象模型到生成表单的高速开发体验，加上直观的布局与交互编排 | 保持元数据高复用带来的极速构建能力，超越简单的 CRUD 界面，迈向工业级完整工作区 |
 | Oracle [APEX 应用构建器](https://apex.oracle.com/en/learn/getting-started/app-builder/) | 页面可视化设计、共享通用组件与打包支撑对象 | 可复用的页面资产与交付包；绝不将所有业务语义与特定单一数据库 UI 绑死 |
 | [Retool 经典应用 IDE](https://docs.retool.com/apps/concepts/ide), [全新 AI 辅助构建器](https://docs.retool.com/build/apps) 与 [组件库](https://docs.retool.com/apps/concepts/components/); [Appsmith 的组件体系](https://docs.appsmith.com/reference/widgets) 与 [数据绑定](https://docs.appsmith.com/core-concepts/building-ui/dynamic-ui) | **编辑体验本身**：左侧组件调色板、中间实时交互画布、右侧上下文属性检查器，以及所见即所得的即时反馈。Retool 现将上述三栏 IDE 标为经典版并力推其 AI 辅助构建器；我们将其经典交互范式作为体验参考，而非对其最新产品的对等宣称 | 我们所有构建器界面乃至工作区自身页面的前端基准交互体验：统一的三栏交互语法、一致的即时反馈感、单一位置完成配置。但绝不照搬其数据模型、JavaScript 绑定机制或在租户端执行任意代码——组件只能绑定到平台能够形式化校验的已声明对象、字段与动作上 (ADR-0035) |
-| [Retool Workflows](https://docs.retool.com/workflows/quickstart) | 在画布拖放并连接块、配置分支、测试运行、查看每块状态与运行历史；草稿修改与版本化发布分离 | 对齐其工作流 IDE 的可见操作与反馈闭环；节点仅引用已注册的类型化能力，测试沿隔离候选路径，发布沿现有闭包与 Flow 版本绑定 (ADR-0042) |
+| [Retool Workflows](https://docs.retool.com/workflows/quickstart) | 在画布拖放并连接块、配置分支、测试运行、查看每块状态与运行历史；草稿修改与版本化发布分离 | 对齐其工作流 IDE 的可见操作与反馈闭环；节点引用已注册的类型化能力，测试、发布沿候选闭包与版本绑定；原生/Wasm Block 与原 Flow 必要扩展见 ADR-0044，一手选型证据由该 ADR 维护 |
 
 ### 10.2 已审计能力矩阵与稳健性
 
@@ -472,6 +473,8 @@ flowchart TD
 | 交付应用/行业方案包 | 全局稳定标识与不可变发布版本；所引用的全部资产依赖项及所需的底层代码/运行时版本；自闭合的依赖图谱、面向客户的安全扩展切入点、权限集、自动化测试集与平滑升级方案 |
 
 应用定义是具有严格形式化语义的数据本身，绝非任意可执行的无约束字符串。无论是代码导出工具、可视化拖拽编辑器还是 AI 辅助生成的修改，都必须面对这同一套模型进行严苛校验。纯代码编写的扩展函数依然保留为源码形态，并通过强类型、版本化的契约向外暴露；系统绝不追求将任意由人类编写的 Go 或 React 源码无损双向转译为可视化编辑图表。唯一 ID 用于标识资产本身；内容哈希摘要 (content digest) 用于精确锁定不可变的特定版本；业务对象即使在其内容被修改更新后，其不透明的身份标识始终保持绝对不变。
+
+**能力装配层（Capability Fabric）** 将原生查询、动作、普通计算、AI 函数与流程投影到现有 owner 目录；Go/TinyGo Wasm 由 Go/wazero 执行，算法不直接取得业务写入权。当前实现及基准边界归 [ADR-0044 §12](ADR/0044-capability-fabric.md#12-实际构建边界)；复用原 Flow/Work、发布与结果日志。
 
 客户侧的扩展允许添加经过审批的定制字段、对象、关系、专属视图与运营逻辑。但受保护的核心行业不变式依然必须由其归属的原生动作强制捍卫。基础核心应用包、客户个性化扩展与具体环境绑定三者属于截然不同的资产实体，具备显式的优先级覆盖规则、冲突检测机制与升级兼容性校验体系；绝不允许为每个客户全量复制拷贝一整套基础应用源码。
 

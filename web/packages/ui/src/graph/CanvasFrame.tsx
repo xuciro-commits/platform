@@ -2,16 +2,21 @@
 // graphs. The graph adapter owns meaning; this frame owns viewport behavior.
 import { Background, Controls, useNodesInitialized, useReactFlow, useStore } from "@xyflow/react";
 import { Maximize2, Minimize2 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "../i18n";
 
 export const fitting = { padding: 0.12, maxZoom: 1 };
 
-export function CanvasFrame({ label, height, children, role = "figure" }: { label?: string; height: number; children: ReactNode; role?: "figure" | "region" }) {
+export function CanvasFrame({ label, height, children, role = "figure" }: { label?: string; height: number | string; children: ReactNode; role?: "figure" | "region" }) {
   const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", close); return () => window.removeEventListener("keydown", close);
+  }, [expanded]);
   return <div className={expanded ? "fixed inset-4 z-50 rounded-md border border-border bg-background shadow-2xl" : "relative rounded-md border border-border bg-background"}
     style={expanded ? { overflow: "hidden" } : { height, minHeight: 200, resize: "vertical", overflow: "hidden" }}
-    role={role} aria-label={label} title={label}>
+    role={role} aria-label={label}>
     {children}
     <button type="button" className="absolute right-2 top-2 z-20 rounded border border-border bg-surface p-1 text-muted shadow-sm hover:bg-row-hover"
       aria-label={t(expanded ? "Restore canvas" : "Expand canvas")} title={t(expanded ? "Restore canvas" : "Expand canvas")}
@@ -25,7 +30,13 @@ export function CanvasRefit({ signature }: { signature: string }) {
   const { fitView } = useReactFlow();
   const measured = useNodesInitialized();
   const width = useStore((s) => s.width), height = useStore((s) => s.height);
-  useEffect(() => { if (measured && width > 0 && height > 0) void fitView(fitting); }, [fitView, measured, width, height, signature]);
+  const previous = useRef<{ signature: string; width: number; height: number } | undefined>(undefined);
+  useEffect(() => {
+    if (!measured || width <= 0 || height <= 0) return;
+    const last = previous.current;
+    if (last?.signature === signature && last.width === width && last.height === height) return;
+    previous.current = { signature, width, height }; void fitView(fitting);
+  }, [fitView, measured, width, height, signature]);
   return null;
 }
 

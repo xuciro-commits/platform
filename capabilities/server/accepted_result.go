@@ -288,7 +288,9 @@ func (t *Tenant) applyAcceptedResult(l *platform.Ledger, raw []byte) (bool, erro
 		draft.mu.Unlock()
 		return false, fmt.Errorf("accepted record is missing its predecessor")
 	}
-	et.rows[rec.ID] = &row{value: value, history: copyHistory(result.Row.History)}
+	recovered := &row{value: value, history: copyHistory(result.Row.History)}
+	recovered.retainOriginal(result.Row.Value)
+	et.rows[rec.ID] = recovered
 	draft.writes[result.Row.Type+"/"+rec.ID] = true
 	draft.remember(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)
 	if et.knowledge {

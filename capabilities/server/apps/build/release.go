@@ -31,7 +31,12 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(assets, functions...), nil
+	assets = append(assets, functions...)
+	code, err := b.CodeReleaseAssets()
+	if err != nil {
+		return nil, err
+	}
+	return append(assets, code...), nil
 }
 
 // FlowReleaseAsset reads a retained native version, not the current draft or
@@ -106,6 +111,9 @@ func readDefinitionInventory[T any](c platform.Caller) ([]T, error) {
 // so the host can compare identical code dependencies under one tenant lock.
 // Only the authenticated builder-facing host path may call this method.
 func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	if kind == platform.AssetCompute {
+		return b.CodeDraftAssets(id)
+	}
 	if kind == platform.AssetFunction {
 		return b.functionDraftAssets(id)
 	}
@@ -149,7 +157,7 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 			err = fmt.Errorf("this tenant runs no processes")
 		} else {
 			record.Version++
-			err = b.host.Processes().Validate(b, flowOf(record))
+			err = b.host.Processes().Validate(b, b.flowOf(record))
 			if err == nil {
 				record.Published = published(record)
 				record.Versions = append(slices.Clone(record.Versions), record.Published)
@@ -451,40 +459,98 @@ func releaseAssets(objects []Object, pages []Page, apps []Application, processes
 }
 
 func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseAsset, error) {
-	fl := flowOf(saved)
+	fl := platform.Flow{Name: saved.Name, Subject: saved.Object}
 	ref := platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: TypeOf(fl.Name)}
-	subject := platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: fl.Subject}
+	var subject platform.AssetRef
+	if fl.Subject != "" {
+		owner, _, _ := strings.Cut(fl.Subject, ".")
+		subject = platform.AssetRef{App: owner, Kind: platform.AssetObject, Name: fl.Subject}
+	}
 	var actions []platform.AssetRef
 	var functions []platform.AssetBinding
+	var operations []platform.AssetBinding
+	var dependencies []platform.AssetRef
 	for _, step := range saved.Steps {
 		if step.Act != "" {
-			actions = append(actions, platform.AssetRef{App: ID, Kind: platform.AssetAction, Name: saved.Object + "." + step.Act})
+			name := step.Act
+			if !strings.Contains(name, ".") {
+				name = saved.Object + "." + name
+			}
+			owner := step.App
+			if owner == "" {
+				owner, _, _ = strings.Cut(name, ".")
+			}
+			actions = append(actions, platform.AssetRef{App: owner, Kind: platform.AssetAction, Name: name})
 		}
 		if step.Function != nil {
-			binding := platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: step.Function.Name}, SourceVersion: sourceVersion + ".function-" + strconv.Itoa(step.Function.Version)}
+			owner := step.Function.App
+			if owner == "" {
+				owner = ID
+			}
+			ref := platform.AssetRef{App: owner, Kind: platform.AssetFunction, Name: step.Function.Name}
+			if owner != ID || step.Function.Version == 0 {
+				dependencies = append(dependencies, ref)
+				continue
+			}
+			binding := platform.AssetBinding{Ref: ref, SourceVersion: sourceVersion + ".function-" + strconv.Itoa(step.Function.Version)}
 			if !slices.Contains(functions, binding) {
 				functions = append(functions, binding)
 			}
 		}
+		if step.Operation != nil {
+			owner := step.Operation.App
+			if owner == "" {
+				owner = ID
+			}
+			ref := platform.AssetRef{App: owner, Kind: platform.AssetCompute, Name: step.Operation.Name}
+			if owner == ID && step.Operation.Version > 0 {
+				operations = append(operations, platform.AssetBinding{Ref: ref, SourceVersion: sourceVersion + ".compute-" + strconv.Itoa(step.Operation.Version)})
+			} else {
+				dependencies = append(dependencies, ref)
+			}
+		}
+		if step.Query != "" {
+			dependencies = append(dependencies, platform.AssetRef{App: step.App, Kind: platform.AssetQuery, Name: step.Query})
+		}
+		if step.Flow != "" {
+			name := step.Flow
+			if !strings.HasPrefix(name, ID+".") {
+				name = TypeOf(name)
+			}
+			dependencies = append(dependencies, platform.AssetRef{App: ID, Kind: platform.AssetFlow, Name: name})
+		}
 	}
+	slices.SortFunc(operations, func(a, b platform.AssetBinding) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
+	operations = slices.Compact(operations)
+	slices.SortFunc(dependencies, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
+	dependencies = slices.Compact(dependencies)
 	slices.SortFunc(functions, func(a, b platform.AssetBinding) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	slices.SortFunc(actions, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	actions = slices.Compact(actions)
 	definition := json.RawMessage(published(saved))
+	if len(saved.originalDefinition) > 0 {
+		definition = slices.Clone(saved.originalDefinition)
+	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(definition, &fields); err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	for _, key := range []string{"id", "revision", "created", "changed", "archived", "state", "version"} {
+	for _, key := range []string{"id", "revision", "created", "changed", "archived", "state", "version", "layout"} {
 		delete(fields, key)
 	}
 	definition, err := json.Marshal(fields)
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition, Functions: functions})
-	requires := append([]platform.AssetRef{subject}, actions...)
+	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition, Functions: functions, Operations: operations, Dependencies: dependencies})
+	requires := append(slices.Clone(dependencies), actions...)
+	if subject.Name != "" {
+		requires = append(requires, subject)
+	}
 	for _, binding := range functions {
+		requires = append(requires, binding.Ref)
+	}
+	for _, binding := range operations {
 		requires = append(requires, binding.Ref)
 	}
 	return platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion,

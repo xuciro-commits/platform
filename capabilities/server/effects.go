@@ -321,7 +321,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 			t.settleWithUsage(j.effect.ID, outcome, usage, now)
 		})
 	}
-	return sends
+	return append(sends, t.operationDispatches(now)...)
 }
 
 func (t *Tenant) sendWithUsage(ep Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *ai.Usage) {
@@ -432,7 +432,24 @@ func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *ai.Us
 	if t.quarantined() {
 		return
 	}
-	if t.AcceptResult != nil {
+	if o.Generation != 0 && !t.operationCurrent(effect, o.Generation) {
+		return
+	}
+	if o.Generation != 0 && o.Result == "delivered" {
+		t.opsMu.Lock()
+		var current platform.Effect
+		for _, x := range t.outbound {
+			if x.ID == effect {
+				current = x.Effect
+				break
+			}
+		}
+		t.opsMu.Unlock()
+		if !t.operationAllowed(current, now) {
+			o.Result, o.Detail, o.Answer, o.Digest = "rejected", "Operation permission or source access was revoked", nil, ""
+		}
+	}
+	if t.AcceptResult != nil || o.Generation != 0 {
 		t.settleAccepted(effect, o, usage, now)
 		return
 	}
@@ -507,6 +524,9 @@ func markEffect(x *effect, o platform.Outcome, at time.Time) {
 	x.sending, x.Last, x.Digest, x.Error = false, at, o.Digest, o.Detail
 	if x.State == "discarded" {
 		return // discarded while its attempt was on the way
+	}
+	if x.Endpoint == operationEndpoint && o.Result == "delivered" {
+		x.Output, x.Millis = slices.Clone(o.Answer), o.Millis
 	}
 	x.Attempts++
 	switch {

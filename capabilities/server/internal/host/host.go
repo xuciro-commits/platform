@@ -73,6 +73,11 @@ type Host interface {
 	// retains its publication family; inference still uses the model effect.
 	ValidateInstallFunction(f platform.AIFunction) error
 	InstallFunction(c platform.Caller, f platform.AIFunction, version int) error
+	ValidateInstallOperation(o platform.Operation) error
+	InstallOperation(c platform.Caller, o platform.Operation, version int) error
+	// Function resolves an owner's retained AI function through its existing registry.
+	Function(app, name string, version int) (platform.AIFunction, int, bool)
+	Operation(app, name string, version int) (platform.Operation, int, bool)
 	// Entity is an entity type's declaration, for an app composing over it.
 	Entity(typ string) (platform.EntityInfo, bool)
 	// Declares says whether an entity type, a field (<type>.<field>) or an action exists.
