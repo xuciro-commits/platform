@@ -131,11 +131,11 @@ export function WorkflowEditor({ id }: { id: string }) {
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {(dirty || draft.id) && issues.length > 0 && <Panel className="text-xs text-danger" aria-live="polite">{issues.join(" ")}</Panel>}
     {(sources.isError || functionRecords.isError) && <Panel role="alert">{t("The workflow sources could not be loaded.")}</Panel>}
-    <nav aria-label={t("Workflow workspace")} className="flex flex-wrap gap-1 rounded-md border border-border bg-surface p-1">
+    <Panel role="navigation" aria-label={t("Workflow workspace")} className="flex flex-wrap gap-1 p-1">
       {([ ["design", t("Design")], ["test", t("Test")], ["runs", t("Runs")], ["release", t("Release")] ] as const).map(([key, label]) =>
         <Button key={key} variant={stage === key ? "primary" : "ghost"} aria-pressed={stage === key}
           disabled={key !== "design" && (!draft.id || dirty)} onClick={() => show(key)}>{label}</Button>)}
-    </nav>
+    </Panel>
     <div ref={designRef}>
     <fieldset disabled={busy} className="grid min-w-0 gap-3 lg:grid-cols-[12rem_minmax(0,1fr)_17rem] 2xl:grid-cols-[14rem_minmax(0,1fr)_20rem]">
       <Panel role="region" aria-label={t("Workflow steps")} className="grid content-start gap-2 p-3">

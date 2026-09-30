@@ -111,7 +111,7 @@ function StudioInventory() {
   const failed = [objects, pages, workflows, functions, applications].some((query) => query.isError);
   return <div className="grid gap-4">
     <PageHeader title={t("Application Studio")} description={t("Build with the capabilities already available in this workspace.")} />
-    <section aria-label={t("Studio capabilities")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <Panel aria-label={t("Studio capabilities")} className="grid gap-3 border-0 bg-transparent p-0 sm:grid-cols-2 xl:grid-cols-3">
       {[
         { title: "Objects and relationships", detail: "Define fields, relationships, actions and access.", route: { view: "page", params: { app: "build", kind: "page", name: "objects" } }, query: objects },
         { title: "Pages", detail: "Compose an interface over your business objects.", route: { view: "pages" }, query: pages },
@@ -127,7 +127,7 @@ function StudioInventory() {
         <p className="text-xs text-muted">{t(capability.detail)}</p>
         {capability.title === "Test and release" && <Button size="sm" onClick={() => open({ view: "release-review" })}>{t("Release review")}</Button>}
       </Card>)}
-    </section>
+    </Panel>
     {failed && <Panel role="alert" className="text-sm text-danger">{t("Some studio assets could not be loaded. Retry the workspace.")}</Panel>}
     <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
       <Card className="min-w-0 grid gap-3 p-3">

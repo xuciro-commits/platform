@@ -67,6 +67,7 @@ type Tenant struct {
 	// is a movable pointer; neither is derived from the mutable development
 	// definition registry (ADR-0039 20b).
 	releaseCandidates map[string]json.RawMessage
+	releaseApplied    map[string]string // committed release key -> applied result digest
 	activeRelease     string
 	definitions       []platform.Definition   // installed code assets; member views are derived on read
 	owner             map[string]platform.App // "action:", "read:" and "input:" names → app

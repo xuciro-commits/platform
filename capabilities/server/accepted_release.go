@@ -13,9 +13,9 @@ import (
 	"platformserver/platform"
 )
 
-// acceptedRelease saves one immutable candidate, not an activation. It is
-// committed as one journal result before the tenant may expose the saved
-// revision. Its bytes are never reconstructed from a later mutable draft.
+// acceptedRelease commits immutable candidate bytes or an activation. Format 2
+// carries frozen owner publication images beside the pointer; neither is
+// reconstructed from a later mutable draft.
 type acceptedRelease struct {
 	Version     int       `json:"version"`
 	Kind        string    `json:"kind"`
@@ -28,9 +28,10 @@ type acceptedRelease struct {
 	Bytes       []byte    `json:"bytes"`
 	// Active marks an activation: the tenant's single release pointer moves to
 	// this saved candidate (ADR-0039 D2). A save leaves the pointer alone.
-	Active      bool   `json:"active,omitempty"`
-	RequestHash string `json:"requestHash"`
-	Digest      string `json:"digest"`
+	Active        bool                  `json:"active,omitempty"`
+	Installations []releaseInstallation `json:"installations,omitempty"`
+	RequestHash   string                `json:"requestHash"`
+	Digest        string                `json:"digest"`
 }
 
 func releaseRequestHash(tenant, member, key, id string, active bool) (string, error) {
@@ -73,10 +74,13 @@ func decodeAcceptedRelease(raw []byte) (acceptedRelease, error) {
 		return saved, fmt.Errorf("release result has trailing data")
 	}
 	hash, err := releaseRequestHash(saved.Tenant, saved.Member, saved.Key, saved.CandidateID, saved.Active)
-	if err != nil || saved.Version != 1 || saved.Kind != "release-result" || saved.App != build.ID ||
+	if err != nil || (saved.Version != 1 && saved.Version != 2) || saved.Kind != "release-result" || saved.App != build.ID ||
 		saved.Tenant == "" || saved.Member == "" || saved.Key == "" || saved.At.IsZero() ||
 		saved.RequestHash != hash {
 		return saved, fmt.Errorf("invalid release result identity")
+	}
+	if len(saved.Installations) > 0 && (saved.Version != 2 || !saved.Active) {
+		return saved, fmt.Errorf("definition installation needs an active format-2 release result")
 	}
 	digest, err := releaseDigest(saved)
 	if err != nil || saved.Digest != digest {
@@ -99,6 +103,31 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	if prior, ok := t.releaseCandidates[saved.CandidateID]; ok && !bytes.Equal(prior, saved.Bytes) {
 		return saved, fmt.Errorf("immutable release candidate %s changed", saved.CandidateID)
 	}
+	if prior, ok := t.releaseApplied[saved.Key]; ok {
+		if prior != saved.Digest {
+			return saved, fmt.Errorf("release result idempotency key changed")
+		}
+		return saved, nil
+	}
+	if len(saved.Installations) > 0 {
+		if !saved.Active {
+			return saved, fmt.Errorf("a saved candidate cannot install definitions")
+		}
+		draft, err := t.stageReleaseInstallationLocked(saved.Installations, false)
+		if err != nil {
+			return saved, err
+		}
+		if err := t.records.promoteRecords(draft.records); err != nil {
+			return saved, err
+		}
+		t.owner, t.definitions = draft.owner, draft.definitions
+		publisher := t.app(build.ID).(*build.Build)
+		for _, installation := range saved.Installations {
+			if err := publisher.ApplyAcceptedPublication(installation.Schema, installation.Image); err != nil {
+				return saved, err
+			}
+		}
+	}
 	if t.releaseCandidates == nil {
 		t.releaseCandidates = make(map[string]json.RawMessage)
 	}
@@ -106,6 +135,10 @@ func (t *Tenant) applyAcceptedRelease(raw []byte) (acceptedRelease, error) {
 	if saved.Active {
 		t.activeRelease = saved.CandidateID
 	}
+	if t.releaseApplied == nil {
+		t.releaseApplied = map[string]string{}
+	}
+	t.releaseApplied[saved.Key] = saved.Digest
 	return saved, nil
 }
 
@@ -159,10 +192,9 @@ func (t *Tenant) SaveReleaseCandidate(m platform.Member, kind platform.AssetKind
 	return t.commitReleaseLocked(m, saved)
 }
 
-// ActivateRelease moves the tenant's single release pointer to a saved
-// candidate (ADR-0039 D2). The pointer must describe what operators run, so
-// every asset of the candidate must equal the running definition byte for
-// byte; a stale or not-yet-installed candidate is refused with its paths.
+// ActivateRelease installs the supported saved closure and moves its pointer
+// in one committed result (ADR-0039 D2). Unsupported upgrades and changed code
+// dependencies are refused before either state is exposed.
 func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now time.Time) (string, error) {
 	if err := t.admits(m); err != nil {
 		return "", err
@@ -182,23 +214,25 @@ func (t *Tenant) ActivateRelease(m platform.Member, candidateID, key string, now
 	if raw == nil {
 		return "", fmt.Errorf("release candidate %s is not saved", candidateID)
 	}
-	if t.activeRelease == candidateID && t.AcceptResult == nil {
-		return candidateID, nil
+	var installations []releaseInstallation
+	if t.runningMatchesLocked(candidateID, raw) != nil {
+		var err error
+		installations, err = t.prepareReleaseActivationLocked(candidateID, raw)
+		if err != nil {
+			return "", err
+		}
+	} else if err := t.pendingWorkFitsLocked(candidateID, raw); err != nil {
+		return "", err
 	}
-	if t.activeRelease != candidateID {
-		if err := t.runningMatchesLocked(candidateID, raw); err != nil {
-			return "", err
-		}
-		if err := t.pendingWorkFitsLocked(candidateID, raw); err != nil {
-			return "", err
-		}
-		if err := t.evaluationsReadyLocked(candidateID, raw); err != nil {
-			return "", err
-		}
+	if err := t.evaluationsReadyLocked(candidateID, raw); err != nil {
+		return "", err
 	}
 	saved := acceptedRelease{Version: 1, Kind: "release-result", Tenant: t.ID, App: build.ID,
 		Member: m.ID, Key: "activate:" + key, At: now.UTC(), CandidateID: candidateID,
-		Bytes: slices.Clone(raw), Active: true}
+		Bytes: slices.Clone(raw), Active: true, Installations: installations}
+	if len(installations) > 0 {
+		saved.Version = 2
+	}
 	var err error
 	saved.RequestHash, err = releaseRequestHash(t.ID, m.ID, saved.Key, candidateID, true)
 	if err != nil {
@@ -323,5 +357,6 @@ func (t *Tenant) commitReleaseLocked(m platform.Member, saved acceptedRelease) (
 		t.quarantine(fmt.Errorf("committed release result differs: %v", err))
 		return "", fmt.Errorf("committed release result differs: %v", err)
 	}
+	t.changed()
 	return applied.CandidateID, nil
 }

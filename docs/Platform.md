@@ -106,7 +106,7 @@
 | 聚合与投影 (ADR-0019) | 宿主运行时 | 权限内分组度量及每租户只读 PostgreSQL 投影。 | /v1/aggregates, -project；[ADR-0019](ADR/0019-read-models-analytics-snapshots.md) |
 | 动作目录 | 应用 API、宿主运行时 | 统一声明与按调用者角色发现动作。 | platform.Action, /v1/actions |
 | 已安装定义与有界页面 (ADR-0032 13a–13b) | 应用 API、宿主运行时、`@platform/app`、`@platform/ui` | 对象/动作/页面限定引用、依赖校验、授权目录及只读样本预览。 | platform.AssetRef, Manifest.Pages；[ADR-0032](ADR/0032-shared-application-definitions.md) |
-| 发布候选审查与活跃闭包（ADR-0039 20a–20b） | 应用 API、平台应用 `build`、宿主、`@pkg/build` | 规范候选、差异/依赖校验、持久字节、可续接发布工作台与活跃/运行一致性；仍先安装后激活。 | platform.Candidate, Build.DraftReleaseAssets；[ADR-0039](ADR/0039-minimal-definition-release.md) |
+| 发布候选审查与活跃闭包（ADR-0039 20a–20b） | 应用 API、平台应用 `build`、宿主、`@pkg/build` | 规范候选、差异/依赖校验、持久字节、可续接发布工作台与活跃/运行一致性；有界对象/页面/应用闭包提交后一起安装并激活。 | platform.Candidate, Build.DraftReleaseAssets；[ADR-0039](ADR/0039-minimal-definition-release.md) |
 | 具名查询 (ADR-0040 21c) | 应用 API、宿主运行时、共享页面与智能体工具 | 成员、页面和 AI 共用受权纯查询；候选包含查询依赖。 | platform.NamedQuery, Tenant.RunQuery；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 应用工坊总览 | 平台应用 `build`、`@pkg/build` | 能力卡片与资产图、搜索/状态、编辑器入口、选中资产测试/发布和返回上下文。 | `StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户原生流程编写 (ADR-0042 23a–23c) | 平台应用 `build`、`flow`、`work`、宿主 | 同一工作流工作区的编写/测试/历史/发布；原生 Flow/Work、固定计划/模拟及精确启动绑定。 | build.Process/TestPlan, WorkflowEditor；[ADR-0042](ADR/0042-typed-workflow-composer.md) |
@@ -235,7 +235,7 @@
 
 | 分录类别 | 写入时机 | 重放时的行为 |
 |---|---|---|
-| `accepted-result` | 已选择的生成动作（含构建器固定测试计划的记录映像：对象/流程/函数根、样本、身份、模型及固定回答）/生命周期转移、构建器可变发布（含函数定义）、函数调用记录、审批、多记录嵌套、关系链接和 Console 成员目录在正式状态可见前单行入账；ERP 适配器轮询、MES 设备状态及 PMS 渠道预订的 `input-result` 独立保存输入/答复、游标、事实/记录及应用私有状态；受属 `work-result` 独立占用工作键命名空间，原生构建器流程记录映像含启动依赖/发布绑定（ADR-0042），函数步骤以 Run.Data 保留调用 ID，模型意图继承实例的保留发布（ADR-0043）；出站尝试的 `effect-result` 在同一封套中保存效果结果、受支持的回调状态和模型请求用量（含已校验类型化函数回答、自动 Reply 及 Build 函数逐调用度量）；同路径的拒绝以无变更封套入账 | 校验版本、摘要、权威、前序及收据，纯应用记录/历史、编号、通知、观察投影、出站与模型请求意图（含接受时已解析的模型；类型化函数另含完整声明、输入、来源、发布版本及定义/依赖摘要）、受支持的回调及用量、部分应用归属状态、受限动作及三个已接入应用输入的连接器标记和工作 generation；拒绝直接返回已保存答复，不重新运行规则或发送效果 |
+| `accepted-result` | 已选择的生成动作（含构建器固定测试计划的记录映像：对象/流程/函数根、样本、身份、模型及固定回答）/生命周期转移、构建器可变发布（含函数定义）、函数调用记录、审批、多记录嵌套、关系链接和 Console 成员目录在正式状态可见前单行入账；ERP 适配器轮询、MES 设备状态及 PMS 渠道预订的 `input-result` 独立保存输入/答复、游标、事实/记录及应用私有状态；受属 `work-result` 独立占用工作键命名空间，原生构建器流程记录映像含启动依赖/发布绑定（ADR-0042），函数步骤以 Run.Data 保留调用 ID，模型意图继承实例的保留发布（ADR-0043）；出站尝试的 `effect-result` 在同一封套中保存效果结果、受支持的回调状态和模型请求用量（含已校验类型化函数回答、自动 Reply 及 Build 函数逐调用度量）；`release-result` 格式 1 保存不可变候选/指针，格式 2 同时提交冻结发布元数据与有界安装闭包；同路径的拒绝以无变更封套入账 | 校验版本、摘要、权威、前序及收据，纯应用记录/历史、编号、通知、观察投影、出站与模型请求意图（含接受时已解析的模型；类型化函数另含完整声明、输入、来源、发布版本及定义/依赖摘要）、受支持的回调及用量、部分应用归属状态、受限动作及三个已接入应用输入的连接器标记和工作 generation；发布恢复安装保存的定义映像、保留草稿并恢复指针/已应用键；拒绝直接返回已保存答复，不重新运行规则或发送效果 |
 | `submission` | 顶级决策被接受时 | 运行相同的应用规则而不重新鉴权；重新将其事件排队；重新生成 Webhook 效果 |
 | `<input>`（旧连接器批次或页面） | 旧式持久输入曾被接受时；新声明输入在正式结果宿主中必须接入 `input-result` | 历史分录仍运行当前的应用代码（包含游标校验），尚未完成版本化历史迁移 |
 | `delivery` | 为订阅者尝试分发事件的每一次 | 再次尝试，必须达到完全相同的结果，否则重放终止 |

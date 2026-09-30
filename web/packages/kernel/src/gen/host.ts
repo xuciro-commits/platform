@@ -871,6 +871,8 @@ export type SavedReleaseReview = {
   active: boolean;
   runningMatches: boolean;
   runningDiagnostic?: string;
+  canActivate: boolean;
+  activationDiagnostic?: string;
 };
 
 export type SavedView = {

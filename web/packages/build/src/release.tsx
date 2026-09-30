@@ -28,6 +28,8 @@ export function ReleaseReview({ initialKind = "object", initialID = "", embedded
   const [savedReview, setSavedReview] = useState(false);
   const [runningMatches, setRunningMatches] = useState<boolean>();
   const [runningDiagnostic, setRunningDiagnostic] = useState("");
+  const [canActivate, setCanActivate] = useState(false);
+  const [activationDiagnostic, setActivationDiagnostic] = useState("");
   const [planID, setPlanID] = useState("");
   const [reportID, setReportID] = useState("");
   const [error, setError] = useState("");
@@ -57,6 +59,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", embedded
       else {
         setReview(result.body.preview); setSavedID(candidateID); setSavedReview(true);
         setRunningMatches(result.body.runningMatches); setRunningDiagnostic(result.body.runningDiagnostic ?? "");
+        setCanActivate(result.body.canActivate); setActivationDiagnostic(result.body.activationDiagnostic ?? "");
         await reports.refetch();
       }
     } catch { setError(t("Saved releases could not be loaded.")); }
@@ -108,7 +111,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", embedded
       setBusy(false);
     }
   };
-  // Activation succeeds only when operators already run exactly these bytes.
+  // The host stages the saved closure and commits installation with its pointer.
   const activate = async () => {
     if (!savedID) return;
     setBusy(true);
@@ -117,7 +120,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", embedded
       const result = await client.call<Api.ReleaseActive>("POST", "/v1/releases/active",
         { candidateId: savedID, key: crypto.randomUUID() } satisfies Api.ReleaseActivateRequest);
       if (!result.ok) setError(apiErrorMessage(result.body) ?? t("Release could not be activated."));
-      else await inventory.refetch();
+      else { await inventory.refetch(); await loadSaved(result.body.id); }
     } catch {
       setError(t("Release could not be activated."));
     } finally {
@@ -176,8 +179,10 @@ export function ReleaseReview({ initialKind = "object", initialID = "", embedded
       </div>
       {review.currentId && <p className="break-all text-xs">{t("Installed candidate")}: <code>{review.currentId}</code></p>}
       {review.candidateId && <p className="break-all text-xs">{savedReview ? t("Saved candidate") : t("Draft candidate")}: <code>{review.candidateId}</code></p>}
-      {savedReview && <p className="text-sm" role="status">{runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release. Publish the matching definitions before activation.")}</p>}
-      {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
+      {savedReview && <p className="text-sm" role="status">{runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release.")}</p>}
+      {savedReview && !runningMatches && canActivate && <p className="text-sm">{t("Activation will install the saved objects, pages and application together.")}</p>}
+      {savedReview && activationDiagnostic && <p role="alert" className="text-sm text-warning">{activationDiagnostic}</p>}
+      {savedReview && runningDiagnostic && !canActivate && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
       {review.diagnostic && <p role="alert" className="text-sm text-danger">{review.diagnostic}</p>}
       {!review.diagnostic && <div className="grid gap-3 sm:grid-cols-3">
         {changed("Added", review.added)}
@@ -210,7 +215,7 @@ export function ReleaseReview({ initialKind = "object", initialID = "", embedded
           {report && <p className="text-sm" role="status">{t("Report state")}: {t(report.state)} · {t("Quality")}: {Math.round(report.quality * 100)}% · {t("Reported USD cost")}: {report.costComplete ? report.costUsd : t("Unknown")} · {t("Peak latency (ms)")}: {report.peakLatencyMillis} · {t("Calls")}: {report.attempts.length}</p>}
           {!eligiblePlans.length && <p className="text-xs text-warning">{t("Save a function test plan with evaluation cases before running the release evaluation.")}</p>}
         </div>}
-        {savedID && <Button variant="default" disabled={busy || activeID === savedID || !evaluated || savedReview && !runningMatches} onClick={activate}>{t("Activate release")}</Button>}
+        {savedID && <Button variant="default" disabled={busy || activeID === savedID || !evaluated || savedReview && !canActivate} onClick={activate}>{t("Activate release")}</Button>}
         {activeID === savedID && savedID && <p className="break-all text-sm" role="status">{savedReview && !runningMatches ? t("Active release differs from running definitions.") : t("Release active for operators.")} <code>{activeID}</code></p>}
       </div>}
     </Card>}

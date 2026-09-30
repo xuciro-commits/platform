@@ -12,6 +12,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformkernel/kernel"
+	"platformserver/apps/build"
 	"platformserver/platform"
 )
 
@@ -30,6 +31,7 @@ type tenantState struct {
 	AcceptedAnswers   map[string]json.RawMessage `json:"acceptedAnswers,omitempty"`
 	AcceptedInputs    map[string]json.RawMessage `json:"acceptedInputs,omitempty"`
 	ReleaseCandidates map[string]json.RawMessage `json:"releaseCandidates,omitempty"`
+	ReleaseApplied    map[string]string          `json:"releaseApplied,omitempty"`
 	ActiveRelease     string                     `json:"activeRelease,omitempty"`
 	Deliveries        []Delivery                 `json:"deliveries"`
 	Acted             int                        `json:"acted"`
@@ -130,6 +132,7 @@ func (t *Tenant) capture(position func() int64) (tenantState, map[string][]*row,
 	s.AcceptedAnswers = maps.Clone(t.acceptedAnswers)
 	s.AcceptedInputs = maps.Clone(t.acceptedInputs)
 	s.ReleaseCandidates = maps.Clone(t.releaseCandidates)
+	s.ReleaseApplied = maps.Clone(t.releaseApplied)
 	s.ActiveRelease = t.activeRelease
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
@@ -236,10 +239,35 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	if len(held) > 0 {
+	needsDefinitions := len(held) > 0
+	for typ, kind := range map[string]platform.AssetKind{build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp} {
+		for _, row := range s.Records[typ] {
+			var meta struct {
+				Published string `json:"published"`
+			}
+			if json.Unmarshal(row.Value, &meta) != nil || meta.Published == "" {
+				continue
+			}
+			var saved struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal([]byte(meta.Published), &saved) != nil {
+				continue
+			}
+			name := saved.Name
+			if kind == platform.AssetObject {
+				name = build.TypeOf(name)
+			}
+			ref := platform.AssetRef{App: build.ID, Kind: kind, Name: name}
+			needsDefinitions = needsDefinitions || !slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref && d.Source == "tenant" })
+		}
+	}
+	if needsDefinitions {
 		if err := t.reinstall(); err != nil {
 			return err
 		}
+	}
+	if len(held) > 0 {
 		left, err := t.restoreRecords(held)
 		if err != nil {
 			return err
@@ -299,6 +327,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		return fmt.Errorf("tenant %s: active release snapshot has no saved candidate", t.ID)
 	}
 	t.releaseCandidates = maps.Clone(s.ReleaseCandidates)
+	t.releaseApplied = maps.Clone(s.ReleaseApplied)
 	t.activeRelease = s.ActiveRelease
 	for protocol, provider := range s.Bindings {
 		if !t.rebind(protocol, provider) {

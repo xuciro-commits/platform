@@ -23,10 +23,12 @@ type ReleasePage struct {
 }
 
 type SavedReleaseReview struct {
-	Preview           ReleasePreview `json:"preview"`
-	Active            bool           `json:"active"`
-	RunningMatches    bool           `json:"runningMatches"`
-	RunningDiagnostic string         `json:"runningDiagnostic,omitempty"`
+	Preview              ReleasePreview `json:"preview"`
+	Active               bool           `json:"active"`
+	RunningMatches       bool           `json:"runningMatches"`
+	RunningDiagnostic    string         `json:"runningDiagnostic,omitempty"`
+	CanActivate          bool           `json:"canActivate"`
+	ActivationDiagnostic string         `json:"activationDiagnostic,omitempty"`
 }
 
 func (t *Tenant) SavedReleases(m platform.Member, offset, limit int) (ReleasePage, error) {
@@ -107,10 +109,22 @@ func (t *Tenant) ReviewSavedRelease(m platform.Member, id string) (SavedReleaseR
 	running, err := t.runningReleaseLocked(saved)
 	if err != nil {
 		reply.RunningDiagnostic = err.Error()
-		return reply, nil
+	} else {
+		reply.Preview.CurrentID = running.ID
+		reply.RunningMatches = running.ID == id
+		reply.Preview.Added, reply.Preview.Removed, reply.Preview.Changed, err = platform.CandidateDiff(running, saved)
+		if err != nil {
+			return reply, err
+		}
 	}
-	reply.Preview.CurrentID = running.ID
-	reply.RunningMatches = running.ID == id
-	reply.Preview.Added, reply.Preview.Removed, reply.Preview.Changed, err = platform.CandidateDiff(running, saved)
-	return reply, err
+	if reply.RunningMatches {
+		err = t.pendingWorkFitsLocked(id, raw)
+	} else {
+		_, err = t.prepareReleaseActivationLocked(id, raw)
+	}
+	reply.CanActivate = err == nil
+	if err != nil {
+		reply.ActivationDiagnostic = err.Error()
+	}
+	return reply, nil
 }

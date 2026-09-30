@@ -63,6 +63,7 @@ for (const fixture of [
         await page.getByRole("button", { name: "Save test plan" }).click();
         await expect(page.getByRole("status").filter({ hasText: "Test plan saved." })).toBeVisible();
 
+        await decide(request, fixture.builder, "build", "build.object.edit", { type: "build.object", id: objectID }, { title: `${fixture.title} Released` });
         await open(page, fixture.builder, "/release-review");
         await page.getByRole("combobox", { name: "Saved draft" }).selectOption(objectID);
         await page.getByRole("button", { name: "Check draft and dependencies" }).click();
@@ -74,6 +75,7 @@ for (const fixture of [
         expect(preview.candidateId).toMatch(/^sha256-v1:/);
         await page.getByRole("button", { name: "Save immutable candidate" }).click();
         await expect(page.getByRole("button", { name: "Activate release" })).toBeDisabled();
+        await decide(request, fixture.builder, "build", "build.object.edit", { type: "build.object", id: objectID }, { title: `${fixture.title} Next draft` });
         await page.reload();
         await page.getByRole("combobox", { name: "Saved candidate", exact: true }).selectOption(preview.candidateId);
         await expect(page.getByText("Saved candidate review", { exact: true })).toBeVisible();
@@ -86,10 +88,17 @@ for (const fixture of [
         }).toBe("passed");
         await page.getByRole("button", { name: "Refresh evaluation reports" }).click();
         await expect(page.getByRole("status").filter({ hasText: "Report state: passed" })).toBeVisible();
+        const installedBefore = await (await request.get("/v1/entities", { headers })).json();
+        expect(installedBefore.find((entity: { type: string; title: string }) => entity.type === type).title).toBe(fixture.title);
         await page.getByRole("button", { name: "Activate release" }).click();
         await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
         const active = await (await request.get("/v1/releases/active", { headers })).json();
         expect(active.id).toBe(preview.candidateId);
+        const installedAfter = await (await request.get("/v1/entities", { headers })).json();
+        expect(installedAfter.find((entity: { type: string; title: string }) => entity.type === type).title).toBe(`${fixture.title} Released`);
+        const editing = await (await request.get(`/v1/records/build.object/${objectID}`, { headers })).json();
+        expect(editing.record.title).toBe(`${fixture.title} Next draft`);
+
         await page.reload();
         await page.getByRole("button", { name: "Review active release", exact: true }).click();
         await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();

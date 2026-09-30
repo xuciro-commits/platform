@@ -391,9 +391,8 @@ func TestInMemoryReleaseCandidateSaveReplays(t *testing.T) {
 	}
 }
 
-// Activation moves the single pointer only to a saved candidate that equals the
-// running definitions; an unpublished draft's candidate is refused, the pointer
-// survives replay, and a non-builder cannot move it (ADR-0039 D2).
+// Activation installs a saved draft and moves the single pointer. The result
+// survives replay, and a non-builder cannot change it (ADR-0039 D2).
 func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
 	const tenantID = "release-activate"
 	compose := func() *Tenant {
@@ -425,10 +424,9 @@ func TestActivateReleaseMatchesRunningDefinitions(t *testing.T) {
 	if _, err := live.SaveReleaseCandidate(member, platform.AssetObject, "O1", draft.CandidateID, "s1", at); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := live.ActivateRelease(member, draft.CandidateID, "a1", at); err == nil || live.ActiveRelease() != "" {
-		t.Fatal("a candidate operators do not run was activated")
+	if _, err := live.ActivateRelease(member, draft.CandidateID, "a1", at); err != nil || live.ActiveRelease() != draft.CandidateID {
+		t.Fatalf("saved draft was not installed and activated: %v", err)
 	}
-	submit("publish", build.SchemaPublish, `{}`)
 	foreign := member
 	foreign.Tenant = "foreign"
 	before, count := snapshot(live), len(entries)

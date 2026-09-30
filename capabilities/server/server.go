@@ -409,7 +409,7 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, ReleaseEvaluationStarted{ID: id})
 	})
-	handle(Route{Pattern: "POST /v1/releases/active", Summary: "Builder-only activation of a saved candidate that equals the running definitions (ADR-0039 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	handle(Route{Pattern: "POST /v1/releases/active", Summary: "Builder-only atomic installation and activation of a saved object/page/application closure (ADR-0039 20b)", Body: ReleaseActivateRequest{}, Answer: ReleaseActive{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder {
 			w.WriteHeader(http.StatusForbidden)
 			return
