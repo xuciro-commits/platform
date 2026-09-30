@@ -361,7 +361,9 @@ export function RecordHistory({ info, history = [], heading = true }: { info: En
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields }: {
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work }: {
+  /** App API composes declared record-specific work without another read path. */
+  work?: (view: RecordView) => ReactNode;
   /** Answering the open tasks about the record from its page; without it they are listed only. */
   tasks?: { answer: (task: Api.InboxTask, answer?: string) => Promise<void> };
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
@@ -400,22 +402,26 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   return (
     <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">
       <header className="flex flex-wrap items-center gap-2">
-        <h1 className="text-lg font-semibold">{displayOf(info, r)}</h1>
-        <span className="font-mono text-xs text-muted">{info.title} · {r.id} {t("· rev")} {r.revision}</span>
+        <h1 className="min-w-0 break-words text-lg font-semibold">{displayOf(info, r)}</h1>
+        <span className="min-w-0 break-words font-mono text-xs text-muted">{info.title} · {r.id} {t("· rev")} {r.revision}</span>
         {r.archived && <Tag label="archived" />}
-        <span className="ml-auto flex gap-1">{actions?.(r)}</span>
+        <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>
       </header>
       {info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={can}
         onTransition={onTransition && ((schema) => onTransition(schema, r))} />}
+      {(view.tasks.length > 0 || view.approvals.length > 0 || view.processes.length > 0 || work) && <section aria-label={t("Work on this record")} className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-3">
+        <h2 className="text-sm font-semibold">{t("Work on this record")}</h2>
+        {view.tasks.length > 0 && <Tasks list={view.tasks} tasks={tasks} />}
+        {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} onOpen={onOpen} />}
+        {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
+        {work?.(view)}
+      </section>}
+      {info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
       <section className="rounded-md border border-border bg-surface p-3">
         <PropertyList items={[...info.fields.filter((f) => !fields || fields.includes(f.name)).map((f) => [f.title, entity.fields[f.name]!.display(r[f.name] as never, r)] as [string, ReactNode]),
           [t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
           [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
       </section>
-      {view.tasks.length > 0 && <Tasks list={view.tasks} tasks={tasks} />}
-      {info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
-      {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} />}
-      {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
       {(view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
       {(view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
       {[...view.related, ...(view.linked ?? [])].map((rel) => {
@@ -549,10 +555,10 @@ const processTone = (state: string) =>
 const approvalTone = (state: string) => state === "approved" ? "success" : state === "pending" ? "warning" : state === "withdrawn" ? "neutral" : "danger";
 
 /** The approvals asked for a record: each request, its state, whom it waits for, and who rejected it and why. */
-function Approvals({ source, approvals }: { source: RecordSource; approvals: Api.ApprovalRequest[] }) {
+function Approvals({ source, approvals, onOpen }: { source: RecordSource; approvals: Api.ApprovalRequest[]; onOpen?: (type: string, r: EntityRecord) => void }) {
   const state = source.entity("work.approval")?.fields.find((f) => f.name === "state");
   return (
-    <section>
+    <section aria-label={t("Approvals")}>
       <h2 className="mb-1 text-sm font-semibold">{t("Approvals")}</h2>
       {approvals[0] && <div className="mb-1.5"><ApprovalGraph approval={approvals[0]} /></div>}
       <ul className="grid gap-1">
@@ -561,7 +567,7 @@ function Approvals({ source, approvals }: { source: RecordSource; approvals: Api
           const by = a.levels.flatMap((l) => l.approved.map((m) => l.decidedBy?.[m] ? t("{delegate} for {approver}", { delegate: l.decidedBy[m]!, approver: m }) : m));
           return (
             <li key={a.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
-              <span className="font-medium">{a.title}</span>
+              {onOpen ? <Button size="sm" variant="ghost" onClick={() => onOpen("work.approval", a)}>{a.title}</Button> : <span className="font-medium">{a.title}</span>}
               <Tag label={state?.choiceTitles?.[state.choices?.indexOf(a.state) ?? -1] ?? a.state} tone={approvalTone(a.state)} />
               {a.state === "pending" && level && <span className="text-xs text-muted">{t("waiting for {level}: {approvers}", { level: level.title, approvers: level.approvers.join(", ") })}</span>}
               {by.length > 0 && <span className="text-xs text-muted">{t("approved by {members}", { members: by.join(", ") })}</span>}
@@ -588,8 +594,8 @@ export function Tasks({ list, tasks }: { list: Api.InboxTask[]; tasks?: { answer
             <span className="font-medium">{task.title}</span>
             {task.body && <span className="whitespace-pre-wrap text-xs text-muted">{task.body}</span>}
             {tasks && <span className="flex flex-wrap gap-1.5">
-              {(task.answers?.length ? task.answers : [undefined]).map((a) =>
-                <Button key={a ?? "done"} size="sm" variant={a === task.answers?.[0] ? "primary" : undefined} disabled={busy === task.id} onClick={() => void answer(task, a)}>{a ?? t("Done")}</Button>)}
+              {(task.answers?.length ? task.answers : [undefined]).map((a, i) =>
+                <Button key={a ?? "done"} size="sm" variant={a === task.answers?.[0] ? "primary" : undefined} disabled={busy === task.id} onClick={() => void answer(task, a)}>{task.answerTitles?.[i] ?? a ?? t("Done")}</Button>)}
             </span>}
           </li>
         ))}
@@ -627,7 +633,7 @@ export function ApprovalGraph({ approval: a }: { approval: Api.ApprovalRequest }
 function Processes({ source, processes, onOpen }: { source: RecordSource; processes: RecordView["processes"]; onOpen?: (type: string, r: EntityRecord) => void }) {
   const state = source.entity("flow.instance")?.fields.find((f) => f.name === "state");
   return (
-    <section>
+    <section aria-label={t("Processes")}>
       <h2 className="mb-1 text-sm font-semibold">{t("Processes")}</h2>
       <ul className="grid gap-1">
         {processes.map((p) => (

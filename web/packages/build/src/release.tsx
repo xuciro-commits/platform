@@ -5,11 +5,11 @@ import { Button, Card, PageHeader, Select, t } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useState } from "react";
 
-type Kind = "object" | "page" | "app" | "flow" | "function";
+export type ReleaseKind = "object" | "page" | "app" | "flow" | "function";
 type Record = { id: string; title: string; name: string; state: string };
 type EvaluationPlan = { id: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
-const kinds: { kind: Kind; type: string; label: string }[] = [
+const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
   { kind: "object", type: "build.object", label: "Objects" },
   { kind: "page", type: "build.page", label: "Pages" },
   { kind: "app", type: "build.app", label: "Applications" },
@@ -17,10 +17,10 @@ const kinds: { kind: Kind; type: string; label: string }[] = [
   { kind: "function", type: "build.function", label: "AI functions" },
 ];
 
-export function ReleaseReview({ flowId = "", embedded = false }: { flowId?: string; embedded?: boolean } = {}) {
+export function ReleaseReview({ initialKind = "object", initialID = "", embedded = false }: { initialKind?: ReleaseKind; initialID?: string; embedded?: boolean } = {}) {
   const { client, role } = useHost();
-  const [kind, setKind] = useState<Kind>(flowId ? "flow" : "object");
-  const [id, setId] = useState(flowId);
+  const [kind, setKind] = useState<ReleaseKind>(initialKind);
+  const [id, setId] = useState(initialID);
   const [review, setReview] = useState<Api.ReleasePreview>();
   const [candidateKey, setCandidateKey] = useState("");
   const [savedID, setSavedID] = useState("");
@@ -117,7 +117,7 @@ export function ReleaseReview({ flowId = "", embedded = false }: { flowId?: stri
     {!embedded && <PageHeader title={t("Release review")} description={t("Compare a saved draft, then save its exact candidate bytes. Saving does not activate it for operators.")} />}
     <Card className="grid gap-3 p-3">
       {!embedded && <label className="grid gap-1 text-xs">{t("Definition kind")}
-        <Select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setId(""); setReview(undefined); setSavedID(""); setActiveID(""); setPlanID(""); setReportID(""); setError(""); }}>
+        <Select value={kind} onChange={(event) => { setKind(event.target.value as ReleaseKind); setId(""); setReview(undefined); setSavedID(""); setActiveID(""); setPlanID(""); setReportID(""); setError(""); }}>
           {kinds.map((item) => <option key={item.kind} value={item.kind}>{t(item.label)}</option>)}
         </Select>
       </label>}

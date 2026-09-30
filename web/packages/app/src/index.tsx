@@ -5,7 +5,7 @@
 import "./i18n";
 import type { ActionDeclaration, Api, EdgeClient, Entry } from "@platform/kernel";
 import {
-  Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
+  Button, Chart, Dialog, FilePicker, Form, Input, PageHeader, Panel, PropertyList, RecordForm, RecordList, RecordPage, entityFrom, useWorkspace,
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
@@ -240,8 +240,8 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
 }
 
 /** A record page with its lifecycle's transitions and the generated edit and archive where the catalog grants them. */
-export function RecordDetail({ type, id, fields, allowed }: { type: string; id: string; fields?: string[]; allowed?: string[] }) {
-  const { source, can, decide, client, me } = useHost();
+export function RecordDetail({ type, id, fields, allowed, advice }: { type: string; id: string; fields?: string[]; allowed?: string[]; advice?: { action: string; fields: string[] } }) {
+  const { source, can, decide, client, me, catalog } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
@@ -272,12 +272,15 @@ export function RecordDetail({ type, id, fields, allowed }: { type: string; id: 
   };
   return (
     <>
-      <RecordPage source={source} type={type} id={id} fields={fields} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
+      <RecordPage source={source} type={type} id={id} fields={advice ? (fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => !advice!.fields.includes(name)) : fields}
+        work={advice ? (view) => <RecordAdvice type={type} record={view.record} action={advice.action} fields={advice.fields} /> : undefined} onOpen={(t, r) => openRecord({ type: t, id: r.id })}
         can={(schema) => can(schema) && (!allowed || allowed.includes(schema))} onTransition={transition.take} files={can("files.file.attach") ? files : undefined}
         comments={can("platform.comment.add") ? comments : undefined}
         tasks={can("work.task.complete") ? { answer: async (task, answer) => { await decide("work.task.complete", { type: "work.task", id: task.id }, answer ? { answer } : {}); } } : undefined}
         actions={(r) => <>
-          <RecordActions type={type} record={r} allowed={allowed} />
+          <Button size="sm" variant="ghost" onClick={() => open({ view: "inbox" }, { window: "float" })}>{t("Back to inbox")}</Button>
+          {(["work.approval", "work.task", "flow.instance"].includes(type) && typeof (r.target ?? r.ref ?? r.subject) === "string") && <Button size="sm" variant="ghost" onClick={() => openRecord(String(r.target ?? r.ref ?? r.subject))}>{t("Open related record")}</Button>}
+          <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} />
           {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}
           {can(`${type}.edit`) && (!allowed || allowed.includes(`${type}.edit`)) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
           {can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>{t("Archive")}</Button>}
@@ -289,6 +292,24 @@ export function RecordDetail({ type, id, fields, allowed }: { type: string; id: 
       </Dialog>
     </>
   );
+}
+
+// Typed field/action bindings come from the owning app; the host remains the read authority.
+function RecordAdvice({ type, record, action, fields }: { type: string; record: EntityRecord; action: string; fields: string[] }) {
+  const { source, can } = useHost();
+  const info = source.entity(type);
+  if (!info) return null;
+  const entity = entityFrom(info);
+  const shown = info.fields.filter((field) => fields.includes(field.name));
+  if (!shown.length && !can(action)) return null;
+  return <Panel aria-label={t("AI review advice")} className="grid grid-cols-[minmax(0,1fr)] gap-2 p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">{t("AI review advice")}</h3>
+      <RecordActions type={type} record={record} allowed={[action]} />
+    </div>
+    {<p className="text-xs text-muted">{t("Request advice for this record. Business actions remain your decision.")}</p>}
+    <PropertyList items={shown.filter((field) => record[field.name] !== undefined && record[field.name] !== "")
+      .map((field) => [field.title, entity.fields[field.name]!.display(record[field.name] as never, record)])} />
+  </Panel>;
 }
 
 export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;

@@ -108,7 +108,7 @@
 | 已安装定义与有界页面 (ADR-0032 13a–13b) | 应用 API、宿主运行时、`@platform/app`、`@platform/ui` | 对象/动作/页面限定引用、依赖校验、授权目录及只读样本预览。 | platform.AssetRef, Manifest.Pages；[ADR-0032](ADR/0032-shared-application-definitions.md) |
 | 发布候选审查与活跃闭包（ADR-0039 20a–20b） | 应用 API、平台应用 `build`、宿主、`@pkg/build` | 规范候选、差异/依赖校验、持久字节与唯一活跃指针；仍先安装后激活。 | platform.Candidate, Build.DraftReleaseAssets；[ADR-0039](ADR/0039-minimal-definition-release.md) |
 | 具名查询 (ADR-0040 21c) | 应用 API、宿主运行时、共享页面与智能体工具 | 成员、页面和 AI 共用受权纯查询；候选包含查询依赖。 | platform.NamedQuery, Tenant.RunQuery；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 应用工坊总览 | 平台应用 `build`、`@pkg/build` | 对象/页面/流程/函数/应用资产图、搜索、状态及现有编辑器入口；完整跨界面上下文仍需推进。 | `StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| 应用工坊总览 | 平台应用 `build`、`@pkg/build` | 能力卡片与资产图、搜索/状态、编辑器入口、选中资产测试/发布和返回上下文。 | `StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户原生流程编写 (ADR-0042 23a–23c) | 平台应用 `build`、`flow`、`work`、宿主 | 同一工作流工作区的编写/测试/历史/发布；原生 Flow/Work、固定计划/模拟及精确启动绑定。 | build.Process/TestPlan, WorkflowEditor；[ADR-0042](ADR/0042-typed-workflow-composer.md) |
 | 固定数据候选测试 (ADR-0040 21d) | 宿主、平台应用 `build`、共享 UI | 空内存租户的固定样本/预期/恢复核对；非物理沙箱。 | build.TestPlan, Tenant.SimulateCandidate；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户交付的应用 (ADR-0036) | 平台应用 `build`、宿主运行时、`web/apps/workspace` | 已发布页面编组为应用，按成员可见页面进入启动器，不增加权限。 | platform.Application, Tenant.InstallApplication；[ADR-0036](ADR/0036-an-application-a-tenant-hands-to-its-people.md) |
@@ -146,8 +146,8 @@
 | 智能体 (ADR-0021, 0022) | 应用 API、平台应用 `agent` | 受管主体、交集权限、工具、草稿确认、追踪/记忆/评估和暂停。 | platform.Agent, agent*.go；[ADR-0021](ADR/0021-agents.md) |
 | 知识库 (ADR-0022) | 平台应用 `knowledge` | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。 | knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |
 | 协议 (ADR-0011) | 协议 | 版本化跨应用动作/读取/应答；住宿暂留与生产确认。 | platform.Protocol, Caller.Probe；[ADR-0011](ADR/0011-apps-interoperate-through-protocols.md) |
-| UI 库 | Web | 共享表格/表单/抽屉/工作区/画布；整体体验与组件广度按真实任务推进。 | @platform/ui, apps/gallery |
-| 工作区与 UI 应用 API (ADR-0018) | Web | 统一登录/应用导航、记录打开、助手/运行与搜索。 | @platform/app, web/apps/workspace；[ADR-0018](ADR/0018-one-workspace.md) |
+| UI 库 | Web | 共享表格/表单/详情/工作区/画布；记录工作区集中任务、审批、流程，窄屏属性单列。 | @platform/ui, apps/gallery |
+| 工作区与 UI 应用 API (ADR-0018) | Web | 统一登录/应用导航、记录与收件箱返回、编辑标签上下文；CRM/MES 建议复用记录与动作。 | @platform/app, web/apps/workspace；[ADR-0018](ADR/0018-one-workspace.md) |
 | 边缘客户端与登录 | Web | HTTP 边缘客户端、发件箱、PKCE/OIDC 与可读拒绝。 | @platform/kernel |
 | 设置中心 | Web | 系统治理与运行设置界面。 | @pkg/platform |
 | 应用 UI 包 | Web | 业务视图组合共享 UI/API，跨记录共性能力归平台。 | @pkg/<id>, crm |

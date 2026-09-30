@@ -2,7 +2,7 @@
 // routing, quality holds and equipment downtime — manufacturing's reference app
 // (Opcenter / SAP ME model) as a contribution to the workspace.
 import "./i18n";
-import { Records, defineApp, newId, useHost, useRead } from "@platform/app";
+import { RecordDetail, Records, defineApp, newId, useHost, useRead } from "@platform/app";
 import {
   Button, DataTable, Dialog, EntityCard, EntityForm, Graph, PageHeader, Panel, PropertyList, Select, StatusTag, defineStatuses, useWorkspace, type ColumnDef, type GraphEdge, type GraphNode,
  t } from "@platform/ui";
@@ -297,8 +297,9 @@ export default defineApp({
       encoding: { x: { field: "changed", timeUnit: "day", type: "temporal" }, y: count, color: { field: "state", type: "nominal" } } },
     { title: t("Orders confirmed to the ERP"), data: { entity: "mes.order" }, mark: "bar", encoding: { x: { field: "erp", type: "nominal", title: t("ERP answer") }, y: count } },
   ] }],
-  opens: { "mes.sfc": "sfc", "mes.downtime": "equipment" },
+  opens: { "mes.order": "mes-order", "mes.sfc": "sfc", "mes.downtime": "equipment" },
   views: [
+    { id: "mes-order", title: (p) => p.id ?? t("Shop orders"), render: (p) => <RecordDetail type="mes.order" id={p.id ?? ""} advice={{ action: "mes.order.advise", fields: ["advice", "adviceCategory", "adviceReview", "adviceState", "adviceWithheld"] }} /> },
     { id: "orders", title: () => t("Shop orders"), render: () => <ShopOrders /> },
     { id: "planned", title: () => t("Planned orders"), render: () => <PlannedOrders /> },
     { id: "queue", title: () => t("SFCs"), render: () => <SFCTable title={t("SFCs")} description={t("The lots of every released order, each with its quantity; what waits or is in work first")} /> },

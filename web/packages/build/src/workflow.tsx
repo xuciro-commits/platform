@@ -210,7 +210,7 @@ export function WorkflowEditor({ id }: { id: string }) {
         <WorkflowRuns name={draft.name} onStepSelect={inspectStep} />
       </div>}
       {visited.includes("release") && <div className={stage === "release" ? "" : "hidden"}>
-        <ReleaseReview flowId={draft.id} embedded />
+        <ReleaseReview initialKind="flow" initialID={draft.id} embedded />
       </div>}
     </div>}
   </div>;

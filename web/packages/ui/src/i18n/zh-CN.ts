@@ -1,5 +1,10 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "Workspace view": "工作区视图",
+  "Work on this record": "此记录的相关工作",
+  "Back to inbox": "返回收件箱",
+  "Open related record": "打开关联业务记录",
+
   "Back to list": "返回列表",
   "Search records": "搜索记录",
   "No matching records.": "没有匹配的记录。",

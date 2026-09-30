@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "AI review advice": "AI 审核建议",
+  "Request advice for this record. Business actions remain your decision.": "为此记录请求建议；业务操作仍由你决定。",
+
   "Version": "版本",
   "Choose a published function for this page.": "请为此页面选择已发布函数。",
   "Select a record to request advice.": "选中记录后再请求建议。",

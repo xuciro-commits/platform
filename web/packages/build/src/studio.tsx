@@ -23,6 +23,7 @@ const catalog: NodeCatalog = [
 
 function StudioInventory() {
   const { open } = useWorkspace();
+  const { definitions } = useHost();
   const objects = useRecordInventory<Asset>("build.object");
   const pages = useRecordInventory<Asset>("build.page");
   const workflows = useRecordInventory<Asset>("build.process");
@@ -57,7 +58,9 @@ function StudioInventory() {
       const own = byObject.get(name);
       if (own) return own;
       const key = `source:${name}`;
-      if (!assets.some((asset) => asset.key === key)) assets.push({ key, kind: "source", label: name, detail: t("Installed object") });
+      const definition = definitions.find((d) => d.ref.kind === "object" && d.ref.name === name);
+      if (!assets.some((asset) => asset.key === key)) assets.push({ key, kind: "source", label: definition?.entity?.title ?? name, detail: t("Installed object"),
+        route: definition ? { view: "definition", params: definition.ref } : undefined });
       return key;
     };
     for (const record of objects.data?.records ?? []) for (const field of record.fields ?? []) {
@@ -86,7 +89,7 @@ function StudioInventory() {
       }
     }
     return { assets, edges };
-  }, [applications.data, functions.data, objects.data, pages.data, workflows.data]);
+  }, [applications.data, functions.data, objects.data, pages.data, workflows.data, definitions]);
   const visible = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
     const matches = q ? all.assets.filter((asset) => `${asset.label} ${asset.detail}`.toLocaleLowerCase().includes(q)) : all.assets;
@@ -107,17 +110,24 @@ function StudioInventory() {
   const loading = [objects, pages, workflows, functions, applications].some((query) => query.isLoading);
   const failed = [objects, pages, workflows, functions, applications].some((query) => query.isError);
   return <div className="grid gap-4">
-    <PageHeader title={t("Application Studio")} description={t("See how objects, pages, workflows and functions form an application. Select an asset to edit it.")}
-      actions={<div className="flex flex-wrap gap-2">
-        <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: "objects" } })}>{t("Objects")}</Button>
-        <Button onClick={() => open({ view: "pages" })}>{t("Pages")}</Button>
-        <Button onClick={() => open({ view: "workflow" })}>{t("Workflows")}</Button>
-      </div>} />
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-      {([[t("Objects"), objects], [t("Pages"), pages], [t("Workflows"), workflows], [t("AI functions"), functions], [t("Applications"), applications]] as const)
-        .map(([label, query]) => <Card key={label} className="p-3"><p className="text-xs text-muted">{label}</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{query.data?.records.length ?? (query.isLoading ? "…" : 0)}</p></Card>)}
-    </div>
+    <PageHeader title={t("Application Studio")} description={t("Build with the capabilities already available in this workspace.")} />
+    <section aria-label={t("Studio capabilities")} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {[
+        { title: "Objects and relationships", detail: "Define fields, relationships, actions and access.", route: { view: "page", params: { app: "build", kind: "page", name: "objects" } }, query: objects },
+        { title: "Pages", detail: "Compose an interface over your business objects.", route: { view: "pages" }, query: pages },
+        { title: "Workflows", detail: "Connect actions, people and published functions.", route: { view: "workflow" }, query: workflows },
+        { title: "AI functions", detail: "Configure typed advice and review its results.", route: { view: "function" }, query: functions },
+        { title: "Applications", detail: "Give published pages to the people who use them.", route: { view: "page", params: { app: "build", kind: "page", name: "applications" } }, query: applications },
+        { title: "Test and release", detail: "Try saved drafts, review dependencies and activate a candidate.", route: { view: "candidate-test" } },
+      ].map((capability) => <Card key={capability.title} className="grid gap-2 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="ghost" className="-ml-2 text-sm font-semibold" onClick={() => open(capability.route)}>{t(capability.title)}</Button>
+          {capability.query && <span className="text-sm tabular-nums text-muted">{capability.query.isError ? "—" : capability.query.data?.records.length ?? "…"}</span>}
+        </div>
+        <p className="text-xs text-muted">{t(capability.detail)}</p>
+        {capability.title === "Test and release" && <Button size="sm" onClick={() => open({ view: "release-review" })}>{t("Release review")}</Button>}
+      </Card>)}
+    </section>
     {failed && <Panel role="alert" className="text-sm text-danger">{t("Some studio assets could not be loaded. Retry the workspace.")}</Panel>}
     <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
       <Card className="min-w-0 grid gap-3 p-3">
@@ -140,6 +150,12 @@ function StudioInventory() {
           {current.record?.state && <StatusTag status={current.record.state} registry={states} />}
           {current.record?.version ? <p className="text-xs">{t("Version")} {current.record.version}</p> : null}
           {current.route && <Button variant="primary" onClick={() => open(current.route!)}>{t("Open selected asset")}</Button>}
+          {current.record && <div className="flex flex-wrap gap-2">
+            {["object", "workflow", "function"].includes(current.kind) && <Button size="sm" onClick={() => open({ view: "candidate-test", params: {
+              [current.kind === "workflow" ? "processId" : current.kind === "function" ? "functionId" : "objectId"]: current.record!.id,
+            } })}>{t("Test selected asset")}</Button>}
+            <Button size="sm" onClick={() => open({ view: "release-review", params: { kind: current.kind === "workflow" ? "flow" : current.kind === "application" ? "app" : current.kind, id: current.record!.id } })}>{t("Review selected release")}</Button>
+          </div>}
           {current.kind === "source" && <p className="text-xs text-muted">{t("This source is installed outside Application Studio.")}</p>}
           {connections.length > 0 && <div className="mt-2 grid gap-1 border-t border-border pt-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{t("Connected assets")}</h3>

@@ -4,7 +4,7 @@
 // whichever app provides the lodging protocol, and what the provider told about
 // them (ADR-0011) — the platform's, not the CRM's (#129).
 import "./i18n";
-import { Records, defineApp } from "@platform/app";
+import { RecordDetail, Records, defineApp } from "@platform/app";
 import { t } from "@platform/ui";
 import { Building2, Handshake } from "lucide-react";
 
@@ -25,7 +25,9 @@ export default defineApp({
       encoding: { x: { field: "owner", type: "nominal" }, y: count, color: { field: "stage", type: "nominal" } } },
     { title: t("Opened per month"), data: opportunities, mark: "line", encoding: { x: { field: "created", timeUnit: "month", type: "temporal" }, y: count } },
   ] }],
+  opens: { "crm.opportunity": "crm-opportunity" },
   views: [
+    { id: "crm-opportunity", title: (p) => p.id ?? t("Opportunities"), render: (p) => <RecordDetail type="crm.opportunity" id={p.id ?? ""} advice={{ action: "crm.opportunity.advise", fields: ["advice", "adviceCategory", "adviceReview", "adviceState", "adviceWithheld"] }} /> },
     { id: "accounts", title: () => t("Accounts"), render: () => <Records type="crm.account" description={t("Customers, companies or people, each with their opportunities and the stays booked for them.")} /> },
     { id: "opportunities", title: () => t("Opportunities"), render: () => <Records type="crm.opportunity" /> },
   ],

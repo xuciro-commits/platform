@@ -45,7 +45,13 @@ test("route 4: an approval reaches the requester's page", async ({ page, request
   await open(managerPage, "manager", "/inbox");
   const task = managerPage.getByRole("listitem").filter({ hasText: leave });
   await expect(task).toBeVisible();
-  await task.getByRole("button", { name: "Approve", exact: true }).click();
+  await task.getByRole("button").first().click();
+  await managerPage.getByRole("button", { name: "Open related record" }).click();
+  await managerPage.getByRole("region", { name: "Approvals", exact: true }).getByRole("button", { name: "Submit for approval", exact: true }).click();
+  const approvalID = new URLSearchParams(new URL(managerPage.url()).hash.split("?")[1]).get("id")!;
+  await managerPage.getByRole("region", { name: approvalID, exact: true }).getByRole("button", { name: "Approve", exact: true }).click();
+  await managerPage.getByRole("dialog").getByRole("button", { name: "Approve", exact: true }).click();
+  await managerPage.getByRole("button", { name: "Back to inbox" }).click();
   await expect(value(page, "Approved")).toBeVisible();
   await managerPage.close();
 });
@@ -82,7 +88,7 @@ test("route 29: define an object, publish it, use it", async ({ page }) => {
   const name = `visit${Date.now().toString(36).slice(-5)}`;
   await open(page, "manager", "/home");
   await page.getByRole("button", { name: "Application Studio" }).first().click(); // the app, from the launcher
-  await page.getByRole("tabpanel", { name: "Application Studio" }).getByRole("button", { name: "Objects", exact: true }).click();
+  await page.getByRole("region", { name: "Application Studio", exact: true }).getByRole("button", { name: "Objects and relationships", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Objects" })).toBeVisible();
   await page.getByRole("button", { name: "Create object" }).click();
   const dialog = page.getByRole("dialog");
@@ -143,14 +149,14 @@ test("route 30: compose a page of widgets and use it", async ({ page, request })
   await expect(page.getByRole("group", { name: "Fields it shows" })).toBeVisible();
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText("The page is in the workspace.")).toBeVisible(); // what the host answered
-  await expect(page.getByText("Published", { exact: true })).toBeVisible(); // and the composer shows where the page stands
+  await expect(page.getByRole("region", { name: "Compose a page", exact: true }).getByText("Published", { exact: true })).toBeVisible(); // and the composer shows where the page stands
 
   // What was composed is what people open: the table fills the detail beside it.
   await page.getByRole("button", { name: "Group offsites" }).click();
   await expect(page.getByRole("heading", { name: "Group offsites" })).toBeVisible();
   await page.getByRole("textbox", { name: "Search" }).first().fill(opp);
   await page.getByRole("row").filter({ hasText: opp }).click();
-  await expect(page.getByText("Composed offsite " + opp).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Composed offsite " + opp, exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Close opportunity" })).toBeVisible(); // the CRM's own action, on a page someone composed
 });
 

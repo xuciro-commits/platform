@@ -61,6 +61,20 @@ class ViewBoundary extends Component<{ children: ReactNode; onClose: () => void 
   }
 }
 
+/** Narrow workspaces use full-width tabs, while retaining each record's context. */
+function dockFloating(api: DockviewApi) {
+  const root = api.groups.find((group) => group.api.location.type === "grid");
+  if (!root) return;
+  const active = api.activePanel;
+  for (const group of [...api.groups].filter((group) => group.api.location.type === "floating")) {
+    for (const panel of [...group.panels]) {
+      panel.api.setRenderer("always");
+      panel.api.moveTo({ group: root });
+    }
+  }
+  active?.api.setActive();
+}
+
 /**
  * The platform shell: menu bar, session, navigation, a docking workspace whose
  * tabs are routes (one per entity), a command palette (⌘K) and notifications.
@@ -99,6 +113,8 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   const navigationVisible = compact ? mobileNavOpen : navOpen;
   const toggleNavigation = () => compact ? setMobileNavOpen((open) => !open) : setNavOpen((open) => !open);
   const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
+  useEffect(() => { if (compact && dock.current) dockFloating(dock.current); }, [compact]);
+
   const followed = useRef(onActiveRoute);
   followed.current = onActiveRoute;
 
@@ -108,19 +124,23 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     if (!api || !view) return;
     const key = routeKey(route);
     const title = view.title(route.params ?? {});
+    const floating = options.window === "float" && !compact ? api.groups.find((g) => g.api.location.type === "floating") : undefined;
     let panel = api.getPanel(key);
-    if (!panel && options.window === "float") {
+    if (panel && floating && panel.group !== floating) {
+      panel.api.setRenderer("onlyWhenVisible");
+      panel.api.moveTo({ group: floating });
+    }
+    if (!panel && options.window === "float" && !compact) {
       // One floating window above the page: what opens next joins it as a tab, so people click back and forth.
-      const floating = api.groups.find((g) => g.api.location.type === "floating");
       const width = Math.min(820, api.width - 48), height = Math.max(280, api.height - 64);
       panel = floating
-        ? api.addPanel({ id: key, component: "view", title, params: { route }, position: { referenceGroup: floating } })
-        : api.addPanel({ id: key, component: "view", title, params: { route }, floating: { width, height, x: api.width - width - 24, y: 32 } });
+        ? api.addPanel({ id: key, component: "view", renderer: "onlyWhenVisible", title, params: { route }, position: { referenceGroup: floating } })
+        : api.addPanel({ id: key, component: "view", renderer: "onlyWhenVisible", title, params: { route }, floating: { width, height, x: api.width - width - 24, y: 32 } });
     }
     panel ??= api.addPanel({ id: key, component: "view", title, params: { route } });
     if (options.window === "popout") void api.addPopoutGroup(panel);
     panel.api.setActive();
-  }, [byId]);
+  }, [byId, compact]);
 
   const workspace = useMemo<WorkspaceApi>(() => ({
     open, notify: toast, close: (route) => dock.current?.getPanel(routeKey(route))?.api.close(),
@@ -129,7 +149,12 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   const components = useMemo(() => ({
     view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
       const view = byId.get(params.route.view);
-      return <div className="h-full overflow-auto bg-background p-4">
+      const [visible, setVisible] = useState(api.isVisible);
+      useEffect(() => {
+        const changed = api.onDidVisibilityChange((event) => setVisible(event.isVisible));
+        return () => changed.dispose();
+      }, [api]);
+      return <div style={{ display: visible ? undefined : "none" }} role="region" aria-label={view?.title(params.route.params ?? {}) ?? t("Workspace view")} className="h-full overflow-auto bg-background p-4">
         <ViewBoundary onClose={() => api.close()}>
           {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}
         </ViewBoundary>
@@ -153,6 +178,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     } catch {
       api.clear(); // a stale or corrupt layout falls back to the home view
     }
+    if (compact) dockFloating(api);
     const sync = () => {
       setOpenTabs(api.panels.map((p) => ({ key: p.id, title: p.title ?? p.id })));
       setActive(api.activePanel?.id);
@@ -165,7 +191,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
     if (linked && byId.has(linked.view)) open(linked);
     else if (api.panels.length === 0) open(home);
     sync();
-  }, [byId, home, open, storageKey]);
+  }, [byId, home, open, storageKey, compact]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -249,7 +275,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
             </nav>
           )}
           <div className="platform-dock min-h-0 min-w-0 overflow-hidden">
-            <DockviewReact components={components} onReady={onReady} theme={themeLight} />
+            <DockviewReact defaultRenderer="always" components={components} onReady={onReady} theme={themeLight} />
           </div>
         </div>
       </div>

@@ -9,7 +9,7 @@ import { PageEditor, PagesList } from "./editor";
 import { ProcessEditor, ProcessPicker } from "./process";
 import { WorkflowEditor, Workflows } from "./workflow";
 import { FunctionEditor, Functions } from "./function";
-import { ReleaseReview } from "./release";
+import { ReleaseReview, type ReleaseKind } from "./release";
 import { CandidateTest } from "./simulate";
 import { StudioOverview } from "./studio";
 import { t, type NavSection } from "@platform/ui";
@@ -30,8 +30,8 @@ export default defineApp({
     { id: "process", title: () => t("Object design"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
     { id: "workflow", title: () => t("Workflows"), render: (p) => p.id ? <WorkflowEditor key={p.id} id={p.id} /> : <Workflows /> },
     { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <Functions /> },
-    { id: "release-review", title: () => t("Release review"), render: () => <ReleaseReview /> },
-    { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <CandidateTest key={p.functionId ?? p.processId ?? "object"} processId={p.processId} functionId={p.functionId} /> },
+    { id: "release-review", title: () => t("Release review"), render: (p) => <ReleaseReview key={`${p.kind}:${p.id}`} initialKind={["object", "page", "app", "flow", "function"].includes(p.kind ?? "") ? p.kind as ReleaseKind : "object"} initialID={p.id} /> },
+    { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <CandidateTest key={p.functionId ?? p.processId ?? p.objectId ?? "object"} processId={p.processId} functionId={p.functionId} objectId={p.objectId} /> },
   ],
   opens: { "build.page": "compose", "build.object": "process", "build.process": "workflow", "build.function": "function" }, // open a semantic asset in its editor
   nav: (host): NavSection[] => {

@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Build with the capabilities already available in this workspace.": "用工作区已有能力构建应用。",
+  "Studio capabilities": "工坊能力入口",
+  "Objects and relationships": "对象与关系",
+  "Define fields, relationships, actions and access.": "定义字段、关系、动作与访问权限。",
+  "Compose an interface over your business objects.": "基于业务对象组装操作界面。",
+  "Connect actions, people and published functions.": "连接动作、人员与已发布函数。",
+  "Configure typed advice and review its results.": "配置类型化建议并查看结果。",
+  "Give published pages to the people who use them.": "将已发布页面交付给使用者。",
+  "Test and release": "测试与发布",
+  "Try saved drafts, review dependencies and activate a candidate.": "测试已保存草稿，审查依赖并激活候选。",
+  "Test selected asset": "测试所选资产",
+  "Review selected release": "审查所选资产发布",
+
   "Design": "设计",
   "Test": "测试",
   "Runs": "运行记录",

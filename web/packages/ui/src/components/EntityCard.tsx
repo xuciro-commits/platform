@@ -4,10 +4,10 @@ import { Card } from "../primitives/card";
 /** Label/value pairs; values may be any node (tags, links, numbers). */
 export function PropertyList({ items }: { items: [label: string, value: ReactNode][] }) {
   return (
-    <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+    <dl className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
       {items.map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="text-muted">{label}</dt>
+          <dt className="break-words text-muted">{label}</dt>
           <dd className="min-w-0 break-words">{value}</dd>
         </div>
       ))}

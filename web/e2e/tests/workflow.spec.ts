@@ -7,7 +7,7 @@ for (const fixture of [
 ]) {
   test.describe(fixture.industry, () => {
     test.use({ baseURL: fixture.baseURL });
-    test("route 43: compose, test, publish and answer a native workflow", async ({ page, request }) => {
+    test("route 43: compose, test, publish and answer a native workflow", async ({ page, request }, testInfo) => {
       test.setTimeout(90_000);
       const objectID = fresh("OBJ"), stamp = fresh("wf").replace(/[^a-z0-9]/gi, "").toLowerCase(), name = `item${stamp}`, flowName = `review${stamp}`, type = `build.${name}`;
       await decide(request, fixture.builder, "build", "build.object.create", { type: "build.object", id: objectID }, {
@@ -17,12 +17,27 @@ for (const fixture of [
       });
       await decide(request, fixture.builder, "build", "build.object.publish", { type: "build.object", id: objectID }, {});
       await open(page, fixture.builder, "/studio");
+      const capabilities = page.getByRole("region", { name: "Studio capabilities" });
+      for (const title of ["Objects and relationships", "Pages", "Workflows", "AI functions", "Applications", "Test and release", "Release review"])
+        await expect(capabilities.getByRole("button", { name: title, exact: true })).toBeVisible();
+      await page.getByRole("textbox", { name: "Find an asset" }).fill(fixture.title);
       const studio = page.getByRole("region", { name: "Application map" });
       await expect(studio.getByText(fixture.title, { exact: true })).toBeVisible();
       await studio.getByText(fixture.title, { exact: true }).click();
       await expect(page.getByRole("region", { name: "Asset inspector" }).getByText(`build.${name}`)).toBeVisible();
       await page.getByRole("button", { name: "Open selected asset" }).click();
       await expect(page.getByRole("heading", { name: `Design ${fixture.title}` })).toBeVisible();
+      await page.getByRole("button", { name: "Overview", exact: true }).click();
+      await expect(page.getByRole("textbox", { name: "Find an asset" })).toHaveValue(fixture.title);
+      await expect(page.getByRole("region", { name: "Asset inspector" }).getByText(`build.${name}`)).toBeVisible();
+      if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("studio-capabilities.png"), fullPage: true });
+      await page.getByRole("button", { name: "Test selected asset" }).click();
+      await expect(page.getByRole("combobox", { name: "Saved object draft" })).toHaveValue(objectID);
+      await page.getByRole("button", { name: "Overview", exact: true }).click();
+      await page.getByRole("button", { name: "Review selected release" }).click();
+      await expect(page.getByRole("combobox", { name: "Saved draft" })).toHaveValue(objectID);
+      await page.getByRole("button", { name: "Overview", exact: true }).click();
+
       await open(page, fixture.builder, "/workflow");
       await page.getByRole("button", { name: "New workflow", exact: true }).click();
       const properties = page.getByRole("region", { name: "Workflow properties" });
@@ -120,6 +135,14 @@ for (const fixture of [
       await decide(request, fixture.operator, "build", `${type}.create`, { type, id: real }, { note: "OPERATOR RECORD" });
       const operator = await page.context().newPage();
       await open(operator, fixture.operator, "/inbox");
+      await operator.getByRole("listitem").filter({ hasText: real }).getByRole("button").first().click();
+      const work = operator.getByRole("region", { name: "Work on this record" });
+      await expect(work.getByRole("region", { name: "Waiting for you" })).toBeVisible();
+      await work.getByRole("region", { name: "Processes" }).getByRole("button").first().click();
+      await operator.getByRole("button", { name: "Open related record" }).click();
+      await expect(work).toBeVisible();
+      if (process.env.PLATFORM_SCREENSHOTS) await operator.screenshot({ path: testInfo.outputPath("record-work.png"), fullPage: true });
+      await operator.getByRole("button", { name: "Back to inbox" }).click();
       const task = operator.getByRole("listitem").filter({ hasText: real });
       await expect(task).toBeVisible();
       const bound = await request.get(`/v1/records/flow.instance/build.${flowName}:${real}`, { headers: { Authorization: `Bearer ${fixture.builder}` } });

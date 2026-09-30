@@ -1,6 +1,6 @@
 // Settings: flows (ADR-0020), agents and their evaluations (ADR-0021).
-import { ChainGraph, Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { Button, Checkbox, DataTable, Form, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
+import { ChainGraph, Records, newId, useHost, useOpenRecord, useReadQuery as useRead, type AgentInfo } from "@platform/app";
+import { Button, Checkbox, DataTable, Form, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, PageHeader, Select, useWorkspace, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { type AIModel } from "./shared";
@@ -34,6 +34,8 @@ export function Flows() {
 }
 
 export function FlowPage({ id }: { id: string }) {
+  const { open } = useWorkspace();
+  const openRecord = useOpenRecord();
   const { decide, can } = useHost();
   const view = useRead<{ record: FlowInstanceData }>(`/v1/records/flow.instance/${encodeURIComponent(id)}`, 3000).data;
   const flows = useRead<FlowDefinition[]>("/v1/flows").data ?? [];
@@ -45,6 +47,9 @@ export function FlowPage({ id }: { id: string }) {
   const next = flows.some((f) => f.id === x.flow && f.version > x.version);
   return (
     <div className="grid max-w-4xl gap-3">
+      <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => open({ view: "inbox" }, { window: "float" })}>{t("Back to inbox")}</Button>
+        {x.subject && <Button variant="ghost" onClick={() => openRecord(x.subject!)}>{t("Open related record")}</Button>}
+      </div>
       {live && (
         <div className="flex gap-2">
           {can("flow.instance.retry") && <Button size="sm" onClick={() => void decide("flow.instance.retry", target, {})}>{t("Retry")}</Button>}

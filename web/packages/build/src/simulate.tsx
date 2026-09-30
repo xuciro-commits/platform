@@ -12,8 +12,8 @@ type EvaluationPolicy = { minQuality: number; maxCostUsd: number; maxLatencyMill
 type TestPlan = { id: string; revision: number; title: string; object?: string; process?: string; function?: string; model?: string; as?: string; at: string; steps: Step[]; evaluation?: EvaluationPolicy[] };
 
 /** The host owns the test runtime. This editor only assembles its fixed inputs. */
-export function CandidateTest({ processId = "", functionId = "", embedded = false, onStepSelect }: {
-  processId?: string; functionId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
+export function CandidateTest({ processId = "", functionId = "", objectId = "", embedded = false, onStepSelect }: {
+  processId?: string; functionId?: string; objectId?: string; embedded?: boolean; onStepSelect?: (step: string) => void;
 }) {
   const { client, role, decide } = useHost();
   const objects = useRecordInventory<ObjectDraft>("build.object");
@@ -27,7 +27,7 @@ export function CandidateTest({ processId = "", functionId = "", embedded = fals
   const [title, setTitle] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [id, setID] = useState(functionId || processId);
+  const [id, setID] = useState(functionId || processId || objectId);
   const [member, setMember] = useState("");
   const [at, setAt] = useState("2026-01-01T09:00:00Z");
   const [steps, setSteps] = useState<Step[]>([]);
@@ -56,6 +56,11 @@ export function CandidateTest({ processId = "", functionId = "", embedded = fals
       ...(ask ? [{ type: workflow.object, id: "TEST-1", action: "", payload: "{}", flow: `build.${workflow.name}`, step: ask.name, answer: ask.answers?.[0] ?? "", expect: "accepted" as const, advanceSeconds: 2 }] : [])];
   };
   useEffect(() => { if (process && steps.length === 0) setSteps(workflowSteps(process)); }, [process, steps.length]);
+  useEffect(() => {
+    if (objectId && kind === "object" && object && steps.length === 0) setSteps([
+      { type: `build.${object.name}`, id: "TEST-1", action: `build.${object.name}.create`, payload: "{}", expect: "accepted" },
+    ]);
+  }, [objectId, kind, object, steps.length]);
   const actions = [{ name: "create", title: t("Create records") }, { name: "edit", title: t("Edit records") },
     { name: "archive", title: t("Archive records") }, ...(object?.actions ?? [])];
   const clear = () => { setResult(undefined); setError(""); setSaved(false); setDirty(true); };
