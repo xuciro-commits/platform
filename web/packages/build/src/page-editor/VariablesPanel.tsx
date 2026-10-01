@@ -63,12 +63,13 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
       {variable.mode === "shared" && <label className="grid gap-1 text-xs">{t("Application variable")}<Select value={variable.source?.variable ?? ""} onChange={(event) => { const source = shared[event.target.value]; if (source) patch({ type:source.type, writable:source.mode === "state", source:{kind:"application",variable:event.target.value} }); }}><option value="">{t("Choose an application variable")}</option>{Object.entries(shared).map(([id,v]) => <option key={id} value={id}>{v.title || id}</option>)}</Select></label>}
       {variable.mode === "resource" && variable.scope === "page" && <>
         <label className="grid gap-1 text-xs">{t("Resource output kind")}<Select value={variable.source?.kind ?? "record"} onChange={(event) => {
+          if (event.target.value === "plan") { patch({type:"object-set",source:{kind:"plan",query:Object.keys(document.queries??{})[0]??""}});return; }
           const resource = pageVariableContract.resources.find((resource) => resource.kind === event.target.value)!;
           patch({ type: resource.type, source: { kind: resource.kind, section: sections.find((section) => section.widget === resource.widget)?.id ?? "" } });
-        }}><option value="record">{t("Record selection")}</option><option value="filter">{t("Filter values")}</option><option value="query">{t("Query window")}</option></Select></label>
-        <label className="grid gap-1 text-xs">{t("Source widget")}<Select value={variable.source?.section ?? ""} onChange={(event) => patch({ source: { kind: variable.source!.kind, section: event.target.value } })}>
+        }}><option value="record">{t("Record selection")}</option><option value="filter">{t("Filter values")}</option><option value="query">{t("Query window")}</option>{Object.keys(document.queries??{}).length>0&&<option value="plan">{t("Query plan")}</option>}</Select></label>
+        {variable.source?.kind === "plan" ? <label className="grid gap-1 text-xs">{t("Query plan")}<Select value={variable.source.query??""} onChange={(event)=>patch({source:{kind:"plan",query:event.target.value}})}>{Object.entries(document.queries??{}).map(([id,query])=><option key={id} value={id}>{query.title||id}</option>)}</Select></label> : <label className="grid gap-1 text-xs">{t("Source widget")}<Select value={variable.source?.section ?? ""} onChange={(event) => patch({ source: { kind: variable.source!.kind, section: event.target.value } })}>
           <option value="">{t("Choose a source widget")}</option>{sections.filter((section) => section.widget === pageVariableContract.resources.find((resource) => resource.kind === variable.source?.kind)?.widget).map((section) => <option key={section.id} value={section.id}>{section.title || section.widget}</option>)}
-        </Select></label>
+        </Select></label>}
         <p className="text-xs text-muted">{t("Uses the widget's original binding and read permissions. A query window is not the full object set.")}</p>
       </>}
       {expr && <>

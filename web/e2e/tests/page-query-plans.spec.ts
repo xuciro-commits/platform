@@ -1,0 +1,48 @@
+import { expect, test } from "@playwright/test";
+import { decide, fresh, open, pageUIProfile } from "./host";
+
+test("a configured independent query feeds original loop work and drops obsolete parameter responses after frozen publication", async ({page,request},testInfo)=>{
+  test.setTimeout(60_000);
+  const name=fresh("plan").replace(/[^a-z0-9]/gi,"").toLowerCase(),type=`build.${name}`,object=fresh("OBJ"),id=fresh("PAGE"),a=fresh("NOTE"),b=fresh("NOTE"),c=fresh("NOTE");
+  await decide(request,"manager","build","build.object.create",{type:"build.object",id:object},{name,title:"Plan notes",fields:[{name:"note",title:"Note",type:"text"},{name:"bucket",title:"Bucket",type:"text"}],states:[{name:"open",title:"Open"},{name:"done",title:"Done"}],actions:[{name:"close",title:"Complete plan note",from:["open"],to:"done"}]});
+  await decide(request,"manager","build","build.object.publish",{type:"build.object",id:object},{});
+  for(const [id,note,bucket] of [[a,"PLAN-A1","A"],[b,"PLAN-A2","A"],[c,"PLAN-B","B"]])await decide(request,"desk","build",`${type}.create`,{type,id},{note,bucket});
+  await decide(request,"manager","build","build.page.create",{type:"build.page",id},{name,title:"Query operation desk",object:type,sections:[{id:"parameter",widget:"input",configVersion:1,title:"Bucket parameter"},{id:"detail",widget:"detail",configVersion:1,title:"Plan note",fields:["note","bucket","state"]},{id:"actions",widget:"actions",configVersion:1,title:"Plan work",actions:[`${type}.close`]}],document:{formatVersion:2,uiProfile:pageUIProfile,root:"root",nodes:{root:{kind:"rows",children:["parameter","cards"]},parameter:{kind:"widget",section:"parameter",valueVariable:"parameter"},cards:{kind:"rows",children:["detail","actions"]},detail:{kind:"widget",section:"detail"},actions:{kind:"widget",section:"actions"}},variables:{parameter:{title:"Bucket parameter",scope:"page",type:"string",mode:"state",initial:"A"}}}});
+  await open(page,"manager",`/compose?id=${id}`);
+  const tree=page.getByRole("region",{name:"Widgets and layout",exact:true}),inspector=page.getByRole("region",{name:"The widget in hand",exact:true});
+  await tree.getByRole("button",{name:"Query plans",exact:true}).click();
+  await inspector.getByRole("button",{name:"Add query plan",exact:true}).click();
+  await inspector.getByLabel("Query title",{exact:true}).fill("Bucket query");
+  await inspector.getByLabel("Query window limit",{exact:true}).fill("2");
+  await inspector.getByRole("button",{name:"Add query condition",exact:true}).click();
+  await inspector.getByRole("combobox",{name:"Query condition field",exact:true}).selectOption("bucket");
+  await inspector.getByRole("combobox",{name:"Query condition value",exact:true}).selectOption("parameter");
+  await expect(inspector.getByRole("region",{name:"Query result window",exact:true})).toContainText("2");
+  await tree.getByRole("button",{name:/^Rows/}).last().click();
+  await inspector.getByRole("combobox",{name:"Layout",exact:true}).selectOption("loop");
+  await inspector.getByLabel("Container title",{exact:true}).fill("Query cards");
+  const canvas=page.getByRole("region",{name:"The page",exact:true});
+  await expect(canvas.getByText("PLAN-A1",{exact:true})).toBeVisible();
+  await expect(canvas.getByText("Actions do not run while you compose.",{exact:true}).first()).toBeVisible();
+  await page.getByRole("button",{name:"Save",exact:true}).click();await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();
+  const saved=(await(await request.get(`/v1/records/build.page/${id}`,{headers:{Authorization:"Bearer manager"}})).json()).record;
+  expect(saved.sections.some((section:any)=>section.widget==="table")).toBe(false);
+  expect(Object.values(saved.document.queries)).toHaveLength(1);
+  if(process.env.PLATFORM_SCREENSHOTS)await page.screenshot({path:testInfo.outputPath("query-plan-designer.png"),fullPage:true});
+  await page.getByRole("button",{name:"Review release",exact:true}).click();await page.getByRole("button",{name:"Check draft and dependencies",exact:true}).click();await page.getByRole("button",{name:"Save immutable candidate",exact:true}).click();
+  const later=structuredClone(saved.document);Object.values(later.queries).forEach((query:any)=>query.limit=1);await decide(request,"manager","build","build.page.edit",{type:"build.page",id},{document:later});
+  await page.getByRole("button",{name:"Activate release",exact:true}).click();
+  const operation=await page.context().newPage();await open(operation,"desk",`/page?app=build&kind=page&name=${name}`);
+  const input=operation.getByRole("textbox",{name:"Bucket parameter",exact:true}),cards=operation.getByRole("list",{name:"Query cards",exact:true});
+  await expect(cards.getByText("PLAN-A1",{exact:true})).toBeVisible();await expect(cards.getByText("PLAN-A2",{exact:true})).toBeVisible();
+  let release!:()=>void,held=false;const wait=new Promise<void>((resolve)=>release=resolve);
+  await operation.route(`**/v1/records/${type}?*`,async route=>{const domain=new URL(route.request().url()).searchParams.get("domain")??"";if(domain.includes('"B"')&&!held){const response=await route.fetch();held=true;await wait;await route.fulfill({response});}else await route.continue();});
+  await input.fill("B");await expect.poll(()=>held).toBe(true);await expect(cards.getByText("PLAN-A1",{exact:true})).toHaveCount(0);
+  await input.fill("A");await expect(cards.getByText("PLAN-A1",{exact:true})).toBeVisible();release();await expect(cards.getByText("PLAN-B",{exact:true})).toHaveCount(0);
+  await operation.unroute(`**/v1/records/${type}?*`);
+  await input.fill("B");await expect(cards.getByText("PLAN-B",{exact:true})).toBeVisible();await expect(cards.getByText("PLAN-A1",{exact:true})).toHaveCount(0);
+  await cards.getByRole("button",{name:"Complete plan note",exact:true}).click();
+  await expect.poll(async()=>(await(await request.get(`/v1/records/${type}/${c}`,{headers:{Authorization:"Bearer desk"}})).json()).record.state).toBe("done");
+  if(process.env.PLATFORM_SCREENSHOTS){await operation.screenshot({path:testInfo.outputPath("query-plan-runtime.png"),fullPage:true});await operation.setViewportSize({width:390,height:844});await operation.evaluate(()=>new Promise<void>((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));await operation.screenshot({path:testInfo.outputPath("query-plan-runtime-narrow.png"),fullPage:true});}
+  await operation.reload();await expect(input).toHaveValue("A");await expect(cards.getByText("PLAN-A1",{exact:true})).toBeVisible();
+});

@@ -14,6 +14,8 @@ import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
 import { useApplicationVariables } from "./runtime/ApplicationRuntime";
+import { usePageQueries } from "./runtime/PageQueries";
+import { planKey } from "./runtime/query-plans";
 import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
@@ -435,7 +437,10 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot);
   const application = useApplicationVariables(initialVariables);
-  const allResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources)]);
+  const inputResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources)]);
+  const inputValues = useMemo(() => evaluateVariables(initialVariables, snapshot.scalars, pageVariableContract, inputResources), [initialVariables,snapshot.scalars,inputResources]);
+  const queries = usePageQueries(page,inputValues,session,snapshot);
+  const allResources = useMemo(() => ({ ...inputResources,...queries.resources }), [inputResources,JSON.stringify(queries.resources)]);
   const variables = usePageVariables(initialVariables, snapshot.scalars, session, allResources);
   const overlayValues = useMemo(() => Object.fromEntries(Object.keys(page.document?.overlays ?? {}).map((id) => [id, evaluateVariables(initialVariables, snapshot.scalars, pageVariableContract, allResources, undefined, id)])), [initialVariables, snapshot.scalars, allResources]);
   const overlayForRoot = (root: string) => Object.entries(page.document?.overlays ?? {}).find(([, overlay]) => overlay.root === root)?.[0];
@@ -476,7 +481,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         value={value?.status === "value" && typeof value.value === "string" ? value.value : undefined} onValue={valueVariable ? (value) => setContextState(valueVariable, value, context, overlay) : undefined}
         onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
           const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
-          if (event.navigate || event.return) { navigation.emit(event, { values, set: (id, value) => setContextState(id, value, context, overlay), isActive: () => (!overlay || session.overlayEpoch(overlay) === epoch) && (!context || session.hasLoopItem(context.owner, context.key)) }); return; }
+          if (event.navigate || event.return) { navigation.emit(event, { values, set: (id, value) => setContextState(id, value, context, overlay), isActive: () => (!overlay || session.overlayEpoch(overlay) === epoch) && (!context || session.hasLoopItem(context.owner, context.key) && session.querySignature(context.queryKey) === context.signature) }); return; }
           if (typeof event.value === "string" || typeof event.value === "boolean") setContextState(event.target, event.value, context, overlay);
         } : undefined} />
     );
@@ -504,7 +509,9 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     if (node.kind === "loop") {
       if (context) return <Panel role="alert">{t("Nested loops are not supported by this UI profile.")}</Panel>;
       if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
-      const body = <LoopRuntime owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
+      const collection = initialVariables[node.loop.collection]?.source;
+      const queryKey = collection?.kind === "plan" ? planKey(collection.query ?? "") : collection?.section ?? "";
+      const body = <LoopRuntime queryKey={queryKey} expectedSignature={collection?.kind === "plan" ? queries.signatures[collection.query ?? ""] ?? "" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
         {(item) => <>{node.children?.map((child) => <div key={child} className="min-w-0">{renderNode(child, next, item, overlay)}</div>)}</>}
       </LoopRuntime>;
       return wrapLayout ? wrapLayout(id, node, body) : body;
@@ -530,6 +537,11 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   return (
     <div ref={pageFocus} tabIndex={-1} className="@container/page grid gap-3 outline-none">
       {notice}
+      {Object.entries(page.document?.queries ?? {}).map(([id,plan]) => {
+        const result = Object.entries(initialVariables).find(([,v]) => v.source?.kind === "plan" && v.source.query === id);
+        const status = result && queries.resources[result[0]];
+        return status?.status === "error" ? <Panel key={id} role="alert" className="flex flex-wrap items-center gap-2">{plan.title || id}: {t(status.code)}<Button onClick={() => queries.retry(id)}>{t("Retry query")}</Button></Panel> : null;
+      })}
       {application.error && <Panel role="alert">{t(application.error)}</Panel>}
       {(incoming.error || navigation.error) && <Panel role="alert">{t(incoming.error ?? navigation.error!)}</Panel>}
       {incoming.error && !onChoose ? null : page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)

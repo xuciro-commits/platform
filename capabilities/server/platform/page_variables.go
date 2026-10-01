@@ -24,6 +24,7 @@ type PageVariable struct {
 // PageResourceSource names a typed widget output, loop item or application
 // presentation port. Widget sources retain their original read boundary.
 type PageResourceSource struct {
+	Query    string `json:"query,omitempty"`
 	Variable string `json:"variable,omitempty"`
 	Kind     string `json:"kind"`
 	Section  string `json:"section,omitempty"`
@@ -68,6 +69,16 @@ type pageRuntimeContract struct {
 		RecordWidgets       []string `json:"recordWidgets"`
 		PresentationWidgets []string `json:"presentationWidgets"`
 	} `json:"loop"`
+	Query struct {
+		Source        string   `json:"source"`
+		MaxPlans      int      `json:"maxPlans"`
+		MaxConditions int      `json:"maxConditions"`
+		MaxSort       int      `json:"maxSort"`
+		MaxLimit      int      `json:"maxLimit"`
+		MaxTotalLimit int      `json:"maxTotalLimit"`
+		MaxOffset     int      `json:"maxOffset"`
+		Operators     []string `json:"operators"`
+	} `json:"query"`
 	Interface struct {
 		MaxPorts   int      `json:"maxPorts"`
 		MaxVersion int      `json:"maxVersion"`
@@ -142,7 +153,7 @@ func (d *PageDocument) CheckVariables() error {
 		}
 		switch v.Mode {
 		case "shared":
-			if v.Scope != "application" || v.Source == nil || v.Source.Kind != "application" || !pageNodeID.MatchString(v.Source.Variable) || v.Source.Section != "" || v.Source.Node != "" || v.Expression != nil || len(v.Initial) != 0 {
+			if v.Scope != "application" || v.Source == nil || v.Source.Kind != "application" || !pageNodeID.MatchString(v.Source.Variable) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("shared binding needs only an application variable source")
 			}
 		case "input":
@@ -152,6 +163,15 @@ func (d *PageDocument) CheckVariables() error {
 		case "resource":
 			if v.Source == nil || v.Source.Variable != "" || v.Scope == "application" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
+			}
+			if v.Source.Kind == "plan" {
+				if v.Scope != "page" || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
+					return fail("plan source needs a page query window")
+				}
+				break
+			}
+			if v.Source.Query != "" {
+				return fail("only a plan source may declare a query")
 			}
 			if v.Scope == contract.Loop.Scope {
 				if v.Type != "record" || v.Source.Kind != contract.Loop.Source || v.Source.Node != v.Owner || v.Source.Section != "" {

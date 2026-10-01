@@ -137,6 +137,9 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) er
 	if err := p.Document.Check(p.Sections); err != nil {
 		return fmt.Errorf("page %s: %w", p.Name, err)
 	}
+	if err := t.checkPageQueries(p); err != nil {
+		return err
+	}
 	if err := p.CheckRecordPorts(); err != nil {
 		return err
 	}

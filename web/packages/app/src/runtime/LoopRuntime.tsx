@@ -5,18 +5,18 @@ import { PageSessionStore, type RecordReference, type PageSessionSnapshot } from
 import { evaluateVariables, type VariableResult } from "./variables";
 
 export const loopItemKey = (owner: string, reference: RecordReference) => JSON.stringify([owner, reference.object, reference.id]);
-export type LoopContext = { owner: string; key: string; reference: RecordReference; record: EntityRecord; source: RecordSource;
+export type LoopContext = { owner: string; key: string; signature: string; queryKey: string; reference: RecordReference; record: EntityRecord; source: RecordSource;
   values: Record<string, VariableResult>; set: (id: string, value: string | boolean) => void };
 
-export function LoopRuntime({ owner, loop, label, result, session, snapshot, variables, resources, overlay, children }: {
-  owner: string; loop: Api.PageLoop; label: string; result?: VariableResult; session: PageSessionStore; snapshot: PageSessionSnapshot;
+export function LoopRuntime({ queryKey, expectedSignature, owner, loop, label, result, session, snapshot, variables, resources, overlay, children }: {
+  queryKey: string; expectedSignature?: string; owner: string; loop: Api.PageLoop; label: string; result?: VariableResult; session: PageSessionStore; snapshot: PageSessionSnapshot;
   variables: Record<string, Api.PageVariable>; resources: Record<string, VariableResult>; overlay?: string; children: (context: LoopContext) => ReactNode;
 }) {
   const currentWindow = result && (result.status === "value" || result.status === "empty") && typeof result.value === "object" && result.value?.kind === "object-set" ? result.value.window : undefined;
   const prior = useRef<{ window: NonNullable<typeof currentWindow>; scope?: string; signature: string } | undefined>(undefined);
-  const source = session.readSource(), queryKey = variables[loop.collection]?.source?.section ?? "";
+  const source = session.readSource();
   if (currentWindow) prior.current = { window: currentWindow, scope: source.scope, signature: JSON.stringify([currentWindow.object, currentWindow.query]) };
-  const retaining = !!prior.current && !currentWindow && result?.status !== "error" && prior.current?.scope === source.scope && prior.current?.signature === session.querySignature(queryKey);
+  const retaining = !!prior.current && !currentWindow && result?.status !== "error" && prior.current?.scope === source.scope && prior.current?.signature === (expectedSignature ?? session.querySignature(queryKey));
   const window = currentWindow ?? (retaining ? prior.current?.window : undefined);
   const records = window?.records.slice(0, loop.limit) ?? [], key = JSON.stringify(records), signature = window ? JSON.stringify([window.object, window.query]) : undefined;
   useEffect(() => { if (signature !== undefined) session.reconcileLoop(owner, signature, JSON.parse(key).map((reference: RecordReference) => loopItemKey(owner, reference))); else if (!retaining) session.clearLoop(owner); }, [session, owner, signature, key, retaining]);
@@ -28,12 +28,12 @@ export function LoopRuntime({ owner, loop, label, result, session, snapshot, var
   return <div className="grid min-w-0 gap-2">
     {retaining && <p role="status" className="text-xs text-muted">{t("Refreshing loop records…")}</p>}
     <p className="text-xs text-muted">{t("Showing {shown} of {window} records in this window; {total} match overall.", { shown: records.length, window: window.records.length, total: window.total })}</p>
-    <VirtualStack items={records} label={label} itemKey={(reference) => loopItemKey(owner, reference)} renderItem={(reference) => <LoopItem key={loopItemKey(owner, reference)} reference={reference} owner={owner} loop={loop} signature={signature!} session={session} snapshot={snapshot} variables={variables} resources={resources} overlay={overlay}>{children}</LoopItem>} />
+    <VirtualStack items={records} label={label} itemKey={(reference) => loopItemKey(owner, reference)} renderItem={(reference) => <LoopItem key={loopItemKey(owner, reference)} reference={reference} queryKey={queryKey} owner={owner} loop={loop} signature={signature!} session={session} snapshot={snapshot} variables={variables} resources={resources} overlay={overlay}>{children}</LoopItem>} />
   </div>;
 }
 
-function LoopItem({ reference, owner, loop, signature, session, snapshot, variables, resources, overlay, children }: {
-  reference: RecordReference; owner: string; loop: Api.PageLoop; signature: string; session: PageSessionStore; snapshot: PageSessionSnapshot;
+function LoopItem({ reference, queryKey, owner, loop, signature, session, snapshot, variables, resources, overlay, children }: {
+  queryKey: string; reference: RecordReference; owner: string; loop: Api.PageLoop; signature: string; session: PageSessionStore; snapshot: PageSessionSnapshot;
   variables: Record<string, Api.PageVariable>; resources: Record<string, VariableResult>; overlay?: string; children: (context: LoopContext) => ReactNode;
 }) {
   const source = session.readSource(), [read, setRead] = useState<{ record?: EntityRecord; error?: boolean }>({});
@@ -48,5 +48,5 @@ function LoopItem({ reference, owner, loop, signature, session, snapshot, variab
     if (variable?.scope !== "loop-item" || variable.owner !== owner || variable.mode !== "state" || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > pageUIManifest.runtime.maxStringBytes) return;
     session.setItemScalar(owner, key, id, value);
   };
-  return <Panel aria-label={reference.id} className="@container grid min-w-0 gap-3">{children({ owner, key, reference, record: read.record, source, values, set })}</Panel>;
+  return <Panel aria-label={reference.id} className="@container grid min-w-0 gap-3">{children({ owner, key, signature, queryKey, reference, record: read.record, source, values, set })}</Panel>;
 }

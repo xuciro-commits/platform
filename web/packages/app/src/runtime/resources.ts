@@ -10,7 +10,7 @@ export const recordSlot = (object: string, name?: string) => `${name ? `selectio
 export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot): Record<string, VariableResult> {
   return Object.fromEntries(Object.entries(page.document?.variables ?? {}).flatMap(([id, variable]) => {
     const source = variable.source;
-    if (variable.mode !== "resource" || !source || variable.scope !== "page") return [];
+    if (variable.mode !== "resource" || !source || variable.scope !== "page" || source.kind === "plan") return [];
     const section = page.sections?.find((section) => section.id === source.section);
     if (!section) return [[id, { status: "error", code: "Resource source is unavailable" } as VariableResult]];
     const object = section.object?.name || page.object.name;

@@ -1,0 +1,101 @@
+package platform
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func queryPlanPage() Page {
+	d, sections := loopDocument()
+	d.Queries = map[string]PageQuery{"read": {Title: "Read notes", Object: AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}, Limit: 20, Sort: []string{"id"}, Conditions: []PageQueryCondition{{Field: "bucket", Op: "=", Value: PageValue{Variable: "bucket"}}}}}
+	d.Variables["window"] = PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "plan", Query: "read"}}
+	d.Variables["bucket"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: json.RawMessage(`"A"`)}
+	return Page{Name: "work", Object: d.Queries["read"].Object, Layout: "composed", Sections: sections, Document: d}
+}
+
+func TestIndependentQueryPlansAndScopes(t *testing.T) {
+	p := queryPlanPage()
+	info := EntityInfo{Type: "sample.note", Fields: []FieldInfo{{Name: "bucket", Type: "text"}}}
+	if err := p.Document.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.CheckQuerySchema(p.Document.Queries["read"], info, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name   string
+		change func(*Page)
+	}{
+		{"old profile", func(p *Page) { p.Document.UIProfile = "platform.page.v2.8" }},
+		{"unbounded window", func(p *Page) { q := p.Document.Queries["read"]; q.Limit = 101; p.Document.Queries["read"] = q }},
+		{"missing source", func(p *Page) { delete(p.Document.Queries, "read") }},
+		{"item parameter", func(p *Page) {
+			q := p.Document.Queries["read"]
+			q.Conditions[0].Value = PageValue{Variable: "expanded"}
+			p.Document.Queries["read"] = q
+		}},
+		{"query output dependency", func(p *Page) {
+			p.Document.Variables["present"] = PageVariable{Scope: "page", Type: "boolean", Mode: "derived", Expression: &PageExpression{Op: "present", Args: []PageValue{{Variable: "window"}}}}
+			q := p.Document.Queries["read"]
+			q.Conditions[0].Value = PageValue{Variable: "present"}
+			p.Document.Queries["read"] = q
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			p := queryPlanPage()
+			test.change(&p)
+			if p.Document.Check(p.Sections) == nil {
+				t.Fatal("invalid plan accepted")
+			}
+		})
+	}
+	hidden := info
+	hidden.Fields = nil
+	if p.CheckQuerySchema(p.Document.Queries["read"], hidden, nil) == nil {
+		t.Fatal("hidden condition field accepted")
+	}
+	mismatch := info
+	mismatch.Fields = []FieldInfo{{Name: "bucket", Type: "boolean"}}
+	if p.CheckQuerySchema(p.Document.Queries["read"], mismatch, nil) == nil {
+		t.Fatal("parameter type mismatch accepted")
+	}
+	doc := *p.Document
+	doc.Queries = map[string]PageQuery{}
+	shown := doc.Visible(p.Sections)
+	if _, ok := shown.Variables["window"]; ok || shown.Nodes["loop"].Loop != nil {
+		t.Fatal("unavailable plan left dependent loop")
+	}
+}
+
+func TestQueryBindingFreezesOriginalNamedVersion(t *testing.T) {
+	p := queryPlanPage()
+	q := p.Document.Queries["read"]
+	ref := AssetRef{App: "sample", Kind: AssetQuery, Name: "notes"}
+	q.Query = &AssetBinding{Ref: ref, SourceVersion: "query-1"}
+	p.Document.Queries["read"] = q
+	info := EntityInfo{Type: q.Object.Name, Fields: []FieldInfo{{Name: "bucket", Type: "text"}}}
+	decl := NamedQuery{Name: ref.Name, Title: "Notes", Object: q.Object.Name, Domain: json.RawMessage(`[["bucket","!=","private"]]`)}
+	named := Definition{Ref: ref, Version: "query-1", Query: &decl}
+	if err := p.CheckQuerySchema(q, info, &named); err != nil {
+		t.Fatal(err)
+	}
+	named.Version = "query-2"
+	if p.CheckQuerySchema(q, info, &named) == nil {
+		t.Fatal("changed named query version accepted")
+	}
+	page, err := PageReleaseAsset("sample", "page-1", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(info)
+	queryBody, _ := json.Marshal(decl)
+	object := ReleaseAsset{Ref: q.Object, SourceVersion: "object-1", ContractVersion: 1, Body: body}
+	query := ReleaseAsset{Ref: ref, SourceVersion: "query-1", ContractVersion: 1, Requires: []AssetRef{q.Object}, Body: queryBody}
+	if _, err = Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, object, query}); err != nil {
+		t.Fatal(err)
+	}
+	query.SourceVersion = "query-2"
+	if _, err = Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, object, query}); err == nil {
+		t.Fatal("candidate ignored exact query binding")
+	}
+}

@@ -112,7 +112,7 @@ export function setLayoutKind(document: Document, id: string, kind: Kind): Docum
   if (kind === "loop" && !node.loop) {
     const item = layoutID("item");
     next.variables = { ...next.variables, [item]: { title: "", scope: "loop-item", owner: id, type: "record", mode: "resource", source: { kind: "item", node: id } } };
-    node.loop = { collection: Object.entries(next.variables).find(([, value]) => value.scope === "page" && value.mode === "resource" && value.source?.kind === "query")?.[0] ?? "", itemVariable: item, limit: 50 };
+    node.loop = { collection: Object.entries(next.variables).find(([, value]) => value.scope === "page" && value.mode === "resource" && (value.source?.kind === "query" || value.source?.kind === "plan"))?.[0] ?? "", itemVariable: item, limit: 50 };
   }
   if (kind !== "loop") delete node.loop;
   next.uiProfile = pageUIProfile;

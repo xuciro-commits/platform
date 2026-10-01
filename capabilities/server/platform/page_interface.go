@@ -78,6 +78,13 @@ func (p Page) RecordVariableObject(variable string) string {
 		if v.Source.Kind == "record" {
 			section = v.Source.Section
 		} else if v.Source.Kind == "item" {
+			loop := d.Nodes[v.Owner].Loop
+			if loop != nil {
+				collection := d.Variables[loop.Collection]
+				if collection.Source != nil && collection.Source.Kind == "plan" {
+					return d.Queries[collection.Source.Query].Object.Name
+				}
+			}
 			section = d.LoopRecordSource(variable)
 		}
 	}

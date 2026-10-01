@@ -2,6 +2,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Retry query": "重试查询",
+  "Query plan is unavailable or exceeds its budget.": "查询计划不可用或超出预算。",
+  "Query value needs one variable or literal.": "查询值需选择变量或固定值。",
+  "Query parameter escapes its input scope.": "查询参数超出输入作用域。",
+  "Query value needs a bounded scalar literal.": "查询值需使用有界标量固定值。",
+  "The named query version is unavailable.": "具名查询版本不可用。",
+  "The named query domain is unavailable.": "具名查询条件不可用。",
+  "A named query field is unavailable.": "具名查询字段不可用。",
+  "The named query needs its parent input.": "具名查询需提供父记录输入。",
+  "Query parameter type does not match its field.": "查询参数类型与字段不匹配。",
+  "The named query has no parent input.": "具名查询不接收父记录输入。",
+  "Query parent input requires a named query.": "查询父记录输入需绑定具名查询。",
+  "Query sort field is unavailable.": "查询排序字段不可用。",
+  "Query search requires text.": "查询搜索需使用文本。",
+
   "Shared":"共享",
   "Isolated":"隔离",
   "Application sessions": "应用会话",

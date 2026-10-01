@@ -868,6 +868,7 @@ export type PageDocument = {
   variables?: Record<string, PageVariable>;
   overlays?: Record<string, PageOverlay>;
   events?: PageEventBinding[];
+  queries?: Record<string, PageQuery>;
   interface?: PageInterface;
 };
 
@@ -931,7 +932,26 @@ export type PagePort = {
   required?: boolean;
 };
 
+export type PageQuery = {
+  title?: string;
+  object: AssetRef;
+  query?: AssetBinding;
+  conditions?: PageQueryCondition[];
+  search?: PageValue;
+  for?: PageValue;
+  sort?: string[];
+  limit: number;
+  offset?: number;
+};
+
+export type PageQueryCondition = {
+  field: string;
+  op: string;
+  value: PageValue;
+};
+
 export type PageResourceSource = {
+  query?: string;
   variable?: string;
   kind: string;
   section?: string;
@@ -1509,7 +1529,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.8",
+  "uiProfile": "platform.page.v2.9",
   "widgets": [
     {
       "componentID": "table",
@@ -2005,7 +2025,8 @@ export const pageUIManifest = {
     "platform.page.v2.5",
     "platform.page.v2.6",
     "platform.page.v2.7",
-    "platform.page.v2.8"
+    "platform.page.v2.8",
+    "platform.page.v2.9"
   ],
   "runtime": {
     "scope": "page",
@@ -2130,6 +2151,24 @@ export const pageUIManifest = {
         "derived"
       ],
       "bindingMode": "shared"
+    },
+    "query": {
+      "source": "plan",
+      "maxPlans": 8,
+      "maxConditions": 16,
+      "maxSort": 4,
+      "maxLimit": 100,
+      "maxTotalLimit": 512,
+      "maxOffset": 100000,
+      "operators": [
+        "=",
+        "!=",
+        "<",
+        "<=",
+        ">",
+        ">=",
+        "like"
+      ]
     }
   }
 } as const;

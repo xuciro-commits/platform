@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:b4ad216c5eb6e125",
+  "revision": "sha256:036c9b83b35ef3d6",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2056,6 +2056,7 @@
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
+      "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
@@ -2099,6 +2100,7 @@
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
+      "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
@@ -2130,6 +2132,7 @@
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
+      "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -2178,6 +2181,7 @@
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
+      "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
@@ -2291,6 +2295,7 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/people.tsx",
@@ -2359,6 +2364,7 @@
     "app/semantic-selection": [
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
+      "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/process.tsx"
     ],
     "ui/editor-workbench": [

@@ -58,6 +58,7 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 	}
 	requires := append([]AssetRef{page.Object}, page.NavigationTargets()...)
 	requires = append(requires, page.Actions...)
+	requires = append(requires, page.QueryReferences()...)
 	for _, selection := range page.Selections {
 		requires = append(requires, selection.Object)
 	}
@@ -226,6 +227,28 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 						}
 					}
 				}
+				if page.Document != nil {
+					for id, plan := range page.Document.Queries {
+						objectAsset, ok := lookup[plan.Object]
+						var object EntityInfo
+						if !ok || json.Unmarshal(objectAsset.Body, &object) != nil {
+							return fmt.Errorf("page query %s object is unavailable", id)
+						}
+						var named *Definition
+						if plan.Query != nil {
+							asset, ok := lookup[plan.Query.Ref]
+							var query NamedQuery
+							if !ok || json.Unmarshal(asset.Body, &query) != nil {
+								return fmt.Errorf("page query %s named query is unavailable", id)
+							}
+							named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
+						}
+						if err := page.CheckQuerySchema(plan, object, named); err != nil {
+							return fmt.Errorf("page query %s: %w", id, err)
+						}
+					}
+				}
+
 				for _, section := range page.Sections {
 					if section.Function != nil {
 						bindings = append(bindings, *section.Function)
@@ -395,6 +418,7 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		required = append(required, page.Object)
 		required = append(required, page.NavigationTargets()...)
 		required = append(required, page.Actions...)
+		required = append(required, page.QueryReferences()...)
 		for _, selection := range page.Selections {
 			required = append(required, selection.Object)
 		}

@@ -208,6 +208,7 @@ export class PageSessionStore {
     }
     return source;
   }
+  clearQuery(key: string) { if (this.queries.has(key) || this.state.queries[key]) this.resetQueries([key]); }
   private query(key: string, object: string, input: RecordQuery): Promise<RecordPageData> {
     const query = structuredClone(input), source = this.source, scope = source.scope;
     this.queryObjects.set(key, object);

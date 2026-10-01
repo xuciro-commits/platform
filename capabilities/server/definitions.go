@@ -413,6 +413,29 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					sections = append(sections, section)
 				}
 				page.Sections = sections
+				if page.Document != nil {
+					doc := *page.Document
+					doc.Queries = map[string]platform.PageQuery{}
+					for id, q := range page.Document.Queries {
+						info, ok := entities[q.Object.Name]
+						if !ok {
+							continue
+						}
+						var named *platform.Definition
+						if q.Query != nil {
+							for i := range t.definitions {
+								if t.definitions[i].Ref == q.Query.Ref {
+									named = &t.definitions[i]
+									break
+								}
+							}
+						}
+						if page.CheckQuerySchema(q, info, named) == nil {
+							doc.Queries[id] = q
+						}
+					}
+					page.Document = &doc
+				}
 				page.Document = page.Document.Visible(sections)
 				// Removing a resource producer also removes dependent visibility
 				// branches. Repeat to closure without exposing orphan inputs.

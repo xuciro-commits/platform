@@ -96,7 +96,7 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		total += loop.Limit
 		collection := d.Variables[loop.Collection]
 		item := d.Variables[loop.ItemVariable]
-		if collection.Scope != "page" || collection.Type != "object-set" || collection.Mode != "resource" || collection.Source == nil || collection.Source.Kind != "query" || sectionOwners[collection.Source.Section] != "" {
+		if collection.Scope != "page" || collection.Type != "object-set" || collection.Mode != "resource" || collection.Source == nil || (collection.Source.Kind != "query" && collection.Source.Kind != "plan") || collection.Source.Kind == "query" && sectionOwners[collection.Source.Section] != "" {
 			return fmt.Errorf("page loop %s needs an external page query window", id)
 		}
 		if item.Scope != contract.Scope || item.Type != "record" || item.Mode != "resource" || item.Owner != id || item.Source == nil || item.Source.Kind != contract.Source || item.Source.Node != id {
