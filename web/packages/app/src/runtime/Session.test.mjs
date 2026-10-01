@@ -129,3 +129,18 @@ test("loop record readers share an authorized read and reject old-scope completi
   second.resolve({record:record("A")});assert.equal((await current).record.id,"A");
   store.dispose();await assert.rejects(reader.get("sample.parent","B"),/ended/);
 });
+
+test("ending an overlay clears only its states atomically and invalidates the old opening", () => {
+  const source = { scope: "one", entity: () => ({ fields: [] }), list: async () => ({ records: [], total: 0 }), get: async (_, id) => ({ record: record(id) }) };
+  const store = new PageSessionStore(source, plan()), other = new PageSessionStore(source, plan());
+  store.setScalars({ page: "shared", first: "private-a", second: "private-b", openA: true });
+  const opening = store.overlayEpoch("A"), changes = [];
+  store.subscribe(() => changes.push(store.snapshot().scalars));
+  store.endOverlay("A"); store.setScalars({ openA: false, openB: true }, ["first"]);
+  assert.deepEqual(changes, [{ page: "shared", second: "private-b", openA: false, openB: true }]);
+  assert.notEqual(store.overlayEpoch("A"), opening);
+  assert.equal(store.overlayEpoch("B"), 0);
+  assert.deepEqual(other.snapshot().scalars, {});
+  source.scope = "different-member-or-version"; store.updateSource(source);
+  assert.deepEqual(store.snapshot().scalars, {});
+});

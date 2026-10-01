@@ -36,3 +36,5 @@ export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, R
 export { RecordWorkspace } from "./records/RecordWorkspace";
 export { RecordLookup } from "./records/RecordLookup";
 export { humanizeKernelError } from "./lib/errors";
+
+export { useViewVisible } from "./shell/ViewVisibility";

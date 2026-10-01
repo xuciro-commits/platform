@@ -260,6 +260,14 @@ Button click有互斥的state写入、navigate、return三种处理。navigate�
 
 导航目标和port对象进入原候选闭包。页面间显式导航边允许成环，结构性依赖环继续拒绝；只允许实际Document.navigate声明的page边形成导航环。候选使用冻结目标接口校验，激活在全部页面声明安装后统一校验目标，避免排序决定互相导航页面是否可安装。直接安装按当前定义校验。接口version标记兼容承诺；结构不匹配即使version相同也拒绝。
 
+### 6.6 Overlay 局部变量与输入
+
+`platform.page.v2.7` 增加 `scope=overlay, owner=<OverlayID>` 的 string/boolean state、constant、derived；声明仍归原 PageDocument，owner 必须存在。局部表达式只能读 page 或同一 Overlay 的变量；page、另一个 Overlay 和 loop-item 表达式不能反向读此局部状态。布局、按钮、Tabs、导航参数/返回绑定只在所属根使用局部变量，显式输入传递继续通过页面接口，不隐式扩展页面输出端口。
+
+新增 Registry 的 `input/configVersion=1` 使用共享 Input，布局节点 `valueVariable` 必须绑定当前 page/Overlay/item 可访问的 string state；输入只改变展示状态，4096 UTF-8 字节限制沿统一变量契约。它不写业务字段，业务编辑仍走原表单/动作。
+
+每个页面实例保存局部状态。关闭或切换 Overlay 原子恢复该 owner 的 state 初值；查询/Loop 在原卸载路径清理。工作区通过共享视图可见性暂停隐藏标签页的全局焦点/指针层；内容使用稳定Portal body暂时脱离DOM，保留原组件、Loop和输入身份。重新显示恢复该次打开，真实关闭才卸载。导航返回只在发起 Overlay 的同一次打开仍有效时应用，关闭再打开不能接收旧返回。成员/定义版本变化仍销毁原页面会话。Overlay 中的 Loop 可读节点所属 Overlay 条件，但 item 表达式跨 scope 读取暂未支持；资源输出仍走已有 page/widget 查询声明，不宣称已完成 Overlay 资源作用域。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -418,7 +426,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 编辑器使用共享 `EditorWorkbench` 的可调整三栏，支持树/画布/检查器同步选择、分组/取消分组、移动/拖放、复制、撤销重做、设备宽度和缩放预览。`build/session/DraftSession` 原子记录文档及绑定编辑，UI选中独立；保存串行且携带期望revision，拒绝保留草稿。V1平铺和list-detail页保留原发布渲染，在编辑器转换并显式保存为V2。
 
-`platform/pageui/widgets.json` 是首批12种业务/内容组件及新增Button的身份、配置版本、UI profile、默认属性、字段预设、绑定种类、选择方向和展示Schema来源；Go校验、生成的Web契约、Palette及基础Renderer Registry共同消费。每个组件仍调用原共享UI/应用API。复杂检查器复用原绑定编辑；完整ports/events、按组件拆分检查器、懒加载和92种外包组件迁移尚未完成，基础注册不能称为完整Plugin Architecture。
+`platform/pageui/widgets.json` 是首批12种业务/内容组件及新增Button、Input的身份、配置版本、UI profile、默认属性、字段预设、绑定种类、选择方向和展示Schema来源；Go校验、生成的Web契约、Palette及基础Renderer Registry共同消费。每个组件仍调用原共享UI/应用API。复杂检查器复用原绑定编辑；完整ports/events、按组件拆分检查器、懒加载和92种外包组件迁移尚未完成，基础注册不能称为完整Plugin Architecture。
 
 F2在原“对象”入口提供统一资源目录、原生/租户来源筛选、搜索和有界关系图；图节点支持选择检查、双击及键盘打开详情。对象详情包含概览、属性、引用关系、动作、数据、用途和访问页签。`@platform/app/semantic` 从当前成员的原定义目录投影对象、字段支持的引用及声明用途，不建立第二份本体缓存；隐藏目标不生成占位节点，引用不推断基数、唯一性或删除保证。关系图最多显示当前筛选的80个对象，不能据此声称大模型性能已验证。
 
@@ -436,4 +444,6 @@ F3d实现 `v2.5` 的有界Loop、类型化item变量及同owner的标量/派生�
 
 F3e实现 `v2.6` 的页面接口、input变量与Button navigate/return。构建者可编辑端口/版本、绑定输入记录、选择导航目标及输入/返回映射。发送端传递有界标量/记录引用，接收端通过原成员读取，再供原详情/动作组件使用；临时通道由共享Workspace按实例管理，路由仅保存不透明ticket，刷新明确过期。返回保留调用页面/item上下文，关闭或作用域变化后的结果不应用。Go校验接口类型、记录对象、必填/版本、作用域与成员裁剪；导航页纳入冻结候选，显式page导航环允许，结构环拒绝，激活在全部页面安装后校验接口。工程路线覆盖Loop指定记录→处理页原动作→输出返回、只读预览、读取拒绝/重新调用、URL无记录值及刷新过期；内存冻结/恢复保留接口与input声明。这不是持久跨页会话或任意路由脚本，也不增加生产恢复保证。
 
-F3仍未完成：独立查询计划/集合运算及application/overlay/widget-local作用域，嵌套Loop和其他Widget的item端口仍待扩展。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+F3f1实现 `v2.7` 的Overlay标量局部变量和Input绑定。变量面板选择Overlay owner，节点/Input、按钮、Tabs及导航映射按所在根过滤；页面、其他Overlay与item表达式跨读局部值被拒绝。新增Input注册使用共享控件，添加时生成当前page/Overlay/item文本状态，复制保留节点绑定；保存/冻结/激活沿原PageDocument。每个页面实例保存局部值，关闭/切换原子清理指定owner，并按opening epoch拦截旧返回；隐藏标签页暂停全局层且保留原内容身份。工程路线验证编辑器owner/输入绑定、冻结后业务成员操作、两个Overlay独立值与切换清理、正常返回/关闭重开后的旧返回拒绝、刷新；成员/定义作用域清理由会话回归验证，普通/窄屏截图已观察。此批仅支持Overlay标量，不完成应用共享状态或Overlay资源输出。
+
+F3仍未完成：独立查询计划/集合运算及application/widget-local作用域与Overlay资源输出，嵌套Loop和其他Widget的item端口仍待扩展。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

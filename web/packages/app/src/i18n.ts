@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Text input": "文本输入",
+
   "Page values do not match the interface.": "页面值与接口不匹配。",
   "A required page input is missing.": "缺少必填的页面输入。",
   "Page value type does not match the interface.": "页面值类型与接口不匹配。",

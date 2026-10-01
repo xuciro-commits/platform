@@ -53,9 +53,15 @@ export class PageSessionStore {
   setScalar(id: string, value: string | boolean) {
     this.setScalars({ [id]: value });
   }
-  setScalars(values: Record<string, string | boolean>) {
-    if (Object.entries(values).some(([id, value]) => this.state.scalars[id] !== value)) this.publish({ scalars: { ...this.state.scalars, ...values } });
+  setScalars(values: Record<string, string | boolean>, reset: string[] = []) {
+    const scalars = { ...this.state.scalars };
+    for (const id of reset) delete scalars[id];
+    if (reset.some((id) => Object.hasOwn(this.state.scalars, id)) || Object.entries(values).some(([id, value]) => scalars[id] !== value)) this.publish({ scalars: { ...scalars, ...values } });
   }
+  private overlayEpochs = new Map<string, number>();
+  overlayEpoch(owner: string) { return this.overlayEpochs.get(owner) ?? 0; }
+  endOverlay(owner: string) { this.overlayEpochs.set(owner, this.overlayEpoch(owner) + 1); }
+
   resetQueries(keys: string[]) {
     const queries = { ...this.state.queries };
     for (const key of keys) { this.queries.delete(key); this.querySignatures.delete(key); delete queries[key]; }

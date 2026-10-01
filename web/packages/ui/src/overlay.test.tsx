@@ -37,3 +37,19 @@ test("an unavailable overlay caller returns focus to the page fallback", async (
   await waitFor(() => expect(document.activeElement).toBe(fallback));
   fallback.remove(); caller.remove();
 });
+
+for (const Frame of [Dialog, Sheet]) test(`${Frame.name} suspends its global layer without resetting content and resets on a real close`, async () => {
+  const { rerender } = render(<Frame open title="Paused task" onOpenChange={() => {}}><Input aria-label="Paused draft" defaultValue="initial" /></Frame>);
+  const input = await screen.findByLabelText("Paused draft");
+  fireEvent.change(input, { target: { value: "keep" } });
+  rerender(<Frame open suspended title="Paused task" onOpenChange={() => {}}><Input aria-label="Paused draft" defaultValue="initial" /></Frame>);
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(input.isConnected).toBe(false);
+  expect(document.body.style.pointerEvents).not.toBe("none");
+  rerender(<Frame open title="Paused task" onOpenChange={() => {}}><Input aria-label="Paused draft" defaultValue="initial" /></Frame>);
+  expect(await screen.findByLabelText("Paused draft")).toBe(input);
+  expect((input as HTMLInputElement).value).toBe("keep");
+  rerender(<Frame open={false} title="Paused task" onOpenChange={() => {}}><Input aria-label="Paused draft" defaultValue="initial" /></Frame>);
+  rerender(<Frame open title="Paused task" onOpenChange={() => {}}><Input aria-label="Paused draft" defaultValue="initial" /></Frame>);
+  expect((await screen.findByLabelText("Paused draft") as HTMLInputElement).value).toBe("initial");
+});

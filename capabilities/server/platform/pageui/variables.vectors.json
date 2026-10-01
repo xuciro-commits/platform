@@ -1016,5 +1016,178 @@
         "mode": "input"
       }
     }
+  },
+  {
+    "name": "typed overlay local scope",
+    "valid": true,
+    "variables": {
+      "page": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "page"
+      },
+      "local": {
+        "scope": "overlay",
+        "owner": "panel",
+        "type": "string",
+        "mode": "state",
+        "initial": "local"
+      },
+      "label": {
+        "scope": "overlay",
+        "owner": "panel",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "variable": "page"
+            },
+            {
+              "variable": "local"
+            }
+          ]
+        }
+      }
+    },
+    "overlay": "panel",
+    "values": {
+      "page": "page",
+      "local": "local",
+      "label": "pagelocal"
+    },
+    "state": {
+      "local": "changed"
+    },
+    "updated": {
+      "page": "page",
+      "local": "changed",
+      "label": "pagechanged"
+    }
+  },
+  {
+    "name": "page cannot depend on overlay scope",
+    "valid": false,
+    "variables": {
+      "page": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "page"
+      },
+      "local": {
+        "scope": "overlay",
+        "owner": "panel",
+        "type": "string",
+        "mode": "state",
+        "initial": "local"
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "variable": "page"
+            },
+            {
+              "variable": "local"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "another overlay cannot depend on local scope",
+    "valid": false,
+    "variables": {
+      "page": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "page"
+      },
+      "local": {
+        "scope": "overlay",
+        "owner": "panel",
+        "type": "string",
+        "mode": "state",
+        "initial": "local"
+      },
+      "label": {
+        "scope": "overlay",
+        "owner": "other",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "variable": "page"
+            },
+            {
+              "variable": "local"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "item expression cannot depend on overlay scope",
+    "valid": false,
+    "variables": {
+      "page": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "page"
+      },
+      "local": {
+        "scope": "overlay",
+        "owner": "panel",
+        "type": "string",
+        "mode": "state",
+        "initial": "local"
+      },
+      "label": {
+        "scope": "loop-item",
+        "owner": "loop",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "variable": "page"
+            },
+            {
+              "variable": "local"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "overlay source cannot masquerade as local state",
+    "valid": false,
+    "variables": {
+      "local": {
+        "scope": "overlay",
+        "owner": "panel",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "table"
+        }
+      }
+    }
   }
 ]

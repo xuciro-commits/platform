@@ -1,14 +1,15 @@
+import { variableAccessible } from "../page-layout";
 import type { Api } from "@platform/kernel";
 import { useHost, pageUIProfile, assetKey } from "@platform/app";
 import { Card, Checkbox, Input, Select, t } from "@platform/ui";
 
-export function NavigationPanel({ document, section, owner, onChange }: { document: Api.PageDocument; section: string; owner?: string; onChange: (document: Api.PageDocument) => void }) {
+export function NavigationPanel({ document, section, owner, overlay, onChange }: { document: Api.PageDocument; section: string; owner?: string; overlay?: string; onChange: (document: Api.PageDocument) => void }) {
   const { definitions } = useHost(), event = document.events?.find((event) => event.source === section);
   const kind = event?.navigate ? "navigate" : event?.return ? "return" : "state";
   const pages = definitions.filter((d) => d.page);
   const update = (binding: Api.PageEventBinding) => onChange({ ...document, uiProfile: pageUIProfile, events: [...(document.events ?? []).filter((e) => e.source !== section), binding] });
   const target = pages.find((page) => assetKey(page.ref) === (event?.navigate && assetKey(event.navigate.page)));
-  const eligible = Object.entries(document.variables ?? {}).filter(([, v]) => v.scope === "page" || v.owner === owner);
+  const eligible = Object.entries(document.variables ?? {}).filter(([, v]) => variableAccessible(v, owner, overlay));
   const patch = (navigation: Api.PageNavigation) => update({ source: section, event: "click", target: "", navigate: navigation });
   return <Card className="grid gap-3 p-3">
     <label className="grid gap-1 text-xs">{t("Click handler")}<Select value={kind} onChange={(e) => {

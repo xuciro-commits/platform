@@ -1,6 +1,10 @@
 // What the tests need of the host: decisions made over its API as a member,
 // and the workspace opened as a member (development tokens: the token is the subject).
+import { readFileSync } from "node:fs";
 import type { APIRequestContext, Page } from "@playwright/test";
+
+// The editor writes the current profile from the shared application API descriptor.
+export const pageUIProfile = JSON.parse(readFileSync(new URL("../../../capabilities/server/platform/pageui/widgets.json", import.meta.url), "utf8")).uiProfile as string;
 
 let n = 0;
 

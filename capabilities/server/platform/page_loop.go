@@ -34,24 +34,47 @@ func (d *PageDocument) loopOwners() map[string]string {
 	return owners
 }
 
+// Each independent presentation root owns its Overlay locals.
+func (d *PageDocument) overlayOwners() map[string]string {
+	owners := map[string]string{}
+	var visit func(string, string)
+	visit = func(id, owner string) {
+		if _, seen := owners[id]; seen {
+			return
+		}
+		owners[id] = owner
+		for _, child := range d.Nodes[id].Children {
+			visit(child, owner)
+		}
+	}
+	visit(d.Root, "")
+	for id, overlay := range d.Overlays {
+		visit(overlay.Root, id)
+	}
+	return owners
+}
+
 func (d *PageDocument) checkLoops(sections []Section) error {
 	contract := pageWidgets.Runtime.Loop
 	owners := d.loopOwners()
+	overlays := d.overlayOwners()
+	sectionOverlays := map[string]string{}
 	sectionOwners := map[string]string{}
 	for id, node := range d.Nodes {
 		if node.Kind == "widget" {
 			sectionOwners[node.Section] = owners[id]
+			sectionOverlays[node.Section] = overlays[id]
 		}
 	}
-	accessible := func(variable, owner string) bool {
+	accessible := func(variable, owner, overlay string) bool {
 		v, ok := d.Variables[variable]
-		return variable == "" || ok && (v.Scope == "page" || v.Owner == owner && owner != "")
+		return variable == "" || ok && (v.Scope == "page" || v.Scope == "loop-item" && v.Owner == owner && owner != "" || v.Scope == "overlay" && v.Owner == overlay && overlay != "")
 	}
 	count, total := 0, 0
 	for id, node := range d.Nodes {
 		owner := owners[id]
-		if !accessible(node.VisibleWhen, owner) || !accessible(node.EnabledWhen, owner) || !accessible(node.ActiveVariable, owner) {
-			return fmt.Errorf("page node %s variable escapes its loop scope", id)
+		if !accessible(node.VisibleWhen, owner, overlays[id]) || !accessible(node.EnabledWhen, owner, overlays[id]) || !accessible(node.ActiveVariable, owner, overlays[id]) || !accessible(node.ValueVariable, owner, overlays[id]) {
+			return fmt.Errorf("page node %s variable escapes its presentation scope", id)
 		}
 		if node.Kind != "loop" {
 			if node.Loop != nil {
@@ -84,6 +107,11 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		return fmt.Errorf("page loop budget exceeded")
 	}
 	for id, variable := range d.Variables {
+		if variable.Scope == "overlay" {
+			if _, ok := d.Overlays[variable.Owner]; !ok {
+				return fmt.Errorf("page variable %s needs an existing overlay owner", id)
+			}
+		}
 		if variable.Scope != contract.Scope {
 			continue
 		}
@@ -108,19 +136,18 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, event := range d.Events {
-		if !accessible(event.Target, sectionOwners[event.Source]) {
-
-			return fmt.Errorf("page event %s target escapes its loop scope", event.Source)
+		if !accessible(event.Target, sectionOwners[event.Source], sectionOverlays[event.Source]) {
+			return fmt.Errorf("page event %s target escapes its presentation scope", event.Source)
 		}
 		if event.Navigate != nil {
 			for _, arg := range event.Navigate.Inputs {
-				if !accessible(arg.Variable, sectionOwners[event.Source]) {
-					return fmt.Errorf("page navigation input escapes its loop scope")
+				if !accessible(arg.Variable, sectionOwners[event.Source], sectionOverlays[event.Source]) {
+					return fmt.Errorf("page navigation input escapes its presentation scope")
 				}
 			}
 			for _, target := range event.Navigate.Results {
-				if !accessible(target, sectionOwners[event.Source]) {
-					return fmt.Errorf("page navigation output escapes its loop scope")
+				if !accessible(target, sectionOwners[event.Source], sectionOverlays[event.Source]) {
+					return fmt.Errorf("page navigation output escapes its presentation scope")
 				}
 			}
 		}

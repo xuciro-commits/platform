@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { decide, fresh, open } from "./host";
+import { pageUIProfile, decide, fresh, open } from "./host";
 
 test("typed page variables drive tabs and visibility through saved candidate activation", async ({ page, request }, testInfo) => {
   const name = fresh("tabs").replace(/[^a-z0-9]/gi, "").toLowerCase(), id = fresh("PAGE"), object = fresh("OBJ");
@@ -38,7 +38,7 @@ test("typed page variables drive tabs and visibility through saved candidate act
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   const record = (await (await request.get(`/v1/records/build.page/${id}`, { headers: { Authorization: "Bearer manager" } })).json()).record;
-  expect(record.document.uiProfile).toBe("platform.page.v2.6");
+  expect(record.document.uiProfile).toBe(pageUIProfile);
   expect(record.document.variables[visibleID].expression.args[0].variable).toBe(activeID);
   if (process.env.PLATFORM_SCREENSHOTS) {
     await tree.getByRole("button", { name: "Page variables", exact: true }).click();

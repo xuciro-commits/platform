@@ -894,6 +894,7 @@ export type PageLayoutNode = {
   children?: string[];
   section?: string;
   title?: string;
+  valueVariable?: string;
   activeVariable?: string;
   visibleWhen?: string;
   enabledWhen?: string;
@@ -1504,7 +1505,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.6",
+  "uiProfile": "platform.page.v2.7",
   "widgets": [
     {
       "componentID": "table",
@@ -1959,6 +1960,37 @@ export const pageUIManifest = {
         }
       },
       "fieldPreset": "none"
+    },
+    {
+      "componentID": "input",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.7",
+      "title": "Text input",
+      "category": "Interaction",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "state-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
     }
   ],
   "supportedProfiles": [
@@ -1967,7 +1999,8 @@ export const pageUIManifest = {
     "platform.page.v2.3",
     "platform.page.v2.4",
     "platform.page.v2.5",
-    "platform.page.v2.6"
+    "platform.page.v2.6",
+    "platform.page.v2.7"
   ],
   "runtime": {
     "scope": "page",
@@ -2055,7 +2088,8 @@ export const pageUIManifest = {
       ],
       "presentationWidgets": [
         "text",
-        "button"
+        "button",
+        "input"
       ]
     },
     "interface": {
@@ -2065,6 +2099,18 @@ export const pageUIManifest = {
         "string",
         "boolean",
         "record"
+      ]
+    },
+    "overlay": {
+      "scope": "overlay",
+      "valueTypes": [
+        "string",
+        "boolean"
+      ],
+      "modes": [
+        "state",
+        "constant",
+        "derived"
       ]
     }
   }

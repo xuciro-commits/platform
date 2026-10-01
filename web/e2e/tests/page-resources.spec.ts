@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { decide, fresh, open } from "./host";
+import { pageUIProfile, decide, fresh, open } from "./host";
 
 test("resource variables bind parent selections, authorized query windows and filters", async ({ page, request }, testInfo) => {
   const name = fresh("resources").replace(/[^a-z0-9]/gi, "").toLowerCase(), id = fresh("PAGE");
@@ -52,7 +52,7 @@ test("resource variables bind parent selections, authorized query windows and fi
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     const saved = (await (await request.get(`/v1/records/build.page/${id}`, { headers: { Authorization: "Bearer manager" } })).json()).record;
-    expect(saved.document.uiProfile).toBe("platform.page.v2.6");
+    expect(saved.document.uiProfile).toBe(pageUIProfile);
     expect(Object.values(saved.document.variables).filter((variable: any) => variable.mode === "resource")).toHaveLength(3);
     if (process.env.PLATFORM_SCREENSHOTS) {
       const canvas = page.getByRole("region", { name: "The page", exact: true });

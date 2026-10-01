@@ -8,7 +8,7 @@ const vectors = JSON.parse(readFileSync(new URL("variables.vectors.json", root))
 for (const vector of vectors) test(vector.name, () => {
   assert.equal(compileVariables(vector.variables, contract).issues.length === 0, vector.valid);
   if (!vector.valid) return;
-  const values = (state) => Object.fromEntries(Object.entries(evaluateVariables(vector.variables, state, contract, vector.resources, vector.owner)).map(([id, result]) => {
+  const values = (state) => Object.fromEntries(Object.entries(evaluateVariables(vector.variables, state, contract, vector.resources, vector.owner, vector.overlay)).map(([id, result]) => {
     assert.equal(result.status, "value"); return [id, result.value];
   }));
   assert.deepEqual(values({}), vector.values);
@@ -30,4 +30,11 @@ test("resource presence preserves pending, empty and refusal without coercing re
   assert.equal(evaluateVariables(variables, {}, contract, { selected: { status: "pending" } }).hasRecord.status, "pending");
   assert.equal(evaluateVariables(variables, {}, contract, { selected: { status: "error", code: "Denied" } }).hasRecord.status, "error");
   assert.equal(evaluateVariables(variables, {}, contract, { selected: { status: "value", value: "untyped record" } }).hasRecord.status, "error");
+});
+
+test("an overlay can evaluate only its own locals; page evaluation exposes no hidden local value", () => {
+  const variables = vectors.find((vector) => vector.name === "typed overlay local scope").variables;
+  assert.equal(evaluateVariables(variables, { local: "private" }, contract).local.status, "empty");
+  assert.equal(evaluateVariables(variables, { local: "private" }, contract, {}, undefined, "other").label.status, "empty");
+  assert.equal(evaluateVariables(variables, { local: "private" }, contract, {}, undefined, "panel").label.value, "pageprivate");
 });

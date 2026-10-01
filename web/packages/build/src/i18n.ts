@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Input state variable": "输入状态变量",
+  "Choose a text state variable": "选择文本状态变量",
+  "Text input": "文本输入",
+  "Values belong to this overlay and reset when it closes.": "值属于此浮层，关闭时恢复初始值。",
+  "Overlay dependency escapes its owner scope": "浮层依赖超出其归属作用域",
+  "Overlay variable needs a scalar state, constant or expression": "浮层变量需声明标量状态、常量或表达式",
+
   "This widget reads the input record.": "此组件读取页面输入记录。",
   "Page interface": "页面接口",
   "Interface version": "接口版本",

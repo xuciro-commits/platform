@@ -12,7 +12,7 @@ import { Copy, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRig
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Api as HostApi } from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
-import { loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
+import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
 import { InterfacePanel } from "./page-editor/InterfacePanel";
 import { NavigationPanel } from "./page-editor/NavigationPanel";
@@ -129,8 +129,13 @@ export function PageEditor({ id }: { id: string }) {
   const incompatible = document.formatVersion !== 2 || !supportsPageUIProfile(document.uiProfile) || sections.some((s) => !widgetContract(s.widget) || s.configVersion !== widgetContract(s.widget)?.configVersion);
   const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => !document.nodes[overlay.root]?.children?.length || !overlay.title.trim()) || sections.some((section) => section.widget === "button" && !document.events?.some((event) => event.source === section.id));
   const loopProblem = Object.values(document.nodes).some((node) => node.kind === "loop" && (!node.loop || !document.variables?.[node.loop.collection]));
+  const inputProblem = Object.entries(document.nodes).some(([id, node]) => {
+    if (!sections.some((s) => s.id === node.section && s.widget === "input")) return false;
+    const variable = document.variables?.[node.valueVariable ?? ""];
+    return !variable || variable.mode !== "state" || variable.type !== "string" || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
+  });
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
-  const invalid = loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
+  const invalid = inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
   const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
@@ -144,13 +149,29 @@ export function PageEditor({ id }: { id: string }) {
     if (contract.fieldPreset === "list") section.fields = info?.fields.slice(0, 4).map((f) => f.name) ?? [];
     if (contract.fieldPreset === "filter") section.fields = info?.fields.filter((f) => filterable.includes(f.type)).slice(0, 2).map((f) => f.name) ?? [];
     if (contract.fieldPreset === "create") section.fields = info?.fields.filter((f) => f.required && !f.readOnly).map((f) => f.name) ?? [];
-    edit((old) => ({ ...old, document: appendWidget({ ...old.document, uiProfile: pageUIProfile }, section.id!, destination?.container ?? container ?? old.document.root, destination ? destination.after : chosen >= 0 ? sections[chosen]?.id : undefined), sections: [...old.sections, section] }));
+    edit((old) => {
+      const document = appendWidget({ ...old.document, uiProfile: pageUIProfile }, section.id!, destination?.container ?? container ?? old.document.root, destination ? destination.after : chosen >= 0 ? sections[chosen]?.id : undefined);
+      if (widget === "input") {
+        const [nodeID, node] = Object.entries(document.nodes).find(([, node]) => node.section === section.id)!;
+        const loop = loopOwner(document, nodeID), overlay = overlayOwner(document, nodeID), variable = layoutID("value");
+        node.valueVariable = variable;
+        document.variables = { ...document.variables, [variable]: { title: section.title, scope: loop ? "loop-item" : overlay ? "overlay" : "page", owner: loop ?? overlay, type: "string", mode: "state", initial: "" } };
+      }
+      return { ...old, document, sections: [...old.sections, section] };
+    });
     select({ kind: "widget", id: section.id! }); setRightOpen(true);
   };
   const duplicate = () => {
     const source = sections[chosen]; if (!source?.id) return;
     const copy = { ...structuredClone(source), id: layoutID("section") };
-    edit((old) => ({ ...old, sections: [...old.sections, copy], document: { ...appendWidget(old.document, copy.id, old.document.root, source.id), events: [...(old.document.events ?? []), ...(old.document.events ?? []).filter((event) => event.source === source.id).map((event) => ({ ...event, source: copy.id }))] } }));
+    edit((old) => {
+      const document = appendWidget(old.document, copy.id, old.document.root, source.id);
+      const original = Object.values(document.nodes).find((node) => node.section === source.id);
+      const leaf = Object.keys(document.nodes).find((id) => document.nodes[id]?.section === copy.id);
+      if (original && leaf) document.nodes[leaf] = { ...structuredClone(original), section: copy.id };
+      document.events = [...(old.document.events ?? []), ...(old.document.events ?? []).filter((event) => event.source === source.id).map((event) => ({ ...event, source: copy.id }))];
+      return { ...old, sections: [...old.sections, copy], document };
+    });
     select({ kind: "widget", id: copy.id });
   };
   const save = async () => {
@@ -235,9 +256,9 @@ export function PageEditor({ id }: { id: string }) {
           <Properties section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
             document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
             {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
-            {canvasSelection?.widget === "button" && <NavigationPanel document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}
-            {canvasSelection?.widget === "button" && !document.events?.some((e) => e.source === canvasSelection.id && (e.navigate || e.return)) && <ButtonEventProperties document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}
-            {nodeID && <NodeBindings document={document} id={nodeID} button={canvasSelection?.widget === "button"} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
+            {canvasSelection?.widget === "button" && <NavigationPanel document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}
+            {canvasSelection?.widget === "button" && !document.events?.some((e) => e.source === canvasSelection.id && (e.navigate || e.return)) && <ButtonEventProperties document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} overlay={nodeID ? overlayOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}
+            {nodeID && <NodeBindings document={document} id={nodeID} button={canvasSelection?.widget === "button"} input={canvasSelection?.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-1.5">
             <span className="mr-auto truncate text-xs font-medium">{title || page.title}</span>
             {([["desktop", "Desktop preview", Monitor], ["tablet", "Tablet preview", Tablet], ["mobile", "Mobile preview", Smartphone]] as const).map(([device, label, Icon]) => <Button key={device} size="sm" variant="ghost" aria-label={t(label)} aria-pressed={viewport === device} onClick={() => setViewport(device)}><Icon /></Button>)}

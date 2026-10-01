@@ -36,7 +36,12 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
-	Scope          string         `json:"scope"`
+	Scope   string `json:"scope"`
+	Overlay struct {
+		Scope      string   `json:"scope"`
+		ValueTypes []string `json:"valueTypes"`
+		Modes      []string `json:"modes"`
+	} `json:"overlay"`
 	ValueTypes     []string       `json:"valueTypes"`
 	MaxVariables   int            `json:"maxVariables"`
 	MaxStringBytes int            `json:"maxStringBytes"`
@@ -111,8 +116,11 @@ func (d *PageDocument) CheckVariables() error {
 		if visited[id] {
 			return v.Type, nil
 		}
-		if !pageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope) || (v.Scope == contract.Scope && v.Owner != "") || (v.Scope == contract.Loop.Scope && !pageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
+		if !pageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope && v.Scope != contract.Overlay.Scope) || (v.Scope == contract.Scope && v.Owner != "") || (v.Scope != contract.Scope && !pageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
 			return fail("unsupported identity, scope or type")
+		}
+		if v.Scope == contract.Overlay.Scope && (!slices.Contains(contract.Overlay.ValueTypes, v.Type) || !slices.Contains(contract.Overlay.Modes, v.Mode)) {
+			return fail("overlay variable needs a scalar state, constant or expression")
 		}
 		visiting[id] = true
 		if v.Mode != "resource" && v.Source != nil {
@@ -172,6 +180,9 @@ func (d *PageDocument) CheckVariables() error {
 					dependency := d.Variables[arg.Variable]
 					if dependency.Scope == contract.Loop.Scope && (v.Scope != contract.Loop.Scope || v.Owner != dependency.Owner) {
 						return fail("item dependency escapes its loop scope")
+					}
+					if dependency.Scope == contract.Overlay.Scope && (v.Scope != contract.Overlay.Scope || v.Owner != dependency.Owner) {
+						return fail("overlay dependency escapes its owner scope")
 					}
 					var err error
 					typ, err = visit(arg.Variable)

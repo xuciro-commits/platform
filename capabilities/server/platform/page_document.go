@@ -27,6 +27,7 @@ type PageLayoutNode struct {
 	Children       []string  `json:"children,omitempty"`
 	Section        string    `json:"section,omitempty"`
 	Title          string    `json:"title,omitempty"`
+	ValueVariable  string    `json:"valueVariable,omitempty"`
 	ActiveVariable string    `json:"activeVariable,omitempty"`
 	VisibleWhen    string    `json:"visibleWhen,omitempty"`
 	EnabledWhen    string    `json:"enabledWhen,omitempty"`
@@ -52,6 +53,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
+		if variable.Scope == "overlay" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") {
+			return fmt.Errorf("page variable %s requires UI profile v2.7", id)
+		}
 		if variable.Scope == pageWidgets.Runtime.Loop.Scope && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") {
 			return fmt.Errorf("page variable %s requires UI profile v2.5", id)
 		}
@@ -141,8 +145,15 @@ func (d *PageDocument) Check(sections []Section) error {
 		if node.Align != "" && (node.Kind != "flow" && node.Kind != "toolbar" || !slices.Contains([]string{"start", "center", "end", "between"}, node.Align)) {
 			return fmt.Errorf("page node %s has unsupported alignment", id)
 		}
-		if node.EnabledWhen != "" && (node.Kind != "widget" || d.Variables[node.EnabledWhen].Type != "boolean" || !slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && s.Widget == "button" })) {
-			return fmt.Errorf("page node %s enable binding needs a button and boolean variable", id)
+		if node.EnabledWhen != "" && (node.Kind != "widget" || d.Variables[node.EnabledWhen].Type != "boolean" || !slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && (s.Widget == "button" || s.Widget == "input") })) {
+			return fmt.Errorf("page node %s enable binding needs an interactive widget and boolean variable", id)
+		}
+		input := slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && s.Widget == "input" })
+		if input || node.ValueVariable != "" {
+			v, ok := d.Variables[node.ValueVariable]
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") || node.Kind != "widget" || !input || !ok || v.Type != "string" || v.Mode != "state" {
+				return fmt.Errorf("page node %s input needs v2.7 and a text state binding", id)
+			}
 		}
 		switch node.Kind {
 		case "widget":
@@ -309,6 +320,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 				return false
 			}
 		}
+		if node.ValueVariable != "" {
+			if _, available := variables[node.ValueVariable]; !available {
+				return false
+			}
+		}
 		if node.EnabledWhen != "" {
 			if _, available := variables[node.EnabledWhen]; !available {
 				return false
@@ -391,6 +407,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		out.Nodes = map[string]PageLayoutNode{d.Root: {Kind: "rows"}}
 	}
 	for id, variable := range out.Variables {
+		if variable.Scope == "overlay" {
+			if _, ok := out.Overlays[variable.Owner]; !ok {
+				delete(out.Variables, id)
+			}
+		}
 		if variable.Scope == pageWidgets.Runtime.Loop.Scope && out.Nodes[variable.Owner].Kind != "loop" {
 			delete(out.Variables, id)
 		}

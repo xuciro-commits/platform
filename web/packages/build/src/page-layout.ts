@@ -121,7 +121,8 @@ export function setLayoutKind(document: Document, id: string, kind: Kind): Docum
     next.uiProfile = pageUIProfile;
     if (!node.activeVariable) {
       const variable = layoutID("tab");
-      next.variables = { ...next.variables, [variable]: { title: "", scope: "page", type: "string", mode: "state", initial: node.children?.[0] ?? "" } };
+      const overlay = overlayOwner(next, id), loop = loopOwner(next, id);
+      next.variables = { ...next.variables, [variable]: { title: "", scope: loop ? "loop-item" : overlay ? "overlay" : "page", owner: loop ?? overlay, type: "string", mode: "state", initial: node.children?.[0] ?? "" } };
       node.activeVariable = variable;
     }
   } else delete node.activeVariable;
@@ -157,6 +158,7 @@ export function removeOverlay(document: Document, id: string): { document: Docum
     node.children?.forEach(remove); delete next.nodes[id];
   };
   remove(overlay.root); delete next.overlays![id]; delete next.variables?.[overlay.openVariable];
+  for (const [key, variable] of Object.entries(next.variables ?? {})) if (variable.scope === "overlay" && variable.owner === id) delete next.variables![key];
   for (const event of next.events ?? []) if (event.target === overlay.openVariable) sections.add(event.source);
   for (const section of sections) Object.assign(next, removeWidget(next, section));
   next.events = next.events?.filter((event) => !sections.has(event.source) && event.target !== overlay.openVariable);
@@ -170,6 +172,20 @@ export function loopOwner(document: Document, node: string): string | undefined 
     seen.add(parent); parent = parentOf(document, parent);
   }
   return undefined;
+}
+
+export function overlayOwner(document: Document, node: string): string | undefined {
+  const roots = new Map(Object.entries(document.overlays ?? {}).map(([id, overlay]) => [overlay.root, id]));
+  const seen = new Set<string>(); let current: string | undefined = node;
+  while (current && !seen.has(current)) {
+    if (roots.has(current)) return roots.get(current);
+    seen.add(current); current = parentOf(document, current);
+  }
+  return undefined;
+}
+
+export function variableAccessible(variable: Api.PageVariable, loop?: string, overlay?: string) {
+  return variable.scope === "page" || variable.scope === "loop-item" && !!loop && variable.owner === loop || variable.scope === "overlay" && !!overlay && variable.owner === overlay;
 }
 
 export function synchronizeLoopBindings<T extends { id?: string; widget: string; selection?: string; recordVariable?: string }>(document: Document, sections: T[]): { document: Document; sections: T[] } {

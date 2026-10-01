@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8b81c3ef2580ba9c",
+  "revision": "sha256:ca628ddc58f86508",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2440,6 +2440,7 @@
         "useChartData",
         "useUnsavedChanges",
         "useViewCall",
+        "useViewVisible",
         "useWorkspace",
         "validateCanvasConnection",
         "valueOf"

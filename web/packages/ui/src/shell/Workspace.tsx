@@ -9,6 +9,7 @@ import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
 import { language, languages, setLanguage, t } from "../i18n";
 import { Dialog } from "../primitives/dialog";
 import { Button } from "../primitives/button";
+import { ViewVisibilityContext } from "./ViewVisibility";
 import { ViewTransfers } from "./ViewTransfers";
 
 export type View = {
@@ -240,9 +241,9 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
         return () => changed.dispose();
       }, [api]);
       return <div style={{ display: visible ? undefined : "none" }} role="region" aria-label={view?.title(params.route.params ?? {}) ?? t("Workspace view")} className="h-full overflow-auto bg-background p-4">
-        <PanelContext.Provider value={api.id}><ViewCallContext.Provider value={ticket ? { input: call?.input, expired: !call, returnValue: call ? returned : undefined } : undefined}><ViewBoundary onClose={() => closePanel(api.id)}>
+        <ViewVisibilityContext.Provider value={visible}><PanelContext.Provider value={api.id}><ViewCallContext.Provider value={ticket ? { input: call?.input, expired: !call, returnValue: call ? returned : undefined } : undefined}><ViewBoundary onClose={() => closePanel(api.id)}>
           {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}
-        </ViewBoundary></ViewCallContext.Provider></PanelContext.Provider>
+        </ViewBoundary></ViewCallContext.Provider></PanelContext.Provider></ViewVisibilityContext.Provider>
       </div>;
     },
   }), [byId, closePanel]);

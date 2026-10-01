@@ -4,8 +4,9 @@ import { findDefinition, useHost } from "../index";
 import type { Api } from "@platform/kernel";
 import type { PageSessionStore, PageSessionSnapshot } from "./Session";
 import type { VariableResult } from "./variables";
-import type { LoopContext } from "./LoopRuntime";
 import { checkPortValues, navigationValues, portValues, readPageEnvelope } from "./page-values";
+
+type EventContext = { values: Record<string, VariableResult>; set: (id: string, value: string | boolean) => void; isActive: () => boolean };
 
 export const inputSlot = (variable: string) => `input/${variable}`;
 export function usePageInputs(page: Api.Page, session: PageSessionStore, snapshot: PageSessionSnapshot) {
@@ -37,13 +38,13 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
   return { inputs, error: inputError ?? (recordError ? "A page record input is unavailable." : undefined) };
 }
 
-export function usePageNavigation(page: Api.Page, live: boolean, session: PageSessionStore, values: Record<string, VariableResult>, set: (id: string, value: string | boolean) => void) {
+export function usePageNavigation(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: string | boolean) => void) {
   const { definitions, source } = useHost(), workspace = useWorkspace(), call = useViewCall();
   const [error, setError] = useState<string>();
   const active = useRef(true); useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const currentScope = useRef(source.scope); currentScope.current = source.scope;
   const iface = page.document?.interface;
-  const emit = (event: Api.PageEventBinding, context?: LoopContext) => {
+  const emit = (event: Api.PageEventBinding, context?: EventContext) => {
     try {
       setError(undefined);
       if (event.return) {
@@ -62,13 +63,13 @@ export function usePageNavigation(page: Api.Page, live: boolean, session: PageSe
       if (problem) throw new Error(problem);
       const scope = source.scope;
       workspace.transfer("", { view: live ? "page" : "page-preview", params: { app: navigation.page.app, kind: "page", name: navigation.page.name } }, { version: navigation.interfaceVersion, values: input }, (raw) => {
-        if (!active.current || currentScope.current !== scope || context && !session.hasLoopItem(context.owner, context.key)) return;
+        if (!active.current || currentScope.current !== scope || context && !context.isActive()) return;
         const returned = readPageEnvelope(raw);
         if (!returned || returned.version !== navigation.interfaceVersion || checkPortValues(targetInterface?.outputs ?? {}, returned.values)) { setError("The returned page values do not match the interface."); return; }
         for (const [output, id] of Object.entries(navigation.results ?? {})) {
           const value = returned.values[output];
           if (typeof value !== "string" && typeof value !== "boolean") continue;
-          page.document?.variables?.[id]?.scope === "loop-item" && context ? context.set(id, value) : set(id, value);
+          context ? context.set(id, value) : set(id, value);
         }
       });
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Page navigation failed."); }

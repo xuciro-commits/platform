@@ -5,7 +5,7 @@
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, ContentTabs, Dialog, FlowLayout, Sheet, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordSource, type RecordView,
+  Button, Card, Chart, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type Encoding, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
@@ -17,7 +17,7 @@ import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavig
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
 import { recordSlot, resourceVariables } from "./runtime/resources";
-import type { VariableResult } from "./runtime/variables";
+import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 type Page = NonNullable<Definition["page"]>;
@@ -32,7 +32,7 @@ type Bound = {
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
   session?: PageSessionStore;
-  onClick?: () => void; enabled?: boolean; readSource?: RecordSource;
+  onClick?: () => void; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
   narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
 
@@ -348,6 +348,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+  input: ({ section, value, onValue, enabled }) => <Input aria-label={section.title || t("Text input")} value={value ?? ""} disabled={!onValue || enabled === false} onChange={(event) => onValue?.(event.target.value)} />,
   button: ({ section, onClick, enabled }) => <Button onClick={onClick} disabled={!onClick || enabled === false}>{section.title || t("Button")}</Button>,
   table: TableWidget, detail: DetailWidget, actions: ActionsWidget,
   chart: (bound) => <ChartWidget {...bound} kpi={false} />,
@@ -399,6 +400,7 @@ export function ComposedPage(props: ComposedPageProps) {
 
 function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, onVariableValues, editingRoot }: ComposedPageProps) {
   const { source } = useHost();
+  const viewVisible = useViewVisible();
   const pageFocus = useRef<HTMLDivElement>(null), callers = useRef<Record<string, HTMLElement | null>>({});
   const initialVariables = useMemo(() => {
     const values = { ...page.document?.variables };
@@ -431,36 +433,56 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot);
-  const variables = usePageVariables(initialVariables, snapshot.scalars, session, useMemo(() => ({ ...resources, ...incoming.inputs }), [resources, JSON.stringify(incoming.inputs)]));
-  const navigation = usePageNavigation(page, live, session, variables.values, variables.set);
+  const allResources = useMemo(() => ({ ...resources, ...incoming.inputs }), [resources, JSON.stringify(incoming.inputs)]);
+  const variables = usePageVariables(initialVariables, snapshot.scalars, session, allResources);
+  const overlayValues = useMemo(() => Object.fromEntries(Object.keys(page.document?.overlays ?? {}).map((id) => [id, evaluateVariables(initialVariables, snapshot.scalars, pageVariableContract, allResources, undefined, id)])), [initialVariables, snapshot.scalars, allResources]);
+  const overlayForRoot = (root: string) => Object.entries(page.document?.overlays ?? {}).find(([, overlay]) => overlay.root === root)?.[0];
+  const navigation = usePageNavigation(page, live, variables.values, variables.set);
   useEffect(() => { onVariableValues?.(variables.values); }, [onVariableValues, variables.values]);
   const narrowed = snapshot.filters;
   const onSelect = (key: string, record?: EntityRecord) => session.select(key, record);
   const onNarrow = (object: string, field: string, value: unknown) => session.filter(object, field, value);
   const indexed = new Map((page.sections ?? []).map((section, i) => [section.id, { section, i }]));
-  const writeState = (id: string, value: string | boolean) => {
-    const overlay = Object.values(page.document?.overlays ?? {}).find((overlay) => overlay.openVariable === id);
-    if (overlay && value === true) {
-      callers.current[id] = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      variables.setMany(Object.fromEntries(Object.values(page.document?.overlays ?? {}).map((item) => [item.openVariable, item.openVariable === id])));
-    } else variables.set(id, value);
+  const writeState = (id: string, value: string | boolean, owner?: string) => {
+    const variable = initialVariables[id];
+    if (variable?.mode !== "state" || !(variable.scope === "page" || variable.scope === "overlay" && variable.owner === owner) || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > pageVariableContract.maxStringBytes) return;
+    const entries = Object.entries(page.document?.overlays ?? {}), target = entries.find(([, overlay]) => overlay.openVariable === id);
+    const changes: Record<string, string | boolean> = { [id]: value }, reset: string[] = [];
+    if (target) {
+      if (value === true) callers.current[id] = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      for (const [owner, overlay] of entries) {
+        const closing = owner === target[0] ? value === false : value === true;
+        if (value === true) changes[overlay.openVariable] = owner === target[0];
+        if (closing) {
+          session.endOverlay(owner);
+          reset.push(...Object.entries(initialVariables).filter(([, v]) => v.scope === "overlay" && v.owner === owner && v.mode === "state").map(([key]) => key));
+        }
+      }
+    }
+    session.setScalars(changes, reset);
   };
+  const setContextState = (id: string, value: string | boolean, context?: LoopContext, overlay?: string) => initialVariables[id]?.scope === "loop-item" && context ? context.set(id, value) : writeState(id, value, overlay);
   const booleanValue = (id: string) => { const result = variables.values[id]; return result?.status === "value" && result.value === true; };
-  const renderSection = (section: Section, i: number, nested: boolean, enabled = true, context?: LoopContext) => (
-    <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable ? context ? context.record : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionKey(objectOf(page, section), section.selection))}
-      master={session.selected(selectionKey(parentTypeOf(page, section), section.parentSelection))} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
-      chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
-      onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
-        const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
-        if (event.navigate || event.return) { navigation.emit(event, context); return; }
-        if (typeof event.value === "string" || typeof event.value === "boolean") initialVariables[event.target]?.scope === "loop-item" && context ? context.set(event.target, event.value) : writeState(event.target, event.value);
-      } : undefined} />
-  );
-  const renderNode = (id: string, ancestors: Set<string>, context?: LoopContext): ReactNode => {
+  const renderSection = (section: Section, i: number, nested: boolean, enabled = true, context?: LoopContext, overlay?: string, valueVariable?: string) => {
+    const values = context?.values ?? (overlay ? overlayValues[overlay] : variables.values) ?? {}, value = values[valueVariable ?? ""];
+    const epoch = overlay ? session.overlayEpoch(overlay) : undefined;
+    return (
+      <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable ? context ? context.record : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionKey(objectOf(page, section), section.selection))}
+        master={session.selected(selectionKey(parentTypeOf(page, section), section.parentSelection))} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
+        chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
+        value={value?.status === "value" && typeof value.value === "string" ? value.value : undefined} onValue={valueVariable ? (value) => setContextState(valueVariable, value, context, overlay) : undefined}
+        onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
+          const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
+          if (event.navigate || event.return) { navigation.emit(event, { values, set: (id, value) => setContextState(id, value, context, overlay), isActive: () => (!overlay || session.overlayEpoch(overlay) === epoch) && (!context || session.hasLoopItem(context.owner, context.key)) }); return; }
+          if (typeof event.value === "string" || typeof event.value === "boolean") setContextState(event.target, event.value, context, overlay);
+        } : undefined} />
+    );
+  };
+  const renderNode = (id: string, ancestors: Set<string>, context?: LoopContext, overlay?: string): ReactNode => {
     if (!page.document || ancestors.has(id)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
     const node = page.document.nodes[id];
     if (!node) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
-    const values = context?.values ?? variables.values;
+    const values = context?.values ?? (overlay ? overlayValues[overlay] : variables.values) ?? {};
     if (node.visibleWhen) {
       const visible = values[node.visibleWhen];
       if (!visible || visible.status === "error") return <Panel role="alert">{t("This page variable could not be evaluated.")} {node.visibleWhen}</Panel>;
@@ -471,7 +493,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       const item = indexed.get(node.section);
       if (!item) return null; // server filtered this widget for the reader
       if (context && !([...pageVariableContract.loop.recordWidgets, ...pageVariableContract.loop.presentationWidgets] as readonly string[]).includes(item.section.widget)) return <Panel role="alert">{t("This widget is not supported in a loop.")}</Panel>;
-      const body = renderSection(item.section, item.i, true, !node.enabledWhen || (() => { const result = values[node.enabledWhen]; return result?.status === "value" && result.value === true; })(), context);
+      const body = renderSection(item.section, item.i, true, !node.enabledWhen || (() => { const result = values[node.enabledWhen]; return result?.status === "value" && result.value === true; })(), context, overlay, node.valueVariable);
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
     if (!["rows", "columns", "tabs", "flow", "toolbar", "loop"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
@@ -479,26 +501,26 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     if (node.kind === "loop") {
       if (context) return <Panel role="alert">{t("Nested loops are not supported by this UI profile.")}</Panel>;
       if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
-      const body = <LoopRuntime owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={resources}>
-        {(item) => <>{node.children?.map((child) => <div key={child} className="min-w-0">{renderNode(child, next, item)}</div>)}</>}
+      const body = <LoopRuntime owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
+        {(item) => <>{node.children?.map((child) => <div key={child} className="min-w-0">{renderNode(child, next, item, overlay)}</div>)}</>}
       </LoopRuntime>;
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
     if (node.kind === "tabs") {
       const active = values[node.activeVariable ?? ""];
       if (!active || active.status !== "value" || typeof active.value !== "string") return <Panel role="alert">{t("This page variable could not be evaluated.")} {node.activeVariable}</Panel>;
-      const body = <ContentTabs label={node.title || t("Page tabs")} value={active.value} onChange={(value) => initialVariables[node.activeVariable!]?.scope === "loop-item" && context ? context.set(node.activeVariable!, value) : variables.set(node.activeVariable!, value)}
+      const body = <ContentTabs label={node.title || t("Page tabs")} value={active.value} onChange={(value) => setContextState(node.activeVariable!, value, context, overlay)}
         items={(node.children ?? []).map((child, index) => ({ id: child,
-          title: page.document!.nodes[child]?.title || indexed.get(page.document!.nodes[child]?.section)?.section.title || t("Tab {n}", { n: index + 1 }), content: renderNode(child, next, context) }))} />;
+          title: page.document!.nodes[child]?.title || indexed.get(page.document!.nodes[child]?.section)?.section.title || t("Tab {n}", { n: index + 1 }), content: renderNode(child, next, context, overlay) }))} />;
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
     if (node.kind === "flow" || node.kind === "toolbar") {
-      const body = <FlowLayout toolbar={node.kind === "toolbar"} label={node.title || t("Toolbar")} align={node.align}>{node.children?.map((child) => <div key={child} className="min-w-0 max-w-full">{renderNode(child, next, context)}</div>)}</FlowLayout>;
+      const body = <FlowLayout toolbar={node.kind === "toolbar"} label={node.title || t("Toolbar")} align={node.align}>{node.children?.map((child) => <div key={child} className="min-w-0 max-w-full">{renderNode(child, next, context, overlay)}</div>)}</FlowLayout>;
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
     const body = <div key={id} className={node.kind === "columns" ? "grid min-w-0 grid-cols-1 gap-3 @md:grid-cols-[repeat(var(--page-columns),minmax(0,1fr))]" : "flex min-w-0 flex-col gap-3"}
       style={node.kind === "columns" ? { "--page-columns": Math.max(1, node.children?.length ?? 0) } as CSSProperties : undefined}>
-      {node.children?.map((child) => <div key={child} className="@container min-w-0">{renderNode(child, next, context)}</div>)}
+      {node.children?.map((child) => <div key={child} className="@container min-w-0">{renderNode(child, next, context, overlay)}</div>)}
     </div>;
     return wrapLayout ? wrapLayout(id, node, body) : body;
   };
@@ -508,7 +530,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       {(incoming.error || navigation.error) && <Panel role="alert">{t(incoming.error ?? navigation.error!)}</Panel>}
       {incoming.error && !onChoose ? null : page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)
         ? <Panel role="alert">{t("This page needs a newer workspace version. Refresh after updating the workspace.")}</Panel>
-        : renderNode(editingRoot ?? page.document.root, new Set()) : <div className="grid gap-3 md:grid-cols-2">
+        : renderNode(editingRoot ?? page.document.root, new Set(), undefined, editingRoot ? overlayForRoot(editingRoot) : undefined) : <div className="grid gap-3 md:grid-cols-2">
         {(page.sections ?? []).map((section, i) => (
           renderSection(section, i, false)
         ))}
@@ -524,8 +546,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
           node.children?.forEach((child) => collect(child, seen));
         };
         collect(overlay.root);
-        return <Frame key={id} open={open} title={overlay.title} onOpenChange={(open) => writeState(overlay.openVariable, open)} returnFocus={callers.current[overlay.openVariable]} fallbackFocus={pageFocus.current}>
-          {open && <OverlayBody session={session} sectionIDs={sections}>{renderNode(overlay.root, new Set())}</OverlayBody>}
+        return <Frame key={id} open={open} suspended={!viewVisible} title={overlay.title} onOpenChange={(open) => writeState(overlay.openVariable, open)} returnFocus={callers.current[overlay.openVariable]} fallbackFocus={pageFocus.current}>
+          {open && <OverlayBody session={session} sectionIDs={sections}>{renderNode(overlay.root, new Set(), undefined, id)}</OverlayBody>}
         </Frame>;
       })}
       {(page.sections ?? []).length === 0 && <Panel role="status" className="text-sm text-muted">{t("Nothing is on this page yet.")}</Panel>}

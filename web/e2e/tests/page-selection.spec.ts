@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { decide, fresh, open } from "./host";
+import { pageUIProfile, decide, fresh, open } from "./host";
 
 test("two selections of one object keep their details and actions independent after release", async ({ page, request }, testInfo) => {
   const suffix = fresh("probe").replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -124,7 +124,7 @@ test("two selections of one object keep their details and actions independent af
   await page.getByRole("button", { name: "Review release", exact: true }).click();
   const savedDraft = (await (await request.get(`/v1/records/build.page/${pageID}`, { headers: builder })).json()).record;
   expect(savedDraft.document.formatVersion).toBe(2);
-  expect(savedDraft.document.uiProfile).toBe("platform.page.v2.6");
+  expect(savedDraft.document.uiProfile).toBe(pageUIProfile);
   expect(new Set(savedDraft.sections.map((s: { id: string }) => s.id)).size).toBe(11);
   expect(savedDraft.sections.every((s: { configVersion: number }) => s.configVersion === 1)).toBe(true);
   expect(savedDraft.document.nodes.v1columns2.children).toEqual(["v1node3", "v1node2"]);

@@ -25,7 +25,8 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (visiting.has(id)) return fail(id, "Cyclic variable dependency");
     if (visited.has(id)) return variable.type;
     visited.add(id); visiting.add(id);
-    if (!validID.test(id) || (variable.scope !== contract.scope && variable.scope !== contract.loop.scope) || (variable.scope === contract.scope ? !!variable.owner : !validID.test(variable.owner ?? "")) || !(contract.valueTypes as readonly string[]).includes(variable.type) || bytes(variable.title ?? "") > 1024) fail(id, "Unsupported variable type or scope");
+    if (!validID.test(id) || (variable.scope !== contract.scope && variable.scope !== contract.loop.scope && variable.scope !== contract.overlay.scope) || (variable.scope === contract.scope ? !!variable.owner : !validID.test(variable.owner ?? "")) || !(contract.valueTypes as readonly string[]).includes(variable.type) || bytes(variable.title ?? "") > 1024) fail(id, "Unsupported variable type or scope");
+    if (variable.scope === contract.overlay.scope && (!(contract.overlay.valueTypes as readonly string[]).includes(variable.type) || !(contract.overlay.modes as readonly string[]).includes(variable.mode))) fail(id, "Overlay variable needs a scalar state, constant or expression");
     if (variable.mode !== "resource" && variable.source) fail(id, "Only resource variables may declare a source");
     if (variable.mode === "resource") {
       if (!variable.source || (variable.scope === contract.loop.scope ? variable.type !== "record" || variable.source.kind !== contract.loop.source || variable.source.node !== variable.owner || !!variable.source.section : !validID.test(variable.source.section ?? "") || !!variable.source.node) || variable.expression || variable.initial !== undefined || (variable.scope !== contract.loop.scope && !contract.resources.some((resource) => resource.kind === variable.source!.kind && resource.type === variable.type))) fail(id, "Resource source type mismatch");
@@ -42,6 +43,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
           if (!arg || typeof arg !== "object") return fail(id, "Argument needs a variable or literal");
           if (!!arg.variable === (arg.literal !== undefined)) return fail(id, "Argument needs a variable or literal");
           if (arg.variable && variables[arg.variable]?.scope === contract.loop.scope && (variable.scope !== contract.loop.scope || variable.owner !== variables[arg.variable]?.owner)) return fail(id, "Item dependency escapes its loop scope");
+          if (arg.variable && variables[arg.variable]?.scope === contract.overlay.scope && (variable.scope !== contract.overlay.scope || variable.owner !== variables[arg.variable]?.owner)) return fail(id, "Overlay dependency escapes its owner scope");
           return arg.variable ? visit(arg.variable) : valueType(arg.literal, contract);
         });
         if (types.some((type) => !type || (op.input === "resource" ? !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean"].includes(type)))) fail(id, "Argument type mismatch");
@@ -61,12 +63,12 @@ const operators: Record<Contract["operators"][number]["id"], (values: Scalar[]) 
   present: () => true,
 };
 
-export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string): Record<string, VariableResult> {
+export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string, overlay?: string): Record<string, VariableResult> {
   const compiled = compileVariables(variables, contract), result: Record<string, VariableResult> = {};
   if (compiled.issues.length) return Object.fromEntries(Object.keys(variables).map((id) => [id, { status: "error", code: "Invalid variable graph" }]));
   for (const id of compiled.order) {
     const variable = variables[id]!;
-    if (variable.scope === contract.loop.scope && variable.owner !== owner) { result[id] = { status: "empty" }; continue; }
+    if (variable.scope === contract.loop.scope && variable.owner !== owner || variable.scope === contract.overlay.scope && variable.owner !== overlay) { result[id] = { status: "empty" }; continue; }
     if (variable.mode === "input") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
     if (variable.mode === "resource") {
       const value = resources[id] ?? { status: "empty" };

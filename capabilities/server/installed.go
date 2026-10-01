@@ -408,9 +408,9 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
-		case "button":
+		case "button", "input":
 			if p.Document == nil || s.Object.Name != "" || s.Query.Name != "" || s.Selection != "" || s.ParentSelection != "" || s.Relation != "" || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Text != "" || s.Function != nil || s.Operation != nil || len(s.Inputs) > 0 {
-				return fmt.Errorf("%s: a presentation button requires a document event and no business binding", where)
+				return fmt.Errorf("%s: an interactive presentation widget requires a document and no business binding", where)
 			}
 		case "text":
 			if strings.TrimSpace(s.Text) == "" {

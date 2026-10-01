@@ -2,7 +2,7 @@ import type { Api } from "@platform/kernel";
 import { pageUIProfile, pageVariableContract, type PageVariableValue } from "@platform/app";
 import { Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
 import { useState } from "react";
-import { layoutID, loopOwner } from "../page-layout";
+import { layoutID, loopOwner, overlayOwner, variableAccessible } from "../page-layout";
 
 type Variables = NonNullable<Api.PageDocument["variables"]>;
 const initial = (type: string) => type === "boolean" ? false : "";
@@ -32,7 +32,12 @@ export function VariablesPanel({ document, sections, values, onChange }: { docum
     {variable && <>
       <label className="grid gap-1 text-xs">{t("Variable label")}<Input value={variable.title ?? ""} onChange={(event) => patch({ title: event.target.value })} /></label>
       <p className="break-all font-mono text-[10px] text-muted">{id}</p>
-      <label className="grid gap-1 text-xs">{t("Variable scope")}<Select value={variable.owner ?? "page"} disabled={variable.source?.kind === "item" || variable.mode === "input"} onChange={(event) => patch({ scope: event.target.value === "page" ? "page" : "loop-item", owner: event.target.value === "page" ? undefined : event.target.value })}><option value="page">{t("Page")}</option>{Object.entries(document.nodes).filter(([, node]) => node.kind === "loop").map(([id, node], at) => <option key={id} value={id}>{node.title || t("Loop {n}", { n: at + 1 })}</option>)}</Select></label>
+      <label className="grid gap-1 text-xs">{t("Variable scope")}<Select value={variable.scope === "page" ? "page" : `${variable.scope}:${variable.owner}`} disabled={variable.source?.kind === "item" || variable.mode === "input"} onChange={(event) => {
+        const value = event.target.value, at = value.indexOf(":");
+        const scope = value === "page" ? "page" : value.slice(0, at), owner = value === "page" ? undefined : value.slice(at + 1);
+        patch({ scope, owner, ...(scope === "overlay" && variable.mode === "resource" ? { mode: "state", type: "string", initial: "", source: undefined, expression: undefined } : {}) });
+      }}><option value="page">{t("Page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={`overlay:${id}`}>{t("Overlay")}: {overlay.title}</option>)}{Object.entries(document.nodes).filter(([, node]) => node.kind === "loop").map(([id, node], at) => <option key={id} value={`loop-item:${id}`}>{node.title || t("Loop {n}", { n: at + 1 })}</option>)}</Select></label>
+      {variable.scope === "overlay" && <p className="text-xs text-muted">{t("Values belong to this overlay and reset when it closes.")}</p>}
       {variable.scope === "loop-item" && <p className="text-xs text-muted">{t("Values are local to each loop record; the page inspector has no active item.")}</p>}
       <label className="grid gap-1 text-xs">{t("Variable mode")}<Select value={variable.mode} disabled={variable.source?.kind === "item" || variable.mode === "input"} onChange={(event) => {
         const mode = event.target.value;
@@ -64,7 +69,7 @@ export function VariablesPanel({ document, sections, values, onChange }: { docum
         <label className="grid gap-1 text-xs">{t("Operator")}<Select value={expr.op} onChange={(event) => patch({ expression: expression(event.target.value), type: pageVariableContract.operators.find((op) => op.id === event.target.value)!.output })}>
           {pageVariableContract.operators.map((op) => <option key={op.id} value={op.id}>{t(op.id)}</option>)}</Select></label>
         {expr.args.map((arg, at) => <fieldset key={at} className="grid min-w-0 gap-2 border-t border-border pt-2"><legend className="text-xs">{t("Argument {n}", { n: at + 1 })}</legend>
-          <Argument value={arg} variables={Object.fromEntries(Object.entries(variables).filter(([, value]) => value.scope === "page" || value.owner === variable.owner))} document={document} onChange={(value) => patch({ expression: { ...expr, args: expr.args.map((old, i) => i === at ? value : old) } })} />
+          <Argument value={arg} variables={Object.fromEntries(Object.entries(variables).filter(([, value]) => value.scope === "page" || value.scope === variable.scope && value.owner === variable.owner))} document={document} onChange={(value) => patch({ expression: { ...expr, args: expr.args.map((old, i) => i === at ? value : old) } })} />
           {expr.args.length > (pageVariableContract.operators.find((op) => op.id === expr.op)?.minArgs ?? 0) && <Button onClick={() => patch({ expression: { ...expr, args: expr.args.filter((_, i) => i !== at) } })}>{t("Remove argument")}</Button>}
         </fieldset>)}
         <Button disabled={expr.args.length >= (pageVariableContract.operators.find((op) => op.id === expr.op)?.maxArgs ?? 0)} onClick={() => patch({ expression: { ...expr, args: [...expr.args, { literal: initial(variable.type) }] } })}>{t("Add argument")}</Button>
@@ -100,12 +105,13 @@ function Argument({ value, variables, document, onChange }: { value: Api.PageVal
   </>;
 }
 
-export function NodeBindings({ document, id, button, onChange }: { document: Api.PageDocument; id: string; button?: boolean; onChange: (patch: Partial<Api.PageLayoutNode>) => void }) {
-  const node = document.nodes[id], owner = loopOwner(document, id);
-  const eligible = Object.entries(document.variables ?? {}).filter(([, variable]) => variable.type === "boolean" && (variable.scope === "page" || variable.owner === owner));
+export function NodeBindings({ document, id, button, input, onChange }: { document: Api.PageDocument; id: string; button?: boolean; input?: boolean; onChange: (patch: Partial<Api.PageLayoutNode>) => void }) {
+  const node = document.nodes[id], owner = loopOwner(document, id), overlay = overlayOwner(document, id);
+  const visible = Object.entries(document.variables ?? {}).filter(([, variable]) => variableAccessible(variable, owner, overlay));
+  const eligible = visible.filter(([, variable]) => variable.type === "boolean");
   return <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Visible when")}<Select value={node?.visibleWhen ?? ""} onChange={(event) => onChange({ visibleWhen: event.target.value || undefined })}>
     <option value="">{t("Always visible")}</option>{eligible.map(([key, variable]) => <option key={key} value={key}>{variable.title || key}</option>)}
-  </Select></label>{button && <label className="grid gap-1 text-xs">{t("Enabled when")}<Select value={node?.enabledWhen ?? ""} onChange={(event) => onChange({ enabledWhen: event.target.value || undefined })}>
+  </Select></label>{(button || input) && <label className="grid gap-1 text-xs">{t("Enabled when")}<Select value={node?.enabledWhen ?? ""} onChange={(event) => onChange({ enabledWhen: event.target.value || undefined })}>
     <option value="">{t("Always enabled")}</option>{eligible.map(([key, variable]) => <option key={key} value={key}>{variable.title || key}</option>)}
-  </Select></label>}</Card>;
+  </Select></label>}{input && <label className="grid gap-1 text-xs">{t("Input state variable")}<Select value={node?.valueVariable ?? ""} onChange={(event) => onChange({ valueVariable: event.target.value || undefined })}><option value="">{t("Choose a text state variable")}</option>{visible.filter(([, variable]) => variable.type === "string" && variable.mode === "state").map(([id, variable]) => <option key={id} value={id}>{variable.title || id}</option>)}</Select></label>}</Card>;
 }
