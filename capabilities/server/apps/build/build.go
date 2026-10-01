@@ -455,6 +455,13 @@ func TypeOf(name string) string { return ID + "." + name }
 // check refuses a definition the host could not install, with the reason, while
 // it is still a draft: a name that is not a name, a field the platform has no
 // type for, a choice without values, a reference to an object that is not there.
+func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
+	if b.host == nil {
+		return platform.EntityInfo{}, false
+	}
+	return b.host.Entity(typ)
+}
+
 func (b *Build) check(o Object, id string) error {
 	if err := b.checkName(o.Name, id); err != nil {
 		return err
@@ -462,7 +469,7 @@ func (b *Build) check(o Object, id string) error {
 	if err := checkFields(o.Fields, b.host); err != nil {
 		return err
 	}
-	if err := checkProcess(o); err != nil {
+	if err := checkProcess(o, b.conditionLookup); err != nil {
 		return err
 	}
 	if err := b.checkCreates(o); err != nil {
@@ -648,24 +655,6 @@ func (b *Build) Reinstall() error {
 			return fmt.Errorf("object %s: %v", o.Name, err)
 		}
 	}
-	for _, p := range pages { // after the objects they show
-		was, ok := wasPublished[Page](p.Published)
-		if !ok || p.Archived {
-			continue
-		}
-		if err := b.release(platform.Caller{Replaying: true}, was); err != nil {
-			return fmt.Errorf("page %s: %v", p.Name, err)
-		}
-	}
-	for _, a := range applications { // after the pages they hold
-		was, ok := wasPublished[Application](a.Published)
-		if !ok || a.Archived {
-			continue
-		}
-		if err := b.hand(platform.Caller{Replaying: true}, was); err != nil {
-			return fmt.Errorf("application %s: %v", a.Name, err)
-		}
-	}
 	functions, err := b.functionInventory()
 	if err != nil {
 		return err
@@ -700,18 +689,39 @@ func (b *Build) Reinstall() error {
 			return err
 		}
 	}
-	return b.installProcesses()
+	for _, p := range pages { // after the objects they show
+		was, ok := wasPublished[Page](p.Published)
+		if !ok || p.Archived {
+			continue
+		}
+		if err := b.release(platform.Caller{Replaying: true}, was); err != nil {
+			return fmt.Errorf("page %s: %v", p.Name, err)
+		}
+	}
+	if err := b.installProcesses(); err != nil {
+		return err
+	}
+	for _, a := range applications { // after the pages they hold
+		was, ok := wasPublished[Application](a.Published)
+		if !ok || a.Archived {
+			continue
+		}
+		if err := b.hand(platform.Caller{Replaying: true}, was); err != nil {
+			return fmt.Errorf("application %s: %v", a.Name, err)
+		}
+	}
+	return nil
 }
 
 // Entity is the declaration a defined object amounts to: a Go type built now,
 // with the tags a developer would have written (ADR-0034 D1).
-func Entity(o Object) platform.Entity { return entityWith(o, nil) }
+func Entity(o Object) platform.Entity { return entityWith(o, nil, nil) }
 
 // entity is the declaration as installed: its actions may create related
 // records through this builder's host (ADR-0040 21c).
-func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b.create) }
+func (b *Build) entity(o Object) platform.Entity { return entityWith(o, b.create, b.conditionLookup) }
 
-func entityWith(o Object, creates creator) platform.Entity {
+func entityWith(o Object, creates creator, lookup func(string) (platform.EntityInfo, bool)) platform.Entity {
 	// StructOf interns identical shapes. The entity identity keeps two named
 	// objects distinct, just as two named Go record types are distinct; this
 	// tag adds no JSON field and stays stable across draft/publication/restore.
@@ -771,7 +781,7 @@ func entityWith(o Object, creates creator) platform.Entity {
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup)}
 }
 
 // page is the list and detail page a defined object comes with: the same

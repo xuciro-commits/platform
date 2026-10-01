@@ -34,8 +34,9 @@ type Application struct {
 	Pages       []string `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
 	// Groups are the headings of its navigation (17b); a page in none of them
 	// sits under the application's own name.
-	Groups []Group `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
-	State  string  `json:"state" field:"readonly" choices:"draft,published"`
+	Resources []platform.AssetRef `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
+	Groups    []Group             `json:"groups,omitempty" title:"Groups" help:"Headings in its navigation, each over some of its pages in their order"`
+	State     string              `json:"state" field:"readonly" choices:"draft,published"`
 	// Published is the application as it was last handed over: what people open,
 	// and what a restore puts back.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -49,7 +50,7 @@ type Group struct {
 
 func (b *Build) applicationEntity() platform.Entity {
 	return platform.Entity{Type: AppType, Title: "Application", Plural: "Applications", Model: Application{}, Display: "title",
-		Description: "An application this organisation hands to its people: a name, an icon and the pages it holds. It gives nobody new access; each page is offered to whoever may read what it shows.",
+		Description: "An application this organisation hands to its people: a name, an icon, its pages and shared resource references. It gives nobody new access; each page is offered to whoever may read what it shows.",
 		Standard:    platform.Standard{Create: true, Edit: true, Archive: true, Roles: []string{Builder}, Capability: "applications"},
 		Lifecycle: &platform.Lifecycle{Field: "state", Initial: "draft",
 			States: []platform.State{{Name: "draft", Title: "Draft", Tone: "warning", Description: "Being put together; nobody has it yet."},
@@ -95,7 +96,7 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups}
+	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources)}
 }
 
 // checkApplication refuses an application people could not open: a name that is
@@ -116,6 +117,9 @@ func (b *Build) checkApplication(a Application) error {
 			return fmt.Errorf("the page %q is in it twice", name)
 		}
 		seen[name] = true
+	}
+	if err := applicationDescriptor(a).CheckResources(); err != nil {
+		return err
 	}
 	return applicationDescriptor(a).CheckGroups()
 }

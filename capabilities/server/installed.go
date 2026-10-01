@@ -219,8 +219,8 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := t.checkPageOperation(s, page); err != nil {
 				return fmt.Errorf("%s: %w", where, err)
 			}
-		} else if s.Operation != nil || len(s.Inputs) != 0 {
-			return fmt.Errorf("%s: only a compute widget may bind compute inputs", where)
+		} else if s.Operation != nil || s.Widget != "form" && len(s.Inputs) != 0 {
+			return fmt.Errorf("%s: only a compute or form widget may bind inputs", where)
 		}
 		info := page
 		if s.Object.Name != "" && s.Object.Name != p.Object.Name {
@@ -229,6 +229,13 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("%s: no object %s", where, s.Object.Name)
 			}
 			info = shown
+		}
+		parentType := p.Object.Name
+		if s.ParentSelection != "" {
+			parentType = selections[s.ParentSelection]
+			if parentType == "" {
+				return fmt.Errorf("%s: parent selection %q is not declared", where, s.ParentSelection)
+			}
 		}
 		if s.Selection != "" {
 			if selections[s.Selection] != info.Type {
@@ -244,25 +251,22 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 		}
 		if s.ParentSelection != "" {
-			if selections[s.ParentSelection] != p.Object.Name {
-				return fmt.Errorf("%s: parent selection %q does not hold %s records", where, s.ParentSelection, p.Object.Name)
-			}
-			if !slices.Contains([]string{"table", "chart", "metric", "form"}, s.Widget) || info.Type == p.Object.Name ||
-				!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == p.Object.Name }) || s.Widget == "form" && s.Relation == "" {
+			if !slices.Contains([]string{"table", "chart", "metric", "form"}, s.Widget) ||
+				!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parentType }) || s.Widget == "form" && s.Relation == "" {
 				return fmt.Errorf("%s: parent selection needs a related table, chart, metric or bound form", where)
 			}
 			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-				return other.Widget == "table" && other.Selection == s.ParentSelection && (other.Object.Name == "" || other.Object == p.Object)
+				return other.Widget == "table" && other.Selection == s.ParentSelection && (other.Object.Name == parentType || other.Object.Name == "" && parentType == p.Object.Name)
 			}) {
 				return fmt.Errorf("%s: add a table that supplies parent selection %q", where, s.ParentSelection)
 			}
 		}
-		if s.Widget == "table" && info.Type != p.Object.Name && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == p.Object.Name }) {
+		if s.Widget == "table" && (info.Type != p.Object.Name || s.ParentSelection != "") && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == parentType }) {
 			key := "object:" + info.Type
 			if s.Selection != "" {
 				key = "selection:" + s.Selection
 			}
-			parent := "object:" + p.Object.Name
+			parent := "object:" + parentType
 			if s.ParentSelection != "" {
 				parent = "selection:" + s.ParentSelection
 			}
@@ -277,17 +281,17 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("%s: only a table, chart, metric or form follows a relation", where)
 			}
 			at := slices.IndexFunc(info.Fields, func(f platform.FieldInfo) bool {
-				return f.Type == "reference" && f.Ref == p.Object.Name && f.Inverse == s.Relation
+				return f.Type == "reference" && f.Ref == parentType && f.Inverse == s.Relation
 			})
-			if info.Type == p.Object.Name || at < 0 {
-				return fmt.Errorf("%s: %s declares no relation %q from %s", where, info.Type, s.Relation, p.Object.Name)
+			if at < 0 {
+				return fmt.Errorf("%s: %s declares no relation %q from %s", where, info.Type, s.Relation, parentType)
 			}
 			if s.Widget == "form" {
 				if info.Fields[at].ReadOnly {
 					return fmt.Errorf("%s: parent reference %s is read only", where, info.Fields[at].Name)
 				}
 				if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-					return other.Widget == "table" && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.ParentSelection
+					return other.Widget == "table" && (other.Object.Name == parentType || other.Object.Name == "" && parentType == p.Object.Name) && other.Selection == s.ParentSelection
 				}) {
 					return fmt.Errorf("%s: add a table that selects a parent record", where)
 				}
@@ -303,10 +307,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("%s: no query %s", where, s.Query)
 			case q.Object != info.Type:
 				return fmt.Errorf("%s: query %s reads %s, not %s", where, s.Query, q.Object, info.Type)
-			case q.By != "" && (info.Type == p.Object.Name || !slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool {
-				return f.Name == q.By && f.Ref == p.Object.Name
+			case q.By != "" && (!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool {
+				return f.Name == q.By && f.Ref == parentType
 			})):
-				return fmt.Errorf("%s: query %s is run for a %s record, not this page's %s", where, s.Query, q.By, p.Object.Name)
+				return fmt.Errorf("%s: query %s is run for a %s record, not this page's %s", where, s.Query, q.By, parentType)
 			}
 		}
 		field := func(name string) error {
@@ -379,7 +383,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := t.checkAction(p.Name, info.Type+".create", info.Type); err != nil {
 				return fmt.Errorf("%s: %s cannot be created here", where, info.Type)
 			}
-			if len(s.Fields) == 0 && boundParent == "" {
+			if len(s.Fields) == 0 && boundParent == "" && len(s.Inputs) == 0 {
 				return fmt.Errorf("%s: no fields to fill in", where)
 			}
 			for _, name := range s.Fields {
@@ -387,11 +391,24 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
+			if err := t.checkFormInputs(s, info, parentType, boundParent); err != nil {
+				return fmt.Errorf("%s: %w", where, err)
+			}
 			for _, f := range info.Fields {
-				if f.Required && !f.ReadOnly && f.Name != boundParent && !slices.Contains(s.Fields, f.Name) {
+				_, bound := s.Inputs[f.Name]
+				if f.Required && !f.ReadOnly && f.Name != boundParent && !bound && !slices.Contains(s.Fields, f.Name) {
 					return fmt.Errorf("%s: %s needs %s, which the form does not ask for", where, info.Type, f.Name)
 				}
 			}
+		}
+	}
+	for key := range parentBindings {
+		seen := map[string]bool{}
+		for at := key; at != ""; at = parentBindings[at] {
+			if seen[at] {
+				return fmt.Errorf("page %s: record selections have a parent cycle", p.Name)
+			}
+			seen[at] = true
 		}
 	}
 	return nil
@@ -442,15 +459,25 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 			return fmt.Errorf("application %s: no page %s", a.Name, page)
 		}
 	}
+	if err := a.CheckResources(); err != nil {
+		return fmt.Errorf("application %s: %w", a.Name, err)
+	}
+	for _, ref := range a.Resources {
+		known := slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
+		if ref.Kind == platform.AssetFlow {
+			known = t.procs != nil && strings.HasPrefix(ref.Name, ref.App+".") && t.procs.HasPublishedFlow(ref.Name)
+		}
+		if !known {
+			return fmt.Errorf("application %s: no published resource %s", a.Name, ref)
+		}
+	}
 	if err := a.CheckGroups(); err != nil {
 		return fmt.Errorf("application %s: %v", a.Name, err)
 	}
 	installed := a
 	def := platform.Definition{Ref: platform.AssetRef{App: id, Kind: platform.AssetApp, Name: a.Name}, Source: "tenant", Version: "1",
 		ContractVersion: 1, Application: &installed}
-	for _, page := range a.Pages {
-		def.Requires = append(def.Requires, platform.AssetRef{App: id, Kind: platform.AssetPage, Name: page})
-	}
+	def.Requires = a.Dependencies(id)
 	if i := slices.IndexFunc(t.definitions, func(x platform.Definition) bool { return x.Ref == def.Ref }); i >= 0 {
 		t.definitions[i] = def
 	} else {

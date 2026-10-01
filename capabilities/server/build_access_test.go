@@ -51,6 +51,7 @@ func TestTenantDefinedAccess(t *testing.T) {
 		"fields": []map[string]any{
 			{"name": "item", "title": "Item", "type": "text", "required": true, "search": true},
 			{"name": "value", "title": "Value", "type": "integer", "read": []string{"supervisor"}, "write": []string{"supervisor"}},
+			{"name": "checked", "title": "Checked", "type": "text", "write": []string{"supervisor"}},
 			{"name": "claimant", "title": "Handed to", "type": "text"}},
 		"states": []map[string]any{{"name": "found", "title": "Found"}, {"name": "returned", "title": "Returned"}},
 		"actions": []map[string]any{{"name": "handback", "title": "Hand it back", "from": []string{"found"}, "to": "returned", "roles": []string{"supervisor"},
@@ -101,6 +102,9 @@ func TestTenantDefinedAccess(t *testing.T) {
 	}
 	if got := do("ann", lost+".create", lost, "L-3", map[string]any{"item": "Ring", "value": 900}); got == "ok" {
 		t.Error("a desk set a field only a supervisor sets")
+	}
+	if got := do("ann", lost+".edit", lost, "L-1", map[string]any{"checked": "yes"}); got == "ok" {
+		t.Error("a desk wrote a readable field restricted to the supervisor")
 	}
 	if got := do("sam", lost+".create", lost, "L-4", map[string]any{"item": "Hat"}); got == "ok" {
 		t.Error("a supervisor created an item without create access")
@@ -174,6 +178,19 @@ func TestTenantDefinedAccess(t *testing.T) {
 		{"sam", lost + ".create", false}, {"sam", lost + ".handback", true}, {"cy", lost + ".create", false}, {"dana", lost + ".handback", true}} {
 		if got := offers(x.who, x.schema); got != x.want {
 			t.Errorf("%s is offered %s: %v, want %v", x.who, x.schema, got, x.want)
+		}
+	}
+	// Discovery projects generated form inputs without changing custom actions
+	// or the owner's catalog when different roles read it in succession.
+	for _, who := range []string{"ann", "sam", "dana", "ann"} {
+		for _, action := range tn.Catalog(member(who)) {
+			if action.Schema != lost+".create" && action.Schema != lost+".edit" {
+				continue
+			}
+			restricted := slices.ContainsFunc(action.Payload, func(field platform.Field) bool { return field.Name == "value" || field.Name == "checked" })
+			if restricted != (who != "ann") {
+				t.Errorf("%s has wrong writable form inputs for %s: %v", who, action.Schema, action.Payload)
+			}
 		}
 	}
 	CheckReplay(t, tn, journal, compose)

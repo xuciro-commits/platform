@@ -217,7 +217,7 @@ export const chromeViews = (apps: () => AppUI[], select: (id: string) => void, d
   { id: "saved", title: () => t("Saved view"), render: (p) => <Saved id={p.id ?? ""} /> },
   { id: "dashboard", title: (p) => apps().find((a) => a.id === p.app)?.dashboards?.find((d) => d.id === p.id)?.title ?? t("Dashboard"),
     render: (p) => { const d = apps().find((a) => a.id === p.app)?.dashboards?.find((x) => x.id === p.id); return d ? <DashboardView dashboard={d} /> : <p className="text-sm text-muted">{t("No dashboard.")}</p>; } },
-  { id: "home", title: () => t("Apps"), render: () => <Home apps={apps} onSelect={select} /> },
+  { id: "home", title: () => t("Application launcher"), render: () => <Home apps={apps} onSelect={select} /> },
   { id: "inbox", title: () => t("Inbox"), render: () => <MyInbox /> },
   { id: "requests", title: () => t("My requests"), render: () => <MyRequests /> },
   { id: "notifications", title: () => t("Notifications"), render: () => <Notifications /> },

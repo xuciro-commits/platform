@@ -91,10 +91,11 @@ type Set struct {
 // Condition is what must hold for the action to be taken, and what a person
 // reads when it does not (Foundry's submission criteria, as data).
 type Condition struct {
-	Field    string `json:"field" field:"required" help:"A field of the record, or input.<name>"`
-	Operator string `json:"operator" field:"required" choices:"=,!=,<,<=,>,>=,empty,not empty"`
-	Value    string `json:"value,omitempty" help:"What it is compared with; $me is the person taking the action"`
-	Message  string `json:"message" field:"required" help:"What a person reads when it does not hold"`
+	Field      string `json:"field" field:"required" help:"A declared record path through references, or input.<name>"`
+	Operator   string `json:"operator" field:"required" choices:"=,!=,<,<=,>,>=,empty,not empty"`
+	Value      string `json:"value,omitempty" help:"What it is compared with; $me is the person taking the action"`
+	ValueField string `json:"valueField,omitempty" help:"Compare with another declared record path or input; excludes value"`
+	Message    string `json:"message" field:"required" help:"What a person reads when it does not hold"`
 }
 
 // Operators are the comparisons a condition may make.
@@ -105,7 +106,7 @@ var inputTypes = map[string]string{"text": "string", "longtext": "string", "inte
 // checkProcess refuses states and actions people could not take: names that are
 // not names, an action from or to a state the object has not, an input or a
 // field it does not have, a condition that compares nothing.
-func checkProcess(o Object) error {
+func checkProcess(o Object, lookup func(string) (platform.EntityInfo, bool)) error {
 	if len(o.States) == 0 && len(o.Actions) > 0 {
 		return fmt.Errorf("an object needs states before it has actions")
 	}
@@ -223,35 +224,82 @@ func checkProcess(o Object) error {
 			}
 		}
 		for _, cond := range a.Conditions {
-			name, isInput := strings.CutPrefix(cond.Field, "input.")
-			known := isInput && inputs[name].Name != "" || !isInput && (fields[cond.Field].Name != "" || cond.Field == "state" && len(o.States) > 0)
+			left, err := conditionField(o, a, cond.Field, lookup)
+			if err != nil {
+				return fmt.Errorf("%s: %w", where, err)
+			}
 			switch {
-			case !known:
-				return fmt.Errorf("%s needs %q, which is not a field of the object or one of its inputs", where, cond.Field)
 			case !slices.Contains(Operators, cond.Operator):
-				return fmt.Errorf("%s: %q is not one of %s", where, cond.Operator, strings.Join(Operators, ", "))
-			case cond.Operator != "empty" && cond.Operator != "not empty" && cond.Value == "":
+				return fmt.Errorf("%s: unsupported condition operator %q", where, cond.Operator)
+			case cond.Value != "" && cond.ValueField != "":
+				return fmt.Errorf("%s: use a value or a comparison field, not both", where)
+			case cond.Operator != "empty" && cond.Operator != "not empty" && cond.Value == "" && cond.ValueField == "":
 				return fmt.Errorf("%s: %s %s compares with nothing", where, cond.Field, cond.Operator)
 			case strings.TrimSpace(cond.Message) == "":
 				return fmt.Errorf("%s: the condition on %s says nothing to a person it stops", where, cond.Field)
 			}
-			kind, options := "", []string(nil)
-			switch {
-			case cond.Field == "state":
-				kind = "choice"
-				for _, s := range o.States {
-					options = append(options, s.Name)
+			if cond.ValueField != "" {
+				if cond.Operator == "empty" || cond.Operator == "not empty" {
+					return fmt.Errorf("%s: an emptiness check needs no comparison field", where)
 				}
-			case isInput:
-				kind, options = inputs[name].Type, choices(inputs[name].Choices)
-			default:
-				f := fields[cond.Field]
-				kind, options = f.Type, choices(f.Choices)
-			}
-			if err := checkCondition(kind, options, cond); err != nil {
+				right, err := conditionField(o, a, cond.ValueField, lookup)
+				if err != nil {
+					return fmt.Errorf("%s: %w", where, err)
+				}
+				if err := checkConditionFields(left, right, cond.Operator); err != nil {
+					return fmt.Errorf("%s: %w", where, err)
+				}
+			} else if err := checkCondition(left.Type, left.Choices, cond); err != nil {
 				return fmt.Errorf("%s: the condition on %s: %w", where, cond.Field, err)
 			}
 		}
+	}
+	return nil
+}
+
+// conditionField resolves a typed operand against this draft and installed
+// related objects. It never infers a field from an arbitrary JSON expression.
+func conditionField(o Object, a Action, name string, lookup func(string) (platform.EntityInfo, bool)) (platform.FieldInfo, error) {
+	if input, ok := strings.CutPrefix(name, "input."); ok {
+		for _, in := range a.Inputs {
+			if in.Name == input {
+				return platform.FieldInfo{Name: name, Type: in.Type, Choices: choices(in.Choices)}, nil
+			}
+		}
+		return platform.FieldInfo{}, fmt.Errorf("condition input %q is not declared", input)
+	}
+	return platform.RecordPathField(TypeOf(o.Name), strings.Split(name, "."), func(typ string) (platform.EntityInfo, bool) {
+		if typ != TypeOf(o.Name) {
+			if lookup == nil {
+				return platform.EntityInfo{}, false
+			}
+			return lookup(typ)
+		}
+		info := platform.EntityInfo{Type: typ}
+		for _, f := range o.Fields {
+			info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, Choices: choices(f.Choices)})
+		}
+		if len(o.States) > 0 {
+			state := platform.FieldInfo{Name: "state", Type: "choice"}
+			for _, s := range o.States {
+				state.Choices = append(state.Choices, s.Name)
+			}
+			info.Fields = append(info.Fields, state)
+		}
+		return info, true
+	})
+}
+
+func checkConditionFields(left, right platform.FieldInfo, op string) error {
+	if left.Type == "money" || right.Type == "money" {
+		return fmt.Errorf("money needs a currency-aware comparison rule")
+	}
+	numeric := func(kind string) bool { return kind == "integer" || kind == "decimal" }
+	if left.Type != right.Type && !(numeric(left.Type) && numeric(right.Type)) || left.Type == "reference" && left.Ref != right.Ref {
+		return fmt.Errorf("condition fields have incompatible types %s and %s", left.Type, right.Type)
+	}
+	if op != "=" && op != "!=" && !numeric(left.Type) && left.Type != "date" && left.Type != "datetime" {
+		return fmt.Errorf("%s does not support ordered comparison", left.Type)
 	}
 	return nil
 }
@@ -331,7 +379,7 @@ func conditionValue(kind, raw string) (any, error) {
 // lifecycle is the object's states and actions as the platform's own lifecycle
 // (ADR-0037 D1): each action a transition whose Do checks its conditions and
 // sets its fields, inside the decision and again in replay.
-func lifecycle(o Object, roles []string, creates creator) *platform.Lifecycle {
+func lifecycle(o Object, roles []string, creates creator, lookup func(string) (platform.EntityInfo, bool)) *platform.Lifecycle {
 	if len(o.States) == 0 {
 		return nil
 	}
@@ -367,7 +415,7 @@ func lifecycle(o Object, roles []string, creates creator) *platform.Lifecycle {
 		l.Transitions = append(l.Transitions, platform.Transition{Name: a.Name, Title: a.Title, Description: a.Description,
 			From: slices.Clone(a.From), To: reach, Roles: takers, Capability: o.Name, Payload: payload, Approval: approval,
 			Do: func(c platform.Caller, record any, raw json.RawMessage, now time.Time) *kernel.Error {
-				return take(o, action, c, record, raw, now, creates)
+				return take(o, action, c, record, raw, now, creates, lookup)
 			}, After: stored(o, action, creates)})
 	}
 	return l
@@ -393,7 +441,7 @@ func stored(o Object, a Action, creates creator) func(platform.Caller, *pb.Chang
 
 // take is one action on a record: its required inputs, its conditions, then
 // the fields it sets. A refusal says what the builder wrote.
-func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator) *kernel.Error {
+func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage, now time.Time, creates creator, lookup func(string) (platform.EntityInfo, bool)) *kernel.Error {
 	var inputs map[string]any
 	if len(raw) > 0 && json.Unmarshal(raw, &inputs) != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{action} takes an object of inputs", a.Title)
@@ -404,36 +452,58 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 		}
 	}
 	v := reflect.ValueOf(record).Elem()
-	value := func(name string) any {
+	value := func(name string) (any, *kernel.Error) {
 		if in, ok := strings.CutPrefix(name, "input."); ok {
-			return inputs[in]
+			return inputs[in], nil
+		}
+		if strings.Contains(name, ".") {
+			rec := v.Field(0).Interface().(platform.Record)
+			raw, _, refusal := c.ReadRecordPath(TypeOf(o.Name), rec.ID, strings.Split(name, "."), now)
+			if refusal != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A related condition source is unavailable / 关联条件来源不可读")
+			}
+			var result any
+			if json.Unmarshal(raw, &result) != nil {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid condition source")
+			}
+			return result, nil
 		}
 		f := v.FieldByName(goName(name))
 		if !f.IsValid() {
-			return nil
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition field is unavailable")
 		}
-		return f.Interface()
+		return f.Interface(), nil
 	}
 	for _, cond := range a.Conditions {
-		kind := "choice"
-		if cond.Field != "state" {
-			if name, isInput := strings.CutPrefix(cond.Field, "input."); isInput {
-				for _, in := range a.Inputs {
-					if in.Name == name {
-						kind = in.Type
-						break
-					}
-				}
-			} else {
-				for _, f := range o.Fields {
-					if f.Name == cond.Field {
-						kind = f.Type
-						break
-					}
-				}
-			}
+		field, err := conditionField(o, a, cond.Field, lookup)
+		if err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition field is unavailable")
 		}
-		if !holds(value(cond.Field), kind, cond.Operator, cond.Value, c.ID) {
+		got, refusal := value(cond.Field)
+		if refusal != nil {
+			return refusal
+		}
+		kind, want := field.Type, cond.Value
+		if cond.ValueField != "" {
+			right, err := conditionField(o, a, cond.ValueField, lookup)
+			if err != nil || checkConditionFields(field, right, cond.Operator) != nil {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Condition comparison field is unavailable or incompatible")
+			}
+			other, refusal := value(cond.ValueField)
+			if refusal != nil {
+				return refusal
+			}
+			want = textOf(other)
+			if want == "" {
+				return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
+			}
+			if right.Type == "decimal" {
+				kind = "decimal"
+			}
+		} else if want == "$me" {
+			want = c.ID
+		}
+		if !holds(got, kind, cond.Operator, want) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{message}", cond.Message)
 		}
 	}
@@ -482,10 +552,7 @@ func take(o Object, a Action, c platform.Caller, record any, raw json.RawMessage
 
 // holds compares typed values. An unset or malformed value fails closed; it
 // never falls back to lexical order when a numeric or temporal parse fails.
-func holds(got any, kind, op, want, me string) bool {
-	if want == "$me" {
-		want = me
-	}
+func holds(got any, kind, op, want string) bool {
 	text := textOf(got)
 	switch op {
 	case "empty":

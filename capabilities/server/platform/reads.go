@@ -28,6 +28,17 @@ func (c Caller) ReadRecord(typ, id string, now time.Time) (json.RawMessage, *ker
 	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Record bindings require the host read path")
 }
 
+// ReadRecordPath traverses declared single-record references with this caller's
+// current permissions. The host supplies field provenance for each hop.
+func (c Caller) ReadRecordPath(typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
+	if rt, ok := c.rt.(interface {
+		ReadRecordPath(Caller, string, string, []string, time.Time) (json.RawMessage, []string, *kernel.Error)
+	}); ok {
+		return rt.ReadRecordPath(c, typ, id, path, now)
+	}
+	return nil, nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Record paths require the host's scoped reads")
+}
+
 // RequestApproval stays in the existing Work request/accepted-result boundary.
 func (c Caller) RequestApproval(app string, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *kernel.Error) {
 	if rt, ok := c.rt.(interface {

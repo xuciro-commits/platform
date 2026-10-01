@@ -134,6 +134,11 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 		return before, nil, prior, next, false, functionErr
 	}
 	before = append(before, functions...)
+	code, codeErr := b.CodeReleaseAssets()
+	if codeErr != nil {
+		return before, nil, prior, next, false, codeErr
+	}
+	before = append(before, code...)
 	if id == "" {
 		return before, nil, prior, next, false, fmt.Errorf("draft record id is empty")
 	}
@@ -225,6 +230,7 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 	after, err = releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
 	if err == nil {
 		after = append(after, functions...)
+		after = append(after, code...)
 	}
 	return before, after, prior, next, hadPrior, err
 }

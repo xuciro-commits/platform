@@ -237,10 +237,19 @@ func TestTenantDefinedObject(t *testing.T) {
 	if still := composedPage("eli", "visits"); still == nil || len(still.Sections) != 10 {
 		t.Errorf("a refused layout changed the page people open: %+v", still)
 	}
+	// Shared membership must not expose an unrelated private object.
+	if got := do("dana", build.ObjectType+".create", build.ObjectType, "PRIVATE", map[string]any{"name": "privateasset", "title": "Private asset", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}}, "access": []build.Access{{Role: build.User, Read: "none"}}}); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := do("dana", build.SchemaPublish, build.ObjectType, "PRIVATE", map[string]any{}); got != "ok" {
+		t.Fatal(got)
+	}
+	shared := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: visit}
+	private := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.privateasset"}
 	// An application handed to the people it was built for (ADR-0036): a name,
 	// an icon and the pages it holds, offered to whoever may open one of them.
 	if got := do("dana", build.AppType+".create", build.AppType, "A-1",
-		map[string]any{"name": "frontdesk", "title": "Front desk", "icon": "clipboard", "pages": []string{"visits"}}); got != "ok" {
+		map[string]any{"name": "frontdesk", "title": "Front desk", "icon": "clipboard", "pages": []string{"visits"}, "resources": []platform.AssetRef{shared, private}}); got != "ok" {
 		t.Fatalf("an application: %s", got)
 	}
 	if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); got != "ok" {
@@ -256,6 +265,18 @@ func TestTenantDefinedObject(t *testing.T) {
 	}
 	if app := handed("eli"); app == nil || app.Title != "Front desk" || app.Icon != "clipboard" || len(app.Pages) != 1 {
 		t.Fatalf("the application eli was handed: %+v", app)
+	}
+	if app := handed("eli"); !slices.Equal(app.Resources, []platform.AssetRef{shared}) {
+		t.Fatalf("private membership leaked: %+v", app)
+	}
+	if app := handed("dana"); len(app.Resources) != 2 {
+		t.Fatalf("builder membership lost: %+v", app)
+	}
+	if got := do("dana", build.AppType+".create", build.AppType, "A-2", map[string]any{"name": "otherdesk", "title": "Other desk", "pages": []string{"visits"}, "resources": []platform.AssetRef{shared}}); got != "ok" {
+		t.Fatal(got)
+	}
+	if got := do("dana", build.SchemaHandOver, build.AppType, "A-2", map[string]any{}); got != "ok" {
+		t.Fatalf("shared resource ownership changed: %s", got)
 	}
 	// It grants nothing: someone who may not open its pages is not handed it.
 	if app := handed("boss"); app != nil {
@@ -282,8 +303,11 @@ func TestTenantDefinedObject(t *testing.T) {
 		{"a heading over nothing", map[string]any{"groups": []map[string]any{{"title": "Empty", "pages": []string{}}}}, "holds no page"},
 		{"a page that is not there", map[string]any{"groups": []map[string]any{}, "pages": []string{"nothing"}}, "no page nothing"},
 		{"no page at all", map[string]any{"pages": []string{}}, "holds at least one page"},
+		{"missing resource", map[string]any{"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetCompute, Name: "missing"}}}, "no published resource"},
+		{"duplicate resource", map[string]any{"resources": []platform.AssetRef{shared, shared}}, "declared twice"},
+		{"page duplicated as a resource", map[string]any{"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "visits"}}}, "non-navigation"},
 	} {
-		if got := do("dana", build.AppType+".edit", build.AppType, "A-1", x.fields); got != "ok" {
+		if got := do("dana", build.AppType+".edit", build.AppType, "A-1", merge(map[string]any{"pages": []string{"visits"}, "groups": daily, "resources": []platform.AssetRef{}}, x.fields)); got != "ok" {
 			t.Fatalf("%s: edit: %s", x.why, got)
 		}
 		if got := do("dana", build.SchemaHandOver, build.AppType, "A-1", map[string]any{}); !strings.Contains(got, x.want) {

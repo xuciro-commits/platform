@@ -122,6 +122,8 @@ type Processes interface {
 	// Install registers a flow an app composed at runtime as its next version;
 	// Validate checks one without registering it (#132).
 	Install(a platform.App, fl platform.Flow) error
+	// HasPublishedFlow checks published membership against the original flow owner.
+	HasPublishedFlow(id string) bool
 	Validate(a platform.App, fl platform.Flow) error
 	// HasRunningDependency protects a composed flow's source and transitive
 	// object dependencies while its instances are running, waiting, compensating or stuck.

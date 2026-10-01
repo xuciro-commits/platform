@@ -54,11 +54,26 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 		answer.State, answer.Result = "completed", result
 		return answer, err
 	case "action":
-		if q.Version != 0 || q.Target == "" || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
+		if q.Version != 0 || q.Target == "" || len(q.Sources) != 0 {
 			return bad("Action requires its target and canonical payload")
 		}
+		payload := q.Inputs
+		if len(q.Bindings) > 0 || q.Record != "" {
+			bound, _, refusal := t.bindCapabilityInputs(m, q, now)
+			if refusal != nil {
+				return answer, refusal
+			}
+			var inputs, values map[string]json.RawMessage
+			if json.Unmarshal(q.Inputs, &inputs) != nil || inputs == nil || json.Unmarshal(bound, &values) != nil {
+				return bad("Bound action inputs need an object payload")
+			}
+			for name, value := range values {
+				inputs[name] = value // fresh scoped values replace client previews
+			}
+			payload, _ = json.Marshal(inputs)
+		}
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: q.Ref.App, IdempotencyKey: q.Key,
-			Target: &pb.EntityRef{Type: selected.Target, Id: q.Target}, Schema: &pb.SchemaRef{Name: q.Ref.Name, Version: 1}, Payload: q.Inputs, ExpectedRevision: q.ExpectedRevision}
+			Target: &pb.EntityRef{Type: selected.Target, Id: q.Target}, Schema: &pb.SchemaRef{Name: q.Ref.Name, Version: 1}, Payload: payload, ExpectedRevision: q.ExpectedRevision}
 		record, err := t.Submit(m, s, now)
 		if err != nil {
 			return answer, err

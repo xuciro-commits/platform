@@ -134,6 +134,7 @@ export type Application = {
   icon?: string;
   pages: string[];
   groups?: AppGroup[];
+  resources?: AssetRef[];
 };
 
 export type ApprovalRequest = {

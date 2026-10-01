@@ -1,10 +1,11 @@
+import { recordPaths } from "./record-paths";
 import { AssetControls } from "./asset-controls";
 // The object's process editor (ADR-0037): its states and the actions people
 // take on its records, in the page editor's three panes — what there is on the
 // left, what a person will see in the middle, the piece in hand on the right.
 // It writes the object's own record through its own action; the host checks
 // everything again when the object is published.
-import { PayloadFields, useHost, useReadQuery } from "@platform/app";
+import { NewActions, PayloadFields, useHost, useReadQuery } from "@platform/app";
 import {
   Button, Card, Checkbox, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, canvasNodeWidth, cn, defineStatuses, layout, notify, t, useWorkspace, useUnsavedChanges,
   type CanvasEdge, type CanvasNode, type NodeCatalog, type EntityInfo,
@@ -16,7 +17,7 @@ type Field = { name: string; title: string; type: string; choices?: string; requ
 type State = { name: string; title: string; tone?: string; description?: string };
 type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean };
 type Set_ = { field: string; from: string };
-type Condition = { field: string; operator: string; value?: string; message: string };
+type Condition = { field: string; operator: string; value?: string; valueField?: string; message: string };
 type ApproverLevel = { title: string; role: string; all?: boolean };
 type Approval = { pending: string; rejected?: string; levels: ApproverLevel[] };
 type Create_ = { object: string; via: string; sets?: Set_[] };
@@ -46,8 +47,20 @@ const valueFits = (kind: string, raw: string) => {
     default: return true;
   }
 };
+function conditionSubjects(process: Process, action: Action, parent: string, entities: EntityInfo[]) {
+  const current = entities.find((entity) => entity.type === parent);
+  const fields = process.fields.map((field) => ({ ...field, choices: field.choices?.split(",").map((value) => value.trim()) }));
+  if (process.states.length) fields.push({ name: "state", title: t("State"), type: "choice", choices: process.states.map((state) => state.name) });
+  const root = { ...current, type: parent, fields } as EntityInfo;
+  return [...recordPaths(parent, (type) => type === parent ? root : entities.find((entity) => entity.type === type))
+    .map(({ path, label, field }) => ({ value: path.join("."), label, type: field.type, ref: field.ref })),
+    ...(action.inputs ?? []).map((input) => ({ value: `input.${input.name}`, label: t("Input: {name}", { name: input.title }), type: input.type, ref: undefined }))];
+}
+const comparisonFits = (left: { type: string; ref?: string }, right: { type: string; ref?: string }) =>
+  (left.type === right.type || [left.type, right.type].every((kind) => ["integer", "decimal"].includes(kind))) && (left.type !== "reference" || left.ref === right.ref);
+
 /** Early authoring hints; the host's publication check is authoritative. */
-function actionIssues(action: Action, process: Process, parent: string, targets: EntityInfo[]): string[] {
+function actionIssues(action: Action, process: Process, parent: string, targets: EntityInfo[], entities: EntityInfo[]): string[] {
   const issues: string[] = [];
   if (action.from.length === 0) issues.push(t("Choose at least one starting state."));
   for (const set of action.sets ?? []) {
@@ -62,17 +75,20 @@ function actionIssues(action: Action, process: Process, parent: string, targets:
         issues.push(t("{input} has a choice outside {field}.", { input: input.title, field: field.title }));
     }
   }
+  const subjects = conditionSubjects(process, action, parent, entities);
   for (const condition of action.conditions ?? []) {
-    const field = process.fields.find((f) => f.name === condition.field);
-    const input = action.inputs?.find((i) => `input.${i.name}` === condition.field);
-    const kind = condition.field === "state" ? "choice" : field?.type ?? input?.type;
+    const field = subjects.find((field) => field.value === condition.field), kind = field?.type;
     if (!condition.message.trim()) issues.push(t("Write the message people see when a rule fails."));
-    if (condition.operator === "empty" || condition.operator === "not empty" || !kind) continue;
+    if (!field) { issues.push(t("Unavailable record path")); continue; }
+    if (condition.operator === "empty" || condition.operator === "not empty") continue;
     if (kind === "money") { issues.push(t("Money rules need a currency-aware comparison.")); continue; }
-    if (!["=", "!="].includes(condition.operator) && !["integer", "decimal", "date", "datetime"].includes(kind))
-      issues.push(t("{type} cannot be ordered.", { type: t(kind) }));
-    if (condition.value === "$me" ? !["text", "longtext"].includes(kind) : !condition.value || !valueFits(kind, condition.value))
-      issues.push(t("{field} needs a {type} value.", { field: field?.title ?? input?.title ?? t("State"), type: t(kind) }));
+    if (!["=", "!="].includes(condition.operator) && !["integer", "decimal", "date", "datetime"].includes(kind!))
+      issues.push(t("{type} cannot be ordered.", { type: t(kind!) }));
+    if (condition.valueField) {
+      const other = subjects.find((field) => field.value === condition.valueField);
+      if (!other || !comparisonFits(field, other)) issues.push(t("Choose a compatible comparison field."));
+    } else if (condition.value === "$me" ? !["text", "longtext"].includes(kind!) : !condition.value || !valueFits(kind!, condition.value))
+      issues.push(t("{field} needs a {type} value.", { field: field.label, type: t(kind!) }));
   }
   for (const create of action.creates ?? []) {
     const target = targets.find((item) => item.type === create.object);
@@ -103,12 +119,12 @@ const nameOf = (title: string, taken: string[]) => {
 };
 
 /** The objects of this organisation: open one to give it states and actions. */
-export function ProcessPicker() {
+export function Objects() {
   const { source } = useHost();
   const { open } = useWorkspace();
   return (
     <div className="grid gap-3">
-      <PageHeader title={t("Process and access")} description={t("Choose an object to give its records states, the steps people take on them, and who may do what.")} />
+      <PageHeader title={t("Objects")} description={t("Define fields, relationships, actions and access.")} actions={<NewActions type="build.object" />} />
       <RecordList source={source} type="build.object" fields={["title", "name", "state"]} onOpen={(record) => open({ view: "process", params: { id: record.id } })} />
     </div>
   );
@@ -136,7 +152,7 @@ export function ProcessEditor({ id }: { id: string }) {
   const parent = `build.${object.name}`;
   const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
     && definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type));
-  const issues = process.actions.flatMap((a) => actionIssues(a, process, parent, targets).map((message) => `${a.title || a.name}: ${message}`));
+  const issues = process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`));
   const change = (next: Process) => { setProcess(next); setDirty(true); };
   const addState = () => {
     const title = process.states.length === 0 ? t("New") : t("State {n}", { n: process.states.length + 1 });
@@ -179,7 +195,8 @@ export function ProcessEditor({ id }: { id: string }) {
         description={t("Define fields, states, actions and access, then review the saved object and its dependencies.")}
         actions={<div className="flex flex-wrap items-center gap-2">
           <StatusTag status={object.state} registry={objectStates} />
-          <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: "objects" } })}>{t("Back to objects")}</Button>
+          <Button onClick={() => open({ view: "process" })}>{t("Back to objects")}</Button>
+          {object.state === "published" && <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
 <AssetControls type="build.object" record={object} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "process", params: { id } }} />
           <Button onClick={() => void perform(save)} disabled={!dirty || busy}>{t("Save")}</Button>
           <Button disabled={busy || issues.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
@@ -213,7 +230,7 @@ export function ProcessEditor({ id }: { id: string }) {
           {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
             onChange={(patch) => change({ ...process, access: process.access.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })}
             onFields={(fields) => change({ ...process, fields })} />}
-          {action && chosen && <ActionProperties action={action} states={process.states} fields={process.fields} parent={parent} targets={targets} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")} approverRoles={["builder", ...(process.access.length ? process.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])]}
+          {action && chosen && <ActionProperties action={action} states={process.states} fields={process.fields} parent={parent} targets={targets} entities={entities} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")} approverRoles={["builder", ...(process.access.length ? process.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])]}
             onChange={(patch) => change({ ...process, actions: process.actions.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })} />}
           {!chosen && <Card className="p-3 text-xs text-muted">{t("Choose a field, state or action to configure it.")}</Card>}
         </div>
@@ -390,7 +407,7 @@ function Preview({ object, process, action }: { object: ObjectRecord; process: P
           required: i.required, description: i.title, choices: i.type === "choice" ? (i.choices ?? "").split(",").map((c) => c.trim()).filter(Boolean) : undefined,
         }))} />
         {(action.conditions ?? []).length > 0 && <ul className="grid gap-1 text-xs text-muted">
-          {action.conditions!.map((c, i) => <li key={i}>{t("Needs {field} {operator} {value}; otherwise: “{message}”", { field: c.field, operator: c.operator, value: c.value ?? "", message: c.message })}</li>)}
+          {action.conditions!.map((c, i) => <li key={i}>{t("Needs {field} {operator} {value}; otherwise: “{message}”", { field: c.field, operator: c.operator, value: c.valueField ?? c.value ?? "", message: c.message })}</li>)}
         </ul>}
       </Card>}
     </div>
@@ -413,14 +430,13 @@ function StateProperties({ state, onChange }: { state: State; onChange: (patch: 
   );
 }
 
-function ActionProperties({ action, states, fields, parent, targets, roles, approverRoles, onChange }: {
-  action: Action; states: State[]; fields: Field[]; parent: string; targets: EntityInfo[]; roles: string[]; approverRoles: string[]; onChange: (patch: Partial<Action>) => void;
+function ActionProperties({ action, states, fields, parent, targets, entities, roles, approverRoles, onChange }: {
+  action: Action; states: State[]; fields: Field[]; parent: string; targets: EntityInfo[]; entities: EntityInfo[]; roles: string[]; approverRoles: string[]; onChange: (patch: Partial<Action>) => void;
 }) {
   const inputs = action.inputs ?? [], sets = action.sets ?? [], conditions = action.conditions ?? [];
   const sources = [...inputs.map((i) => ({ value: i.name, label: t("Input: {name}", { name: i.title }) })),
     { value: "$me", label: t("The person taking it") }, { value: "$now", label: t("Now") }];
-  const subjects = [...fields.map((f) => ({ value: f.name, label: f.title })), ...(states.length ? [{ value: "state", label: t("State") }] : []),
-    ...inputs.map((i) => ({ value: `input.${i.name}`, label: t("Input: {name}", { name: i.title }) }))];
+  const subjects = conditionSubjects({ states, fields, actions: [], access: [] }, action, parent, entities);
   return (
     <Card className="grid content-start gap-3 p-3">
       <div className="text-xs font-semibold text-muted">{t("Action")}</div>
@@ -482,9 +498,18 @@ function ActionProperties({ action, states, fields, parent, targets, roles, appr
         make={() => ({ field: subjects[0]?.value ?? "", operator: "=", value: "", message: "" })}
         onChange={(next) => onChange({ conditions: next })}
         row={(c, patch) => <>
-          <Select aria-label={t("Field")} value={c.field} onChange={(e) => patch({ field: e.target.value })}>{subjects.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select>
-          <Select aria-label={t("Operator")} value={c.operator} onChange={(e) => patch({ operator: e.target.value })}>{operators.map((o) => <option key={o} value={o}>{t(o)}</option>)}</Select>
-          {c.operator !== "empty" && c.operator !== "not empty" && <Input aria-label={t("Value")} placeholder={t("a value, or $me")} value={c.value ?? ""} onChange={(e) => patch({ value: e.target.value })} />}
+          <Select aria-label={t("Field")} value={c.field} onChange={(e) => patch({ field: e.target.value, valueField: undefined })}>{subjects.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select>
+          <Select aria-label={t("Operator")} value={c.operator} onChange={(e) => patch({ operator: e.target.value, ...(e.target.value.includes("empty") ? { value: undefined, valueField: undefined } : {}) })}>{operators.map((o) => <option key={o} value={o}>{t(o)}</option>)}</Select>
+          {c.operator !== "empty" && c.operator !== "not empty" && <>
+            <Select aria-label={t("Compare with")} value={c.valueField ? "field" : "literal"} onChange={(e) => patch(e.target.value === "field"
+              ? { value: undefined, valueField: subjects.find((s) => s.value !== c.field && comparisonFits(subjects.find((s) => s.value === c.field) ?? { type: "" }, s))?.value ?? c.field }
+              : { value: "", valueField: undefined })}>
+              <option value="literal">{t("A fixed value")}</option><option value="field">{t("Another field")}</option>
+            </Select>
+            {c.valueField ? <Select aria-label={t("Comparison field")} value={c.valueField} onChange={(e) => patch({ valueField: e.target.value })}>
+              {subjects.filter((s) => comparisonFits(subjects.find((s) => s.value === c.field) ?? { type: "" }, s)).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </Select> : <Input aria-label={t("Value")} placeholder={t("a value, or $me")} value={c.value ?? ""} onChange={(e) => patch({ value: e.target.value })} />}
+          </>}
           <Input aria-label={t("Message when it does not hold")} placeholder={t("What a person reads when it does not hold")} value={c.message} onChange={(e) => patch({ message: e.target.value })} />
         </>} />
       </Disclosure>

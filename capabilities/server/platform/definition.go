@@ -98,10 +98,11 @@ type Section struct {
 	Object AssetRef `json:"object,omitempty"`
 	// Selection is the record variable a table writes or detail/actions read.
 	Selection string `json:"selection,omitempty"`
-	// ParentSelection supplies the page's parent record to a related section.
+	// ParentSelection supplies a typed parent record to a related section;
+	// empty uses the page object's shared selection.
 	ParentSelection string `json:"parentSelection,omitempty"`
 	// Relation is the named inverse (FieldInfo.Inverse) of Object's reference to
-	// the page's object: the section shows the selected record's related records
+	// the parent selection's object: the section shows its related records
 	// through it, or a form supplies that reference when creating a related
 	// record (ADR-0040 21b D3). Empty: no declared relation binding.
 	Relation string `json:"relation,omitempty"`
@@ -115,7 +116,7 @@ type Section struct {
 	Text      string             `json:"text,omitempty"`      // text
 	Function  *AssetBinding      `json:"function,omitempty"`  // exact published function
 	Operation *AssetBinding      `json:"operation,omitempty"` // exact compute owner revision
-	Inputs    map[string]Binding `json:"inputs,omitempty"`
+	Inputs    map[string]Binding `json:"inputs,omitempty"`    // compute inputs or form fields supplied by constants/parent record paths
 }
 
 // Widgets are the widget kinds a composed page may hold (ADR-0035 D2).
@@ -139,6 +140,42 @@ type Application struct {
 	// Groups are headings in its navigation (ADR-0036 17b), each over some of
 	// Pages in its own order; a page in no group sits under the application's name.
 	Groups []AppGroup `json:"groups,omitempty"`
+	// Resources are shared owner references included in the release closure.
+	// Pages remain the sole navigation list; membership grants no permissions.
+	Resources []AssetRef `json:"resources,omitempty"`
+}
+
+// CheckResources checks explicit non-navigation resource membership. Assets
+// keep their existing owner and may be shared by several applications.
+func (a Application) CheckResources() error {
+	if len(a.Resources) > 1000 {
+		return fmt.Errorf("application resources exceed 1000 assets")
+	}
+	seen := map[AssetRef]bool{}
+	for _, ref := range a.Resources {
+		if err := ref.Check(); err != nil {
+			return err
+		}
+		if ref.Kind == AssetPage || ref.Kind == AssetApp {
+			return fmt.Errorf("application resources use non-navigation assets; pages belong in Pages")
+		}
+		if seen[ref] {
+			return fmt.Errorf("application resource %s is declared twice", ref)
+		}
+		seen[ref] = true
+	}
+	return nil
+}
+
+// Dependencies is the single application closure path for discovery and
+// releases. Page order affects navigation; dependency order is canonical.
+func (a Application) Dependencies(owner string) []AssetRef {
+	refs := slices.Clone(a.Resources)
+	for _, name := range a.Pages {
+		refs = append(refs, AssetRef{App: owner, Kind: AssetPage, Name: name})
+	}
+	slices.SortFunc(refs, compareRef)
+	return slices.Compact(refs)
 }
 
 // AppGroup is one heading in an application's navigation and the pages under it.

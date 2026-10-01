@@ -10,10 +10,14 @@ test("Catalog leads a builder to a controlled Studio draft", async ({ page, requ
   await appMenu.click();
   await expect(page.getByRole("menuitemradio", { name: /Platform Catalog/ })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Primitives", exact: true }).click();
+  const nav = page.getByRole("navigation", { name: "Main", exact: true });
+  await expect(nav.getByRole("button", { name: "Inspector", exact: true })).toHaveCount(0);
+  await expect(nav.getByRole("button", { name: "Primitives", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: /L1.*Primitives/ }).click();
   await page.getByRole("button", { name: /^Button L1/ }).click();
   await expect(page.locator('[data-catalog-asset="ui/button"]:visible')).toBeVisible();
-  await page.getByRole("button", { name: "All assets", exact: true }).click();
+  await page.getByRole("button", { name: "All layers", exact: true }).click();
+  await page.getByRole("button", { name: "Record handling workspace", exact: true }).click();
   const asset = page.locator('[data-catalog-asset="scenario/record-handling"]:visible');
   await expect(asset.getByRole("button", { name: "Create in Studio" })).toBeVisible();
   await expect(asset.getByRole("button", { name: "Copy developer example" })).toHaveCount(0);

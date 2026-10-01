@@ -21,7 +21,13 @@ export const entries: CatalogEntry[] = [
     id: "scenario/object-studio", owner: "@pkg/build", name: "Object design workbench", summary: "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["object", "lifecycle", "fields", "access", "studio"],
     source: "web/packages/build/src/process.tsx", example: "ObjectStudioExample", dependencies: ["ui/block-canvas", "app/record-actions"],
-    constraints: ["This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.", "A tenant object must be created, tested and published in the connected Application Studio."],
+    constraints: ["This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.", "A tenant object must be created, tested and published in the connected Application Studio.", "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions."],
+  },
+  {
+    id: "scenario/application-studio", owner: "@pkg/build", name: "Application release workbench", summary: "Organize navigation and shared published objects, workflows and functions with the original application editor.",
+    layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["application", "resources", "release", "navigation", "studio"],
+    source: "web/packages/build/src/application.tsx", example: "ApplicationStudioExample", dependencies: ["ui/panels", "app/record-actions"],
+    constraints: ["The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.", "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path."],
   },
   {
     id: "scenario/logic-studio", owner: "@pkg/build", name: "Logic design workbench", summary: "Compose typed platform blocks with the existing native workflow editor and shared canvas.",

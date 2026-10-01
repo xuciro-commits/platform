@@ -150,11 +150,13 @@ export function GeneratedForm({ type, record, fields, onSubmit, onCancel, submit
   /** Presentation subset, in this order: a composed page's form asks for these (ADR-0035 16b). */
   fields?: string[];
 }) {
-  const { source } = useHost();
+  const { source, catalog } = useHost();
   const info = source.entity(type);
-  if (!info) return null;
+  const action = catalog.find((action) => action.schema === `${type}.${record ? "edit" : "create"}`);
+  if (!info || !action) return null;
   // A field a purpose-built editor owns (`aside`) is not asked for here (ADR-0035).
-  const editable = info.fields.filter((f) => !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
+  const inputs = new Set(action.payload.map((field) => field.name));
+  const editable = info.fields.filter((f) => inputs.has(f.name) && !f.readOnly && !f.aside && (!fields || fields.includes(f.name))).map((f) => f.name);
   return <RecordForm entity={entityFrom(info, {}, source)} keys={fields ? fields.filter((name) => editable.includes(name)) : editable} defaultValues={record} submitLabel={submitLabel} onCancel={onCancel}
     onSubmit={(v) => onSubmit(Object.fromEntries(Object.entries(v).filter(([k]) => editable.includes(k))))} />;
 }

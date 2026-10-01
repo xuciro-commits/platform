@@ -229,6 +229,9 @@ func (f *Flows) Install(a platform.App, fl platform.Flow) error {
 	return nil
 }
 
+// HasPublishedFlow checks application membership through the original registry.
+func (f *Flows) HasPublishedFlow(id string) bool { _, ok := f.latest(id); return ok }
+
 // Validate checks a flow as Install would, registering nothing.
 func (f *Flows) Validate(a platform.App, fl platform.Flow) error {
 	_, err := f.check(a.Manifest(), fl)

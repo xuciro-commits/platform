@@ -7,10 +7,10 @@ import { HostContext, type AppUI, type Definition, type Host, type Me, type Save
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
 import { Button, Card, Dialog, Workspace, humanizeKernelError, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { Bell, Bookmark, Boxes, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
+import { Bell, Bookmark, Gauge, Inbox, LayoutGrid, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chromeViews } from "./chrome";
-import { tenantApps } from "./tenantApps";
+import { pageApplication, tenantApps } from "./tenantApps";
 
 /** A development identity of a host on development tokens (GET /v1/sign-in); generated from the host (ADR-0023). */
 export type Identity = Api.Identity;
@@ -21,9 +21,9 @@ type ProtocolInfo = Api.ProtocolInfo;
 // member holds a role in an app it serves. Public reference applications need
 // no backend role; their runtime reads/actions still use the original host.
 // Settings serves the platform's apps.
-const packages: { serves: string[]; public?: boolean; load: () => Promise<{ default: AppUI }> }[] = [
+const packages: { serves: string[]; role?: string; public?: boolean; load: () => Promise<{ default: AppUI }> }[] = [
   { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
-  { serves: ["build"], load: () => import("@pkg/build") },
+  { serves: ["build"], role: "builder", load: () => import("@pkg/build") },
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["pms"], load: () => import("@pkg/pms/app") },
   { serves: ["hcm"], load: () => import("@pkg/hcm") },
@@ -98,7 +98,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   useEffect(() => {
     if (!me) return;
     const held = new Set(me.apps.map((a) => a.id));
-    void Promise.all(packages.filter((p) => p.public || p.serves.some((id) => held.has(id)))
+    void Promise.all(packages.filter((p) => p.public || p.serves.some((id) => held.has(id) && (!p.role || me.profile.roles[id] === p.role)))
       .map((p) => p.load().then((m) => ({ ...m.default, serves: p.serves })))).then(setApps);
   }, [me]);
 
@@ -198,8 +198,15 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const registry = useRef<Definition[]>([]); // read by tab titles, as the launcher reads `open`
   registry.current = definitions;
   const app = all.find((a) => a.id === current);
+  const [activeRoute, setActiveRoute] = useState<Route>();
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   const select = useCallback((id: string) => { setCurrent(id); remember("workspace:app", id); }, []);
+  useEffect(() => {
+    if (!activeRoute) return;
+    const id = owner.get(activeRoute.view) ?? pageApplication(activeRoute, definitions, current)
+      ?? (["records", "definitions"].includes(activeRoute.view) && apps?.some((a) => a.id === "platform") ? "platform" : undefined);
+    if (id && id !== current && all.some((a) => a.id === id)) select(id);
+  }, [activeRoute, all, apps, current, definitions, owner, select]);
   const views = useMemo(() => {
     const views = [...chromeViews(() => open.current, (id) => {
       select(id);
@@ -246,16 +253,13 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
         launcher={{ apps: all.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
           onSelect: (id) => { select(id); const home = all.find((a) => a.id === id)?.home; if (home) location.hash = routeToHash(home); } }}
-        onActiveRoute={(route: Route) => { const id = owner.get(route.view); if (id && id !== current) select(id); }}
+        onActiveRoute={setActiveRoute}
         nav={[
           { label: t("You"), items: [
-            { label: t("Apps"), icon: <LayoutGrid />, route: { view: "home" } },
+            { label: t("Application launcher"), icon: <LayoutGrid />, route: { view: "home" } },
             { label: t("Inbox"), icon: <Inbox />, route: { view: "inbox" } },
             { label: t("My requests"), icon: <Send />, route: { view: "requests" } },
             { label: t("Notifications"), icon: <Bell />, route: { view: "notifications" }, badge: badge(unread) },
-            { label: t("Records"), icon: <Database />, route: { view: "records" } },
-            { label: t("Definitions"), icon: <Boxes />, route: { view: "definitions" } },
-            { label: t("Search"), icon: <Search />, route: { view: "search" } },
             ...(host.can("agent.run.start") ? [{ label: t("Assistant"), icon: <Sparkles />, route: { view: "assistant" } }] : []),
             ...(waiting ? [{ label: t("Outbox"), icon: <Upload />, route: { view: "outbox" }, badge: badge(waiting) }] : []),
           ] },
@@ -265,12 +269,17 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
           ...(app?.nav(host) ?? []),
         ]}
         commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
-          { id: "active-release", label: t("Active release"), run: () => setReleaseOpen(true) }, ...(app?.commands?.(host) ?? [])]}
+          { id: "active-release", label: t("Active release"), run: () => setReleaseOpen(true) },
+          { id: "search", label: t("Search"), run: () => { location.hash = "#/search"; } },
+          ...(host.role("build") === "builder" ? [
+            { id: "records", label: t("Browse all records"), run: () => { location.hash = "#/records"; } },
+            { id: "definitions", label: t("Browse definitions"), run: () => { location.hash = "#/definitions"; } },
+          ] : []), ...(app?.commands?.(host) ?? [])]}
         search={async (text) => (await client.get<{ type: string; id: string; title?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
           .map((h) => ({ id: `${h.type}/${h.id}`, label: h.title || h.id, detail: `${h.type} · ${h.id}`,
             open: () => { const view = host?.opens.get(h.type); location.hash = routeToHash(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
         status={<div className="flex items-center gap-2 text-xs text-muted">
-          <span className="max-lg:hidden">{app ? `${app.title}: ${host.role(app.id) ?? "—"}` : t("{n} apps", { n: apps.length })}</span>
+          <span className="max-lg:hidden">{app ? `${app.title}: ${host.role(app.id.split(":")[0]!) ?? "—"}` : t("{n} apps", { n: apps.length })}</span>
           <Button size="sm" variant="ghost" aria-label={t("Active release")} onClick={() => setReleaseOpen(true)}
             title={!releaseUnavailable ? release.data?.id : undefined}>
             {releaseUnavailable ? t("Release unavailable") : release.isPending ? t("Checking release…") :

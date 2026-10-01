@@ -114,9 +114,7 @@ for (const fixture of [
         await decide(request, fixture.operator, "build", `${type}.create`, { type, id: source }, { note: "Needs human review" });
         const operator = await browser.newContext({ baseURL: fixture.baseURL, locale: "en-US" });
         const task = await operator.newPage();
-        await open(task, fixture.operator, "/home");
-        await task.getByRole("button", { name: "Application Studio" }).first().click();
-        await task.getByRole("button", { name: fixture.title, exact: true }).click();
+        await open(task, fixture.operator, `/page?app=build&kind=page&name=${name}page`);
         await task.getByRole("textbox", { name: "Search" }).first().fill(source);
         await task.getByRole("row").filter({ hasText: source }).click();
         await task.getByRole("button", { name: "Request advice" }).click();

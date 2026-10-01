@@ -20,7 +20,7 @@ export function Apps() {
   const { apps } = useAdmin();
   return (
     <>
-      <PageHeader title={t("Apps")} description={t("Apps this tenant runs, from their manifests. Apps know no other app; columns follow protocols: an app consumes only protocols provided to its left.")} />
+      <PageHeader title={t("Installed packages")} description={t("Apps this tenant runs, from their manifests. Apps know no other app; columns follow protocols: an app consumes only protocols provided to its left.")} />
       <div className="flex gap-6 overflow-x-auto">
         {tiers(apps).map((tier, i) => (
           <div key={i} className="grid content-start gap-3">

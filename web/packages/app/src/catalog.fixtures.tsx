@@ -8,7 +8,7 @@ import { HostContext, type Definition, type Host } from "./index";
 
 const stamp = { by: "catalog-fixture", at: "2026-09-30T09:00:00Z" };
 export const sampleObject: EntityInfo = {
-  type: "catalog.sample", app: "catalog", title: "Sample record", plural: "Sample records", display: "title", standard: [],
+  type: "catalog.sample", app: "catalog", title: "Sample record", plural: "Sample records", display: "title", standard: ["catalog.sample.create", "catalog.sample.edit"],
   fields: [{ name: "title", title: "Title", type: "text", required: true, search: true },
     { name: "state", title: "State", type: "choice", choices: ["draft", "ready"], choiceTitles: ["Draft", "Ready"] },
     { name: "quantity", title: "Quantity", type: "integer" }],
@@ -35,7 +35,11 @@ export const sampleSource: RecordSource = {
   aggregate: async () => ({ columns: [{ name: "state", title: "State", kind: "group", type: "nominal" }, { name: "count", title: "Count", kind: "measure", type: "quantitative" }], rows: [{ state: "draft", count: 1 }, { state: "ready", count: 1 }] }),
 };
 export const sampleActions: ActionDeclaration[] = [{ schema: "catalog.sample.review", target: sampleObject.type, capability: "records", title: "Review", description: "Review this sample record.",
-  payload: [{ name: "note", type: "string", description: "Review note", required: true }] }];
+  payload: [{ name: "note", type: "string", description: "Review note", required: true }] },
+  ...["create", "edit"].map((verb) => ({ schema: `catalog.sample.${verb}`, target: sampleObject.type, capability: "records", title: verb === "create" ? t("Create") : t("Edit"), description: "Local Catalog form / 本地资产表单", new: verb === "create",
+    payload: [{ name: "title", type: "string", description: t("Title"), required: verb === "create" },
+      { name: "state", type: "string", description: t("State"), choices: ["draft", "ready"] }, { name: "quantity", type: "integer", description: t("Quantity") }] })),
+];
 export const samplePage: Definition & { page: NonNullable<Definition["page"]> } = {
   ref: { app: "catalog", kind: "page", name: "samples" }, source: "catalog-fixture", version: "fixture-v1", contractVersion: 1, requires: [],
   page: { name: "samples", title: "Sample record workspace", layout: "list-detail", object: { app: "catalog", kind: "object", name: sampleObject.type },
@@ -76,7 +80,7 @@ class FixtureClient extends EdgeClient {
 /** Trusted local fixtures for owner demos, never a tenant or runtime host. */
 const noReads: Record<string, unknown> = {};
 const readerRole = { catalog: "reader" };
-export function CatalogFixture({ children, reads = noReads, roles = readerRole }: { children: ReactNode; reads?: Record<string, unknown>; roles?: Record<string, string> }) {
+export function CatalogFixture({ children, reads = noReads, roles = readerRole, definitions = sampleDefinitions }: { children: ReactNode; reads?: Record<string, unknown>; roles?: Record<string, string>; definitions?: Definition[] }) {
   const [message, setMessage] = useState("");
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } }));
   const host = useMemo<Host>(() => ({
@@ -85,8 +89,8 @@ export function CatalogFixture({ children, reads = noReads, roles = readerRole }
     role: (app) => roles[app], can: (schema) => sampleActions.some((action) => action.schema === schema),
     action: (schema) => sampleActions.find((action) => action.schema === schema), catalog: sampleActions,
     decide: async (_schema, _target, _payload, options) => { const reason = t("Local example only. No action was sent to a host."); setMessage(reason); options?.onRefused?.(reason); return false; },
-    outbox: [], resend: async () => {}, entities: [sampleObject], definitions: sampleDefinitions, source: sampleSource, opens: new Map(),
-  }), [reads, roles]);
+    outbox: [], resend: async () => {}, entities: [sampleObject], definitions, source: sampleSource, opens: new Map(),
+  }), [reads, roles, definitions]);
   return <QueryClientProvider client={queryClient}><HostContext.Provider value={host}><PreviewWorkspace onOpen={() => setMessage(t("Local example only. Open the connected workspace to follow this link."))}>
     <div className="grid min-w-0 gap-3"><Panel role="status" className="text-xs text-muted">{t("Synthetic local data. No backend requests or mutations.")}</Panel>
       {children}{message && <p role="status" className="text-xs text-muted">{message}</p>}</div>

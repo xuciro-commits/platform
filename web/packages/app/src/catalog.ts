@@ -38,7 +38,8 @@ export const entries: CatalogEntry[] = [
   }),
   asset("composed-page", "Controlled page composition", "Render original Page sections with shared selection and filters; composition disables writes.", ["ComposedPage", "SectionView"], "ComposedPageExample", {
     tags: ["page", "selection", "relation", "binding"],
-    constraints: ["Named record selections keep same-object lists independent; parent bindings scope related sections."],
+    constraints: ["Named record selections keep same-object lists independent; parent bindings scope related sections.",
+      "Form inputs read declared record paths. The original action checks writes; unavailable sources do not become manual inputs."],
     uses: ["code", "widget"], widgets: ["table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function", "compute"],
     source: "web/packages/app/src/sections.tsx", dependencies: ["app/generated-form", "ui/record-page", "app/record-actions", "app/compute-call"],
     snippet: 'import { ComposedPage } from "@platform/app";\n<ComposedPage page={installedPage.page} live={false} />',

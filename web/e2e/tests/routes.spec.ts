@@ -105,15 +105,16 @@ test("route 29: define an object, publish it, use it", async ({ page }) => {
   await expect(page.getByRole("row").filter({ hasText: name })).toBeVisible();
 
   await page.getByRole("row").filter({ hasText: name }).click();
-  await page.getByRole("button", { name: "Open full view", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Design Visit", exact: true })).toBeVisible();
-  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Objects", exact: true }).click();
-  await page.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByRole("definition").filter({ hasText: `build.${name}` })).toBeVisible();
+  await page.getByRole("button", { name: "Direct install", exact: true }).click();
+  await expect(page.getByText("The object is installed with its states and actions.")).toBeVisible();
 
-  // The object someone just defined is now in the navigation and has its own page.
-  await page.getByRole("button", { name: "Toggle navigation" }).click({ trial: true }).catch(() => undefined);
-  await page.getByRole("button", { name: "Visits" }).click();
+  // Publication does not dump an automatic CRUD page into Studio's menu.
+  const nav = page.getByRole("navigation", { name: "Main", exact: true });
+  await expect(nav.getByRole("button", { name: "Objects", exact: true })).toHaveCount(1);
+  await expect(nav.getByRole("button", { name: "Process and access", exact: true })).toHaveCount(0);
+  await expect(nav.getByRole("button", { name: "Visits", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open records", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Visits" })).toBeVisible();
   await page.getByRole("button", { name: "Create Visit" }).click();
   const create = page.getByRole("dialog");
@@ -166,7 +167,7 @@ test("route 30: compose a page of widgets and use it", async ({ page, request })
   await expect(page.getByRole("region", { name: "Compose a page", exact: true }).getByText("Published", { exact: true })).toBeVisible(); // and the composer shows where the page stands
 
   // What was composed is what people open: the table fills the detail beside it.
-  await page.getByRole("button", { name: "Group offsites" }).click();
+  await page.getByRole("button", { name: "Open published page", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Group offsites" })).toBeVisible();
   await page.getByRole("textbox", { name: "Search" }).first().fill(opp);
   await page.getByRole("row").filter({ hasText: opp }).click();
@@ -194,27 +195,45 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await page.getByRole("button", { name: "Direct install", exact: true }).click();
   await expect(page.getByText("The page is in the workspace.")).toBeVisible();
 
-  // The application: a name, an icon, the page it holds.
+  // The application editor writes typed membership and reviews the whole app.
+  const flowID = fresh("FLOW"), flowName = `routing${Date.now().toString(36).slice(-5)}`;
+  await decide(request, "manager", "build", "build.process.create", { type: "build.process", id: flowID }, { name: flowName, title: "Shared routing", manual: true, steps: [{ name: "end", kind: "end" }] });
+  await decide(request, "manager", "build", "build.process.publish", { type: "build.process", id: flowID }, {});
   await page.getByRole("button", { name: "Applications", exact: true }).click();
-  await page.getByRole("button", { name: "Create application" }).click();
-  dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "Name" }).first().fill(name);
-  await dialog.getByRole("textbox", { name: "What people call it" }).fill("Front desk");
-  await dialog.getByRole("combobox", { name: "Icon" }).selectOption("clipboard");
-  await dialog.getByLabel("Pages", { exact: true }).fill(pageName);
-  await dialog.getByLabel("Pages", { exact: true }).press("Enter");
-  await dialog.getByRole("button", { name: "Create" }).click();
-  await page.getByRole("row").filter({ hasText: name }).click();
-  await expect(page.getByRole("definition").filter({ hasText: pageName })).toBeVisible(); // the page it holds
-  await page.getByRole("button", { name: "Hand it over" }).click();
-  await expect(page.getByRole("definition").filter({ hasText: "Published" })).toBeVisible(); // the host took it
+  await page.getByRole("button", { name: "Create application", exact: true }).click();
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+  await page.getByRole("textbox", { name: "What people call it", exact: true }).fill("Front desk");
+  await page.getByRole("combobox", { name: "Icon", exact: true }).selectOption("clipboard");
+  await page.getByRole("checkbox", { name: new RegExp(`Handed offsites.*${pageName}`) }).check();
+  await page.getByRole("checkbox", { name: /Shared routing/ }).check();
+  await page.getByRole("button", { name: "Create application", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review application release", exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name: /Shared routing/ })).toBeChecked();
+  await page.getByRole("button", { name: "Review application release", exact: true }).click();
+  await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
+  await expect(page.getByText(`build/flow/build.${flowName}`, { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
+  await page.getByRole("button", { name: "Activate release", exact: true }).click();
+  await expect(page.getByText("Release active for operators.", { exact: false })).toBeVisible();
 
   // It is in the launcher, and its page opens from its own navigation.
-  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Apps", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("button", { name: "Application launcher", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible(); // the launcher itself
   await expect(page.getByRole("button", { name: "Front desk" }).first()).toBeVisible();
   await page.getByRole("button", { name: "Front desk" }).first().click();
   await expect(page.getByRole("heading", { name: "Handed offsites" })).toBeVisible();
+  // A shared page view retains its application's shell after a fresh load.
+  await page.reload();
+  const nav = page.getByRole("navigation", { name: "Main", exact: true });
+  await expect(nav.getByRole("button", { name: "Handed offsites", exact: true })).toHaveCount(1);
+  await expect(nav.getByRole("button", { name: "Objects", exact: true })).toHaveCount(0);
+  await expect(nav.getByRole("button", { name: "Definitions", exact: true })).toHaveCount(0);
+  // Old unambiguous page links also resolve membership, even from Studio.
+  await page.getByRole("button", { name: "Apps", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Application Studio", exact: true }).click();
+  await page.goto(`/#/page?app=build&kind=page&name=${pageName}`);
+  await expect(nav.getByRole("button", { name: "Handed offsites", exact: true })).toHaveCount(1);
 });
 
 test("route 34: states and actions a tenant defines", async ({ page, request }) => {
@@ -225,7 +244,7 @@ test("route 34: states and actions a tenant defines", async ({ page, request }) 
       { name: "claimant", title: "Handed to", type: "text" }],
   });
   await open(page, "manager", `/process?id=${id}`);
-  await expect(page.getByRole("button", { name: "Process and access" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back to objects" })).toBeVisible();
   const outline = page.getByRole("region", { name: "States and actions" });
   const inHand = page.getByRole("region", { name: "The piece in hand" });
   // Two states: found, then returned.

@@ -111,11 +111,11 @@
 | 应用工坊总览 | 平台应用 `build`、`@pkg/build` | 能力卡片与资产图、搜索/状态、编辑器入口、选中资产测试/发布和返回上下文。 | `StudioOverview`；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户原生流程编写 | 平台应用 `build`、`flow`、`work`、宿主 | 共享 Block IDE、类型化输入/绑定、分支/集合/并发、原生调用、固定测试及只读运行；原 Flow/Work 与精确版本绑定。 | build.Process/TestPlan；[ADR-0044](ADR/0044-capability-fabric.md) |
 | 固定数据候选测试 (ADR-0040 21d) | 宿主、平台应用 `build`、共享 UI | 空内存租户的固定样本/预期/恢复核对；非物理沙箱。 | build.TestPlan, Tenant.SimulateCandidate；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
-| 租户交付的应用 (ADR-0036) | 平台应用 `build`、宿主运行时、`web/apps/workspace` | 已发布页面编组为应用，按成员可见页面进入启动器，不增加权限。 | platform.Application, Tenant.InstallApplication；[ADR-0036](ADR/0036-an-application-a-tenant-hands-to-its-people.md) |
+| 租户交付的应用 (ADR-0036) | 平台应用 `build`、宿主运行时、`web/apps/workspace` | 已发布页面及共享资源编组为应用，应用根闭合对象/流程/计算依赖并沿原候选激活；按成员可见页面进入启动器，不增加权限。 | platform.Application, Tenant.InstallApplication；[ADR-0036](ADR/0036-an-application-a-tenant-hands-to-its-people.md) |
 | 由组件布局的页面 (ADR-0035 / 0040) | `@platform/app`、`@platform/ui`、平台应用 `build`、宿主运行时 | 按对象的选择/过滤、关联列表与详情/动作绑定、只读实时画布及原保存/发布校验。 | platform.Section, Tenant.checkSections；[ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户编排的页面 (ADR-0034 15b) | 平台应用 `build`、宿主运行时、`@pkg/build`、`@platform/ui` | Build 在已安装对象上编排并发布页面，草稿不改已发布镜像。 | build.page, Tenant.InstallPage；[ADR-0034](ADR/0034-tenant-defined-objects.md) |
 | 租户定义的对象 (ADR-0034) | 平台应用 `build`、宿主运行时、`@pkg/build` | Build 强类型字段、动态注册、标准页面/动作及受控演进。 | apps/build, Tenant.Install；[ADR-0034](ADR/0034-tenant-defined-objects.md) |
-| 租户定义的状态与动作 (ADR-0037 18a, ADR-0040 21a) | 平台应用 `build`、`@pkg/build`、账本生命周期 | 状态/动作、输入/条件/赋值编译为原生生命周期。 | build.State, build.Action；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md), [ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
+| 租户定义的状态与动作 (ADR-0037 18a, ADR-0040 21a) | 平台应用 `build`、`@pkg/build`、账本生命周期 | 状态/动作、输入/条件/赋值编译为原生生命周期；条件可比较已声明的关联路径与类型兼容字段，审批放行重查申请人权限及当前来源。 | build.State, build.Action；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md), [ADR-0040](ADR/0040-semantic-builder-and-relationship-model.md) |
 | 租户定义的访问控制 (ADR-0037 18b) | 平台应用 `build`、宿主运行时（`Scope`、`Standard`、账本） | 对象行范围、动词/动作角色与字段权限编译为统一读取和动作门禁。 | build.Access, checkAccess；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md) |
 | 租户动作的审批 (ADR-0037 18c) | 平台应用 `build` 编译定义；平台应用 `work` 拥有请求、任务与决策 | 动作等待审批，沿原生 Work 处理层级/驳回/恢复。 | build.ActionApproval, checkProcess；[ADR-0037](ADR/0037-actions-and-access-a-tenant-defines.md) |
 | 读取与读取授权 | 宿主运行时 | 成员读取统一收窄视野/字段，应用内读取走规范 Caller。 | Tenant.Read, Tenant.admits |
@@ -495,6 +495,8 @@ flowchart TD
 #### B. 前端与构建器产品体验
 
 三类工作上下文共用外壳与设计系统：**业务运营 (operate)**、**应用工坊 (build)**、**系统治理 (administer)**。应用工坊提供应用全貌与资产依赖入口；打开对象、页面、工作流、AI 或发布审查时保持当前应用、选中资产和未保存状态，相关资产可在上下文中直达。平台统一规定导航、信息层级、密度、状态色、字体、间距、键盘焦点、浮层与过渡反馈。生成的记录页面是默认入口，不是唯一操作界面。
+
+**应用设计台融合方向（2026-10-01）。** 负责人指定外包 Workshop 原型的页面编辑和本体设计交互作为目标体验；在现有 Go/React 平台中吸收布局文档、编辑操作、类型化绑定与语义资源工作台。当前 12 类平铺部件是已有切片，不是体验和表达能力上限。具体的 V2 页面、本体语义映射、组件契约、归属与迁移提案见 [ADR-0046](ADR/0046-application-studio-fusion.md)；设计提案不代表功能已经实现，原业务执行与发布权威保持既有归属。
 
 **Platform Catalog / 平台资产目录** 已替换 Gallery，作为体验规范与装配资产入口：基础规范→原子控件→功能组合→语义组件→页面/交互模式→场景装配；人类与 AI 共用 owner 维护的内容，构建使用与开发接入各有明确产物。当前边界见 [ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界)；层级不参与授权或装配资格，Catalog 不取代原动作目录或能力执行入口。
 

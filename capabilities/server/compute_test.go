@@ -8,6 +8,9 @@ import (
 	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
+	"platformserver/apps/flow"
+	"platformserver/apps/work"
+	"slices"
 	"testing"
 	"time"
 
@@ -20,6 +23,98 @@ type computeStock struct {
 }
 
 type fixtureCodeCompiler struct{}
+
+func TestApplicationPreviewRetainsPublishedCompute(t *testing.T) {
+	store := &memoryFiles{}
+	compose := func() *Tenant {
+		tn, err := NewTenant("compute-app", NewConsole("compute-app", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}, Seat{Subjects: []string{"operator-token"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User}}}), work.New("compute-app"), flow.New("compute-app"), build.New("compute-app"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		tn.Files = store
+		return tn
+	}
+	tn := compose()
+	var entries []Entry
+	tn.Compiler = fixtureCodeCompiler{}
+	tn.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { entries = append(entries, e); return e.Body, nil }
+	member, _ := tn.Member("builder")
+	now := time.Now().UTC()
+	submit := func(typ, id, verb string, value any) {
+		t.Helper()
+		payload, _ := json.Marshal(value)
+		if _, err := tn.Submit(member, &pb.Submission{TenantId: tn.ID, PrincipalId: member.ID, Authority: build.ID, IdempotencyKey: typ + id + verb, Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + "." + verb, Version: 1}, Payload: payload}, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	activate := func(kind platform.AssetKind, id string) ReleasePreview {
+		t.Helper()
+		preview, err := tn.PreviewRelease(member, kind, id)
+		if err != nil || preview.CandidateID == "" {
+			t.Fatalf("preview %s: %+v %v", kind, preview, err)
+		}
+		if _, err := tn.SaveReleaseCandidate(member, kind, id, preview.CandidateID, "save:"+id+":"+preview.CandidateID, now); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate:"+id+":"+preview.CandidateID, now); err != nil {
+			t.Fatal(err)
+		}
+		return preview
+	}
+	schema := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"value": {Type: "integer"}}, Required: []string{"value"}}
+	submit(build.CodeType, "C", "create", map[string]any{"name": "double", "title": "Double", "language": "go", "source": "package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*2},nil}", "input": schema, "output": schema, "roles": []string{build.Builder, build.User}, "limits": platform.OperationLimits{TimeoutMillis: 1000, MemoryPages: 512, MaxInputBytes: 4096, MaxOutputBytes: 4096}})
+	submit(build.CodeType, "C", "compile", map[string]any{})
+	for _, run := range tn.operationDispatches(now) {
+		run()
+	}
+	activate(platform.AssetCompute, "C")
+	submit(build.ObjectType, "O", "create", map[string]any{"name": "sample", "title": "Sample", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "value", Title: "Value", Type: "integer"}}, "states": []build.State{{Name: "open", Title: "Open"}}})
+	submit(build.ObjectType, "O", "publish", map[string]any{})
+	submit(build.ObjectType, "CHILD", "create", map[string]any{"name": "child", "title": "Child", "fields": []build.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.sample", Inverse: "children"}}})
+	submit(build.ObjectType, "CHILD", "publish", map[string]any{})
+	submit(build.PageType, "P", "create", map[string]any{"name": "computed", "title": "Computed", "object": "build.sample", "actions": []string{"build.sample.create"}, "sections": []build.Section{{Widget: "compute", Operation: &platform.AssetBinding{Ref: platform.AssetRef{App: build.ID, Kind: platform.AssetCompute, Name: "double"}, SourceVersion: "1.compute-1"}}, {Widget: "table", Object: "build.child", Relation: "children", Fields: []string{"parent"}}, {Widget: "actions", Actions: []string{"build.sample.edit"}}}})
+	submit(build.PageType, "P", "publish", map[string]any{})
+	submit(build.AppType, "A", "create", map[string]any{"name": "computedapp", "title": "Computed app", "pages": []string{"computed"}})
+	submit(build.AppType, "A", "publish", map[string]any{})
+	preview := activate(platform.AssetApp, "A")
+	found := false
+	for _, ref := range preview.Included {
+		found = found || ref.Kind == platform.AssetCompute && ref.Name == "double"
+	}
+	if !found {
+		t.Fatal("application candidate omitted its published compute dependency")
+	}
+	// A child update validates the whole composed page. Its parent's actions
+	// must remain owned by the parent, rather than being treated as removals.
+	child, err := tn.PreviewRelease(member, platform.AssetObject, "CHILD")
+	if err != nil || child.CandidateID == "" {
+		t.Fatalf("related object preview: %+v %v", child, err)
+	}
+	submit(build.ProcessType, "FLOW", "create", map[string]any{"name": "calculate", "title": "Calculate", "object": "build.sample", "when": "open", "steps": []build.ProcessStep{{Name: "calculate", Kind: "compute", Operation: &build.OperationRef{App: build.ID, Name: "double", Version: 1}, Inputs: map[string]platform.Binding{"value": {Source: "subject", Path: []string{"value"}}}, Next: "end"}, {Name: "end", Kind: "end"}}})
+	submit(build.ProcessType, "FLOW", "publish", map[string]any{})
+	resources := []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "build.sample"}, {App: build.ID, Kind: platform.AssetFlow, Name: "build.calculate"}, {App: build.ID, Kind: platform.AssetCompute, Name: "double"}}
+	submit(build.AppType, "A", "edit", map[string]any{"resources": resources})
+	preview = activate(platform.AssetApp, "A")
+	if !slices.Contains(preview.Included, resources[1]) || !slices.Contains(preview.Included, resources[2]) {
+		t.Fatalf("application omitted its explicit flow/compute: %v", preview.Included)
+	}
+
+	operator, _ := tn.Member("operator")
+	if _, err := tn.Submit(operator, &pb.Submission{TenantId: tn.ID, PrincipalId: operator.ID, Authority: build.ID, IdempotencyKey: "operator:create", Target: &pb.EntityRef{Type: "build.sample", Id: "SAMPLE"}, Schema: &pb.SchemaRef{Name: "build.sample.create", Version: 1}, Payload: []byte(`{"name":"Sample","value":3}`)}, now); err != nil {
+		t.Fatal(err)
+	}
+	tn.Work(now.Add(time.Second))
+	instance, ok := platform.Get[flow.FlowInstance](tn.automation(flow.ID, false), "build.calculate:SAMPLE")
+	if !ok || instance.State != "waiting" || instance.OnBehalf != operator.ID {
+		t.Fatalf("operator's compute flow did not start: %+v", instance)
+	}
+	for _, source := range instance.Sources {
+		if source == "build.sample/SAMPLE#id" || source == "build.sample/SAMPLE#revision" || source == "build.sample/SAMPLE#created" || source == "build.sample/SAMPLE#changed" {
+			t.Fatalf("record metadata was treated as a declared source field: %s", source)
+		}
+	}
+	CheckReplay(t, tn, entries, compose)
+}
 
 func (fixtureCodeCompiler) Compile(_ context.Context, q platform.CodeBuildRequest) (platform.CodeBuildResult, []byte, error) {
 	hash := sha256.Sum256([]byte(q.Source))

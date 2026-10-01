@@ -9,7 +9,7 @@ import {
 } from "@platform/ui";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
-import { GeneratedForm, findDefinition, newId, useHost, type Definition } from "./index";
+import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
 
 type Page = NonNullable<Definition["page"]>;
@@ -30,6 +30,8 @@ type Bound = {
 type Composing = { chosen?: number; onChoose?: (at: number) => void; at?: number };
 
 const objectOf = (page: Page, section: Section) => section.object?.name || page.object.name;
+const parentTypeOf = (page: Page, section: Section) => section.parentSelection
+  ? page.selections?.find((selection) => selection.name === section.parentSelection)?.object.name ?? "" : page.object.name;
 // Named and unnamed selections use one typed slot model.
 const selectionKey = (type: string, name?: string) => `${name ? `selection:${name}` : "object"}/${type}`;
 
@@ -41,13 +43,13 @@ const domainOf = (narrowed: Narrowed, object: string): unknown[] =>
  *  the declared relation when the section names one (ADR-0040 21b), else the
  *  first reference to the page's object. */
 const relatedField = (fields: { name: string; title: string; type: string; ref?: string; inverse?: string; readOnly?: boolean }[] | undefined, page: Page, section: Section) =>
-  fields?.find((f) => f.type === "reference" && f.ref === page.object.name && (!section.relation || f.inverse === section.relation));
+  fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
 function TableWidget({ page, section, onSelect, selected, master, narrowed }: Bound) {
   const { source, definitions } = useHost();
   const type = objectOf(page, section);
-  const isMaster = type === page.object.name;
+  const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
   const info = source.entity(type);
   // A named query (ADR-0040 21c): its declared conditions, run for the selected
   // record through its reference; the list is still the member's own read.
@@ -122,7 +124,7 @@ function ChartWidget({ page, section, kpi, narrowed, master }: Bound & { kpi: bo
   const { source } = useHost();
   const aggregate = source.aggregate;
   const type = objectOf(page, section);
-  const isMaster = type === page.object.name;
+  const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
   const info = source.entity(type);
   const refField = !isMaster ? relatedField(info?.fields, page, section) : undefined;
   if ((section.relation || section.parentSelection) && !refField) return <p role="alert" className="text-sm text-danger">
@@ -176,27 +178,65 @@ function FilterWidget({ page, section, narrowed, onNarrow }: Bound) {
  *  action with the fields the builder chose; the host checks it like any other. */
 function FormWidget({ page, section, live, master }: Bound) {
   const { decide, source } = useHost();
-  const type = objectOf(page, section);
-  // Explicit relation binding leaves independent forms unchanged.
+  const invoke = useInvokeCapability();
+  const type = objectOf(page, section), parentType = parentTypeOf(page, section);
   const refField = section.relation ? relatedField(source.entity(type)?.fields, page, section) : undefined;
-  const [round, setRound] = useState(0); // a fresh, empty form after each record
+  const [round, setRound] = useState(0), [error, setError] = useState("");
+  const bindings = section.inputs ?? {};
+  const bindingKey = JSON.stringify([parentType, master?.id, bindings]);
+  const [bound, setBound] = useState<{ key: string; values?: Record<string, unknown>; error?: string }>({ key: "" });
+  useEffect(() => {
+    let current = true;
+    setBound({ key: bindingKey });
+    Promise.all(Object.entries(bindings).map(async ([name, binding]) => {
+      if (binding.source === "literal") return [name, binding.value] as const;
+      if (binding.source !== "subject" || !master || !binding.path?.length) throw new Error(t("The bound record input is unavailable."));
+      let typ = parentType, record = (await source.get(typ, master.id)).record;
+      for (const [index, part] of binding.path.entries()) {
+        const field = source.entity(typ)?.fields.find((field) => field.name === part);
+        const value = record[part];
+        if (!field || value === undefined) throw new Error(t("The bound record input is unavailable."));
+        if (index === binding.path.length - 1) return [name, value] as const;
+        if (field.type !== "reference" || !field.ref || typeof value !== "string" || !value) throw new Error(t("The bound record input is unavailable."));
+        typ = field.ref; record = (await source.get(typ, value)).record;
+      }
+      throw new Error(t("The bound record input is unavailable."));
+    })).then((values) => { if (current) setBound({ key: bindingKey, values: Object.fromEntries(values) }); }, () => {
+      if (current) setBound({ key: bindingKey, error: t("The bound record input is unavailable.") });
+    });
+    return () => { current = false; };
+  }, [bindingKey, source, source.revision]);
   if (section.relation && (!refField || refField.readOnly)) return <p role="alert" className="text-sm text-danger">
     {t("This form's parent reference is unavailable.")}</p>;
   if (refField && !master) return <p className="text-sm text-muted">{t("Select a parent record before creating a related record.")}</p>;
-  const fields = refField ? (section.fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => name !== refField.name) : section.fields;
-  const parentInfo = source.entity(page.object.name);
-  return (
-    <div className="grid gap-2">
-      {!live && <p className="text-xs text-muted">{t("The form does not submit while you compose.")}</p>}
-      {refField && master && <PropertyList items={[[refField.title, String(master[parentInfo?.display ?? "id"] ?? master.id)]]} />}
-      <GeneratedForm key={round} type={type} fields={fields} submitLabel={t("Create")} onCancel={() => setRound((r) => r + 1)}
+  const fields = (section.fields ?? source.entity(type)?.fields.map((field) => field.name) ?? [])
+    .filter((name) => name !== refField?.name && !bindings[name]);
+  const parentInfo = source.entity(parentType);
+  const ready = bound.key === bindingKey && bound.values !== undefined;
+  const supplied = ready ? Object.entries(bound.values!).map(([name, value]) => [source.entity(type)?.fields.find((field) => field.name === name)?.title ?? name, String(value)] as [string, string]) : [];
+  return <div className="grid gap-2">
+    {!live && <p className="text-xs text-muted">{t("The form does not submit while you compose.")}</p>}
+    {refField && master && <PropertyList items={[[refField.title, String(master[parentInfo?.display ?? "id"] ?? master.id)]]} />}
+    {supplied.length > 0 && <PropertyList items={supplied} />}
+    {!ready && Object.keys(bindings).length > 0 && <p role={bound.error ? "alert" : "status"} className="text-xs text-muted">{bound.error ?? t("Loading bound inputs…")}</p>}
+    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+    <fieldset disabled={!live || !ready}>
+      <GeneratedForm key={round} type={type} fields={fields} submitLabel={t("Create")} onCancel={() => { setError(""); setRound((r) => r + 1); }}
         onSubmit={async (values) => {
           if (!live) return;
+          setError("");
           const payload = refField && master ? { ...values, [refField.name]: master.id } : values;
-          if (await decide(`${type}.create`, { type, id: newId(prefixOf(type)) }, payload, { expectedRevision: 0 })) setRound((r) => r + 1);
+          const id = newId(prefixOf(type));
+          try {
+            if (Object.keys(bindings).length > 0) {
+              await invoke({ ref: { app: type.split(".")[0]!, kind: "action", name: `${type}.create` }, target: id, key: crypto.randomUUID(),
+                inputs: payload, bindings, record: Object.values(bindings).some((binding) => binding.source === "subject") && master ? `${parentType}/${master.id}` : undefined, expectedRevision: 0 });
+              setRound((r) => r + 1);
+            } else if (await decide(`${type}.create`, { type, id }, payload, { expectedRevision: 0 })) setRound((r) => r + 1);
+          } catch (failure) { setError(failure instanceof Error ? failure.message : t("The related record could not be created.")); }
         }} />
-    </div>
-  );
+    </fieldset>
+  </div>;
 }
 
 /** The selected record as its page reads it: history, tasks waiting on it. */
@@ -347,8 +387,8 @@ export function ComposedPage({ page, live = true, notice, chosen, onChoose }: {
   const children = new Map<string, Set<string>>();
   for (const section of page.sections ?? []) {
     const type = objectOf(page, section);
-    if (section.widget !== "table" || type === masterType || !(section.relation || section.parentSelection || relatedField(source.entity(type)?.fields, page, section))) continue;
-    const parent = selectionKey(masterType, section.parentSelection), child = selectionKey(type, section.selection);
+    if (section.widget !== "table" || type === masterType && !section.parentSelection || !(section.relation || section.parentSelection || relatedField(source.entity(type)?.fields, page, section))) continue;
+    const parent = selectionKey(parentTypeOf(page, section), section.parentSelection), child = selectionKey(type, section.selection);
     if (!children.has(parent)) children.set(parent, new Set());
     children.get(parent)!.add(child);
   }
@@ -391,7 +431,7 @@ export function ComposedPage({ page, live = true, notice, chosen, onChoose }: {
       <div className="grid gap-3 md:grid-cols-2">
         {(page.sections ?? []).map((section, i) => (
           <SectionView key={i} page={page} section={section} selected={selected[selectionKey(objectOf(page, section), section.selection)]}
-            master={selected[selectionKey(masterType, section.parentSelection)]} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
+            master={selected[selectionKey(parentTypeOf(page, section), section.parentSelection)]} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
             chosen={chosen} onChoose={onChoose} at={i} />
         ))}
       </div>

@@ -7,7 +7,7 @@
 import "./i18n";
 import { defineApp } from "@platform/app";
 import { type View, t } from "@platform/ui";
-import { BarChart3, BookA, BookOpen, Blocks, Bot, BrainCircuit, Cable, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
+import { BarChart3, BookA, BookOpen, Blocks, Bot, Boxes, BrainCircuit, Cable, Database, FlaskConical, Grid3x3, History, MessageSquare, Network, PlugZap, Route, SlidersHorizontal, Users, Workflow } from "lucide-react";
 import { Members, MemberDetail, Organization } from "./people";
 import { Apps, Matrix, Protocols } from "./apps";
 import { Automation, Integrations, AppSettingsView, Audit } from "./operations";
@@ -20,11 +20,11 @@ const views: View[] = [
   { id: "glossary", title: () => t("Glossary"), render: () => <Glossary /> },
   { id: "agents", title: () => t("Agents"), render: () => <Agents /> },
   { id: "evaluations", title: () => t("Evaluations"), render: () => <Evaluations /> },
-  { id: "flows", title: () => t("Flows"), render: () => <Flows /> },
+  { id: "flows", title: () => t("Workflow runs"), render: () => <Flows /> },
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "organization", title: () => t("Organisation"), render: () => <Organization /> },
-  { id: "apps", title: () => t("Apps"), render: () => <Apps /> },
+  { id: "apps", title: () => t("Installed packages"), render: () => <Apps /> },
   { id: "matrix", title: () => t("Capability matrix"), render: () => <Matrix /> },
   { id: "protocols", title: () => t("Protocols"), render: () => <Protocols /> },
   { id: "automation", title: () => t("Automation"), render: () => <Automation /> },
@@ -50,10 +50,11 @@ export default defineApp({
     const admin = !!host.role("platform");
     return [
       ...(admin || host.role("org") ? [{ label: t("Access"), items: [...(admin ? [nav(t("Members"), <Users />, "members")] : []), nav(t("Organisation"), <Network />, "organization")] }] : []),
-      ...(admin ? [{ label: t("Apps"), items: [nav(t("Apps"), <Blocks />, "apps"), nav(t("App settings"), <SlidersHorizontal />, "app-settings"), nav(t("Capability matrix"), <Grid3x3 />, "matrix"), nav(t("Protocols"), <Cable />, "protocols")] }] : []),
+      ...(admin ? [{ label: t("Platform"), items: [nav(t("Installed packages"), <Blocks />, "apps"), nav(t("App settings"), <SlidersHorizontal />, "app-settings"), nav(t("Capability matrix"), <Grid3x3 />, "matrix"), nav(t("Protocols"), <Cable />, "protocols")] },
+        { label: t("Developer tools"), items: [nav(t("Records"), <Database />, "records"), nav(t("Definitions"), <Boxes />, "definitions")] }] : []),
       ...(host.role("ai") ? [{ label: "AI", items: [...(host.role("ai") === "admin" ? [nav(t("Providers and models"), <Bot />, "ai-providers")] : []), nav(t("Playground"), <MessageSquare />, "ai-playground"), nav(t("Usage"), <BarChart3 />, "ai-usage")] }] : []),
       ...(admin ? [{ label: t("Operations"), items: [nav(t("Integrations"), <PlugZap />, "integrations"), nav(t("Automation"), <Workflow />, "automation"), nav(t("Audit"), <History />, "audit")] }] : []),
-      ...(host.role("flow") || host.role("agent") ? [{ label: t("Processes"), items: [...(host.role("flow") ? [nav(t("Flows"), <Route />, "flows")] : []),
+      ...(host.role("flow") || host.role("agent") ? [{ label: t("Processes"), items: [...(host.role("flow") ? [nav(t("Workflow runs"), <Route />, "flows")] : []),
         ...(host.role("agent") ? [nav(t("Agents"), <BrainCircuit />, "agents"), nav(t("Evaluations"), <FlaskConical />, "evaluations")] : [])] }] : []),
       ...(host.role("knowledge") ? [{ label: t("Knowledge"), items: [nav(t("Documents"), <BookOpen />, "knowledge"), nav(t("Glossary"), <BookA />, "glossary")] }] : []),
     ];

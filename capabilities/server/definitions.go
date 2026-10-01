@@ -329,7 +329,45 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						}
 						shown = other
 					}
-					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool { _, ok := shown.Field(name); return !ok })
+					parentType := page.Object.Name
+					if section.ParentSelection != "" {
+						for _, selection := range page.Selections {
+							if selection.Name == section.ParentSelection {
+								parentType = selection.Object.Name
+							}
+						}
+					}
+					if section.Relation != "" && !slices.ContainsFunc(shown.Fields, func(f platform.FieldInfo) bool {
+						return f.Type == "reference" && f.Ref == parentType && f.Inverse == section.Relation
+					}) {
+						continue // the member cannot follow this parent reference
+					}
+					if section.Widget == "form" {
+						if _, offered := actions[shown.Type+".create"]; !offered {
+							continue
+						}
+					}
+					if section.Widget == "form" && slices.ContainsFunc(slices.Collect(maps.Keys(section.Inputs)), func(name string) bool {
+						field, writable := shown.Field(name)
+						if !writable || !field.Writes(m.Roles[shown.App]) {
+							return true
+						}
+						binding := section.Inputs[name]
+						if binding.Source != "subject" {
+							return false
+						}
+						_, err := platform.RecordPathField(parentType, binding.Path, func(typ string) (platform.EntityInfo, bool) {
+							info, visible := entities[typ]
+							return info, visible
+						})
+						return err != nil
+					}) {
+						continue // no manual-input fallback for a hidden bound source
+					}
+					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool {
+						field, visible := shown.Field(name)
+						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))
+					})
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
 					if section.Function != nil {
 						owner, ok := t.app(section.Function.Ref.App).(interface {
@@ -384,6 +422,10 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			opens[def.Ref] = true
 		}
 	}
+	visibleResources := map[platform.AssetRef]bool{}
+	for _, def := range out {
+		visibleResources[def.Ref] = true
+	}
 	for _, registered := range t.definitions {
 		if registered.Ref.Kind != platform.AssetApp || registered.Application == nil || m.Roles[registered.Ref.App] == "" {
 			continue
@@ -404,6 +446,13 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			}
 		}
 		application.Groups = groups
+		application.Resources = slices.DeleteFunc(slices.Clone(application.Resources), func(ref platform.AssetRef) bool {
+			if ref.Kind == platform.AssetFlow {
+				return m.Roles["build"] != "builder" || t.procs == nil || !t.procs.HasPublishedFlow(ref.Name)
+			}
+			return !visibleResources[ref]
+		})
+		def.Requires = application.Dependencies(def.Ref.App)
 		def.Application = &application
 		out = append(out, def)
 	}

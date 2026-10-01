@@ -1,6 +1,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Only builders can open Application Studio.": "只有构建者可以打开应用设计台。",
   "Platform Catalog": "平台资产库",
   "Components": "组件库",
   "All components": "全部组件",

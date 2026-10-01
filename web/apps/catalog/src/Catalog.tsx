@@ -48,13 +48,10 @@ export function Catalog({ initialID, initialLayer, initialMode = "builder" }: { 
   const snippet = entry?.snippet ?? (entry?.exports?.length
     ? `import { ${[...new Set(entry.exports.map((name) => name.split(".")[0]))].join(", ")} } from "${entry.owner}";` : undefined);
   useEffect(() => setCopyStatus(""), [entry?.id]);
-  const choose = (id: string) => {
-    open({ view: "catalog", params: { id, mode } });
-  };
-  const changeMode = (next: "builder" | "developer") => open({ view: "catalog", params: {
-    ...(initialID ? { id: initialID } : {}), ...(initialLayer !== undefined ? { layer: initialLayer } : {}), mode: next,
-  } });
-  const changeLayer = (next: string) => open({ view: "catalog", params: { ...(next ? { layer: next } : {}), mode } });
+  // Browsing and filters belong to this task, not a new workspace tab per click.
+  const choose = (id: string) => setSelected(id);
+  const changeMode = (next: "builder" | "developer") => setMode(next);
+  const changeLayer = (next: string) => { setLayer(next); setOffset(0); setSelected(undefined); };
   const reset = () => { setOffset(0); setSelected(undefined); };
   const openStudio = (asset: CatalogEntry) => {
     const hash = routeToHash(studioRoute(asset));
@@ -138,7 +135,8 @@ export function Catalog({ initialID, initialLayer, initialMode = "builder" }: { 
           {entry.uses.some((u) => ["template", "widget", "block"].includes(u)) ? <div className="mt-3 flex flex-wrap items-center gap-2">
             {!host && <Input aria-label={t("Workspace URL")} className="w-64" value={workspaceURL} placeholder={t("Workspace URL")}
               onChange={(e) => setWorkspaceURL(e.target.value)} />}
-            <Button variant="primary" disabled={!!host && !host.role("build")} onClick={() => openStudio(entry)}>
+            <Button variant="primary" disabled={!!host && host.role("build") !== "builder"} onClick={() => openStudio(entry)}
+              title={host && host.role("build") !== "builder" ? t("Only builders can open Application Studio.") : undefined}>
               {t(entry.template ? "Create in Studio" : "Open in Studio")}
             </Button>
             <span className="text-xs text-muted">{t("Creates or edits a controlled draft; nothing is published automatically.")}</span>

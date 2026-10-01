@@ -33,7 +33,7 @@ func (h hostView) Install(c platform.Caller, e platform.Entity, actions []platfo
 // record store; a failed or refused publication cannot change live metadata.
 func (h hostView) installationDraft() *Tenant {
 	draft := &Tenant{ID: h.t.ID, apps: h.t.apps, owner: maps.Clone(h.t.owner),
-		records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions), Files: h.t.files()}
+		records: h.t.records.forkRecords(), definitions: slices.Clone(h.t.definitions), Files: h.t.files(), procs: h.t.procs}
 	return draft
 }
 
@@ -53,6 +53,12 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 			}
 		}
 	}
+	removedAction := func(ref platform.AssetRef) bool {
+		owned := ref.App == h.app.Manifest().ID && slices.ContainsFunc(h.t.definitions, func(d platform.Definition) bool {
+			return d.Ref == ref && d.Action != nil && d.Action.Target == e.Type
+		})
+		return owned && !slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == ref.Name })
+	}
 	for _, def := range h.t.definitions {
 		if def.Ref.App == h.app.Manifest().ID && def.Ref.Kind == platform.AssetAction &&
 			def.Action != nil && def.Action.Target == e.Type &&
@@ -70,13 +76,13 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 			continue
 		}
 		for _, ref := range p.Actions {
-			if ref.App == h.app.Manifest().ID && !slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == ref.Name }) {
+			if removedAction(ref) {
 				return fmt.Errorf("page %s: removed action %s", p.Name, ref.Name)
 			}
 		}
 		for _, section := range p.Sections {
 			for _, ref := range section.Actions {
-				if ref.App == h.app.Manifest().ID && !slices.ContainsFunc(actions, func(a platform.Action) bool { return a.Schema == ref.Name }) {
+				if removedAction(ref) {
 					return fmt.Errorf("page %s: removed action %s", p.Name, ref.Name)
 				}
 			}

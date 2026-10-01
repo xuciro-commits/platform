@@ -519,15 +519,29 @@ func (b *Build) flowOf(p Process) platform.Flow {
 			raw, err := b.host.Caller(c, member, ID).ReadRecord(p.Object, r.Key, r.Now)
 			if err == nil {
 				var fields map[string]json.RawMessage
-				if json.Unmarshal(raw, &fields) == nil {
+				info, known := b.host.Entity(p.Object)
+				if known && json.Unmarshal(raw, &fields) == nil {
 					for name := range fields {
-						r.Sources = append(r.Sources, p.Object+"/"+r.Key+"#"+name)
+						// Record identity/stamps are covered by the record source.
+						// Field provenance only names the owner's declared fields.
+						if _, declared := info.Field(name); declared {
+							r.Sources = append(r.Sources, p.Object+"/"+r.Key+"#"+name)
+						}
 					}
 				}
 			}
 			return raw, err
 		}
 		resolve := func(c platform.Caller, r *platform.Run, binding platform.Binding) (json.RawMessage, *kernel.Error) {
+			if binding.Source == "subject" && len(binding.Path) > 0 {
+				member, known := b.host.Member(r.OnBehalf)
+				if !known {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
+				}
+				value, sources, err := b.host.Caller(c, member, ID).ReadRecordPath(p.Object, r.Key, binding.Path, r.Now)
+				r.Sources = append(r.Sources, sources...)
+				return value, err
+			}
 			var raw json.RawMessage
 			if binding.Source == "subject" {
 				var err *kernel.Error

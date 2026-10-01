@@ -76,19 +76,17 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		ContractVersion: 1, SourceVersion: sourceVersion, Requires: requires, Body: body}, nil
 }
 
-// ApplicationReleaseAsset binds an application's ordered pages. A different
-// navigation order changes its hash, while the closure includes every page.
+// ApplicationReleaseAsset binds ordered navigation and explicit resources.
+// Frozen closure dependencies retain their original owner and exact bytes.
 func ApplicationReleaseAsset(app, sourceVersion string, application Application) (ReleaseAsset, error) {
+	if err := application.CheckResources(); err != nil {
+		return ReleaseAsset{}, err
+	}
 	body, err := json.Marshal(application)
 	if err != nil {
 		return ReleaseAsset{}, err
 	}
-	requires := make([]AssetRef, 0, len(application.Pages))
-	for _, name := range application.Pages {
-		requires = append(requires, AssetRef{App: app, Kind: AssetPage, Name: name})
-	}
-	slices.SortFunc(requires, compareRef)
-	requires = slices.Compact(requires)
+	requires := application.Dependencies(app)
 	return ReleaseAsset{Ref: AssetRef{App: app, Kind: AssetApp, Name: application.Name},
 		ContractVersion: 1, SourceVersion: sourceVersion, Requires: requires, Body: body}, nil
 }
@@ -357,9 +355,10 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		if err := json.Unmarshal(body, &app); err != nil {
 			return fmt.Errorf("release application %s: %w", ref, err)
 		}
-		for _, name := range app.Pages {
-			required = append(required, AssetRef{App: ref.App, Kind: AssetPage, Name: name})
+		if err := app.CheckResources(); err != nil {
+			return err
 		}
+		required = app.Dependencies(ref.App)
 	}
 	for _, dep := range required {
 		if err := dep.Check(); err != nil {

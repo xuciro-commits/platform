@@ -63,7 +63,7 @@
 - **再次发布，实现演进**（`recordStore.install`）：通过 JSON 将行数据载入新的 Go 类型中，因此记录会保留所有仍然存在的字段的值。
 - **重放与恢复**（`snapshot.go`）：租户类型的记录仅出现在安装它的发布决策之后，因此重放按序安装；恢复会先加载代码类型的记录，在安装定义的应用上调用 `Reinstall`，然后恢复其余内容。`TestTenantDefinedObject` 中的 `CheckReplay` 覆盖了这两者。
 - **内核学会了学习**（K7 S7，`contract/spec/K7-schema-evolution.md`，`vectors/k7-schema-evolution.json`，`SchemaRegistry.Learn`）：接收方可以接受启动时不存在的模式。这是该切片发现的唯一一处契约缺口。
-- **工作区**（`web/packages/build`，`@pkg/build`）：构建器应用展示对象页面以及每个已发布对象的导航项，两者均由 `PageWorkspace` 渲染——与代码页面使用的组件完全一致。在实际走查中完成了两项平台修复：应用的主页路由保留了其参数，并且针对客户端没有声明的类型的决策会在被拒绝前刷新声明（K5 发件箱此前曾返回 `NOT_FOUND`）。
+- **工作区**（`web/packages/build`，`@pkg/build`）：对象列表直接打开统一对象编辑器，字段、状态、动作与权限在同一上下文维护。已发布对象的默认记录页使用共享 `PageWorkspace`，从编辑器“打开业务记录”进入，不自动加入主导航。在实际走查中完成了两项平台修复：应用的主页路由保留了其参数，并且针对客户端没有声明的类型的决策会在被拒绝前刷新声明（K5 发件箱此前曾返回 `NOT_FOUND`）。
 - **验证通过**：`TestTenantDefinedObject`（宿主：拒绝、发布、记录、搜索、页面资产、字段添加、重放和快照）、`TestTheHotelDefinesItsOwnObject`（酒店业方案，与 CRM 和 PMS 并存）、浏览器路由 29（在工作区中定义 → 发布 → 使用），以及 docs/Testing.md 中记录的走查路径。`scripts/verify.sh contract capabilities composition web` 通过。
 - **15a 未构建内容**：按对象的角色与范围、租户编写的页面、动作与流程、已发布修订版与发布、按租户配额限制，以及针对已定义类型的 PostgreSQL 投影。
 
@@ -72,7 +72,7 @@
 - **`build.page` 记录**（`apps/build/page.go`）：名称、人类可读称谓、所展示的对象（该租户定义的或应用自有的）、其列表和详情字段，以及它所提供的动作——具有与对象类似的草稿 → 已发布生命周期。有效负载所携带的内容在草稿期间即受校验，发布时检查整个页面：该租户不具备的对象、它不具备的字段（错误原因会指明它确实具备的字段）、针对其他内容的动作。
 - **宿主负责校验与提供**（`Tenant.InstallPage`）：仅当页面所依赖的对象、字段和动作存在时才注册该页面，因此注册表提供的页面始终可以打开。对于成员无权读取的对象的页面，不会提供给该成员，因为 `Tenant.Definitions` 已经与他们有权查看的内容求交集；页面上的记录和动作依然归属于该成员自身。
 - **发布的内容即运行的内容**（`Object.Published`，`Page.Published`）：发布在记录上保留发布时的定义，恢复时安装该定义——此后编写的草稿仍保持为草稿。这是 #131 13c 将完成的修订模型的诚实起点；它尚不是带版本的不可变修订版。
-- **工作区从注册表导航**（`Host.definitions`，`@pkg/build`）：应用的导航可以提供其拥有的页面（无论是代码还是组合页面）。构建器展示对象、页面以及该组织发布的每个页面。
+- **工作区从注册表导航**（`Host.definitions`，`@pkg/build`）：应用的导航可以提供其拥有的页面（无论是代码还是组合页面）。构建器展示设计资产列表；已发布页面从原编辑器打开，业务主导航由交付应用的 Pages/Groups 明确选择，不自动枚举注册表。
 - **UI 套件扩展了组合器所需的编辑器**（`field.tags`，`packages/ui`）：没有预设列表供选择的标签字段现在支持用户手动输入词语——Enter 或逗号添加一项，chip 标签移除一项，Backspace 移除最后一项。在此之前，任何应用中都没有此类字段的编辑器。
 - **验证通过**：`TestTenantDefinedObject`（已定义对象之上的页面、被拒绝的组合不会干扰运行中页面、重放与快照）、`TestTheHotelDefinesItsOwnObject`（CRM 商机之上的页面及 CRM 的关闭动作；不向没有 CRM 权限的成员提供）、UI 套件的 `tags` 测试，以及浏览器路由 30（在 `crm.opportunity` 上组合并对真实记录执行动作）。`scripts/verify.sh ci capabilities web` 通过。
 - **未构建内容**：租户编写的动作、流程与 AI 逻辑；除 `list-detail` 之外的布局；从列表中选取字段而非手动输入名称；按对象的角色与范围；不可变修订版与发布。

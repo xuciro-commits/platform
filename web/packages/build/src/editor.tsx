@@ -1,3 +1,4 @@
+import { recordPaths } from "./record-paths";
 import { AssetControls } from "./asset-controls";
 // The page editor (ADR-0035), shaped like the editors this is measured against:
 // a layout panel listing the sections, a canvas showing the page with real
@@ -95,25 +96,15 @@ export function PageEditor({ id }: { id: string }) {
   const selectionProblem = selections.some((v, i) => !/^[a-z][a-z0-9_-]{0,63}$/.test(v.name) || selections.some((other, at) => at !== i && other.name === v.name))
     ? t("Selection names must be unique lowercase identifiers.") : sections.some((s) =>
       s.selection && !selections.some((v) => v.name === s.selection && v.object.name === (s.object || page?.object)) ||
-      s.parentSelection && !selections.some((v) => v.name === s.parentSelection && v.object.name === page?.object))
+      s.parentSelection && !selections.some((v) => v.name === s.parentSelection))
       ? t("A widget references a missing selection or the wrong object type.") : "";
   const invalid = Object.values(formProblems).some(Boolean) || !!selectionProblem;
   const relatedObjects = useMemo(() => {
     return (definitions ?? [])
       .filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
-      .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && f.ref === page?.object))
+      .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref)))
       .map((d) => d.ref.name);
-  }, [definitions, page?.object]);
-  // The named relations from the page's object, by the related object that declares them (ADR-0040 21b).
-  const relationsOf = useMemo(() => {
-    const out: Record<string, string[]> = {};
-    for (const d of definitions ?? []) {
-      if (d.ref.kind !== "object" || !d.entity) continue;
-      const names = d.entity.fields.filter((f) => f.type === "reference" && f.ref === page?.object && f.inverse).map((f) => f.inverse!);
-      if (names.length) out[d.ref.name] = names;
-    }
-    return out;
-  }, [definitions, page?.object]);
+  }, [definitions, page?.object, selections]);
   useEffect(() => {
     if (page && !dirty) {
       setSections(page.sections ?? []);
@@ -186,6 +177,7 @@ export function PageEditor({ id }: { id: string }) {
       <PageHeader title={settings?.title || page.title} description={t("Compose what people see, save your draft, then review its release candidate.")}
         actions={<div className="flex flex-wrap items-center gap-2">
           <StatusTag status={page.state} registry={pageStates} />
+          {page.state === "published" && <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: page.name } })}>{t("Open published page")}</Button>}
 <AssetControls type="build.page" record={page} dirty={dirty} busy={saving || publishing} onCancel={discardChanges} route={{ view: "compose", params: { id } }} />
           <Button onClick={() => void save()} disabled={!dirty || saving || publishing || invalid}>{saving ? t("Saving…") : t("Save")}</Button>
           <Button onClick={() => void publish()} disabled={nothing || publishing || saving || invalid}
@@ -219,7 +211,7 @@ export function PageEditor({ id }: { id: string }) {
             onChange={(patch) => { setSettings({ ...settings, ...patch }); setDirty(true); }} /> :
           <Properties section={sections[chosen]} info={source.entity(sections[chosen]?.object || page.object)}
             catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            object={page.object} selections={selections} relatedObjects={relatedObjects} relationsOf={relationsOf} onChange={(patch) => change(chosen, patch)} />}
+            object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
         </div>
       </div>
     </div></WorkflowFormProblems.Provider>
@@ -272,13 +264,13 @@ function Layout({ sections, chosen, title, onChoose, onAdd, onMove, onRemove }: 
 }
 
 /** The panel that configures the widget in hand: only what that widget binds. */
-function Properties({ section, info, catalog, object, selections, relatedObjects = [], relationsOf = {}, onChange }: {
-  section?: Draft; info?: EntityInfo; object: string; relatedObjects?: string[]; relationsOf?: Record<string, string[]>;
+function Properties({ section, info, catalog, object, selections, relatedObjects = [], onChange }: {
+  section?: Draft; info?: EntityInfo; object: string; relatedObjects?: string[];
   selections: HostApi.SelectionVariable[];
   catalog: { schema: string; title: string; target: string }[];
   onChange: (patch: Partial<Draft>) => void;
 }) {
-  const { definitions } = useHost();
+  const { definitions, source } = useHost();
   const functionRecords = useRecordInventory<{ name: string; title: string; object: string; versions?: string[] }>("build.function");
   const codeRecords = useRecordInventory<{ versions?: string[] }>("build.code");
   const computations = (codeRecords.data?.records ?? []).flatMap((record) => (record.versions ?? []).flatMap((raw) => {
@@ -297,6 +289,8 @@ function Properties({ section, info, catalog, object, selections, relatedObjects
     .map((d) => ({ key: `${d.ref.app}.${d.ref.name}`, title: d.query?.title ?? d.ref.name }));
   if (!section) return <Card className="p-3 text-xs text-muted">{t("Choose a section to configure it.")}</Card>;
   const fields = info?.fields ?? [];
+  const parentType = section.parentSelection ? selections.find((selection) => selection.name === section.parentSelection)?.object.name ?? "" : object;
+  const relations = fields.filter((field) => field.type === "reference" && field.ref === parentType && field.inverse).map((field) => field.inverse!);
   const actions = catalog.filter((a) => a.target === (section.object || object));
   const measures = ["count", ...fields.filter((f) => f.type === "integer" || f.type === "decimal" || f.type === "money").flatMap((f) => [`sum:${f.name}`, `avg:${f.name}`])];
   return (
@@ -305,7 +299,7 @@ function Properties({ section, info, catalog, object, selections, relatedObjects
       {relatedObjects.length > 0 && ["table", "detail", "actions", "chart", "metric", "filter", "form", "timeline", "tasks"].includes(section.widget) && (
         <label className="grid gap-1 text-xs">{t("Object")}
           <Select value={section.object ?? object} onChange={(e) => onChange({ object: e.target.value === object ? undefined : e.target.value,
-            selection: undefined, parentSelection: undefined, relation: undefined, query: undefined, fields: [], actions: [] })}>
+            selection: undefined, parentSelection: undefined, relation: undefined, query: undefined, inputs: undefined, fields: [], actions: [] })}>
             <option value={object}>{t("{object} (this page)", { object })}</option>
             {relatedObjects.map((rel) => <option key={rel} value={rel}>{rel}</option>)}
           </Select>
@@ -321,24 +315,24 @@ function Properties({ section, info, catalog, object, selections, relatedObjects
           </Select>
         </label>}
       {(selections.length > 0 || section.parentSelection) && section.object && relatedObjects.includes(section.object) &&
-        (["table", "chart", "metric"].includes(section.widget) || section.widget === "form" && section.relation) &&
+        ["table", "chart", "metric", "form"].includes(section.widget) &&
         <label className="grid gap-1 text-xs">{t("Parent selection")}
-          <Select value={section.parentSelection ?? ""} onChange={(e) => onChange({ parentSelection: e.target.value || undefined })}>
+          <Select value={section.parentSelection ?? ""} onChange={(e) => { const nextType = e.target.value ? selections.find((selection) => selection.name === e.target.value)?.object.name : object; onChange({ parentSelection: e.target.value || undefined, ...(nextType !== parentType ? { relation: undefined, inputs: undefined } : {}) }); }}>
             <option value="">{t("Page's shared selection")}</option>
-            {section.parentSelection && !selections.some((v) => v.name === section.parentSelection && v.object.name === object) &&
+            {section.parentSelection && !selections.some((v) => v.name === section.parentSelection && fields.some((field) => field.ref === v.object.name)) &&
               <option value={section.parentSelection}>{t("Unavailable selection: {name}", { name: section.parentSelection })}</option>}
-            {selections.filter((v) => v.object.name === object).map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+            {selections.filter((v) => fields.some((field) => field.type === "reference" && field.ref === v.object.name)).map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
           </Select>
         </label>}
-      {section.object && (relationsOf[section.object]?.length ?? 0) > 0 && ["table", "chart", "metric", "form"].includes(section.widget) && (
+      {section.object && relations.length > 0 && ["table", "chart", "metric", "form"].includes(section.widget) && (
         <label className="grid gap-1 text-xs">{t("Through")}
           <Select value={section.relation ?? ""} onChange={(e) => {
-            const parent = fields.find((f) => f.type === "reference" && f.ref === object && f.inverse === e.target.value);
+            const parent = fields.find((f) => f.type === "reference" && f.ref === parentType && f.inverse === e.target.value);
             onChange({ relation: e.target.value || undefined,
               ...(section.widget === "form" && parent && e.target.value ? { fields: section.fields?.filter((name) => name !== parent.name) } : {}) });
           }}>
             <option value="">{section.widget === "form" ? t("Choose the parent in the form") : t("Any reference to this page's object")}</option>
-            {relationsOf[section.object]!.map((name) => <option key={name} value={name}>{name}</option>)}
+            {relations.map((name) => <option key={name} value={name}>{name}</option>)}
           </Select>
         </label>
       )}
@@ -396,13 +390,16 @@ function Properties({ section, info, catalog, object, selections, relatedObjects
       {section.widget === "form" && (
         <fieldset className="grid gap-1 text-xs">
           <legend className="mb-1">{t("Fields it asks for")}</legend>
-          <Toggles options={fields.filter((f) => !f.readOnly && !(section.relation && f.type === "reference" && f.ref === object && f.inverse === section.relation)).map((f) => ({ value: f.name, label: f.required ? `${f.title} *` : f.title }))} value={section.fields ?? []}
+          <Toggles options={fields.filter((f) => !f.readOnly && !section.inputs?.[f.name] && !(section.relation && f.type === "reference" && f.ref === parentType && f.inverse === section.relation)).map((f) => ({ value: f.name, label: f.required ? `${f.title} *` : f.title }))} value={section.fields ?? []}
             onChange={(value) => onChange({ fields: value })} />
           <p className="text-muted">{section.relation
             ? t("The selected parent supplies its reference. Choose the remaining fields; creation still uses the object's own action.")
             : t("It makes a new record through the object's own create action; fields marked * are needed.")}</p>
         </fieldset>
       )}
+      {section.widget === "form" && <FormInputBindings fields={fields.filter((field) => !field.readOnly && !(section.relation && field.ref === parentType && field.inverse === section.relation))}
+        parentType={section.relation ? parentType : undefined} entity={source.entity} inputs={section.inputs ?? {}} onChange={(inputs, field, bound) => onChange({ inputs,
+          fields: bound ? section.fields?.filter((name) => name !== field) : [...new Set([...(section.fields ?? []), field])] })} />}
       {(section.widget === "timeline" || section.widget === "tasks") && (
         <p className="text-xs text-muted">{section.widget === "timeline"
           ? t("It shows what happened to the record selected in a table.")
@@ -487,4 +484,35 @@ function Settings({ value, object, selections, objects, onSelections, onRename, 
       </fieldset>
     </Card>
   );
+}
+
+/** Configure native form inputs without requiring an expression or TSX. */
+function FormInputBindings({ fields, parentType, entity, inputs, onChange }: {
+  fields: EntityInfo["fields"]; parentType?: string; entity: (type: string) => EntityInfo | undefined;
+  inputs: Record<string, HostApi.Binding>; onChange: (inputs: Record<string, HostApi.Binding>, field: string, bound: boolean) => void;
+}) {
+  const paths = (target: EntityInfo["fields"][number]) => parentType ? recordPaths(parentType, entity).filter(({ field }) =>
+    (field.type === target.type || field.type === "integer" && target.type === "decimal") && (field.type !== "reference" || field.ref === target.ref)) : [];
+  const update = (field: string, value?: HostApi.Binding) => {
+    const next = { ...inputs }; if (value) next[field] = value; else delete next[field];
+    onChange(next, field, !!value);
+  };
+  return <fieldset className="grid gap-2 text-xs"><legend className="mb-1">{t("Supplied form inputs")}</legend>
+    {fields.map((field) => {
+      const options = paths(field), binding = inputs[field.name];
+      const choice = binding?.source === "subject" ? `path:${binding.path?.join(".")}` : binding ? "literal" : "manual";
+      const schema: HostApi.ValueSchema = { type: field.type === "integer" ? "integer" : field.type === "decimal" ? "number" : field.type === "boolean" ? "boolean" : "string", ...(field.choices?.length ? { enum: field.choices } : {}) };
+      return <div key={field.name} className="grid gap-1"><label className="grid gap-1">{field.title}
+        <Select aria-label={t("Input source for {field}", { field: field.title })} value={choice} onChange={(event) => {
+          const value = event.target.value;
+          update(field.name, value === "manual" ? undefined : value === "literal" ? { source: "literal", value: schema.type === "integer" || schema.type === "number" ? 0 : schema.type === "boolean" ? false : "" } : { source: "subject", path: value.slice(5).split(".") });
+        }}><option value="manual">{t("Operator input")}</option><option value="literal">{t("Constant")}</option>
+          {binding?.source === "subject" && !options.some((option) => `path:${option.path.join(".")}` === choice) && <option value={choice}>{t("Unavailable record path")}</option>}
+          {options.map((option) => <option key={option.path.join(".")} value={`path:${option.path.join(".")}`}>{option.label}</option>)}
+        </Select></label>
+        {binding?.source === "literal" && <BindingEditor label={field.title} value={binding} schema={schema} sources={["literal"]} steps={[]} onChange={(value) => update(field.name, value)} />}
+      </div>;
+    })}
+    <p className="text-muted">{t("Bound fields are read-only here. The host reads record paths with the operator's permissions when creating the record.")}</p>
+  </fieldset>;
 }

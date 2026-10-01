@@ -10,7 +10,7 @@ export default defineApp({
   id: "erpadapter",
   title: t("ERP adapter"),
   icon: <Cable />,
-  home: { view: "orders" },
-  views: [{ id: "orders", title: () => t("ERP orders"), render: () => <Records type="erpadapter.order" /> }],
-  nav: () => [{ label: t("ERP adapter"), items: [{ label: t("ERP orders"), icon: <ClipboardList />, route: { view: "orders" } }] }],
+  home: { view: "erpadapter-orders" },
+  views: [{ id: "erpadapter-orders", title: () => t("ERP orders"), render: () => <Records type="erpadapter.order" /> }],
+  nav: () => [{ label: t("ERP adapter"), items: [{ label: t("ERP orders"), icon: <ClipboardList />, route: { view: "erpadapter-orders" } }] }],
 });

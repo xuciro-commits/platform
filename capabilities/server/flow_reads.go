@@ -97,3 +97,53 @@ func (r runtime) ReadRecord(c platform.Caller, typ, id string, now time.Time) (j
 func (d *stagedDecision) ReadRecord(c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 	return d.tenant.readRecordFrom(d.records, c, typ, id, now)
 }
+
+func (t *Tenant) readRecordPathFrom(store *recordStore, c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
+	if len(path) == 0 || len(path) > 16 {
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record paths need 1–16 fields")
+	}
+	var sources []string
+	for i, name := range path {
+		raw, refusal := t.readRecordFrom(store, c, typ, id, now)
+		if refusal != nil {
+			return nil, nil, refusal
+		}
+		info, known := t.entity(typ)
+		field, declared := info.Field(name)
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &fields)
+		value, visible := fields[name]
+		if !known || !declared || !field.Reads(c.Roles[info.App]) {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record input is unavailable to this member")
+		}
+		if !visible {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input has no value")
+		}
+		ref := typ + "/" + id
+		sources = append(sources, ref, ref+"#"+name)
+		if i == len(path)-1 {
+			return value, sources, nil
+		}
+		if field.Type != "reference" || field.Ref == "" {
+			// Opaque JSON fields retain ordinary JSON-path behavior; typed
+			// form publications cannot infer a schema inside an opaque field.
+			result, err := (platform.Binding{Source: "subject", Path: path[i+1:]}).Resolve(&platform.Run{}, value)
+			if err != nil {
+				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+			}
+			return result, sources, nil
+		}
+		if json.Unmarshal(value, &id) != nil || id == "" {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input reference is empty")
+		}
+		typ = field.Ref
+	}
+	return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input is unavailable")
+}
+
+func (r runtime) ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
+	return r.t.readRecordPathFrom(r.t.records, c, typ, id, path, now)
+}
+func (d *stagedDecision) ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.Time) (json.RawMessage, []string, *kernel.Error) {
+	return d.tenant.readRecordPathFrom(d.records, c, typ, id, path, now)
+}

@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Application launcher": "应用启动器",
+  "Browse all records": "浏览全部记录",
+  "Browse definitions": "浏览定义",
+  "Active release": "活跃发布",
   "Release unavailable": "发布标识不可用",
   "Checking release…": "正在核对发布…",
   "No activated release": "尚无已激活发布",

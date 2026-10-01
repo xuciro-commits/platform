@@ -21,7 +21,7 @@ export function Flows() {
   ];
   return (
     <>
-      <PageHeader title={t("Flows")} description={t("Long-running processes the apps declare. Each instance is a record: open one to see where it stands and why it moved.")} />
+      <PageHeader title={t("Workflow runs")} description={t("Long-running processes the apps declare. Each instance is a record: open one to see where it stands and why it moved.")} />
       <DataTable data={flows} columns={columns} getRowId={(f) => `${f.id}@${f.version}`} height={180} empty={t("No app declares a flow")}
         selectedId={shown} onRowClick={(f) => setShown(shown === `${f.id}@${f.version}` ? undefined : `${f.id}@${f.version}`)} />
       {definition

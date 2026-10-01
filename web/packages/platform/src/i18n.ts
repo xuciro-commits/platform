@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Platform": "平台",
+  "Developer tools": "开发工具",
+  "Definitions": "定义",
+  "Installed packages": "已安装模块",
+  "Workflow runs": "流程运行",
   "Waiting: {n}": "排队：{n}",
   "Gave up: {n}": "已放弃：{n}",
   "Past their quota: {n}": "超出配额的应用：{n}",

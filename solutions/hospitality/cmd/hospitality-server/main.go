@@ -30,6 +30,9 @@ var demo = []platformserver.Seat{
 		platform.Membership{Unit: "hotel-a-co", Role: "director"},
 		platform.Membership{Unit: "guest-committee", Role: "chair"}),
 	withUnits(seat("desk", "desk-1", map[string]string{"pms": "front-desk", "hcm": "employee", "csm": "desk", build.ID: build.User}), platform.Membership{Unit: "front-office", Role: "receptionist", Primary: true}),
+	// A separate business approver; a published object's role is granted by
+	// the original Console, rather than giving this member builder/admin access.
+	seat("business-supervisor", "business-supervisor-1", map[string]string{}),
 }
 
 func withUnits(s platformserver.Seat, units ...platform.Membership) platformserver.Seat {

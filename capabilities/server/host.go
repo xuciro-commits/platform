@@ -985,12 +985,25 @@ func submitted(member string, a platform.App, s *pb.Submission, at time.Time) Au
 // action that uses protocol actions only when m may call the bound provider's.
 func (t *Tenant) Catalog(m platform.Member) []platform.Action {
 	out := []platform.Action{}
+	entities := map[string]platform.EntityInfo{}
+	for _, info := range t.Entities(m) {
+		entities[info.Type] = info
+	}
 	for _, a := range t.apps {
 		for _, action := range a.Manifest().Actions.For(m.Roles[a.Manifest().ID]) {
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
 				owner, schema, _ := t.provider(used)
 				return owner == nil || !owner.Manifest().Actions.Permits(m.Roles[owner.Manifest().ID], schema)
 			}) {
+				// Generated create/edit forms use this member's writable fields.
+				// Custom actions keep their own declared inputs and policy.
+				if info, ok := entities[action.Target]; ok && info.App == a.Manifest().ID &&
+					slices.Contains(info.Standard, action.Schema) && (action.Schema == info.Type+".create" || action.Schema == info.Type+".edit") {
+					action.Payload = slices.DeleteFunc(slices.Clone(action.Payload), func(input platform.Field) bool {
+						field, visible := info.Field(input.Name)
+						return !visible || field.ReadOnly || !field.Writes(m.Roles[info.App])
+					})
+				}
 				out = append(out, action)
 			}
 		}

@@ -50,7 +50,7 @@ type Section struct {
 	Object          string `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
 	Selection       string `json:"selection,omitempty"`
 	ParentSelection string `json:"parentSelection,omitempty"`
-	// Relation is the named relation from the page's object the section follows (ADR-0040 21b D3).
+	// Relation follows the typed parent selection, or the page's shared record.
 	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
 	// Query is a named query "<app>.<name>" the section lists (ADR-0040 21c).
 	Query     string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like crm.open-opportunities"`

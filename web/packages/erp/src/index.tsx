@@ -107,7 +107,7 @@ export default defineApp({
   views: [
     { id: "entries", title: () => t("Journal entries"), render: () => <Drafted type="erp.entry" label={t("New entry")} prefix="JE" wide
       initial={{ journal: "general", date: new Date().toISOString().slice(0, 10), lines: [{}, {}] }} /> },
-    { id: "accounts", title: () => t("Accounts"), render: () => <Coded type="erp.account" label={t("New account")} placeholder="1403" /> },
+    { id: "erp-accounts", title: () => t("Accounts"), render: () => <Coded type="erp.account" label={t("New account")} placeholder="1403" /> },
     { id: "purchases", title: () => t("Purchase orders"), render: () => <Drafted type="erp.purchase" label={t("New purchase order")} prefix="PO" wide
       initial={{ date: new Date().toISOString().slice(0, 10), lines: [{}] }} /> },
     { id: "partners", title: () => t("Partners"), render: () => <Drafted type="erp.partner" label={t("New partner")} prefix="BP" /> },
@@ -124,7 +124,7 @@ export default defineApp({
       { label: t("Journal entries"), icon: <BookOpen />, route: { view: "entries" } },
       { label: t("Postings"), icon: <ListTree />, route: { view: "postings" } },
       { label: t("Trial balance"), icon: <Scale />, route: { view: "trial-balance" } },
-      { label: t("Accounts"), icon: <Landmark />, route: { view: "accounts" } },
+      { label: t("Accounts"), icon: <Landmark />, route: { view: "erp-accounts" } },
       { label: t("Periods"), icon: <CalendarRange />, route: { view: "periods" } },
     ],
   }, {

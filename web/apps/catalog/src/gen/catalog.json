@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ab0f2b19759bc3aa",
+  "revision": "sha256:be3137008fb6eb66",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -92,7 +92,8 @@
       ],
       "example": "ComposedPageExample",
       "constraints": [
-        "Named record selections keep same-object lists independent; parent bindings scope related sections."
+        "Named record selections keep same-object lists independent; parent bindings scope related sections.",
+        "Form inputs read declared record paths. The original action checks writes; unavailable sources do not become manual inputs."
       ],
       "widgets": [
         "table",
@@ -539,6 +540,36 @@
       ]
     },
     {
+      "id": "scenario/application-studio",
+      "owner": "@pkg/build",
+      "name": "Application release workbench",
+      "summary": "Organize navigation and shared published objects, workflows and functions with the original application editor.",
+      "layer": 5,
+      "authority": "example",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "reference"
+      ],
+      "tags": [
+        "application",
+        "resources",
+        "release",
+        "navigation",
+        "studio"
+      ],
+      "source": "web/packages/build/src/application.tsx",
+      "example": "ApplicationStudioExample",
+      "dependencies": [
+        "ui/panels",
+        "app/record-actions"
+      ],
+      "constraints": [
+        "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.",
+        "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path."
+      ]
+    },
+    {
       "id": "scenario/logic-studio",
       "owner": "@pkg/build",
       "name": "Logic design workbench",
@@ -596,7 +627,8 @@
       ],
       "constraints": [
         "This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.",
-        "A tenant object must be created, tested and published in the connected Application Studio."
+        "A tenant object must be created, tested and published in the connected Application Studio.",
+        "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions."
       ]
     },
     {
@@ -1640,9 +1672,12 @@
       "A labelled boolean choice with an explicit disabled state.": "带标签的布尔选择，支持明确的禁用状态。",
       "A runtime call needs the actual host, a published owner revision and the current member’s permissions.": "运行调用需要实际宿主、已发布能力版本及当前成员的权限。",
       "A tenant object must be created, tested and published in the connected Application Studio.": "租户对象须在已连接的应用工坊创建、测试和发布。",
+      "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions.": "动作条件将已声明的记录路径或输入与固定值或兼容字段比较；关联读取和审批重试均走原动作及申请人当前权限。",
       "Agent run and execution chain": "智能体运行与执行链",
       "An inbox preview is not an approval or permission engine.": "收件箱预览不承担审批或权限引擎职责。",
       "App Shell / Workspace": "应用外壳 / 工作区",
+      "Application release workbench": "整应用发布工作台",
+      "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path.": "应用资源引用原归属方；加入应用不会授予权限。发布审查通过原候选路径冻结已发布依赖。",
       "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
       "Authorized cross-application search": "受权跨应用搜索",
@@ -1684,6 +1719,7 @@
       "Expanded": "展开",
       "File picker": "文件选择器",
       "Flow observation": "流程观测",
+      "Form inputs read declared record paths. The original action checks writes; unavailable sources do not become manual inputs.": "表单参数读取已声明的记录路径。写入由原动作检查；来源不可用时不会改为手动输入。",
       "Form submission": "表单提交",
       "Generated record form": "记录生成表单",
       "Give a task its title, description and visible actions.": "提供任务标题、说明与可见动作。",
@@ -1722,6 +1758,7 @@
       "Only the canonical action owner may authorize and apply a transition.": "只有规范动作的归属方可以授权并应用状态跃迁。",
       "Open": "打开",
       "Open this full-window preview separately; its shell owns routes and saved layout.": "单独打开全窗口预览；外壳负责路由与保存的布局。",
+      "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
       "Page header": "页面标题区",
       "Page workspace and preview": "页面工作台与预览",
       "Pass a scoped RecordSource; this layout does not define a business entity.": "传入限定范围的 RecordSource；布局不定义业务实体。",
@@ -1777,6 +1814,7 @@
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
       "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.": "本地示例在原 WorkflowEditor 展示输入到结果的流程，不执行流程。",
+      "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
       "The offline preview shows the binding only and never executes Wasm or reads tenant data.": "离线预览仅展示绑定，不执行 Wasm 或读取租户数据。",
       "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
       "The same list-detail descriptor serves a live workspace and a read-only sample preview.": "同一列表详情声明用于实际工作台和只读样例预览。",
@@ -1818,6 +1856,7 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/application.tsx",
       "web/packages/build/src/asset-controls.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
@@ -1841,7 +1880,6 @@
       "web/packages/platform/src/processes.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Governance.tsx",
-      "web/apps/catalog/src/PageBuilder.tsx",
       "web/apps/catalog/src/Preview.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
@@ -1854,6 +1892,7 @@
       "web/packages/app/src/capability.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
@@ -1880,6 +1919,7 @@
     ],
     "ui/checkbox": [
       "web/packages/app/src/actions.tsx",
+      "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/process.tsx",
@@ -1917,6 +1957,7 @@
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
@@ -1934,7 +1975,6 @@
       "web/packages/platform/src/people.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Governance.tsx",
-      "web/apps/catalog/src/PageBuilder.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
@@ -1961,6 +2001,7 @@
     ],
     "ui/status": [
       "web/packages/app/src/agents.tsx",
+      "web/packages/build/src/application.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
@@ -1977,7 +2018,6 @@
       "web/packages/pms/src/index.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Governance.tsx",
-      "web/apps/catalog/src/PageBuilder.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
@@ -1986,6 +2026,7 @@
       "web/packages/app/src/agents.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
+      "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
@@ -2005,7 +2046,6 @@
       "web/packages/pms/src/app.tsx",
       "web/apps/catalog/src/Catalog.tsx",
       "web/apps/catalog/src/Governance.tsx",
-      "web/apps/catalog/src/PageBuilder.tsx",
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
@@ -2036,6 +2076,7 @@
     "ui/record-list": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",

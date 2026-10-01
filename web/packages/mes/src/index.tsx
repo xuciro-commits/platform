@@ -304,7 +304,6 @@ export default defineApp({
     { id: "planned", title: () => t("Planned orders"), render: () => <PlannedOrders /> },
     { id: "queue", title: () => t("SFCs"), render: () => <SFCTable title={t("SFCs")} description={t("The lots of every released order, each with its quantity; what waits or is in work first")} /> },
     { id: "holds", title: () => t("Quality holds"), render: () => <SFCTable initial="hold" title={t("Quality holds")} description={t("SFCs held by a nonconformance")} /> },
-    { id: "sfcs", title: () => t("SFCs"), render: () => <SFCTable initial="all" title={t("SFCs")} description={t("The lots of every released order, each with its quantity; what waits or is in work first")} /> },
     { id: "sfc", title: (p) => p.id ?? t("SFC"), render: (p) => <SFCDetail id={p.id ?? ""} /> },
     { id: "equipment", title: () => t("Downtime"), render: () => <Equipment /> },
   ],

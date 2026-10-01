@@ -55,7 +55,7 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 		case build.SchemaProcess:
 			return 2
 		default:
-			return 2
+			return 3
 		}
 	}
 	slices.SortStableFunc(publications, func(a, b build.ReleasePublication) int { return priority(a.Schema) - priority(b.Schema) })

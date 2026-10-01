@@ -39,6 +39,20 @@ func (t *Tenant) bindCapabilityInputs(m platform.Member, q platform.CapabilityIn
 			if q.Record == "" {
 				return refuse("Select a readable source record")
 			}
+			if len(binding.Path) > 0 {
+				typ, id, ok := strings.Cut(q.Record, "/")
+				if !ok || id == "" || binding.Check() != nil {
+					return refuse("Source needs an object, record ID and bounded path")
+				}
+				value, refs, problem := caller.ReadRecordPath(typ, id, binding.Path, now)
+				if problem != nil {
+					return nil, nil, problem
+				}
+				values[name] = value
+				sources = append(sources, refs...)
+				usedRecord = true
+				continue
+			}
 			if subject == nil {
 				typ, id, ok := strings.Cut(q.Record, "/")
 				if !ok || id == "" {
