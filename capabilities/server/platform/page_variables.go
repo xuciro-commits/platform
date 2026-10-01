@@ -139,7 +139,7 @@ func (d *PageDocument) CheckVariables() error {
 			return fail("unsupported identity, scope or type")
 		}
 		if v.Scope == contract.Overlay.Scope && (!slices.Contains(contract.Overlay.ValueTypes, v.Type) || !slices.Contains(contract.Overlay.Modes, v.Mode)) {
-			return fail("overlay variable needs a scalar state, constant or expression")
+			return fail("overlay variable needs a supported local value or resource")
 		}
 		visiting[id] = true
 		if v.Scope == contract.Application.Scope && !slices.Contains(contract.Application.ValueTypes, v.Type) {
@@ -165,8 +165,8 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("resource variable needs only a typed source")
 			}
 			if v.Source.Kind == "plan" {
-				if v.Scope != "page" || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
-					return fail("plan source needs a page query window")
+				if (v.Scope != "page" && v.Scope != "overlay") || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
+					return fail("plan source needs a scoped query window")
 				}
 				break
 			}

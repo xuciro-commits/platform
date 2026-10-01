@@ -57,6 +57,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		if variable.Scope == "application" && (!PageUIProfileSupports(d.UIProfile, "platform.page.v2.8") || variable.Mode != "shared") {
 			return fmt.Errorf("page variable %s needs v2.8 and a shared application binding", id)
 		}
+		if variable.Scope == "overlay" && variable.Mode == "resource" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.11") {
+			return fmt.Errorf("overlay resource %s requires UI profile v2.11", id)
+		}
 		if variable.Scope == "overlay" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") {
 			return fmt.Errorf("page variable %s requires UI profile v2.7", id)
 		}
@@ -96,7 +99,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		byID[section.ID] = true
 		if section.CollectionVariable != "" {
 			v, ok := d.Variables[section.CollectionVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.10") || section.Widget != "table" || !ok || v.Scope != "page" || v.Mode != "resource" || v.Type != "object-set" || v.Source == nil || v.Source.Kind != "plan" || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.10") || section.Widget != "table" || !ok || (v.Scope != "page" && v.Scope != "overlay") || v.Mode != "resource" || v.Type != "object-set" || v.Source == nil || v.Source.Kind != "plan" || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
 				return fmt.Errorf("page section %s needs an exclusive plan window binding", section.ID)
 			}
 		}
@@ -257,7 +260,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		if variable.Source != nil {
 			dependencies = append(dependencies, controls[variable.Source.Section]...)
-			if variable.Source.Kind == "query" {
+			if variable.Source.Kind == "query" || variable.Source.Kind == "record" {
 				for _, s := range sections {
 					if s.ID == variable.Source.Section && s.CollectionVariable != "" {
 						dependencies = append(dependencies, s.CollectionVariable)
@@ -380,8 +383,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		}
 		if node.Kind == "widget" {
 			for _, s := range sections {
-				if s.ID == node.Section && s.CollectionVariable != "" {
-					if _, ok := variables[s.CollectionVariable]; !ok {
+				if s.ID == node.Section && (s.CollectionVariable != "" || s.RecordVariable != "") {
+					if _, ok := variables[s.CollectionVariable]; s.CollectionVariable != "" && !ok {
+						return false
+					}
+					if _, ok := variables[s.RecordVariable]; s.RecordVariable != "" && !ok {
 						return false
 					}
 				}
@@ -464,6 +470,13 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		}
 		if variable.Scope == pageWidgets.Runtime.Loop.Scope && out.Nodes[variable.Owner].Kind != "loop" {
 			delete(out.Variables, id)
+		}
+	}
+	for id, q := range out.Queries {
+		if q.Owner != "" {
+			if _, ok := out.Overlays[q.Owner]; !ok {
+				delete(out.Queries, id)
+			}
 		}
 	}
 	if d.Interface != nil {

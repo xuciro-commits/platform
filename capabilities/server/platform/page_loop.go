@@ -96,8 +96,8 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		total += loop.Limit
 		collection := d.Variables[loop.Collection]
 		item := d.Variables[loop.ItemVariable]
-		if collection.Scope != "page" || collection.Type != "object-set" || collection.Mode != "resource" || collection.Source == nil || (collection.Source.Kind != "query" && collection.Source.Kind != "plan") || collection.Source.Kind == "query" && sectionOwners[collection.Source.Section] != "" {
-			return fmt.Errorf("page loop %s needs an external page query window", id)
+		if !accessible(loop.Collection, "", overlays[id]) || (collection.Scope != "page" && collection.Scope != "overlay") || collection.Type != "object-set" || collection.Mode != "resource" || collection.Source == nil || (collection.Source.Kind != "query" && collection.Source.Kind != "plan") || collection.Source.Kind == "query" && sectionOwners[collection.Source.Section] != "" {
+			return fmt.Errorf("page loop %s needs an external scoped query window", id)
 		}
 		if item.Scope != contract.Scope || item.Type != "record" || item.Mode != "resource" || item.Owner != id || item.Source == nil || item.Source.Kind != contract.Source || item.Source.Node != id {
 			return fmt.Errorf("page loop %s needs its own item record variable", id)
@@ -107,6 +107,12 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		return fmt.Errorf("page loop budget exceeded")
 	}
 	for id, variable := range d.Variables {
+		if variable.Mode == "resource" && variable.Source != nil && variable.Source.Section != "" {
+			producer := sectionOverlays[variable.Source.Section]
+			if (variable.Scope == "page" && producer != "" && PageUIProfileSupports(d.UIProfile, "platform.page.v2.11")) || (variable.Scope == "overlay" && variable.Owner != producer) {
+				return fmt.Errorf("page variable %s resource escapes its producer scope", id)
+			}
+		}
 		if variable.Scope == "overlay" {
 			if _, ok := d.Overlays[variable.Owner]; !ok {
 				return fmt.Errorf("page variable %s needs an existing overlay owner", id)
@@ -121,6 +127,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if !accessible(section.CollectionVariable, "", sectionOverlays[section.ID]) {
+			return fmt.Errorf("page section %s window escapes its overlay scope", section.ID)
+		}
 		owner := sectionOwners[section.ID]
 		if owner != "" && !slices.Contains(contract.RecordWidgets, section.Widget) && !slices.Contains(contract.PresentationWidgets, section.Widget) {
 			return fmt.Errorf("page loop %s does not support widget %s", owner, section.Widget)
@@ -130,7 +139,7 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 		if section.RecordVariable != "" {
 			v := d.Variables[section.RecordVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || (owner == "" || v.Owner != owner) && !(v.Scope == "page" && v.Mode == "input") || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || (owner == "" || v.Scope != "loop-item" || v.Owner != owner) && !(v.Scope == "page" && v.Mode == "input") && !(v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && accessible(section.RecordVariable, "", sectionOverlays[section.ID]) && PageUIProfileSupports(d.UIProfile, "platform.page.v2.11")) || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) {
 				return fmt.Errorf("page section %s record binding escapes its loop scope", section.ID)
 			}
 		}

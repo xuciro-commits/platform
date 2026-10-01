@@ -112,7 +112,7 @@ export function setLayoutKind(document: Document, id: string, kind: Kind): Docum
   if (kind === "loop" && !node.loop) {
     const item = layoutID("item");
     next.variables = { ...next.variables, [item]: { title: "", scope: "loop-item", owner: id, type: "record", mode: "resource", source: { kind: "item", node: id } } };
-    node.loop = { collection: Object.entries(next.variables).find(([, value]) => value.scope === "page" && value.mode === "resource" && (value.source?.kind === "query" || value.source?.kind === "plan"))?.[0] ?? "", itemVariable: item, limit: 50 };
+    node.loop = { collection: Object.entries(next.variables).find(([, value]) => variableAccessible(value,undefined,overlayOwner(next,id)) && value.mode === "resource" && (value.source?.kind === "query" || value.source?.kind === "plan"))?.[0] ?? "", itemVariable: item, limit: 50 };
   }
   if (kind !== "loop") delete node.loop;
   next.uiProfile = pageUIProfile;
@@ -157,7 +157,8 @@ export function removeOverlay(document: Document, id: string): { document: Docum
     if (node.section) sections.add(node.section);
     node.children?.forEach(remove); delete next.nodes[id];
   };
-  remove(overlay.root); delete next.overlays![id]; delete next.variables?.[overlay.openVariable];
+  remove(overlay.root); delete next.overlays![id];
+  next.queries=Object.fromEntries(Object.entries(next.queries??{}).filter(([,q])=>q.owner!==id)); delete next.variables?.[overlay.openVariable];
   for (const [key, variable] of Object.entries(next.variables ?? {})) if (variable.scope === "overlay" && variable.owner === id) delete next.variables![key];
   for (const event of next.events ?? []) if (event.target === overlay.openVariable) sections.add(event.source);
   for (const section of sections) Object.assign(next, removeWidget(next, section));
@@ -194,6 +195,6 @@ export function synchronizeLoopBindings<T extends { id?: string; widget: string;
   return { document: next, sections: sections.map((section) => {
     const leaf = leafOf(document, section.id ?? ""), owner = leaf ? loopOwner(document, leaf) : undefined;
     const item = owner && (pageVariableContract.loop.recordWidgets as readonly string[]).includes(section.widget) ? document.nodes[owner]?.loop?.itemVariable : undefined;
-    return item ? { ...section, selection: undefined, recordVariable: item } : section.recordVariable && document.variables?.[section.recordVariable]?.mode !== "input" ? { ...section, recordVariable: undefined } : section;
+    return item ? { ...section, selection: undefined, recordVariable: item } : section.recordVariable && document.variables?.[section.recordVariable]?.mode !== "input" && document.variables?.[section.recordVariable]?.source?.kind !== "record" ? { ...section, recordVariable: undefined } : section;
   }) };
 }

@@ -5,9 +5,10 @@ import type { PageSessionStore, PageSessionSnapshot, QueryView } from "./Session
 import type { VariableResult } from "./variables";
 import { boundQueryDefinition, compileQueryPlan, queryView, variablePlan, planKey } from "./query-plans";
 
-export function usePageQueries(page: Api.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot) {
+export function usePageQueries(page: Api.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot, overlays:Record<string,Record<string,VariableResult>>={}, editingOverlay?:string) {
   const { source, definitions } = useHost(), plans = page.document?.queries ?? {};
-  const base = Object.entries(plans).map(([id, plan]) => [id, compileQueryPlan(plan, page.document?.variables ?? {}, values, source.entity(plan.object.name), plan.query ? findDefinition(definitions, plan.query.ref) : undefined, pageUIManifest.runtime.query,page.sections??[])] as const);
+  const active=(owner?:string)=>!owner||owner===editingOverlay||values[page.document?.overlays?.[owner]?.openVariable??""]?.status==="value"&&(values[page.document!.overlays![owner]!.openVariable] as {value:unknown}).value===true;
+  const base = Object.entries(plans).map(([id, plan]) => [id, !active(plan.owner)?{status:"empty" as const}:compileQueryPlan(plan, page.document?.variables ?? {}, plan.owner?overlays[plan.owner]??{}:values, source.entity(plan.object.name), plan.query ? findDefinition(definitions, plan.query.ref) : undefined, pageUIManifest.runtime.query,page.sections??[])] as const);
   const compiled = base.map(([id,result]) => [id,queryView(plans[id]!,result,result.status==="value"&&snapshot.views[planKey(id)]?.base===result.signature?snapshot.views[planKey(id)]:undefined,source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query)] as const);
   const [round, rerun] = useState(0);
   const requestKey = JSON.stringify(compiled);

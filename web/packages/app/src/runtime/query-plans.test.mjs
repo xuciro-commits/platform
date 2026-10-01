@@ -44,3 +44,12 @@ test("a page binds its retained query while newer and unreadable latest versions
  assert.equal(compileQueryPlan(bound,variables,values,info,{...definition,queryVersions:{}},contract).status,"error");
  assert.equal(queryView(bound,compiled,{sort:["id"]},info,definition,contract).status,"error");
 });
+
+test("overlay query parameters accept their own locals and reject foreign roots, page leaks and selected plan results",()=>{
+ const locals={local:{scope:"overlay",owner:"picker",type:"string",mode:"state",initial:"A"}},values={local:{status:"value",value:"A"}};
+ const scoped={object:plan.object,owner:"picker",limit:20,search:{variable:"local"}};
+ assert.equal(compileQueryPlan(scoped,locals,values,info,undefined,contract).status,"value");
+ for(const owner of [undefined,"other"])assert.equal(compileQueryPlan({...scoped,owner},locals,values,info,undefined,contract).status,"error");
+ const selected={local:{scope:"overlay",owner:"picker",type:"record",mode:"resource",source:{kind:"record",section:"table"}}};
+ assert.equal(compileQueryPlan(scoped,selected,values,info,undefined,contract,[{id:"table",collectionVariable:"window"}]).status,"error");
+});

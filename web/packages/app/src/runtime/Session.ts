@@ -15,7 +15,7 @@ export type PageSessionSnapshot = {
   filters: Record<string, Record<string, unknown>>;
   queries: Record<string, ReadState<QueryWindow>>;
 };
-export type SelectionPlan = { objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
+export type SelectionPlan = { objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;loops?:ReadonlySet<string>}>; querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
 
 /** One member/definition-scoped presentation session. References and query
  * windows are values; record fields/revisions are a separate ephemeral cache.
@@ -70,12 +70,22 @@ export class PageSessionStore {
   }
   private overlayEpochs = new Map<string, number>();
   overlayEpoch(owner: string) { return this.overlayEpochs.get(owner) ?? 0; }
-  endOverlay(owner: string) { this.overlayEpochs.set(owner, this.overlayEpoch(owner) + 1); }
+  endOverlay(owner: string) {
+    this.overlayEpochs.set(owner, this.overlayEpoch(owner) + 1);
+    const scope=this.plan.overlayScopes?.get(owner);
+    if(!scope)return;
+    const queries={...this.state.queries},views={...this.state.views};
+    for(const key of scope.queries){this.queries.delete(key);this.querySignatures.delete(key);this.queryData.delete(key);delete queries[key];delete views[key];}
+    const items={...this.state.items};
+    for(const owner of scope.loops??[]){for(const [key,parent] of this.itemOwners){if(parent===owner){delete items[key];this.itemOwners.delete(key)}}this.loopItems.delete(owner);this.loopQueries.delete(owner);}
+    this.publish({queries,views,items,records:this.clear([...scope.selections])});
+  }
 
   resetQueries(keys: string[]) {
     const queries = { ...this.state.queries };
     for (const key of keys) { this.queries.delete(key); this.querySignatures.delete(key);this.queryData.delete(key); delete queries[key]; }
-    this.publish({ queries });
+    const selections=keys.flatMap((key)=>[...(this.plan.querySelections?.get(key)??[])]);
+    this.publish({ queries, ...(selections.length?{records:this.clear(selections)}:{}) });
   }
   setItemScalar(owner: string, key: string, id: string, value: string | boolean) {
     this.itemOwners.set(key, owner);

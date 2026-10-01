@@ -10,6 +10,7 @@ import (
 // PageQuery is a presentation-owned read plan over the original record API.
 // A named query keeps its source version and fixed owner conditions.
 type PageQuery struct {
+	Owner      string               `json:"owner,omitempty"` // empty: page; otherwise an Overlay identity
 	Title      string               `json:"title,omitempty"`
 	Object     AssetRef             `json:"object"`
 	Query      *AssetBinding        `json:"query,omitempty"`
@@ -64,7 +65,7 @@ func (d *PageDocument) CheckQueries(sections []Section) error {
 			if v.Source.Kind == "plan" {
 				return true
 			}
-			if v.Source.Kind == "query" {
+			if v.Source.Section != "" {
 				for _, s := range sections {
 					if s.ID == v.Source.Section && s.CollectionVariable != "" {
 						return true
@@ -83,6 +84,11 @@ func (d *PageDocument) CheckQueries(sections []Section) error {
 	}
 	total := 0
 	for id, q := range d.Queries {
+		if q.Owner != "" {
+			if _, ok := d.Overlays[q.Owner]; !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.11") {
+				return fmt.Errorf("page query %s needs a v2.11 overlay owner", id)
+			}
+		}
 		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || q.Object.Check() != nil || q.Object.Kind != AssetObject || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Conditions) > c.MaxConditions || len(q.Sort) > c.MaxSort {
 			return fmt.Errorf("page query %s has an invalid identity, object or budget", id)
 		}
@@ -109,7 +115,7 @@ func (d *PageDocument) CheckQueries(sections []Section) error {
 			}
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
-				if !ok || (v.Scope != "page" && v.Scope != "application") || !slices.Contains([]string{"string", "boolean", "record"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
+				if !ok || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "")) || !slices.Contains([]string{"string", "boolean", "record"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
 					return fmt.Errorf("page query %s parameter escapes its input scope", id)
 				}
 			} else {
@@ -134,7 +140,8 @@ func (d *PageDocument) CheckQueries(sections []Section) error {
 	}
 	for id, v := range d.Variables {
 		if v.Source != nil && v.Source.Kind == "plan" {
-			if _, ok := d.Queries[v.Source.Query]; !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") {
+			q, ok := d.Queries[v.Source.Query]
+			if !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") || !(q.Owner == "" && v.Scope == "page" || q.Owner != "" && v.Scope == "overlay" && v.Owner == q.Owner) {
 				return fmt.Errorf("page variable %s needs an existing query plan", id)
 			}
 		}

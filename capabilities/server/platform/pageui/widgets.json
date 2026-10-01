@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.10",
+  "uiProfile": "platform.page.v2.11",
   "widgets": [
     {
       "componentID": "table",
@@ -498,7 +498,8 @@
     "platform.page.v2.7",
     "platform.page.v2.8",
     "platform.page.v2.9",
-    "platform.page.v2.10"
+    "platform.page.v2.10",
+    "platform.page.v2.11"
   ],
   "runtime": {
     "scope": "page",
@@ -603,12 +604,15 @@
       "scope": "overlay",
       "valueTypes": [
         "string",
-        "boolean"
+        "boolean",
+        "record",
+        "object-set"
       ],
       "modes": [
         "state",
         "constant",
-        "derived"
+        "derived",
+        "resource"
       ]
     },
     "application": {

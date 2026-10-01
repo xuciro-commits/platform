@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Query scope": "查询作用域",
+  "This widget reads the bound record selection.": "此组件读取绑定的记录选择。",
   "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",
   "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it.": "查询使用原记录读取与成员权限；页面明确选择保留的来源版本，后续草稿与发布不会替换它。",
 
@@ -1084,6 +1086,8 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+  "Query scope": "查询作用域",
+  "This widget reads the bound record selection.": "此组件读取绑定的记录选择。",
   "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",
   "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it.": "查询使用原记录读取与成员权限；页面明确选择保留的来源版本，后续草稿与发布不会替换它。",
 

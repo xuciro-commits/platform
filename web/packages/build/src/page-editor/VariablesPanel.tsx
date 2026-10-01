@@ -14,6 +14,9 @@ const expression = (op: string): Api.PageExpression => {
 export function VariablesPanel({ document, sections, values, onChange, application = false }: { application?: boolean; document: Api.PageDocument; sections: { id?: string; widget: string; title?: string }[]; values: Record<string, PageVariableValue>; onChange: (document: Api.PageDocument) => void }) {
   const { definitions } = useHost();
   const shared = Object.fromEntries(definitions.flatMap((d) => Object.entries(d.application?.variables ?? {})));
+  const sectionOwner=(section?:string)=>{const node=Object.entries(document.nodes).find(([,n])=>n.section===section)?.[0];return node?overlayOwner(document,node):undefined;};
+  const sourceSections=(scope:string,owner?:string)=>sections.filter((s)=>sectionOwner(s.id)===(scope==="overlay"?owner:undefined));
+  const sourcePlans=(scope:string,owner?:string)=>Object.entries(document.queries??{}).filter(([,q])=>(q.owner??undefined)===(scope==="overlay"?owner:undefined));
   const variables = document.variables ?? {}, [chosen, choose] = useState("");
   const id = variables[chosen] ? chosen : Object.keys(variables)[0] ?? "", variable = variables[id];
   const update = (next: Variables) => onChange({ ...document, uiProfile: pageUIProfile, variables: next });
@@ -37,7 +40,7 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
       <label className="grid gap-1 text-xs">{t("Variable scope")}<Select value={variable.scope === "page" || variable.scope === "application" ? variable.scope : `${variable.scope}:${variable.owner}`} disabled={application || variable.source?.kind === "item" || variable.mode === "input" || variable.mode === "shared"} onChange={(event) => {
         const value = event.target.value, at = value.indexOf(":");
         const scope = value === "page" ? "page" : value.slice(0, at), owner = value === "page" ? undefined : value.slice(at + 1);
-        patch({ scope, owner, ...(scope === "overlay" && variable.mode === "resource" ? { mode: "state", type: "string", initial: "", source: undefined, expression: undefined } : {}) });
+        patch({ scope, owner, ...(variable.mode === "resource" ? { mode: "state", type: "string", initial: "", source: undefined, expression: undefined } : {}) });
       }}><option value="page">{t("Page")}</option>{(application || variable.mode === "shared") && <option value="application">{t("Application")}</option>}{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={`overlay:${id}`}>{t("Overlay")}: {overlay.title}</option>)}{Object.entries(document.nodes).filter(([, node]) => node.kind === "loop").map(([id, node], at) => <option key={id} value={`loop-item:${id}`}>{node.title || t("Loop {n}", { n: at + 1 })}</option>)}</Select></label>
       {variable.scope === "overlay" && <p className="text-xs text-muted">{t("Values belong to this overlay and reset when it closes.")}</p>}
       {variable.scope === "loop-item" && <p className="text-xs text-muted">{t("Values are local to each loop record; the page inspector has no active item.")}</p>}
@@ -48,12 +51,12 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
           patch({ scope:"application", owner:undefined, mode, type:declaration?.type ?? "string", writable:declaration?.mode === "state", source:{kind:"application",variable:key ?? ""}, initial:undefined, expression:undefined });
         } else if (mode === "resource") {
           const resource = pageVariableContract.resources[0];
-          patch({ mode, type: resource.type, initial: undefined, expression: undefined, source: { kind: resource.kind, section: sections.find((section) => section.widget === resource.widget)?.id ?? "" } });
+          patch({ mode, type: resource.type, initial: undefined, expression: undefined, source: { kind: resource.kind, section: sourceSections(variable.scope,variable.owner).find((section) => section.widget === resource.widget)?.id ?? "" } });
         } else {
           const type = variable.type === "string" ? "string" : "boolean";
           patch({ mode, scope: variable.mode === "shared" ? "page" : variable.scope, writable:undefined, type, source: undefined, initial: mode === "derived" ? undefined : initial(type), expression: mode === "derived" ? expression(type === "string" ? "concat" : "equal") : undefined });
         }
-      }}>{variable.mode === "input" && <option value="input">{t("Page input")}</option>}{!application && (Object.keys(shared).length > 0 || variable.mode === "shared") && <option value="shared">{t("Application binding")}</option>}<option value="state">{t("State")}</option><option value="constant">{t("Constant")}</option><option value="derived">{t("Derived")}</option>{variable.scope === "page" || variable.source?.kind === "item" ? <option value="resource">{t("Resource output")}</option> : null}</Select></label>
+      }}>{variable.mode === "input" && <option value="input">{t("Page input")}</option>}{!application && (Object.keys(shared).length > 0 || variable.mode === "shared") && <option value="shared">{t("Application binding")}</option>}<option value="state">{t("State")}</option><option value="constant">{t("Constant")}</option><option value="derived">{t("Derived")}</option>{variable.scope === "page" || variable.scope === "overlay" || variable.source?.kind === "item" ? <option value="resource">{t("Resource output")}</option> : null}</Select></label>
       <label className="grid gap-1 text-xs">{t("Value type")}<Select value={variable.type} disabled={variable.mode === "derived" || variable.mode === "resource" || variable.mode === "input" || variable.mode === "shared"} onChange={(event) => patch({ type: event.target.value, initial: initial(event.target.value) })}>
         <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option>{variable.mode === "resource" && <option value={variable.type}>{t(variable.type)}</option>}</Select></label>
       {(variable.mode === "state" || variable.mode === "constant") && (targets.length ? <label className="grid gap-1 text-xs">{t("Initial tab")}<Select value={String(variable.initial)} onChange={(event) => patch({ initial: event.target.value })}>
@@ -61,14 +64,14 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
         : variable.type === "boolean" ? <Checkbox checked={variable.initial === true} onChange={(value) => patch({ initial: value })}>{t("Initial value")}</Checkbox>
         : <label className="grid gap-1 text-xs">{t("Initial value")}<Input value={String(variable.initial ?? "")} onChange={(event) => patch({ initial: event.target.value })} /></label>)}
       {variable.mode === "shared" && <label className="grid gap-1 text-xs">{t("Application variable")}<Select value={variable.source?.variable ?? ""} onChange={(event) => { const source = shared[event.target.value]; if (source) patch({ type:source.type, writable:source.mode === "state", source:{kind:"application",variable:event.target.value} }); }}><option value="">{t("Choose an application variable")}</option>{Object.entries(shared).map(([id,v]) => <option key={id} value={id}>{v.title || id}</option>)}</Select></label>}
-      {variable.mode === "resource" && variable.scope === "page" && <>
+      {variable.mode === "resource" && (variable.scope === "page" || variable.scope === "overlay") && <>
         <label className="grid gap-1 text-xs">{t("Resource output kind")}<Select value={variable.source?.kind ?? "record"} onChange={(event) => {
-          if (event.target.value === "plan") { patch({type:"object-set",source:{kind:"plan",query:Object.keys(document.queries??{})[0]??""}});return; }
+          if (event.target.value === "plan") { patch({type:"object-set",source:{kind:"plan",query:sourcePlans(variable.scope,variable.owner)[0]?.[0]??""}});return; }
           const resource = pageVariableContract.resources.find((resource) => resource.kind === event.target.value)!;
-          patch({ type: resource.type, source: { kind: resource.kind, section: sections.find((section) => section.widget === resource.widget)?.id ?? "" } });
-        }}><option value="record">{t("Record selection")}</option><option value="filter">{t("Filter values")}</option><option value="query">{t("Query window")}</option>{Object.keys(document.queries??{}).length>0&&<option value="plan">{t("Query plan")}</option>}</Select></label>
-        {variable.source?.kind === "plan" ? <label className="grid gap-1 text-xs">{t("Query plan")}<Select value={variable.source.query??""} onChange={(event)=>patch({source:{kind:"plan",query:event.target.value}})}>{Object.entries(document.queries??{}).map(([id,query])=><option key={id} value={id}>{query.title||id}</option>)}</Select></label> : <label className="grid gap-1 text-xs">{t("Source widget")}<Select value={variable.source?.section ?? ""} onChange={(event) => patch({ source: { kind: variable.source!.kind, section: event.target.value } })}>
-          <option value="">{t("Choose a source widget")}</option>{sections.filter((section) => section.widget === pageVariableContract.resources.find((resource) => resource.kind === variable.source?.kind)?.widget).map((section) => <option key={section.id} value={section.id}>{section.title || section.widget}</option>)}
+          patch({ type: resource.type, source: { kind: resource.kind, section: sourceSections(variable.scope,variable.owner).find((section) => section.widget === resource.widget)?.id ?? "" } });
+        }}><option value="record">{t("Record selection")}</option>{variable.scope==="page"&&<option value="filter">{t("Filter values")}</option>}<option value="query">{t("Query window")}</option>{sourcePlans(variable.scope,variable.owner).length>0&&<option value="plan">{t("Query plan")}</option>}</Select></label>
+        {variable.source?.kind === "plan" ? <label className="grid gap-1 text-xs">{t("Query plan")}<Select value={variable.source.query??""} onChange={(event)=>patch({source:{kind:"plan",query:event.target.value}})}>{sourcePlans(variable.scope,variable.owner).map(([id,query])=><option key={id} value={id}>{query.title||id}</option>)}</Select></label> : <label className="grid gap-1 text-xs">{t("Source widget")}<Select value={variable.source?.section ?? ""} onChange={(event) => patch({ source: { kind: variable.source!.kind, section: event.target.value } })}>
+          <option value="">{t("Choose a source widget")}</option>{sourceSections(variable.scope,variable.owner).filter((section) => section.widget === pageVariableContract.resources.find((resource) => resource.kind === variable.source?.kind)?.widget).map((section) => <option key={section.id} value={section.id}>{section.title || section.widget}</option>)}
         </Select></label>}
         <p className="text-xs text-muted">{t("Uses the widget's original binding and read permissions. A query window is not the full object set.")}</p>
       </>}

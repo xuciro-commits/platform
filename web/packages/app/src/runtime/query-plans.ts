@@ -38,7 +38,7 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
 export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[]): QueryPlanResult {
   if (!info || info.type !== plan.object.name || plan.object.kind !== "object" || plan.limit < 1 || plan.limit > contract.maxLimit || !Number.isInteger(plan.limit) || !Number.isInteger(plan.offset ?? 0) || (plan.offset ?? 0) < 0 || (plan.offset ?? 0) > contract.maxOffset || (plan.conditions?.length ?? 0) > contract.maxConditions || (plan.sort?.length ?? 0) > contract.maxSort) return failed("Query plan is unavailable or exceeds its budget.");
   const field = (name: string) => ["id", "created", "changed"].includes(name) ? { name, type: name === "id" ? "text" : "datetime", ref: undefined } : info.fields.find((field) => field.name === name);
-  const usesPlan = (id: string, seen = new Set<string>()): boolean => { if (seen.has(id)) return false; seen.add(id); const variable = variables[id]; return variable?.source?.kind === "plan" || variable?.source?.kind === "query" && !!sections.find((s)=>s.id===variable.source!.section)?.collectionVariable || !!variable?.expression?.args.some((arg) => arg.variable && usesPlan(arg.variable, seen)); };
+  const usesPlan = (id: string, seen = new Set<string>()): boolean => { if (seen.has(id)) return false; seen.add(id); const variable = variables[id]; return variable?.source?.kind === "plan" || !!variable?.source?.section && !!sections.find((s)=>s.id===variable.source!.section)?.collectionVariable || !!variable?.expression?.args.some((arg) => arg.variable && usesPlan(arg.variable, seen)); };
   const read = (binding: Api.PageValue): QueryValueResult => {
     if (!!binding.variable === (binding.literal !== undefined)) return { status: "error", code: "Query value needs one variable or literal." };
     if (!binding.variable) {
@@ -47,7 +47,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
       return {status:"value",value:value as string|boolean|number};
     }
     const variable = variables[binding.variable];
-    if (!variable || !["page", "application"].includes(variable.scope) || usesPlan(binding.variable)) return { status: "error", code: "Query parameter escapes its input scope." };
+    if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner) || usesPlan(binding.variable)) return { status: "error", code: "Query parameter escapes its input scope." };
     return values[binding.variable] ?? { status: "empty" };
   };
   const scalar = (value: QueryValueResult & { status: "value" }) => typeof value.value === "object" ? value.value.kind === "record" ? value.value.reference.id : undefined : value.value;

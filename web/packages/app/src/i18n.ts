@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Overlay variable needs a supported local value or resource": "浮层变量需要受支持的局部值或资源。",
+  "Plan source needs a scoped query window": "计划来源需要对应作用域的查询窗口。",
   "Query window is unavailable.": "查询窗口不可用。",
   "Query window offset exceeds its budget.": "查询窗口起点超出预算。",
   "This plan owns its search parameter.": "此计划拥有搜索参数。",
@@ -233,6 +235,8 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+  "Overlay variable needs a supported local value or resource": "浮层变量需要受支持的局部值或资源。",
+  "Plan source needs a scoped query window": "计划来源需要对应作用域的查询窗口。",
   "Generated record form": "记录生成表单",
   "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
   "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions.": "通过工作区 Host 接入。目录预览使用本地示例，不授予权限。",

@@ -934,6 +934,7 @@ export type PagePort = {
 };
 
 export type PageQuery = {
+  owner?: string;
   title?: string;
   object: AssetRef;
   query?: AssetBinding;
@@ -1531,7 +1532,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.10",
+  "uiProfile": "platform.page.v2.11",
   "widgets": [
     {
       "componentID": "table",
@@ -2030,7 +2031,8 @@ export const pageUIManifest = {
     "platform.page.v2.7",
     "platform.page.v2.8",
     "platform.page.v2.9",
-    "platform.page.v2.10"
+    "platform.page.v2.10",
+    "platform.page.v2.11"
   ],
   "runtime": {
     "scope": "page",
@@ -2135,12 +2137,15 @@ export const pageUIManifest = {
       "scope": "overlay",
       "valueTypes": [
         "string",
-        "boolean"
+        "boolean",
+        "record",
+        "object-set"
       ],
       "modes": [
         "state",
         "constant",
-        "derived"
+        "derived",
+        "resource"
       ]
     },
     "application": {
