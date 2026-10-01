@@ -171,3 +171,20 @@ func TestTableCollectionPortIsVersionedAndExclusive(t *testing.T) {
 		t.Fatal("table output introduced a plan dependency cycle")
 	}
 }
+
+func TestFrozenQueryObjectChoiceProjection(t *testing.T) {
+	for _, body := range []string{`{"type":"sample.note","fields":[{"name":"bucket","type":"choice","choices":"A, B"}]}`, `{"type":"sample.note","fields":[{"name":"bucket","type":"choice","choices":["A","B"]}]}`} {
+		object, err := queryObjectDescriptor([]byte(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := Page{Document: &PageDocument{Variables: map[string]PageVariable{}}}
+		q := PageQuery{Object: AssetRef{App: "sample", Kind: AssetObject, Name: "sample.note"}, Limit: 10, Conditions: []PageQueryCondition{{Field: "bucket", Op: "=", Value: PageValue{Literal: json.RawMessage(`"B"`)}}}}
+		if err := p.CheckQuerySchema(q, object, nil); err != nil {
+			t.Fatal(err)
+		}
+		if len(object.Fields[0].Choices) != 2 || object.Fields[0].Choices[1] != "B" {
+			t.Fatal("source choices changed during projection")
+		}
+	}
+}

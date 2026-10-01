@@ -18,6 +18,24 @@ export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):st
  const local=scoped&&owner&&(page.sections??[]).some((s)=>s.widget==="table"&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
  return recordSlot(object,name,local?owner:undefined);
 }
+export const filterSlot=(object:string,owner?:string)=>`${owner?`overlay:${owner}/`:""}${object}`;
+export function filterOwner(page:Api.Page,section:Api.Section):string|undefined {
+ return Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?sectionOverlay(page,section.id??""):undefined;
+}
+export function filtersForOwner(filters:PageSessionSnapshot["filters"],owner?:string) {
+ const prefix=owner?`overlay:${owner}/`:"";
+ return Object.fromEntries(Object.entries(filters).filter(([key])=>owner?key.startsWith(prefix):!key.startsWith("overlay:")).map(([key,fields])=>[owner?key.slice(prefix.length):key,fields]));
+}
+export function filterSessionBindings(page:Api.Page) {
+ const selections=new Map<string,Set<string>>(),queries=new Map<string,Set<string>>();
+ for(const section of page.sections??[]){
+  if(section.widget!=="table"||section.collectionVariable)continue;
+  const key=filterSlot(section.object?.name||page.object.name,filterOwner(page,section));
+  if(!selections.has(key))selections.set(key,new Set());selections.get(key)!.add(selectionSlot(page,section));
+  if(!queries.has(key))queries.set(key,new Set());queries.get(key)!.add(section.id??`section:${page.sections!.indexOf(section)}`);
+ }
+ return {filterSelections:selections,filterQueries:queries};
+}
 export function overlaySessionScopes(page:Api.Page) {
  const document=page.document;
  return new Map(Object.entries(document?.overlays??{}).map(([owner,overlay])=>{
@@ -26,6 +44,7 @@ export function overlaySessionScopes(page:Api.Page) {
   return [owner,{
    queries:new Set([...sections.map((s)=>s.id??""),...Object.entries(document?.queries??{}).filter(([,q])=>q.owner===owner).map(([id])=>`plan/${id}`)]),
    selections:new Set(sections.map((s)=>selectionSlot(page,s)).filter((key)=>key.startsWith(`overlay:${owner}/`))),
+   filters:new Set(sections.filter((s)=>s.widget==="filter").map((s)=>filterSlot(s.object?.name||page.object.name,filterOwner(page,s))).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    loops:new Set([...nodes].filter((id)=>document?.nodes[id]?.kind==="loop")),
   }];
  }));
@@ -47,7 +66,7 @@ export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot)
       value = state?.status === "value" ? { status: "value", value: { kind: "record", reference: state.value } }
         : state?.status === "pending" ? { status: "pending" } : state?.status === "error" ? { status: "error", code: "Resource read failed" } : { status: "empty" };
     } else if (source.kind === "filter") {
-      const fields = snapshot.filters[object] ?? {}, payload = { kind: "filter" as const, object, fields };
+      const fields = snapshot.filters[filterSlot(object,filterOwner(page,section))] ?? {}, payload = { kind: "filter" as const, object, fields };
       value = Object.keys(fields).length ? { status: "value", value: payload } : { status: "empty", value: payload };
     } else {
       const state = snapshot.queries[source.section ?? ""];

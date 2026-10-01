@@ -1512,5 +1512,43 @@
         }
       }
     }
+  },
+  {
+    "name": "typed overlay filter resource",
+    "valid": true,
+    "overlay": "panel",
+    "variables": {
+      "filter": {
+        "scope": "overlay",
+        "owner": "panel",
+        "mode": "resource",
+        "type": "filter",
+        "source": {
+          "kind": "filter",
+          "section": "filters"
+        }
+      }
+    },
+    "resources": {
+      "filter": {
+        "status": "value",
+        "value": {
+          "kind": "filter",
+          "object": "sample.note",
+          "fields": {
+            "active": true
+          }
+        }
+      }
+    },
+    "values": {
+      "filter": {
+        "kind": "filter",
+        "object": "sample.note",
+        "fields": {
+          "active": true
+        }
+      }
+    }
   }
 ]

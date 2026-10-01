@@ -33,7 +33,7 @@ func TestOverlayQueryFreezeProjectionAndReplay(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	submit(build.ObjectType, "object", "create", map[string]any{"name": "note", "title": "Note", "access": []build.Access{{Role: build.User, Read: "all"}}, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
+	submit(build.ObjectType, "object", "create", map[string]any{"name": "note", "title": "Note", "access": []build.Access{{Role: build.User, Read: "all"}}, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}, {Name: "active", Title: "Active", Type: "boolean", Read: []string{build.Builder}}}})
 	submit(build.ObjectType, "object", "publish", map[string]any{})
 	object := platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.note"}
 	doc := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{
@@ -41,7 +41,11 @@ func TestOverlayQueryFreezeProjectionAndReplay(t *testing.T) {
 		Overlays: map[string]platform.PageOverlay{"picker": {Root: "picker", Kind: "modal", Title: "Picker", OpenVariable: "open"}}, Variables: map[string]platform.PageVariable{
 			"open": {Scope: "page", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)}, "local": {Scope: "overlay", Owner: "picker", Type: "string", Mode: "state", Initial: json.RawMessage(`"initial"`)}, "window": {Scope: "overlay", Owner: "picker", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "read"}}, "selected": {Scope: "overlay", Owner: "picker", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "table"}}},
 		Queries: map[string]platform.PageQuery{"read": {Owner: "picker", Object: object, Search: &platform.PageValue{Variable: "local"}, Conditions: []platform.PageQueryCondition{{Field: "secret", Op: "=", Value: platform.PageValue{Literal: json.RawMessage(`"private"`)}}}, Limit: 20}}, Events: []platform.PageEventBinding{{Source: "trigger", Event: "click", Target: "open", Value: json.RawMessage(`true`)}}}
+	doc.Nodes["picker"] = platform.PageLayoutNode{Kind: "rows", Children: []string{"input", "filters", "table", "detail"}}
+	doc.Nodes["filters"] = platform.PageLayoutNode{Kind: "widget", Section: "filters"}
+	doc.Variables["localFilters"] = platform.PageVariable{Scope: "overlay", Owner: "picker", Type: "filter", Mode: "resource", Source: &platform.PageResourceSource{Kind: "filter", Section: "filters"}}
 	sections := []build.Section{{ID: "trigger", Widget: "button", ConfigVersion: 1}, {ID: "input", Widget: "input", ConfigVersion: 1}, {ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"note"}, CollectionVariable: "window"}, {ID: "detail", Widget: "detail", ConfigVersion: 1, Fields: []string{"note"}, RecordVariable: "selected"}}
+	sections = append(sections, build.Section{ID: "filters", Widget: "filter", ConfigVersion: 1, Fields: []string{"active"}})
 	submit(build.PageType, "page", "create", map[string]any{"name": "work", "title": "Work", "object": object.Name, "sections": sections, "document": doc})
 	preview, err := tn.PreviewRelease(member, platform.AssetPage, "page")
 	if err != nil || preview.Diagnostic != "" {
@@ -71,7 +75,7 @@ func TestOverlayQueryFreezeProjectionAndReplay(t *testing.T) {
 	for _, current := range []*Tenant{tn, restored} {
 		for _, d := range current.definitions {
 			if d.Page != nil && d.Ref.Name == "work" {
-				if d.Page.Document.Queries["read"].Owner != "picker" || d.Page.Document.Queries["read"].Limit != 20 || d.Page.Document.Variables["selected"].Owner != "picker" {
+				if d.Page.Document.Queries["read"].Owner != "picker" || d.Page.Document.Queries["read"].Limit != 20 || d.Page.Document.Variables["selected"].Owner != "picker" || d.Page.Document.Variables["localFilters"].Source.Kind != "filter" || d.Page.Document.Variables["localFilters"].Owner != "picker" {
 					t.Fatal("overlay ownership or frozen plan drifted")
 				}
 			}
@@ -79,6 +83,9 @@ func TestOverlayQueryFreezeProjectionAndReplay(t *testing.T) {
 		reader, _ := current.Member("reader")
 		for _, d := range current.Definitions(reader) {
 			if d.Page != nil && d.Ref.Name == "work" {
+				if _, ok := d.Page.Document.Variables["localFilters"]; ok {
+					t.Fatal("hidden filter resource exposed")
+				}
 				if len(d.Page.Document.Queries) != 0 {
 					t.Fatal("private overlay plan exposed")
 				}

@@ -15,7 +15,7 @@ export type PageSessionSnapshot = {
   filters: Record<string, Record<string, unknown>>;
   queries: Record<string, ReadState<QueryWindow>>;
 };
-export type SelectionPlan = { objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;loops?:ReadonlySet<string>}>; querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
+export type SelectionPlan = { objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;filters?:ReadonlySet<string>;loops?:ReadonlySet<string>}>; filterSelections?:ReadonlyMap<string,ReadonlySet<string>>;filterQueries?:ReadonlyMap<string,ReadonlySet<string>>;querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
 
 /** One member/definition-scoped presentation session. References and query
  * windows are values; record fields/revisions are a separate ephemeral cache.
@@ -74,11 +74,12 @@ export class PageSessionStore {
     this.overlayEpochs.set(owner, this.overlayEpoch(owner) + 1);
     const scope=this.plan.overlayScopes?.get(owner);
     if(!scope)return;
-    const queries={...this.state.queries},views={...this.state.views};
+    const queries={...this.state.queries},views={...this.state.views},filters={...this.state.filters};
+    for(const key of scope.filters??[])delete filters[key];
     for(const key of scope.queries){this.queries.delete(key);this.querySignatures.delete(key);this.queryData.delete(key);delete queries[key];delete views[key];}
     const items={...this.state.items};
     for(const owner of scope.loops??[]){for(const [key,parent] of this.itemOwners){if(parent===owner){delete items[key];this.itemOwners.delete(key)}}this.loopItems.delete(owner);this.loopQueries.delete(owner);}
-    this.publish({queries,views,items,records:this.clear([...scope.selections])});
+    this.publish({queries,views,items,filters,records:this.clear([...scope.selections])});
   }
 
   resetQueries(keys: string[]) {
@@ -176,17 +177,21 @@ export class PageSessionStore {
     this.publish({ records: this.clear([key]), queries: this.invalidate([key]) });
     if (reference) void this.read(key, reference);
   }
-  filter(object: string, field: string, value: unknown) {
+  filter(object: string, field: string, value: unknown, owner?:string) {
+    const filterKey=owner?`overlay:${owner}/${object}`:object;
+    if(owner&&!this.plan.overlayScopes?.get(owner)?.filters?.has(filterKey))return;
     const descriptor = this.source.entity(object)?.fields.find((item) => item.name === field);
     if (!descriptor || !["choice", "boolean", "reference"].includes(descriptor.type)) return;
     if (value !== undefined && value !== "" && (descriptor.type === "boolean" ? typeof value !== "boolean"
       : typeof value !== "string" || descriptor.type === "choice" && !descriptor.choices?.includes(value))) return;
-    if (Object.is(this.state.filters[object]?.[field], value === "" ? undefined : value)) return;
+    if (Object.is(this.state.filters[filterKey]?.[field], value === "" ? undefined : value)) return;
     // Filtering invalidates every selection over this object and its descendants.
-    const keys = [...this.plan.objects].filter(([, type]) => type === object).map(([key]) => key);
-    const fields = { ...this.state.filters[object] };
+    const keys = this.plan.filterSelections?[...(this.plan.filterSelections.get(filterKey)??[])]:[...this.plan.objects].filter(([,type])=>type===object).map(([key])=>key);
+    const fields = { ...this.state.filters[filterKey] };
     if (value === undefined || value === "") delete fields[field]; else fields[field] = value;
-    this.publish({ filters: { ...this.state.filters, [object]: fields }, records: this.clear(keys), queries: this.invalidate(keys, object) });
+    const queries=this.invalidate(keys,this.plan.filterQueries?undefined:object);
+    for(const key of this.plan.filterQueries?.get(filterKey)??[]){this.queries.delete(key);this.querySignatures.delete(key);this.queryData.delete(key);queries[key]={status:"empty"};}
+    this.publish({filters:{...this.state.filters,[filterKey]:fields},records:this.clear(keys),queries});
   }
   private async read(key: string, reference: RecordReference) {
     const epoch = (this.recordEpoch.get(key) ?? 0) + 1, source = this.source, scope = source.scope;

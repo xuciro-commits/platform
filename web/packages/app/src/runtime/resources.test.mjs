@@ -28,3 +28,24 @@ test("closing an overlay clears its windows, views, selections and item state wh
  pending[1].resolve({records:[{id:"current",revision:1}],total:1});await reopened;assert.equal(store.snapshot().queries["plan/read"].value.records[0].id,"current");
  store.dispose();
 });
+
+test("local filter resources use their owning root and retiring the root preserves page filters and plan windows",async()=>{
+ const {filterSessionBindings,filterSlot,filterOwner,filtersForOwner}=await import("./resources.ts");
+ const doc=structuredClone(page);doc.document.uiProfile="platform.page.v2.13";doc.sections.push({id:"pageFilter",widget:"filter"},{id:"localFilter",widget:"filter"});doc.document.nodes.pageFilter={kind:"widget",section:"pageFilter"};doc.document.nodes.root.children.push("pageFilter");doc.document.nodes.localFilter={kind:"widget",section:"localFilter"};doc.document.nodes.panel.children.unshift("localFilter");doc.sections.find(s=>s.id==="local").collectionVariable=undefined;
+ doc.document.variables.localFilter={scope:"overlay",owner:"picker",type:"filter",mode:"resource",source:{kind:"filter",section:"localFilter"}};
+ const root=selectionSlot(doc,doc.sections[0]),local=selectionSlot(doc,doc.sections[1]),other=selectionSlot(doc,doc.sections[3]),pending=[];
+ const source={entity:()=>({fields:[{name:"active",type:"boolean"},{name:"state",type:"choice",choices:["open","done"]},{name:"hidden",type:"text"}]}),get:async(_,id)=>({record:{id,revision:1}}),list:()=>{const read=deferred();pending.push(read);return read.promise;}};
+ const store=new PageSessionStore(source,{objects:new Map([[root,"sample.note"],[local,"sample.note"],[other,"sample.note"]]),children:new Map(),queryParents:new Map(),overlayScopes:overlaySessionScopes(doc),...filterSessionBindings(doc)});
+ for(const [slot,id] of [[root,"page"],[local,"local"],[other,"other"]])store.select(slot,{id,revision:1});await tick();
+ const owned=store.querySource("local").list("sample.note",{limit:10}),planRead=store.querySource("plan/read").list("sample.note",{limit:10});await tick();
+ pending[1].resolve({records:[{id:"fixed",revision:1}],total:1});await planRead;
+ store.filter("sample.note","active",false);store.select(root,{id:"page",revision:1});await tick();
+ store.filter("sample.note","active",true,"picker");assert.equal(store.selected(root).id,"page");assert.equal(store.selected(other).id,"other");assert.equal(store.selected(local),undefined);assert.equal(store.snapshot().queries["plan/read"].value.records[0].id,"fixed");
+ assert.deepEqual(filtersForOwner(store.snapshot().filters),{"sample.note":{active:false}});assert.deepEqual(filtersForOwner(store.snapshot().filters,"picker"),{"sample.note":{active:true}});assert.equal(filterSlot("sample.note",filterOwner(doc,doc.sections[1])),"overlay:picker/sample.note");
+ assert.deepEqual(resourceVariables(doc,store.snapshot()).localFilter.value.fields,{active:true});
+ store.filter("sample.note","state","undeclared","picker");store.filter("sample.note","hidden","private","picker");store.filter("sample.note","active",false,"unknown");assert.deepEqual(filtersForOwner(store.snapshot().filters,"picker"),{"sample.note":{active:true}});
+ store.endOverlay("picker");assert.deepEqual(filtersForOwner(store.snapshot().filters,"picker"),{});assert.equal(store.selected(root).id,"page");assert.deepEqual(filtersForOwner(store.snapshot().filters),{"sample.note":{active:false}});
+ pending[0].resolve({records:[{id:"obsolete",revision:1}],total:1});await owned;assert.equal(store.snapshot().queries.local,undefined);
+ assert.equal(filterOwner({...doc,document:{...doc.document,uiProfile:"platform.page.v2.12"}},doc.sections[1]),undefined);
+ store.dispose();
+});

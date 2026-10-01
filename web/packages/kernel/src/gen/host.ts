@@ -1534,7 +1534,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.12",
+  "uiProfile": "platform.page.v2.13",
   "widgets": [
     {
       "componentID": "table",
@@ -2035,7 +2035,8 @@ export const pageUIManifest = {
     "platform.page.v2.9",
     "platform.page.v2.10",
     "platform.page.v2.11",
-    "platform.page.v2.12"
+    "platform.page.v2.12",
+    "platform.page.v2.13"
   ],
   "runtime": {
     "scope": "page",
@@ -2142,7 +2143,8 @@ export const pageUIManifest = {
         "string",
         "boolean",
         "record",
-        "object-set"
+        "object-set",
+        "filter"
       ],
       "modes": [
         "state",

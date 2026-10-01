@@ -60,6 +60,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		if variable.Scope == "application" && (!PageUIProfileSupports(d.UIProfile, "platform.page.v2.8") || variable.Mode != "shared") {
 			return fmt.Errorf("page variable %s needs v2.8 and a shared application binding", id)
 		}
+		if variable.Scope == "overlay" && variable.Type == "filter" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.13") {
+			return fmt.Errorf("overlay filter %s requires v2.13", id)
+		}
 		if variable.Scope == "overlay" && variable.Mode == "resource" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.11") {
 			return fmt.Errorf("overlay resource %s requires UI profile v2.11", id)
 		}

@@ -19,7 +19,7 @@ import { planKey, variablePlan } from "./runtime/query-plans";
 import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
-import { recordSlot, selectionSlot, overlaySessionScopes, resourceVariables } from "./runtime/resources";
+import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, selectionSlot, overlaySessionScopes, resourceVariables } from "./runtime/resources";
 import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
@@ -440,7 +440,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const querySelections = new Map<string,Set<string>>();
   for(const section of page.sections??[]){const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
   for(const section of page.sections??[]){const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
-  const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents, querySelections, overlayScopes:overlaySessionScopes(page) });
+  const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents, querySelections, ...(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?filterSessionBindings(page):{}), overlayScopes:overlaySessionScopes(page) });
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot);
@@ -458,9 +458,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
 
   const navigation = usePageNavigation(page, live, variables.values, variables.set);
   useEffect(() => { onVariableValues?.({...variables.values,...Object.fromEntries(Object.entries(initialVariables).filter(([,v])=>v.scope==="overlay").map(([id,v])=>[id,overlayValues[v.owner??""]?.[id]??{status:"empty" as const}]))}); }, [onVariableValues, variables.values, overlayValues]);
-  const narrowed = snapshot.filters;
   const onSelect = (key: string, record?: EntityRecord) => session.select(key, record);
-  const onNarrow = (object: string, field: string, value: unknown) => session.filter(object, field, value);
   const indexed = new Map((page.sections ?? []).map((section, i) => [section.id, { section, i }]));
   const writeState = (id: string, value: string | boolean, owner?: string) => {
     const variable = initialVariables[id];
@@ -488,7 +486,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     const epoch = overlay ? session.overlayEpoch(overlay) : undefined;
     return (
       <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const producer=page.sections?.find((s)=>s.id===initialVariables[section.recordVariable!]?.source?.section);return producer?session.selected(selectionSlot(page,producer)):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
-        master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => onSelect(selectionSlot(page,section), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
+        master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => onSelect(selectionSlot(page,section), record)} live={live} narrowed={filtersForOwner(snapshot.filters,filterOwner(page,section))} onNarrow={(object,field,value)=>session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
         value={value?.status === "value" && typeof value.value === "string" ? value.value : undefined} onValue={valueVariable ? (value) => setContextState(valueVariable, value, context, overlay) : undefined}

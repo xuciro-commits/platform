@@ -387,6 +387,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						field, visible := shown.Field(name)
 						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))
 					})
+					if section.Widget == "filter" && len(section.Fields) == 0 {
+						continue
+					}
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
 					if section.Function != nil {
 						owner, ok := t.app(section.Function.Ref.App).(interface {

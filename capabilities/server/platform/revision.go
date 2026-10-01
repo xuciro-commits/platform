@@ -629,8 +629,8 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	if page.Document != nil {
 		for id, plan := range page.Document.Queries {
 			objectAsset, ok := lookup[plan.Object]
-			var object EntityInfo
-			if !ok || json.Unmarshal(objectAsset.Body, &object) != nil {
+			object, err := queryObjectDescriptor(objectAsset.Body)
+			if !ok || err != nil {
 				return fmt.Errorf("page query %s object is unavailable", id)
 			}
 			var named *Definition
@@ -648,4 +648,42 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		}
 	}
 	return nil
+}
+
+// Frozen objects retain their owner's complete definition. Construction fields
+// store choices as source text, while native descriptors use an array. Project
+// these representations before the shared query checker reads the schema.
+func queryObjectDescriptor(body []byte) (EntityInfo, error) {
+	var shape struct {
+		Type   string                       `json:"type"`
+		Fields []map[string]json.RawMessage `json:"fields"`
+	}
+	if err := json.Unmarshal(body, &shape); err != nil {
+		return EntityInfo{}, err
+	}
+	var fields []FieldInfo
+	for _, raw := range shape.Fields {
+		if choicesRaw, ok := raw["choices"]; ok {
+			var source string
+			if json.Unmarshal(choicesRaw, &source) == nil {
+				options := []string{}
+				for _, part := range strings.Split(source, ",") {
+					if value := strings.TrimSpace(part); value != "" {
+						options = append(options, value)
+					}
+				}
+				raw["choices"], _ = json.Marshal(options)
+			}
+		}
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return EntityInfo{}, err
+		}
+		var field FieldInfo
+		if err := json.Unmarshal(encoded, &field); err != nil {
+			return EntityInfo{}, err
+		}
+		fields = append(fields, field)
+	}
+	return EntityInfo{Type: shape.Type, Fields: fields}, nil
 }

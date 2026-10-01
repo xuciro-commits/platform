@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.12",
+  "uiProfile": "platform.page.v2.13",
   "widgets": [
     {
       "componentID": "table",
@@ -500,7 +500,8 @@
     "platform.page.v2.9",
     "platform.page.v2.10",
     "platform.page.v2.11",
-    "platform.page.v2.12"
+    "platform.page.v2.12",
+    "platform.page.v2.13"
   ],
   "runtime": {
     "scope": "page",
@@ -607,7 +608,8 @@
         "string",
         "boolean",
         "record",
-        "object-set"
+        "object-set",
+        "filter"
       ],
       "modes": [
         "state",
