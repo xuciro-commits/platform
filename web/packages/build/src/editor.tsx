@@ -12,8 +12,9 @@ import { Copy, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRig
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Api as HostApi } from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
-import { appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
+import { addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
+import { OverlayProperties, ButtonEventProperties } from "./page-editor/OverlayPanel";
 import { LayoutProperties, LayoutTree } from "./page-editor/LayoutTree";
 import { useDraftSession } from "./session/DraftSession";
 
@@ -121,8 +122,9 @@ export function PageEditor({ id }: { id: string }) {
       s.parentSelection && !selections.some((v) => v.name === s.parentSelection))
       ? t("A widget references a missing selection or the wrong object type.") : "";
   const incompatible = document.formatVersion !== 2 || !supportsPageUIProfile(document.uiProfile) || sections.some((s) => !widgetContract(s.widget) || s.configVersion !== widgetContract(s.widget)?.configVersion);
+  const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => !document.nodes[overlay.root]?.children?.length || !overlay.title.trim()) || sections.some((section) => section.widget === "button" && !document.events?.some((event) => event.source === section.id));
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
-  const invalid = variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
+  const invalid = overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
   const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
@@ -136,13 +138,13 @@ export function PageEditor({ id }: { id: string }) {
     if (contract.fieldPreset === "list") section.fields = info?.fields.slice(0, 4).map((f) => f.name) ?? [];
     if (contract.fieldPreset === "filter") section.fields = info?.fields.filter((f) => filterable.includes(f.type)).slice(0, 2).map((f) => f.name) ?? [];
     if (contract.fieldPreset === "create") section.fields = info?.fields.filter((f) => f.required && !f.readOnly).map((f) => f.name) ?? [];
-    edit((old) => ({ ...old, document: appendWidget(old.document, section.id!, destination?.container ?? container ?? old.document.root, destination ? destination.after : chosen >= 0 ? sections[chosen]?.id : undefined), sections: [...old.sections, section] }));
+    edit((old) => ({ ...old, document: appendWidget({ ...old.document, uiProfile: pageUIProfile }, section.id!, destination?.container ?? container ?? old.document.root, destination ? destination.after : chosen >= 0 ? sections[chosen]?.id : undefined), sections: [...old.sections, section] }));
     select({ kind: "widget", id: section.id! }); setRightOpen(true);
   };
   const duplicate = () => {
     const source = sections[chosen]; if (!source?.id) return;
     const copy = { ...structuredClone(source), id: layoutID("section") };
-    edit((old) => ({ ...old, sections: [...old.sections, copy], document: appendWidget(old.document, copy.id, old.document.root, source.id) }));
+    edit((old) => ({ ...old, sections: [...old.sections, copy], document: { ...appendWidget(old.document, copy.id, old.document.root, source.id), events: [...(old.document.events ?? []), ...(old.document.events ?? []).filter((event) => event.source === source.id).map((event) => ({ ...event, source: copy.id }))] } }));
     select({ kind: "widget", id: copy.id });
   };
   const save = async () => {
@@ -202,6 +204,7 @@ export function PageEditor({ id }: { id: string }) {
       </Card>
       {refused && <Panel role="alert" className="text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {variableProblems.length > 0 && <Panel role="alert" className="text-xs text-danger">{variableProblems.map((issue, index) => <p key={index}>{issue.variable}: {t(issue.code)}</p>)}</Panel>}
+      {overlayProblem && <Panel role="status" className="text-xs text-muted">{t("Add content to each overlay and bind every button before saving.")}</Panel>}
       {selectionProblem && <Panel role="alert" className="text-xs text-danger">{selectionProblem}</Panel>}
       {incompatible && <Panel role="alert" className="text-xs text-danger">{t("This draft needs a newer workspace version. Its saved content has been preserved.")}</Panel>}
       <fieldset disabled={busy || incompatible} className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
@@ -211,8 +214,11 @@ export function PageEditor({ id }: { id: string }) {
             onInsert={(widget, container, after) => add(widget, { container, after })}
             onRelocate={(section, target, after) => edit((old) => ({ ...old, document: relocateWidget(old.document, section, target, after) }))}
             onGroup={(kind) => { const section = sections[chosen]; if (!section?.id) return; const result = groupWidget(document, section.id, kind); edit({ document: result.document }); if (result.id) select({ kind: "container", id: result.id }); }}
+            onAddOverlay={() => { const result = addOverlay(document, t("Overlay {n}", { n: Object.keys(document.overlays ?? {}).length + 1 })); edit({ document: result.document }); select({ kind: "container", id: result.root }); setRightOpen(true); }}
             onRemove={(index) => { const section = sections[index]; if (!section?.id) return; edit((old) => ({ ...old, document: removeWidget(old.document, section.id!), sections: old.sections.filter((s) => s.id !== section.id) })); select({ kind: "page" }); }} /></>}
-          right={rightOpen && (selection.kind === "variables" ? <VariablesPanel document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container ? <LayoutProperties document={document} id={container}
+          right={rightOpen && (selection.kind === "variables" ? <VariablesPanel document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
+            onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
+            onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}{container ? <LayoutProperties document={document} id={container}
             onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
             onUngroup={() => { edit({ document: ungroup(document, container) }); select({ kind: "page" }); }} /> :
           chosen < 0 ? <Settings value={{ title, description }} object={info?.title ?? page.object}
@@ -220,7 +226,10 @@ export function PageEditor({ id }: { id: string }) {
             onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
             onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> :
           <Properties section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}{nodeID && <NodeBindings document={document} id={nodeID} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
+            object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
+            {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
+            {canvasSelection?.widget === "button" && <ButtonEventProperties document={document} section={canvasSelection.id!} onChange={(document) => edit({ document })} />}
+            {nodeID && <NodeBindings document={document} id={nodeID} button={canvasSelection?.widget === "button"} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-1.5">
             <span className="mr-auto truncate text-xs font-medium">{title || page.title}</span>
             {([["desktop", "Desktop preview", Monitor], ["tablet", "Tablet preview", Tablet], ["mobile", "Mobile preview", Smartphone]] as const).map(([device, label, Icon]) => <Button key={device} size="sm" variant="ghost" aria-label={t(label)} aria-pressed={viewport === device} onClick={() => setViewport(device)}><Icon /></Button>)}
@@ -228,7 +237,13 @@ export function PageEditor({ id }: { id: string }) {
           </div>
           <div className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
-              <ComposedPage onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={false} chosen={chosen} onChoose={choose}
+              <ComposedPage editingRoot={(() => {
+                const node = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id)?.[0];
+                return Object.values(document.overlays ?? {}).find((overlay) => {
+                  const includes = (id: string): boolean => id === node || (document.nodes[id]?.children ?? []).some(includes);
+                  return includes(overlay.root);
+                })?.root;
+              })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={false} chosen={chosen} onChoose={choose}
                 notice={nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before installing or reviewing a release.")}</Panel>}
                 wrapLayout={(id, node, body) => <div key={id} data-layout-node={id} className={`relative min-w-0 rounded ${dropTarget === id || container === id ? "outline outline-2 outline-primary" : ""}`}
                   onDragOver={(event) => { if (!event.dataTransfer.types.some((type) => type === "application/platform-page-widget" || type === "application/platform-page-section")) return; event.preventDefault(); event.stopPropagation(); setDropTarget(id); }}
@@ -238,7 +253,7 @@ export function PageEditor({ id }: { id: string }) {
                     const destination = { container: node.kind === "widget" ? document.root : id, after: node.kind === "widget" ? node.section : undefined };
                     if (widget) add(widget, destination); else edit((old) => ({ ...old, document: relocateWidget(old.document, section, destination.container, destination.after) }));
                   }}>
-                  {container === id && <Button size="sm" variant="primary" className="absolute -top-3 left-2 z-10" onClick={() => select({ kind: "container", id })}>{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : "Rows")}</Button>}
+                  {container === id && <Button size="sm" variant="primary" className="absolute -top-3 left-2 z-10" onClick={() => select({ kind: "container", id })}>{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : "Rows")}</Button>}
                   {body}
                 </div>} />
             </div>

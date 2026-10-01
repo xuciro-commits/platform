@@ -1,7 +1,8 @@
 import type { Api } from "@platform/kernel";
 
 type Document = Api.PageDocument;
-type Kind = "rows" | "columns" | "tabs";
+export type LayoutKind = "rows" | "columns" | "tabs" | "flow" | "toolbar";
+type Kind = LayoutKind;
 import { pageUIProfile } from "@platform/app";
 
 export const layoutID = (prefix: string) => `${prefix}${crypto.randomUUID()}`;
@@ -61,6 +62,7 @@ export function removeWidget(document: Document, section: string): Document {
   const next = structuredClone(document);
   next.nodes[parent]!.children = next.nodes[parent]!.children!.filter((id) => id !== leaf);
   delete next.nodes[leaf];
+  next.events = next.events?.filter((event) => event.source !== section);
   pruneEmpty(next, parent);
   return repairTabs(next);
 }
@@ -107,6 +109,8 @@ export function setLayoutKind(document: Document, id: string, kind: Kind): Docum
   const next = structuredClone(document), node = next.nodes[id];
   if (!node || node.kind === "widget") return document;
   node.kind = kind;
+  next.uiProfile = pageUIProfile;
+  if (kind !== "flow" && kind !== "toolbar") delete node.align;
   if (kind === "tabs") {
     next.uiProfile = pageUIProfile;
     if (!node.activeVariable) {
@@ -125,4 +129,30 @@ function repairTabs(document: Document): Document {
     if (variable?.type === "string" && variable.mode === "state" && !node.children.includes(String(variable.initial))) variable.initial = node.children[0];
   }
   return document;
+}
+
+/** An independent root; the editor must add content before saving. */
+export function addOverlay(document: Document, title: string): { document: Document; root: string } {
+  const next = structuredClone(document), id = layoutID("overlay"), root = layoutID("overlayRoot"), variable = layoutID("open");
+  next.uiProfile = pageUIProfile;
+  next.nodes[root] = { kind: "rows", children: [] };
+  next.variables = { ...next.variables, [variable]: { title, scope: "page", type: "boolean", mode: "state", initial: false } };
+  next.overlays = { ...next.overlays, [id]: { root, kind: "modal", title, openVariable: variable } };
+  return { document: next, root };
+}
+
+/** Remove this root and its triggers, preserving every other section identity. */
+export function removeOverlay(document: Document, id: string): { document: Document; sections: Set<string> } {
+  const next = structuredClone(document), overlay = next.overlays?.[id], sections = new Set<string>();
+  if (!overlay) return { document, sections };
+  const remove = (id: string) => {
+    const node = next.nodes[id]; if (!node) return;
+    if (node.section) sections.add(node.section);
+    node.children?.forEach(remove); delete next.nodes[id];
+  };
+  remove(overlay.root); delete next.overlays![id]; delete next.variables?.[overlay.openVariable];
+  for (const event of next.events ?? []) if (event.target === overlay.openVariable) sections.add(event.source);
+  for (const section of sections) Object.assign(next, removeWidget(next, section));
+  next.events = next.events?.filter((event) => !sections.has(event.source) && event.target !== overlay.openVariable);
+  return { document: next, sections };
 }

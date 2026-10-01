@@ -98,9 +98,11 @@ function Argument({ value, variables, document, onChange }: { value: Api.PageVal
   </>;
 }
 
-export function NodeBindings({ document, id, onChange }: { document: Api.PageDocument; id: string; onChange: (patch: Partial<Api.PageLayoutNode>) => void }) {
+export function NodeBindings({ document, id, button, onChange }: { document: Api.PageDocument; id: string; button?: boolean; onChange: (patch: Partial<Api.PageLayoutNode>) => void }) {
   const node = document.nodes[id];
   return <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Visible when")}<Select value={node?.visibleWhen ?? ""} onChange={(event) => onChange({ visibleWhen: event.target.value || undefined })}>
     <option value="">{t("Always visible")}</option>{Object.entries(document.variables ?? {}).filter(([, variable]) => variable.type === "boolean").map(([key, variable]) => <option key={key} value={key}>{variable.title || key}</option>)}
-  </Select></label></Card>;
+  </Select></label>{button && <label className="grid gap-1 text-xs">{t("Enabled when")}<Select value={node?.enabledWhen ?? ""} onChange={(event) => onChange({ enabledWhen: event.target.value || undefined })}>
+    <option value="">{t("Always enabled")}</option>{Object.entries(document.variables ?? {}).filter(([, variable]) => variable.type === "boolean").map(([key, variable]) => <option key={key} value={key}>{variable.title || key}</option>)}
+  </Select></label>}</Card>;
 }

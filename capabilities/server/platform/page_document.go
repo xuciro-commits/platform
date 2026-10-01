@@ -17,15 +17,19 @@ type PageDocument struct {
 	Root          string                    `json:"root"`
 	Nodes         map[string]PageLayoutNode `json:"nodes"`
 	Variables     map[string]PageVariable   `json:"variables,omitempty"`
+	Overlays      map[string]PageOverlay    `json:"overlays,omitempty"`
+	Events        []PageEventBinding        `json:"events,omitempty"`
 }
 
 type PageLayoutNode struct {
-	Kind           string   `json:"kind"` // rows, columns, tabs, or widget
+	Kind           string   `json:"kind"` // rows, columns, tabs, flow, toolbar, or widget
 	Children       []string `json:"children,omitempty"`
 	Section        string   `json:"section,omitempty"`
 	Title          string   `json:"title,omitempty"`
 	ActiveVariable string   `json:"activeVariable,omitempty"`
 	VisibleWhen    string   `json:"visibleWhen,omitempty"`
+	EnabledWhen    string   `json:"enabledWhen,omitempty"`
+	Align          string   `json:"align,omitempty"`
 }
 
 var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
@@ -46,11 +50,14 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
-		if variable.Mode == "resource" && d.UIProfile != "platform.page.v2.3" {
+		if variable.Mode == "resource" && (d.UIProfile == "platform.page.v2.1" || d.UIProfile == "platform.page.v2.2") {
 			return fmt.Errorf("page variable %s requires UI profile v2.3", id)
 		}
 	}
 	if err := d.CheckVariables(); err != nil {
+		return err
+	}
+	if err := d.checkEvents(sections); err != nil {
 		return err
 	}
 	if !pageNodeID.MatchString(d.Root) || len(d.Nodes) == 0 || len(d.Nodes) > 256 {
@@ -120,13 +127,22 @@ func (d *PageDocument) Check(sections []Section) error {
 		if node.Kind != "tabs" && node.ActiveVariable != "" {
 			return fmt.Errorf("page node %s is not tabs", id)
 		}
+		if (node.Kind == "flow" || node.Kind == "toolbar" || node.Align != "" || node.EnabledWhen != "") && d.UIProfile != "platform.page.v2.4" {
+			return fmt.Errorf("page node %s requires UI profile v2.4", id)
+		}
+		if node.Align != "" && (node.Kind != "flow" && node.Kind != "toolbar" || !slices.Contains([]string{"start", "center", "end", "between"}, node.Align)) {
+			return fmt.Errorf("page node %s has unsupported alignment", id)
+		}
+		if node.EnabledWhen != "" && (node.Kind != "widget" || d.Variables[node.EnabledWhen].Type != "boolean" || !slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && s.Widget == "button" })) {
+			return fmt.Errorf("page node %s enable binding needs a button and boolean variable", id)
+		}
 		switch node.Kind {
 		case "widget":
 			if len(node.Children) != 0 || !byID[node.Section] || used[node.Section] {
 				return fmt.Errorf("page document widget %q needs one unique section", id)
 			}
 			used[node.Section] = true
-		case "rows", "columns", "tabs":
+		case "rows", "columns", "tabs", "flow", "toolbar":
 			if node.Section != "" || len(node.Children) == 0 || len(node.Children) > 128 {
 				return fmt.Errorf("page document container %q needs children and no section", id)
 			}
@@ -150,6 +166,14 @@ func (d *PageDocument) Check(sections []Section) error {
 	if err := walk(d.Root, 0); err != nil {
 		return err
 	}
+	for id, overlay := range d.Overlays {
+		if d.Nodes[overlay.Root].Kind == "widget" {
+			return fmt.Errorf("page overlay %s root must be a container", id)
+		}
+		if err := walk(overlay.Root, 0); err != nil {
+			return err
+		}
+	}
 	if len(seen) != len(d.Nodes) || len(used) != len(byID) {
 		return fmt.Errorf("page document has unreachable nodes or sections")
 	}
@@ -171,6 +195,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 	}
 	collect(d.Root, nil)
+	for _, overlay := range d.Overlays {
+		collect(overlay.Root, []string{overlay.OpenVariable})
+	}
 	active, complete := map[string]bool{}, map[string]bool{}
 	var check func(string) error
 	check = func(id string) error {
@@ -250,6 +277,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if !ok {
 			return false
 		}
+		if node.EnabledWhen != "" {
+			if _, available := variables[node.EnabledWhen]; !available {
+				return false
+			}
+		}
 		if node.VisibleWhen != "" {
 			if _, visible := variables[node.VisibleWhen]; !visible {
 				return false
@@ -274,6 +306,38 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		node.Children = children
 		out.Nodes[id] = node
 		return true
+	}
+	for {
+		out.Nodes = map[string]PageLayoutNode{}
+		out.Overlays = map[string]PageOverlay{}
+		missing := map[string]bool{}
+		for id, overlay := range d.Overlays {
+			if copyVisible(overlay.Root) {
+				out.Overlays[id] = overlay
+			} else {
+				missing[overlay.OpenVariable] = true
+			}
+		}
+		out.Events = nil
+		bound := map[string]bool{}
+		for _, event := range d.Events {
+			if allowed[event.Source] && !missing[event.Target] {
+				if _, ok := variables[event.Target]; ok {
+					out.Events = append(out.Events, event)
+					bound[event.Source] = true
+				}
+			}
+		}
+		changed := false
+		for _, section := range sections {
+			if section.Widget == "button" && allowed[section.ID] && !bound[section.ID] {
+				delete(allowed, section.ID)
+				changed = true
+			}
+		}
+		if !changed {
+			break
+		}
 	}
 	copyVisible(d.Root)
 	if _, ok := out.Nodes[d.Root]; !ok {

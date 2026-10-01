@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:27ae586d984c941c",
+  "revision": "sha256:0ff0c8322df9d473",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1162,6 +1162,31 @@
       ]
     },
     {
+      "id": "ui/flow-layout",
+      "owner": "@platform/ui",
+      "name": "Flow layout and toolbar",
+      "summary": "Wrap presentation items and navigate toolbar buttons with arrow keys.",
+      "layer": 2,
+      "source": "web/packages/ui/src/layout/FlowLayout.tsx",
+      "exports": [
+        "FlowLayout"
+      ],
+      "example": "FlowLayouts",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "layout",
+        "toolbar"
+      ],
+      "dependencies": [
+        "ui/button"
+      ]
+    },
+    {
       "id": "ui/form",
       "owner": "@platform/ui",
       "name": "Form submission",
@@ -1807,6 +1832,7 @@
       "Error": "错误",
       "Expanded": "展开",
       "File picker": "文件选择器",
+      "Flow layout and toolbar": "流式布局与工具栏",
       "Flow observation": "流程观测",
       "Form inputs read declared record paths. The original action checks writes; unavailable sources do not become manual inputs.": "表单参数读取已声明的记录路径。写入由原动作检查；来源不可用时不会改为手动输入。",
       "Form submission": "表单提交",
@@ -1923,6 +1949,7 @@
       "Use semantic tokens instead of assigning domain meaning to raw colors.": "使用语义令牌表达含义，不给原始色值赋予领域语义。",
       "Use shared surface, text, focus and status tokens across themes.": "跨主题使用共享的表面、文字、焦点和状态令牌。",
       "Visibility and allowed actions come from the scoped source and caller.": "可见范围与允许的动作来自限定范围的数据源和调用方。",
+      "Wrap presentation items and navigate toolbar buttons with arrow keys.": "让呈现项自动换行，并使用方向键在工具栏按钮间移动。",
       "conflict": "冲突",
       "dirty": "未保存",
       "done": "完成",
@@ -1955,6 +1982,7 @@
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
@@ -1994,6 +2022,7 @@
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
@@ -2022,6 +2051,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -2036,6 +2066,7 @@
       "web/packages/app/src/actions.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/sections.tsx",
       "web/packages/csm/src/index.tsx",
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
@@ -2064,6 +2095,7 @@
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
@@ -2205,8 +2237,15 @@
     "ui/record-workspace": [
       "web/packages/app/src/pages.tsx"
     ],
+    "ui/flow-layout": [
+      "web/packages/app/src/sections.tsx"
+    ],
     "ui/content-tabs": [
       "web/packages/app/src/sections.tsx"
+    ],
+    "ui/sheet": [
+      "web/packages/app/src/sections.tsx",
+      "web/apps/pms-desk/src/App.tsx"
     ],
     "ui/markdown": [
       "web/packages/app/src/sections.tsx",
@@ -2299,9 +2338,6 @@
       "web/apps/catalog/src/main.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx"
-    ],
-    "ui/sheet": [
-      "web/apps/pms-desk/src/App.tsx"
     ],
     "app/flow-instance": [
       "web/apps/workspace/src/chrome.tsx"

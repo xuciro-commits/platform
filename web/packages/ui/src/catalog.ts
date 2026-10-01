@@ -12,6 +12,8 @@ export const entries: CatalogEntry[] = [
   asset("foundation/semantic-tokens", "Semantic tokens", "Use shared surface, text, focus and status tokens across themes.", 0,
     "styles.css", [], "Tokens", { authority: "specification", uses: ["reference"], tags: ["color", "theme", "density"],
       constraints: ["Use semantic tokens instead of assigning domain meaning to raw colors."] }),
+  asset("ui/flow-layout", "Flow layout and toolbar", "Wrap presentation items and navigate toolbar buttons with arrow keys.", 2,
+    "layout/FlowLayout.tsx", ["FlowLayout"], "FlowLayouts", { tags: ["layout", "toolbar"], dependencies: ["ui/button"] }),
   asset("ui/content-tabs", "Content tabs", "Switch stable named panels with keyboard navigation and retain visited content.", 2,
     "layout/ContentTabs.tsx", ["ContentTabs"], "ContentTabsExample", { tags: ["tabs", "layout", "state"], dependencies: ["ui/button"] }),
   asset("ui/button", "Button", "One action control with primary, quiet, destructive, link and row variants.", 1,

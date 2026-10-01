@@ -37,6 +37,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/file-picker": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.FilePicking })),
   "ui/filter-bar": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Filters })),
   "ui/flow": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.FlowObservation })),
+  "ui/flow-layout": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.FlowLayouts })),
   "ui/form": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Forms })),
   "ui/graph": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Graphs })),
   "ui/input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Inputs })),

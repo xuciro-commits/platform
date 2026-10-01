@@ -42,7 +42,15 @@ export class PageSessionStore {
     this.listeners.forEach((listener) => listener());
   }
   setScalar(id: string, value: string | boolean) {
-    if (this.state.scalars[id] !== value) this.publish({ scalars: { ...this.state.scalars, [id]: value } });
+    this.setScalars({ [id]: value });
+  }
+  setScalars(values: Record<string, string | boolean>) {
+    if (Object.entries(values).some(([id, value]) => this.state.scalars[id] !== value)) this.publish({ scalars: { ...this.state.scalars, ...values } });
+  }
+  resetQueries(keys: string[]) {
+    const queries = { ...this.state.queries };
+    for (const key of keys) { this.queries.delete(key); delete queries[key]; }
+    this.publish({ queries });
   }
   selected(key: string): EntityRecord | undefined { return this.recordCache.get(key); }
   private descendants(keys: string[]) {

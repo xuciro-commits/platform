@@ -864,6 +864,15 @@ export type PageDocument = {
   root: string;
   nodes: Record<string, PageLayoutNode>;
   variables?: Record<string, PageVariable>;
+  overlays?: Record<string, PageOverlay>;
+  events?: PageEventBinding[];
+};
+
+export type PageEventBinding = {
+  source: string;
+  event: string;
+  target: string;
+  value: unknown;
 };
 
 export type PageExpression = {
@@ -878,6 +887,15 @@ export type PageLayoutNode = {
   title?: string;
   activeVariable?: string;
   visibleWhen?: string;
+  enabledWhen?: string;
+  align?: string;
+};
+
+export type PageOverlay = {
+  root: string;
+  kind: string;
+  title: string;
+  openVariable: string;
 };
 
 export type PageResourceSource = {
@@ -1453,7 +1471,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.3",
+  "uiProfile": "platform.page.v2.4",
   "widgets": [
     {
       "componentID": "table",
@@ -1867,12 +1885,50 @@ export const pageUIManifest = {
           }
         }
       }
+    },
+    {
+      "componentID": "button",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.4",
+      "title": "Button",
+      "category": "Interaction",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "interaction"
+      ],
+      "selectionMode": "none",
+      "events": [
+        {
+          "id": "click",
+          "payload": "void"
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "fieldPreset": "none"
     }
   ],
   "supportedProfiles": [
     "platform.page.v2.1",
     "platform.page.v2.2",
-    "platform.page.v2.3"
+    "platform.page.v2.3",
+    "platform.page.v2.4"
   ],
   "runtime": {
     "scope": "page",

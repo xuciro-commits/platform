@@ -143,14 +143,14 @@ Page（原资产）
     ├── root: LayoutNodeID
     ├── nodes: Map<LayoutNodeID, ContainerNode | WidgetNode>
     ├── unusedWidgets: WidgetID[]          [后续]
-    ├── variables: VariableDefinition[]   [后续]
-    ├── events: EventBinding[]            [后续]
-    ├── overlays: OverlayDefinition[]    [后续]
+    ├── variables: Map<VariableID, Definition> [page级已实现，其余后续]
+    ├── events: EventBinding[]            [button click写入标量state已实现]
+    ├── overlays: Map<OverlayID, Definition> [独立root、modal/drawer已实现]
     └── interface: TypedInputOutput[]     [后续]
 
 ContainerNode
     node ID（nodes键） / kind / children / section（组件叶的稳定引用）
-    layoutProps / visibilityBinding       [后续]
+    align / visibleWhen / enabledWhen（按钮叶） / activeVariable（Tabs）
     kind = rows | columns | tabs | flow | toolbar | loop
 
 WidgetInstance
@@ -233,6 +233,14 @@ Tabs的有序children同时是稳定tab身份，标题取子节点title或原组
 共享 `RecordSource.scope` 标记成员与定义作用域。当前工作区以成员信息及可见定义版本构成该标记，变化时清空页面值/读取缓存；普通数据revision变化刷新原选择并失效查询窗口。同一记录、同一作用域刷新保留已显示视图和表单输入；记录身份或作用域改变后不显示旧视图。读取请求有世代/作用域检查，列表和详情也直接拒绝旧响应。
 
 当前查询变量是已有表格读取的输出，保留其分页/搜索/排序状态；来源未挂载或父记录未选择时不会另发隐式查询。独立于组件的查询计划、集合运算、完整对象集聚合、记录属性派生及跨页面传值仍未实现。
+
+### 6.3 Flow、Toolbar与Overlay契约（F3c）
+
+`v2.4` 增加flow/toolbar容器、受控align（start/center/end/between）及有界换行；旧profile继续可读。Overlay在Document.overlays中声明独立root、modal/drawer、title及page级布尔state openVariable，initial必须为false；最多16个，根与主布局不能共享节点或Section。变量及全部节点继续使用原文档预算。
+
+首个呈现事件为Button的click。Document.events绑定source Section ID、event、target state变量与固定value；类型必须匹配，写入Tabs状态时value须为其子节点ID，不执行表达式源码或业务动作。一个来源事件只有一个处理器。打开一个Overlay同时关闭其他Overlay；关闭按钮、Escape和遮罩统一回写openVariable。Button的enabledWhen为布尔呈现输入，业务提交仍由原动作owner授权。预览允许这些纯呈现交互，原提交入口保持只读。
+
+Overlay复用共享Dialog/Sheet的焦点陷阱、Escape和响应式滚动；打开记录调用者焦点，关闭返回仍存在的调用者。内容在关闭时卸载，清理局部表单输入及该根内查询窗口；page级选择和变量按其声明保留，尚不声明完整overlay变量作用域。成员隐藏全部Overlay内容时移除该Overlay及其打开/关闭按钮，事件和显示依赖仍需完整检查。冻结和激活保留所有根、事件与变量。
 
 ## 7. 本体设计台与平台语义融合（D5）
 
@@ -392,7 +400,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 编辑器使用共享 `EditorWorkbench` 的可调整三栏，支持树/画布/检查器同步选择、分组/取消分组、移动/拖放、复制、撤销重做、设备宽度和缩放预览。`build/session/DraftSession` 原子记录文档及绑定编辑，UI选中独立；保存串行且携带期望revision，拒绝保留草稿。V1平铺和list-detail页保留原发布渲染，在编辑器转换并显式保存为V2。
 
-`platform/pageui/widgets.json` 是首批12种组件的身份、配置版本、UI profile、默认属性、字段预设、绑定种类、选择方向和展示Schema来源；Go校验、生成的Web契约、Palette及基础Renderer Registry共同消费。每个组件仍调用原共享UI/应用API。复杂检查器复用原绑定编辑；完整ports/events、按组件拆分检查器、懒加载和92种外包组件迁移尚未完成，基础注册不能称为完整Plugin Architecture。
+`platform/pageui/widgets.json` 是首批12种业务/内容组件及新增Button的身份、配置版本、UI profile、默认属性、字段预设、绑定种类、选择方向和展示Schema来源；Go校验、生成的Web契约、Palette及基础Renderer Registry共同消费。每个组件仍调用原共享UI/应用API。复杂检查器复用原绑定编辑；完整ports/events、按组件拆分检查器、懒加载和92种外包组件迁移尚未完成，基础注册不能称为完整Plugin Architecture。
 
 F2在原“对象”入口提供统一资源目录、原生/租户来源筛选、搜索和有界关系图；图节点支持选择检查、双击及键盘打开详情。对象详情包含概览、属性、引用关系、动作、数据、用途和访问页签。`@platform/app/semantic` 从当前成员的原定义目录投影对象、字段支持的引用及声明用途，不建立第二份本体缓存；隐藏目标不生成占位节点，引用不推断基数、唯一性或删除保证。关系图最多显示当前筛选的80个对象，不能据此声称大模型性能已验证。
 
@@ -400,8 +408,10 @@ F2在原“对象”入口提供统一资源目录、原生/租户来源筛选�
 
 共享对象/属性选择器提供类型化引用。选择属性可创建绑定该字段的V2页面草稿；选择带声明inverse的入向单值引用，可创建父表/相关表/相关详情及具名父子选择。创建后进入原页面编辑器，发布继续走候选冻结与激活。工程路线已验证真实CRM账户/商机的关系绑定、业务成员操作及刷新、原生只读、租户字段编辑、保存后历史与并发拒绝。多值引用及独立关系资产尚不支持这条相关页面创建路线。
 
-F3a实现 `v2.2` 的页面级文本/布尔变量、constant/state/derived、显式依赖与equal/not/and/or/concat。Go与Web消费共同算子描述及合法/拒绝用例；Go负责定义校验，前端在组件局部会话执行纯求值。变量面板可编辑初始值和表达式，Tabs检查器提供稳定子节点标题和选中变量，节点可绑定布尔显示条件。当前组件连线覆盖Tabs的状态输出及节点可见性输入，其他Widget端口和事件仍需后续批次接入。Tabs复用共享 `ContentTabs`，首次访问挂载、保留访问过的内容并支持键盘切换；页面定义或成员变化重建运行会话，刷新从初始值开始。原 `v2.1` 文档继续可读，新字段必须使用 `v2.2`。工程路线覆盖设计器声明派生条件、保存候选、激活、操作员读取选中记录、显示联动、会话独立及刷新；冻结文档中的Tabs/变量随原发布与恢复路径保留。
+F3a实现 `v2.2` 的页面级文本/布尔变量、constant/state/derived、显式依赖与equal/not/and/or/concat。Go与Web消费共同算子描述及合法/拒绝用例；Go负责定义校验，前端在组件局部会话执行纯求值。变量面板可编辑初始值和表达式，Tabs检查器提供稳定子节点标题和选中变量，节点可绑定布尔显示条件。当前组件连线覆盖Tabs状态、节点可见性、资源输出及F3c的Button事件；其他Widget端口和事件仍需后续批次接入。Tabs复用共享 `ContentTabs`，首次访问挂载、保留访问过的内容并支持键盘切换；页面定义或成员变化重建运行会话，刷新从初始值开始。原 `v2.1` 文档继续可读，新字段必须使用 `v2.2`。工程路线覆盖设计器声明派生条件、保存候选、激活、操作员读取选中记录、显示联动、会话独立及刷新；冻结文档中的Tabs/变量随原发布与恢复路径保留。
 
 F3b将选择、筛选、标量及查询窗口纳入 `runtime/PageSessionStore`；类型化资源输出进入保存文档、变量面板及派生条件，运行状态覆盖pending/value/empty/error。记录字段/revision与引用分开缓存，父子切换/筛选/拒绝清理后代，旧响应不恢复过期状态；成员与定义作用域变化清空缓存，列表和详情同步拦截旧响应。工程路线验证CRM具名父子查询、记录/筛选/查询变量控制多组件、候选激活与刷新；共同用例覆盖依赖环、来源隐藏闭包、类型错误、请求反序及作用域切换，冻结恢复保留资源来源。
 
-F3仍未完成：独立查询计划/集合运算、跨页面输入输出、application/overlay/loop-item/widget-local作用域及Flow/Toolbar/Loop/Overlay待实施。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+F3c实现 `v2.4` 的Flow/Toolbar、独立Overlay布局根、Modal/Drawer与Button click绑定。编辑器提供独立根树、画布/检查器、跨根移动、删除及历史；原Section ID、业务绑定和候选路径保留。Button仅写入类型化state，enabledWhen可读取记录资源的派生条件；业务动作继续使用原组件/Go owner，预览只运行纯呈现交互。共享Dialog/Sheet处理焦点返回、Escape、关闭与遮罩激活；调用者不可用时返回页面焦点。关闭卸载局部输入，并丢弃该根内查询缓存及晚到响应；page级选择保留。工程路线覆盖选中记录→打开抽屉→执行原动作→关闭返回，以及只读预览、输入清理、候选激活和刷新。Go校验覆盖独立根/类型/版本/事件完整性及成员裁剪；内存冻结/恢复用例保留Overlay与事件，未据此增加PostgreSQL或生产恢复保证。
+
+F3仍未完成：独立查询计划/集合运算、跨页面输入输出、application/overlay/loop-item/widget-local作用域及有界Loop。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

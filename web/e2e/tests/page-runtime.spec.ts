@@ -38,7 +38,7 @@ test("typed page variables drive tabs and visibility through saved candidate act
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   const record = (await (await request.get(`/v1/records/build.page/${id}`, { headers: { Authorization: "Bearer manager" } })).json()).record;
-  expect(record.document.uiProfile).toBe("platform.page.v2.3");
+  expect(record.document.uiProfile).toBe("platform.page.v2.4");
   expect(record.document.variables[visibleID].expression.args[0].variable).toBe(activeID);
   if (process.env.PLATFORM_SCREENSHOTS) {
     await tree.getByRole("button", { name: "Page variables", exact: true }).click();

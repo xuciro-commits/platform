@@ -6,7 +6,7 @@ import {
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
-  Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, ContentTabs, notify, t,
+  Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, ContentTabs, FlowLayout, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
@@ -276,4 +276,8 @@ export function ContentTabsExample() {
     { id: "overview", title: t("Overview"), content: <p>{t("Choose a tab to see its content.")}</p> },
     { id: "notes", title: t("Notes"), content: <Input aria-label={t("Notes")} /> },
   ]} />;
+}
+
+export function FlowLayouts() {
+  return <FlowLayout toolbar label={t("Toolbar")}><Button>{t("Open")}</Button><Button>{t("Save")}</Button><Button disabled>{t("Delete")}</Button></FlowLayout>;
 }

@@ -5,9 +5,9 @@
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, ContentTabs, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
+  Button, Card, Chart, ContentTabs, Dialog, FlowLayout, Sheet, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
 } from "@platform/ui";
-import { Component, useEffect, useId, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { Component, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
 import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
@@ -30,6 +30,7 @@ type Bound = {
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
   session?: PageSessionStore;
+  onClick?: () => void; enabled?: boolean;
   narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
 
@@ -345,6 +346,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+  button: ({ section, onClick, enabled }) => <Button onClick={onClick} disabled={!onClick || enabled === false}>{section.title || t("Button")}</Button>,
   table: TableWidget, detail: DetailWidget, actions: ActionsWidget,
   chart: (bound) => <ChartWidget {...bound} kpi={false} />,
   metric: (bound) => <ChartWidget {...bound} kpi />,
@@ -366,6 +368,7 @@ export function SectionView(bound: Bound & Composing) {
   const Renderer = widgets.resolve(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
   const body = Renderer ? <Renderer {...bound} /> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
   const inHand = onChoose !== undefined && chosen === at;
+  if (section.widget === "button") return <div onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined} className={cn("min-w-0", inHand && "outline outline-2 outline-primary rounded")}><WidgetBoundary>{body}</WidgetBoundary></div>;
   return (
     <Card onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined}
       className={cn("grid min-w-0 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
@@ -384,6 +387,7 @@ export function SectionView(bound: Bound & Composing) {
  */
 type ComposedPageProps = {
   page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;
+  editingRoot?: string;
   onVariableValues?: (values: Record<string, VariableResult>) => void;
 } & Composing;
 export function ComposedPage(props: ComposedPageProps) {
@@ -391,8 +395,9 @@ export function ComposedPage(props: ComposedPageProps) {
   return <PageSession key={JSON.stringify([me, props.definitionKey, props.page])} {...props} />;
 }
 
-function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, onVariableValues }: ComposedPageProps) {
+function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, onVariableValues, editingRoot }: ComposedPageProps) {
   const { source } = useHost();
+  const pageFocus = useRef<HTMLDivElement>(null), callers = useRef<Record<string, HTMLElement | null>>({});
   const initialVariables = useMemo(() => {
     const values = { ...page.document?.variables };
     for (const node of Object.values(page.document?.nodes ?? {})) {
@@ -428,10 +433,22 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const onSelect = (key: string, record?: EntityRecord) => session.select(key, record);
   const onNarrow = (object: string, field: string, value: unknown) => session.filter(object, field, value);
   const indexed = new Map((page.sections ?? []).map((section, i) => [section.id, { section, i }]));
-  const renderSection = (section: Section, i: number, nested: boolean) => (
+  const writeState = (id: string, value: string | boolean) => {
+    const overlay = Object.values(page.document?.overlays ?? {}).find((overlay) => overlay.openVariable === id);
+    if (overlay && value === true) {
+      callers.current[id] = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      variables.setMany(Object.fromEntries(Object.values(page.document?.overlays ?? {}).map((item) => [item.openVariable, item.openVariable === id])));
+    } else variables.set(id, value);
+  };
+  const booleanValue = (id: string) => { const result = variables.values[id]; return result?.status === "value" && result.value === true; };
+  const renderSection = (section: Section, i: number, nested: boolean, enabled = true) => (
     <SectionView key={section.id || i} page={page} section={section} session={session} selected={session.selected(selectionKey(objectOf(page, section), section.selection))}
       master={session.selected(selectionKey(parentTypeOf(page, section), section.parentSelection))} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
-      chosen={chosen} onChoose={onChoose} at={i} nested={nested} />
+      chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
+      onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
+        const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
+        if (typeof event.value === "string" || typeof event.value === "boolean") writeState(event.target, event.value);
+      } : undefined} />
   );
   const renderNode = (id: string, ancestors: Set<string>): ReactNode => {
     if (!page.document || ancestors.has(id)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
@@ -446,10 +463,10 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     if (node.kind === "widget") {
       const item = indexed.get(node.section);
       if (!item) return null; // server filtered this widget for the reader
-      const body = renderSection(item.section, item.i, true);
+      const body = renderSection(item.section, item.i, true, !node.enabledWhen || booleanValue(node.enabledWhen));
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
-    if (!["rows", "columns", "tabs"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    if (!["rows", "columns", "tabs", "flow", "toolbar"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
     const next = new Set(ancestors); next.add(id);
     if (node.kind === "tabs") {
       const active = variables.values[node.activeVariable ?? ""];
@@ -459,6 +476,10 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
           title: page.document!.nodes[child]?.title || indexed.get(page.document!.nodes[child]?.section)?.section.title || t("Tab {n}", { n: index + 1 }), content: renderNode(child, next) }))} />;
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
+    if (node.kind === "flow" || node.kind === "toolbar") {
+      const body = <FlowLayout toolbar={node.kind === "toolbar"} label={node.title || t("Toolbar")} align={node.align}>{node.children?.map((child) => <div key={child} className="min-w-0 max-w-full">{renderNode(child, next)}</div>)}</FlowLayout>;
+      return wrapLayout ? wrapLayout(id, node, body) : body;
+    }
     const body = <div key={id} className={node.kind === "columns" ? "grid min-w-0 grid-cols-1 gap-3 @md:grid-cols-[repeat(var(--page-columns),minmax(0,1fr))]" : "flex min-w-0 flex-col gap-3"}
       style={node.kind === "columns" ? { "--page-columns": Math.max(1, node.children?.length ?? 0) } as CSSProperties : undefined}>
       {node.children?.map((child) => <div key={child} className="@container min-w-0">{renderNode(child, next)}</div>)}
@@ -466,18 +487,39 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     return wrapLayout ? wrapLayout(id, node, body) : body;
   };
   return (
-    <div className="@container/page grid gap-3">
+    <div ref={pageFocus} tabIndex={-1} className="@container/page grid gap-3 outline-none">
       {notice}
       {page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)
         ? <Panel role="alert">{t("This page needs a newer workspace version. Refresh after updating the workspace.")}</Panel>
-        : renderNode(page.document.root, new Set()) : <div className="grid gap-3 md:grid-cols-2">
+        : renderNode(editingRoot ?? page.document.root, new Set()) : <div className="grid gap-3 md:grid-cols-2">
         {(page.sections ?? []).map((section, i) => (
           renderSection(section, i, false)
         ))}
       </div>}
+      {!editingRoot && page.document && supportsPageUIProfile(page.document.uiProfile) && Object.entries(page.document.overlays ?? {}).map(([id, overlay]) => {
+        const open = booleanValue(overlay.openVariable);
+        const Frame = overlay.kind === "drawer" ? Sheet : Dialog;
+        const sections: string[] = [];
+        const collect = (id: string, seen = new Set<string>()) => {
+          if (seen.has(id)) return; seen.add(id);
+          const node = page.document!.nodes[id]; if (!node) return;
+          if (node.section) sections.push(node.section);
+          node.children?.forEach((child) => collect(child, seen));
+        };
+        collect(overlay.root);
+        return <Frame key={id} open={open} title={overlay.title} onOpenChange={(open) => writeState(overlay.openVariable, open)} returnFocus={callers.current[overlay.openVariable]} fallbackFocus={pageFocus.current}>
+          {open && <OverlayBody session={session} sectionIDs={sections}>{renderNode(overlay.root, new Set())}</OverlayBody>}
+        </Frame>;
+      })}
       {(page.sections ?? []).length === 0 && <Panel role="status" className="text-sm text-muted">{t("Nothing is on this page yet.")}</Panel>}
     </div>
   );
+}
+
+function OverlayBody({ children, session, sectionIDs }: { children: ReactNode; session: PageSessionStore; sectionIDs: string[] }) {
+  const key = JSON.stringify(sectionIDs);
+  useEffect(() => () => session.resetQueries(JSON.parse(key)), [session, key]);
+  return <div className="@container grid min-w-0 gap-3">{children}</div>;
 }
 
 /** Whether a page is composed of sections (ADR-0035) rather than the list-detail shorthand. */

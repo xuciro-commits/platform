@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "Close": "关闭",
+  "Delete": "删除",
+  "Flow layout and toolbar": "流式布局与工具栏",
+  "Wrap presentation items and navigate toolbar buttons with arrow keys.": "让呈现项自动换行，并使用方向键在工具栏按钮间移动。",
+  "Flow layout": "流式布局",
+  "Toolbar": "工具栏",
+
   "Input port: {name}, {type}": "输入端口：{name}，{type}",
   "Output port: {name}, {type}": "输出端口：{name}，{type}",
   "Expand block ports": "展开节点端口",

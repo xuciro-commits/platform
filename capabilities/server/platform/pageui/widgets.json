@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.3",
+  "uiProfile": "platform.page.v2.4",
   "widgets": [
     {
       "componentID": "table",
@@ -413,12 +413,50 @@
           }
         }
       }
+    },
+    {
+      "componentID": "button",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.4",
+      "title": "Button",
+      "category": "Interaction",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "interaction"
+      ],
+      "selectionMode": "none",
+      "events": [
+        {
+          "id": "click",
+          "payload": "void"
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "fieldPreset": "none"
     }
   ],
   "supportedProfiles": [
     "platform.page.v2.1",
     "platform.page.v2.2",
-    "platform.page.v2.3"
+    "platform.page.v2.3",
+    "platform.page.v2.4"
   ],
   "runtime": {
     "scope": "page",

@@ -12,12 +12,14 @@ export const pageVariableDiagnostics = (variables: Record<string, Api.PageVariab
  */
 export function usePageVariables(variables: Record<string, Api.PageVariable>, state: Record<string, unknown>, session: PageSessionStore, resources: Record<string, VariableResult>) {
   const values = useMemo(() => evaluateVariables(variables, state, pageVariableContract, resources), [variables, state, resources]);
-  const set = (id: string, value: string | boolean) => {
-    const variable = variables[id];
-    if (variable?.mode !== "state" || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > pageVariableContract.maxStringBytes) return;
-    session.setScalar(id, value);
+  const setMany = (changes: Record<string, string | boolean>) => {
+    if (Object.entries(changes).some(([id, value]) => {
+      const variable = variables[id];
+      return variable?.mode !== "state" || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > pageVariableContract.maxStringBytes;
+    })) return;
+    session.setScalars(changes);
   };
-  return { values, set };
+  return { values, set: (id: string, value: string | boolean) => setMany({ [id]: value }), setMany };
 }
 
 export function usePageSession(source: RecordSource, plan: SelectionPlan) {

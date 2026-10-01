@@ -161,6 +161,25 @@ func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string, v2
 	if v2 {
 		pageDraft = fmt.Sprintf(`{"name":"visits","title":"Visit desk","object":"build.visit","sections":[{"id":"list","configVersion":1,"widget":"table","fields":["note"]},{"id":"detail","configVersion":1,"widget":"detail","fields":["note"]}],"document":{"formatVersion":2,"uiProfile":%q,"root":"root","nodes":{"root":{"kind":"rows","children":["columns"]},"columns":{"kind":"tabs","activeVariable":"active","children":["list","detail"]},"list":{"kind":"widget","section":"list"},"detail":{"kind":"widget","section":"detail"}},"variables":{"active":{"scope":"page","type":"string","mode":"state","initial":"list"},"record":{"scope":"page","type":"record","mode":"resource","source":{"kind":"record","section":"list"}}}}}`, platform.PageUIProfile())
 	}
+	if v2 {
+		var draft map[string]any
+		_ = json.Unmarshal([]byte(pageDraft), &draft)
+		raw, _ := json.Marshal(draft["document"])
+		var document platform.PageDocument
+		_ = json.Unmarshal(raw, &document)
+		document.Nodes["root"] = platform.PageLayoutNode{Kind: "rows", Children: []string{"columns", "trigger"}}
+		document.Nodes["trigger"] = platform.PageLayoutNode{Kind: "widget", Section: "trigger"}
+		document.Nodes["overlay"] = platform.PageLayoutNode{Kind: "flow", Children: []string{"overlayDetail"}, Align: "start"}
+		document.Nodes["overlayDetail"] = platform.PageLayoutNode{Kind: "widget", Section: "overlayDetail"}
+		document.Variables["open"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: json.RawMessage(`false`)}
+		document.Overlays = map[string]platform.PageOverlay{"panel": {Root: "overlay", Kind: "drawer", Title: "Frozen panel", OpenVariable: "open"}}
+		document.Events = []platform.PageEventBinding{{Source: "trigger", Event: "click", Target: "open", Value: json.RawMessage(`true`)}}
+		draft["document"] = document
+		draft["sections"] = append(draft["sections"].([]any), map[string]any{"id": "trigger", "configVersion": 1, "widget": "button", "title": "Open panel"}, map[string]any{"id": "overlayDetail", "configVersion": 1, "widget": "detail", "fields": []string{"note"}})
+		bytes, _ := json.Marshal(draft)
+		pageDraft = string(bytes)
+	}
+
 	do(builder, build.PageType, "P1", build.PageType+".create", pageDraft)
 	page := save(platform.AssetPage, "P1")
 	if v2 {
@@ -170,7 +189,10 @@ func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string, v2
 		raw, _ := json.Marshal(stored.Document)
 		var edited platform.PageDocument
 		_ = json.Unmarshal(raw, &edited)
-		edited.Nodes["root"] = platform.PageLayoutNode{Kind: "columns", Children: []string{"columns"}}
+		edited.Nodes["root"] = platform.PageLayoutNode{Kind: "columns", Children: []string{"columns", "trigger"}}
+		o := edited.Overlays["panel"]
+		o.Title = "Later panel"
+		edited.Overlays["panel"] = o
 		payload, _ := json.Marshal(map[string]any{"title": "Later page draft", "document": edited})
 		do(builder, build.PageType, "P1", build.PageType+".edit", string(payload))
 	}
@@ -216,7 +238,7 @@ func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string, v2
 					installed = definition.Page
 				}
 			}
-			if installed == nil || installed.Document == nil || installed.Document.Nodes["root"].Kind != "rows" || installed.Sections[0].ID != "list" || installed.Sections[1].ConfigVersion != 1 || installed.Document.Nodes["columns"].Kind != "tabs" || string(installed.Document.Variables["active"].Initial) != `"list"` || installed.Document.Variables["record"].Source == nil || installed.Document.Variables["record"].Source.Section != "list" {
+			if installed == nil || installed.Document == nil || installed.Document.Nodes["root"].Kind != "rows" || installed.Document.Overlays["panel"].Title != "Frozen panel" || len(installed.Document.Events) != 1 || installed.Document.Events[0].Target != "open" || installed.Document.Nodes["overlay"].Kind != "flow" || installed.Sections[0].ID != "list" || installed.Sections[1].ConfigVersion != 1 || installed.Document.Nodes["columns"].Kind != "tabs" || string(installed.Document.Variables["active"].Initial) != `"list"` || installed.Document.Variables["record"].Source == nil || installed.Document.Variables["record"].Source.Section != "list" {
 				t.Fatalf("recovery lost the frozen V2 layout: %+v", installed)
 			}
 			draft, _ := platform.Get[build.Page](tn.caller(builder, tn.app(build.ID), false), "P1")

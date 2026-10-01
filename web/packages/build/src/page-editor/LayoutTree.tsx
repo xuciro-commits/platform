@@ -1,3 +1,4 @@
+import type { LayoutKind } from "../page-layout";
 import type { Api } from "@platform/kernel";
 import { Button, Card, Input, Select, cn, t } from "@platform/ui";
 import { useState, type DragEvent, type ReactNode } from "react";
@@ -6,13 +7,13 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Columns2, Layers, Plus, 
 
 type Label = { id?: string; widget: string; title?: string };
 
-export function LayoutTree({ document, sections, chosen, container, title, widgetTitles, widgets, onChoose, onContainer, onAdd, onMove, onRemove, onGroup, onRelocate, onInsert }: {
+export function LayoutTree({ document, sections, chosen, container, title, widgetTitles, widgets, onChoose, onContainer, onAdd, onMove, onRemove, onGroup, onRelocate, onInsert, onAddOverlay }: {
   document: Api.PageDocument; sections: Label[]; chosen: number; container?: string; title: string;
   widgetTitles: Record<string, () => string>; widgets: readonly string[];
   onChoose: (i: number) => void; onContainer: (id: string) => void; onAdd: (widget: string) => void;
   onMove: (i: number, by: -1 | 1) => void;
   onRelocate: (section: string, container: string, afterSection?: string) => void;
-  onInsert: (widget: string, container: string, afterSection?: string) => void; onRemove: (i: number) => void; onGroup: (kind: "rows" | "columns" | "tabs") => void;
+  onInsert: (widget: string, container: string, afterSection?: string) => void; onRemove: (i: number) => void; onGroup: (kind: LayoutKind) => void; onAddOverlay: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -53,7 +54,7 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
         onDragOver={(event) => over(event, id)} onDragLeave={() => setHover(undefined)} onDrop={(event) => drop(event, id)}>
         <Button size="sm" variant="ghost" aria-label={t("Expand or collapse layout group")} aria-expanded={expanded[id] !== false} onClick={() => setExpanded((old) => ({ ...old, [id]: old[id] === false }))}>{expanded[id] === false ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>
         <Button size="sm" variant="ghost" aria-pressed={container === id && chosen === -2} className={cn("min-w-0 w-0 flex-1 justify-start", container === id && chosen === -2 && "bg-row-selected text-primary")} onClick={() => onContainer(id)}>
-          {node.kind === "columns" ? <Columns2 className="size-3" /> : <Rows3 className="size-3" />}{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : "Rows")}<span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
+          {node.kind === "columns" ? <Columns2 className="size-3" /> : <Rows3 className="size-3" />}{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : "Rows")}<span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
         </Button>
       </div>
       {expanded[id] !== false && <ul className="ml-3 grid min-w-0 gap-0.5 border-l border-border pl-2">{node.children?.map((child) => renderNode(child, next))}</ul>}
@@ -72,9 +73,16 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
     <div className="grid min-w-0 gap-2 border-t border-border pt-3">
       <div className="text-xs font-semibold text-muted">{t("Layout")}</div>
       <ul className="grid min-w-0 gap-1">{renderNode(document.root)}</ul>
+      <div className="grid gap-2">
+        <strong className="text-xs text-muted">{t("Overlays")}</strong>
+        {Object.entries(document.overlays ?? {}).map(([id, overlay]) => <div key={id} className="grid gap-1"><span className="truncate text-xs">{overlay.title} · {t(overlay.kind === "drawer" ? "Drawer" : "Modal")}</span><ul>{renderNode(overlay.root)}</ul></div>)}
+        <Button size="sm" disabled={Object.keys(document.overlays ?? {}).length >= 16} onClick={onAddOverlay}>{t("Add overlay")}</Button>
+      </div>
       <div className="flex flex-wrap gap-1">
         <Button size="sm" disabled={chosen < 0} aria-label={t("Group with next in rows")} onClick={() => onGroup("rows")}><Rows3 className="size-3" />{t("Rows")}</Button>
         <Button size="sm" disabled={chosen < 0} aria-label={t("Group with next in columns")} onClick={() => onGroup("columns")}><Columns2 className="size-3" />{t("Columns")}</Button>
+        <Button size="sm" disabled={chosen < 0} onClick={() => onGroup("flow")}>{t("Flow layout")}</Button>
+        <Button size="sm" disabled={chosen < 0} onClick={() => onGroup("toolbar")}>{t("Toolbar")}</Button>
         <Button size="sm" disabled={chosen < 0} aria-label={t("Group with next in tabs")} onClick={() => onGroup("tabs")}>{t("Tabs")}</Button>
       </div>
       {sections.length === 0 && <p className="text-xs text-muted">{t("Add what people should see.")}</p>}
@@ -83,18 +91,21 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
 }
 
 export function LayoutProperties({ document, id, onChange, onPatch, onUngroup }: {
-  document: Api.PageDocument; id: string; onChange: (kind: "rows" | "columns" | "tabs") => void; onPatch: (id: string, patch: Partial<Api.PageLayoutNode>) => void; onUngroup: () => void;
+  document: Api.PageDocument; id: string; onChange: (kind: LayoutKind) => void; onPatch: (id: string, patch: Partial<Api.PageLayoutNode>) => void; onUngroup: () => void;
 }) {
   const node = document.nodes[id];
   if (!node) return null;
   return <Card className="grid content-start gap-3 p-3">
     <div className="text-xs font-semibold text-muted">{t("Layout container")}</div>
     <label className="grid gap-1 text-xs">{t("Layout")}
-      <Select value={node.kind} onChange={(event) => onChange(event.target.value as "rows" | "columns" | "tabs")}>
-        <option value="rows">{t("Rows")}</option><option value="columns">{t("Columns")}</option><option value="tabs">{t("Tabs")}</option>
+      <Select value={node.kind} onChange={(event) => onChange(event.target.value as LayoutKind)}>
+        <option value="rows">{t("Rows")}</option><option value="columns">{t("Columns")}</option><option value="tabs">{t("Tabs")}</option><option value="flow">{t("Flow layout")}</option><option value="toolbar">{t("Toolbar")}</option>
       </Select>
     </label>
     <label className="grid gap-1 text-xs">{t("Container title")}<Input value={node.title ?? ""} onChange={(event) => onPatch(id, { title: event.target.value })} /></label>
+    {(node.kind === "flow" || node.kind === "toolbar") && <label className="grid gap-1 text-xs">{t("Alignment")}<Select value={node.align ?? "start"} onChange={(event) => onPatch(id, { align: event.target.value })}>
+      <option value="start">{t("Start")}</option><option value="center">{t("Center")}</option><option value="end">{t("End")}</option><option value="between">{t("Space between")}</option>
+    </Select></label>}
     {node.kind === "tabs" && <>
       <label className="grid gap-1 text-xs">{t("Active tab variable")}<Select value={node.activeVariable ?? ""} onChange={(event) => onPatch(id, { activeVariable: event.target.value })}>
         {Object.entries(document.variables ?? {}).filter(([, value]) => value.type === "string" && value.mode === "state").map(([key, value]) => <option key={key} value={key}>{value.title || key}</option>)}
@@ -103,6 +114,6 @@ export function LayoutProperties({ document, id, onChange, onPatch, onUngroup }:
       <p className="text-xs text-muted">{t("Tabs keep visited content mounted until this page session ends.")}</p>
     </>}
     <p className="text-xs text-muted">{t("Add widgets to this container, or nest another group inside it.")}</p>
-    <Button disabled={id === document.root} onClick={onUngroup}>{t("Ungroup")}</Button>
+    <Button disabled={id === document.root || Object.values(document.overlays ?? {}).some((overlay) => overlay.root === id)} onClick={onUngroup}>{t("Ungroup")}</Button>
   </Card>;
 }

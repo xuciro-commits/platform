@@ -83,3 +83,18 @@ test("a changed member/definition scope clears values and discards the previous 
   assert.equal(store.snapshot().records.parent.status, "empty");
   assert.deepEqual(store.snapshot().scalars, {}); assert.deepEqual(store.snapshot().filters, {});
 });
+
+test("closing an overlay discards its pending query and preserves the page selection", async () => {
+  const read = deferred();
+  const store = new PageSessionStore({ entity: () => ({ fields: [] }), get: async (_, id) => ({ record: record(id) }), list: () => read.promise }, plan());
+  store.select("parent", record("A")); await tick();
+  const pending = store.querySource("overlay-list").list("sample.child", { limit: 20 });
+  store.resetQueries(["overlay-list"]);
+  read.resolve({ records: [record("old")], total: 1 }); await pending;
+  assert.equal(store.snapshot().queries["overlay-list"], undefined);
+  assert.equal(store.selected("parent").id, "A");
+  const changes = [];
+  store.subscribe(() => changes.push(store.snapshot().scalars));
+  store.setScalars({ first: false, second: true });
+  assert.deepEqual(changes, [{ first: false, second: true }]);
+});
