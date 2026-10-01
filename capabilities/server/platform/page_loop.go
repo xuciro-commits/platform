@@ -1,0 +1,134 @@
+package platform
+
+import (
+	"fmt"
+	"slices"
+)
+
+type PageLoop struct {
+	Collection   string `json:"collection"`
+	ItemVariable string `json:"itemVariable"`
+	Limit        int    `json:"limit"`
+}
+
+func (d *PageDocument) loopOwners() map[string]string {
+	owners := map[string]string{}
+	var visit func(string, string)
+	visit = func(id, owner string) {
+		if _, seen := owners[id]; seen {
+			return
+		}
+		owners[id] = owner
+		node := d.Nodes[id]
+		if node.Kind == "loop" {
+			owner = id
+		}
+		for _, child := range node.Children {
+			visit(child, owner)
+		}
+	}
+	visit(d.Root, "")
+	for _, overlay := range d.Overlays {
+		visit(overlay.Root, "")
+	}
+	return owners
+}
+
+func (d *PageDocument) checkLoops(sections []Section) error {
+	contract := pageWidgets.Runtime.Loop
+	owners := d.loopOwners()
+	sectionOwners := map[string]string{}
+	for id, node := range d.Nodes {
+		if node.Kind == "widget" {
+			sectionOwners[node.Section] = owners[id]
+		}
+	}
+	accessible := func(variable, owner string) bool {
+		v, ok := d.Variables[variable]
+		return variable == "" || ok && (v.Scope == "page" || v.Owner == owner && owner != "")
+	}
+	count, total := 0, 0
+	for id, node := range d.Nodes {
+		owner := owners[id]
+		if !accessible(node.VisibleWhen, owner) || !accessible(node.EnabledWhen, owner) || !accessible(node.ActiveVariable, owner) {
+			return fmt.Errorf("page node %s variable escapes its loop scope", id)
+		}
+		if node.Kind != "loop" {
+			if node.Loop != nil {
+				return fmt.Errorf("page node %s is not a loop", id)
+			}
+			continue
+		}
+		if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") {
+			return fmt.Errorf("page loop %s requires UI profile v2.5", id)
+		}
+		if owner != "" {
+			return fmt.Errorf("page loop %s cannot nest in another loop", id)
+		}
+		loop := node.Loop
+		if loop == nil || loop.Limit < 1 || loop.Limit > contract.MaxItems {
+			return fmt.Errorf("page loop %s needs a bounded limit", id)
+		}
+		count++
+		total += loop.Limit
+		collection := d.Variables[loop.Collection]
+		item := d.Variables[loop.ItemVariable]
+		if collection.Scope != "page" || collection.Type != "object-set" || collection.Mode != "resource" || collection.Source == nil || collection.Source.Kind != "query" || sectionOwners[collection.Source.Section] != "" {
+			return fmt.Errorf("page loop %s needs an external page query window", id)
+		}
+		if item.Scope != contract.Scope || item.Type != "record" || item.Mode != "resource" || item.Owner != id || item.Source == nil || item.Source.Kind != contract.Source || item.Source.Node != id {
+			return fmt.Errorf("page loop %s needs its own item record variable", id)
+		}
+	}
+	if count > contract.MaxContainers || total > contract.MaxTotalItems {
+		return fmt.Errorf("page loop budget exceeded")
+	}
+	for id, variable := range d.Variables {
+		if variable.Scope != contract.Scope {
+			continue
+		}
+		loop := d.Nodes[variable.Owner].Loop
+		if loop == nil || variable.Mode == "resource" && loop.ItemVariable != id {
+			return fmt.Errorf("page variable %s needs an existing loop owner", id)
+		}
+	}
+	for _, section := range sections {
+		owner := sectionOwners[section.ID]
+		if owner != "" && !slices.Contains(contract.RecordWidgets, section.Widget) && !slices.Contains(contract.PresentationWidgets, section.Widget) {
+			return fmt.Errorf("page loop %s does not support widget %s", owner, section.Widget)
+		}
+		if owner != "" && slices.Contains(contract.RecordWidgets, section.Widget) && section.RecordVariable != d.Nodes[owner].Loop.ItemVariable {
+			return fmt.Errorf("page loop section %s must bind its item record", section.ID)
+		}
+		if section.RecordVariable != "" {
+			v := d.Variables[section.RecordVariable]
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || owner == "" || v.Owner != owner || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) {
+				return fmt.Errorf("page section %s record binding escapes its loop scope", section.ID)
+			}
+		}
+	}
+	for _, event := range d.Events {
+		if !accessible(event.Target, sectionOwners[event.Source]) {
+			return fmt.Errorf("page event %s target escapes its loop scope", event.Source)
+		}
+	}
+	return nil
+}
+
+// LoopRecordSource returns the original query-producing section. The host
+// compares its object with each template binding using its native entity API.
+func (d *PageDocument) LoopRecordSource(variable string) string {
+	if d == nil {
+		return ""
+	}
+	v := d.Variables[variable]
+	loop := d.Nodes[v.Owner].Loop
+	if loop == nil {
+		return ""
+	}
+	collection := d.Variables[loop.Collection]
+	if collection.Source == nil {
+		return ""
+	}
+	return collection.Source.Section
+}

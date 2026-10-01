@@ -25,10 +25,10 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (visiting.has(id)) return fail(id, "Cyclic variable dependency");
     if (visited.has(id)) return variable.type;
     visited.add(id); visiting.add(id);
-    if (!validID.test(id) || variable.scope !== contract.scope || !(contract.valueTypes as readonly string[]).includes(variable.type) || bytes(variable.title ?? "") > 1024) fail(id, "Unsupported variable type or scope");
+    if (!validID.test(id) || (variable.scope !== contract.scope && variable.scope !== contract.loop.scope) || (variable.scope === contract.scope ? !!variable.owner : !validID.test(variable.owner ?? "")) || !(contract.valueTypes as readonly string[]).includes(variable.type) || bytes(variable.title ?? "") > 1024) fail(id, "Unsupported variable type or scope");
     if (variable.mode !== "resource" && variable.source) fail(id, "Only resource variables may declare a source");
     if (variable.mode === "resource") {
-      if (!variable.source || !validID.test(variable.source.section) || variable.expression || variable.initial !== undefined || !contract.resources.some((resource) => resource.kind === variable.source!.kind && resource.type === variable.type)) fail(id, "Resource source type mismatch");
+      if (!variable.source || (variable.scope === contract.loop.scope ? variable.type !== "record" || variable.source.kind !== contract.loop.source || variable.source.node !== variable.owner || !!variable.source.section : !validID.test(variable.source.section ?? "") || !!variable.source.node) || variable.expression || variable.initial !== undefined || (variable.scope !== contract.loop.scope && !contract.resources.some((resource) => resource.kind === variable.source!.kind && resource.type === variable.type))) fail(id, "Resource source type mismatch");
     } else if (variable.mode === "state" || variable.mode === "constant") {
       if (variable.expression || valueType(variable.initial, contract) !== variable.type) fail(id, "Initial value type mismatch");
     } else if (variable.mode === "derived") {
@@ -39,6 +39,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
         const types = expr.args.map((arg) => {
           if (!arg || typeof arg !== "object") return fail(id, "Argument needs a variable or literal");
           if (!!arg.variable === (arg.literal !== undefined)) return fail(id, "Argument needs a variable or literal");
+          if (arg.variable && variables[arg.variable]?.scope === contract.loop.scope && (variable.scope !== contract.loop.scope || variable.owner !== variables[arg.variable]?.owner)) return fail(id, "Item dependency escapes its loop scope");
           return arg.variable ? visit(arg.variable) : valueType(arg.literal, contract);
         });
         if (types.some((type) => !type || (op.input === "resource" ? !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean"].includes(type)))) fail(id, "Argument type mismatch");
@@ -58,11 +59,12 @@ const operators: Record<Contract["operators"][number]["id"], (values: Scalar[]) 
   present: () => true,
 };
 
-export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}): Record<string, VariableResult> {
+export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string): Record<string, VariableResult> {
   const compiled = compileVariables(variables, contract), result: Record<string, VariableResult> = {};
   if (compiled.issues.length) return Object.fromEntries(Object.keys(variables).map((id) => [id, { status: "error", code: "Invalid variable graph" }]));
   for (const id of compiled.order) {
     const variable = variables[id]!;
+    if (variable.scope === contract.loop.scope && variable.owner !== owner) { result[id] = { status: "empty" }; continue; }
     if (variable.mode === "resource") {
       const value = resources[id] ?? { status: "empty" };
       result[id] = (value.status === "value" || value.status === "empty") && value.value !== undefined && (value.value === null || typeof value.value !== "object" || value.value.kind !== variable.type)

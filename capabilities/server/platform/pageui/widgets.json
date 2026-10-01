@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.4",
+  "uiProfile": "platform.page.v2.5",
   "widgets": [
     {
       "componentID": "table",
@@ -49,7 +49,8 @@
       "bindingKinds": [
         "object",
         "fields",
-        "selection"
+        "selection",
+        "record-variable"
       ],
       "selectionMode": "read",
       "propsSchema": {
@@ -82,7 +83,8 @@
       "bindingKinds": [
         "object",
         "actions",
-        "selection"
+        "selection",
+        "record-variable"
       ],
       "selectionMode": "read",
       "propsSchema": {
@@ -297,7 +299,8 @@
       },
       "bindingKinds": [
         "object",
-        "selection"
+        "selection",
+        "record-variable"
       ],
       "selectionMode": "read",
       "propsSchema": {
@@ -329,7 +332,8 @@
       },
       "bindingKinds": [
         "object",
-        "selection"
+        "selection",
+        "record-variable"
       ],
       "selectionMode": "read",
       "propsSchema": {
@@ -456,7 +460,8 @@
     "platform.page.v2.1",
     "platform.page.v2.2",
     "platform.page.v2.3",
-    "platform.page.v2.4"
+    "platform.page.v2.4",
+    "platform.page.v2.5"
   ],
   "runtime": {
     "scope": "page",
@@ -529,6 +534,23 @@
         "type": "object-set",
         "widget": "table"
       }
-    ]
+    ],
+    "loop": {
+      "scope": "loop-item",
+      "source": "item",
+      "maxContainers": 8,
+      "maxItems": 100,
+      "maxTotalItems": 256,
+      "recordWidgets": [
+        "detail",
+        "actions",
+        "timeline",
+        "tasks"
+      ],
+      "presentationWidgets": [
+        "text",
+        "button"
+      ]
+    }
   }
 }

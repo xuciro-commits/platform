@@ -12,7 +12,7 @@ import { Copy, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRig
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Api as HostApi } from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
-import { addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
+import { loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
 import { OverlayProperties, ButtonEventProperties } from "./page-editor/OverlayPanel";
 import { LayoutProperties, LayoutTree } from "./page-editor/LayoutTree";
@@ -26,7 +26,7 @@ type PageRecord = {
   list?: string[]; detail?: string[]; actions?: string[];
   selections?: HostApi.SelectionVariable[];
   document?: HostApi.PageDocument;
-  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
+  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; recordVariable?: string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
@@ -58,7 +58,7 @@ const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDo
   selections: record.selections,
   document,
   sections: sections.map((s) => ({
-    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
+    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
     query: s.query ? { app: s.query.split(".")[0] ?? "", kind: "query", name: s.query.split(".").slice(1).join(".") } : undefined,
     function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,
@@ -114,7 +114,10 @@ export function PageEditor({ id }: { id: string }) {
   const chosen = selection.kind === "widget" ? sections.findIndex((section) => section.id === selection.id) : selection.kind === "container" ? -2 : selection.kind === "variables" ? -3 : -1;
   const container = selection.kind === "container" ? selection.id : undefined;
   const choose = (index: number) => { select(index < 0 || !sections[index]?.id ? { kind: "page" } : { kind: "widget", id: sections[index]!.id! }); setRightOpen(true); };
-  const edit: typeof session.edit = (update, key) => { if (!lock.current) session.edit(update, key); };
+  const edit: typeof session.edit = (update, key) => { if (!lock.current) session.edit((old) => {
+    const next = typeof update === "function" ? update(old) : { ...old, ...update };
+    return { ...next, ...synchronizeLoopBindings(next.document, next.sections) };
+  }, key); };
   const history = (direction: "undo" | "redo") => { if (lock.current) return; session[direction](); setFormProblems({}); setRefused(undefined); };
   const selectionProblem = selections.some((v, i) => !/^[a-z][a-z0-9_-]{0,63}$/.test(v.name) || selections.some((other, at) => at !== i && other.name === v.name))
     ? t("Selection names must be unique lowercase identifiers.") : sections.some((s) =>
@@ -123,8 +126,9 @@ export function PageEditor({ id }: { id: string }) {
       ? t("A widget references a missing selection or the wrong object type.") : "";
   const incompatible = document.formatVersion !== 2 || !supportsPageUIProfile(document.uiProfile) || sections.some((s) => !widgetContract(s.widget) || s.configVersion !== widgetContract(s.widget)?.configVersion);
   const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => !document.nodes[overlay.root]?.children?.length || !overlay.title.trim()) || sections.some((section) => section.widget === "button" && !document.events?.some((event) => event.source === section.id));
+  const loopProblem = Object.values(document.nodes).some((node) => node.kind === "loop" && (!node.loop || !document.variables?.[node.loop.collection]));
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
-  const invalid = overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
+  const invalid = loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
   const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
@@ -204,6 +208,7 @@ export function PageEditor({ id }: { id: string }) {
       </Card>
       {refused && <Panel role="alert" className="text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
       {variableProblems.length > 0 && <Panel role="alert" className="text-xs text-danger">{variableProblems.map((issue, index) => <p key={index}>{issue.variable}: {t(issue.code)}</p>)}</Panel>}
+      {loopProblem && <Panel role="status" className="text-xs text-muted">{t("Choose a query window for each loop before saving.")}</Panel>}
       {overlayProblem && <Panel role="status" className="text-xs text-muted">{t("Add content to each overlay and bind every button before saving.")}</Panel>}
       {selectionProblem && <Panel role="alert" className="text-xs text-danger">{selectionProblem}</Panel>}
       {incompatible && <Panel role="alert" className="text-xs text-danger">{t("This draft needs a newer workspace version. Its saved content has been preserved.")}</Panel>}
@@ -228,7 +233,7 @@ export function PageEditor({ id }: { id: string }) {
           <Properties section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
             object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
             {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
-            {canvasSelection?.widget === "button" && <ButtonEventProperties document={document} section={canvasSelection.id!} onChange={(document) => edit({ document })} />}
+            {canvasSelection?.widget === "button" && <ButtonEventProperties document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}
             {nodeID && <NodeBindings document={document} id={nodeID} button={canvasSelection?.widget === "button"} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-1.5">
             <span className="mr-auto truncate text-xs font-medium">{title || page.title}</span>
@@ -253,7 +258,7 @@ export function PageEditor({ id }: { id: string }) {
                     const destination = { container: node.kind === "widget" ? document.root : id, after: node.kind === "widget" ? node.section : undefined };
                     if (widget) add(widget, destination); else edit((old) => ({ ...old, document: relocateWidget(old.document, section, destination.container, destination.after) }));
                   }}>
-                  {container === id && <Button size="sm" variant="primary" className="absolute -top-3 left-2 z-10" onClick={() => select({ kind: "container", id })}>{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : "Rows")}</Button>}
+                  {container === id && <Button size="sm" variant="primary" className="absolute -top-3 left-2 z-10" onClick={() => select({ kind: "container", id })}>{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows")}</Button>}
                   {body}
                 </div>} />
             </div>
@@ -307,7 +312,8 @@ function Properties({ section, info, catalog, object, selections, relatedObjects
               selection: undefined, parentSelection: undefined, relation: undefined, query: undefined, inputs: undefined, fields: [], actions: [] }); }} />
         </label>
       )}
-      {(selections.length > 0 || section.selection) && contract?.selectionMode !== "none" &&
+      {section.recordVariable && <p className="text-xs text-muted">{t("This widget reads the current loop record.")}</p>}
+      {!section.recordVariable && (selections.length > 0 || section.selection) && contract?.selectionMode !== "none" &&
         <label className="grid gap-1 text-xs">{section.widget === "table" ? t("Writes selection") : t("Reads selection")}
           <Select value={section.selection ?? ""} onChange={(e) => onChange({ selection: e.target.value || undefined })}>
             <option value="">{t("Shared selection for this object")}</option>

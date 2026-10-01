@@ -1,4 +1,4 @@
-import type { EntityRecord, RecordPageData, RecordQuery, RecordSource } from "@platform/ui";
+import type { EntityRecord, RecordPageData, RecordQuery, RecordSource, RecordView } from "@platform/ui";
 
 export type RecordReference = { object: string; id: string };
 export type ReadState<T> = { status: "empty"; value?: T } | { status: "pending"; value?: T } | { status: "value"; value: T } | { status: "error"; error: string };
@@ -8,6 +8,7 @@ export type QueryWindow = {
 };
 export type PageSessionSnapshot = {
   scalars: Record<string, string | boolean>;
+  items: Record<string, Record<string, string | boolean>>;
   records: Record<string, ReadState<RecordReference>>;
   filters: Record<string, Record<string, unknown>>;
   queries: Record<string, ReadState<QueryWindow>>;
@@ -21,14 +22,20 @@ export type SelectionPlan = { objects: ReadonlyMap<string, string>; children: Re
 export class PageSessionStore {
   private source: RecordSource;
   private plan: SelectionPlan;
-  private state: PageSessionSnapshot = { scalars: {}, records: {}, filters: {}, queries: {} };
+  private state: PageSessionSnapshot = { scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
   private listeners = new Set<() => void>();
   private recordCache = new Map<string, EntityRecord>();
   private recordEpoch = new Map<string, number>();
   private queries = new Map<string, { signature: string; object: string; promise: Promise<RecordPageData> }>();
   private sources = new Map<string, RecordSource>();
+  private querySignatures = new Map<string, string>();
+  querySignature(key: string) { return this.querySignatures.get(key); }
   private queryObjects = new Map<string, string>();
   private version = 0;
+  private itemOwners = new Map<string, string>();
+  private loopQueries = new Map<string, string>();
+  private reads = new Map<string, Promise<RecordView>>();
+  private readAdapter?: RecordSource;
   private sourceRevision?: number;
   private sourceScope?: string;
   private disposed = false;
@@ -49,8 +56,47 @@ export class PageSessionStore {
   }
   resetQueries(keys: string[]) {
     const queries = { ...this.state.queries };
-    for (const key of keys) { this.queries.delete(key); delete queries[key]; }
+    for (const key of keys) { this.queries.delete(key); this.querySignatures.delete(key); delete queries[key]; }
     this.publish({ queries });
+  }
+  setItemScalar(owner: string, key: string, id: string, value: string | boolean) {
+    this.itemOwners.set(key, owner);
+    if (this.state.items[key]?.[id] !== value) this.publish({ items: { ...this.state.items, [key]: { ...this.state.items[key], [id]: value } } });
+  }
+  reconcileLoop(owner: string, signature: string, keys: string[]) {
+    const changed = this.loopQueries.get(owner) !== signature, allowed = new Set(keys), items = { ...this.state.items };
+    let removed = false;
+    for (const [key, parent] of this.itemOwners) if (parent === owner && (changed || !allowed.has(key))) { delete items[key]; this.itemOwners.delete(key); removed = true; }
+    this.loopQueries.set(owner, signature);
+    if (removed) this.publish({ items });
+  }
+  itemValues(owner: string, signature: string, key: string) { return this.loopQueries.get(owner) === signature ? this.state.items[key] : undefined; }
+  clearLoop(owner: string) { this.reconcileLoop(owner, "", []); this.loopQueries.delete(owner); }
+  readSource(): RecordSource {
+    if (!this.readAdapter) {
+      const session = this;
+      this.readAdapter = {
+        entity: (type) => session.source.entity(type), list: (type, query) => session.source.list(type, query),
+        get: (type, id) => session.readReference(type, id),
+        get scope() { return session.source.scope; }, get revision() { return session.version; },
+      };
+    }
+    return this.readAdapter;
+  }
+  private readReference(type: string, id: string): Promise<RecordView> {
+    const key = JSON.stringify([type, id]), existing = this.reads.get(key);
+    if (existing) return existing;
+    const source = this.source, scope = source.scope, version = this.version;
+    if (this.disposed) return Promise.reject(new Error("Page session ended"));
+    if (this.reads.size >= 256) this.reads.delete(this.reads.keys().next().value!);
+    const promise = Promise.resolve().then(() => source.get(type, id)).then((view) => {
+      if (this.disposed || source !== this.source || source.scope !== scope || version !== this.version) throw new Error("Obsolete record read");
+      if (view.record.id !== id) throw new Error("Record identity mismatch");
+      return view;
+    });
+    this.reads.set(key, promise);
+    void promise.catch(() => { if (this.reads.get(key) === promise) this.reads.delete(key); });
+    return promise;
   }
   selected(key: string): EntityRecord | undefined { return this.recordCache.get(key); }
   private descendants(keys: string[]) {
@@ -62,7 +108,7 @@ export class PageSessionStore {
     const changed = this.descendants(keys), queries = { ...this.state.queries };
     for (const [key, type] of this.queryObjects) {
       if (object && type === object || changed.has(this.plan.queryParents.get(key) ?? "")) {
-        this.queries.delete(key); queries[key] = { status: "empty" };
+        this.queries.delete(key); this.querySignatures.delete(key); queries[key] = { status: "empty" };
       }
     }
     return queries;
@@ -122,10 +168,11 @@ export class PageSessionStore {
     if (this.disposed || source === this.source && source.revision === this.sourceRevision && source.scope === this.sourceScope) return;
     const changedScope = source.scope !== this.sourceScope;
     this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.version++;
-    this.queries.clear();
+    this.queries.clear(); this.reads.clear();
     this.publish({ queries: Object.fromEntries(Object.keys(this.state.queries).map((key) => [key, { status: "empty" }])) });
     if (changedScope) {
-      this.publish({ scalars: {}, filters: {}, records: this.clear([...this.plan.objects.keys()]) });
+      this.itemOwners.clear(); this.loopQueries.clear(); this.querySignatures.clear();
+      this.publish({ scalars: {}, items: {}, filters: {}, records: this.clear([...this.plan.objects.keys()]) });
       return;
     }
     for (const [key, record] of this.recordCache) {
@@ -151,6 +198,7 @@ export class PageSessionStore {
   private query(key: string, object: string, input: RecordQuery): Promise<RecordPageData> {
     const query = structuredClone(input), source = this.source, scope = source.scope;
     this.queryObjects.set(key, object);
+    this.querySignatures.set(key, JSON.stringify([object, query]));
     const signature = JSON.stringify([this.version, object, query]);
     const previous = this.queries.get(key);
     if (previous?.signature === signature) return previous.promise;
@@ -176,9 +224,9 @@ export class PageSessionStore {
     return request.promise;
   }
   dispose() {
-    this.disposed = true; this.queries.clear(); this.queryObjects.clear(); this.recordCache.clear(); this.sources.clear();
+    this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear(); this.recordCache.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
-    this.state = { scalars: {}, records: {}, filters: {}, queries: {} };
+    this.state = { scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
     this.listeners.clear();
   }
 }

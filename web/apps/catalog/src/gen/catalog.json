@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:0ff0c8322df9d473",
+  "revision": "sha256:951945343b033963",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1775,6 +1775,32 @@
       "constraints": [
         "Rows are always expanded; collapse and full tree keyboard navigation are not implemented."
       ]
+    },
+    {
+      "id": "ui/virtual-stack",
+      "owner": "@platform/ui",
+      "name": "Virtual item list",
+      "summary": "Render measured rows by stable identity and retain the focused item.",
+      "layer": 2,
+      "source": "web/packages/ui/src/layout/VirtualStack.tsx",
+      "exports": [
+        "VirtualStack"
+      ],
+      "example": "VirtualItems",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "virtual",
+        "list",
+        "layout"
+      ],
+      "constraints": [
+        "The caller owns data reads and item state; offscreen local inputs are disposed."
+      ]
     }
   ],
   "translations": {
@@ -1901,6 +1927,7 @@
       "Reference links need a Workspace; attachment upload needs an explicit caller implementation.": "引用链接需要 Workspace；附件上传需要调用方明确实现。",
       "Render a visualization spec using inline values or a scoped aggregate source.": "使用内联值或限定范围的聚合数据源呈现可视化规格。",
       "Render labelled editors and validate an ad hoc schema before submission.": "呈现带标签的编辑器，并在提交前校验临时模式。",
+      "Render measured rows by stable identity and retain the focused item.": "按稳定身份呈现测量后的行，并保留当前聚焦项。",
       "Render original Page sections with shared selection and filters; composition disables writes.": "按原 Page 区块共享选择和过滤状态；装配预览关闭写入。",
       "Render original action payloads and offered transitions without duplicating role rules.": "展示原动作参数和可执行的状态跃迁，不重复定义角色规则。",
       "Render the existing chart specification over the member’s permitted aggregates.": "用原图表规范展示当前成员有权读取的聚合数据。",
@@ -1927,6 +1954,7 @@
       "Tasks and inbox": "任务与收件箱",
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
+      "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
       "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.": "本地示例在原 WorkflowEditor 展示输入到结果的流程，不执行流程。",
@@ -1948,6 +1976,7 @@
       "Use exact registry keys; unknown states fall back to a neutral label.": "使用登记表的精确键；未知状态回退为中性色标签。",
       "Use semantic tokens instead of assigning domain meaning to raw colors.": "使用语义令牌表达含义，不给原始色值赋予领域语义。",
       "Use shared surface, text, focus and status tokens across themes.": "跨主题使用共享的表面、文字、焦点和状态令牌。",
+      "Virtual item list": "虚拟条目列表",
       "Visibility and allowed actions come from the scoped source and caller.": "可见范围与允许的动作来自限定范围的数据源和调用方。",
       "Wrap presentation items and navigate toolbar buttons with arrow keys.": "让呈现项自动换行，并使用方向键在工具栏按钮间移动。",
       "conflict": "冲突",
@@ -2088,6 +2117,7 @@
       "web/packages/app/src/catalog.fixtures.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
@@ -2236,6 +2266,9 @@
     ],
     "ui/record-workspace": [
       "web/packages/app/src/pages.tsx"
+    ],
+    "ui/virtual-stack": [
+      "web/packages/app/src/runtime/LoopRuntime.tsx"
     ],
     "ui/flow-layout": [
       "web/packages/app/src/sections.tsx"

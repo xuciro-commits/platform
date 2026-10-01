@@ -15,7 +15,7 @@ export function usePageVariables(variables: Record<string, Api.PageVariable>, st
   const setMany = (changes: Record<string, string | boolean>) => {
     if (Object.entries(changes).some(([id, value]) => {
       const variable = variables[id];
-      return variable?.mode !== "state" || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > pageVariableContract.maxStringBytes;
+      return variable?.scope !== "page" || variable?.mode !== "state" || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > pageVariableContract.maxStringBytes;
     })) return;
     session.setScalars(changes);
   };

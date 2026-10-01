@@ -8,7 +8,7 @@ const vectors = JSON.parse(readFileSync(new URL("variables.vectors.json", root))
 for (const vector of vectors) test(vector.name, () => {
   assert.equal(compileVariables(vector.variables, contract).issues.length === 0, vector.valid);
   if (!vector.valid) return;
-  const values = (state) => Object.fromEntries(Object.entries(evaluateVariables(vector.variables, state, contract, vector.resources)).map(([id, result]) => {
+  const values = (state) => Object.fromEntries(Object.entries(evaluateVariables(vector.variables, state, contract, vector.resources, vector.owner)).map(([id, result]) => {
     assert.equal(result.status, "value"); return [id, result.value];
   }));
   assert.deepEqual(values({}), vector.values);

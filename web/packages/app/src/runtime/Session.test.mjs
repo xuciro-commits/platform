@@ -98,3 +98,34 @@ test("closing an overlay discards its pending query and preserves the page selec
   store.setScalars({ first: false, second: true });
   assert.deepEqual(changes, [{ first: false, second: true }]);
 });
+
+test("loop item states follow identity through reorder and clear on removal, query or scope changes", () => {
+  const source = { scope:"one", entity:()=>({fields:[]}), get:async(_,id)=>({record:record(id)}), list:async()=>({records:[],total:0}) };
+  const store = new PageSessionStore(source, plan());
+  store.reconcileLoop("loop", "query-a", ["A", "B"]);
+  store.setItemScalar("loop", "A", "open", true);
+  store.reconcileLoop("loop", "query-a", ["B", "A"]);
+  assert.equal(store.itemValues("loop", "query-a", "A").open, true);
+  assert.equal(store.itemValues("loop", "query-a", "B"), undefined);
+  assert.equal(store.itemValues("loop", "query-b", "A"), undefined);
+  store.reconcileLoop("loop", "query-a", ["B"]);
+  assert.equal(store.snapshot().items.A, undefined);
+  store.setItemScalar("loop", "B", "open", true);
+  store.reconcileLoop("loop", "query-b", ["B"]);
+  assert.equal(store.snapshot().items.B, undefined);
+  store.setItemScalar("loop", "B", "open", true);
+  source.scope="two";store.updateSource(source);
+  assert.deepEqual(store.snapshot().items, {});
+});
+
+test("loop record readers share an authorized read and reject old-scope completion", async () => {
+  const first=deferred(), second=deferred();let count=0;
+  const source={scope:"one",entity:()=>({fields:[]}),list:async()=>({records:[],total:0}),get:()=>++count===1?first.promise:second.promise};
+  const store=new PageSessionStore(source,plan()), reader=store.readSource();
+  const old=reader.get("sample.parent","A");assert.equal(old,reader.get("sample.parent","A"));await tick();assert.equal(count,1);
+  source.scope="two";store.updateSource(source);
+  const current=reader.get("sample.parent","A");await tick();assert.equal(count,2);
+  first.resolve({record:record("A")});await assert.rejects(old,/Obsolete/);
+  second.resolve({record:record("A")});assert.equal((await current).record.id,"A");
+  store.dispose();await assert.rejects(reader.get("sample.parent","B"),/ended/);
+});

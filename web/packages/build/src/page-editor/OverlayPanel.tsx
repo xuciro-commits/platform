@@ -13,8 +13,8 @@ export function OverlayProperties({ overlay, onChange, onRemove }: {
   </Card>;
 }
 
-export function ButtonEventProperties({ document, section, onChange }: {
-  document: Api.PageDocument; section: string; onChange: (document: Api.PageDocument) => void;
+export function ButtonEventProperties({ document, section, owner, onChange }: {
+  document: Api.PageDocument; section: string; owner?: string; onChange: (document: Api.PageDocument) => void;
 }) {
   const event = document.events?.find((event) => event.source === section), variable = document.variables?.[event?.target ?? ""];
   const tabs = Object.values(document.nodes).filter((node) => node.kind === "tabs" && node.activeVariable === event?.target).flatMap((node) => node.children ?? []);
@@ -25,7 +25,7 @@ export function ButtonEventProperties({ document, section, onChange }: {
       <option value="">{t("Choose an overlay action")}</option>{Object.entries(document.overlays ?? {}).flatMap(([id, overlay]) => [true, false].map((open) => <option key={`${id}:${open}`} value={`${overlay.openVariable}:${open ? "open" : "close"}`}>{t(open ? "Open {title}" : "Close {title}", { title: overlay.title })}</option>))}
     </Select></label>
     <label className="grid gap-1 text-xs">{t("Target state variable")}<Select value={event?.target ?? ""} onChange={(e) => { const variable = document.variables?.[e.target.value]; if (variable) update(e.target.value, variable.type === "boolean" ? false : ""); }}>
-      <option value="">{t("Choose a state variable")}</option>{Object.entries(document.variables ?? {}).filter(([, variable]) => variable.mode === "state").map(([id, variable]) => <option key={id} value={id}>{variable.title || id}</option>)}
+      <option value="">{t("Choose a state variable")}</option>{Object.entries(document.variables ?? {}).filter(([, variable]) => variable.mode === "state" && (variable.scope === "page" || variable.owner === owner)).map(([id, variable]) => <option key={id} value={id}>{variable.title || id}</option>)}
     </Select></label>
     {variable && (variable.type === "boolean" ? <Checkbox checked={event?.value === true} onChange={(value) => update(event!.target, value)}>{t("Event value")}</Checkbox> : tabs.length ? <label className="grid gap-1 text-xs">{t("Event value")}<Select value={String(event?.value ?? "")} onChange={(e) => update(event!.target, e.target.value)}><option value="">{t("Choose a tab")}</option>{tabs.map((id, index) => <option key={id} value={id}>{document.nodes[id]?.title || t("Tab {n}", { n: index + 1 })}</option>)}</Select></label> : <label className="grid gap-1 text-xs">{t("Event value")}<Input value={String(event?.value ?? "")} onChange={(e) => update(event!.target, e.target.value)} /></label>)}
     <p className="text-xs text-muted">{t("This event changes page state. Business actions use their original action widget.")}</p>

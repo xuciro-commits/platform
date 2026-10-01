@@ -242,6 +242,14 @@ Tabs的有序children同时是稳定tab身份，标题取子节点title或原组
 
 Overlay复用共享Dialog/Sheet的焦点陷阱、Escape和响应式滚动；打开记录调用者焦点，关闭返回仍存在的调用者。内容在关闭时卸载，清理局部表单输入及该根内查询窗口；page级选择和变量按其声明保留，尚不声明完整overlay变量作用域。成员隐藏全部Overlay内容时移除该Overlay及其打开/关闭按钮，事件和显示依赖仍需完整检查。冻结和激活保留所有根、事件与变量。
 
+### 6.4 有界Loop与item作用域（F3d）
+
+`v2.5` 增加Loop容器，loop声明collection（page级query资源变量）、itemVariable与limit。消费原表格的授权窗口，保留total/offset/完整性；最多8个Loop、每个1–100项、声明limit总和不超过256。不隐式续页、下载全库或执行动作，超过limit的窗口明确显示呈现范围。首profile拒绝嵌套Loop与模板内查询生产者，避免乘法预算和同一Section查询身份冲突。
+
+item变量为record资源，scope=loop-item、owner=Loop节点ID、source={kind:item,node:Loop节点ID}；同owner可有标量state/constant/derived，读取page值或本项值，page及其他Loop不能读取本项变量。Section.recordVariable显式绑定该项记录，不能同时声明selection；宿主检查来源对象与Section对象相同。首profile支持detail/actions/timeline/tasks及text/button模板；其他组件保留诊断，按其端口能力扩展。节点条件及按钮事件遵循相同作用域。来源在自身模板中、跨根/跨Loop泄漏及可见性读取循环拒绝。
+
+实例身份由Loop节点、对象类型与记录ID组成，不能使用数组索引。共享虚拟列表只挂载可见项及有限overscan，并保留已聚焦的项；卸载清理Widget局部输入。显式item状态在同一查询参数下按身份保留，重排不串值；删除项、查询参数改变、Loop卸载、成员/定义变化时清理。普通数据revision刷新在相同查询/成员/定义作用域下保留已挂载视图与动作输入，并标记刷新；参数/作用域改变及拒绝读取立即清理。原记录读取按可见项进行、合并同一引用的在途请求，字段/revision只留会话缓存；拒绝或晚到响应不能恢复过期内容。动作使用当前项的原记录revision及原授权入口，预览不写入。冻结/激活保留Loop与作用域绑定，不持久化运行缓存。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -414,4 +422,6 @@ F3b将选择、筛选、标量及查询窗口纳入 `runtime/PageSessionStore`�
 
 F3c实现 `v2.4` 的Flow/Toolbar、独立Overlay布局根、Modal/Drawer与Button click绑定。编辑器提供独立根树、画布/检查器、跨根移动、删除及历史；原Section ID、业务绑定和候选路径保留。Button仅写入类型化state，enabledWhen可读取记录资源的派生条件；业务动作继续使用原组件/Go owner，预览只运行纯呈现交互。共享Dialog/Sheet处理焦点返回、Escape、关闭与遮罩激活；调用者不可用时返回页面焦点。关闭卸载局部输入，并丢弃该根内查询缓存及晚到响应；page级选择保留。工程路线覆盖选中记录→打开抽屉→执行原动作→关闭返回，以及只读预览、输入清理、候选激活和刷新。Go校验覆盖独立根/类型/版本/事件完整性及成员裁剪；内存冻结/恢复用例保留Overlay与事件，未据此增加PostgreSQL或生产恢复保证。
 
-F3仍未完成：独立查询计划/集合运算、跨页面输入输出、application/overlay/loop-item/widget-local作用域及有界Loop。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+F3d实现 `v2.5` 的有界Loop、类型化item变量及同owner的标量/派生状态。编辑器可声明query窗口、组合模板、设置limit与变量作用域；详情/动作/历史/任务显式保存recordVariable，冻结/激活及内存重放恢复保留此绑定。共享VirtualStack按稳定身份测量和虚拟化，聚焦项保留；运行会话按引用合并读取，并在参数/成员/定义变化或卸载时清理。相同查询的普通数据刷新保留已挂载视图与动作输入，查询/记录拒绝不回填旧内容。工程路线验证36条授权记录按需挂载、局部状态独立及虚拟卸载后恢复、过滤切换清理、原动作拒绝保留输入/成功只改变目标记录、预览只读、候选激活与刷新；共享向量覆盖作用域类型与泄漏，Go检查覆盖外部来源、预算、嵌套拒绝及对象匹配。此profile仅消费已有表格窗口，支持范围与预算见§6.4；不是完整集合执行器或所有Widget的循环端口。
+
+F3仍未完成：独立查询计划/集合运算、跨页面输入输出及application/overlay/widget-local作用域，嵌套Loop和其他Widget的item端口仍待扩展。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

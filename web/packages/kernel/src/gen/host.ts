@@ -889,6 +889,13 @@ export type PageLayoutNode = {
   visibleWhen?: string;
   enabledWhen?: string;
   align?: string;
+  loop?: PageLoop;
+};
+
+export type PageLoop = {
+  collection: string;
+  itemVariable: string;
+  limit: number;
 };
 
 export type PageOverlay = {
@@ -900,7 +907,8 @@ export type PageOverlay = {
 
 export type PageResourceSource = {
   kind: string;
-  section: string;
+  section?: string;
+  node?: string;
 };
 
 export type PageValue = {
@@ -911,6 +919,7 @@ export type PageValue = {
 export type PageVariable = {
   title?: string;
   scope: string;
+  owner?: string;
   type: string;
   mode: string;
   initial?: unknown;
@@ -1173,6 +1182,7 @@ export type Section = {
   width?: string;
   object?: AssetRef;
   selection?: string;
+  recordVariable?: string;
   parentSelection?: string;
   relation?: string;
   query?: AssetRef;
@@ -1471,7 +1481,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.4",
+  "uiProfile": "platform.page.v2.5",
   "widgets": [
     {
       "componentID": "table",
@@ -1521,7 +1531,8 @@ export const pageUIManifest = {
       "bindingKinds": [
         "object",
         "fields",
-        "selection"
+        "selection",
+        "record-variable"
       ],
       "selectionMode": "read",
       "propsSchema": {
@@ -1554,7 +1565,8 @@ export const pageUIManifest = {
       "bindingKinds": [
         "object",
         "actions",
-        "selection"
+        "selection",
+        "record-variable"
       ],
       "selectionMode": "read",
       "propsSchema": {
@@ -1769,7 +1781,8 @@ export const pageUIManifest = {
       },
       "bindingKinds": [
         "object",
-        "selection"
+        "selection",
+        "record-variable"
       ],
       "selectionMode": "read",
       "propsSchema": {
@@ -1801,7 +1814,8 @@ export const pageUIManifest = {
       },
       "bindingKinds": [
         "object",
-        "selection"
+        "selection",
+        "record-variable"
       ],
       "selectionMode": "read",
       "propsSchema": {
@@ -1928,7 +1942,8 @@ export const pageUIManifest = {
     "platform.page.v2.1",
     "platform.page.v2.2",
     "platform.page.v2.3",
-    "platform.page.v2.4"
+    "platform.page.v2.4",
+    "platform.page.v2.5"
   ],
   "runtime": {
     "scope": "page",
@@ -2001,6 +2016,23 @@ export const pageUIManifest = {
         "type": "object-set",
         "widget": "table"
       }
-    ]
+    ],
+    "loop": {
+      "scope": "loop-item",
+      "source": "item",
+      "maxContainers": 8,
+      "maxItems": 100,
+      "maxTotalItems": 256,
+      "recordWidgets": [
+        "detail",
+        "actions",
+        "timeline",
+        "tasks"
+      ],
+      "presentationWidgets": [
+        "text",
+        "button"
+      ]
+    }
   }
 } as const;

@@ -12,6 +12,7 @@ import (
 type PageVariable struct {
 	Title      string              `json:"title,omitempty"`
 	Scope      string              `json:"scope"`
+	Owner      string              `json:"owner,omitempty"`
 	Type       string              `json:"type"`
 	Mode       string              `json:"mode"`
 	Initial    json.RawMessage     `json:"initial,omitempty"`
@@ -23,7 +24,8 @@ type PageVariable struct {
 // that section's object, query, selections and member-filtered read boundary.
 type PageResourceSource struct {
 	Kind    string `json:"kind"`
-	Section string `json:"section"`
+	Section string `json:"section,omitempty"`
+	Node    string `json:"node,omitempty"`
 }
 type PageExpression struct {
 	Op   string      `json:"op"`
@@ -44,6 +46,15 @@ type pageRuntimeContract struct {
 		Type   string `json:"type"`
 		Widget string `json:"widget"`
 	} `json:"resources"`
+	Loop struct {
+		Scope               string   `json:"scope"`
+		Source              string   `json:"source"`
+		MaxContainers       int      `json:"maxContainers"`
+		MaxItems            int      `json:"maxItems"`
+		MaxTotalItems       int      `json:"maxTotalItems"`
+		RecordWidgets       []string `json:"recordWidgets"`
+		PresentationWidgets []string `json:"presentationWidgets"`
+	} `json:"loop"`
 }
 type pageOperator struct {
 	ID      string `json:"id"`
@@ -95,7 +106,7 @@ func (d *PageDocument) CheckVariables() error {
 		if visited[id] {
 			return v.Type, nil
 		}
-		if !pageNodeID.MatchString(id) || v.Scope != contract.Scope || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
+		if !pageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope) || (v.Scope == contract.Scope && v.Owner != "") || (v.Scope == contract.Loop.Scope && !pageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
 			return fail("unsupported identity, scope or type")
 		}
 		visiting[id] = true
@@ -104,8 +115,17 @@ func (d *PageDocument) CheckVariables() error {
 		}
 		switch v.Mode {
 		case "resource":
-			if v.Source == nil || !pageNodeID.MatchString(v.Source.Section) || v.Expression != nil || len(v.Initial) != 0 {
+			if v.Source == nil || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
+			}
+			if v.Scope == contract.Loop.Scope {
+				if v.Type != "record" || v.Source.Kind != contract.Loop.Source || v.Source.Node != v.Owner || v.Source.Section != "" {
+					return fail("item source needs its loop owner")
+				}
+				break
+			}
+			if !pageNodeID.MatchString(v.Source.Section) || v.Source.Node != "" {
+				return fail("resource source needs a section")
 			}
 			found := false
 			for _, resource := range contract.Resources {
@@ -140,6 +160,10 @@ func (d *PageDocument) CheckVariables() error {
 				}
 				typ := pageLiteralType(arg.Literal)
 				if arg.Variable != "" {
+					dependency := d.Variables[arg.Variable]
+					if dependency.Scope == contract.Loop.Scope && (v.Scope != contract.Loop.Scope || v.Owner != dependency.Owner) {
+						return fail("item dependency escapes its loop scope")
+					}
 					var err error
 					typ, err = visit(arg.Variable)
 					if err != nil {

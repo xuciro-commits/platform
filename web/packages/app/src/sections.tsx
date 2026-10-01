@@ -5,7 +5,7 @@
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, ContentTabs, Dialog, FlowLayout, Sheet, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
+  Button, Card, Chart, ContentTabs, Dialog, FlowLayout, Sheet, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
@@ -13,10 +13,11 @@ import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, typ
 import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
+import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
 import { recordSlot, resourceVariables } from "./runtime/resources";
 import type { VariableResult } from "./runtime/variables";
-import { usePageVariables, usePageSession } from "./runtime/PageRuntime";
+import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
@@ -30,7 +31,7 @@ type Bound = {
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
   session?: PageSessionStore;
-  onClick?: () => void; enabled?: boolean;
+  onClick?: () => void; enabled?: boolean; readSource?: RecordSource;
   narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
 
@@ -92,8 +93,8 @@ function TableWidget({ page, section, onSelect, selected, master, narrowed, sess
 }
 
 /** The record the page has selected, with the fields the builder chose. */
-function DetailWidget({ page, section, selected }: Bound) {
-  const { source } = useHost();
+function DetailWidget({ page, section, selected, readSource }: Bound) {
+  const host = useHost(), source = readSource ?? host.source;
   const type = objectOf(page, section);
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
   // The fields alone: what people do with it is the actions widget's (ADR-0035 D2).
@@ -249,8 +250,8 @@ function FormWidget({ page, section, live, master }: Bound) {
 }
 
 /** The selected record as its page reads it: history, tasks waiting on it. */
-function useRecordView(type: string, id?: string) {
-  const { source } = useHost();
+function useRecordView(type: string, id?: string, readSource?: RecordSource) {
+  const host = useHost(), source = readSource ?? host.source;
   const [view, setView] = useState<RecordView>();
   useEffect(() => {
     let current = true;
@@ -262,11 +263,11 @@ function useRecordView(type: string, id?: string) {
 }
 
 /** The timeline (16b): the selected record's history from the journal. */
-function TimelineWidget({ page, section, selected }: Bound) {
+function TimelineWidget({ page, section, selected, readSource }: Bound) {
   const { source } = useHost();
   const type = objectOf(page, section);
   const info = source.entity(type);
-  const view = useRecordView(type, selected?.id);
+  const view = useRecordView(type, selected?.id, readSource);
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see what happened to it.")}</p>;
   if (!view || !info) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   return <RecordHistory info={info} history={view.history} heading={false} />;
@@ -274,10 +275,10 @@ function TimelineWidget({ page, section, selected }: Bound) {
 
 /** The tasks (16b): what waits on the selected record for this member — approvals
  *  and flow steps from the work app — answered where they are. */
-function TasksWidget({ page, section, selected, live }: Bound) {
+function TasksWidget({ page, section, selected, live, readSource }: Bound) {
   const { can, decide } = useHost();
   const type = objectOf(page, section);
-  const view = useRecordView(type, selected?.id);
+  const view = useRecordView(type, selected?.id, readSource);
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see what waits on it.")}</p>;
   if (!view) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   if (view.tasks.length === 0) return <p className="text-sm text-muted">{t("Nothing waits on it.")}</p>;
@@ -441,21 +442,22 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     } else variables.set(id, value);
   };
   const booleanValue = (id: string) => { const result = variables.values[id]; return result?.status === "value" && result.value === true; };
-  const renderSection = (section: Section, i: number, nested: boolean, enabled = true) => (
-    <SectionView key={section.id || i} page={page} section={section} session={session} selected={session.selected(selectionKey(objectOf(page, section), section.selection))}
+  const renderSection = (section: Section, i: number, nested: boolean, enabled = true, context?: LoopContext) => (
+    <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable && context ? context.record : session.selected(selectionKey(objectOf(page, section), section.selection))}
       master={session.selected(selectionKey(parentTypeOf(page, section), section.parentSelection))} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
       chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
       onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
         const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
-        if (typeof event.value === "string" || typeof event.value === "boolean") writeState(event.target, event.value);
+        if (typeof event.value === "string" || typeof event.value === "boolean") initialVariables[event.target]?.scope === "loop-item" && context ? context.set(event.target, event.value) : writeState(event.target, event.value);
       } : undefined} />
   );
-  const renderNode = (id: string, ancestors: Set<string>): ReactNode => {
+  const renderNode = (id: string, ancestors: Set<string>, context?: LoopContext): ReactNode => {
     if (!page.document || ancestors.has(id)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
     const node = page.document.nodes[id];
     if (!node) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    const values = context?.values ?? variables.values;
     if (node.visibleWhen) {
-      const visible = variables.values[node.visibleWhen];
+      const visible = values[node.visibleWhen];
       if (!visible || visible.status === "error") return <Panel role="alert">{t("This page variable could not be evaluated.")} {node.visibleWhen}</Panel>;
       if (visible.status === "pending") return <Panel role="status">{t("Loading page variable…")}</Panel>;
       if (visible.value !== true) return wrapLayout ? wrapLayout(id, node, <Panel>{t("Hidden by page variable")}: {node.visibleWhen}</Panel>) : null;
@@ -463,26 +465,35 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     if (node.kind === "widget") {
       const item = indexed.get(node.section);
       if (!item) return null; // server filtered this widget for the reader
-      const body = renderSection(item.section, item.i, true, !node.enabledWhen || booleanValue(node.enabledWhen));
+      if (context && !([...pageVariableContract.loop.recordWidgets, ...pageVariableContract.loop.presentationWidgets] as readonly string[]).includes(item.section.widget)) return <Panel role="alert">{t("This widget is not supported in a loop.")}</Panel>;
+      const body = renderSection(item.section, item.i, true, !node.enabledWhen || (() => { const result = values[node.enabledWhen]; return result?.status === "value" && result.value === true; })(), context);
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
-    if (!["rows", "columns", "tabs", "flow", "toolbar"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    if (!["rows", "columns", "tabs", "flow", "toolbar", "loop"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
     const next = new Set(ancestors); next.add(id);
+    if (node.kind === "loop") {
+      if (context) return <Panel role="alert">{t("Nested loops are not supported by this UI profile.")}</Panel>;
+      if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
+      const body = <LoopRuntime owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={resources}>
+        {(item) => <>{node.children?.map((child) => <div key={child} className="min-w-0">{renderNode(child, next, item)}</div>)}</>}
+      </LoopRuntime>;
+      return wrapLayout ? wrapLayout(id, node, body) : body;
+    }
     if (node.kind === "tabs") {
-      const active = variables.values[node.activeVariable ?? ""];
+      const active = values[node.activeVariable ?? ""];
       if (!active || active.status !== "value" || typeof active.value !== "string") return <Panel role="alert">{t("This page variable could not be evaluated.")} {node.activeVariable}</Panel>;
-      const body = <ContentTabs label={node.title || t("Page tabs")} value={active.value} onChange={(value) => variables.set(node.activeVariable!, value)}
+      const body = <ContentTabs label={node.title || t("Page tabs")} value={active.value} onChange={(value) => initialVariables[node.activeVariable!]?.scope === "loop-item" && context ? context.set(node.activeVariable!, value) : variables.set(node.activeVariable!, value)}
         items={(node.children ?? []).map((child, index) => ({ id: child,
-          title: page.document!.nodes[child]?.title || indexed.get(page.document!.nodes[child]?.section)?.section.title || t("Tab {n}", { n: index + 1 }), content: renderNode(child, next) }))} />;
+          title: page.document!.nodes[child]?.title || indexed.get(page.document!.nodes[child]?.section)?.section.title || t("Tab {n}", { n: index + 1 }), content: renderNode(child, next, context) }))} />;
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
     if (node.kind === "flow" || node.kind === "toolbar") {
-      const body = <FlowLayout toolbar={node.kind === "toolbar"} label={node.title || t("Toolbar")} align={node.align}>{node.children?.map((child) => <div key={child} className="min-w-0 max-w-full">{renderNode(child, next)}</div>)}</FlowLayout>;
+      const body = <FlowLayout toolbar={node.kind === "toolbar"} label={node.title || t("Toolbar")} align={node.align}>{node.children?.map((child) => <div key={child} className="min-w-0 max-w-full">{renderNode(child, next, context)}</div>)}</FlowLayout>;
       return wrapLayout ? wrapLayout(id, node, body) : body;
     }
     const body = <div key={id} className={node.kind === "columns" ? "grid min-w-0 grid-cols-1 gap-3 @md:grid-cols-[repeat(var(--page-columns),minmax(0,1fr))]" : "flex min-w-0 flex-col gap-3"}
       style={node.kind === "columns" ? { "--page-columns": Math.max(1, node.children?.length ?? 0) } as CSSProperties : undefined}>
-      {node.children?.map((child) => <div key={child} className="@container min-w-0">{renderNode(child, next)}</div>)}
+      {node.children?.map((child) => <div key={child} className="@container min-w-0">{renderNode(child, next, context)}</div>)}
     </div>;
     return wrapLayout ? wrapLayout(id, node, body) : body;
   };

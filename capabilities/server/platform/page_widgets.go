@@ -59,6 +59,11 @@ func SupportsPageUIProfile(profile string) bool {
 	return slices.Contains(pageWidgets.SupportedProfiles, profile)
 }
 
+func PageUIProfileSupports(profile, required string) bool {
+	current, minimum := slices.Index(pageWidgets.SupportedProfiles, profile), slices.Index(pageWidgets.SupportedProfiles, required)
+	return current >= 0 && minimum >= 0 && current >= minimum
+}
+
 // Widgets remains the original public discovery list, derived from the one
 // descriptor rather than a separately maintained enumeration.
 var Widgets = func() []string {

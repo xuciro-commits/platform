@@ -54,7 +54,7 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
         onDragOver={(event) => over(event, id)} onDragLeave={() => setHover(undefined)} onDrop={(event) => drop(event, id)}>
         <Button size="sm" variant="ghost" aria-label={t("Expand or collapse layout group")} aria-expanded={expanded[id] !== false} onClick={() => setExpanded((old) => ({ ...old, [id]: old[id] === false }))}>{expanded[id] === false ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>
         <Button size="sm" variant="ghost" aria-pressed={container === id && chosen === -2} className={cn("min-w-0 w-0 flex-1 justify-start", container === id && chosen === -2 && "bg-row-selected text-primary")} onClick={() => onContainer(id)}>
-          {node.kind === "columns" ? <Columns2 className="size-3" /> : <Rows3 className="size-3" />}{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : "Rows")}<span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
+          {node.kind === "columns" ? <Columns2 className="size-3" /> : <Rows3 className="size-3" />}{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows")}<span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
         </Button>
       </div>
       {expanded[id] !== false && <ul className="ml-3 grid min-w-0 gap-0.5 border-l border-border pl-2">{node.children?.map((child) => renderNode(child, next))}</ul>}
@@ -83,6 +83,7 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
         <Button size="sm" disabled={chosen < 0} aria-label={t("Group with next in columns")} onClick={() => onGroup("columns")}><Columns2 className="size-3" />{t("Columns")}</Button>
         <Button size="sm" disabled={chosen < 0} onClick={() => onGroup("flow")}>{t("Flow layout")}</Button>
         <Button size="sm" disabled={chosen < 0} onClick={() => onGroup("toolbar")}>{t("Toolbar")}</Button>
+        <Button size="sm" disabled={chosen < 0} onClick={() => onGroup("loop")}>{t("Loop")}</Button>
         <Button size="sm" disabled={chosen < 0} aria-label={t("Group with next in tabs")} onClick={() => onGroup("tabs")}>{t("Tabs")}</Button>
       </div>
       {sections.length === 0 && <p className="text-xs text-muted">{t("Add what people should see.")}</p>}
@@ -99,13 +100,18 @@ export function LayoutProperties({ document, id, onChange, onPatch, onUngroup }:
     <div className="text-xs font-semibold text-muted">{t("Layout container")}</div>
     <label className="grid gap-1 text-xs">{t("Layout")}
       <Select value={node.kind} onChange={(event) => onChange(event.target.value as LayoutKind)}>
-        <option value="rows">{t("Rows")}</option><option value="columns">{t("Columns")}</option><option value="tabs">{t("Tabs")}</option><option value="flow">{t("Flow layout")}</option><option value="toolbar">{t("Toolbar")}</option>
+        <option value="rows">{t("Rows")}</option><option value="columns">{t("Columns")}</option><option value="tabs">{t("Tabs")}</option><option value="flow">{t("Flow layout")}</option><option value="toolbar">{t("Toolbar")}</option><option value="loop">{t("Loop")}</option>
       </Select>
     </label>
     <label className="grid gap-1 text-xs">{t("Container title")}<Input value={node.title ?? ""} onChange={(event) => onPatch(id, { title: event.target.value })} /></label>
     {(node.kind === "flow" || node.kind === "toolbar") && <label className="grid gap-1 text-xs">{t("Alignment")}<Select value={node.align ?? "start"} onChange={(event) => onPatch(id, { align: event.target.value })}>
       <option value="start">{t("Start")}</option><option value="center">{t("Center")}</option><option value="end">{t("End")}</option><option value="between">{t("Space between")}</option>
     </Select></label>}
+    {node.kind === "loop" && node.loop && <>
+      <label className="grid gap-1 text-xs">{t("Loop query window")}<Select value={node.loop.collection} onChange={(event) => onPatch(id, { loop: { ...node.loop!, collection: event.target.value } })}><option value="">{t("Choose a query window")}</option>{Object.entries(document.variables ?? {}).filter(([, value]) => value.scope === "page" && value.type === "object-set" && value.source?.kind === "query").map(([key, value]) => <option key={key} value={key}>{value.title || key}</option>)}</Select></label>
+      <label className="grid gap-1 text-xs">{t("Loop item limit")}<Input type="number" min={1} max={100} value={node.loop.limit} onChange={(event) => onPatch(id, { loop: { ...node.loop!, limit: Number(event.target.value) } })} /></label>
+      <p className="text-xs text-muted">{t("Record widgets bind to each item. The source query stays outside the loop.")}</p>
+    </>}
     {node.kind === "tabs" && <>
       <label className="grid gap-1 text-xs">{t("Active tab variable")}<Select value={node.activeVariable ?? ""} onChange={(event) => onPatch(id, { activeVariable: event.target.value })}>
         {Object.entries(document.variables ?? {}).filter(([, value]) => value.type === "string" && value.mode === "state").map(([key, value]) => <option key={key} value={key}>{value.title || key}</option>)}

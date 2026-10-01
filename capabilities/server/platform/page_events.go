@@ -27,7 +27,7 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 	if len(d.Overlays) > 16 || len(d.Events) > 256 {
 		return fmt.Errorf("page overlay or event limit exceeded")
 	}
-	if (len(d.Overlays) > 0 || len(d.Events) > 0) && d.UIProfile != "platform.page.v2.4" {
+	if (len(d.Overlays) > 0 || len(d.Events) > 0) && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.4") {
 		return fmt.Errorf("page overlays and events require UI profile v2.4")
 	}
 	open := map[string]bool{}

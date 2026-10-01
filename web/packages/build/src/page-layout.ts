@@ -1,9 +1,9 @@
 import type { Api } from "@platform/kernel";
 
 type Document = Api.PageDocument;
-export type LayoutKind = "rows" | "columns" | "tabs" | "flow" | "toolbar";
+export type LayoutKind = "rows" | "columns" | "tabs" | "flow" | "toolbar" | "loop";
 type Kind = LayoutKind;
-import { pageUIProfile } from "@platform/app";
+import { pageUIProfile, pageVariableContract } from "@platform/app";
 
 export const layoutID = (prefix: string) => `${prefix}${crypto.randomUUID()}`;
 
@@ -109,6 +109,12 @@ export function setLayoutKind(document: Document, id: string, kind: Kind): Docum
   const next = structuredClone(document), node = next.nodes[id];
   if (!node || node.kind === "widget") return document;
   node.kind = kind;
+  if (kind === "loop" && !node.loop) {
+    const item = layoutID("item");
+    next.variables = { ...next.variables, [item]: { title: "", scope: "loop-item", owner: id, type: "record", mode: "resource", source: { kind: "item", node: id } } };
+    node.loop = { collection: Object.entries(next.variables).find(([, value]) => value.scope === "page" && value.mode === "resource" && value.source?.kind === "query")?.[0] ?? "", itemVariable: item, limit: 50 };
+  }
+  if (kind !== "loop") delete node.loop;
   next.uiProfile = pageUIProfile;
   if (kind !== "flow" && kind !== "toolbar") delete node.align;
   if (kind === "tabs") {
@@ -155,4 +161,23 @@ export function removeOverlay(document: Document, id: string): { document: Docum
   for (const section of sections) Object.assign(next, removeWidget(next, section));
   next.events = next.events?.filter((event) => !sections.has(event.source) && event.target !== overlay.openVariable);
   return { document: next, sections };
+}
+
+export function loopOwner(document: Document, node: string): string | undefined {
+  const seen = new Set<string>(); let parent = parentOf(document, node);
+  while (parent && !seen.has(parent)) {
+    if (document.nodes[parent]?.kind === "loop") return parent;
+    seen.add(parent); parent = parentOf(document, parent);
+  }
+  return undefined;
+}
+
+export function synchronizeLoopBindings<T extends { id?: string; widget: string; selection?: string; recordVariable?: string }>(document: Document, sections: T[]): { document: Document; sections: T[] } {
+  const removed = new Set(Object.entries(document.variables ?? {}).filter(([, value]) => value.scope === "loop-item" && document.nodes[value.owner ?? ""]?.kind !== "loop").map(([id]) => id));
+  const next = { ...document, variables: Object.fromEntries(Object.entries(document.variables ?? {}).filter(([id]) => !removed.has(id))) };
+  return { document: next, sections: sections.map((section) => {
+    const leaf = leafOf(document, section.id ?? ""), owner = leaf ? loopOwner(document, leaf) : undefined;
+    const item = owner && (pageVariableContract.loop.recordWidgets as readonly string[]).includes(section.widget) ? document.nodes[owner]?.loop?.itemVariable : undefined;
+    return item ? { ...section, selection: undefined, recordVariable: item } : section.recordVariable ? { ...section, recordVariable: undefined } : section;
+  }) };
 }

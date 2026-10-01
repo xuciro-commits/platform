@@ -59,4 +59,5 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/tasks": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.TaskInbox })),
   "ui/toggles": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Choices })),
   "ui/tree": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Hierarchy })),
+  "ui/virtual-stack": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.VirtualItems })),
 };

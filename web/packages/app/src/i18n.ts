@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "This widget is not supported in a loop.": "循环中暂不支持此组件。",
+  "Nested loops are not supported by this UI profile.": "此界面版本不支持嵌套循环。",
+  "Refreshing loop records…": "正在刷新循环记录…",
+  "Loop source could not be read.": "循环来源读取失败。",
+  "Loading loop records…": "正在加载循环记录…",
+  "No records in this query window.": "此查询窗口中没有记录。",
+  "Loop record identities are invalid.": "循环记录身份无效。",
+  "Showing {shown} of {window} records in this window; {total} match overall.": "显示此窗口内{window}条中的{shown}条记录；总计匹配{total}条。",
+  "This loop record is unavailable.": "此循环记录不可用。",
+  "Loading loop record…": "正在读取循环记录…",
+  "Choose a loop query window.": "选择循环的查询窗口。",
+  "Item dependency escapes its loop scope": "条目依赖超出其循环作用域",
+
   "Title": "标题",
   "State": "状态",
   "Quantity": "数量",

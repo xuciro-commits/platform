@@ -239,6 +239,22 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 			info = shown
 		}
+		if s.RecordVariable != "" {
+			producer := p.Document.LoopRecordSource(s.RecordVariable)
+			sourceType := ""
+			for _, candidate := range p.Sections {
+				if candidate.ID == producer {
+					sourceType = candidate.Object.Name
+					if sourceType == "" {
+						sourceType = p.Object.Name
+					}
+				}
+			}
+			if sourceType != info.Type {
+				return fmt.Errorf("%s: item record type does not match the widget object", where)
+			}
+		}
+
 		parentType := p.Object.Name
 		if s.ParentSelection != "" {
 			parentType = selections[s.ParentSelection]

@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Loop {n}": "循环{n}",
+  "Loop query window": "循环查询窗口",
+  "Choose a query window": "选择查询窗口",
+  "Loop item limit": "循环条目上限",
+  "Record widgets bind to each item. The source query stays outside the loop.": "记录组件绑定每项记录，来源查询位于循环之外。",
+  "Choose a query window for each loop before saving.": "保存前为每个循环选择查询窗口。",
+  "This widget reads the current loop record.": "此组件读取当前循环记录。",
+  "Variable scope": "变量作用域",
+  "Values are local to each loop record; the page inspector has no active item.": "值属于每项循环记录；页面检查器没有当前条目。",
+
   "Choose a tab": "选择页签",
   "Overlays": "浮层",
   "Add overlay": "添加浮层",

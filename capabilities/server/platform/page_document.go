@@ -22,14 +22,15 @@ type PageDocument struct {
 }
 
 type PageLayoutNode struct {
-	Kind           string   `json:"kind"` // rows, columns, tabs, flow, toolbar, or widget
-	Children       []string `json:"children,omitempty"`
-	Section        string   `json:"section,omitempty"`
-	Title          string   `json:"title,omitempty"`
-	ActiveVariable string   `json:"activeVariable,omitempty"`
-	VisibleWhen    string   `json:"visibleWhen,omitempty"`
-	EnabledWhen    string   `json:"enabledWhen,omitempty"`
-	Align          string   `json:"align,omitempty"`
+	Kind           string    `json:"kind"` // rows, columns, tabs, flow, toolbar, or widget
+	Children       []string  `json:"children,omitempty"`
+	Section        string    `json:"section,omitempty"`
+	Title          string    `json:"title,omitempty"`
+	ActiveVariable string    `json:"activeVariable,omitempty"`
+	VisibleWhen    string    `json:"visibleWhen,omitempty"`
+	EnabledWhen    string    `json:"enabledWhen,omitempty"`
+	Align          string    `json:"align,omitempty"`
+	Loop           *PageLoop `json:"loop,omitempty"`
 }
 
 var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
@@ -50,6 +51,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
+		if variable.Scope == pageWidgets.Runtime.Loop.Scope && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") {
+			return fmt.Errorf("page variable %s requires UI profile v2.5", id)
+		}
 		if variable.Mode == "resource" && (d.UIProfile == "platform.page.v2.1" || d.UIProfile == "platform.page.v2.2") {
 			return fmt.Errorf("page variable %s requires UI profile v2.3", id)
 		}
@@ -80,7 +84,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 	}
 	for id, variable := range d.Variables {
-		if variable.Source == nil {
+		if variable.Source == nil || variable.Source.Kind == pageWidgets.Runtime.Loop.Source {
 			continue
 		}
 		found := false
@@ -127,7 +131,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		if node.Kind != "tabs" && node.ActiveVariable != "" {
 			return fmt.Errorf("page node %s is not tabs", id)
 		}
-		if (node.Kind == "flow" || node.Kind == "toolbar" || node.Align != "" || node.EnabledWhen != "") && d.UIProfile != "platform.page.v2.4" {
+		if (node.Kind == "flow" || node.Kind == "toolbar" || node.Align != "" || node.EnabledWhen != "") && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.4") {
 			return fmt.Errorf("page node %s requires UI profile v2.4", id)
 		}
 		if node.Align != "" && (node.Kind != "flow" && node.Kind != "toolbar" || !slices.Contains([]string{"start", "center", "end", "between"}, node.Align)) {
@@ -142,7 +146,7 @@ func (d *PageDocument) Check(sections []Section) error {
 				return fmt.Errorf("page document widget %q needs one unique section", id)
 			}
 			used[node.Section] = true
-		case "rows", "columns", "tabs", "flow", "toolbar":
+		case "rows", "columns", "tabs", "flow", "toolbar", "loop":
 			if node.Section != "" || len(node.Children) == 0 || len(node.Children) > 128 {
 				return fmt.Errorf("page document container %q needs children and no section", id)
 			}
@@ -177,6 +181,9 @@ func (d *PageDocument) Check(sections []Section) error {
 	if len(seen) != len(d.Nodes) || len(used) != len(byID) {
 		return fmt.Errorf("page document has unreachable nodes or sections")
 	}
+	if err := d.checkLoops(sections); err != nil {
+		return err
+	}
 	// Include producer availability in the dependency graph: mutually hidden
 	// tables must not deadlock even when the pure expression graph is acyclic.
 	controls := map[string][]string{}
@@ -186,6 +193,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		conditions := slices.Clone(inherited)
 		if node.VisibleWhen != "" {
 			conditions = append(conditions, node.VisibleWhen)
+		}
+		if node.Loop != nil {
+			conditions = append(conditions, node.Loop.Collection)
 		}
 		if node.Kind == "widget" {
 			controls[node.Section] = conditions
@@ -250,13 +260,26 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 	}
 	variables := map[string]PageVariable{}
 	for id, variable := range d.Variables {
-		if variable.Source == nil || allowed[variable.Source.Section] {
+		if variable.Source == nil || variable.Source.Kind == pageWidgets.Runtime.Loop.Source || allowed[variable.Source.Section] {
 			variables[id] = variable
 		}
 	}
 	for changed := true; changed; {
 		changed = false
 		for id, variable := range variables {
+			if variable.Scope == pageWidgets.Runtime.Loop.Scope {
+				loop := d.Nodes[variable.Owner].Loop
+				if loop == nil {
+					delete(variables, id)
+					changed = true
+					continue
+				}
+				if _, ok := variables[loop.Collection]; !ok {
+					delete(variables, id)
+					changed = true
+					continue
+				}
+			}
 			if variable.Expression != nil {
 				for _, arg := range variable.Expression.Args {
 					if arg.Variable != "" {
@@ -276,6 +299,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		node, ok := d.Nodes[id]
 		if !ok {
 			return false
+		}
+		if node.Loop != nil {
+			if _, available := variables[node.Loop.Collection]; !available {
+				return false
+			}
 		}
 		if node.EnabledWhen != "" {
 			if _, available := variables[node.EnabledWhen]; !available {
@@ -342,6 +370,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 	copyVisible(d.Root)
 	if _, ok := out.Nodes[d.Root]; !ok {
 		out.Nodes = map[string]PageLayoutNode{d.Root: {Kind: "rows"}}
+	}
+	for id, variable := range out.Variables {
+		if variable.Scope == pageWidgets.Runtime.Loop.Scope && out.Nodes[variable.Owner].Kind != "loop" {
+			delete(out.Variables, id)
+		}
 	}
 	return out
 }
