@@ -360,6 +360,19 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 	}
 	var required []AssetRef
 	switch ref.Kind {
+	case AssetQuery:
+		var q NamedQuery
+		if err := json.Unmarshal(body, &q); err != nil {
+			return err
+		}
+		if err := q.Check(); err != nil {
+			return err
+		}
+		owner, _, ok := strings.Cut(q.Object, ".")
+		if !ok {
+			return fmt.Errorf("query object has no owner")
+		}
+		required = append(required, AssetRef{App: owner, Kind: AssetObject, Name: q.Object})
 	case AssetFunction:
 		var function AIFunction
 		if err := json.Unmarshal(body, &function); err != nil {

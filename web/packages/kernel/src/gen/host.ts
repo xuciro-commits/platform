@@ -409,6 +409,7 @@ export type Definition = {
   page?: Page;
   application?: Application;
   query?: NamedQuery;
+  queryVersions?: Record<string, NamedQuery>;
   function?: AIFunction;
   operation?: Operation;
 };

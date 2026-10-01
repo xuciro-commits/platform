@@ -223,16 +223,17 @@ var Icons = []string{"boxes", "clipboard", "people", "calendar", "wrench", "map"
 // Entity and Action reuse the same descriptions as the existing record/action
 // APIs; this registry is an index over those owners, not another executor.
 type Definition struct {
-	Ref             AssetRef     `json:"ref"`
-	Source          string       `json:"source"`  // code, until published definitions exist
-	Version         string       `json:"version"` // installed app manifest version, not a published revision
-	ContractVersion int          `json:"contractVersion"`
-	Requires        []AssetRef   `json:"requires"`
-	Entity          *EntityInfo  `json:"entity,omitempty"`
-	Action          *Action      `json:"action,omitempty"`
-	Page            *Page        `json:"page,omitempty"`
-	Application     *Application `json:"application,omitempty"`
-	Query           *NamedQuery  `json:"query,omitempty"`
-	Function        *AIFunction  `json:"function,omitempty"`
-	Operation       *Operation   `json:"operation,omitempty"`
+	Ref             AssetRef              `json:"ref"`
+	Source          string                `json:"source"`  // code, until published definitions exist
+	Version         string                `json:"version"` // installed app manifest version, not a published revision
+	ContractVersion int                   `json:"contractVersion"`
+	Requires        []AssetRef            `json:"requires"`
+	Entity          *EntityInfo           `json:"entity,omitempty"`
+	Action          *Action               `json:"action,omitempty"`
+	Page            *Page                 `json:"page,omitempty"`
+	Application     *Application          `json:"application,omitempty"`
+	Query           *NamedQuery           `json:"query,omitempty"`
+	QueryVersions   map[string]NamedQuery `json:"queryVersions,omitempty"`
+	Function        *AIFunction           `json:"function,omitempty"`
+	Operation       *Operation            `json:"operation,omitempty"`
 }

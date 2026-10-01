@@ -6,6 +6,7 @@ import { PageEditor, PagesList } from "./editor";
 import { ProcessEditor, Objects } from "./process";
 import { ModelWorkbench } from "./model-editor/ModelWorkbench";
 import { WorkflowEditor, Workflows } from "./workflow";
+import { QueryEditor, Queries } from "./query";
 import { FunctionEditor, Functions } from "./function";
 import { ApplicationEditor, Applications } from "./application";
 import { CodeEditor, CodeFunctions } from "./code";
@@ -31,12 +32,13 @@ export default defineApp({
     { id: "process", title: (p) => p.id ? t("Object design") : t("Objects"), render: (p) => p.id ? <ProcessEditor id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} /> : <Objects /> },
     { id: "model", title: () => t("Business model"), render: (p) => <ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} /> },
     { id: "workflow", title: () => t("Workflows"), render: (p) => p.id ? <WorkflowEditor key={p.id} id={p.id} /> : <Workflows /> },
+    { id: "query", title: () => t("Queries"), render: (p) => p.id ? <QueryEditor key={p.id} id={p.id} /> : <Queries /> },
     { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <Functions /> },
     { id: "code", title: () => t("Code functions"), render: (p) => p.id ? <CodeEditor key={p.id} id={p.id} /> : <CodeFunctions /> },
-    { id: "release-review", title: () => t("Release review"), render: (p) => <ReleaseReview key={`${p.kind}:${p.id}`} initialKind={["object", "page", "app", "flow", "function", "compute"].includes(p.kind ?? "") ? p.kind as ReleaseKind : "object"} initialID={p.id} /> },
+    { id: "release-review", title: () => t("Release review"), render: (p) => <ReleaseReview key={`${p.kind}:${p.id}`} initialKind={["object", "page", "app", "flow", "query", "function", "compute"].includes(p.kind ?? "") ? p.kind as ReleaseKind : "object"} initialID={p.id} /> },
     { id: "candidate-test", title: () => t("Test a candidate"), render: (p) => <CandidateTest key={p.functionId ?? p.processId ?? p.objectId ?? "object"} processId={p.processId} functionId={p.functionId} objectId={p.objectId} /> },
   ],
-  opens: { "build.app": "application", "build.page": "compose", "build.object": "process", "build.process": "workflow", "build.function": "function", "build.code": "code" }, // open a semantic asset in its editor
+  opens: { "build.app": "application", "build.page": "compose", "build.object": "process", "build.process": "workflow", "build.query": "query", "build.function": "function", "build.code": "code" }, // open a semantic asset in its editor
   nav: (host): NavSection[] => {
     const builder = host.role("build") === "builder";
     return [
@@ -53,6 +55,7 @@ export default defineApp({
       ...(builder ? [
         { label: t("Logic"), items: [
             { label: t("Workflows"), icon: <GitBranch />, route: { view: "workflow" } },
+            { label: t("Queries"), icon: <Boxes />, route: { view: "query" } },
             { label: t("AI functions"), icon: <Boxes />, route: { view: "function" } },
             { label: t("Code functions"), icon: <Boxes />, route: { view: "code" } },
         ] },

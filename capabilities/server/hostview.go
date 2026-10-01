@@ -47,6 +47,17 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 		return err
 	}
 	for _, def := range h.t.definitions {
+		if def.Query != nil && def.Query.Object == e.Type {
+			view := hostView{t: draft, app: h.t.app(def.Ref.App)}
+			if err := view.ValidateInstallQuery(*def.Query); err != nil {
+				return err
+			}
+			for _, q := range def.QueryVersions {
+				if err := view.ValidateInstallQuery(q); err != nil {
+					return err
+				}
+			}
+		}
 		if def.Function != nil && def.Function.Object == e.Type {
 			if err := (hostView{t: draft, app: h.t.app(def.Ref.App)}).ValidateInstallFunction(*def.Function); err != nil {
 				return err
@@ -70,7 +81,7 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 			continue
 		}
 		p := *def.Page
-		if p.Object.Name != e.Type && !slices.ContainsFunc(p.Sections, func(s platform.Section) bool {
+		if p.Object.Name != e.Type && !slices.ContainsFunc(p.QueryReferences(), func(ref platform.AssetRef) bool { return ref.Kind == platform.AssetObject && ref.Name == e.Type }) && !slices.ContainsFunc(p.Sections, func(s platform.Section) bool {
 			return s.Object.Name == e.Type
 		}) {
 			continue

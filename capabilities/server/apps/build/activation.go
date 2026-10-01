@@ -25,11 +25,20 @@ type ReleaseDeclaration struct {
 	Application *platform.Application
 	Operation   *platform.Operation
 	Flow        *platform.Flow
+	Query       *platform.NamedQuery
 	Function    *platform.AIFunction
 	Version     int
 }
 
 func (b *Build) ReleaseDeclaration(p ReleasePublication) (ReleaseDeclaration, error) {
+	if p.Schema == SchemaQuery {
+		saved, err := queryImage(p.Image)
+		if err != nil {
+			return ReleaseDeclaration{}, err
+		}
+		q := saved.definition()
+		return ReleaseDeclaration{Query: &q, Version: saved.Version}, nil
+	}
 	if p.Schema == SchemaCodePublish {
 		code, err := codeImage(p.Image)
 		if err != nil {
@@ -88,7 +97,7 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 		}
 		switch asset.Ref.Kind {
 		case platform.AssetObject:
-			if slices.ContainsFunc([]platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity()}, func(e platform.Entity) bool { return e.Type == asset.Ref.Name }) {
+			if slices.ContainsFunc([]platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity()}, func(e platform.Entity) bool { return e.Type == asset.Ref.Name }) {
 				continue // immutable code-owned metadata, not a tenant-authored object
 			}
 			var frozen Object
@@ -200,6 +209,22 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 		return nil, nil, err
 	}
 	available = append(available, functions...)
+	queryPublications, err := b.prepareQueryReleasePublications(assets)
+	if err != nil {
+		return nil, nil, err
+	}
+	publications = append(publications, queryPublications...)
+	queries, err := b.queryAssets()
+	if err != nil {
+		return nil, nil, err
+	}
+	available = append(available, queries...)
+	for _, asset := range assets {
+		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetQuery {
+			available = slices.DeleteFunc(available, func(old platform.ReleaseAsset) bool { return old.Ref == asset.Ref })
+			available = append(available, asset)
+		}
+	}
 	codePublications, err := b.PrepareCodeReleasePublications(assets)
 	if err != nil {
 		return nil, nil, err
@@ -236,7 +261,7 @@ func pageFunctionBindings(p platform.Page) map[string]string {
 func PublicationRecord(p ReleasePublication) (string, string, error) {
 	typ, _, ok := strings.Cut(p.Schema, ".publish")
 	var record platform.Record
-	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, FunctionType, CodeType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
+	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, QueryType, FunctionType, CodeType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
 		return "", "", fmt.Errorf("invalid release publication row")
 	}
 	return typ, record.ID, nil

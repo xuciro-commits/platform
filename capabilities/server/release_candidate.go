@@ -24,7 +24,7 @@ func (t *Tenant) releaseCandidateLocked(roots []platform.AssetRef) (platform.Rel
 	if err != nil {
 		return platform.ReleaseCandidate{}, err
 	}
-	return t.candidateWithFunctions(roots, available, roots)
+	return t.candidateWithBindings(roots, available, roots)
 }
 
 func (t *Tenant) releaseAssetsLocked(builderAssets []platform.ReleaseAsset, replaceBuilder bool) ([]platform.ReleaseAsset, error) {
@@ -161,7 +161,7 @@ func (t *Tenant) previewCandidateLocked(ref platform.AssetRef, builderAssets []p
 			roots = append(roots, other)
 		}
 	}
-	return t.candidateWithFunctions(roots, available, []platform.AssetRef{ref})
+	return t.candidateWithBindings(roots, available, []platform.AssetRef{ref})
 }
 
 // ReleasePreview is a builder-only comparison between the installed
@@ -264,7 +264,7 @@ func (t *Tenant) previewReleaseLocked(kind platform.AssetKind, id string) (Relea
 			return ReleasePreview{}, platform.ReleaseCandidate{}, err
 		}
 		oldOwners = dependentRoots(oldRoot, available)
-		current, err = t.candidateWithFunctions(oldOwners, available, []platform.AssetRef{oldRoot})
+		current, err = t.candidateWithBindings(oldOwners, available, []platform.AssetRef{oldRoot})
 		if err != nil {
 			return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("installed definition: %w", err)
 		}

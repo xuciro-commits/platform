@@ -21,7 +21,7 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		if q.Query != nil {
 			for i := range t.definitions {
 				if t.definitions[i].Ref == q.Query.Ref {
-					named = &t.definitions[i]
+					named = t.definitions[i].QueryVersion(q.Query.SourceVersion)
 					break
 				}
 			}

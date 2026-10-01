@@ -284,7 +284,7 @@ export function WorkflowEditor({ id }: { id: string }) {
       layout: Object.fromEntries(Object.entries(current.layout ?? {}).map(([id, point]) => [id === old ? name : id, point])) }));
     setChosen(name);
   };
-  const filtered = capabilities.filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
+  const filtered = capabilities.filter((capability) => !(capability.kind === "query" && capability.source === "tenant") && (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
     && [capability.title, t(capability.title), capability.description, capability.ref.app, capability.ref.name].some((value) => value.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
   const groups = [...new Set(filtered.map((capability) => capability.group))];
   if (role("build") !== "builder") return <PageHeader title={t("Logic Studio")} description={t("Only a builder can edit workflows.")} />;

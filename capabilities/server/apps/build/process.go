@@ -380,6 +380,11 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 			if step.Query == "" || step.App == "" {
 				return problem("choose an owner query")
 			}
+			if step.App == ID {
+				if _, tenantQuery := b.queries[step.Query]; tenantQuery {
+					return problem("tenant queries require an exact page-plan binding; retained workflow query bindings are not supported yet")
+				}
+			}
 		case "branch":
 			if step.Condition == nil || step.Cases["true"] == "" || step.Cases["false"] == "" {
 				return problem("choose a predicate and true/false paths")

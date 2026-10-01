@@ -6,6 +6,11 @@ import { layoutID } from "../page-layout";
 
 export function QueriesPanel({ document, object, values, onChange }: { document: Api.PageDocument; object: Api.AssetRef; values: Record<string,PageVariableValue>; onChange:(document:Api.PageDocument)=>void }) {
   const { definitions } = useHost(), [chosen,choose] = useState("");
+  const namedQueries=definitions.flatMap((d)=>{
+    if(d.ref.kind!=="query")return [];
+    const versions={...d.queryVersions,...(d.query?{[d.version]:d.query}:{})};
+    return Object.entries(versions).map(([version,query])=>({ref:d.ref,version,query,key:`${d.ref.app}/${d.ref.name}@${version}`}));
+  });
   const plans = document.queries ?? {}, id = plans[chosen] ? chosen : Object.keys(plans)[0] ?? "", plan = plans[id];
   const update = (queries:Record<string,Api.PageQuery>, variables=document.variables) => onChange({...document,uiProfile:pageUIProfile,queries,variables});
   const patch = (change:Partial<Api.PageQuery>) => update({...plans,[id]:{...plan!,...change}});
@@ -18,7 +23,7 @@ export function QueriesPanel({ document, object, values, onChange }: { document:
     {plan && <>
       <label className="grid gap-1 text-xs">{t("Query title")}<Input value={plan.title??""} onChange={(event)=>patch({title:event.target.value})}/></label>
       <label className="grid gap-1 text-xs">{t("Query object")}<SemanticObjectSelect value={plan.object.name} label={t("Query object")} onChange={(object)=>{if(object)patch({object,conditions:[],sort:["id"],query:undefined,for:undefined})}}/></label>
-      <label className="grid gap-1 text-xs">{t("Named query binding")}<Select value={plan.query?`${plan.query.ref.app}/${plan.query.ref.name}`:""} onChange={(event)=>{const named=definitions.find((d)=>d.query&&`${d.ref.app}/${d.ref.name}`===event.target.value);patch({query:named?{ref:named.ref,sourceVersion:named.version}:undefined,for:named?.query?.by?{literal:""}:undefined})}}><option value="">{t("Read the object directly")}</option>{definitions.filter((d)=>d.query?.object===plan.object.name).map((d)=><option key={`${d.ref.app}/${d.ref.name}`} value={`${d.ref.app}/${d.ref.name}`}>{d.query?.title||d.ref.name} · {d.version}</option>)}</Select></label>
+      <label className="grid gap-1 text-xs">{t("Named query binding")}<Select value={plan.query?`${plan.query.ref.app}/${plan.query.ref.name}@${plan.query.sourceVersion}`:""} onChange={(event)=>{const named=namedQueries.find((d)=>d.key===event.target.value);patch({query:named?{ref:named.ref,sourceVersion:named.version}:undefined,for:named?.query?.by?{literal:""}:undefined})}}><option value="">{t("Read the object directly")}</option>{namedQueries.filter((d)=>d.query.object===plan.object.name).map((d)=><option key={d.key} value={d.key}>{d.query?.title||d.ref.name} · {d.version}</option>)}</Select></label>
       {plan.query && <p className="break-all text-xs text-muted">{t("Named query conditions and version remain fixed.")} {plan.query.sourceVersion}</p>}
       {plan.for && <QueryValue label="Query parent input" value={plan.for} document={document} onChange={(value)=>patch({for:value})}/>}
       <label className="grid gap-1 text-xs">{t("Query window limit")}<Input type="number" min={1} max={pageVariableContract.query.maxLimit} value={plan.limit} onChange={(event)=>patch({limit:Number(event.target.value)})}/></label>

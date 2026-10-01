@@ -33,3 +33,14 @@ test("query views preserve domain and limit and reject locked or unauthorized ov
  assert.equal(queryView({...plan,search:{literal:"fixed"}},base,{search:"replace"},info,undefined,contract).status,"error");
  assert.equal(queryView(plan,base,{sort:["id"]},info,{query:{sort:["-bucket"]}},contract).status,"error");
 });
+
+test("a page binds its retained query while newer and unreadable latest versions cannot replace it",()=>{
+ const ref={app:"sample",kind:"query",name:"notes"},query={object:info.type,domain:[["active","=",true]],sort:["-bucket"],limit:5};
+ const binding={ref,sourceVersion:"q1"},bound={...plan,query:binding},values={bucket:{status:"value",value:"A"}};
+ const definition={ref,version:"q2",query:{...query,domain:[["active","=",false]],sort:["bucket"],limit:1},queryVersions:{q1:query}};
+ const compiled=compileQueryPlan(bound,variables,values,info,definition,contract);
+ assert.equal(compiled.status,"value");assert.equal(compiled.query.limit,5);assert.deepEqual(compiled.query.domain,[["active","=",true],["bucket","=","A"]]);assert.deepEqual(compiled.query.sort,["-bucket"]);
+ assert.equal(compileQueryPlan(bound,variables,values,info,{...definition,query:undefined},contract).status,"value");
+ assert.equal(compileQueryPlan(bound,variables,values,info,{...definition,queryVersions:{}},contract).status,"error");
+ assert.equal(queryView(bound,compiled,{sort:["id"]},info,definition,contract).status,"error");
+});

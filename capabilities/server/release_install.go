@@ -36,7 +36,7 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 	for _, asset := range saved.Assets {
 		roots = append(roots, asset.Ref)
 	}
-	resolved, err := t.candidateWithFunctions(roots, available, nil)
+	resolved, err := t.candidateWithBindings(roots, available, nil)
 	if err != nil {
 		return nil, fmt.Errorf("saved release cannot be installed with this runtime: %w", err)
 	}
@@ -48,8 +48,10 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 		switch schema {
 		case build.SchemaPublish:
 			return 0
-		case build.SchemaRelease:
+		case build.SchemaQuery:
 			return 1
+		case build.SchemaRelease:
+			return 2
 		case build.SchemaCodePublish, build.SchemaFunction:
 			return 1
 		case build.SchemaProcess:
@@ -161,6 +163,22 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 			view := hostView{t: draft, app: owner}
 			if err := view.InstallOperation(platform.Caller{Replaying: true}, *decl.Operation, decl.Version); err != nil {
 				return nil, err
+			}
+		case build.SchemaQuery:
+			var record build.Query
+			if err := json.Unmarshal(installation.Image, &record); err != nil {
+				return nil, err
+			}
+			view := hostView{t: draft, app: owner}
+			for i, raw := range record.Versions {
+				var q build.Query
+				if json.Unmarshal([]byte(raw), &q) != nil {
+					return nil, fmt.Errorf("invalid query family")
+				}
+				declaration := platform.NamedQuery{Name: q.Name, Title: q.Title, Description: q.Description, Object: q.Object, By: q.By, Domain: q.Domain, Sort: q.Sort, Limit: q.Limit}
+				if err := view.InstallQuery(platform.Caller{Replaying: true}, declaration, i+1); err != nil {
+					return nil, err
+				}
 			}
 		case build.SchemaFunction:
 			view := hostView{t: draft, app: owner}

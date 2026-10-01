@@ -272,7 +272,7 @@ func (t *Tenant) runningReleaseLocked(saved platform.ReleaseCandidate) (platform
 	for _, asset := range saved.Assets {
 		roots = append(roots, asset.Ref)
 	}
-	return t.candidateWithFunctions(roots, available, nil)
+	return t.candidateWithBindings(roots, available, nil)
 }
 
 // pendingWorkFitsLocked refuses an activation that would change the action a

@@ -39,8 +39,8 @@ export function ApplicationEditor({ id }: { id: string }) {
   useEffect(() => { if (query.data?.record && !dirty) setDraft(hydrate(query.data.record)); }, [query.data, dirty]);
   const change = (patch: Partial<Draft>) => { setDraft((current) => ({ ...current, ...patch })); setDirty(true); setError(""); };
   const pages = definitions.filter((definition) => definition.ref.app === "build" && definition.page);
-  const resources = definitions.filter((definition) => ["object", "function", "compute"].includes(definition.ref.kind) && (definition.ref.app !== "build" || definition.source === "tenant"))
-    .map((definition) => ({ ref: definition.ref, title: definition.entity?.title ?? definition.function?.title ?? definition.operation?.title ?? definition.ref.name, version: definition.version }));
+  const resources = definitions.filter((definition) => ["object", "query", "function", "compute"].includes(definition.ref.kind) && (definition.ref.app !== "build" || definition.source === "tenant"))
+    .map((definition) => ({ ref: definition.ref, title: definition.entity?.title ?? definition.query?.title ?? definition.function?.title ?? definition.operation?.title ?? definition.ref.name, version: definition.version }));
   for (const process of processes.data?.records ?? []) if (process.published && !process.archived)
     resources.push({ ref: { app: "build", kind: "flow", name: `build.${process.name}` }, title: process.title, version: String(process.version ?? "") });
   const selected = draft.resources ?? [];

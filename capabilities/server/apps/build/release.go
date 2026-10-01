@@ -32,6 +32,11 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	assets = append(assets, functions...)
+	queries, err := b.queryAssets()
+	if err != nil {
+		return nil, err
+	}
+	assets = append(assets, queries...)
 	code, err := b.CodeReleaseAssets()
 	if err != nil {
 		return nil, err
@@ -111,6 +116,9 @@ func readDefinitionInventory[T any](c platform.Caller) ([]T, error) {
 // so the host can compare identical code dependencies under one tenant lock.
 // Only the authenticated builder-facing host path may call this method.
 func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, after []platform.ReleaseAsset, prior, next platform.AssetRef, hadPrior bool, err error) {
+	if kind == platform.AssetQuery {
+		return b.queryDraftAssets(id)
+	}
 	if kind == platform.AssetCompute {
 		return b.CodeDraftAssets(id)
 	}
@@ -134,6 +142,11 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 		return before, nil, prior, next, false, functionErr
 	}
 	before = append(before, functions...)
+	queries, queryErr := b.queryAssets()
+	if queryErr != nil {
+		return before, nil, prior, next, false, queryErr
+	}
+	before = append(before, queries...)
 	code, codeErr := b.CodeReleaseAssets()
 	if codeErr != nil {
 		return before, nil, prior, next, false, codeErr
@@ -230,6 +243,7 @@ func (b *Build) DraftReleaseAssets(kind platform.AssetKind, id string) (before, 
 	after, err = releaseAssets(objects, pages, apps, processes, b.Manifest().Version)
 	if err == nil {
 		after = append(after, functions...)
+		after = append(after, queries...)
 		after = append(after, code...)
 	}
 	return before, after, prior, next, hadPrior, err

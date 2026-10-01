@@ -11,13 +11,9 @@ import (
 
 // namedQuery is the query an app declares, by its name.
 func (t *Tenant) namedQuery(app, name string) (platform.NamedQuery, bool) {
-	a := t.app(app)
-	if a == nil {
-		return platform.NamedQuery{}, false
-	}
-	for _, q := range a.Manifest().Queries {
-		if q.Name == name {
-			return q, true
+	for _, d := range t.definitions {
+		if d.Ref == (platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}) && d.Query != nil {
+			return *d.Query, true
 		}
 	}
 	return platform.NamedQuery{}, false

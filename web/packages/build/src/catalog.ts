@@ -4,6 +4,13 @@ import { pageTemplates } from "./templates";
 const template = pageTemplates[0];
 export const entries: CatalogEntry[] = [
   {
+    id: "scenario/query-studio", owner: "@pkg/build", name: "Reusable query workbench", summary: "Author fixed record conditions and retain explicit query versions for shared page plans.",
+    layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["query", "version", "resources", "studio"],
+    source: "web/packages/build/src/query.tsx", example: "QueryStudioExample", dependencies: ["ui/panels", "app/record-actions"],
+    constraints: ["The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.", "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it."],
+  },
+
+  {
     id: "pattern/master-detail", owner: "@pkg/build", name: "Master-detail interaction", layer: 4, authority: "recommendation", maturity: "recommended", scope: "platform",
     summary: "Keep selection and detail together using the existing record workspace or controlled table/detail sections.",
     uses: ["code", "widget", "reference"], widgets: ["table", "detail"], tags: ["list", "selection", "inspector", "record"], source: "web/packages/app/src/pages.tsx", example: "MasterDetailExample",

@@ -1,6 +1,7 @@
 import "./i18n";
 import { CatalogFixture, sampleObject, samplePage } from "@platform/app/catalog/fixtures";
 import { PageWorkspaceExample } from "@platform/app/catalog/examples";
+import { QueryEditor } from "./query";
 import { ApplicationEditor } from "./application";
 import { ComposedPage } from "@platform/app";
 import { t } from "@platform/ui";
@@ -43,3 +44,12 @@ const applicationReads = {
   "/v1/records/build.process?limit=500&offset=0": { records: [], total: 0 },
 };
 export const ApplicationStudioExample = () => <CatalogFixture reads={applicationReads} roles={builderRole} definitions={applicationDefinitions}><ApplicationEditor id="APP-SAMPLE" /></CatalogFixture>;
+
+const querySource = {...sampleObject,app:"build",type:"build.sample"};
+const queryDeclaration = {name:"shared",title:"Shared query",description:"Read ready records.",object:querySource.type,domain:[["state","=","ready"]],sort:["id"],limit:20};
+const queryDefinitions = [
+ {ref:{app:"build",kind:"object" as const,name:querySource.type},source:"tenant",version:"1",contractVersion:1,requires:[],entity:querySource},
+ {ref:{app:"build",kind:"query" as const,name:"shared"},source:"tenant",version:"1.query-1",contractVersion:1,requires:[],query:queryDeclaration,queryVersions:{"1.query-1":queryDeclaration}},
+];
+const queryReads = {"/v1/records/build.query/QUERY-SAMPLE":{record:{...queryDeclaration,id:"QUERY-SAMPLE",revision:1,state:"published",version:1,published:JSON.stringify(queryDeclaration)}}};
+export const QueryStudioExample = () => <CatalogFixture reads={queryReads} roles={builderRole} definitions={queryDefinitions}><QueryEditor id="QUERY-SAMPLE" /></CatalogFixture>;

@@ -428,7 +428,7 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 		if asset.Ref.App != build.ID {
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute {
+		if asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute {
 			continue // compiled after its source objects below
 		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {
@@ -486,6 +486,13 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 	for _, asset := range candidate.Assets {
 		if asset.Ref.Kind == platform.AssetCompute && asset.Ref.App == build.ID {
 			if err := b.InstallOperationAsset(asset); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetQuery {
+			if err := b.InstallQueryAsset(asset); err != nil {
 				return nil, err
 			}
 		}

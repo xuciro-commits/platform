@@ -70,6 +70,6 @@ func (h hostView) flowClosure(app, name string, version int) (platform.ReleaseCa
 		return platform.ReleaseCandidate{}, asset.Ref, fmt.Errorf("flow %s has no installed release asset", asset.Ref)
 	}
 	available[i] = asset
-	closure, err := h.t.candidateWithFunctions([]platform.AssetRef{asset.Ref}, available, nil)
+	closure, err := h.t.candidateWithBindings([]platform.AssetRef{asset.Ref}, available, nil)
 	return closure, asset.Ref, err
 }

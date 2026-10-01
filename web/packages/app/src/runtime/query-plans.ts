@@ -3,6 +3,13 @@ import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
 import type { QueryView } from "./Session";
 
+/** Resolve only the explicitly selected retained query version. */
+export function boundQueryDefinition(definition: Api.Definition | undefined, binding: Api.AssetBinding | undefined): Api.Definition | undefined {
+ if(!definition||!binding)return undefined;
+ if(definition.version===binding.sourceVersion&&definition.query)return definition;
+ const query=definition.queryVersions?.[binding.sourceVersion];
+ return query?{...definition,version:binding.sourceVersion,query,queryVersions:undefined}:undefined;
+}
 export function variablePlan(page:Api.Page,variableID:string):string|undefined {
  const variable=page.document?.variables?.[variableID],source=variable?.source;
  if(source?.kind==="plan")return source.query;
@@ -17,6 +24,7 @@ type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"valu
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 
 export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract): QueryPlanResult {
+  named=plan.query?boundQueryDefinition(named,plan.query):named;
   if(base.status!=="value" || !view) return base;
   const query={...base.query};
   if(view.offset!==undefined){if(!Number.isInteger(view.offset)||view.offset<0||view.offset>contract.maxOffset)return failed("Query window offset exceeds its budget.");query.offset=view.offset;}
@@ -53,6 +61,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
   const domain: unknown[] = [];
   let sort = plan.sort ?? ["id"], limit = plan.limit;
   if (plan.query) {
+    named=plan.query?boundQueryDefinition(named,plan.query):named;
     if (!named?.query || named.version !== plan.query.sourceVersion || named.ref.app !== plan.query.ref.app || named.ref.name !== plan.query.ref.name || named.ref.kind !== "query" || named.query.object !== plan.object.name) return failed("The named query version is unavailable.");
     const declaration = named.query;
     if (Array.isArray(declaration.domain)) domain.push(...declaration.domain);

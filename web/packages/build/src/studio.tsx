@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Asset = { id: string; revision: number; archived?: boolean; name: string; title: string; object?: string; pages?: string[]; resources?: { app: string; kind: string; name: string }[]; fields?: { name: string; type: string; ref?: string }[];
   state?: string; version?: number; published?: string };
-type Kind = "object" | "page" | "workflow" | "function" | "compute" | "application" | "source";
+type Kind = "object" | "page" | "workflow" | "query" | "function" | "compute" | "application" | "source";
 type StudioAsset = { key: string; kind: Kind; label: string; detail: string; record?: Asset; route?: Route };
 
 const states = defineStatuses({
@@ -18,6 +18,7 @@ const catalog: NodeCatalog = [
   { id: "source", title: t("Source object"), category: "asset", inputs: [], outputs: [{ id: "used", label: t("Used by"), type: "asset" }] },
   { id: "page", title: t("Page"), category: "asset", inputs: [{ id: "source", label: t("Object"), type: "asset" }], outputs: [{ id: "app", label: t("Application"), type: "asset" }] },
   { id: "workflow", title: t("Workflow"), category: "asset", inputs: [{ id: "source", label: t("Object"), type: "asset" }], outputs: [{ id: "used", label: t("Used by"), type: "asset" }] },
+  { id: "query", title: t("Query"), category: "asset", inputs: [{id:"source",label:t("Object"),type:"asset"}], outputs: [{id:"used",label:t("Used by"),type:"asset"}] },
   { id: "function", title: t("AI function"), category: "asset", inputs: [{ id: "source", label: t("Object"), type: "asset" }], outputs: [{ id: "used", label: t("Used by"), type: "asset" }] },
   { id: "compute", title: t("Code function"), category: "asset", inputs: [], outputs: [{ id: "used", label: t("Used by"), type: "asset" }] },
   { id: "application", title: t("Application"), category: "asset", inputs: [{ id: "page", label: t("Pages"), type: "asset" }, { id: "resource", label: t("Resources"), type: "asset" }], outputs: [] },
@@ -29,6 +30,7 @@ function StudioInventory() {
   const objects = useRecordInventory<Asset>("build.object");
   const pages = useRecordInventory<Asset>("build.page");
   const workflows = useRecordInventory<Asset>("build.process");
+  const queries = useRecordInventory<Asset>("build.query");
   const functions = useRecordInventory<Asset>("build.function");
   const computes = useRecordInventory<Asset>("build.code");
   const applications = useRecordInventory<Asset>("build.app");
@@ -72,6 +74,7 @@ function StudioInventory() {
     }
     for (const [kind, records, view] of [
       ["page", pages.data?.records ?? [], "compose"], ["workflow", workflows.data?.records ?? [], "workflow"],
+      ["query", queries.data?.records ?? [], "query"],
       ["function", functions.data?.records ?? [], "function"],
       ["compute", computes.data?.records ?? [], "code"],
     ] as const) {
@@ -88,7 +91,7 @@ function StudioInventory() {
       assets.push({ key, kind: "application", label: record.title || record.name, detail: record.name, record,
         route: { view: "application", params: { id: record.id } } });
       for (const ref of record.resources ?? []) {
-        const kind = ({ object: "object", flow: "workflow", function: "function", compute: "compute" } as Record<string, string>)[ref.kind];
+        const kind = ({ object: "object", flow: "workflow", query: "query", function: "function", compute: "compute" } as Record<string, string>)[ref.kind];
         const asset = assets.find((asset) => asset.kind === kind && asset.record?.name === (ref.kind === "object" || ref.kind === "flow" ? ref.name.replace(/^build\./, "") : ref.name));
         const from = asset?.key ?? (ref.kind === "object" ? source(ref.name) : undefined);
         if (from) edges.push({ id: `resource:${key}:${from}`, source: from, sourcePort: "used", target: key, targetPort: "resource" });
@@ -99,7 +102,7 @@ function StudioInventory() {
       }
     }
     return { assets, edges };
-  }, [applications.data, functions.data, computes.data, objects.data, pages.data, workflows.data, definitions]);
+  }, [applications.data, queries.data, functions.data, computes.data, objects.data, pages.data, workflows.data, definitions]);
   const visible = useMemo(() => {
     const q = search.trim().toLocaleLowerCase();
     const matches = q ? all.assets.filter((asset) => `${asset.label} ${asset.detail}`.toLocaleLowerCase().includes(q)) : all.assets;
@@ -117,8 +120,8 @@ function StudioInventory() {
   const connections = all.edges.filter((edge) => edge.source === selected || edge.target === selected)
     .map((edge) => all.assets.find((asset) => asset.key === (edge.source === selected ? edge.target : edge.source)))
     .filter((asset): asset is StudioAsset => Boolean(asset));
-  const loading = [objects, pages, workflows, functions, computes, applications].some((query) => query.isLoading);
-  const failed = [objects, pages, workflows, functions, computes, applications].some((query) => query.isError);
+  const loading = [objects, pages, workflows, queries, functions, computes, applications].some((query) => query.isLoading);
+  const failed = [objects, pages, workflows, queries, functions, computes, applications].some((query) => query.isError);
   return <div className="grid gap-4">
     <PageHeader title={t("Application Studio")} description={t("Build with the capabilities already available in this workspace.")}
       actions={<Button onClick={() => open({ view: "studio-templates" })}>{t("Studio templates")}</Button>} />
@@ -127,6 +130,7 @@ function StudioInventory() {
         { title: "Objects and relationships", detail: "Define fields, relationships, actions and access.", route: { view: "process" }, query: objects },
         { title: "Pages", detail: "Compose an interface over your business objects.", route: { view: "pages" }, query: pages },
         { title: "Workflows", detail: "Connect actions, people and published functions.", route: { view: "workflow" }, query: workflows },
+        { title: "Queries", detail: "Publish reusable record reads and bind pages to an exact version.", route: {view:"query"}, query:queries },
         { title: "AI functions", detail: "Configure typed advice and review its results.", route: { view: "function" }, query: functions },
         { title: "Code functions", detail: "Compile typed Go or TinyGo algorithms for pages and workflows.", route: { view: "code" }, query: computes },
         { title: "Applications", detail: "Organize pages and published resources, then review the whole application release.", route: { view: "applications" }, query: applications },
@@ -163,7 +167,7 @@ function StudioInventory() {
           {current.record?.version ? <p className="text-xs">{t("Version")} {current.record.version}</p> : null}
           {current.route && <Button variant="primary" onClick={() => open(current.route!)}>{t("Open selected asset")}</Button>}
           {current.record && <div className="flex flex-wrap gap-2">
-            <AssetControls type={`build.${({ object: "object", page: "page", workflow: "process", function: "function", compute: "code", application: "app", source: "object" })[current.kind]}`} record={current.record} />
+            <AssetControls type={`build.${({ object: "object", page: "page", workflow: "process", query: "query", function: "function", compute: "code", application: "app", source: "object" })[current.kind]}`} record={current.record} />
             {["object", "workflow", "function"].includes(current.kind) && <Button size="sm" onClick={() => open({ view: "candidate-test", params: {
               [current.kind === "workflow" ? "processId" : current.kind === "function" ? "functionId" : "objectId"]: current.record!.id,
             } })}>{t("Test selected asset")}</Button>}

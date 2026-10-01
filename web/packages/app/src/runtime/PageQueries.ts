@@ -3,7 +3,7 @@ import { pageUIManifest, type Api } from "@platform/kernel";
 import { findDefinition, useHost } from "../index";
 import type { PageSessionStore, PageSessionSnapshot, QueryView } from "./Session";
 import type { VariableResult } from "./variables";
-import { compileQueryPlan, queryView, variablePlan, planKey } from "./query-plans";
+import { boundQueryDefinition, compileQueryPlan, queryView, variablePlan, planKey } from "./query-plans";
 
 export function usePageQueries(page: Api.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot) {
   const { source, definitions } = useHost(), plans = page.document?.queries ?? {};
@@ -34,7 +34,7 @@ export function usePageQueries(page: Api.Page, values: Record<string, VariableRe
   }
   const windows = Object.fromEntries(compiled.map(([id,result]) => [id,result.status==="value" ? {
     query:result.query,page:session.queryPage(planKey(id),result.signature),error:snapshot.queries[planKey(id)]?.status==="error"&&session.querySignature(planKey(id))===result.signature?"Resource read failed":undefined,
-    searchLocked:!!plans[id]?.search,sortLocked:!!(plans[id]?.query&&findDefinition(definitions,plans[id]!.query!.ref)?.query?.sort?.length),maxOffset:pageUIManifest.runtime.query.maxOffset,
+    searchLocked:!!plans[id]?.search,sortLocked:!!(plans[id]?.query&&boundQueryDefinition(findDefinition(definitions,plans[id]!.query!.ref),plans[id]!.query)?.query?.sort?.length),maxOffset:pageUIManifest.runtime.query.maxOffset,
     onChange:(change:QueryView)=>{const original=base.find(([key])=>key===id)?.[1];if(original?.status!=="value")return;const next=queryView(plans[id]!,original,{...(snapshot.views[planKey(id)]?.base===original.signature?snapshot.views[planKey(id)]:{}),...change},source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query);if(next.status==="value")session.setQueryView(planKey(id),original.signature,change);}
   }:undefined]));
   return { resources, signatures, windows, retry: (id: string) => { session.resetQueries([planKey(id)]); rerun((round) => round + 1); } };

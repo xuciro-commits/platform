@@ -277,8 +277,21 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			if def.Query == nil {
 				continue
 			}
-			if _, ok := entities[def.Query.Object]; !ok {
-				continue // it reads an object this member does not
+			info, ok := entities[def.Query.Object]
+			if !ok {
+				continue
+			}
+			def.QueryVersions = maps.Clone(def.QueryVersions)
+			for version, query := range def.QueryVersions {
+				if checkNamedQuery(query, info) != nil {
+					delete(def.QueryVersions, version)
+				}
+			}
+			if checkNamedQuery(*def.Query, info) != nil {
+				def.Query = nil
+				if len(def.QueryVersions) == 0 {
+					continue
+				}
 			}
 		case platform.AssetFunction:
 			if def.Function == nil || !slices.Contains(def.Function.Roles, m.Roles[def.Ref.App]) {
@@ -425,12 +438,12 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						if q.Query != nil {
 							for i := range t.definitions {
 								if t.definitions[i].Ref == q.Query.Ref {
-									named = &t.definitions[i]
+									named = t.definitions[i].QueryVersion(q.Query.SourceVersion)
 									break
 								}
 							}
 						}
-						if page.CheckQuerySchema(q, info, named) == nil {
+						if page.CheckQuerySchema(q, info, named) == nil && (named == nil || checkNamedQuery(*named.Query, info) == nil) {
 							doc.Queries[id] = q
 						}
 					}

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:54944c0f1e109393",
+  "revision": "sha256:9a79cfd6aa6759ba",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -697,6 +697,35 @@
         "This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.",
         "A tenant object must be created, tested and published in the connected Application Studio.",
         "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions."
+      ]
+    },
+    {
+      "id": "scenario/query-studio",
+      "owner": "@pkg/build",
+      "name": "Reusable query workbench",
+      "summary": "Author fixed record conditions and retain explicit query versions for shared page plans.",
+      "layer": 5,
+      "authority": "example",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "reference"
+      ],
+      "tags": [
+        "query",
+        "version",
+        "resources",
+        "studio"
+      ],
+      "source": "web/packages/build/src/query.tsx",
+      "example": "QueryStudioExample",
+      "dependencies": [
+        "ui/panels",
+        "app/record-actions"
+      ],
+      "constraints": [
+        "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.",
+        "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it."
       ]
     },
     {
@@ -1856,6 +1885,7 @@
       "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
       "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.": "组合组件库、画布与检查器，支持键盘和指针调整面板宽度。",
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
+      "Author fixed record conditions and retain explicit query versions for shared page plans.": "编写固定记录条件，保留共享页面计划的明确查询版本。",
       "Authorized cross-application search": "受权跨应用搜索",
       "Authorized record detail": "受权记录详情",
       "Authorized record list": "受权记录列表",
@@ -1951,6 +1981,7 @@
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Pressed": "按下",
       "Published code function call": "已发布代码函数调用",
+      "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it.": "查询使用原记录读取与成员权限；页面明确选择保留的来源版本，后续草稿与发布不会替换它。",
       "Read": "已读",
       "Read a record with history, tasks and the actions offered to the current member.": "查看记录、历史、任务和当前成员可执行的动作。",
       "Read a record's declared fields, related work and recorded changes.": "阅读记录的已声明字段、相关工作与变更历史。",
@@ -1973,6 +2004,7 @@
       "Render the existing chart specification over the member’s permitted aggregates.": "用原图表规范展示当前成员有权读取的聚合数据。",
       "Results come from the current member’s host. The offline example searches synthetic records only.": "结果来自当前成员的宿主。离线示例只搜索合成记录。",
       "Retro button": "复古实体按键",
+      "Reusable query workbench": "复用查询设计台",
       "Reveal supporting details while keeping the summary visible.": "显示补充详情，同时保留摘要。",
       "Rows are always expanded; collapse and full tree keyboard navigation are not implemented.": "所有行始终展开；尚未实现折叠与完整的树键盘导航。",
       "Schema form": "模式表单",
@@ -2001,6 +2033,7 @@
       "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
       "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.": "本地示例在原 WorkflowEditor 展示输入到结果的流程，不执行流程。",
       "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
+      "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",
       "The offline preview shows the binding only and never executes Wasm or reads tenant data.": "离线预览仅展示绑定，不执行 Wasm 或读取租户数据。",
       "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
       "The same list-detail descriptor serves a live workspace and a read-only sample preview.": "同一列表详情声明用于实际工作台和只读样例预览。",
@@ -2059,6 +2092,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
       "web/packages/build/src/studio.tsx",
@@ -2103,6 +2137,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
       "web/packages/build/src/studio.tsx",
@@ -2135,6 +2170,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/query.tsx",
       "web/packages/build/src/simulate.tsx",
       "web/packages/build/src/template-ui.tsx",
       "web/packages/build/src/workflow-binding.tsx",
@@ -2184,6 +2220,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
       "web/packages/build/src/studio.tsx",
@@ -2256,6 +2293,7 @@
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
       "web/packages/build/src/studio.tsx",
@@ -2309,6 +2347,7 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/query.tsx",
       "web/packages/build/src/workflow.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
@@ -2365,7 +2404,8 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
-      "web/packages/build/src/process.tsx"
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/query.tsx"
     ],
     "ui/editor-workbench": [
       "web/packages/build/src/editor.tsx",
