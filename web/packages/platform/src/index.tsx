@@ -12,7 +12,7 @@ import { Members, MemberDetail, Organization } from "./people";
 import { Apps, Matrix, Protocols } from "./apps";
 import { Automation, Integrations, AppSettingsView, Audit } from "./operations";
 import { AIProviders, AIPlayground, AIUsage } from "./ai";
-import { Flows, FlowPage, Agents, Evaluations } from "./processes";
+import { Flows, Agents, Evaluations } from "./processes";
 import { Glossary, Knowledge } from "./knowledge";
 
 const views: View[] = [
@@ -21,7 +21,6 @@ const views: View[] = [
   { id: "agents", title: () => t("Agents"), render: () => <Agents /> },
   { id: "evaluations", title: () => t("Evaluations"), render: () => <Evaluations /> },
   { id: "flows", title: () => t("Flows"), render: () => <Flows /> },
-  { id: "flow", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowPage id={p.id ?? ""} /> },
   { id: "members", title: () => t("Members"), render: () => <Members /> },
   { id: "member", title: (p) => p.id ?? t("Member"), render: (p) => <MemberDetail id={p.id ?? ""} /> },
   { id: "organization", title: () => t("Organisation"), render: () => <Organization /> },
@@ -45,7 +44,6 @@ export default defineApp({
   title: t("Settings"),
   icon: <SlidersHorizontal />,
   home: { view: "members" },
-  opens: { "flow.instance": "flow" },
   views,
   nav: (host) => {
     const nav = (label: string, icon: React.ReactNode, view: string) => ({ label, icon, route: { view } });

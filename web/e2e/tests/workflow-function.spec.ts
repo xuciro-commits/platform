@@ -47,7 +47,7 @@ for (const fixture of [
       const workflow = inventory.records.find((p: { name: string }) => p.name === name);
       expect(workflow.steps[0].kind).toBe("ai");
       expect(workflow.steps[0].function).toEqual({ app: "build", name, version: 1 });
-      await page.getByRole("button", { name: "Publish workflow", exact: true }).click();
+      await page.getByRole("button", { name: "Direct install", exact: true }).click();
       await expect.poll(async () => (await (await request.get(`/v1/records/build.process/${workflow.id}`, { headers: { Authorization: `Bearer ${fixture.builder}` } })).json()).record.version).toBe(1);
       await page.reload();
       await chooseBlock(page, name);

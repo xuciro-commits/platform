@@ -106,18 +106,27 @@ func (t *Tenant) registerDefinitions() error {
 				return fmt.Errorf("asset %s requires missing object %s", ref, page.Object)
 			}
 			info := objectInfo[page.Object.Name]
-			for _, fields := range [][]string{page.ListFields, page.DetailFields} {
-				if len(fields) == 0 {
-					return fmt.Errorf("asset %s needs list and detail fields", ref)
+			if len(page.Selections) != 0 && len(page.Sections) == 0 {
+				return fmt.Errorf("asset %s: selections need composed sections", ref)
+			}
+			if len(page.Sections) != 0 {
+				if err := t.checkSections(page, info); err != nil {
+					return err
 				}
-				seenFields := map[string]bool{}
-				for _, field := range fields {
-					if seenFields[field] {
-						return fmt.Errorf("asset %s repeats field %s", ref, field)
+			} else {
+				for _, fields := range [][]string{page.ListFields, page.DetailFields} {
+					if len(fields) == 0 {
+						return fmt.Errorf("asset %s needs list and detail fields", ref)
 					}
-					seenFields[field] = true
-					if _, ok := info.Field(field); !ok {
-						return fmt.Errorf("asset %s requires missing field %s on %s", ref, field, page.Object)
+					seenFields := map[string]bool{}
+					for _, field := range fields {
+						if seenFields[field] {
+							return fmt.Errorf("asset %s repeats field %s", ref, field)
+						}
+						seenFields[field] = true
+						if _, ok := info.Field(field); !ok {
+							return fmt.Errorf("asset %s requires missing field %s on %s", ref, field, page.Object)
+						}
 					}
 				}
 			}
@@ -135,8 +144,12 @@ func (t *Tenant) registerDefinitions() error {
 			if len(uniqueRefs(requires)) != len(requires) {
 				return fmt.Errorf("asset %s repeats an action", ref)
 			}
+			asset, err := platform.PageReleaseAsset(manifest.ID, manifest.Version, page)
+			if err != nil {
+				return err
+			}
 			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1,
-				Requires: uniqueRefs(requires), Page: &page}); err != nil {
+				Requires: asset.Requires, Page: &page}); err != nil {
 				return err
 			}
 		}
@@ -286,6 +299,14 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 				continue
 			}
 			visibleFields := map[string]bool{}
+			page.Selections = slices.DeleteFunc(slices.Clone(page.Selections), func(selection platform.SelectionVariable) bool {
+				_, visible := entities[selection.Object.Name]
+				return !visible
+			})
+			selections := map[string]bool{}
+			for _, selection := range page.Selections {
+				selections[selection.Name] = true
+			}
 			for _, field := range info.Fields {
 				visibleFields[field.Name] = true
 			}
@@ -297,6 +318,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			if len(page.Sections) > 0 {
 				sections := make([]platform.Section, 0, len(page.Sections))
 				for _, section := range page.Sections {
+					if section.Selection != "" && !selections[section.Selection] || section.ParentSelection != "" && !selections[section.ParentSelection] {
+						continue
+					}
 					shown := info
 					if section.Object.Name != "" && section.Object.Name != page.Object.Name {
 						other, ok := entities[section.Object.Name]

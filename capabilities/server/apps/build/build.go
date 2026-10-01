@@ -152,19 +152,19 @@ func (b *Build) Manifest() platform.Manifest {
 			ListFields:   []string{"title", "name", "state", "installed"},
 			DetailFields: []string{"title", "name", "plural", "description", "fields", "state", "installed"},
 			Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".create"},
-				{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}},
+				{App: ID, Kind: platform.AssetAction, Name: ObjectType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: ObjectType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaPublish}}},
 			{Name: "applications", Title: "Applications", Description: "The applications this organisation hands to its people. Each holds pages and appears in their launcher.",
 				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: AppType},
 				ListFields:   []string{"title", "name", "icon", "state"},
 				DetailFields: []string{"title", "name", "description", "icon", "pages", "groups", "state"},
 				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: AppType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaHandOver}}},
+					{App: ID, Kind: platform.AssetAction, Name: AppType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: AppType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaHandOver}}},
 			{Name: "pages", Title: "Pages", Description: "The pages this organisation composes over the objects it may read. Publish one to put it in the workspace.",
 				Layout: "list-detail", Object: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: PageType},
 				ListFields:   []string{"title", "name", "object", "state"},
 				DetailFields: []string{"title", "name", "description", "object", "list", "detail", "actions", "state"},
 				Actions: []platform.AssetRef{{App: ID, Kind: platform.AssetAction, Name: PageType + ".create"},
-					{App: ID, Kind: platform.AssetAction, Name: PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: SchemaRelease}}}}}
+					{App: ID, Kind: platform.AssetAction, Name: PageType + ".edit"}, {App: ID, Kind: platform.AssetAction, Name: PageType + ".archive"}, {App: ID, Kind: platform.AssetAction, Name: SchemaRelease}}}}}
 }
 
 // sortedTypes are the installed types, in a fixed order: a manifest and a
@@ -348,18 +348,42 @@ func (b *Build) Input(platform.Caller, string, []byte, time.Time) (any, *kernel.
 	return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 }
 
-// Archiving removes an object from restore, while its installed data class
-// remains in records/history. Safe retirement is not implemented; retain the
-// published definition, including dependencies of retained workflows.
-func (b *Build) checkObjectArchive(c platform.Caller, id string) *kernel.Error {
+// Draft archival never retires installed definitions or retained runtime versions.
+func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kernel.Error {
 	if c.Role() != Builder {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
-	record, exists := platform.Get[Object](c, id)
-	if !exists || record.Published == "" {
+	published := false
+	switch typ {
+	case ObjectType:
+		record, _ := platform.Get[Object](c, id)
+		published = record.Published != ""
+	case PageType:
+		record, _ := platform.Get[Page](c, id)
+		published = record.Published != ""
+	case AppType:
+		record, _ := platform.Get[Application](c, id)
+		published = record.Published != ""
+	case ProcessType:
+		record, _ := platform.Get[Process](c, id)
+		published = record.Published != ""
+	case FunctionType:
+		record, _ := platform.Get[Function](c, id)
+		published = record.Published != ""
+	case CodeType:
+		record, _ := platform.Get[Code](c, id)
+		published = record.Published != ""
+		if record.State == "compiling" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A compiling code function cannot be archived; wait for its build result")
+		}
+	}
+	if !published {
 		return nil
 	}
-	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published object cannot be archived; its installed definition must be retained")
+	if typ == ObjectType {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published object cannot be archived; its installed definition must be retained")
+	}
+	return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A published definition cannot be archived; its installed version must be retained")
 }
 
 // Submit takes the builder's own actions and those generated for every object
@@ -377,8 +401,8 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if s.GetSchema().GetName() == ObjectType+".archive" && !c.Replaying {
-		if err := b.checkObjectArchive(c, s.GetTarget().GetId()); err != nil {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, FunctionType, CodeType}, typ) {
+		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}
 	}

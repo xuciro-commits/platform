@@ -472,7 +472,7 @@ func (h *Host) Handler() http.Handler {
 			WriteJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
 			return
 		}
-		WriteJSON(w, http.StatusOK, answer)
+		WriteJSON(w, http.StatusOK, t.Translate(answer, t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/releases/candidates", Summary: "Persist exact, immutable bytes for a builder-reviewed candidate; does not activate it (ADR-0039 20a)", Body: ReleaseSaveRequest{}, Answer: ReleaseSaved{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		if m.Roles[build.ID] != build.Builder {

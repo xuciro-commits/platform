@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.tsx"
+    ".": "./src/index.tsx",
+    "./catalog": "./src/catalog.ts",
+    "./catalog/examples": "./src/catalog.examples.tsx",
+    "./templates": "./src/templates.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",
@@ -16,7 +19,8 @@
     "@platform/ui": "workspace:*",
     "@tanstack/react-query": "^5.103.2",
     "lucide-react": "^1.47.0",
-    "react": "^19.3.0"
+    "react": "^19.3.0",
+    "@platform/catalog": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

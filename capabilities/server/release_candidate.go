@@ -175,6 +175,9 @@ type ReleasePreview struct {
 	Removed     []platform.AssetRef `json:"removed"`
 	Changed     []platform.AssetRef `json:"changed"`
 	Diagnostic  string              `json:"diagnostic,omitempty"`
+	// CandidateActions are owner-compiled draft inputs for builder test forms,
+	// not the installed member catalog or permission to execute.
+	CandidateActions []platform.Action `json:"candidateActions"`
 }
 
 type ReleasePreviewRequest struct {
@@ -216,8 +219,30 @@ func (t *Tenant) PreviewRelease(m platform.Member, kind platform.AssetKind, id s
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	reply, _, err := t.previewReleaseLocked(kind, id)
-	return reply, err
+	reply, candidate, err := t.previewReleaseLocked(kind, id)
+	reply.CandidateActions = []platform.Action{}
+	if err != nil {
+		return reply, err
+	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App != build.ID || asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		var object build.Object
+		if err := json.Unmarshal(asset.Body, &object); err != nil {
+			return ReleasePreview{}, fmt.Errorf("candidate object %s: %w", asset.Ref, err)
+		}
+		// A function/flow candidate retains its source object, but may not
+		// retain its create/edit action assets. Ask the original owner for
+		// those test inputs using that exact object image, not the live model.
+		for _, action := range platform.EntityActions(build.Entity(object)) {
+			if action.Payload == nil {
+				action.Payload = []platform.Field{}
+			}
+			reply.CandidateActions = append(reply.CandidateActions, action)
+		}
+	}
+	return reply, nil
 }
 
 // The candidate returned here is exactly what the builder saw in the
@@ -229,7 +254,7 @@ func (t *Tenant) previewReleaseLocked(kind platform.AssetKind, id string) (Relea
 		return ReleasePreview{}, platform.ReleaseCandidate{}, fmt.Errorf("tenant has no builder")
 	}
 	before, after, oldRoot, newRoot, hadPrior, diagnostic := owner.DraftReleaseAssets(kind, id)
-	reply := ReleasePreview{Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
+	reply := ReleasePreview{CandidateActions: []platform.Action{}, Included: []platform.AssetRef{}, Added: []platform.AssetRef{}, Removed: []platform.AssetRef{}, Changed: []platform.AssetRef{}}
 	var current platform.ReleaseCandidate
 	var oldOwners []platform.AssetRef
 	if hadPrior {

@@ -52,6 +52,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 	}
 	requires := []AssetRef{page.Object}
 	requires = append(requires, page.Actions...)
+	for _, selection := range page.Selections {
+		requires = append(requires, selection.Object)
+	}
 	for _, section := range page.Sections {
 		if section.Function != nil {
 			requires = append(requires, section.Function.Ref)
@@ -331,6 +334,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		}
 		required = append(required, page.Object)
 		required = append(required, page.Actions...)
+		for _, selection := range page.Selections {
+			required = append(required, selection.Object)
+		}
 		for _, section := range page.Sections {
 			if section.Function != nil {
 				required = append(required, section.Function.Ref)

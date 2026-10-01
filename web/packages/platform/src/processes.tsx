@@ -1,6 +1,6 @@
 // Settings: flows (ADR-0020), agents and their evaluations (ADR-0021).
-import { ChainGraph, Records, newId, useHost, useOpenRecord, useReadQuery as useRead, type AgentInfo } from "@platform/app";
-import { Button, Checkbox, DataTable, Form, FlowGraph, FlowView, StatusTag, Tag, defineStatuses, PageHeader, Select, useWorkspace, type ColumnDef, type FlowDefinition, type FlowInstanceData, t } from "@platform/ui";
+import { Records, newId, useHost, useReadQuery as useRead, type AgentInfo } from "@platform/app";
+import { Button, Checkbox, DataTable, Form, FlowGraph, StatusTag, Tag, defineStatuses, PageHeader, Select, type ColumnDef, type FlowDefinition, t } from "@platform/ui";
 import { useState } from "react";
 import type { Api } from "@platform/kernel";
 import { type AIModel } from "./shared";
@@ -30,37 +30,6 @@ export function Flows() {
       <h2 className="mt-4 mb-2 text-sm font-semibold">{t("Instances")}</h2>
       <Records type="flow.instance" description={t("Every run of every flow, newest changes first.")} />
     </>
-  );
-}
-
-export function FlowPage({ id }: { id: string }) {
-  const { open } = useWorkspace();
-  const openRecord = useOpenRecord();
-  const { decide, can } = useHost();
-  const view = useRead<{ record: FlowInstanceData }>(`/v1/records/flow.instance/${encodeURIComponent(id)}`, 3000).data;
-  const flows = useRead<FlowDefinition[]>("/v1/flows").data ?? [];
-  const x = view?.record;
-  if (!x) return <p className="text-sm text-muted">{t("Loading")} {id}…</p>;
-  const definition = flows.find((f) => f.id === x.flow && f.version === x.version);
-  const target = { type: "flow.instance", id: x.id };
-  const live = !["done", "compensated", "canceled"].includes(x.state);
-  const next = flows.some((f) => f.id === x.flow && f.version > x.version);
-  return (
-    <div className="grid max-w-4xl gap-3">
-      <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => open({ view: "inbox" }, { window: "float" })}>{t("Back to inbox")}</Button>
-        {x.subject && <Button variant="ghost" onClick={() => openRecord(x.subject!)}>{t("Open related record")}</Button>}
-      </div>
-      {live && (
-        <div className="flex gap-2">
-          {can("flow.instance.retry") && <Button size="sm" onClick={() => void decide("flow.instance.retry", target, {})}>{t("Retry")}</Button>}
-          {can("flow.instance.move") && next && <Button size="sm" onClick={() => void decide("flow.instance.move", target, {})}>{t("Move to the next version")}</Button>}
-          {can("flow.instance.cancel") && <Button size="sm" variant="danger" onClick={() => void decide("flow.instance.cancel", target, {})}>{t("Cancel")}</Button>}
-        </div>
-      )}
-      <ChainGraph of={`flow.instance/${x.id}`} />
-      <FlowView definition={definition} instance={x} actions={(k) => live && can("flow.instance.skip") && (k.waits === "stuck" || k.waits === "retry" || k.waits === "undo")
-        ? <Button size="sm" variant="ghost" onClick={() => void decide("flow.instance.skip", target, { token: k.id })}>{t("Skip")}</Button> : null} />
-    </div>
   );
 }
 

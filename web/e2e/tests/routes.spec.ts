@@ -105,6 +105,9 @@ test("route 29: define an object, publish it, use it", async ({ page }) => {
   await expect(page.getByRole("row").filter({ hasText: name })).toBeVisible();
 
   await page.getByRole("row").filter({ hasText: name }).click();
+  await page.getByRole("button", { name: "Open full view", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Design Visit", exact: true })).toBeVisible();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Objects", exact: true }).click();
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByRole("definition").filter({ hasText: `build.${name}` })).toBeVisible();
 
@@ -125,7 +128,7 @@ test("route 30: compose a page of widgets and use it", async ({ page, request })
   await decide(request, "sales", "crm", "crm.opportunity.open", { type: "crm.opportunity", id: opp }, { account, title: "Composed offsite " + opp });
   await open(page, "manager", "/home");
   await page.getByRole("button", { name: "Application Studio" }).first().click();
-  await page.getByRole("button", { name: "Pages", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Name" }).first().fill(name);
@@ -136,9 +139,10 @@ test("route 30: compose a page of widgets and use it", async ({ page, request })
   // The composer: a layout panel, a canvas over real records, a widget panel.
   await page.getByRole("row").filter({ hasText: name }).click();
   await expect(page.getByText("Actions do not run while you compose.")).toBeVisible();
-  // Nothing laid out yet: publishing is not offered, and the composer says why.
-  await expect(page.getByRole("button", { name: "Publish" })).toBeDisabled();
-  await expect(page.getByText("Add at least one widget before publishing.")).toBeVisible();
+  // Neither installation nor release review accepts an empty page.
+  await expect(page.getByRole("button", { name: "Direct install", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Review release", exact: true })).toBeDisabled();
+  await expect(page.getByText("Add at least one widget before installing or reviewing a release.")).toBeVisible();
   await page.getByRole("button", { name: "Table", exact: true }).click();
   await page.getByRole("group", { name: "Fields it shows" }).getByRole("button", { name: "Stage" }).click();
   await page.getByRole("button", { name: "Detail", exact: true }).click();
@@ -147,7 +151,17 @@ test("route 30: compose a page of widgets and use it", async ({ page, request })
   // Clicking a widget on the canvas takes it in hand.
   await page.locator("div").filter({ hasText: /^Detail/ }).last().click();
   await expect(page.getByRole("group", { name: "Fields it shows" })).toBeVisible();
-  await page.getByRole("button", { name: "Publish" }).click();
+  // Release review saves the edited page and keeps its kind/id, without installing it.
+  const pages = await (await request.get("/v1/records/build.page?limit=500", { headers: { Authorization: "Bearer manager" } })).json();
+  const draft = pages.records.find((record: { name: string }) => record.name === name);
+  await page.getByRole("button", { name: "Review release", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Definition kind" })).toHaveValue("page");
+  await expect(page.getByRole("combobox", { name: "Saved draft" })).toHaveValue(draft.id);
+  const saved = await (await request.get(`/v1/records/build.page/${draft.id}`, { headers: { Authorization: "Bearer manager" } })).json();
+  expect(saved.record.sections.map((section: { widget: string }) => section.widget)).toEqual(["table", "detail", "actions"]);
+  expect(saved.record.state).toBe("draft");
+  await open(page, "manager", `/compose?id=${draft.id}`);
+  await page.getByRole("button", { name: "Direct install", exact: true }).click();
   await expect(page.getByText("The page is in the workspace.")).toBeVisible(); // what the host answered
   await expect(page.getByRole("region", { name: "Compose a page", exact: true }).getByText("Published", { exact: true })).toBeVisible(); // and the composer shows where the page stands
 
@@ -168,7 +182,7 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   // A page to hand over, composed as in route 30.
   await open(page, "manager", "/home");
   await page.getByRole("button", { name: "Application Studio" }).first().click();
-  await page.getByRole("button", { name: "Pages", exact: true }).click();
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("button", { name: "Pages", exact: true }).click();
   await page.getByRole("button", { name: "Create page" }).click();
   let dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Name" }).first().fill(pageName);
@@ -177,7 +191,7 @@ test("route 31: hand an application to the people who use it", async ({ page, re
   await dialog.getByRole("button", { name: "Create" }).click();
   await page.getByRole("row").filter({ hasText: pageName }).click();
   await page.getByRole("button", { name: "Table", exact: true }).click();
-  await page.getByRole("button", { name: "Publish" }).click();
+  await page.getByRole("button", { name: "Direct install", exact: true }).click();
   await expect(page.getByText("The page is in the workspace.")).toBeVisible();
 
   // The application: a name, an icon, the page it holds.
@@ -240,7 +254,7 @@ test("route 34: states and actions a tenant defines", async ({ page, request }) 
   await inHand.getByRole("textbox", { name: "Value" }).fill("500");
   await inHand.getByRole("textbox", { name: "Message when it does not hold" }).fill("Valuables go back through the manager.");
   await expect(inHand.getByRole("group", { name: "Taken from" }).getByRole("button", { name: "Found" })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Publish" }).click();
+  await page.getByRole("button", { name: "Direct install", exact: true }).click();
   await expect(page.getByText("The object is installed with its states and actions.")).toBeVisible();
 
   // A person takes it on a record, from the object's own page.

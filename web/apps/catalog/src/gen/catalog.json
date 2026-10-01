@@ -1,0 +1,2324 @@
+{
+  "revision": "sha256:ab0f2b19759bc3aa",
+  "entries": [
+    {
+      "id": "app/agent-assistant",
+      "owner": "@platform/app",
+      "name": "Member-scoped assistant",
+      "summary": "Give an installed agent a goal; review its proposed actions before confirming them.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "agent",
+        "goal",
+        "human-review"
+      ],
+      "source": "web/packages/app/src/agents.tsx",
+      "exports": [
+        "Assistant"
+      ],
+      "example": "AssistantExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "app/agent-run"
+      ],
+      "snippet": "import { Assistant } from \"@platform/app\";\n<Assistant about=\"your.object/record-id\" />"
+    },
+    {
+      "id": "app/agent-run",
+      "owner": "@platform/app",
+      "name": "Agent run and execution chain",
+      "summary": "Inspect the original run trace, structured drafts and cross-application execution links.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "agent",
+        "trace",
+        "chain"
+      ],
+      "source": "web/packages/app/src/agents.tsx",
+      "exports": [
+        "RunView",
+        "ChainGraph"
+      ],
+      "example": "AgentRunExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "states": [
+        "running",
+        "waiting",
+        "done",
+        "stopped",
+        "withheld"
+      ],
+      "snippet": "import { RunView } from \"@platform/app\";\n<RunView id={runID} />"
+    },
+    {
+      "id": "app/composed-page",
+      "owner": "@platform/app",
+      "name": "Controlled page composition",
+      "summary": "Render original Page sections with shared selection and filters; composition disables writes.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "widget"
+      ],
+      "tags": [
+        "page",
+        "selection",
+        "relation",
+        "binding"
+      ],
+      "source": "web/packages/app/src/sections.tsx",
+      "exports": [
+        "ComposedPage",
+        "SectionView"
+      ],
+      "example": "ComposedPageExample",
+      "constraints": [
+        "Named record selections keep same-object lists independent; parent bindings scope related sections."
+      ],
+      "widgets": [
+        "table",
+        "detail",
+        "actions",
+        "chart",
+        "metric",
+        "text",
+        "filter",
+        "form",
+        "timeline",
+        "tasks",
+        "function",
+        "compute"
+      ],
+      "dependencies": [
+        "app/generated-form",
+        "ui/record-page",
+        "app/record-actions",
+        "app/compute-call"
+      ],
+      "snippet": "import { ComposedPage } from \"@platform/app\";\n<ComposedPage page={installedPage.page} live={false} />"
+    },
+    {
+      "id": "app/compute-call",
+      "owner": "@platform/app",
+      "name": "Published code function call",
+      "summary": "Bind a published Go/Wasm operation to a page using its original owner contract.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "widget"
+      ],
+      "tags": [
+        "wasm",
+        "compute",
+        "binding"
+      ],
+      "source": "web/packages/app/src/capability.tsx",
+      "exports": [
+        "ComputeCall"
+      ],
+      "example": "ComputeExample",
+      "constraints": [
+        "A runtime call needs the actual host, a published owner revision and the current member’s permissions.",
+        "The offline preview shows the binding only and never executes Wasm or reads tenant data."
+      ],
+      "widgets": [
+        "compute"
+      ],
+      "states": [
+        "pending",
+        "error",
+        "unavailable"
+      ],
+      "snippet": "import { ComputeCall } from \"@platform/app\";\n<ComputeCall binding={publishedOperation} bindings={inputs} record={selected} recordType=\"your.object\" />"
+    },
+    {
+      "id": "app/dashboard",
+      "owner": "@platform/app",
+      "name": "Bound dashboard",
+      "summary": "Render the existing chart specification over the member’s permitted aggregates.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "widget"
+      ],
+      "tags": [
+        "aggregate",
+        "chart",
+        "metric"
+      ],
+      "source": "web/packages/app/src/index.tsx",
+      "exports": [
+        "DashboardView"
+      ],
+      "example": "DashboardExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "widgets": [
+        "chart",
+        "metric"
+      ],
+      "snippet": "import { DashboardView } from \"@platform/app\";\n<DashboardView dashboard={dashboard} />"
+    },
+    {
+      "id": "app/flow-instance",
+      "owner": "@platform/app",
+      "name": "Authorized workflow run",
+      "summary": "Inspect a workflow's recorded version and startup release through the member's original read permissions.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "reference"
+      ],
+      "tags": [
+        "flow",
+        "run",
+        "version",
+        "release"
+      ],
+      "source": "web/packages/app/src/flows.tsx",
+      "exports": [
+        "FlowInstanceView"
+      ],
+      "example": "FlowInstanceExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "ui/flow",
+        "app/agent-run"
+      ],
+      "states": [
+        "loading",
+        "error",
+        "running",
+        "waiting",
+        "done"
+      ],
+      "snippet": "import { FlowInstanceView } from \"@platform/app\";\n<FlowInstanceView id={runID} />"
+    },
+    {
+      "id": "app/generated-form",
+      "owner": "@platform/app",
+      "name": "Generated record form",
+      "summary": "Edit fields from the original object declaration; submit through the owning action.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "widget"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/index.tsx",
+      "exports": [
+        "GeneratedForm"
+      ],
+      "example": "GeneratedFormExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "ui/record-form"
+      ],
+      "widgets": [
+        "form"
+      ],
+      "states": [
+        "dirty",
+        "pending",
+        "validation"
+      ],
+      "snippet": "import { GeneratedForm } from \"@platform/app\";\n<GeneratedForm type=\"your.object\" submitLabel=\"Create\" onSubmit={submit} onCancel={cancel} />"
+    },
+    {
+      "id": "app/knowledge-search",
+      "owner": "@platform/app",
+      "name": "Authorized cross-application search",
+      "summary": "Search records and knowledge through the current member’s original read endpoints.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "search",
+        "knowledge",
+        "records"
+      ],
+      "source": "web/packages/app/src/agents.tsx",
+      "exports": [
+        "Search"
+      ],
+      "example": "SearchExample",
+      "constraints": [
+        "Results come from the current member’s host. The offline example searches synthetic records only.",
+        "This search currently has no dedicated error or pending feedback; callers must not claim otherwise."
+      ],
+      "states": [
+        "empty"
+      ],
+      "snippet": "import { Search } from \"@platform/app\";\n<Search initial=\"order\" />"
+    },
+    {
+      "id": "app/page-workspace",
+      "owner": "@platform/app",
+      "name": "Page workspace and preview",
+      "summary": "The same list-detail descriptor serves a live workspace and a read-only sample preview.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "reference"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/pages.tsx",
+      "exports": [
+        "PageWorkspace",
+        "PagePreview"
+      ],
+      "example": "PageWorkspaceExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "ui/record-workspace",
+        "app/record-detail"
+      ],
+      "snippet": "import { PageWorkspace } from \"@platform/app\";\n<PageWorkspace definition={installedPage} />"
+    },
+    {
+      "id": "app/record-actions",
+      "owner": "@platform/app",
+      "name": "Declared action controls",
+      "summary": "Render original action payloads and offered transitions without duplicating role rules.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "widget"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/actions.tsx",
+      "exports": [
+        "NewActions",
+        "RecordActions",
+        "PayloadFields"
+      ],
+      "example": "ActionsExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "widgets": [
+        "actions"
+      ],
+      "dependencies": [
+        "ui/button",
+        "app/generated-form"
+      ],
+      "states": [
+        "pending",
+        "refused",
+        "conflict"
+      ],
+      "snippet": "import { RecordActions } from \"@platform/app\";\n<RecordActions type=\"your.object\" record={record} steps />"
+    },
+    {
+      "id": "app/record-detail",
+      "owner": "@platform/app",
+      "name": "Authorized record detail",
+      "summary": "Read a record with history, tasks and the actions offered to the current member.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code",
+        "widget"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/index.tsx",
+      "exports": [
+        "RecordDetail"
+      ],
+      "example": "RecordDetailExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "ui/record-page",
+        "app/record-actions"
+      ],
+      "widgets": [
+        "detail",
+        "timeline",
+        "tasks"
+      ],
+      "states": [
+        "loading",
+        "error",
+        "pending",
+        "conflict"
+      ],
+      "snippet": "import { RecordDetail } from \"@platform/app\";\n<RecordDetail type=\"your.object\" id={selectedID} />"
+    },
+    {
+      "id": "app/records",
+      "owner": "@platform/app",
+      "name": "Authorized record list",
+      "summary": "Browse records, choose a record and save a list view through the member’s host.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/index.tsx",
+      "exports": [
+        "Records"
+      ],
+      "example": "RecordsExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "ui/record-list",
+        "app/record-actions"
+      ],
+      "states": [
+        "loading",
+        "empty",
+        "error"
+      ],
+      "snippet": "import { Records } from \"@platform/app\";\n<Records type=\"your.object\" />"
+    },
+    {
+      "id": "foundation/semantic-tokens",
+      "owner": "@platform/ui",
+      "name": "Semantic tokens",
+      "summary": "Use shared surface, text, focus and status tokens across themes.",
+      "layer": 0,
+      "source": "web/packages/ui/src/styles.css",
+      "exports": [],
+      "example": "Tokens",
+      "authority": "specification",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "reference"
+      ],
+      "tags": [
+        "color",
+        "theme",
+        "density"
+      ],
+      "constraints": [
+        "Use semantic tokens instead of assigning domain meaning to raw colors."
+      ]
+    },
+    {
+      "id": "pattern/master-detail",
+      "owner": "@pkg/build",
+      "name": "Master-detail interaction",
+      "layer": 4,
+      "authority": "recommendation",
+      "maturity": "recommended",
+      "scope": "platform",
+      "summary": "Keep selection and detail together using the existing record workspace or controlled table/detail sections.",
+      "uses": [
+        "code",
+        "widget",
+        "reference"
+      ],
+      "widgets": [
+        "table",
+        "detail"
+      ],
+      "tags": [
+        "list",
+        "selection",
+        "inspector",
+        "record"
+      ],
+      "source": "web/packages/app/src/pages.tsx",
+      "example": "MasterDetailExample",
+      "dependencies": [
+        "ui/record-workspace",
+        "app/page-workspace",
+        "app/composed-page"
+      ],
+      "constraints": [
+        "List selection is shared by details and actions. The object contract and current member’s read scope remain authoritative.",
+        "This pattern recommends a composition; it does not grant widget eligibility or permissions."
+      ],
+      "snippet": "import { PageWorkspace } from \"@platform/app\";\n<PageWorkspace definition={installedListDetailPage} />"
+    },
+    {
+      "id": "pattern/workspace",
+      "owner": "@platform/ui",
+      "name": "App Shell / Workspace",
+      "summary": "Compose app navigation, routed tabs, commands and session context in one shell.",
+      "layer": 4,
+      "source": "web/packages/ui/src/shell/Workspace.tsx",
+      "exports": [
+        "Workspace"
+      ],
+      "example": "WorkspaceShell",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "AppShell",
+        "navigation",
+        "tabs",
+        "commands"
+      ],
+      "constraints": [
+        "Applications reuse Workspace; app navigation and views come from their AppUI declaration.",
+        "Open this full-window preview separately; its shell owns routes and saved layout."
+      ]
+    },
+    {
+      "id": "scenario/logic-studio",
+      "owner": "@pkg/build",
+      "name": "Logic design workbench",
+      "summary": "Compose typed platform blocks with the existing native workflow editor and shared canvas.",
+      "layer": 5,
+      "authority": "example",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "reference"
+      ],
+      "tags": [
+        "workflow",
+        "logic",
+        "block",
+        "canvas",
+        "studio"
+      ],
+      "source": "web/packages/build/src/workflow.tsx",
+      "example": "LogicStudioExample",
+      "dependencies": [
+        "ui/block-canvas",
+        "app/compute-call",
+        "app/agent-run"
+      ],
+      "constraints": [
+        "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.",
+        "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs."
+      ]
+    },
+    {
+      "id": "scenario/object-studio",
+      "owner": "@pkg/build",
+      "name": "Object design workbench",
+      "summary": "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.",
+      "layer": 5,
+      "authority": "example",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "reference"
+      ],
+      "tags": [
+        "object",
+        "lifecycle",
+        "fields",
+        "access",
+        "studio"
+      ],
+      "source": "web/packages/build/src/process.tsx",
+      "example": "ObjectStudioExample",
+      "dependencies": [
+        "ui/block-canvas",
+        "app/record-actions"
+      ],
+      "constraints": [
+        "This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.",
+        "A tenant object must be created, tested and published in the connected Application Studio."
+      ]
+    },
+    {
+      "id": "scenario/record-handling",
+      "owner": "@pkg/build",
+      "name": "Record handling workspace",
+      "summary": "Select a record, inspect its details and use the original object actions.",
+      "layer": 5,
+      "authority": "example",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "template",
+        "reference"
+      ],
+      "tags": [
+        "record",
+        "actions",
+        "history",
+        "tasks",
+        "studio"
+      ],
+      "source": "web/packages/build/src/templates.ts",
+      "template": "build/record-handling",
+      "example": "RecordHandlingExample",
+      "dependencies": [
+        "pattern/master-detail",
+        "app/composed-page",
+        "app/record-actions",
+        "app/record-detail"
+      ],
+      "widgets": [
+        "filter",
+        "table",
+        "detail",
+        "actions",
+        "timeline",
+        "tasks"
+      ],
+      "constraints": [
+        "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.",
+        "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.",
+        "Template identity and revision are recorded in the editable page description as informative provenance."
+      ]
+    },
+    {
+      "id": "ui/block-canvas",
+      "owner": "@platform/ui",
+      "name": "Typed block canvas",
+      "summary": "Compose nodes through typed ports with one shared graph interaction model.",
+      "layer": 3,
+      "source": "web/packages/ui/src/graph/BlockCanvas.tsx",
+      "exports": [
+        "BlockCanvas",
+        "NodeCanvas"
+      ],
+      "example": "Blocks",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "flow",
+        "node",
+        "canvas"
+      ],
+      "type": "BlockCanvasProps",
+      "states": [
+        "Read only",
+        "Editing",
+        "Selected"
+      ],
+      "constraints": [
+        "The canvas owns interaction; its caller owns graph semantics, validation and persistence."
+      ]
+    },
+    {
+      "id": "ui/button",
+      "owner": "@platform/ui",
+      "name": "Button",
+      "summary": "One action control with primary, quiet, destructive, link and row variants.",
+      "layer": 1,
+      "source": "web/packages/ui/src/primitives/button.tsx",
+      "exports": [
+        "Button"
+      ],
+      "example": "Buttons",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "action",
+        "variants"
+      ],
+      "type": "ButtonProps",
+      "states": [
+        "Enabled",
+        "Disabled",
+        "Keyboard focus"
+      ],
+      "snippet": "import { Button } from \"@platform/ui\";\n<Button variant=\"primary\" onClick={save}>Save</Button>"
+    },
+    {
+      "id": "ui/chart",
+      "owner": "@platform/ui",
+      "name": "Chart",
+      "summary": "Render a visualization spec using inline values or a scoped aggregate source.",
+      "layer": 3,
+      "source": "web/packages/ui/src/charts/Chart.tsx",
+      "exports": [
+        "Chart"
+      ],
+      "example": "Charts",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "chart",
+        "kpi",
+        "aggregate"
+      ],
+      "type": "ChartSpec",
+      "states": [
+        "Loading",
+        "Empty",
+        "Error",
+        "Ready"
+      ]
+    },
+    {
+      "id": "ui/checkbox",
+      "owner": "@platform/ui",
+      "name": "Checkbox",
+      "summary": "A labelled boolean choice with an explicit disabled state.",
+      "layer": 1,
+      "source": "web/packages/ui/src/primitives/controls.tsx",
+      "exports": [
+        "Checkbox"
+      ],
+      "example": "Checkboxes",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "states": [
+        "Checked",
+        "Unchecked",
+        "Disabled"
+      ]
+    },
+    {
+      "id": "ui/data-table",
+      "owner": "@platform/ui",
+      "name": "Data table",
+      "summary": "Browse, sort and edit typed rows in a shared virtualized table.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/DataTable.tsx",
+      "exports": [
+        "DataTable"
+      ],
+      "example": "Tables",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "table",
+        "rows",
+        "sorting"
+      ],
+      "type": "DataTableProps",
+      "states": [
+        "Loading",
+        "Empty",
+        "Selected",
+        "Editing"
+      ],
+      "dependencies": [
+        "ui/input",
+        "ui/field-types"
+      ]
+    },
+    {
+      "id": "ui/dialog",
+      "owner": "@platform/ui",
+      "name": "Modal dialog",
+      "summary": "Ask for a bounded decision with focus trapping and a labelled title.",
+      "layer": 2,
+      "source": "web/packages/ui/src/primitives/dialog.tsx",
+      "exports": [
+        "Dialog"
+      ],
+      "example": "Dialogs",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "states": [
+        "Open",
+        "Closed"
+      ],
+      "dependencies": [
+        "ui/button"
+      ]
+    },
+    {
+      "id": "ui/disclosure",
+      "owner": "@platform/ui",
+      "name": "Disclosure",
+      "summary": "Reveal supporting details while keeping the summary visible.",
+      "layer": 2,
+      "source": "web/packages/ui/src/primitives/controls.tsx",
+      "exports": [
+        "Disclosure"
+      ],
+      "example": "Disclosures",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "states": [
+        "Expanded",
+        "Collapsed"
+      ]
+    },
+    {
+      "id": "ui/entity-card",
+      "owner": "@platform/ui",
+      "name": "Record summary",
+      "summary": "Present a record's title, status and labelled properties.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/EntityCard.tsx",
+      "exports": [
+        "EntityCard",
+        "PropertyList"
+      ],
+      "example": "RecordSummaries",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "properties"
+      ],
+      "dependencies": [
+        "ui/status"
+      ]
+    },
+    {
+      "id": "ui/entity-form",
+      "owner": "@platform/ui",
+      "name": "Schema form",
+      "summary": "Render labelled editors and validate an ad hoc schema before submission.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/EntityForm.tsx",
+      "exports": [
+        "EntityForm"
+      ],
+      "example": "SchemaForms",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "form",
+        "schema"
+      ],
+      "states": [
+        "Invalid",
+        "Submitting"
+      ],
+      "dependencies": [
+        "ui/field-types",
+        "ui/button"
+      ]
+    },
+    {
+      "id": "ui/field-types",
+      "owner": "@platform/ui",
+      "name": "Typed field vocabulary",
+      "summary": "One field type owns display, editing, validation, sorting and filtering.",
+      "layer": 3,
+      "source": "web/packages/ui/src/fields/types.tsx",
+      "exports": [
+        "field.text",
+        "field.longText",
+        "field.markdown",
+        "field.number",
+        "field.currency",
+        "field.percent",
+        "field.checkbox",
+        "field.date",
+        "field.datetime",
+        "field.duration",
+        "field.singleSelect",
+        "field.multiSelect",
+        "field.tags",
+        "field.email",
+        "field.url",
+        "field.phone",
+        "field.barcode",
+        "field.rating",
+        "field.attachment",
+        "field.link",
+        "field.formula",
+        "field.timestamp"
+      ],
+      "example": "Fields",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "text",
+        "longText",
+        "markdown",
+        "number",
+        "currency",
+        "percent",
+        "checkbox",
+        "date",
+        "datetime",
+        "duration",
+        "singleSelect",
+        "multiSelect",
+        "tags",
+        "email",
+        "url",
+        "phone",
+        "barcode",
+        "rating",
+        "attachment",
+        "link",
+        "formula",
+        "timestamp"
+      ],
+      "type": "FieldType",
+      "constraints": [
+        "Reference links need a Workspace; attachment upload needs an explicit caller implementation."
+      ]
+    },
+    {
+      "id": "ui/file-picker",
+      "owner": "@platform/ui",
+      "name": "File picker",
+      "summary": "Pick a local file through a shared button; the caller owns upload.",
+      "layer": 2,
+      "source": "web/packages/ui/src/primitives/controls.tsx",
+      "exports": [
+        "FilePicker"
+      ],
+      "example": "FilePicking",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "Picking a file does not upload or publish it."
+      ]
+    },
+    {
+      "id": "ui/filter-bar",
+      "owner": "@platform/ui",
+      "name": "Typed filters",
+      "summary": "Build filters from the entity's declared fields and operators.",
+      "layer": 3,
+      "source": "web/packages/ui/src/fields/entity.tsx",
+      "exports": [
+        "FilterBar"
+      ],
+      "example": "Filters",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "type": "Filter",
+      "dependencies": [
+        "ui/field-types",
+        "ui/button"
+      ]
+    },
+    {
+      "id": "ui/flow",
+      "owner": "@platform/ui",
+      "name": "Flow observation",
+      "summary": "Inspect a native flow's graph, waiting steps and decision trace.",
+      "layer": 3,
+      "source": "web/packages/ui/src/flows/FlowView.tsx",
+      "exports": [
+        "FlowView",
+        "FlowGraph",
+        "FlowReleaseBinding"
+      ],
+      "example": "FlowObservation",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "flow",
+        "trace",
+        "release",
+        "version"
+      ],
+      "type": "FlowInstanceData",
+      "dependencies": [
+        "ui/graph",
+        "ui/status"
+      ]
+    },
+    {
+      "id": "ui/form",
+      "owner": "@platform/ui",
+      "name": "Form submission",
+      "summary": "Submit an ad hoc form on Enter without reloading the page.",
+      "layer": 2,
+      "source": "web/packages/ui/src/primitives/controls.tsx",
+      "exports": [
+        "Form"
+      ],
+      "example": "Forms",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "dependencies": [
+        "ui/input",
+        "ui/button"
+      ]
+    },
+    {
+      "id": "ui/graph",
+      "owner": "@platform/ui",
+      "name": "Read-only graph",
+      "summary": "Observe relationships and execution paths through the shared canvas.",
+      "layer": 3,
+      "source": "web/packages/ui/src/graph/Graph.tsx",
+      "exports": [
+        "Graph"
+      ],
+      "example": "Graphs",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "type": "GraphNode",
+      "dependencies": [
+        "ui/block-canvas"
+      ],
+      "states": [
+        "Selected"
+      ]
+    },
+    {
+      "id": "ui/input",
+      "owner": "@platform/ui",
+      "name": "Input controls",
+      "summary": "Text, select and multiline controls for explicit labelled values.",
+      "layer": 1,
+      "source": "web/packages/ui/src/primitives/input.tsx",
+      "exports": [
+        "Input",
+        "Select",
+        "Textarea"
+      ],
+      "example": "Inputs",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "text",
+        "input",
+        "select"
+      ],
+      "states": [
+        "Enabled",
+        "Disabled",
+        "Invalid"
+      ]
+    },
+    {
+      "id": "ui/lifecycle",
+      "owner": "@platform/ui",
+      "name": "Lifecycle status bar",
+      "summary": "Display declared record states and caller-allowed transitions.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/Records.tsx",
+      "exports": [
+        "StatusBar"
+      ],
+      "example": "Lifecycle",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "type": "Lifecycle",
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "Only the canonical action owner may authorize and apply a transition."
+      ]
+    },
+    {
+      "id": "ui/markdown",
+      "owner": "@platform/ui",
+      "name": "Markdown display and editor",
+      "summary": "Read formatted content or edit its source with a shared preview.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/Markdown.tsx",
+      "exports": [
+        "Markdown",
+        "MarkdownEditor"
+      ],
+      "example": "MarkdownContent",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "knowledge",
+        "content"
+      ]
+    },
+    {
+      "id": "ui/metal-button",
+      "owner": "@platform/ui",
+      "name": "Metal button",
+      "summary": "Tactile metallic and liquid glass styled buttons for prominent actions.",
+      "layer": 1,
+      "source": "web/packages/ui/src/primitives/metalButton.tsx",
+      "exports": [
+        "MetalButton",
+        "LiquidButton"
+      ],
+      "example": "MetalButtons",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "button",
+        "metal",
+        "tactile",
+        "liquid",
+        "variants"
+      ],
+      "states": [
+        "Pressed",
+        "Hover",
+        "Touch"
+      ],
+      "snippet": "import { MetalButton, LiquidButton } from \"@platform/ui\";\n<MetalButton variant=\"gold\">Confirm</MetalButton>"
+    },
+    {
+      "id": "ui/notifications",
+      "owner": "@platform/ui",
+      "name": "Notifications",
+      "summary": "Show unread changes and let the caller mark a notification as read.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/NotificationList.tsx",
+      "exports": [
+        "NotificationList"
+      ],
+      "example": "Notifications",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "type": "NotificationItem",
+      "states": [
+        "Empty",
+        "Read",
+        "Unread"
+      ]
+    },
+    {
+      "id": "ui/page-header",
+      "owner": "@platform/ui",
+      "name": "Page header",
+      "summary": "Give a task its title, description and visible actions.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/PageHeader.tsx",
+      "exports": [
+        "PageHeader"
+      ],
+      "example": "Headers",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "dependencies": [
+        "ui/button"
+      ]
+    },
+    {
+      "id": "ui/panels",
+      "owner": "@platform/ui",
+      "name": "Cards and panels",
+      "summary": "Group related content with a shared heading, description and action area.",
+      "layer": 2,
+      "source": "web/packages/ui/src/primitives/card.tsx",
+      "exports": [
+        "Card",
+        "Panel"
+      ],
+      "example": "Panels",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "inspector",
+        "grouping"
+      ],
+      "dependencies": [
+        "ui/button",
+        "foundation/semantic-tokens"
+      ]
+    },
+    {
+      "id": "ui/pivot",
+      "owner": "@platform/ui",
+      "name": "Pivot table",
+      "summary": "Compare aggregate groups with totals and explicit drill-down.",
+      "layer": 3,
+      "source": "web/packages/ui/src/charts/Pivot.tsx",
+      "exports": [
+        "Pivot"
+      ],
+      "example": "Pivots",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "report",
+        "aggregate"
+      ],
+      "type": "ChartSource",
+      "states": [
+        "Loading",
+        "Empty",
+        "Error",
+        "Ready"
+      ]
+    },
+    {
+      "id": "ui/record-form",
+      "owner": "@platform/ui",
+      "name": "Entity form",
+      "summary": "Edit declared entity fields using their shared validators and editors.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/EntityForm.tsx",
+      "exports": [
+        "RecordForm"
+      ],
+      "example": "RecordForms",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "form",
+        "entity"
+      ],
+      "states": [
+        "Invalid",
+        "Submitting"
+      ],
+      "dependencies": [
+        "ui/field-types",
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller owns persistence, authorization and conflict handling."
+      ]
+    },
+    {
+      "id": "ui/record-list",
+      "owner": "@platform/ui",
+      "name": "Record list",
+      "summary": "Browse a scoped entity source with search, sort and paging.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/Records.tsx",
+      "exports": [
+        "RecordList"
+      ],
+      "example": "RecordLists",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "type": "RecordSource",
+      "states": [
+        "Loading",
+        "Empty",
+        "Error",
+        "Selected"
+      ],
+      "dependencies": [
+        "ui/data-table",
+        "ui/filter-bar"
+      ]
+    },
+    {
+      "id": "ui/record-lookup",
+      "owner": "@platform/ui",
+      "name": "Record lookup",
+      "summary": "Search a caller's scoped source to choose a reference by record ID.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordLookup.tsx",
+      "exports": [
+        "RecordLookup"
+      ],
+      "example": "RecordLookups",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "type": "RecordSource",
+      "states": [
+        "Loading",
+        "Empty",
+        "Error",
+        "Selected"
+      ],
+      "dependencies": [
+        "ui/input"
+      ]
+    },
+    {
+      "id": "ui/record-page",
+      "owner": "@platform/ui",
+      "name": "Record detail and history",
+      "summary": "Read a record's declared fields, related work and recorded changes.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/Records.tsx",
+      "exports": [
+        "RecordPage",
+        "RecordHistory"
+      ],
+      "example": "RecordDetails",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [],
+      "type": "RecordView",
+      "states": [
+        "Loading",
+        "Error",
+        "Ready"
+      ],
+      "dependencies": [
+        "ui/entity-card",
+        "ui/lifecycle",
+        "ui/tasks"
+      ],
+      "constraints": [
+        "Visibility and allowed actions come from the scoped source and caller."
+      ]
+    },
+    {
+      "id": "ui/record-workspace",
+      "owner": "@platform/ui",
+      "name": "Record list and detail",
+      "summary": "Keep record browsing and focused detail in one responsive task frame.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordWorkspace.tsx",
+      "exports": [
+        "RecordWorkspace"
+      ],
+      "example": "MasterDetail",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "master-detail",
+        "record",
+        "workspace"
+      ],
+      "dependencies": [
+        "ui/record-list",
+        "ui/record-page",
+        "ui/page-header"
+      ],
+      "constraints": [
+        "Pass a scoped RecordSource; this layout does not define a business entity."
+      ]
+    },
+    {
+      "id": "ui/retro-button",
+      "owner": "@platform/ui",
+      "name": "Retro button",
+      "summary": "Tactile mechanical keycap buttons styled after industrial equipment.",
+      "layer": 1,
+      "source": "web/packages/ui/src/primitives/retroButton.tsx",
+      "exports": [
+        "RetroButton"
+      ],
+      "example": "RetroButtons",
+      "authority": "api",
+      "maturity": "experimental",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "button",
+        "retro",
+        "tactile",
+        "keycap",
+        "variants"
+      ],
+      "states": [
+        "Enabled",
+        "Pressed",
+        "Disabled",
+        "Keyboard focus"
+      ],
+      "snippet": "import { RetroButton } from \"@platform/ui\";\n<RetroButton variant=\"default\">RUN</RetroButton>"
+    },
+    {
+      "id": "ui/sheet",
+      "owner": "@platform/ui",
+      "name": "Detail sheet",
+      "summary": "Inspect or edit details while keeping the underlying task in view.",
+      "layer": 2,
+      "source": "web/packages/ui/src/primitives/sheet.tsx",
+      "exports": [
+        "Sheet"
+      ],
+      "example": "Sheets",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "inspector",
+        "details"
+      ],
+      "states": [
+        "Open",
+        "Closed"
+      ]
+    },
+    {
+      "id": "ui/status",
+      "owner": "@platform/ui",
+      "name": "Semantic status tags",
+      "summary": "Map actual domain or kernel states to a label and one of five tones.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/StatusTag.tsx",
+      "exports": [
+        "StatusTag",
+        "Tag"
+      ],
+      "example": "Statuses",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "feedback",
+        "status"
+      ],
+      "type": "StatusRegistry",
+      "dependencies": [
+        "foundation/semantic-tokens"
+      ],
+      "constraints": [
+        "Use exact registry keys; unknown states fall back to a neutral label."
+      ]
+    },
+    {
+      "id": "ui/tasks",
+      "owner": "@platform/ui",
+      "name": "Tasks and inbox",
+      "summary": "Present assigned work with the answers and actions supplied by its owner.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/Records.tsx",
+      "exports": [
+        "Tasks",
+        "Inbox"
+      ],
+      "example": "TaskInbox",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "approval",
+        "work"
+      ],
+      "type": "InboxTask",
+      "states": [
+        "Empty",
+        "Pending"
+      ],
+      "dependencies": [
+        "ui/button",
+        "ui/status"
+      ],
+      "constraints": [
+        "An inbox preview is not an approval or permission engine."
+      ]
+    },
+    {
+      "id": "ui/toggles",
+      "owner": "@platform/ui",
+      "name": "Multiple choices",
+      "summary": "Switch several named choices on or off without a custom control.",
+      "layer": 2,
+      "source": "web/packages/ui/src/primitives/controls.tsx",
+      "exports": [
+        "Toggles"
+      ],
+      "example": "Choices",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "tags",
+        "options"
+      ]
+    },
+    {
+      "id": "ui/tree",
+      "owner": "@platform/ui",
+      "name": "Hierarchy selection",
+      "summary": "Select a row from a small hierarchy of labelled records.",
+      "layer": 2,
+      "source": "web/packages/ui/src/primitives/controls.tsx",
+      "exports": [
+        "Tree"
+      ],
+      "example": "Hierarchy",
+      "authority": "api",
+      "maturity": "experimental",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "tree",
+        "parents"
+      ],
+      "constraints": [
+        "Rows are always expanded; collapse and full tree keyboard navigation are not implemented."
+      ]
+    }
+  ],
+  "translations": {
+    "zh-CN": {
+      "A labelled boolean choice with an explicit disabled state.": "带标签的布尔选择，支持明确的禁用状态。",
+      "A runtime call needs the actual host, a published owner revision and the current member’s permissions.": "运行调用需要实际宿主、已发布能力版本及当前成员的权限。",
+      "A tenant object must be created, tested and published in the connected Application Studio.": "租户对象须在已连接的应用工坊创建、测试和发布。",
+      "Agent run and execution chain": "智能体运行与执行链",
+      "An inbox preview is not an approval or permission engine.": "收件箱预览不承担审批或权限引擎职责。",
+      "App Shell / Workspace": "应用外壳 / 工作区",
+      "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
+      "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
+      "Authorized cross-application search": "受权跨应用搜索",
+      "Authorized record detail": "受权记录详情",
+      "Authorized record list": "受权记录列表",
+      "Authorized workflow run": "受权流程运行",
+      "Bind a published Go/Wasm operation to a page using its original owner contract.": "按原能力契约将已发布 Go/Wasm 操作绑定到页面。",
+      "Bound dashboard": "绑定仪表盘",
+      "Browse a scoped entity source with search, sort and paging.": "通过搜索、排序和分页浏览限定范围的实体数据源。",
+      "Browse records, choose a record and save a list view through the member’s host.": "通过当前成员的宿主浏览和选择记录，并保存列表视图。",
+      "Browse, sort and edit typed rows in a shared virtualized table.": "在共享虚拟化表格中浏览、排序和编辑类型化行。",
+      "Build filters from the entity's declared fields and operators.": "从实体声明的字段和操作符构建筛选条件。",
+      "Button": "按钮",
+      "Cards and panels": "卡片与面板",
+      "Chart": "图表",
+      "Checkbox": "复选框",
+      "Checked": "已选中",
+      "Closed": "关闭",
+      "Collapsed": "收起",
+      "Compare aggregate groups with totals and explicit drill-down.": "比较聚合分组，展示合计并提供明确的下钻。",
+      "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
+      "Compose nodes through typed ports with one shared graph interaction model.": "通过类型化端口装配节点，使用统一的图交互模型。",
+      "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
+      "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions.": "通过工作区 Host 接入。目录预览使用本地示例，不授予权限。",
+      "Controlled page composition": "受控页面装配",
+      "Data table": "数据表格",
+      "Declared action controls": "声明式动作控件",
+      "Detail sheet": "详情侧栏",
+      "Disabled": "禁用",
+      "Disclosure": "展开区块",
+      "Display declared record states and caller-allowed transitions.": "展示已声明的记录状态与调用方允许的跃迁。",
+      "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
+      "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
+      "Editing": "编辑中",
+      "Empty": "空状态",
+      "Enabled": "启用",
+      "Entity form": "实体表单",
+      "Error": "错误",
+      "Expanded": "展开",
+      "File picker": "文件选择器",
+      "Flow observation": "流程观测",
+      "Form submission": "表单提交",
+      "Generated record form": "记录生成表单",
+      "Give a task its title, description and visible actions.": "提供任务标题、说明与可见动作。",
+      "Give an installed agent a goal; review its proposed actions before confirming them.": "为已安装智能体设置目标，在确认前审核它提出的动作。",
+      "Group related content with a shared heading, description and action area.": "通过统一的标题、说明和动作区域组织相关内容。",
+      "Hierarchy selection": "层级选择",
+      "Hover": "悬停",
+      "Input controls": "输入控件",
+      "Inspect a native flow's graph, waiting steps and decision trace.": "检查原生流程的关系图、等待步骤与决策轨迹。",
+      "Inspect a workflow's recorded version and startup release through the member's original read permissions.": "沿成员原有读取权限，检查流程运行所记录的版本与启动发布。",
+      "Inspect and edit fields, lifecycle states, transitions and access through the existing object designer.": "通过现有对象设计器查看和编辑字段、生命周期状态、跃迁与权限。",
+      "Inspect or edit details while keeping the underlying task in view.": "查看或编辑详情，同时保留原任务的上下文。",
+      "Inspect the original run trace, structured drafts and cross-application execution links.": "查看原运行轨迹、结构化草稿和跨应用执行关系。",
+      "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs.": "已安装区块、版本、权限、测试和激活均来自已连接的原能力 API。",
+      "Invalid": "无效",
+      "Keep record browsing and focused detail in one responsive task frame.": "在响应式任务框架中同时保留记录浏览与聚焦详情。",
+      "Keep selection and detail together using the existing record workspace or controlled table/detail sections.": "使用原记录工作台或受控表格与详情区块，保持选择与详情连贯。",
+      "Keyboard focus": "键盘焦点",
+      "Lifecycle status bar": "生命周期状态栏",
+      "List selection is shared by details and actions. The object contract and current member’s read scope remain authoritative.": "详情和动作共享列表选择；对象契约和当前成员的读取范围仍为准。",
+      "Loading": "加载中",
+      "Logic design workbench": "逻辑设计工作台",
+      "Map actual domain or kernel states to a label and one of five tones.": "将真实领域或内核状态映射为标签与五种语义色调之一。",
+      "Markdown display and editor": "Markdown 展示与编辑器",
+      "Master-detail interaction": "列表详情交互",
+      "Member-scoped assistant": "成员范围内的助手",
+      "Metal button": "金属与流体按钮",
+      "Modal dialog": "模态对话框",
+      "Multiple choices": "多项选择",
+      "Named record selections keep same-object lists independent; parent bindings scope related sections.": "具名记录选择让同一对象的多个列表互不干扰；父来源绑定限定关联区块的范围。",
+      "Notifications": "通知",
+      "Object design workbench": "对象设计工作台",
+      "Observe relationships and execution paths through the shared canvas.": "通过共享画布观察关系和执行路径。",
+      "One action control with primary, quiet, destructive, link and row variants.": "一种动作控件，提供主要、弱化、危险、链接和列表行形态。",
+      "One field type owns display, editing, validation, sorting and filtering.": "一种字段类型统一负责展示、编辑、校验、排序与筛选。",
+      "Only the canonical action owner may authorize and apply a transition.": "只有规范动作的归属方可以授权并应用状态跃迁。",
+      "Open": "打开",
+      "Open this full-window preview separately; its shell owns routes and saved layout.": "单独打开全窗口预览；外壳负责路由与保存的布局。",
+      "Page header": "页面标题区",
+      "Page workspace and preview": "页面工作台与预览",
+      "Pass a scoped RecordSource; this layout does not define a business entity.": "传入限定范围的 RecordSource；布局不定义业务实体。",
+      "Pending": "待处理",
+      "Pick a local file through a shared button; the caller owns upload.": "通过共享按钮选择本地文件，上传由调用方负责。",
+      "Picking a file does not upload or publish it.": "选择文件不会上传或发布该文件。",
+      "Pivot table": "透视表",
+      "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
+      "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
+      "Pressed": "按下",
+      "Published code function call": "已发布代码函数调用",
+      "Read": "已读",
+      "Read a record with history, tasks and the actions offered to the current member.": "查看记录、历史、任务和当前成员可执行的动作。",
+      "Read a record's declared fields, related work and recorded changes.": "阅读记录的已声明字段、相关工作与变更历史。",
+      "Read formatted content or edit its source with a shared preview.": "阅读格式化内容，或通过共享预览编辑源码。",
+      "Read only": "只读",
+      "Read-only graph": "只读关系图",
+      "Ready": "就绪",
+      "Record detail and history": "记录详情与历史",
+      "Record handling workspace": "记录处理工作台",
+      "Record list": "记录列表",
+      "Record list and detail": "记录列表与详情",
+      "Record lookup": "记录选择器",
+      "Record summary": "记录摘要",
+      "Reference links need a Workspace; attachment upload needs an explicit caller implementation.": "引用链接需要 Workspace；附件上传需要调用方明确实现。",
+      "Render a visualization spec using inline values or a scoped aggregate source.": "使用内联值或限定范围的聚合数据源呈现可视化规格。",
+      "Render labelled editors and validate an ad hoc schema before submission.": "呈现带标签的编辑器，并在提交前校验临时模式。",
+      "Render original Page sections with shared selection and filters; composition disables writes.": "按原 Page 区块共享选择和过滤状态；装配预览关闭写入。",
+      "Render original action payloads and offered transitions without duplicating role rules.": "展示原动作参数和可执行的状态跃迁，不重复定义角色规则。",
+      "Render the existing chart specification over the member’s permitted aggregates.": "用原图表规范展示当前成员有权读取的聚合数据。",
+      "Results come from the current member’s host. The offline example searches synthetic records only.": "结果来自当前成员的宿主。离线示例只搜索合成记录。",
+      "Retro button": "复古实体按键",
+      "Reveal supporting details while keeping the summary visible.": "显示补充详情，同时保留摘要。",
+      "Rows are always expanded; collapse and full tree keyboard navigation are not implemented.": "所有行始终展开；尚未实现折叠与完整的树键盘导航。",
+      "Schema form": "模式表单",
+      "Search a caller's scoped source to choose a reference by record ID.": "搜索调用方的限定范围数据源，按记录 ID 选择引用。",
+      "Search records and knowledge through the current member’s original read endpoints.": "通过当前成员的原读取入口搜索记录与知识。",
+      "Select a record, inspect its details and use the original object actions.": "选择记录、查看详情，并使用原对象动作。",
+      "Select a row from a small hierarchy of labelled records.": "从小型记录层级中选择一行。",
+      "Selected": "已选中",
+      "Semantic status tags": "语义状态标签",
+      "Semantic tokens": "语义令牌",
+      "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
+      "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.": "工坊要求绑定对象和可见字段，动作来自当前成员的原动作目录。",
+      "Submit an ad hoc form on Enter without reloading the page.": "按回车提交临时表单，不刷新页面。",
+      "Submitting": "提交中",
+      "Switch several named choices on or off without a custom control.": "开启或关闭多项命名选项，无需另写控件。",
+      "Tactile mechanical keycap buttons styled after industrial equipment.": "仿工业仪器和机械键帽质感的复古实体按键。",
+      "Tactile metallic and liquid glass styled buttons for prominent actions.": "用于重点操作的拟物金属与流体玻璃质感按钮。",
+      "Tasks and inbox": "任务与收件箱",
+      "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
+      "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
+      "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
+      "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
+      "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.": "本地示例在原 WorkflowEditor 展示输入到结果的流程，不执行流程。",
+      "The offline preview shows the binding only and never executes Wasm or reads tenant data.": "离线预览仅展示绑定，不执行 Wasm 或读取租户数据。",
+      "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
+      "The same list-detail descriptor serves a live workspace and a read-only sample preview.": "同一列表详情声明用于实际工作台和只读样例预览。",
+      "This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.": "这是使用本地合成数据的原 ProcessEditor；目录拒绝保存和发布。",
+      "This pattern recommends a composition; it does not grant widget eligibility or permissions.": "此模式推荐一种组合，不授予区块资格或权限。",
+      "This search currently has no dedicated error or pending feedback; callers must not claim otherwise.": "当前搜索没有专门的错误或等待反馈；调用方须如实说明。",
+      "Touch": "触摸",
+      "Typed block canvas": "类型化节点画布",
+      "Typed field vocabulary": "类型化字段词汇",
+      "Typed filters": "类型化筛选",
+      "Unchecked": "未选中",
+      "Unread": "未读",
+      "Use exact registry keys; unknown states fall back to a neutral label.": "使用登记表的精确键；未知状态回退为中性色标签。",
+      "Use semantic tokens instead of assigning domain meaning to raw colors.": "使用语义令牌表达含义，不给原始色值赋予领域语义。",
+      "Use shared surface, text, focus and status tokens across themes.": "跨主题使用共享的表面、文字、焦点和状态令牌。",
+      "Visibility and allowed actions come from the scoped source and caller.": "可见范围与允许的动作来自限定范围的数据源和调用方。",
+      "conflict": "冲突",
+      "dirty": "未保存",
+      "done": "完成",
+      "empty": "为空",
+      "error": "错误",
+      "loading": "加载中",
+      "pending": "待完成",
+      "refused": "已拒绝",
+      "running": "运行中",
+      "stopped": "停止",
+      "unavailable": "不可用",
+      "validation": "校验",
+      "waiting": "等待",
+      "withheld": "已隐藏"
+    }
+  },
+  "consumers": {
+    "ui/button": [
+      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/capability.tsx",
+      "web/packages/app/src/flows.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/asset-controls.tsx",
+      "web/packages/build/src/code.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/function.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/release.tsx",
+      "web/packages/build/src/simulate.tsx",
+      "web/packages/build/src/studio.tsx",
+      "web/packages/build/src/template-ui.tsx",
+      "web/packages/build/src/workflow-binding.tsx",
+      "web/packages/build/src/workflow-inspector.tsx",
+      "web/packages/build/src/workflow-runs.tsx",
+      "web/packages/build/src/workflow.tsx",
+      "web/packages/csm/src/index.tsx",
+      "web/packages/erp/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/knowledge.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/apps/catalog/src/Catalog.tsx",
+      "web/apps/catalog/src/Governance.tsx",
+      "web/apps/catalog/src/PageBuilder.tsx",
+      "web/apps/catalog/src/Preview.tsx",
+      "web/apps/catalog/src/Sandbox.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/App.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/input": [
+      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/capability.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/code.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/function.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/release.tsx",
+      "web/packages/build/src/simulate.tsx",
+      "web/packages/build/src/studio.tsx",
+      "web/packages/build/src/template-ui.tsx",
+      "web/packages/build/src/workflow-binding.tsx",
+      "web/packages/build/src/workflow-inspector.tsx",
+      "web/packages/build/src/workflow.tsx",
+      "web/packages/erp/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/knowledge.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/apps/catalog/src/Catalog.tsx",
+      "web/apps/catalog/src/Sandbox.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/checkbox": [
+      "web/packages/app/src/actions.tsx",
+      "web/packages/build/src/code.tsx",
+      "web/packages/build/src/function.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/simulate.tsx",
+      "web/packages/build/src/template-ui.tsx",
+      "web/packages/build/src/workflow-binding.tsx",
+      "web/packages/build/src/workflow-inspector.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/processes.tsx"
+    ],
+    "ui/dialog": [
+      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/pages.tsx",
+      "web/packages/csm/src/index.tsx",
+      "web/packages/erp/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/knowledge.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/App.tsx"
+    ],
+    "ui/record-lookup": [
+      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/sections.tsx"
+    ],
+    "ui/panels": [
+      "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/capability.tsx",
+      "web/packages/app/src/catalog.examples.tsx",
+      "web/packages/app/src/catalog.fixtures.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/code.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/function.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/release.tsx",
+      "web/packages/build/src/simulate.tsx",
+      "web/packages/build/src/studio.tsx",
+      "web/packages/build/src/template-ui.tsx",
+      "web/packages/build/src/workflow.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/knowledge.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/apps/catalog/src/Catalog.tsx",
+      "web/apps/catalog/src/Governance.tsx",
+      "web/apps/catalog/src/PageBuilder.tsx",
+      "web/apps/catalog/src/Sandbox.tsx",
+      "web/apps/workspace/src/App.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/form": [
+      "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/build/src/template-ui.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/knowledge.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/apps/pms-desk/src/App.tsx"
+    ],
+    "ui/disclosure": [
+      "web/packages/app/src/agents.tsx",
+      "web/packages/build/src/code.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/simulate.tsx",
+      "web/packages/build/src/workflow-binding.tsx",
+      "web/packages/build/src/workflow-inspector.tsx",
+      "web/packages/build/src/workflow-runs.tsx",
+      "web/packages/build/src/workflow.tsx",
+      "web/apps/catalog/src/Catalog.tsx"
+    ],
+    "ui/status": [
+      "web/packages/app/src/agents.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/release.tsx",
+      "web/packages/build/src/studio.tsx",
+      "web/packages/build/src/workflow-inspector.tsx",
+      "web/packages/build/src/workflow-runs.tsx",
+      "web/packages/build/src/workflow.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/packages/pms/src/index.tsx",
+      "web/apps/catalog/src/Catalog.tsx",
+      "web/apps/catalog/src/Governance.tsx",
+      "web/apps/catalog/src/PageBuilder.tsx",
+      "web/apps/catalog/src/Sandbox.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/page-header": [
+      "web/packages/app/src/agents.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/pages.tsx",
+      "web/packages/build/src/code.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/function.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/release.tsx",
+      "web/packages/build/src/simulate.tsx",
+      "web/packages/build/src/studio.tsx",
+      "web/packages/build/src/template-ui.tsx",
+      "web/packages/build/src/workflow.tsx",
+      "web/packages/erp/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/packages/pms/src/app.tsx",
+      "web/apps/catalog/src/Catalog.tsx",
+      "web/apps/catalog/src/Governance.tsx",
+      "web/apps/catalog/src/PageBuilder.tsx",
+      "web/apps/catalog/src/Sandbox.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/graph": [
+      "web/packages/app/src/agents.tsx",
+      "web/packages/mes/src/index.tsx"
+    ],
+    "ui/flow": [
+      "web/packages/app/src/flows.tsx",
+      "web/packages/build/src/simulate.tsx",
+      "web/packages/build/src/workflow-runs.tsx",
+      "web/packages/platform/src/processes.tsx"
+    ],
+    "ui/file-picker": [
+      "web/packages/app/src/index.tsx"
+    ],
+    "ui/record-form": [
+      "web/packages/app/src/index.tsx"
+    ],
+    "ui/entity-card": [
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/sections.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/pms/src/index.tsx"
+    ],
+    "ui/record-list": [
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/code.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/function.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/workflow.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/record-page": [
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/sections.tsx"
+    ],
+    "ui/chart": [
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/sections.tsx"
+    ],
+    "ui/record-workspace": [
+      "web/packages/app/src/pages.tsx"
+    ],
+    "ui/markdown": [
+      "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/editor.tsx",
+      "web/packages/platform/src/knowledge.tsx"
+    ],
+    "ui/tasks": [
+      "web/packages/app/src/sections.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/composed-page": [
+      "web/packages/build/src/catalog.examples.tsx",
+      "web/packages/build/src/editor.tsx"
+    ],
+    "app/record-actions": [
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/simulate.tsx"
+    ],
+    "ui/toggles": [
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/process.tsx"
+    ],
+    "ui/block-canvas": [
+      "web/packages/build/src/function.tsx",
+      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/studio.tsx",
+      "web/packages/build/src/workflow-runs.tsx",
+      "web/packages/build/src/workflow.tsx"
+    ],
+    "ui/lifecycle": [
+      "web/packages/build/src/process.tsx"
+    ],
+    "ui/data-table": [
+      "web/packages/build/src/workflow-runs.tsx",
+      "web/packages/erp/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/apps.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/packages/pms/src/index.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/records": [
+      "web/packages/crm/src/index.tsx",
+      "web/packages/csm/src/index.tsx",
+      "web/packages/erp/src/index.tsx",
+      "web/packages/erpadapter/src/index.tsx",
+      "web/packages/hcm/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/knowledge.tsx",
+      "web/packages/platform/src/processes.tsx",
+      "web/packages/pms/src/app.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/record-detail": [
+      "web/packages/crm/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/entity-form": [
+      "web/packages/csm/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/apps/pms-desk/src/App.tsx"
+    ],
+    "app/generated-form": [
+      "web/packages/erp/src/index.tsx",
+      "web/packages/platform/src/knowledge.tsx"
+    ],
+    "ui/tree": [
+      "web/packages/platform/src/people.tsx"
+    ],
+    "pattern/workspace": [
+      "web/apps/catalog/src/main.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/App.tsx"
+    ],
+    "ui/sheet": [
+      "web/apps/pms-desk/src/App.tsx"
+    ],
+    "app/flow-instance": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/dashboard": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/page-workspace": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/agent-assistant": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/agent-run": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "app/knowledge-search": [
+      "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/notifications": [
+      "web/apps/workspace/src/chrome.tsx"
+    ]
+  },
+  "api": {
+    "@platform/ui": {
+      "source": "web/packages/ui/src/index.ts",
+      "symbols": [
+        "aggregateQuery",
+        "aggregateValues",
+        "applyFilters",
+        "canvasNodeHeight",
+        "canvasNodeWidth",
+        "canvasPlacement",
+        "cn",
+        "columnOf",
+        "columnsFor",
+        "defineEntity",
+        "defineStatuses",
+        "entityFrom",
+        "flowStates",
+        "groupDomain",
+        "groupable",
+        "humanizeKernelError",
+        "language",
+        "languages",
+        "layout",
+        "measurable",
+        "notify",
+        "parseInline",
+        "recordSchema",
+        "register",
+        "routeFromHash",
+        "routeKey",
+        "routeToHash",
+        "setCurrency",
+        "setLanguage",
+        "submissionStatuses",
+        "t",
+        "useChartData",
+        "useUnsavedChanges",
+        "useWorkspace",
+        "validateCanvasConnection",
+        "valueOf"
+      ],
+      "types": [
+        "AggregateColumn",
+        "AggregateData",
+        "AggregateOp",
+        "AggregateQuery",
+        "Attachment",
+        "BlockCanvasProps",
+        "BlockDiagnostic",
+        "BlockStatus",
+        "ButtonProps",
+        "CanvasAddContext",
+        "CanvasEdge",
+        "CanvasHistory",
+        "CanvasNode",
+        "CanvasPosition",
+        "Channels",
+        "ChartData",
+        "ChartSource",
+        "ChartSpec",
+        "ColumnDef",
+        "DataTableProps",
+        "Dictionary",
+        "EditorProps",
+        "Encoding",
+        "Entity",
+        "EntityInfo",
+        "EntityRecord",
+        "Field",
+        "FieldInfo",
+        "FieldType",
+        "Filter",
+        "FlowDefinition",
+        "FlowInstanceData",
+        "FlowStep",
+        "FlowToken",
+        "FlowTrace",
+        "GraphEdge",
+        "GraphNode",
+        "InboxTask",
+        "Launcher",
+        "Lifecycle",
+        "ListState",
+        "Mark",
+        "MeasureType",
+        "Menu",
+        "MenuItem",
+        "Money",
+        "NavSection",
+        "NodeCatalog",
+        "NodeKind",
+        "NodePort",
+        "NotificationItem",
+        "Operator",
+        "Option",
+        "Options",
+        "RecordChange",
+        "RecordPageData",
+        "RecordQuery",
+        "RecordSource",
+        "RecordView",
+        "RetroButtonProps",
+        "Route",
+        "Session",
+        "ShellCommand",
+        "State",
+        "StatusRegistry",
+        "TimeUnit",
+        "Tone",
+        "View"
+      ]
+    },
+    "@platform/app": {
+      "source": "web/packages/app/src/index.tsx",
+      "symbols": [
+        "HostContext",
+        "assetKey",
+        "defineApp",
+        "findDefinition",
+        "isComposed",
+        "isPageDefinition",
+        "newId",
+        "runStates",
+        "useCapabilities",
+        "useDefinitions",
+        "useHost",
+        "useInvokeCapability",
+        "useOpenRecord",
+        "useRead",
+        "useReadQuery",
+        "useRecordArchive",
+        "useRecordInventory"
+      ],
+      "types": [
+        "AgentInfo",
+        "AgentRun",
+        "AppEntry",
+        "AppUI",
+        "AssetRef",
+        "Citation",
+        "Dashboard",
+        "Decision",
+        "Definition",
+        "Host",
+        "Me",
+        "Memory",
+        "Passage",
+        "RunDraft",
+        "RunSignal",
+        "RunStep",
+        "SavedView"
+      ]
+    },
+    "@pkg/build": {
+      "source": "web/packages/build/src/index.tsx",
+      "symbols": [
+        "default"
+      ],
+      "types": []
+    }
+  }
+}

@@ -13,6 +13,7 @@ import { CodeEditor, CodeFunctions } from "./code";
 import { ReleaseReview, type ReleaseKind } from "./release";
 import { CandidateTest } from "./simulate";
 import { StudioOverview } from "./studio";
+import { StudioTemplates } from "./template-ui";
 import { t, type NavSection } from "@platform/ui";
 import { AppWindow, Boxes, GitBranch, Hammer, LayoutList } from "lucide-react";
 
@@ -26,6 +27,7 @@ export default defineApp({
   home: { view: "studio" },
   views: [
     { id: "studio", title: () => t("Application Studio"), render: () => <StudioOverview /> },
+    { id: "studio-templates", title: () => t("Studio templates"), render: (p) => <StudioTemplates key={p.template ?? "templates"} initial={p.template} /> },
     { id: "pages", title: () => t("Pages"), render: () => <PagesList /> },
     { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
     { id: "process", title: () => t("Object design"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <ProcessPicker /> },
@@ -48,6 +50,7 @@ export default defineApp({
           { label: t("Pages"), icon: <LayoutList />, route: { view: "pages" } },
           { label: t("Applications"), icon: <AppWindow />, route: page("applications") },
           ...(host.role("build") === "builder" ? [
+            { label: t("Studio templates"), icon: <LayoutList />, route: { view: "studio-templates" } },
             { label: t("Workflows"), icon: <GitBranch />, route: { view: "workflow" } },
             { label: t("AI functions"), icon: <Boxes />, route: { view: "function" } },
             { label: t("Code functions"), icon: <Boxes />, route: { view: "code" } },

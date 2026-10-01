@@ -8,7 +8,7 @@ import {
 import { useMemo, useState } from "react";
 import { NewActions, PayloadFields } from "./actions";
 import { ComposedPage, isComposed } from "./sections";
-import { RecordDetail, assetKey, useHost, type Definition } from "./index";
+import { RecordDetail, assetKey, useHost, useOpenRecord, type Definition } from "./index";
 
 type PageDefinition = Definition & { page: NonNullable<Definition["page"]> };
 
@@ -19,7 +19,8 @@ export function isPageDefinition(definition: Definition | undefined): definition
 
 /** A code page operates through the current member's record/action contracts. */
 export function PageWorkspace({ definition }: { definition: PageDefinition }) {
-  const { source } = useHost();
+  const { source, opens } = useHost();
+  const openRecord = useOpenRecord();
   const [selected, setSelected] = useState<string>();
   const page = definition.page;
   const allowed = page.actions.map((ref) => ref.name);
@@ -31,7 +32,10 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
   }
   return <RecordWorkspace title={page.title} description={page.description} source={source} type={page.object.name} listFields={page.listFields}
     selected={selected} onSelect={setSelected} actions={<NewActions type={page.object.name} allowed={allowed} />}
-    detail={(id) => <RecordDetail type={page.object.name} id={id} fields={page.detailFields} allowed={allowed} />} />;
+    detail={(id) => <>
+      {opens.has(page.object.name) && <Button className="mb-2" variant="primary" onClick={() => openRecord({ type: page.object.name, id }, { window: "tab" })}>{t("Open full view")}</Button>}
+      <RecordDetail type={page.object.name} id={id} fields={page.detailFields} allowed={allowed} />
+    </>} />;
 }
 
 const previewValue = (field: FieldInfo, index: number): unknown => {

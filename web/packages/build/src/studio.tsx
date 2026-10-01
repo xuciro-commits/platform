@@ -1,9 +1,10 @@
+import { AssetControls } from "./asset-controls";
 import { useHost, useRecordInventory } from "@platform/app";
 import { Button, Card, Input, NodeCanvas, PageHeader, Panel, StatusTag, canvasNodeHeight, canvasNodeWidth, defineStatuses, layout, t, useWorkspace,
   type CanvasEdge, type CanvasNode, type NodeCatalog, type Route } from "@platform/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Asset = { id: string; name: string; title: string; object?: string; pages?: string[]; fields?: { name: string; type: string; ref?: string }[];
+type Asset = { id: string; revision: number; archived?: boolean; name: string; title: string; object?: string; pages?: string[]; fields?: { name: string; type: string; ref?: string }[];
   state?: string; version?: number; published?: string };
 type Kind = "object" | "page" | "workflow" | "function" | "compute" | "application" | "source";
 type StudioAsset = { key: string; kind: Kind; label: string; detail: string; record?: Asset; route?: Route };
@@ -113,7 +114,8 @@ function StudioInventory() {
   const loading = [objects, pages, workflows, functions, computes, applications].some((query) => query.isLoading);
   const failed = [objects, pages, workflows, functions, computes, applications].some((query) => query.isError);
   return <div className="grid gap-4">
-    <PageHeader title={t("Application Studio")} description={t("Build with the capabilities already available in this workspace.")} />
+    <PageHeader title={t("Application Studio")} description={t("Build with the capabilities already available in this workspace.")}
+      actions={<Button onClick={() => open({ view: "studio-templates" })}>{t("Studio templates")}</Button>} />
     <Panel role="region" aria-label={t("Studio capabilities")} className="grid gap-3 border-0 bg-transparent p-0 sm:grid-cols-2 xl:grid-cols-3">
       {[
         { title: "Objects and relationships", detail: "Define fields, relationships, actions and access.", route: { view: "page", params: { app: "build", kind: "page", name: "objects" } }, query: objects },
@@ -155,6 +157,7 @@ function StudioInventory() {
           {current.record?.version ? <p className="text-xs">{t("Version")} {current.record.version}</p> : null}
           {current.route && <Button variant="primary" onClick={() => open(current.route!)}>{t("Open selected asset")}</Button>}
           {current.record && <div className="flex flex-wrap gap-2">
+            <AssetControls type={`build.${({ object: "object", page: "page", workflow: "process", function: "function", compute: "code", application: "app", source: "object" })[current.kind]}`} record={current.record} />
             {["object", "workflow", "function"].includes(current.kind) && <Button size="sm" onClick={() => open({ view: "candidate-test", params: {
               [current.kind === "workflow" ? "processId" : current.kind === "function" ? "functionId" : "objectId"]: current.record!.id,
             } })}>{t("Test selected asset")}</Button>}

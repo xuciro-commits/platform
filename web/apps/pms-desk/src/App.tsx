@@ -1,5 +1,5 @@
 import {
-  Button, DataTable, Dialog, EntityForm, Input, PageHeader, Sheet, StatusTag, Workspace,
+  Button, DataTable, Dialog, EntityForm, Form, Input, PageHeader, Sheet, StatusTag, Workspace,
   notify, submissionStatuses, useWorkspace, type ColumnDef, type View,
 } from "@platform/ui";
 import { BedDouble, Inbox, Plus, Send } from "lucide-react";
@@ -171,11 +171,11 @@ export function App() {
         )}
       </Dialog>
       <Sheet open={connecting} onOpenChange={setConnecting} title="Connection">
-        <form className="grid gap-2" onSubmit={(e) => { e.preventDefault(); void signIn(token, server).then(() => setConnecting(false)); }}>
+        <Form className="grid gap-2" onSubmit={() => { void signIn(token, server).then(() => setConnecting(false)); }}>
           <label htmlFor="server" className="text-xs font-medium text-muted">Hotel server</label>
           <Input id="server" value={server} onChange={(e) => setServer(e.target.value)} />
           <Button type="submit" variant="primary">Connect</Button>
-        </form>
+        </Form>
       </Sheet>
     </DeskContext.Provider>
   );

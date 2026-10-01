@@ -4,6 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./catalog": "./src/catalog.ts",
+    "./catalog/examples": "./src/catalog.examples.tsx",
     "./styles.css": "./src/styles.css"
   },
   "scripts": {
@@ -12,6 +14,7 @@
     "build": "true"
   },
   "dependencies": {
+    "@platform/catalog": "workspace:*",
     "@hookform/resolvers": "^5.9.1",
     "@platform/kernel": "workspace:*",
     "@tanstack/react-table": "^8.21.3",

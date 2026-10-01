@@ -1,0 +1,69 @@
+import type { CatalogEntry } from "@platform/catalog";
+
+const asset = (id: string, name: string, summary: string, exports: string[], example: string, extra: Partial<CatalogEntry> = {}): CatalogEntry => ({
+  id: `app/${id}`, owner: "@platform/app", name, summary, layer: 3, authority: "api", maturity: "recommended", scope: "platform",
+  uses: ["code"], tags: ["record", "binding", "host"], source: "web/packages/app/src/index.tsx", exports, example,
+  constraints: ["Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."], ...extra,
+});
+
+export const entries: CatalogEntry[] = [
+  asset("generated-form", "Generated record form", "Edit fields from the original object declaration; submit through the owning action.", ["GeneratedForm"], "GeneratedFormExample", {
+    dependencies: ["ui/record-form"], uses: ["code", "widget"], widgets: ["form"], states: ["dirty", "pending", "validation"],
+    snippet: 'import { GeneratedForm } from "@platform/app";\n<GeneratedForm type="your.object" submitLabel="Create" onSubmit={submit} onCancel={cancel} />',
+  }),
+  asset("records", "Authorized record list", "Browse records, choose a record and save a list view through the member’s host.", ["Records"], "RecordsExample", {
+    dependencies: ["ui/record-list", "app/record-actions"], states: ["loading", "empty", "error"],
+    snippet: 'import { Records } from "@platform/app";\n<Records type="your.object" />',
+  }),
+  asset("record-detail", "Authorized record detail", "Read a record with history, tasks and the actions offered to the current member.", ["RecordDetail"], "RecordDetailExample", {
+    dependencies: ["ui/record-page", "app/record-actions"], uses: ["code", "widget"], widgets: ["detail", "timeline", "tasks"],
+    states: ["loading", "error", "pending", "conflict"], snippet: 'import { RecordDetail } from "@platform/app";\n<RecordDetail type="your.object" id={selectedID} />',
+  }),
+  asset("flow-instance", "Authorized workflow run", "Inspect a workflow's recorded version and startup release through the member's original read permissions.", ["FlowInstanceView"], "FlowInstanceExample", {
+    source: "web/packages/app/src/flows.tsx", uses: ["code", "reference"], tags: ["flow", "run", "version", "release"],
+    dependencies: ["ui/flow", "app/agent-run"], states: ["loading", "error", "running", "waiting", "done"],
+    snippet: 'import { FlowInstanceView } from "@platform/app";\n<FlowInstanceView id={runID} />',
+  }),
+  asset("dashboard", "Bound dashboard", "Render the existing chart specification over the member’s permitted aggregates.", ["DashboardView"], "DashboardExample", {
+    tags: ["aggregate", "chart", "metric"], uses: ["code", "widget"], widgets: ["chart", "metric"], source: "web/packages/app/src/index.tsx",
+    snippet: 'import { DashboardView } from "@platform/app";\n<DashboardView dashboard={dashboard} />',
+  }),
+  asset("record-actions", "Declared action controls", "Render original action payloads and offered transitions without duplicating role rules.", ["NewActions", "RecordActions", "PayloadFields"], "ActionsExample", {
+    uses: ["code", "widget"], widgets: ["actions"], dependencies: ["ui/button", "app/generated-form"], source: "web/packages/app/src/actions.tsx",
+    states: ["pending", "refused", "conflict"], snippet: 'import { RecordActions } from "@platform/app";\n<RecordActions type="your.object" record={record} steps />',
+  }),
+  asset("page-workspace", "Page workspace and preview", "The same list-detail descriptor serves a live workspace and a read-only sample preview.", ["PageWorkspace", "PagePreview"], "PageWorkspaceExample", {
+    dependencies: ["ui/record-workspace", "app/record-detail"], uses: ["code", "reference"], source: "web/packages/app/src/pages.tsx",
+    snippet: 'import { PageWorkspace } from "@platform/app";\n<PageWorkspace definition={installedPage} />',
+  }),
+  asset("composed-page", "Controlled page composition", "Render original Page sections with shared selection and filters; composition disables writes.", ["ComposedPage", "SectionView"], "ComposedPageExample", {
+    tags: ["page", "selection", "relation", "binding"],
+    constraints: ["Named record selections keep same-object lists independent; parent bindings scope related sections."],
+    uses: ["code", "widget"], widgets: ["table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function", "compute"],
+    source: "web/packages/app/src/sections.tsx", dependencies: ["app/generated-form", "ui/record-page", "app/record-actions", "app/compute-call"],
+    snippet: 'import { ComposedPage } from "@platform/app";\n<ComposedPage page={installedPage.page} live={false} />',
+  }),
+  asset("agent-assistant", "Member-scoped assistant", "Give an installed agent a goal; review its proposed actions before confirming them.", ["Assistant"], "AssistantExample", {
+    tags: ["agent", "goal", "human-review"], source: "web/packages/app/src/agents.tsx", dependencies: ["app/agent-run"],
+    snippet: 'import { Assistant } from "@platform/app";\n<Assistant about="your.object/record-id" />',
+  }),
+  asset("agent-run", "Agent run and execution chain", "Inspect the original run trace, structured drafts and cross-application execution links.", ["RunView", "ChainGraph"], "AgentRunExample", {
+    tags: ["agent", "trace", "chain"], source: "web/packages/app/src/agents.tsx", states: ["running", "waiting", "done", "stopped", "withheld"],
+    snippet: 'import { RunView } from "@platform/app";\n<RunView id={runID} />',
+  }),
+  asset("knowledge-search", "Authorized cross-application search", "Search records and knowledge through the current member’s original read endpoints.", ["Search"], "SearchExample", {
+    tags: ["search", "knowledge", "records"], source: "web/packages/app/src/agents.tsx", states: ["empty"],
+    snippet: 'import { Search } from "@platform/app";\n<Search initial="order" />',
+    constraints: ["Results come from the current member’s host. The offline example searches synthetic records only.", "This search currently has no dedicated error or pending feedback; callers must not claim otherwise."],
+  }),
+  asset("compute-call", "Published code function call", "Bind a published Go/Wasm operation to a page using its original owner contract.", ["ComputeCall"], "ComputeExample", {
+    tags: ["wasm", "compute", "binding"], uses: ["code", "widget"], widgets: ["compute"], source: "web/packages/app/src/capability.tsx",
+    states: ["pending", "error", "unavailable"], snippet: 'import { ComputeCall } from "@platform/app";\n<ComputeCall binding={publishedOperation} bindings={inputs} record={selected} recordType="your.object" />',
+    constraints: ["A runtime call needs the actual host, a published owner revision and the current member’s permissions.", "The offline preview shows the binding only and never executes Wasm or reads tenant data."],
+  }),
+];
+
+/** Nonvisual public API, attached to the existing public owner rather than visual cards. */
+export const api = ["AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useReadQuery", "useRead", "useRecordInventory",
+  "useDefinitions", "useCapabilities", "useInvokeCapability", "assetKey", "findDefinition", "useOpenRecord", "Dashboard", "AppUI", "defineApp", "SavedView", "newId",
+  "runStates", "AgentInfo", "AgentRun", "Citation", "Memory", "Passage", "RunDraft", "RunSignal", "RunStep", "isPageDefinition", "isComposed"];

@@ -294,6 +294,8 @@ WMS 是陌生业务装配探针，不开发 WMS/MES 应用。数据关系、页�
 
 ## 12. 实际构建边界
 
+代码函数测试按当前已发布输入 Schema 初始化，运行后明确显示状态、输出或失败原因，可展开本次实际输入；修改输入后提示重新运行，测试输入校验不阻塞源代码/契约编辑。编译由配置固定镜像的原构建 driver 负责，独立开发宿主需显式连接编译与执行 socket。
+
 **As built：能力装配主路径已实现。** `CapabilityDescriptor` 从原 owner 定义投影；共同 API 将 Query/Action/AI/Compute 路由到原入口，计算和人工审批分别保留 pending 回执。类型化 Process 编译同一 Flow；scope/frame 支持分支、集合、并发、等待、人工任务、子流程、break/continue 和首个成功分支。旧定义与 Token 解码为当前模型，历史接受身份及发布字节保留；新写入使用当前格式。
 
 `build.code` 拥有 Go/TinyGo 单源码、nullable/判别 variant 输入输出、生成的无反射 SDK、冻结编译快照和模块摘要。源码通过固定镜像的离线受限容器编译；独立 Go/wazero worker 经私有 socket 执行。模块使用原 FileStore 的 artifact 类别，候选激活固定模块/Schema 并保留后续草稿。派发在租户锁外，原 Work/K9 generation、取消和 accepted-result 接受/恢复结果；旧页面绑定通过已有合法候选保持精确版本。

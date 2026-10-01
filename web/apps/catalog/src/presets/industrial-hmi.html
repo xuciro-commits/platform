@@ -1,0 +1,1334 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>工业仪表 UI · 单页原型</title>
+<style>
+  :root{
+    --bg:#dfe3e6;
+    --panel:#eef1f3;
+    --panel-2:#e5e9ec;
+    --line:#aeb6bc;
+    --line-soft:#cfd5d9;
+    --text:#31373c;
+    --muted:#7b848b;
+    --display:#22282d;
+    --display-2:#2a3136;
+    --white:#f7f8f9;
+    --orange:#ff6a18;
+    --orange-hi:#ff8d42;
+    --green:#24c763;
+    --red:#ef3e43;
+    --yellow:#f3bf20;
+    --blue:#29a9e8;
+    --gray:#9aa3aa;
+    --shadow:0 3px 8px rgba(19,27,33,.18);
+    --inset:inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(41,50,57,.12);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 20% 0%,rgba(255,255,255,.75),transparent 28%),
+      linear-gradient(180deg,#d8dde1,#cfd5d9);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",sans-serif;
+    font-weight:350;
+    letter-spacing:.01em;
+  }
+
+  .app{
+    min-height:100vh;
+    padding:14px;
+  }
+
+  .board{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(330px,1fr));
+    gap:10px;
+    max-width:1500px;
+    margin:0 auto;
+  }
+
+  .panel{
+    position:relative;
+    min-height:360px;
+    border:1px solid #8f989f;
+    border-radius:12px;
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,255,255,.10)),
+      linear-gradient(180deg,var(--panel),var(--panel-2));
+    box-shadow:
+      0 2px 7px rgba(14,21,27,.18),
+      inset 0 1px 0 rgba(255,255,255,.95),
+      inset 0 -1px 0 rgba(94,104,112,.16);
+    overflow:hidden;
+  }
+  .panel:before,.panel:after{
+    content:"";
+    position:absolute;
+    width:8px;height:8px;border-radius:50%;
+    background:
+      radial-gradient(circle at 35% 30%,#f8fafb 0 16%,#7a858c 18% 45%,#3f474d 48% 52%,#b6bdc2 54% 100%);
+    box-shadow:0 0 0 1px rgba(0,0,0,.14);
+    top:7px;
+    z-index:4;
+  }
+  .panel:before{left:7px}
+  .panel:after{right:7px}
+
+  .panel-head{
+    height:48px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:6px 18px 6px 22px;
+    border-bottom:1px solid var(--line-soft);
+    background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(223,229,233,.88));
+  }
+  .num{
+    min-width:58px;
+    height:35px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#f2f4f5;
+    font-size:24px;
+    font-weight:520;
+    letter-spacing:.05em;
+    border-radius:7px;
+    background:linear-gradient(180deg,#4f5960,#31383d);
+    border:1px solid #242b30;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 2px 3px rgba(0,0,0,.18);
+    text-shadow:0 1px 0 #111;
+  }
+  .panel-title{
+    font-size:28px;
+    line-height:1;
+    font-weight:420;
+    letter-spacing:.08em;
+    color:#22292e;
+  }
+  .panel-meta{
+    margin-left:auto;
+    text-align:right;
+    color:#717a81;
+    font-size:11px;
+    line-height:1.15;
+    letter-spacing:.08em;
+    font-weight:380;
+  }
+
+  .content{padding:10px 14px 14px}
+  .section{margin-bottom:10px}
+  .label-row{
+    display:flex;align-items:center;gap:8px;
+    margin:4px 0 7px;
+    color:#475058;
+    font-size:13px;
+    font-weight:390;
+  }
+  .label-row small{
+    color:#8a939a;
+    font-size:10px;
+    font-weight:350;
+    letter-spacing:.06em;
+  }
+
+  .divider{height:1px;background:#c8ced2;margin:8px 0}
+
+  .status-grid{
+    display:grid;
+    grid-template-columns:1.05fr 1.2fr;
+    gap:10px;
+  }
+  .well{
+    border:1px solid #b7bfc5;
+    border-radius:8px;
+    background:linear-gradient(180deg,#e4e8eb,#dce2e6);
+    box-shadow:var(--inset);
+    padding:8px;
+  }
+  .darkwell{
+    background:linear-gradient(180deg,#2a3136,#1e2428);
+    border:1px solid #151a1e;
+    color:#eef2f4;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.09),inset 0 -12px 24px rgba(0,0,0,.12);
+  }
+  .led-row{
+    display:flex;align-items:center;gap:10px;
+    height:34px;
+    font-size:15px;
+  }
+  .led{
+    width:18px;height:18px;border-radius:50%;
+    display:inline-block;flex:0 0 auto;
+    background:var(--c);
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,.28),
+      0 0 9px color-mix(in srgb,var(--c) 65%,transparent),
+      inset 0 2px 3px rgba(255,255,255,.75),
+      inset 0 -2px 4px rgba(0,0,0,.28);
+  }
+  .led.sm{width:11px;height:11px}
+  .muted-en{
+    margin-left:auto;
+    font-size:10px;color:#99a2a9;letter-spacing:.07em;
+  }
+
+  .button-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  button,.btn{
+    -webkit-tap-highlight-color:transparent;
+    border:0;
+    cursor:pointer;
+    font:inherit;
+  }
+  /* Panel-mounted hardware key system
+     The dark rim is the installation gap between keycap and panel,
+     not a decorative black frame. */
+  .plastic{
+    --cap:#e5e7e9;
+    --cap-down:#d3d7da;
+    --hi:#ffffff;
+    --lo:#858d93;
+    --ink:#2a3035;
+    --travel:3.5px;
+    --gap:2px;
+
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:44px;
+    padding:var(--gap);
+    overflow:visible;
+
+    border:0;
+    border-radius:5px;
+    background:#0b0c0d; /* only the narrow installation gap */
+    color:var(--ink);
+
+    /* cavity: very little external shadow; mostly recessed into the panel */
+    box-shadow:
+      inset 0 1px 2px rgba(0,0,0,.95),
+      inset 0 -1px 0 rgba(255,255,255,.03),
+      0 1px 0 rgba(255,255,255,.34);
+
+    cursor:pointer;
+    font:inherit;
+    font-size:15px;
+    font-weight:380;
+    letter-spacing:.04em;
+    text-align:center;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+  }
+
+  .plastic > .retro-inner{
+    position:relative;
+    z-index:1;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    min-height:38px;
+    padding:7px 12px;
+
+    border-radius:10px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.58) 0 7%, rgba(255,255,255,.10) 8% 16%, transparent 17%),
+      var(--cap);
+    color:var(--ink);
+
+    /* subtle silk-screen / oil-print relief */
+    text-shadow:
+      0 .7px 0 rgba(255,255,255,.48),
+      0 -.55px 0 rgba(0,0,0,.10);
+
+    /* raised keycap: top highlight + side wall + floating shadow */
+    box-shadow:
+      inset 1px 1px 1px var(--hi),
+      inset -1px -1px 1px var(--lo),
+      0 1px 0 rgba(255,255,255,.13),
+      0 2px 0 rgba(0,0,0,.36),
+      0 3px 5px rgba(0,0,0,.34);
+
+    transform:translateY(-.5px);
+    transition:
+      transform 95ms cubic-bezier(.2,.85,.25,1),
+      box-shadow 95ms ease,
+      background 95ms ease,
+      filter 120ms ease;
+    will-change:transform;
+  }
+
+  .plastic:hover > .retro-inner{ filter:brightness(1.025); }
+
+  /* momentary key: pressed while pointer/key is down, springs back on release */
+  .plastic.pressed > .retro-inner{
+    transform:translateY(var(--travel));
+    background:var(--cap-down);
+    box-shadow:
+      inset 0 1px 3px rgba(0,0,0,.62),
+      inset 1px 1px 1px rgba(0,0,0,.10),
+      inset -1px -1px 1px rgba(255,255,255,.10),
+      0 .5px 0 rgba(0,0,0,.22);
+    filter:brightness(.97);
+  }
+
+  /* tab / selector: once selected, stays physically sunk */
+  .plastic.is-active > .retro-inner{
+    transform:translateY(var(--travel));
+    background:var(--cap-down);
+    box-shadow:
+      inset 0 1px 4px rgba(0,0,0,.70),
+      inset 0 -1px 0 rgba(255,255,255,.08),
+      0 .5px 0 rgba(0,0,0,.18);
+    filter:brightness(.96);
+  }
+
+  /* Material families */
+  .plastic.orange{
+    --cap:#f97316; --cap-down:#df5209; --hi:#fdba74; --lo:#b63c08; --ink:#fff;
+  }
+  .plastic.dark{
+    --cap:#454545; --cap-down:#292929; --hi:#8f8f8f; --lo:#181818; --ink:#fff;
+  }
+  .plastic.white{
+    --cap:#e9ecef; --cap-down:#d5d9dc; --hi:#fff; --lo:#7b8389; --ink:#20262b;
+  }
+  .plastic.lightGray{
+    --cap:#a7adb2; --cap-down:#8c9399; --hi:#dfe3e6; --lo:#5c646b; --ink:#fff;
+  }
+  .plastic.gray{
+    --cap:#5a6065; --cap-down:#41474c; --hi:#9ea5aa; --lo:#272c30; --ink:#fff;
+  }
+  .plastic.red{
+    --cap:#ef4444; --cap-down:#cf252b; --hi:#fca5a5; --lo:#981a1e; --ink:#fff;
+  }
+  .plastic.green{
+    --cap:#22c55e; --cap-down:#139b45; --hi:#86efac; --lo:#145f32; --ink:#fff;
+  }
+  .plastic.blue{
+    --cap:#38bdf8; --cap-down:#1594cd; --hi:#bae6fd; --lo:#075985; --ink:#07324a;
+  }
+  .plastic.yellow{
+    --cap:#facc15; --cap-down:#d9a908; --hi:#fef08a; --lo:#986807; --ink:#2b2408;
+  }
+
+  /* Compact panel-mounted keys: same mechanism, smaller cavity and travel */
+  .plastic.small,
+  .dots-btn,
+  button.affix{
+    --travel:2.5px;
+  }
+
+  .dots-btn,
+  button.affix{
+    position:relative;
+    border:0;
+    border-radius:4px;
+    background:#0b0c0d;
+    padding:2px;
+    box-shadow:
+      inset 0 1px 2px rgba(0,0,0,.92),
+      0 1px 0 rgba(255,255,255,.30);
+    cursor:pointer;
+  }
+  .dots-btn > .retro-inner,
+  button.affix > .retro-inner{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    height:100%;
+    min-height:20px;
+    border-radius:6px;
+    background:linear-gradient(180deg,#f4f6f7,#d8dde1);
+    color:#3b444a;
+    box-shadow:
+      inset 1px 1px 1px #fff,
+      inset -1px -1px 1px #858d93,
+      0 2px 0 rgba(0,0,0,.30),
+      0 2px 4px rgba(0,0,0,.22);
+    transform:translateY(-.25px);
+    transition:transform 90ms ease,box-shadow 90ms ease,background 90ms ease;
+  }
+  .dots-btn.pressed > .retro-inner,
+  button.affix.pressed > .retro-inner{
+    transform:translateY(2.5px);
+    background:#d4d9dc;
+    box-shadow:
+      inset 0 1px 3px rgba(0,0,0,.55),
+      0 .5px 0 rgba(0,0,0,.16);
+  }
+
+  .plastic:focus-visible,
+  .dots-btn:focus-visible,
+  button.affix:focus-visible{
+    outline:2px solid rgba(41,169,232,.62);
+    outline-offset:3px;
+  }
+
+  .seg{
+    display:flex;
+  }
+  .seg .plastic{
+    flex:1;border-radius:0;margin-right:-1px;
+  }
+  .seg .plastic:first-child{border-radius:7px 0 0 7px}
+  .seg .plastic:last-child{border-radius:0 7px 7px 0;margin-right:0}
+
+  .alarm-levels{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
+  }
+  .alarm-card{
+    text-align:center;
+    padding:8px 4px;
+    border:1px solid #bdc5ca;
+    border-radius:7px;
+    background:linear-gradient(180deg,#f2f4f5,#dfe4e7);
+    box-shadow:var(--inset);
+    color:#4b545b;
+    font-size:12px;
+  }
+  .alarm-card strong{
+    display:block;
+    color:var(--c);
+    font-size:15px;
+    font-weight:500;
+    margin:2px 0;
+  }
+  .tri{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:29px;height:25px;
+    clip-path:polygon(50% 0,100% 100%,0 100%);
+    background:var(--c);
+    color:white;font-size:16px;font-weight:600;
+    padding-top:6px;
+    filter:drop-shadow(0 2px 2px rgba(0,0,0,.22));
+  }
+
+  .field{
+    display:flex;align-items:center;
+    height:42px;
+    border:1px solid #97a1a8;
+    border-radius:7px;
+    background:linear-gradient(180deg,#f5f7f8,#e2e7ea);
+    box-shadow:inset 0 1px 3px rgba(62,72,79,.14),0 1px 0 rgba(255,255,255,.8);
+    overflow:hidden;
+  }
+  .field input,.field select{
+    min-width:0;flex:1;height:100%;
+    border:0;outline:0;background:transparent;color:#364047;
+    padding:0 12px;font-size:15px;font-weight:360;
+    font-family:inherit;
+  }
+  .field select{appearance:none}
+  .field .affix{
+    width:42px;height:100%;
+    display:flex;align-items:center;justify-content:center;
+    border-left:1px solid #b9c1c6;
+    color:#465058;
+    background:linear-gradient(180deg,#f1f4f6,#d9dfe3);
+  }
+
+  .kpis{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .kpi{
+    min-height:112px;
+    border-radius:7px;
+    border:1px solid #10161a;
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.04),transparent),
+      linear-gradient(180deg,#2c3439,#20262a);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 2px 5px rgba(0,0,0,.2);
+    color:#eef2f4;
+    padding:8px 10px;
+    position:relative;
+    overflow:hidden;
+  }
+  .kpi .kname{font-size:12px;color:#b9c1c7;display:flex;align-items:center;gap:7px}
+  .kpi .kval{font-size:28px;font-weight:390;margin:5px 0 1px;letter-spacing:.01em}
+  .kpi .delta{font-size:13px;color:var(--green)}
+  .kpi .foot{font-size:10px;color:#9aa3aa;position:absolute;bottom:6px;left:10px}
+  .spark{
+    position:absolute;right:6px;bottom:16px;width:46%;height:42px;
+  }
+  .spark svg{width:100%;height:100%}
+
+  table{
+    width:100%;border-collapse:collapse;font-size:11px;color:#536068;
+  }
+  th{
+    text-align:left;font-weight:420;color:#4e5860;
+    padding:7px 5px;border-bottom:1px solid #bfc7cc;
+    background:#e8ecef;
+  }
+  td{padding:7px 5px;border-bottom:1px solid #d7dde0}
+  tr.selected{background:#d6ecff}
+  tr:hover{background:#eef6fb}
+  .status-text{display:inline-flex;align-items:center;gap:5px}
+  .dots-btn{
+    min-width:30px;height:24px;border-radius:5px;
+    border:1px solid #9da6ac;background:linear-gradient(#f2f4f5,#d6dde1);
+    box-shadow:0 2px 0 #9da6ac,inset 0 1px 0 white;color:#485159;
+  }
+
+  .pagination{display:flex;gap:5px;justify-content:center;margin-top:9px}
+  .pagination button{min-width:30px;height:30px;padding:0 7px}
+
+  .scope{
+    background:#1f262a;
+    border:1px solid #12181c;
+    border-radius:7px;
+    box-shadow:inset 0 0 20px rgba(0,0,0,.25);
+    padding:7px;
+  }
+  .scope svg{width:100%;height:145px;display:block}
+  .scope-grid line{stroke:#3b474e;stroke-width:.6}
+  .scope-label{fill:#aeb7bd;font-size:9px}
+  .scope-foot{
+    display:flex;gap:15px;color:#b7c0c5;font-size:10px;margin-top:3px;align-items:center
+  }
+
+  .tabs{display:flex;gap:4px;margin-bottom:7px}
+  .tabs .plastic{min-height:30px;padding:0 10px;font-size:12px}
+
+  .alarm-table td.alert{color:#e34a4f}
+  .alarm-table td.warn{color:#d89e13}
+  .alarm-table td.info{color:#288ebc}
+
+  .nav-wrap{
+    display:grid;grid-template-columns:128px 1fr;gap:10px;
+  }
+  .nav{
+    background:linear-gradient(180deg,#3c454b,#242b30);
+    border:1px solid #1b2024;border-radius:7px;padding:7px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.09);
+  }
+  .nav-item{
+    display:flex;align-items:center;gap:8px;
+    height:33px;padding:0 9px;margin-bottom:4px;border-radius:5px;
+    color:#dfe4e7;font-size:13px;cursor:pointer;
+  }
+  .nav-item small{margin-left:auto;font-size:8px;color:#9fa8ae}
+  .nav-item.active{
+    background:linear-gradient(180deg,#ff8a3f,#f05b0c);
+    color:white;
+    box-shadow:0 2px 0 #a9430c,inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  .nav-item:hover:not(.active){background:#465158}
+
+  .filters .field{height:34px}
+  .filters{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .filters .wide{grid-column:1/-1}
+
+  .micro{
+    color:#8a9399;font-size:10px;letter-spacing:.08em;font-weight:340;
+  }
+
+
+  /* ===== Industrial enclosure / mounted-panel material ===== */
+  .panel{
+    isolation:isolate;
+    border-color:#858e94;
+    background:
+      /* sparse powder-coat mottling */
+      radial-gradient(circle at 12% 17%, rgba(255,255,255,.28) 0 1px, transparent 1.4px),
+      radial-gradient(circle at 73% 63%, rgba(70,80,87,.055) 0 .8px, transparent 1.2px),
+      /* subtle vertical brushed-metal streaks */
+      repeating-linear-gradient(
+        90deg,
+        rgba(255,255,255,.055) 0,
+        rgba(255,255,255,.055) 1px,
+        rgba(95,105,112,.018) 1px,
+        rgba(95,105,112,.018) 3px
+      ),
+      linear-gradient(180deg,#f2f4f5 0%,#e6eaed 44%,#dce1e4 100%);
+    background-size:17px 19px,23px 29px,auto,auto;
+    box-shadow:
+      0 4px 10px rgba(18,25,30,.18),
+      inset 0 1px 0 rgba(255,255,255,.98),
+      inset 0 -2px 3px rgba(75,85,92,.16),
+      inset 1px 0 0 rgba(255,255,255,.42),
+      inset -1px 0 0 rgba(61,70,77,.10);
+  }
+
+  /* shallow stamped rim, like a metal faceplate */
+  .panel .content{
+    position:relative;
+    z-index:1;
+  }
+  .panel-head{
+    background:
+      repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,rgba(80,90,98,.012) 1px 3px),
+      linear-gradient(180deg,#f5f7f8,#e0e5e8);
+    box-shadow:
+      inset 0 -1px 0 rgba(91,101,108,.14),
+      inset 0 1px 0 rgba(255,255,255,.95);
+  }
+
+  .hardware-screw{
+    position:absolute;
+    width:10px;height:10px;
+    border-radius:50%;
+    z-index:9;
+    pointer-events:none;
+    background:
+      linear-gradient(45deg,transparent 44%,rgba(20,24,27,.58) 45% 55%,transparent 56%),
+      radial-gradient(circle at 35% 28%,#fbfcfd 0 14%,#b7bec3 15% 34%,#717a80 35% 57%,#c8ced2 58% 76%,#687178 77% 100%);
+    box-shadow:
+      0 0 0 1px rgba(49,57,63,.34),
+      0 1px 1px rgba(0,0,0,.22);
+  }
+  .hardware-screw.tl{left:7px;top:7px}
+  .hardware-screw.tr{right:7px;top:7px}
+  .hardware-screw.bl{left:7px;bottom:7px}
+  .hardware-screw.br{right:7px;bottom:7px}
+
+  /* remove old top-only pseudo screws; real four-corner screws are injected */
+  .panel:before,.panel:after{display:none}
+
+  .well{
+    background:
+      repeating-linear-gradient(90deg,rgba(255,255,255,.045) 0 1px,rgba(69,79,86,.012) 1px 3px),
+      linear-gradient(180deg,#e9edef,#d9dfe3);
+    border-color:#aeb7bd;
+    box-shadow:
+      inset 0 1px 2px rgba(56,65,72,.10),
+      inset 0 -1px 0 rgba(255,255,255,.70),
+      0 1px 0 rgba(255,255,255,.56);
+  }
+
+  /* A physical sub-panel screwed into the faceplate */
+  .hardware-bay{
+    position:relative;
+    margin-top:8px;
+    padding:12px 12px 11px;
+    border:1px solid #8f989e;
+    border-radius:8px;
+    background:
+      repeating-linear-gradient(90deg,rgba(255,255,255,.045) 0 1px,rgba(64,73,80,.02) 1px 3px),
+      linear-gradient(180deg,#dfe4e7,#cfd6da);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.82),
+      inset 0 -2px 4px rgba(55,64,70,.13),
+      0 2px 3px rgba(28,35,40,.13);
+  }
+  .hardware-bay:before,
+  .hardware-bay:after{
+    content:"";
+    position:absolute;
+    top:5px;
+    width:7px;height:7px;border-radius:50%;
+    background:
+      linear-gradient(45deg,transparent 43%,rgba(27,31,34,.5) 44% 56%,transparent 57%),
+      radial-gradient(circle at 35% 30%,#f8fafb 0 17%,#adb5ba 18% 45%,#626b71 46% 64%,#c7cdd1 65% 100%);
+    box-shadow:0 0 0 1px rgba(41,48,53,.25);
+  }
+  .hardware-bay:before{left:6px}
+  .hardware-bay:after{right:6px}
+
+  .hardware-controls{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    align-items:end;
+  }
+  .control-unit{
+    min-width:0;
+    text-align:center;
+    color:#555f66;
+    font-size:11px;
+    letter-spacing:.03em;
+  }
+  .control-unit .caption{
+    margin-top:7px;
+    color:#626c73;
+    font-size:11px;
+    font-weight:360;
+  }
+  .control-unit .micro{
+    display:block;
+    margin-top:1px;
+  }
+
+  /* Rotary control */
+  .knob-wrap{
+    position:relative;
+    width:66px;height:66px;
+    margin:0 auto;
+    border-radius:50%;
+    background:#111416;                 /* mounting clearance */
+    box-shadow:
+      inset 0 2px 4px rgba(0,0,0,.95),
+      0 1px 0 rgba(255,255,255,.43);
+  }
+  .knob{
+    --angle:-45deg;
+    position:absolute;
+    inset:4px;
+    border:0;
+    border-radius:50%;
+    cursor:pointer;
+    background:
+      repeating-conic-gradient(from 0deg,#50585e 0 5deg,#343a3f 5deg 9deg),
+      radial-gradient(circle at 38% 31%,#737d84 0 8%,#4a5258 42%,#252a2e 72%);
+    box-shadow:
+      inset 2px 2px 3px rgba(255,255,255,.22),
+      inset -3px -3px 5px rgba(0,0,0,.48),
+      0 3px 4px rgba(0,0,0,.46);
+    transform:rotate(var(--angle));
+    transition:transform .16s cubic-bezier(.2,.8,.2,1);
+  }
+  .knob:after{
+    content:"";
+    position:absolute;
+    width:3px;height:18px;
+    left:50%;top:6px;
+    margin-left:-1.5px;
+    border-radius:2px;
+    background:#f0f2f3;
+    box-shadow:0 0 0 1px rgba(0,0,0,.20);
+  }
+  .knob-scale{
+    position:absolute;
+    inset:-8px;
+    border-radius:50%;
+    pointer-events:none;
+    background:
+      conic-gradient(from -50deg,
+        transparent 0 2%,#757f85 2.2% 2.7%,transparent 2.9% 11%,
+        #757f85 11.2% 11.7%,transparent 11.9% 20%,
+        #757f85 20.2% 20.7%,transparent 20.9% 29%,
+        #757f85 29.2% 29.7%,transparent 29.9% 38%,
+        #757f85 38.2% 38.7%,transparent 38.9% 100%);
+    mask:radial-gradient(circle,transparent 61%,#000 62%);
+    opacity:.65;
+  }
+
+  /* Metal toggle lever */
+  .toggle-base{
+    position:relative;
+    width:54px;height:64px;
+    margin:0 auto;
+    border-radius:9px;
+    background:
+      linear-gradient(180deg,#d8dde0,#969fa5);
+    border:1px solid #747e84;
+    box-shadow:
+      inset 0 1px 0 #fff,
+      inset 0 -2px 3px rgba(0,0,0,.22),
+      0 2px 3px rgba(0,0,0,.18);
+  }
+  .toggle-base:before,.toggle-base:after{
+    content:"";
+    position:absolute;left:50%;transform:translateX(-50%);
+    width:7px;height:7px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#fff 0 15%,#9ba4aa 17% 48%,#4e565c 50% 68%,#b9c0c4 70%);
+    box-shadow:0 0 0 1px rgba(0,0,0,.22);
+  }
+  .toggle-base:before{top:4px}
+  .toggle-base:after{bottom:4px}
+  .toggle-lever{
+    position:absolute;
+    left:50%;top:50%;
+    width:14px;height:43px;
+    margin-left:-7px;margin-top:-22px;
+    border:0;
+    background:transparent;
+    cursor:pointer;
+    transform-origin:50% 72%;
+    transform:rotate(-28deg);
+    transition:transform .16s cubic-bezier(.2,.8,.25,1);
+  }
+  .toggle-lever.on{transform:rotate(28deg)}
+  .toggle-lever:before{
+    content:"";
+    position:absolute;left:4px;top:7px;
+    width:6px;height:29px;border-radius:4px;
+    background:linear-gradient(90deg,#6f777c,#e9ecee 42%,#8d959a 70%,#555d62);
+    box-shadow:1px 2px 2px rgba(0,0,0,.38);
+  }
+  .toggle-lever:after{
+    content:"";
+    position:absolute;left:1px;top:0;
+    width:12px;height:14px;border-radius:50%;
+    background:radial-gradient(circle at 35% 28%,#fafbfb 0 12%,#b3b9bd 34%,#626b70 66%,#343a3e 100%);
+    box-shadow:0 2px 3px rgba(0,0,0,.38);
+  }
+
+  /* Breaker / pull-handle */
+  .breaker{
+    position:relative;
+    width:62px;height:70px;
+    margin:0 auto;
+    padding:0;
+    border:0;
+    border-radius:8px;
+    cursor:pointer;
+    background:
+      linear-gradient(180deg,#343a3f,#171b1e);
+    box-shadow:
+      inset 0 2px 5px rgba(0,0,0,.9),
+      0 1px 0 rgba(255,255,255,.38);
+  }
+  .breaker-handle{
+    position:absolute;
+    left:10px;right:10px;
+    top:9px;height:34px;
+    border-radius:6px;
+    background:
+      linear-gradient(180deg,#ff9e5d 0 10%,#f56a17 14% 62%,#bd4308 100%);
+    box-shadow:
+      inset 1px 1px 1px #ffc493,
+      inset -2px -2px 2px #913006,
+      0 4px 4px rgba(0,0,0,.55);
+    transform:translateY(0) rotateX(0deg);
+    transform-origin:center bottom;
+    transition:transform .16s ease,box-shadow .16s ease;
+  }
+  .breaker.on .breaker-handle{
+    transform:translateY(22px) rotateX(12deg);
+    box-shadow:
+      inset 0 2px 4px rgba(0,0,0,.48),
+      0 1px 1px rgba(0,0,0,.24);
+  }
+  .breaker-mark{
+    position:absolute;right:5px;top:6px;
+    color:#b9c1c6;font-size:8px;line-height:1.1;
+    text-align:center;
+  }
+
+  /* Selector with physical detents */
+  .selector-wrap{
+    position:relative;
+    width:68px;height:68px;margin:0 auto;
+  }
+  .selector-ring{
+    position:absolute;inset:0;border-radius:50%;
+    background:
+      conic-gradient(from -90deg,
+        #777f84 0 2deg,transparent 2deg 42deg,
+        #777f84 42deg 44deg,transparent 44deg 88deg,
+        #777f84 88deg 90deg,transparent 90deg 132deg,
+        #777f84 132deg 134deg,transparent 134deg 360deg);
+    opacity:.7;
+  }
+
+  @media(max-width:760px){
+    .hardware-controls{grid-template-columns:repeat(2,1fr)}
+  }
+
+  @media(max-width:1180px){
+    .board{grid-template-columns:1fr 1fr}
+  }
+  @media(max-width:760px){
+    .app{padding:7px}
+    .board{grid-template-columns:1fr}
+    .panel-title{font-size:23px}
+    .panel{min-height:auto}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="board">
+
+    <!-- 01 状态语义 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">01</div><div class="panel-title">状态语义</div>
+        <div class="panel-meta">系统状态<br>SYS STATUS</div>
+      </header>
+      <div class="content">
+        <div class="status-grid">
+          <div>
+            <div class="label-row">状态指示 <small>STATUS LED</small></div>
+            <div class="well">
+              <div class="led-row"><span class="led" style="--c:var(--green)"></span>运行中 <span class="muted-en">RUN</span></div>
+              <div class="led-row"><span class="led" style="--c:var(--red)"></span>故障 <span class="muted-en">FAULT</span></div>
+              <div class="led-row"><span class="led" style="--c:var(--yellow)"></span>警告 <span class="muted-en">ALARM</span></div>
+              <div class="led-row"><span class="led" style="--c:var(--blue)"></span>信息 <span class="muted-en">INFO</span></div>
+              <div class="led-row"><span class="led" style="--c:var(--gray)"></span>离线 <span class="muted-en">OFFLINE</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="label-row">状态按钮 <small>STATUS BUTTONS</small></div>
+            <div class="button-grid">
+              <button class="plastic green">▶ 运行中</button>
+              <button class="plastic red">△ 故障</button>
+              <button class="plastic yellow">⌕ 维护</button>
+              <button class="plastic blue">ⓘ 信息</button>
+              <button class="plastic">⏻ 离线</button>
+            </div>
+          </div>
+        </div>
+        <div class="label-row" style="margin-top:10px">告警级别 <small>ALARM LEVEL</small></div>
+        <div class="alarm-levels">
+          <div class="alarm-card" style="--c:var(--red)"><span class="tri" style="--c:var(--red)">!</span><strong>严重</strong>系统停止</div>
+          <div class="alarm-card" style="--c:#ef7e2f"><span class="tri" style="--c:#ef7e2f">!</span><strong>重大</strong>需重点关注</div>
+          <div class="alarm-card" style="--c:var(--yellow)"><span class="tri" style="--c:var(--yellow)">!</span><strong>一般</strong>例行检查</div>
+          <div class="alarm-card" style="--c:var(--blue)"><span class="tri" style="--c:var(--blue)">i</span><strong>信息</strong>仅供参考</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 按钮系统 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">02</div><div class="panel-title">按钮系统</div>
+        <div class="panel-meta">控制操作<br>CONTROL</div>
+      </header>
+      <div class="content">
+        <div class="label-row">主要操作 <small>MAIN ACTIONS</small></div>
+        <div class="button-grid" style="grid-template-columns:1.2fr 1.1fr .8fr .8fr">
+          <button class="plastic orange">● 记录</button>
+          <button class="plastic green">▶ 播放</button>
+          <button class="plastic">清除</button>
+          <button class="plastic">声音</button>
+        </div>
+        <div class="label-row" style="margin-top:10px">危险操作 <small>DANGEROUS</small></div>
+        <div class="button-grid" style="grid-template-columns:1.5fr repeat(4,.55fr)">
+          <button class="plastic red">■ 停止</button>
+          <button class="plastic white">⚙</button><button class="plastic white">▣</button><button class="plastic white">⌫</button><button class="plastic gray">•••</button>
+        </div>
+        <div class="label-row" style="margin-top:10px">模式选择 <small>MODE</small></div>
+        <div class="seg" data-seg>
+          <button class="plastic orange is-active">自动</button>
+          <button class="plastic">单次</button>
+          <button class="plastic">连续</button>
+          <button class="plastic">强制</button>
+        </div>
+        <div class="label-row" style="margin-top:10px">开关控制 <small>SWITCH</small></div>
+        <div class="seg" data-seg>
+          <button class="plastic green is-active">开启</button>
+          <button class="plastic">关闭</button>
+        </div>
+
+        <div class="label-row" style="margin-top:11px">机械控制 <small>HARDWARE CONTROLS</small></div>
+        <div class="hardware-bay">
+          <div class="hardware-controls">
+            <div class="control-unit">
+              <div class="knob-wrap">
+                <div class="knob-scale"></div>
+                <button class="knob" data-knob aria-label="调节旋钮"></button>
+              </div>
+              <div class="caption">调节旋钮</div>
+              <span class="micro">GAIN</span>
+            </div>
+
+            <div class="control-unit">
+              <div class="selector-wrap">
+                <div class="selector-ring"></div>
+                <div class="knob-wrap" style="width:58px;height:58px;position:absolute;left:5px;top:5px">
+                  <button class="knob" data-selector aria-label="档位选择"></button>
+                </div>
+              </div>
+              <div class="caption">档位选择</div>
+              <span class="micro">MODE</span>
+            </div>
+
+            <div class="control-unit">
+              <div class="toggle-base">
+                <button class="toggle-lever" data-toggle aria-label="拨杆开关"></button>
+              </div>
+              <div class="caption">拨杆</div>
+              <span class="micro">ENABLE</span>
+            </div>
+
+            <div class="control-unit">
+              <button class="breaker" data-breaker aria-label="拉闸开关">
+                <span class="breaker-handle"></span>
+                <span class="breaker-mark">I<br>O</span>
+              </button>
+              <div class="caption">拉闸</div>
+              <span class="micro">BREAKER</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 输入搜索 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">03</div><div class="panel-title">输入搜索</div>
+        <div class="panel-meta">文本 / 数值<br>DATA ENTRY</div>
+      </header>
+      <div class="content">
+        <div class="section">
+          <div class="label-row">搜索 <small>SEARCH</small></div>
+          <div class="field"><span class="affix">⌕</span><input id="search" placeholder="搜索设备、工单、操作员…" /><button class="affix" onclick="document.querySelector('#search').value=''">×</button></div>
+        </div>
+        <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div class="label-row">文本输入 <small>TEXT</small></div><div class="field"><input value="产线 A" /></div></div>
+          <div><div class="label-row">设备编号 <small>ID</small></div><div class="field"><select><option>设备编号</option><option>工单编号</option></select><span class="affix">⌄</span></div></div>
+        </div>
+        <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div class="label-row">数值输入 <small>NUMBER</small></div><div class="field"><input type="number" value="12.500" step=".1"><span class="affix">V</span></div></div>
+          <div><div class="label-row">步进值 <small>STEP</small></div><div class="field"><input type="number" value="0.100" step=".1"></div></div>
+        </div>
+        <div class="label-row">筛选条件 <small>FILTER</small></div>
+        <div style="display:grid;grid-template-columns:42px 1fr 1fr;gap:6px">
+          <button class="plastic" style="padding:0">Y</button>
+          <div class="field"><select><option>所有站点</option><option>总装站</option></select><span class="affix">⌄</span></div>
+          <div class="field"><select><option>最近 24 小时</option><option>最近 7 天</option></select><span class="affix">⌄</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 下拉选择 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">04</div><div class="panel-title">下拉选择</div>
+        <div class="panel-meta">选择控件<br>SELECTION</div>
+      </header>
+      <div class="content">
+        <div class="label-row">站点选择 <small>SITE</small></div>
+        <div class="field"><select><option>所有站点</option><option>一号工厂</option></select><span class="affix">⌄</span></div>
+        <div class="label-row" style="margin-top:12px">产线选择 <small>LINE</small></div>
+        <div class="field"><select><option>产线 A - 总装</option><option>产线 B - 包装</option></select><span class="affix">⌄</span></div>
+        <div class="label-row" style="margin-top:12px">视图模式 <small>VIEW</small></div>
+        <div class="seg" data-seg>
+          <button class="plastic orange is-active">实时</button><button class="plastic">历史</button><button class="plastic">趋势</button><button class="plastic">表格</button>
+        </div>
+        <div class="label-row" style="margin-top:12px">功能模块 <small>MODULE</small></div>
+        <div class="seg" data-seg>
+          <button class="plastic orange is-active">▟ 生产</button><button class="plastic">⌕ 维护</button><button class="plastic">▤ 分析</button><button class="plastic">⚙ 设置</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 指标卡片 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">05</div><div class="panel-title">指标卡片</div>
+        <div class="panel-meta">关键指标<br>METRICS</div>
+      </header>
+      <div class="content">
+        <div class="kpis">
+          <div class="kpi"><div class="kname"><span class="led sm" style="--c:var(--green)"></span>吞吐量 <span class="micro">THROUGHPUT</span></div><div class="kval">12,480 <small style="font-size:12px">件/小时</small></div><div class="delta">▲ +6.0%</div><div class="spark"><svg viewBox="0 0 100 42"><polyline fill="none" stroke="#21b9e9" stroke-width="2" points="0,35 10,28 20,30 30,20 40,24 50,18 60,23 70,14 80,17 90,10 100,13"/></svg></div><div class="foot">目标 12,000</div></div>
+          <div class="kpi"><div class="kname"><span class="led sm" style="--c:var(--green)"></span>运行率 <span class="micro">UPTIME</span></div><div class="kval">96.2%</div><div class="delta">▲ +1.3%</div><div class="spark"><svg viewBox="0 0 100 42"><polyline fill="none" stroke="#36e76f" stroke-width="2" points="0,30 10,27 20,29 30,24 40,22 50,20 60,21 70,16 80,15 90,12 100,13"/></svg></div><div class="foot">24小时平均 95.6%</div></div>
+          <div class="kpi"><div class="kname"><span class="led sm" style="--c:var(--red)"></span>报警数 <span class="micro">ALARMS</span></div><div class="kval">5</div><div style="color:#ff5b61;font-size:13px">▲2　<span style="color:#ffd348">▲2</span>　<span style="color:#58bdf0">▲1</span></div><div class="foot">严重 2 ｜ 重大 2 ｜ 一般 1</div></div>
+          <div class="kpi"><div class="kname"><span class="led sm" style="--c:var(--green)"></span>能耗 <span class="micro">ENERGY</span></div><div class="kval">418 <small style="font-size:12px">kWh</small></div><div class="delta">▼ -5.2%</div><div class="spark"><svg viewBox="0 0 100 42"><polyline fill="none" stroke="#31d4df" stroke-width="2" points="0,23 10,19 20,25 30,22 40,23 50,20 60,21 70,18 80,19 90,16 100,20"/></svg></div><div class="foot">平均 440 kWh</div></div>
+          <div class="kpi"><div class="kname"><span class="led sm" style="--c:var(--green)"></span>良率 <span class="micro">YIELD</span></div><div class="kval">98.7%</div><div class="delta">▲ +0.4%</div><div class="foot">目标 98.0%</div></div>
+          <div class="kpi"><div class="kname"><span class="led sm" style="--c:var(--green)"></span>节拍 <span class="micro">CYCLE TIME</span></div><div class="kval">42.0 <small style="font-size:12px">s</small></div><div class="delta">▼ -8.0%</div><div class="foot">目标 45.0 s</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 数据表格 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">06</div><div class="panel-title">数据表格</div>
+        <div class="panel-meta">设备数据<br>DEVICE DATA</div>
+      </header>
+      <div class="content">
+        <table id="deviceTable">
+          <thead><tr><th>□</th><th>编号</th><th>设备</th><th>状态</th><th>数值</th><th>时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td>□</td><td>DV-001</td><td>输送机</td><td><span class="status-text"><span class="led sm" style="--c:var(--green)"></span>运行</span></td><td>12.50</td><td>10:24</td><td><button class="dots-btn">•••</button></td></tr>
+            <tr><td>□</td><td>DV-002</td><td>加注站</td><td><span class="status-text"><span class="led sm" style="--c:var(--green)"></span>运行</span></td><td>8.32</td><td>10:24</td><td><button class="dots-btn">•••</button></td></tr>
+            <tr><td>□</td><td>DV-003</td><td>检测仪</td><td><span class="status-text"><span class="led sm" style="--c:var(--yellow)"></span>警告</span></td><td>0.00</td><td>10:23</td><td><button class="dots-btn">•••</button></td></tr>
+            <tr class="selected"><td>☑</td><td>DV-004</td><td>贴标机</td><td><span class="status-text" style="color:var(--red)"><span class="led sm" style="--c:var(--red)"></span>故障</span></td><td>-</td><td>10:22</td><td><button class="dots-btn">•••</button></td></tr>
+            <tr><td>□</td><td>DV-005</td><td>机械臂</td><td><span class="status-text"><span class="led sm" style="--c:var(--green)"></span>运行</span></td><td>5.21</td><td>10:22</td><td><button class="dots-btn">•••</button></td></tr>
+            <tr><td>□</td><td>DV-006</td><td>测试站</td><td><span class="status-text"><span class="led sm" style="--c:var(--yellow)"></span>维护</span></td><td>0.00</td><td>10:21</td><td><button class="dots-btn">•••</button></td></tr>
+            <tr><td>□</td><td>DV-007</td><td>包装机</td><td><span class="status-text"><span class="led sm" style="--c:var(--green)"></span>运行</span></td><td>18.44</td><td>10:21</td><td><button class="dots-btn">•••</button></td></tr>
+            <tr><td>□</td><td>DV-008</td><td>托盘机</td><td><span class="status-text"><span class="led sm" style="--c:var(--gray)"></span>离线</span></td><td>-</td><td>10:20</td><td><button class="dots-btn">•••</button></td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <button class="plastic">‹</button><button class="plastic orange is-active">1</button><button class="plastic">2</button><button class="plastic">3</button><button class="plastic">4</button><button class="plastic">5</button><button class="plastic">›</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 图表显示 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">07</div><div class="panel-title">图表显示</div>
+        <div class="panel-meta">波形 / 趋势<br>WAVEFORM</div>
+      </header>
+      <div class="content">
+        <div class="tabs" data-seg>
+          <button class="plastic orange is-active">示波图</button><button class="plastic">趋势图</button><button class="plastic">频谱图</button><button class="plastic">柱状图</button><button class="plastic">历史数据</button>
+        </div>
+        <div class="scope">
+          <svg viewBox="0 0 420 145">
+            <g class="scope-grid">
+              <line x1="0" y1="20" x2="420" y2="20"/><line x1="0" y1="45" x2="420" y2="45"/><line x1="0" y1="70" x2="420" y2="70"/><line x1="0" y1="95" x2="420" y2="95"/><line x1="0" y1="120" x2="420" y2="120"/>
+              <line x1="40" y1="0" x2="40" y2="145"/><line x1="80" y1="0" x2="80" y2="145"/><line x1="120" y1="0" x2="120" y2="145"/><line x1="160" y1="0" x2="160" y2="145"/><line x1="200" y1="0" x2="200" y2="145"/><line x1="240" y1="0" x2="240" y2="145"/><line x1="280" y1="0" x2="280" y2="145"/><line x1="320" y1="0" x2="320" y2="145"/><line x1="360" y1="0" x2="360" y2="145"/>
+            </g>
+            <path d="M0 72 C18 20,42 20,60 72 S102 124,120 72 S162 20,180 72 S222 124,240 72 S282 20,300 72 S342 124,360 72 S402 20,420 72" fill="none" stroke="#f3d329" stroke-width="2.3"/>
+            <path d="M0 95 H35 V48 H70 V95 H105 V48 H140 V95 H175 V48 H210 V95 H245 V48 H280 V95 H315 V48 H350 V95 H385 V48 H420" fill="none" stroke="#26c8df" stroke-width="2"/>
+            <text x="8" y="13" class="scope-label">2.0</text><text x="8" y="139" class="scope-label">-2.0</text>
+          </svg>
+          <div class="scope-foot"><span>500 μs/div</span><span><span class="led sm" style="--c:var(--green)"></span> 触发: 自动</span><span>采样率: 100 MS/s</span><span style="margin-left:auto;color:#48e46f">运行</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.6fr .8fr;gap:8px;margin-top:8px">
+          <div class="scope"><div class="micro" style="color:#b7c1c7;margin-bottom:4px">24小时趋势</div><svg viewBox="0 0 260 80" style="height:82px"><polyline fill="none" stroke="#f1ca20" stroke-width="2" points="0,52 25,48 50,51 75,41 100,43 125,36 150,38 175,29 200,33 225,23 260,20"/><polyline fill="none" stroke="#28c6db" stroke-width="2" points="0,62 25,59 50,61 75,56 100,54 125,50 150,52 175,48 200,45 225,44 260,40"/><polyline fill="none" stroke="#ef4d50" stroke-width="2" points="0,68 25,70 50,66 75,67 100,63 125,65 150,62 175,60 200,62 225,58 260,57"/></svg></div>
+          <div class="scope"><div class="micro" style="color:#b7c1c7;margin-bottom:4px">直方图</div><svg viewBox="0 0 120 80" style="height:82px"><rect x="10" y="55" width="12" height="25" fill="#4fc3f7"/><rect x="30" y="40" width="12" height="40" fill="#4fc3f7"/><rect x="50" y="18" width="12" height="62" fill="#4fc3f7"/><rect x="70" y="48" width="12" height="32" fill="#4fc3f7"/><rect x="90" y="60" width="12" height="20" fill="#4fc3f7"/></svg></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08 报警事件 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">08</div><div class="panel-title">报警事件</div>
+        <div class="panel-meta">报警列表<br>EVENTS</div>
+      </header>
+      <div class="content">
+        <div class="seg" data-seg style="margin-bottom:8px">
+          <button class="plastic orange is-active">当前报警 (5)</button><button class="plastic">历史事件 (50)</button>
+        </div>
+        <table class="alarm-table">
+          <thead><tr><th>时间</th><th>设备</th><th>事件</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td><span class="led sm" style="--c:var(--red)"></span> 10:22</td><td>DV-004</td><td class="alert">站点故障</td><td class="alert">严重</td></tr>
+            <tr><td><span class="led sm" style="--c:var(--red)"></span> 09:58</td><td>DV-010</td><td class="alert">温度过高</td><td class="alert">严重</td></tr>
+            <tr><td><span class="led sm" style="--c:var(--yellow)"></span> 09:41</td><td>DV-006</td><td class="warn">需要维护</td><td class="warn">重大</td></tr>
+            <tr><td><span class="led sm" style="--c:var(--yellow)"></span> 09:12</td><td>DV-003</td><td class="warn">传感器信号低</td><td>一般</td></tr>
+            <tr><td><span class="led sm" style="--c:var(--blue)"></span> 08:33</td><td>DV-009</td><td class="info">质量检查失败</td><td class="info">信息</td></tr>
+          </tbody>
+        </table>
+        <div class="label-row" style="margin-top:12px">近期事件 <small>RECENT</small><button class="plastic" style="margin-left:auto;min-height:28px;font-size:11px;padding:0 10px">查看全部</button></div>
+        <table>
+          <thead><tr><th>时间</th><th>设备</th><th>事件</th></tr></thead>
+          <tbody>
+            <tr><td>10:24</td><td>DV-001</td><td>状态变更：运行</td></tr>
+            <tr><td>10:23</td><td>DV-003</td><td>模式：空闲</td></tr>
+            <tr><td>10:22</td><td>DV-004</td><td style="color:var(--red)">站点故障</td></tr>
+            <tr><td>10:21</td><td>DV-006</td><td>切换至维护模式</td></tr>
+            <tr><td>10:20</td><td>DV-008</td><td>设备离线</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 09 导航筛选 -->
+    <section class="panel">
+      <header class="panel-head">
+        <div class="num">09</div><div class="panel-title">导航筛选</div>
+        <div class="panel-meta">系统导航<br>NAVIGATION</div>
+      </header>
+      <div class="content">
+        <div class="nav-wrap">
+          <nav class="nav" id="sideNav">
+            <div class="nav-item active">▦ 总览 <small>OVERVIEW</small></div>
+            <div class="nav-item">▥ 生产 <small>PROD</small></div>
+            <div class="nav-item">☷ 设备 <small>DEVICE</small></div>
+            <div class="nav-item">▤ 工单 <small>WORK</small></div>
+            <div class="nav-item">⌕ 维护 <small>MAINT</small></div>
+            <div class="nav-item">◇ 质量 <small>QUALITY</small></div>
+            <div class="nav-item">◈ 库存 <small>INV</small></div>
+            <div class="nav-item">▥ 报表 <small>REPORT</small></div>
+            <div class="nav-item">⚙ 设置 <small>SETTING</small></div>
+          </nav>
+          <div>
+            <div class="label-row">当前视图 <small>VIEW</small><button class="plastic" style="margin-left:auto;min-height:28px;padding:0 12px;font-size:11px">保存</button></div>
+            <div class="field"><select><option>生产概览</option><option>质量概览</option></select><span class="affix">⌄</span></div>
+            <div class="label-row" style="margin-top:10px">筛选条件 <small>FILTERS</small></div>
+            <div class="filters">
+              <div><div class="micro">站点</div><div class="field"><select><option>所有站点</option></select><span class="affix">⌄</span></div></div>
+              <div><div class="micro">产线</div><div class="field"><select><option>所有产线</option></select><span class="affix">⌄</span></div></div>
+              <div><div class="micro">工位</div><div class="field"><select><option>所有工位</option></select><span class="affix">⌄</span></div></div>
+              <div><div class="micro">设备类型</div><div class="field"><select><option>所有类型</option></select><span class="affix">⌄</span></div></div>
+              <div><div class="micro">运行状态</div><div class="field"><select><option>所有状态</option></select><span class="affix">⌄</span></div></div>
+              <div><div class="micro">时间范围</div><div class="field"><select><option>最近24小时</option></select><span class="affix">⌄</span></div></div>
+            </div>
+            <div class="label-row" style="margin-top:10px">快速操作 <small>QUICK</small></div>
+            <div class="seg" data-seg>
+              <button class="plastic orange is-active">生产</button><button class="plastic">报警</button><button class="plastic">维护</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // Wrap every physical button in a real keycap layer.
+  const physicalButtons = [
+    ...document.querySelectorAll('button.plastic'),
+    ...document.querySelectorAll('button.dots-btn'),
+    ...document.querySelectorAll('button.affix')
+  ];
+
+  physicalButtons.forEach(button => {
+    if (!button.querySelector(':scope > .retro-inner')) {
+      const inner = document.createElement('span');
+      inner.className = 'retro-inner';
+      while (button.firstChild) inner.appendChild(button.firstChild);
+      button.appendChild(inner);
+    }
+  });
+
+  const downAt = new WeakMap();
+  const MIN_VISIBLE_PRESS = 85;
+
+  function pressDown(button) {
+    if (button.classList.contains('is-active')) return;
+    downAt.set(button, performance.now());
+    button.classList.add('pressed');
+  }
+
+  function pressUp(button) {
+    if (button.classList.contains('is-active')) {
+      button.classList.remove('pressed');
+      return;
+    }
+    const elapsed = performance.now() - (downAt.get(button) || performance.now());
+    const delay = Math.max(0, MIN_VISIBLE_PRESS - elapsed);
+    window.setTimeout(() => button.classList.remove('pressed'), delay);
+  }
+
+  // True physical travel: down on pointerdown, spring back on release.
+  physicalButtons.forEach(button => {
+    button.dataset.behavior ||= 'momentary';
+
+    button.addEventListener('pointerdown', e => {
+      if (e.button !== undefined && e.button !== 0) return;
+      if (button.dataset.behavior === 'momentary') pressDown(button);
+    });
+
+    ['pointerup','pointercancel','pointerleave'].forEach(type => {
+      button.addEventListener(type, () => {
+        if (button.dataset.behavior === 'momentary') pressUp(button);
+      });
+    });
+
+    button.addEventListener('keydown', e => {
+      if ((e.key === ' ' || e.key === 'Enter') && button.dataset.behavior === 'momentary') {
+        pressDown(button);
+      }
+    });
+    button.addEventListener('keyup', e => {
+      if ((e.key === ' ' || e.key === 'Enter') && button.dataset.behavior === 'momentary') {
+        pressUp(button);
+      }
+    });
+  });
+
+  // Tabs / segmented controls: selected key remains sunk.
+  document.querySelectorAll('[data-seg]').forEach(group => {
+    const buttons = [...group.querySelectorAll('button.plastic')];
+    buttons.forEach(button => {
+      button.dataset.behavior = 'latched';
+      button.classList.remove('pressed');
+    });
+
+    group.addEventListener('click', e => {
+      const b = e.target.closest('button.plastic');
+      if (!b) return;
+
+      buttons.forEach(x => {
+        x.classList.remove('is-active','orange','pressed');
+      });
+      b.classList.add('is-active','orange');
+    });
+  });
+
+  // Pagination: number = latched, arrows = momentary.
+  document.querySelectorAll('.pagination').forEach(group => {
+    const buttons = [...group.querySelectorAll('button.plastic')];
+
+    buttons.forEach(button => {
+      const isPage = /^[0-9]+$/.test(button.textContent.trim());
+      button.dataset.behavior = isPage ? 'latched-page' : 'momentary';
+      if (isPage) button.classList.remove('pressed');
+    });
+
+    group.addEventListener('click', e => {
+      const b = e.target.closest('button.plastic');
+      if (!b || !/^[0-9]+$/.test(b.textContent.trim())) return;
+
+      buttons
+        .filter(x => /^[0-9]+$/.test(x.textContent.trim()))
+        .forEach(x => x.classList.remove('is-active','orange','pressed'));
+
+      b.classList.add('is-active','orange');
+    });
+  });
+
+  // Left navigation behaves like a latched selector.
+  document.querySelectorAll('#sideNav .nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('#sideNav .nav-item').forEach(x => x.classList.remove('active'));
+      item.classList.add('active');
+    });
+  });
+
+  // Table row selection.
+  document.querySelectorAll('#deviceTable tbody tr').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      document.querySelectorAll('#deviceTable tbody tr').forEach(x => x.classList.remove('selected'));
+      row.classList.add('selected');
+    });
+  });
+
+  // Search clear button keeps its physical momentary motion.
+  const search = document.querySelector('#search');
+  if (search) {
+    const clearButton = search.parentElement?.querySelector('button.affix');
+    if (clearButton) clearButton.addEventListener('click', () => search.value = '');
+  }
+
+  // Physical fasteners: the UI is treated as hardware modules mounted to a faceplate.
+  document.querySelectorAll('.panel').forEach(panel => {
+    ['tl','tr','bl','br'].forEach(pos => {
+      const screw = document.createElement('span');
+      screw.className = `hardware-screw ${pos}`;
+      panel.appendChild(screw);
+    });
+  });
+
+  // Continuous rotary knob: click/drag vertically or wheel to adjust.
+  document.querySelectorAll('[data-knob]').forEach(knob => {
+    let angle = -45;
+    const apply = () => knob.style.setProperty('--angle', `${angle}deg`);
+    apply();
+
+    knob.addEventListener('wheel', e => {
+      e.preventDefault();
+      angle = Math.max(-135, Math.min(135, angle + (e.deltaY > 0 ? 10 : -10)));
+      apply();
+    }, {passive:false});
+
+    knob.addEventListener('click', () => {
+      angle += 45;
+      if (angle > 135) angle = -135;
+      apply();
+    });
+  });
+
+  // Detented selector: 4 fixed positions.
+  document.querySelectorAll('[data-selector]').forEach(selector => {
+    const positions = [-70, -20, 30, 80];
+    let index = 0;
+    selector.style.setProperty('--angle', `${positions[index]}deg`);
+    selector.addEventListener('click', () => {
+      index = (index + 1) % positions.length;
+      selector.style.setProperty('--angle', `${positions[index]}deg`);
+    });
+  });
+
+  // Toggle lever: mechanically flips and stays in position.
+  document.querySelectorAll('[data-toggle]').forEach(toggle => {
+    toggle.addEventListener('click', () => toggle.classList.toggle('on'));
+  });
+
+  // Breaker / pull switch: latched up/down travel.
+  document.querySelectorAll('[data-breaker]').forEach(breaker => {
+    breaker.addEventListener('click', () => breaker.classList.toggle('on'));
+  });
+
+</script>
+</body>
+</html>

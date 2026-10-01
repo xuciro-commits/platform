@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+import { readFile, writeFile, mkdir, readdir, unlink } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { registerHooks } from "node:module";
+import { createHash } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { queryCatalog, getCatalogEntry, batchCatalog } from "../web/packages/catalog/src/query.ts";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const indexPath = path.join(root, "web/apps/catalog/src/gen/catalog.json");
+
+async function generate(check) {
+  const { owners, ownerPackage, ownerDirectory, dictionaryFile, publicExports, publicTypes, readDictionary, validateOwner, sourceFiles, inspectImports } = await import("./catalog-check.mjs");
+  // Metadata can share pure owner descriptors; only relative TS files are resolved.
+  const hook = registerHooks({ resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith(".") && context.parentURL?.startsWith(pathToFileURL(path.join(root, "web/packages/")).href)) {
+      const candidate = new URL(specifier + ".ts", context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  } });
+  const inputs = new Map();
+  const read = async (file) => {
+    const absolute = path.resolve(root, file);
+    if (!inputs.has(absolute)) inputs.set(absolute, await readFile(absolute, "utf8"));
+    return inputs.get(absolute);
+  };
+  const entries = [], translations = {}, errors = [], packages = new Map(), apis = {};
+  const definition = await read("capabilities/server/platform/definition.go");
+  const widgets = new Set([...definition.match(/var Widgets = \[\]string\{([^}]+)\}/)[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]));
+  for (const owner of owners) {
+    const directory = ownerDirectory(owner);
+    const metadata = `${directory}/src/catalog.ts`;
+    await read(metadata);
+    const { entries: owned, api } = await import(pathToFileURL(path.join(root, metadata)));
+    const pkg = JSON.parse(await read(`${directory}/package.json`));
+    packages.set(owner, pkg);
+    const dictionary = readDictionary(dictionaryFile(owner), await read(dictionaryFile(owner)));
+    Object.assign(translations, dictionary);
+    const publicFile = pkg.exports["."];
+    const exports = await publicExports(path.resolve(root, directory, publicFile), read);
+    const examples = await publicExports(path.resolve(root, directory, "src/catalog.examples.tsx"), read);
+    const types = publicTypes(publicFile, await read(path.resolve(root, directory, publicFile)));
+    apis[ownerPackage(owner)] = { source: path.posix.join(directory, publicFile), symbols: api.filter((name) => exports.has(name)).sort(), types: [...types].sort() };
+    errors.push(...validateOwner(owner, owned, api, exports, examples, translations, widgets, types));
+    for (const entry of owned) {
+      try { await read(entry.source); } catch { errors.push(`${entry.id}: missing source ${entry.source}`); }
+    }
+    entries.push(...owned);
+  }
+  const ids = new Set();
+  for (const entry of entries) {
+    if (ids.has(entry.id)) errors.push(`Duplicate Catalog ID: ${entry.id}`);
+    ids.add(entry.id);
+  }
+  for (const entry of entries) for (const dependency of entry.dependencies ?? []) {
+    if (!ids.has(dependency)) errors.push(`${entry.id}: unknown dependency ${dependency}`);
+  }
+  const consumers = {};
+  for (const directory of ["web/packages", "web/apps"]) {
+    for (const file of await sourceFiles(path.join(root, directory))) {
+      const relative = path.relative(root, file).split(path.sep).join("/");
+      const content = await readFile(file, "utf8");
+      // Source identity covers owner implementations, not only their exported
+      // declarations: a compiling behavior change must get a new snapshot.
+      if (owners.some((owner) => relative.startsWith(ownerDirectory(owner) + "/src/"))) inputs.set(file, content);
+      const inspected = inspectImports(relative, content, packages, entries);
+      errors.push(...inspected.errors);
+      for (const id of inspected.consumers) (consumers[id] ??= []).push(relative);
+    }
+  }
+  if (errors.length) throw new Error(errors.join("\n"));
+  const required = new Set(entries.flatMap((entry) => [entry.name, entry.summary, ...(entry.constraints ?? []), ...(entry.states ?? [])]));
+  const dictionary = Object.fromEntries([...required].sort().map((key) => [key, translations[key]]));
+  const digest = createHash("sha256");
+  for (const [file, text] of [...inputs].sort(([a], [b]) => a.localeCompare(b))) digest.update(path.relative(root, file)).update("\0").update(text).update("\0");
+  const index = { revision: `sha256:${digest.digest("hex").slice(0, 16)}`, entries: entries.sort((a, b) => a.id.localeCompare(b.id)), translations: { "zh-CN": dictionary }, consumers, api: apis };
+  const loader = `// Generated by scripts/catalog.mjs; do not edit.\nimport type { ComponentType } from "react";\n\nexport const previewLoaders: Record<string, () => Promise<{ default: ComponentType }>> = {\n${entries.filter((entry) => entry.example).map((entry) => `  ${JSON.stringify(entry.id)}: () => import(${JSON.stringify(ownerPackage(entry.owner) + "/catalog/examples")}).then((module) => ({ default: module.${entry.example} })),`).join("\n")}\n};\n`;
+  const outputs = new Map([[indexPath, JSON.stringify(index, null, 2) + "\n"], [path.join(path.dirname(indexPath), "previews.ts"), loader]]);
+  // Compact owner shards can be read directly, without one CLI process per component.
+  for (const owner of owners) {
+    const pages = [];
+    let offset = 0;
+    do {
+      const page = queryCatalog(index, { owner: ownerPackage(owner), offset });
+      const name = `${owner}.${offset}.json`;
+      outputs.set(path.join(path.dirname(indexPath), name), JSON.stringify(page) + "\n");
+      pages.push(name);
+      offset = page.nextOffset;
+    } while (offset !== undefined);
+    outputs.set(path.join(path.dirname(indexPath), `${owner}.json`), JSON.stringify({ revision: index.revision, owner: ownerPackage(owner), pages, api: apis[ownerPackage(owner)] }) + "\n");
+  }
+  for (const [file, text] of outputs) {
+    if (check) {
+      const existing = await readFile(file, "utf8").catch(() => "");
+      if (existing !== text) throw new Error(`Stale Catalog output: ${path.relative(root, file)}; run node scripts/catalog.mjs generate`);
+    } else { await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, text); }
+  }
+  for (const name of await readdir(path.dirname(indexPath)).catch(() => [])) {
+    const file = path.join(path.dirname(indexPath), name);
+    if (/^(ui|app|build)\.\d+\.json$/.test(name) && !outputs.has(file)) {
+      if (check) throw new Error(`Obsolete Catalog shard ${name}; run node scripts/catalog.mjs generate`);
+      await unlink(file);
+    }
+  }
+  hook.deregister();
+  return { entries: entries.length, owners: owners.length, revision: index.revision };
+}
+
+function argumentsOf(args) {
+  const positional = [], options = {};
+  for (let i = 0; i < args.length; i++) {
+    if (!args[i].startsWith("--")) positional.push(args[i]);
+    else { const name = args[i].slice(2); options[name] = args[++i]; }
+  }
+  return { positional, options };
+}
+
+try {
+  const [command = "search", ...args] = process.argv.slice(2);
+  if (["generate", "check"].includes(command)) console.log(JSON.stringify(await generate(command === "check")));
+  else {
+    const index = JSON.parse(await readFile(indexPath, "utf8"));
+    const { positional, options } = argumentsOf(args);
+    const query = { language: options.language ?? "en", owner: options.owner, use: options.use, scope: options.scope, maturity: options.maturity,
+      layer: options.layer === undefined ? undefined : Number(options.layer), offset: Number(options.offset ?? 0), limit: Number(options.limit ?? 10) };
+    const fields = options.fields?.split(",");
+    const result = command === "search" ? queryCatalog(index, { ...query, query: positional.join(" ") }) :
+      command === "get" ? getCatalogEntry(index, positional[0], { ...query, fields }) :
+      command === "batch" ? batchCatalog(index, positional.flatMap((value) => value.split(",")), { ...query, fields }) : undefined;
+    if (result === undefined) throw new Error("Use search <text>, get <id>, or batch <id...>; options: --language, --owner, --layer, --use, --scope, --maturity, --fields, --offset, --limit");
+    console.log(JSON.stringify(result));
+  }
+} catch (error) { console.error(JSON.stringify({ error: error.message })); process.exitCode = 1; }

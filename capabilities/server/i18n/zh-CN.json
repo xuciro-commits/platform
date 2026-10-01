@@ -659,7 +659,8 @@
  "For actions: the schemas it offers": "动作：它提供哪些动作的 schema",
  "Grouped by": "分组依据",
  "Through": "经由关系",
- "For a table, chart or metric of another object: the relation from the selected record it follows": "用于其他对象的表格、图表或指标：从所选记录沿哪条关系展开",
+ "Record selections": "记录选择变量",
+ "For another object's table, chart, metric or form: the relation to the selected parent record": "用于其他对象的表格、图表、指标或表单：与所选父记录的关系",
  "For a chart: the field, or <field>:month": "图表：按哪个字段分组，或 <字段>:month",
  "Measure": "度量",
  "For a chart or a metric: count, sum:<field>, avg:<field>": "图表或指标：count、sum:<字段>、avg:<字段>",
@@ -999,5 +1000,9 @@
  "Provide a fixed answer for every pending compute call": "请为每个待完成计算提供固定测试回答",
  "The manual test has no run with this key": "手动测试中不存在此运行键对应的实例",
  "Use a bounded compute fixture with a completed or failed outcome": "请使用有界的计算测试回答，并选择完成或失败结果",
- "flow output exceeds its bounded saved-result budget": "流程输出超过保存结果预算"
+ "flow output exceeds its bounded saved-result budget": "流程输出超过保存结果预算",
+ "A published definition cannot be archived; its installed version must be retained": "已发布定义不能归档，必须保留其已安装版本。",
+ "A compiling code function cannot be archived; wait for its build result": "代码函数正在编译，请等待构建结果后再归档。",
+ "Archive ai function": "归档 AI 函数",
+ "Archive an ai function: it leaves lists but stays referenced and in history.": "归档 AI 函数：从列表移除，但保留引用和历史。"
 }

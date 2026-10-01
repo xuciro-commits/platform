@@ -5,8 +5,8 @@
 import "./i18n";
 import { HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
-import { Button, Card, Workspace, humanizeKernelError, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, Card, Dialog, Workspace, humanizeKernelError, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
+import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { Bell, Bookmark, Boxes, Database, Gauge, Inbox, LayoutGrid, Search, Send, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chromeViews } from "./chrome";
@@ -18,8 +18,11 @@ type Notification = Api.Notification;
 type ProtocolInfo = Api.ProtocolInfo;
 
 // The UI packages this workspace is built with (D2): each loads only when the
-// member holds a role in an app it serves. Settings serves the platform's apps.
-const packages: { serves: string[]; load: () => Promise<{ default: AppUI }> }[] = [
+// member holds a role in an app it serves. Public reference applications need
+// no backend role; their runtime reads/actions still use the original host.
+// Settings serves the platform's apps.
+const packages: { serves: string[]; public?: boolean; load: () => Promise<{ default: AppUI }> }[] = [
+  { serves: [], public: true, load: () => import("@platform/catalog-app/app") },
   { serves: ["build"], load: () => import("@pkg/build") },
   { serves: ["crm"], load: () => import("@pkg/crm") },
   { serves: ["pms"], load: () => import("@pkg/pms/app") },
@@ -95,17 +98,20 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   useEffect(() => {
     if (!me) return;
     const held = new Set(me.apps.map((a) => a.id));
-    void Promise.all(packages.filter((p) => p.serves.some((id) => held.has(id)))
+    void Promise.all(packages.filter((p) => p.public || p.serves.some((id) => held.has(id)))
       .map((p) => p.load().then((m) => ({ ...m.default, serves: p.serves })))).then(setApps);
   }, [me]);
 
-  const read = <T,>(path: string, refetchInterval: number | false = false) =>
-    useQuery({ queryKey: [token, tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled: ready });
+  const read = <T,>(path: string, refetchInterval: number | false = false, options: { retry?: false } = {}) =>
+    useQuery({ queryKey: [token, tenant, path], queryFn: () => client.get<T>(path), refetchInterval, enabled: ready, ...options });
   const actions = read<ActionDeclaration[]>("/v1/actions").data;
   const entities = read<EntityInfo[]>("/v1/entities").data ?? [];
   // The installed assets, so an app's navigation can offer the pages it has —
   // a code page, or one someone composed in this tenant (ADR-0032, ADR-0034).
   const definitions = read<Definition[]>("/v1/definitions").data ?? [];
+  const release = read<Api.ReleaseActive>("/v1/releases/active", 5000, { retry: false });
+  const releaseUnavailable = release.isError || release.fetchStatus === "paused";
+  const [releaseOpen, setReleaseOpen] = useState(false);
   const protocols = read<ProtocolInfo[]>("/v1/protocols").data ?? [];
   const unread = (read<Notification[]>("/v1/notifications").data ?? []).filter((n) => !n.read).length;
   const saved = read<SavedView[]>("/v1/views").data ?? [];
@@ -163,7 +169,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     };
     // A record opens in its app's view; a protocol's record (lodging.booking)
     // in the view of the app the tenant binds as its provider (D5).
-    const opens = new Map<string, string>([["agent.run", "run"]]);
+    const opens = new Map<string, string>([["agent.run", "run"], ["flow.instance", "flow"]]);
     for (const app of apps ?? []) {
       for (const [type, view] of Object.entries(app.opens ?? {})) {
         const own = (app.serves ?? [app.id]).some((id) => type.startsWith(`${id}.`));
@@ -258,13 +264,36 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
             .map((d) => ({ label: d.title, icon: <Gauge />, route: { view: "dashboard", params: { app: app.id, id: d.id } } })) }] : []),
           ...(app?.nav(host) ?? []),
         ]}
-        commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() }, ...(app?.commands?.(host) ?? [])]}
+        commands={[{ id: "resend", label: t("Send unanswered decisions again"), run: () => void host.resend() },
+          { id: "active-release", label: t("Active release"), run: () => setReleaseOpen(true) }, ...(app?.commands?.(host) ?? [])]}
         search={async (text) => (await client.get<{ type: string; id: string; title?: string }[]>(`/v1/search?q=${encodeURIComponent(text)}`)).slice(0, 12)
           .map((h) => ({ id: `${h.type}/${h.id}`, label: h.title || h.id, detail: `${h.type} · ${h.id}`,
             open: () => { const view = host?.opens.get(h.type); location.hash = routeToHash(view ? { view, params: { id: h.id } } : { view: "record", params: { type: h.type, id: h.id } }); } }))}
-        status={<span className="text-xs text-muted">{app ? `${app.title}: ${host.role(app.id) ?? "—"}` : t("{n} apps", { n: apps.length })}</span>}
+        status={<div className="flex items-center gap-2 text-xs text-muted">
+          <span className="max-lg:hidden">{app ? `${app.title}: ${host.role(app.id) ?? "—"}` : t("{n} apps", { n: apps.length })}</span>
+          <Button size="sm" variant="ghost" aria-label={t("Active release")} onClick={() => setReleaseOpen(true)}
+            title={!releaseUnavailable ? release.data?.id : undefined}>
+            {releaseUnavailable ? t("Release unavailable") : release.isPending ? t("Checking release…") :
+              release.data?.id ? <>{t("Active release")}: <code>{release.data.id.split(":").at(-1)?.slice(0, 10)}</code></> : t("No activated release")}
+          </Button>
+        </div>}
         session={{ tenant: me!.tenantId, principal: me!.principalId, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch }} />
+      <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} />
     </HostContext.Provider>
   );
+}
+
+/** Public activation identity; candidate descriptors remain builder-only. */
+function ReleaseInformation({ query, open, onOpenChange }: { query: UseQueryResult<Api.ReleaseActive>; open: boolean; onOpenChange: (open: boolean) => void }) {
+  return <Dialog open={open} onOpenChange={onOpenChange} title={t("Active release")}>
+    <div className="grid gap-3 text-sm">
+      {query.isError || query.fetchStatus === "paused" ? <p role="alert">{t("The active release could not be read. Retry to check the current identifier.")}</p> :
+        query.isPending ? <p role="status">{t("Checking release…")}</p> : query.data?.id ?
+          <code className="select-all break-all rounded-sm bg-background p-3 text-xs">{query.data.id}</code> : <p>{t("No activated release")}</p>}
+      <p className="text-xs text-muted">{t("This identifies the last activated release. Existing workflows keep their startup release.")}</p>
+      <p className="text-xs text-muted">{t("Direct installs may change workspace definitions outside this release.")}</p>
+      <Button disabled={query.isFetching} onClick={() => void query.refetch()}>{query.isFetching ? t("Checking release…") : t("Refresh release")}</Button>
+    </div>
+  </Dialog>;
 }

@@ -1,5 +1,5 @@
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
-import { Button, DataTable, Disclosure, NodeCanvas, StatusTag, canvasNodeHeight, canvasNodeWidth, flowStates, layout, t, type BlockStatus, type CanvasNode, type ColumnDef, type FlowDefinition, type FlowInstanceData, type NodeCatalog } from "@platform/ui";
+import { Button, DataTable, Disclosure, FlowReleaseBinding, NodeCanvas, StatusTag, canvasNodeHeight, canvasNodeWidth, flowStates, layout, t, type BlockStatus, type CanvasNode, type ColumnDef, type FlowDefinition, type FlowInstanceData, type NodeCatalog } from "@platform/ui";
 import { useEffect, useMemo, useState } from "react";
 import { controlEdges, workflowKindTitle, type WorkflowDraft } from "./workflow-model";
 
@@ -66,6 +66,7 @@ export function WorkflowRuns({ name, versions, onStepSelect, onRunSelect }: { na
         {can("flow.instance.cancel") && !["done", "canceled", "compensated"].includes(shown.state) && <Button disabled={busy} onClick={() => void command("flow.instance.cancel", {})}>{t("Cancel run")}</Button>}
         {token?.waits === "stuck" && can("flow.instance.retry") && <Button disabled={busy} onClick={() => void command("flow.instance.retry", {})}>{t("Retry run")}</Button>}
       </div>
+      <FlowReleaseBinding dependencies={shown.dependencies} release={shown.release} />
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
       {shown.withheld ? <p className="text-xs text-muted">{t("Run data is withheld by the current source permissions.")}</p> : <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         <NodeCanvas mode="view" label={t("Execution map")} catalog={catalog} nodes={nodes} edges={edges} height={300} selected={step} onSelect={inspect} />

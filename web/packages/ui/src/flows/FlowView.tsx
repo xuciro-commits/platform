@@ -22,6 +22,19 @@ export const flowStates = defineStatuses({
   stuck: { label: t("Stuck"), tone: "danger" },
 });
 
+/** A run's immutable startup binding, independent of today's active pointer. */
+export function FlowReleaseBinding({ dependencies, release }: Pick<FlowInstanceData, "dependencies" | "release">) {
+  if (!dependencies && !release) return null;
+  return <details className="min-w-0 text-xs text-muted">
+    <summary className="cursor-pointer">{t("Release binding")}</summary>
+    <p className="mt-2">{t("This run stays on its recorded version.")}</p>
+    <dl className="mt-2 grid gap-1 break-all">
+      <dt className="font-semibold">{t("Dependency release")}</dt><dd>{dependencies}</dd>
+      <dt className="font-semibold">{t("Started under release")}</dt><dd>{release || t("Development run")}</dd>
+    </dl>
+  </details>;
+}
+
 const kinds: Record<string, string> = { act: t("Act"), wait: t("Wait"), ask: t("Ask"), call: t("Sub-flow"), all: t("All of"), any: t("Any of"), agent: t("Agent") };
 const waits: Record<string, string> = { ready: "ready", retry: "retrying", wait: "waiting", ask: "asking people", call: "in a sub-flow", join: "waiting for its branches", undo: "retrying an undo", stuck: "stuck" };
 
@@ -69,13 +82,7 @@ export function FlowView({ definition, instance, actions, onStepSelect }: {
         <span className="font-semibold">{instance.title}</span>
         <span className="text-xs text-muted">{instance.flow} {t("· version")} {instance.version}{instance.onBehalf ? ` · ${t("on behalf of")} ${instance.onBehalf}` : ""}{instance.parent ? ` · ${t("called by")} ${instance.parent}` : ""}</span>
       </div>
-      {instance.dependencies && <details className="min-w-0 text-xs text-muted">
-        <summary className="cursor-pointer">{t("Release binding")}</summary>
-        <dl className="mt-2 grid gap-1 break-all">
-          <dt className="font-semibold">{t("Dependency release")}</dt><dd>{instance.dependencies}</dd>
-          <dt className="font-semibold">{t("Active release")}</dt><dd>{instance.release || t("Development run")}</dd>
-        </dl>
-      </details>}
+      <FlowReleaseBinding dependencies={instance.dependencies} release={instance.release} />
       {definition && <FlowGraph definition={definition} instance={instance} />}
       {tokens.length > 0 && (
         <ul className="grid gap-1.5" aria-label={t("Where it stands")}>

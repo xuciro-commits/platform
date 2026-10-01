@@ -28,6 +28,9 @@ for (const fixture of [
       await expect(page.getByRole("region", { name: "Asset inspector" }).getByText(`build.${name}`)).toBeVisible();
       await page.getByRole("button", { name: "Open selected asset" }).click();
       await expect(page.getByRole("heading", { name: `Design ${fixture.title}` })).toBeVisible();
+      await page.getByRole("button", { name: "Review release", exact: true }).click();
+      await expect(page.getByRole("combobox", { name: "Definition kind" })).toHaveValue("object");
+      await expect(page.getByRole("combobox", { name: "Saved draft" })).toHaveValue(objectID);
       await page.getByRole("button", { name: "Overview", exact: true }).click();
       await expect(page.getByRole("textbox", { name: "Find an asset" })).toHaveValue(fixture.title);
       await expect(page.getByRole("region", { name: "Asset inspector" }).getByText(`build.${name}`)).toBeVisible();
@@ -76,6 +79,7 @@ for (const fixture of [
       await expect(page.getByRole("alert").filter({ hasText: "changed since it was read" })).toBeVisible();
       await expect(properties.getByRole("textbox", { name: "Workflow title" })).toHaveValue("Local edit");
       await page.getByRole("button", { name: "Reload saved workflow", exact: true }).click();
+      await page.getByRole("dialog", { name: "Unsaved changes", exact: true }).getByRole("button", { name: "Discard changes", exact: true }).click();
       await expect(properties.getByRole("textbox", { name: "Workflow title" })).toHaveValue("Remote edit");
       await properties.getByRole("textbox", { name: "Workflow title" }).fill(fixture.title);
       await page.getByRole("button", { name: "Save workflow", exact: true }).click();
@@ -86,7 +90,7 @@ for (const fixture of [
       await page.getByRole("textbox", { name: "Test plan name" }).fill(`Fixed ${flowName}`);
       const first = page.getByRole("group", { name: "Test step 1", exact: true });
       const answer = page.getByRole("group", { name: "Test step 2", exact: true });
-      await first.getByRole("textbox", { name: "Test inputs (JSON)" }).fill('{"note":"FIXED SAMPLE"}');
+      await first.getByRole("textbox", { name: "Note", exact: true }).fill("FIXED SAMPLE");
       await answer.getByRole("combobox", { name: "Human answer", exact: true }).selectOption(fixture.answer);
       await page.getByRole("button", { name: "Save test plan", exact: true }).click();
       await expect(page.getByRole("status").filter({ hasText: "Test plan saved." })).toBeVisible();
@@ -117,7 +121,7 @@ for (const fixture of [
       const missing = await request.get(`/v1/records/${type}/TEST-1`, { headers: { Authorization: `Bearer ${fixture.operator}` } });
       expect(missing.status()).toBe(404);
       await open(page, fixture.builder, `/workflow?id=${workflow.id}`);
-      await page.getByRole("button", { name: "Publish workflow", exact: true }).click();
+      await page.getByRole("button", { name: "Direct install", exact: true }).click();
       await expect.poll(async () => (await (await request.get(`/v1/records/build.process/${workflow.id}`, { headers: { Authorization: `Bearer ${fixture.builder}` } })).json()).record.version).toBe(1);
       await page.getByRole("button", { name: "Release", exact: true }).first().click();
       await page.getByRole("button", { name: "Check draft and dependencies" }).click();

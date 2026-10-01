@@ -28,7 +28,7 @@ AI 编程助手从这里开始。`CLAUDE.md` 仅引用本文件；`.agents/skill
 8. 批次按 `close-out` 收尾：检查方法以 Testing 为准，旧 ADR 的检查日志不自动成为新批次要求；运行适用检查，仅更新本批改变事实的文档。无需为小修复改齐所有文档；实现证据不在能力地图、队列和测试指南中反复复制。未运行的测试或未观察的 UI 不得报为通过。
 9. 提交信息用单句祈使句，注明适用的 ADR 和工作号。提交、推送、部署遵循本次任务已有授权。
 10. 产品界面与声明文字提供英文原文和简体中文：应用 `i18n/zh-CN.json`，UI `t()` 与包内 `i18n.ts`。业务数据不翻译；仓库技术文档沿用所在文件的语言。
-11. 先复用，单一归属，唯一规范路径。UI Kit、`@platform/app`、应用 API、平台应用、宿主各管自己的能力；不足时扩展归属方。应用不自造共享表格、面板、审批、签名、报表、文件或外部调用。`scripts/escapes.sh` 阻止新增逃逸，已知项只减不增。
+11. 先复用，单一归属，唯一规范路径。UI 变更按当前任务查 Platform Catalog：`node scripts/catalog.mjs search <任务>`，或按需读 owner 摘要；不全量读取目录。UI Kit、`@platform/app`、应用 API、平台应用、宿主各管自己的能力；不足时扩展归属方。应用不自造共享表格、面板、审批、签名、报表、文件或外部调用。`scripts/escapes.sh` 阻止新增逃逸，已知项只减不增。
 12. 应用用于证明平台能力。平台基石门禁见 Platform §10.6；行业深度只取当前验证任务必需的最小变更。平台优先是研发方向，不是百分比汇报指标，也不要求每批补齐所有平台能力。
 
 ## 代码导航
@@ -41,7 +41,7 @@ AI 编程助手从这里开始。`CLAUDE.md` 仅引用本文件；`.agents/skill
 | `apps/<id>/server/` | 自治业务应用；跨应用通过 `protocols/`，用法见 Apps |
 | `solutions/`、`deploy/local/` | 酒店/制造组合宿主、Compose 与恢复演练；地址账号见部署 README |
 | `web/packages/ui`、`web/packages/app` | 共享 UI 与前端应用 API |
-| `web/packages/<id>`、`web/apps/` | 应用 UI、统一工作区、Gallery 与 PMS 桌面前端 |
+| `web/packages/<id>`、`web/apps/` | 应用 UI、统一工作区、Platform Catalog 与 PMS 桌面前端 |
 | `web/e2e/` | 开发宿主浏览器路线与一次性部署路线 |
 
 ## 按需流程与验证

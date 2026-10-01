@@ -90,15 +90,27 @@ func TestCodeBuildUsesArtifactOwnerAndCandidate(t *testing.T) {
 	// A later standalone activation cannot invalidate an existing exact binding.
 	submit("edit2", build.CodeType+".edit", []byte(`{"source":"package main\nfunc Run(input Input)(Output,error){return Output{Value:input.Value*2},nil}"}`))
 	submit("compile2", build.SchemaCodeCompile, []byte(`{}`))
-	for _, run := range tn.operationDispatches(now) {
+	// Dispatch completion records wall time; do not dispatch the next build
+	// from the fixture's earlier clock.
+	if completedAt := time.Now().UTC(); completedAt.After(now) {
+		now = completedAt
+	}
+	secondBuild := tn.operationDispatches(now)
+	if len(secondBuild) != 1 {
+		t.Fatalf("second compiler task was not admitted: %d", len(secondBuild))
+	}
+	for _, run := range secondBuild {
 		run()
+	}
+	if current, ok := platform.Get[build.Code](tn.automation(build.ID, false), "C"); !ok || current.State != "compiled" {
+		t.Fatalf("second build did not finish: %+v", current)
 	}
 	next, err := tn.PreviewRelease(member, platform.AssetCompute, "C")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tn.SaveReleaseCandidate(member, platform.AssetCompute, "C", next.CandidateID, "save2", now); err != nil {
-		t.Fatal(err)
+		t.Fatalf("save second candidate: %v; preview: %+v", err, next)
 	}
 	if _, err := tn.ActivateRelease(member, next.CandidateID, "activate2", now); err != nil {
 		t.Fatal(err)

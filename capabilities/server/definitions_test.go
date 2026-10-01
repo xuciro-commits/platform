@@ -107,6 +107,97 @@ func TestDefinitionValidation(t *testing.T) {
 	})
 }
 
+func TestPageSelectionBindings(t *testing.T) {
+	tn, err := NewTenant("page-selections", NewConsole("page-selections"), newTestCRMApp("page-selections"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := platform.AssetRef{App: "crm", Kind: platform.AssetObject, Name: "crm.account"}
+	opportunity := platform.AssetRef{App: "crm", Kind: platform.AssetObject, Name: "crm.opportunity"}
+	parent, _ := tn.entity(account.Name)
+	page := platform.Page{Name: "comparison", Object: account, Layout: "composed",
+		Selections: []platform.SelectionVariable{{Name: "left", Object: account}, {Name: "right", Object: account}, {Name: "line", Object: opportunity}},
+		Sections: []platform.Section{
+			{Widget: "table", Selection: "left", Fields: []string{"name"}},
+			{Widget: "table", Selection: "right", Fields: []string{"name"}},
+			{Widget: "detail", Selection: "left", Fields: []string{"name"}},
+			{Widget: "table", Selection: "line", ParentSelection: "left", Object: opportunity, Relation: "opportunities", Fields: []string{"title"}},
+		}}
+	if err := tn.checkSections(page, parent); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, want string
+		change     func(*platform.Page)
+	}{
+		{"unknown variable", "does not hold", func(p *platform.Page) { p.Sections[2].Selection = "missing" }},
+		{"wrong object", "does not hold", func(p *platform.Page) { p.Sections[2].Selection = "line" }},
+		{"duplicate declaration", "unique lowercase", func(p *platform.Page) { p.Selections[1].Name = "left" }},
+		{"wrong owner", "known object", func(p *platform.Page) { p.Selections[0].Object.App = "other" }},
+		{"no producer", "supplies selection", func(p *platform.Page) { p.Sections[0].Selection = "right" }},
+		{"wrong parent type", "parent selection", func(p *platform.Page) { p.Sections[3].ParentSelection = "line" }},
+		{"ambiguous parent", "conflicting parent", func(p *platform.Page) {
+			other := p.Sections[3]
+			other.ParentSelection = "right"
+			p.Sections = append(p.Sections, other)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := page
+			p.Sections = append([]platform.Section(nil), page.Sections...)
+			p.Selections = append([]platform.SelectionVariable(nil), page.Selections...)
+			tc.change(&p)
+			if err := tn.checkSections(p, parent); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestRelatedFormBinding(t *testing.T) {
+	crm := newTestCRMApp("related-form")
+	// This fixture's normal route is .open; the form requires .create.
+	crm.ledger.Catalog.Add(platform.Action{Schema: "crm.opportunity.create", Target: "crm.opportunity", Title: "Create opportunity",
+		Description: "Create an opportunity for an account.", Roles: []string{"sales"},
+		Payload: []platform.Field{{Name: "account", Type: "string"}, {Name: "title", Type: "string"}}})
+	tn, err := NewTenant("related-form", NewConsole("related-form"), crm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, _ := tn.entity("crm.account")
+	form := platform.Section{Widget: "form", Object: platform.AssetRef{App: "crm", Kind: platform.AssetObject, Name: "crm.opportunity"},
+		Relation: "opportunities", Fields: []string{"title"}}
+	check := func(section platform.Section, selectParent bool) error {
+		p := platform.Page{Name: "account-work", Object: platform.AssetRef{App: "crm", Kind: platform.AssetObject, Name: parent.Type}, Sections: []platform.Section{section}}
+		if selectParent {
+			p.Sections = append([]platform.Section{{Widget: "table", Fields: []string{"name"}}}, p.Sections...)
+		}
+		return tn.checkSections(p, parent)
+	}
+	if err := check(form, true); err != nil {
+		t.Fatalf("the declared parent supplies the required account: %v", err)
+	}
+	for _, tc := range []struct {
+		name, relation string
+		fields         []string
+		selectParent   bool
+		want           string
+	}{
+		{"independent form needs the parent input", "", []string{"title"}, true, "needs account"},
+		{"binding does not supply another required field", "opportunities", []string{"account"}, true, "needs title"},
+		{"unknown relation", "unknown", []string{"title"}, true, "declares no relation"},
+		{"no parent selection", "opportunities", []string{"title"}, false, "selects a parent record"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			section := form
+			section.Relation, section.Fields = tc.relation, tc.fields
+			if err := check(section, tc.selectParent); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
 func TestPageDefinitions(t *testing.T) {
 	newPage := func() platform.Page {
 		return platform.Page{Name: "items", Title: "Items", Layout: "list-detail",
@@ -152,6 +243,19 @@ func TestPageDefinitions(t *testing.T) {
 	if got := pageFor(platform.Member{Roles: map[string]string{}}); got != nil {
 		t.Fatalf("outsider page: %+v", got)
 	}
+	t.Run("code pages use the same selection contract", func(t *testing.T) {
+		p := newPage()
+		p.Layout, p.ListFields, p.DetailFields = "composed", nil, nil
+		p.Selections = []platform.SelectionVariable{{Name: "chosen", Object: p.Object}}
+		p.Sections = []platform.Section{{Widget: "table", Selection: "chosen", Fields: []string{"name"}}, {Widget: "detail", Selection: "chosen", Fields: []string{"name"}}}
+		if err := build(p).registerDefinitions(); err != nil {
+			t.Fatal(err)
+		}
+		p.Sections[1].Selection = "missing"
+		if err := build(p).registerDefinitions(); err == nil || !strings.Contains(err.Error(), "does not hold") {
+			t.Fatalf("code page bypassed binding validation: %v", err)
+		}
+	})
 	for _, tc := range []struct {
 		name, want string
 		change     func(*platform.Page)

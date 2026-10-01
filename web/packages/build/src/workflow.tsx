@@ -1,8 +1,9 @@
+import { AssetControls } from "./asset-controls";
 // Logic Studio edits the one build.process definition. Its native Flow owner
 // compiles, executes and accepts outcomes; React Flow remains presentation.
 import { useHost, useReadQuery } from "@platform/app";
 import { apiErrorMessage } from "@platform/kernel";
-import { Button, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Tag, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useWorkspace,
+import { Button, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Tag, canvasNodeHeight, canvasNodeWidth, canvasPlacement, layout, t, useWorkspace, useUnsavedChanges,
   type BlockStatus, type CanvasAddContext, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
 import { Blocks, Braces, Brain, ChevronDown, ChevronUp, Database, GitBranch, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Plus, Search, Settings2, Workflow, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
@@ -127,6 +128,9 @@ export function WorkflowEditor({ id }: { id: string }) {
   const [runInput, setRunInput] = useState<unknown>({}), [runKey, setRunKey] = useState("");
   const [formProblems, setFormProblems] = useState<Record<string, string>>({});
   const [validation, setValidation] = useState<{ valid: boolean; issues: { node?: string; message: string }[] }>();
+  const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
+    dispatch({ type: "load", draft: query.data?.record ?? empty() }); setError(""); setValidation(undefined); setChosen(""); setFormProblems({});
+  });
   const reportProblem = useCallback((key: string, problem: string) => setFormProblems((previous) => {
     if ((previous[key] ?? "") === problem) return previous;
     const next = { ...previous }; if (problem) next[key] = problem; else delete next[key]; return next;
@@ -248,11 +252,12 @@ export function WorkflowEditor({ id }: { id: string }) {
     if (!await decide(`build.process.${draft.id ? "edit" : "create"}`, { type: "build.process", id: target }, { name, title, object, when, manual, input, inputSchema, steps, layout: positions },
       { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
     if (!draft.id) {
+      markSaved(); dispatch({ type: "load", draft: { ...draft, id: target, revision: 1 } });
       open({ view: "workflow", params: { id: target } });
       close({ view: "workflow", params: { id } });
       return target;
     }
-    const fresh = await query.refetch(); if (fresh.data?.record) dispatch({ type: "load", draft: fresh.data.record });
+    const fresh = await query.refetch(); if (fresh.data?.record) { markSaved(); dispatch({ type: "load", draft: fresh.data.record }); }
     return target;
   };
   const check = async () => {
@@ -292,16 +297,18 @@ export function WorkflowEditor({ id }: { id: string }) {
     <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface px-2 py-1.5" role="toolbar" aria-label={t("Workflow actions")}>
       <Button variant="ghost" onClick={() => setLeftOpen(!leftOpen)} aria-label={t("Toggle block library")}>{leftOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}</Button>
       <Button variant="ghost" onClick={() => { setChosen(""); setRightOpen(true); }}><Settings2 className="mr-1 size-3.5" />{t("Settings")}</Button>
-      {draft.id && <Button disabled={busy} variant="ghost" onClick={() => void perform(async () => { const fresh = await query.refetch(); if (fresh.data?.record) { dispatch({ type: "load", draft: fresh.data.record }); setError(""); setValidation(undefined); } })}>{t("Reload saved workflow")}</Button>}
+      {draft.id && <Button disabled={busy} variant="ghost" onClick={() => confirmDiscard(() => void perform(async () => { const fresh = await query.refetch(); if (fresh.data?.record) { markSaved(); dispatch({ type: "load", draft: fresh.data.record }); setError(""); setValidation(undefined); } }))}>{t("Reload saved workflow")}</Button>}
+<AssetControls type="build.process" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "workflow", params: { id } }} />
       <Button disabled={busy || brokenForm.length > 0 || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save workflow")}</Button>
       <Button disabled={busy || brokenForm.length > 0} onClick={() => void perform(check)}>{t("Validate workflow")}</Button>
-      <Button disabled={busy || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)}>{t("Publish workflow")}</Button>
+      <Button disabled={busy || !draft.id || brokenForm.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
       <span className="mx-1 h-5 w-px bg-border" />
       <Button variant="primary" disabled={busy || !installed?.manual || dirty} onClick={() => { setDock("run"); setDockOpen(true); }}><Play className="mr-1 size-3" />{t("Run")}</Button>
       <Button variant="ghost" onClick={() => { setDock("history"); setDockOpen(true); }}>{t("Runs")}</Button>
       <Button variant="ghost" disabled={!draft.id || dirty} onClick={() => { setDock("release"); setDockOpen(true); }}>{t("Release")}</Button>
       <Button variant="ghost" className="ml-auto" onClick={() => setRightOpen(!rightOpen)} aria-label={t("Toggle inspector")}>{rightOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}</Button>
     </div>
+    <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {validation && <Panel role="status" className={`text-xs ${validation.valid ? "text-success" : "text-danger"}`}>{validation.valid ? t("The native compiler accepted this draft.") : validation.issues.map((issue) => issue.message).join(" ")}</Panel>}
     {catalogQuery.isError && <Panel role="alert" className="text-xs text-danger">{t("The capability library could not be loaded.")} <Button onClick={() => void catalogQuery.refetch()}>{t("Retry")}</Button></Panel>}

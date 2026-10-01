@@ -40,7 +40,7 @@ func TestComposedPageFollowsNamedRelation(t *testing.T) {
 		t.Fatalf("undeclared relation published: %s", got)
 	}
 	w.expect(page("PDETAIL", "rp-5", "opportunities", "detail"), "ok")
-	if got := publish("PDETAIL", "rp-6"); !strings.Contains(got, "only a table, chart or metric follows a relation") {
+	if got := publish("PDETAIL", "rp-6"); !strings.Contains(got, "only a table, chart, metric or form follows a relation") {
 		t.Fatalf("detail widget followed a relation: %s", got)
 	}
 }

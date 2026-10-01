@@ -361,7 +361,7 @@ export function RecordHistory({ info, history = [], heading = true }: { info: En
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work }: {
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false }: {
   /** App API composes declared record-specific work without another read path. */
   work?: (view: RecordView) => ReactNode;
   /** Answering the open tasks about the record from its page; without it they are listed only. */
@@ -369,6 +369,8 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   source: RecordSource; type: string; id: string; actions?: (r: EntityRecord) => ReactNode;
   /** Presentation subset. No field omitted by source.entity can be restored here. */
   fields?: string[];
+  /** A composed detail widget shows only this record's header and fields. */
+  detailOnly?: boolean;
   /** Uploading a file to the record and downloading one (ADR-0028); without it the files are listed only. */
   files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void };
   /** Commenting and following (ADR-0028 D6); without it comments are listed only. */
@@ -405,26 +407,26 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
         <h1 className="min-w-0 break-words text-lg font-semibold">{displayOf(info, r)}</h1>
         <span className="min-w-0 break-words font-mono text-xs text-muted">{info.title} · {r.id} {t("· rev")} {r.revision}</span>
         {r.archived && <Tag label="archived" />}
-        <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>
+        {!detailOnly && <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>}
       </header>
-      {info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={can}
+      {!detailOnly && info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={can}
         onTransition={onTransition && ((schema) => onTransition(schema, r))} />}
-      {(view.tasks.length > 0 || view.approvals.length > 0 || view.processes.length > 0 || work) && <section aria-label={t("Work on this record")} className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-3">
+      {!detailOnly && (view.tasks.length > 0 || view.approvals.length > 0 || view.processes.length > 0 || work) && <section aria-label={t("Work on this record")} className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-3">
         <h2 className="text-sm font-semibold">{t("Work on this record")}</h2>
         {view.tasks.length > 0 && <Tasks list={view.tasks} tasks={tasks} />}
         {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} onOpen={onOpen} />}
         {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
         {work?.(view)}
       </section>}
-      {info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
+      {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
       <section className="rounded-md border border-border bg-surface p-3">
         <PropertyList items={[...info.fields.filter((f) => !fields || fields.includes(f.name)).map((f) => [f.title, entity.fields[f.name]!.display(r[f.name] as never, r)] as [string, ReactNode]),
-          [t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
-          [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]]} />
+          ...(!detailOnly ? [[t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
+            [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]] as [string, ReactNode][] : [])]} />
       </section>
-      {(view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
-      {(view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
-      {[...view.related, ...(view.linked ?? [])].map((rel) => {
+      {!detailOnly && (view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
+      {!detailOnly && (view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
+      {!detailOnly && [...view.related, ...(view.linked ?? [])].map((rel) => {
         const relInfo = source.entity(rel.type);
         const relEntity = relInfo && entityFrom(relInfo);
         return relEntity && (
@@ -436,7 +438,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           </section>
         );
       })}
-      {(view.activity?.length ?? 0) > 0 && (
+      {!detailOnly && (view.activity?.length ?? 0) > 0 && (
         <section>
           <h2 className="mb-1 text-sm font-semibold">{t("Activity")}</h2>
           <ol className="grid gap-1 text-sm">
@@ -451,7 +453,7 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
           </ol>
         </section>
       )}
-      <RecordHistory info={info} history={view.history} />
+      {!detailOnly && <RecordHistory info={info} history={view.history} />}
     </div>
   );
 }

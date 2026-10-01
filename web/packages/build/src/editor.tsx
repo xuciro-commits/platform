@@ -1,3 +1,4 @@
+import { AssetControls } from "./asset-controls";
 // The page editor (ADR-0035), shaped like the editors this is measured against:
 // a layout panel listing the sections, a canvas showing the page with real
 // records while it is being composed, and a panel configuring the widget that
@@ -5,7 +6,7 @@
 // checks every binding when the page is published.
 import { ComposedPage, NewActions, useHost, useReadQuery, useRecordInventory, type Definition } from "@platform/app";
 import {
-  Button, Card, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, cn, defineStatuses, humanizeKernelError, notify, t, useWorkspace,
+  Button, Card, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, cn, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
   type EntityInfo,
 } from "@platform/ui";
 import { ArrowDown, ArrowUp, Plus, Settings2, Trash2 } from "lucide-react";
@@ -19,7 +20,8 @@ type Section = NonNullable<Api["sections"]>[number];
 type PageRecord = {
   id: string; revision: number; name: string; title: string; description?: string; object: string; state: string;
   list?: string[]; detail?: string[]; actions?: string[];
-  sections?: { widget: string; title?: string; width?: string; object?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
+  selections?: HostApi.SelectionVariable[];
+  sections?: { widget: string; title?: string; width?: string; object?: string; selection?: string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
@@ -41,9 +43,11 @@ const asPage = (record: PageRecord, sections: Draft[]): Api => ({
   name: record.name, title: record.title, description: record.description, layout: "composed",
   object: { app: record.object.split(".")[0] ?? "", kind: "object", name: record.object },
   listFields: [], detailFields: [], actions: [],
+  selections: record.selections,
   sections: sections.map((s) => ({
-    widget: s.widget, title: s.title, width: s.width, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
+    widget: s.widget, title: s.title, width: s.width, selection: s.selection, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
+    query: s.query ? { app: s.query.split(".")[0] ?? "", kind: "query", name: s.query.split(".").slice(1).join(".") } : undefined,
     function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,
     operation: s.operation, inputs: s.inputs,
     actions: (s.actions ?? []).map((schema) => ({ app: schema.split(".")[0] ?? "", kind: "action", name: schema })),
@@ -56,7 +60,7 @@ export function PagesList() {
   const { open } = useWorkspace();
   return (
     <div className="grid gap-3">
-      <PageHeader title={t("Pages")} description={t("The pages this organisation composes. Open one to compose it, publish it to put it in the workspace.")}
+      <PageHeader title={t("Pages")} description={t("Compose pages over your objects, then review a candidate to release them together.")}
         actions={<NewActions type="build.page" />} />
       <RecordList source={source} type="build.page" fields={["title", "name", "object", "state"]}
         onOpen={(record) => open({ view: "compose", params: { id: record.id } })} />
@@ -66,9 +70,11 @@ export function PagesList() {
 
 export function PageEditor({ id }: { id: string }) {
   const { decide, source, catalog, definitions } = useHost();
+  const { open } = useWorkspace();
   const record = useReadQuery<PageRecord>(`/v1/records/${encodeURIComponent("build.page")}/${encodeURIComponent(id)}`).data as unknown as { record?: PageRecord } | undefined;
   const page = (record as { record?: PageRecord } | undefined)?.record;
   const [sections, setSections] = useState<Draft[]>([]);
+  const [selections, setSelections] = useState<HostApi.SelectionVariable[]>([]);
   const [chosen, setChosen] = useState(0);
   const [dirty, setDirty] = useState(false);
   // The page's own settings — what people call it and what it is for — beside
@@ -78,9 +84,20 @@ export function PageEditor({ id }: { id: string }) {
   const [refused, setRefused] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
+    setSections(page?.sections ?? []);
+    setSelections(page?.selections ?? []);
+    setSettings(page ? { title: page.title, description: page.description ?? "" } : undefined);
+    setChosen(0); setDirty(false); setRefused(undefined); setFormProblems({});
+  });
   const [formProblems, setFormProblems] = useState<Record<string, string>>({});
   const report = useCallback((id: string, problem: string) => setFormProblems((old) => old[id] === problem ? old : { ...old, [id]: problem }), []);
-  const invalid = Object.values(formProblems).some(Boolean);
+  const selectionProblem = selections.some((v, i) => !/^[a-z][a-z0-9_-]{0,63}$/.test(v.name) || selections.some((other, at) => at !== i && other.name === v.name))
+    ? t("Selection names must be unique lowercase identifiers.") : sections.some((s) =>
+      s.selection && !selections.some((v) => v.name === s.selection && v.object.name === (s.object || page?.object)) ||
+      s.parentSelection && !selections.some((v) => v.name === s.parentSelection && v.object.name === page?.object))
+      ? t("A widget references a missing selection or the wrong object type.") : "";
+  const invalid = Object.values(formProblems).some(Boolean) || !!selectionProblem;
   const relatedObjects = useMemo(() => {
     return (definitions ?? [])
       .filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
@@ -100,6 +117,7 @@ export function PageEditor({ id }: { id: string }) {
   useEffect(() => {
     if (page && !dirty) {
       setSections(page.sections ?? []);
+      setSelections(page.selections ?? []);
       setSettings({ title: page.title, description: page.description ?? "" });
     }
   }, [page, dirty]);
@@ -133,9 +151,12 @@ export function PageEditor({ id }: { id: string }) {
     setRefused(undefined);
     setSaving(true);
     try {
-      const ok = await decide("build.page.edit", { type: "build.page", id }, { sections, ...settings }, { expectedRevision: page.revision, onRefused: setRefused });
-      if (ok) setDirty(false);
+      const ok = await decide("build.page.edit", { type: "build.page", id }, { sections, selections, ...settings }, { expectedRevision: page.revision, onRefused: setRefused });
+      if (ok) { markSaved(); setDirty(false); }
       return ok;
+    } catch {
+      setRefused(t("The page could not be saved. Your draft is still here."));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -148,26 +169,36 @@ export function PageEditor({ id }: { id: string }) {
       if (await decide("build.page.publish", { type: "build.page", id }, {}, { onRefused: setRefused })) {
         notify.success(t("The page is in the workspace."));
       }
+    } catch {
+      setRefused(t("The page could not be installed."));
     } finally {
       setPublishing(false);
     }
   };
-  // Nothing to publish: no widget laid out and no list/detail from the simple form.
+  // Both installation and release review require content.
   const nothing = sections.length === 0 && (page.list ?? []).length === 0;
+  const review = async () => {
+    if (nothing || invalid || (dirty && !await save())) return;
+    open({ view: "release-review", params: { kind: "page", id } });
+  };
   return (
     <WorkflowFormProblems.Provider value={report}><div className="flex flex-col gap-3 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
-      <PageHeader title={settings?.title || page.title} description={t("Compose what people see. Save keeps your work; publish puts it in the workspace.")}
-        actions={<div className="flex items-center gap-2">
+      <PageHeader title={settings?.title || page.title} description={t("Compose what people see, save your draft, then review its release candidate.")}
+        actions={<div className="flex flex-wrap items-center gap-2">
           <StatusTag status={page.state} registry={pageStates} />
+<AssetControls type="build.page" record={page} dirty={dirty} busy={saving || publishing} onCancel={discardChanges} route={{ view: "compose", params: { id } }} />
           <Button onClick={() => void save()} disabled={!dirty || saving || publishing || invalid}>{saving ? t("Saving…") : t("Save")}</Button>
-          <Button variant="primary" onClick={() => void publish()} disabled={nothing || publishing || saving || invalid}
-            title={nothing ? t("Add at least one widget before publishing.") : undefined}>
-            {publishing ? t("Publishing…") : t("Publish")}
+          <Button onClick={() => void publish()} disabled={nothing || publishing || saving || invalid}
+            title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>
+            {publishing ? t("Installing…") : t("Direct install")}
           </Button>
+          <Button variant="primary" onClick={() => void review()} disabled={nothing || publishing || saving || invalid}>{t("Review release")}</Button>
         </div>} />
-      {nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before publishing.")}</Panel>}
+      <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
+      {nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before installing or reviewing a release.")}</Panel>}
       {refused && <Panel role="alert" className="text-sm text-[var(--tone-danger)]">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
-      {dirty && <Panel role="status" className="text-xs text-muted">{t("Not saved yet. Publishing saves first.")}</Panel>}
+      {dirty && <Panel role="status" className="text-xs text-muted">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
+      {selectionProblem && <Panel role="alert" className="text-xs text-danger">{selectionProblem}</Panel>}
       {/* The workspace scrolls the stack on narrow screens. Wide screens keep
           independent panes so the canvas stays in view while editing. */}
       <div className="grid gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[15rem_minmax(0,1fr)_19rem]">
@@ -176,15 +207,19 @@ export function PageEditor({ id }: { id: string }) {
             onRemove={(i) => { setSections(sections.filter((_, at) => at !== i)); setChosen(0); setDirty(true); }} />
         </div>
         <div role="region" aria-label={t("The page")} className="min-w-0 rounded-md border border-dashed border-border p-3 lg:min-h-0 lg:overflow-y-auto">
-          <ComposedPage page={asPage({ ...page, ...settings }, sections)} live={false} chosen={chosen} onChoose={setChosen}
+          <ComposedPage page={asPage({ ...page, ...settings, selections }, sections)} live={false} chosen={chosen} onChoose={setChosen}
             notice={<Panel role="status" className="text-xs text-muted">{t("Your records, as they are. Actions do not run while you compose.")}</Panel>} />
         </div>
         <div role="region" aria-label={t("The widget in hand")} className="lg:min-h-0 lg:overflow-y-auto">
           {chosen < 0 && settings ? <Settings value={settings} object={info?.title ?? page.object}
+            selections={selections} objects={definitions.filter((d) => d.ref.kind === "object" && d.entity).map((d) => d.ref).sort((a, b) => Number(b.name === page.object) - Number(a.name === page.object))}
+            onSelections={(next) => { setSelections(next); setDirty(true); }}
+            onRename={(from, to) => setSections((old) => old.map((s) => ({ ...s,
+              selection: s.selection === from ? to : s.selection, parentSelection: s.parentSelection === from ? to : s.parentSelection })))}
             onChange={(patch) => { setSettings({ ...settings, ...patch }); setDirty(true); }} /> :
           <Properties section={sections[chosen]} info={source.entity(sections[chosen]?.object || page.object)}
             catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            object={page.object} relatedObjects={relatedObjects} relationsOf={relationsOf} onChange={(patch) => change(chosen, patch)} />}
+            object={page.object} selections={selections} relatedObjects={relatedObjects} relationsOf={relationsOf} onChange={(patch) => change(chosen, patch)} />}
         </div>
       </div>
     </div></WorkflowFormProblems.Provider>
@@ -237,8 +272,9 @@ function Layout({ sections, chosen, title, onChoose, onAdd, onMove, onRemove }: 
 }
 
 /** The panel that configures the widget in hand: only what that widget binds. */
-function Properties({ section, info, catalog, object, relatedObjects = [], relationsOf = {}, onChange }: {
+function Properties({ section, info, catalog, object, selections, relatedObjects = [], relationsOf = {}, onChange }: {
   section?: Draft; info?: EntityInfo; object: string; relatedObjects?: string[]; relationsOf?: Record<string, string[]>;
+  selections: HostApi.SelectionVariable[];
   catalog: { schema: string; title: string; target: string }[];
   onChange: (patch: Partial<Draft>) => void;
 }) {
@@ -266,18 +302,42 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
   return (
     <Card className="grid content-start gap-3 p-3">
       <div className="text-xs font-semibold text-muted">{widgetTitles[section.widget]?.() ?? section.widget}</div>
-      {relatedObjects.length > 0 && (section.widget === "table" || section.widget === "detail" || section.widget === "chart" || section.widget === "metric" || section.widget === "form") && (
+      {relatedObjects.length > 0 && ["table", "detail", "actions", "chart", "metric", "filter", "form", "timeline", "tasks"].includes(section.widget) && (
         <label className="grid gap-1 text-xs">{t("Object")}
-          <Select value={section.object ?? object} onChange={(e) => onChange({ object: e.target.value === object ? undefined : e.target.value, relation: undefined, fields: [] })}>
+          <Select value={section.object ?? object} onChange={(e) => onChange({ object: e.target.value === object ? undefined : e.target.value,
+            selection: undefined, parentSelection: undefined, relation: undefined, query: undefined, fields: [], actions: [] })}>
             <option value={object}>{t("{object} (this page)", { object })}</option>
             {relatedObjects.map((rel) => <option key={rel} value={rel}>{rel}</option>)}
           </Select>
         </label>
       )}
-      {section.object && (relationsOf[section.object]?.length ?? 0) > 0 && (section.widget === "table" || section.widget === "chart" || section.widget === "metric") && (
+      {(selections.length > 0 || section.selection) && ["table", "detail", "actions", "timeline", "tasks", "function", "compute"].includes(section.widget) &&
+        <label className="grid gap-1 text-xs">{section.widget === "table" ? t("Writes selection") : t("Reads selection")}
+          <Select value={section.selection ?? ""} onChange={(e) => onChange({ selection: e.target.value || undefined })}>
+            <option value="">{t("Shared selection for this object")}</option>
+            {section.selection && !selections.some((v) => v.name === section.selection && v.object.name === (section.object || object)) &&
+              <option value={section.selection}>{t("Unavailable selection: {name}", { name: section.selection })}</option>}
+            {selections.filter((v) => v.object.name === (section.object || object)).map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+          </Select>
+        </label>}
+      {(selections.length > 0 || section.parentSelection) && section.object && relatedObjects.includes(section.object) &&
+        (["table", "chart", "metric"].includes(section.widget) || section.widget === "form" && section.relation) &&
+        <label className="grid gap-1 text-xs">{t("Parent selection")}
+          <Select value={section.parentSelection ?? ""} onChange={(e) => onChange({ parentSelection: e.target.value || undefined })}>
+            <option value="">{t("Page's shared selection")}</option>
+            {section.parentSelection && !selections.some((v) => v.name === section.parentSelection && v.object.name === object) &&
+              <option value={section.parentSelection}>{t("Unavailable selection: {name}", { name: section.parentSelection })}</option>}
+            {selections.filter((v) => v.object.name === object).map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+          </Select>
+        </label>}
+      {section.object && (relationsOf[section.object]?.length ?? 0) > 0 && ["table", "chart", "metric", "form"].includes(section.widget) && (
         <label className="grid gap-1 text-xs">{t("Through")}
-          <Select value={section.relation ?? ""} onChange={(e) => onChange({ relation: e.target.value || undefined })}>
-            <option value="">{t("Any reference to this page's object")}</option>
+          <Select value={section.relation ?? ""} onChange={(e) => {
+            const parent = fields.find((f) => f.type === "reference" && f.ref === object && f.inverse === e.target.value);
+            onChange({ relation: e.target.value || undefined,
+              ...(section.widget === "form" && parent && e.target.value ? { fields: section.fields?.filter((name) => name !== parent.name) } : {}) });
+          }}>
+            <option value="">{section.widget === "form" ? t("Choose the parent in the form") : t("Any reference to this page's object")}</option>
             {relationsOf[section.object]!.map((name) => <option key={name} value={name}>{name}</option>)}
           </Select>
         </label>
@@ -336,9 +396,11 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
       {section.widget === "form" && (
         <fieldset className="grid gap-1 text-xs">
           <legend className="mb-1">{t("Fields it asks for")}</legend>
-          <Toggles options={fields.filter((f) => !f.readOnly).map((f) => ({ value: f.name, label: f.required ? `${f.title} *` : f.title }))} value={section.fields ?? []}
+          <Toggles options={fields.filter((f) => !f.readOnly && !(section.relation && f.type === "reference" && f.ref === object && f.inverse === section.relation)).map((f) => ({ value: f.name, label: f.required ? `${f.title} *` : f.title }))} value={section.fields ?? []}
             onChange={(value) => onChange({ fields: value })} />
-          <p className="text-muted">{t("It makes a new record through the object's own create action; fields marked * are needed.")}</p>
+          <p className="text-muted">{section.relation
+            ? t("The selected parent supplies its reference. Choose the remaining fields; creation still uses the object's own action.")
+            : t("It makes a new record through the object's own create action; fields marked * are needed.")}</p>
         </fieldset>
       )}
       {(section.widget === "timeline" || section.widget === "tasks") && (
@@ -387,8 +449,10 @@ function Properties({ section, info, catalog, object, relatedObjects = [], relat
 
 /** The page's own settings: what people call it and what it is for. Its name
  *  and its object are its identity — pages, applications and links name them. */
-function Settings({ value, object, onChange }: {
+function Settings({ value, object, selections, objects, onSelections, onRename, onChange }: {
   value: { title: string; description: string }; object: string;
+  selections: HostApi.SelectionVariable[]; objects: HostApi.AssetRef[];
+  onSelections: (next: HostApi.SelectionVariable[]) => void; onRename: (from: string, to: string) => void;
   onChange: (patch: Partial<{ title: string; description: string }>) => void;
 }) {
   return (
@@ -401,6 +465,26 @@ function Settings({ value, object, onChange }: {
         <Textarea rows={4} value={value.description} onChange={(e) => onChange({ description: e.target.value })} />
       </label>
       <p className="text-xs text-muted">{t("It shows {object}. Its name and object stay as they are: applications and links name them.", { object })}</p>
+      <fieldset className="grid gap-3 border-t border-border pt-3">
+        <legend className="text-xs font-semibold">{t("Record selections")}</legend>
+        <p className="text-xs text-muted">{t("A table writes a selection; details and actions read it. Each selection holds records of one object.")}</p>
+        {selections.map((v, i) => <div key={i} className="grid gap-2 rounded-sm border border-border p-2">
+          <label className="grid gap-1 text-xs">{t("Selection name")}
+            <Input value={v.name} onChange={(e) => { onRename(v.name, e.target.value); onSelections(selections.map((row, at) => at === i ? { ...row, name: e.target.value } : row)); }} />
+          </label>
+          <label className="grid gap-1 text-xs">{t("Selection object")}
+            <Select value={v.object.name} onChange={(e) => {
+              const object = objects.find((ref) => ref.name === e.target.value);
+              if (object) onSelections(selections.map((row, at) => at === i ? { ...row, object } : row));
+            }}>{objects.map((ref) => <option key={ref.name} value={ref.name}>{ref.name}</option>)}</Select>
+          </label>
+          <Button size="sm" variant="ghost" onClick={() => onSelections(selections.filter((_, at) => at !== i))}><Trash2 />{t("Remove selection")}</Button>
+        </div>)}
+        <Button size="sm" disabled={!objects.length} onClick={() => {
+          let n = 1; while (selections.some((v) => v.name === `selection${n}`)) n++;
+          onSelections([...selections, { name: `selection${n}`, object: objects[0]! }]);
+        }}><Plus />{t("Add record selection")}</Button>
+      </fieldset>
     </Card>
   );
 }

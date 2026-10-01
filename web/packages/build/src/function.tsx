@@ -1,8 +1,9 @@
+import { AssetControls } from "./asset-controls";
 // This editor writes build.function's native declaration. The three stages
 // visualize that declaration; execution belongs to the host model effect path.
 import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace,
+import { Button, Card, Checkbox, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace, useUnsavedChanges,
   type CanvasNode, type NodeCatalog } from "@platform/ui";
 import { useEffect, useState } from "react";
 import { installedObjects, type WorkflowObject } from "./workflow-model";
@@ -31,7 +32,7 @@ export function Functions() {
 
 export function FunctionEditor({ id }: { id: string }) {
   const { decide, role } = useHost();
-  const { open } = useWorkspace();
+  const { open, close } = useWorkspace();
   const query = useReadQuery<{ record?: FunctionDraft }>(`/v1/records/build.function/${encodeURIComponent(id)}`);
   const inventory = useRecordInventory<Source>("build.object");
   const objects = installedObjects(inventory.data?.records ?? []);
@@ -40,6 +41,9 @@ export function FunctionEditor({ id }: { id: string }) {
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const { markSaved, confirmDiscard, discardChanges } = useUnsavedChanges(dirty, () => {
+    setDraft(query.data?.record ? loaded(query.data.record) : empty); setDirty(false); setError(""); setChosen("settings");
+  });
   useEffect(() => { if (query.data?.record && !dirty) setDraft(loaded(query.data.record)); }, [query.data, dirty]);
   const source = objects.find((object) => `build.${object.name}` === draft.object);
   const fields = source?.fields?.filter((field) => scalarTypes.includes(field.type)) ?? [];
@@ -66,11 +70,14 @@ export function FunctionEditor({ id }: { id: string }) {
       { name, title, description, object, fields, instructions, output, model: model ?? "", maxInputBytes, maxOutputBytes, maxTokens, roles },
       { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
     const revision = draft.id ? draft.revision + 1 : 1;
-    if (!draft.id) open({ view: "function", params: { id: target } });
+    if (!draft.id) {
+      markSaved(); setDirty(false);
+      open({ view: "function", params: { id: target } }); close({ view: "function", params: { id } });
+    }
     else {
       const refreshed = await query.refetch();
       if (!refreshed.data?.record || refreshed.isError) { setError(t("Reload the saved function before editing again.")); return; }
-      setDraft(loaded(refreshed.data.record)); setDirty(false);
+      setDraft(loaded(refreshed.data.record)); markSaved(); setDirty(false);
     }
     return revision;
   };
@@ -84,25 +91,33 @@ export function FunctionEditor({ id }: { id: string }) {
       else setError(t("Reload the saved function before editing again."));
     }
   };
+  const review = async () => {
+    if (issues.length) { setError(issues.join(" ")); return; }
+    if (dirty && (await save()) === undefined) return;
+    open({ view: "release-review", params: { kind: "function", id: draft.id } });
+  };
   const reload = async () => {
     const refreshed = await query.refetch();
-    if (refreshed.data?.record && !refreshed.isError) { setDraft(loaded(refreshed.data.record)); setDirty(false); }
+    if (refreshed.data?.record && !refreshed.isError) { setDraft(loaded(refreshed.data.record)); markSaved(); setDirty(false); }
     else setError(t("The function could not be saved or loaded. Your draft is still here."));
   };
   if (role("build") !== "builder") return <PageHeader title={t("AI functions")} description={t("Only a builder can edit AI functions.")} />;
   if (id !== "new" && !draft.id) return <PageHeader title={t("AI functions")} description={query.isError ? t("The function could not be loaded.") : t("Loading…")} />;
   const stages: { id: Stage; title: string }[] = [{ id: "settings", title: t("Function settings") }, { id: "source", title: t("Record inputs") }, { id: "model", title: t("Model inference") }, { id: "output", title: t("Strict output") }];
   return <div className="grid min-w-0 gap-3">
-    <PageHeader title={draft.title || t("New AI function")} description={t("Save the declaration, test fixed cases, then publish its next function version.")}
+    <PageHeader title={draft.title || t("New AI function")} description={t("Save the declaration, test fixed cases, then review its release candidate.")}
       actions={<div className="flex flex-wrap gap-2">
         <Button onClick={() => open({ view: "function" })}>{t("AI functions")}</Button>
-        <Button disabled={busy || !draft.id} onClick={() => void perform(reload)}>{t("Reload saved function")}</Button>
+<AssetControls type="build.function" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "function", params: { id } }} />
+        <Button disabled={busy || !draft.id} onClick={() => confirmDiscard(() => void perform(reload))}>{t("Reload saved function")}</Button>
         <Button disabled={busy || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
         <Button disabled={busy || !draft.id || dirty} onClick={() => open({ view: "candidate-test", params: { functionId: draft.id } })}>{t("Test function")}</Button>
-        <Button variant="primary" disabled={busy || !draft.id} onClick={() => void perform(publish)}>{t("Publish function")}</Button>
+        <Button disabled={busy || !draft.id || issues.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
+        <Button variant="primary" disabled={busy || !draft.id || issues.length > 0} onClick={() => void perform(review)}>{t("Review release")}</Button>
       </div>} />
+    <p className="text-xs text-muted">{t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}</p>
     {draft.version ? <Panel role="status" className="text-xs">{t("Installed function version {version}. Accepted calls keep their saved inputs and definition.", { version: draft.version })}</Panel> : null}
-    {dirty && <Panel role="status" className="text-xs">{t("Not saved yet. Publishing saves first.")}</Panel>}
+    {dirty && <Panel role="status" className="text-xs">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
     {error && <Panel role="alert" className="text-sm text-danger">{error}</Panel>}
     {dirty && issues.length > 0 && <Panel aria-live="polite" className="text-xs text-muted">{issues.join(" ")}</Panel>}
     {inventory.isError && <Panel role="alert">{t("The function sources could not be loaded.")}</Panel>}

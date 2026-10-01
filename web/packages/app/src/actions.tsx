@@ -6,18 +6,19 @@
 import type { ActionDeclaration } from "@platform/kernel";
 import { Button, Checkbox, Dialog, Input, RecordLookup, Select, Textarea, t, type EntityRecord } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { GeneratedForm, newId, useHost } from "./index";
 
 type Field = ActionDeclaration["payload"][number];
 
 /** Inputs for an action's declared payload fields. */
 export function PayloadFields({ fields, values, onChange, preview = false }: { fields: Field[]; values: Record<string, unknown>; onChange: (v: Record<string, unknown>) => void; preview?: boolean }) {
+  const prefix = useId();
   return <>{fields.map((f) => {
     const value = values[f.name];
     const set = (v: unknown) => onChange({ ...values, [f.name]: v });
     const label = `${f.description || f.name}${f.required ? " *" : ""}`;
-    const id = `payload-${f.name}`;
+    const id = `${prefix}-payload-${f.name}`;
     if (f.type === "boolean" && !f.choices?.length && !f.ref)
       return <Checkbox key={f.name} className="text-xs text-muted" checked={!!value} onChange={set}>{label}</Checkbox>;
     return (
@@ -59,24 +60,25 @@ function RecordPicker({ id, type, value, onChange }: { id: string; type: string;
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
 /** One action taken through a dialog: the record's ID for a new one, then its payload. */
-function ActionDialog({ declared, type, record, onClose }: { declared: ActionDeclaration; type: string; record?: EntityRecord; onClose: () => void }) {
+function ActionDialog({ declared, type, record, onClose, onCompleted }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: () => void }) {
   const { decide, source } = useHost();
   const info = source.entity(type);
   const [id, setId] = useState(() => newId(prefixOf(type)));
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [refusal, setRefusal] = useState("");
   const target = { type, id: record?.id ?? id };
-  const options = record ? { expectedRevision: record.revision } : { expectedRevision: 0 };
-  const done = (ok: boolean) => { if (ok) onClose(); };
+  const options = { expectedRevision: record?.revision ?? 0, quiet: true, onRefused: setRefusal };
+  const done = (ok: boolean) => { if (ok) { onClose(); onCompleted?.(); } };
   const generated = declared.schema === `${type}.create`; // the entity's own form
   const missing = declared.payload.some((f) => f.required && (values[f.name] === undefined || values[f.name] === ""));
 
   const submitAction = async () => {
     if (submitting) return;
-    setSubmitting(true);
+    setSubmitting(true); setRefusal("");
     try {
       done(await decide(declared.schema, target, values, options));
-    } finally {
+    } catch { setRefusal(t("The action could not be completed. Try again.")); } finally {
       setSubmitting(false);
     }
   };
@@ -86,6 +88,8 @@ function ActionDialog({ declared, type, record, onClose }: { declared: ActionDec
       title={record ? `${declared.title} ${record.id}` : declared.title}>
       <div className="grid gap-3">
         {declared.description && <p className="text-sm text-muted">{declared.description}</p>}
+        {declared.schema === `${type}.archive` && <p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
+        {refusal && <p role="alert" className="text-sm text-danger">{refusal}</p>}
         {!record && <label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={(e) => setId(e.target.value.trim())} disabled={submitting} /></label>}
         {generated
           ? <GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onSubmit={async (v) => done(!!id && await decide(declared.schema, target, v, options))} />
@@ -147,4 +151,17 @@ export function useTransition(type: string) {
   };
   const dialog = taking && <ActionDialog declared={taking.declared} type={type} record={taking.record} onClose={() => setTaking(undefined)} />;
   return { take, dialog };
+}
+
+/** Uses the original declared archive action, with confirmation and revision checking. */
+export function useRecordArchive(type: string) {
+  const { action } = useHost();
+  const declared = action(`${type}.archive`);
+  const [taking, setTaking] = useState<{ record: Pick<EntityRecord, "id" | "revision">; completed?: () => void }>();
+  return {
+    available: !!declared,
+    take: (record: Pick<EntityRecord, "id" | "revision">, completed?: () => void) => setTaking({ record, completed }),
+    dialog: taking && declared ? <ActionDialog declared={declared} type={type} record={taking.record}
+      onClose={() => setTaking(undefined)} onCompleted={taking.completed} /> : null,
+  };
 }

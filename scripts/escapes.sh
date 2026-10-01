@@ -25,7 +25,7 @@ ui_pattern='<(button|input|select|textarea|table|dialog|form|section|details)[ >
 host_pattern='"(net|net/http|net/url|database/sql|os|os/exec|io/fs|path/filepath)"|github.com/minio|kernel\.NewFactLog|sync\.Map'
 
 hits() {
-  for f in $(find web/packages -path '*/src/*.tsx' -not -path 'web/packages/ui/*' -not -path 'web/packages/kernel/*' -not -name '*.test.tsx' | sort); do
+  for f in $(find web/packages web/apps -path '*/src/*.tsx' -not -path 'web/packages/ui/*' -not -path 'web/packages/kernel/*' -not -name '*.test.tsx' | sort); do
     n=$(grep -cE "$ui_pattern" "$f" || true); [[ $n == 0 ]] || printf 'ui\t%s\t%s\n' "$f" "$n"
   done
   for f in $(find apps/*/server protocols -name '*.go' -not -name '*_test.go' -not -path '*/cmd/*' | sort); do

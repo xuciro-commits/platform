@@ -7,9 +7,9 @@
 import {
   Button, Card, Chart, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
 } from "@platform/ui";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
-import { GeneratedForm, RecordDetail, findDefinition, newId, useHost, type Definition } from "./index";
+import { GeneratedForm, findDefinition, newId, useHost, type Definition } from "./index";
 import { ComputeCall } from "./capability";
 
 type Page = NonNullable<Definition["page"]>;
@@ -22,6 +22,7 @@ type Narrowed = Record<string, Record<string, unknown>>;
 /** What a section is bound to, and what the page has selected and narrowed to. */
 type Bound = {
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
+  master?: EntityRecord;
   narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
 
@@ -29,6 +30,8 @@ type Bound = {
 type Composing = { chosen?: number; onChoose?: (at: number) => void; at?: number };
 
 const objectOf = (page: Page, section: Section) => section.object?.name || page.object.name;
+// Named and unnamed selections use one typed slot model.
+const selectionKey = (type: string, name?: string) => `${name ? `selection:${name}` : "object"}/${type}`;
 
 /** The filters' conditions over an object, as the host's domain (ADR-0019). */
 const domainOf = (narrowed: Narrowed, object: string): unknown[] =>
@@ -37,11 +40,11 @@ const domainOf = (narrowed: Narrowed, object: string): unknown[] =>
 /** The reference that ties a section's object to the page's selected record:
  *  the declared relation when the section names one (ADR-0040 21b), else the
  *  first reference to the page's object. */
-const relatedField = (fields: { name: string; type: string; ref?: string; inverse?: string }[] | undefined, page: Page, section: Section) =>
+const relatedField = (fields: { name: string; title: string; type: string; ref?: string; inverse?: string; readOnly?: boolean }[] | undefined, page: Page, section: Section) =>
   fields?.find((f) => f.type === "reference" && f.ref === page.object.name && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableWidget({ page, section, onSelect, selected, narrowed }: Bound) {
+function TableWidget({ page, section, onSelect, selected, master, narrowed }: Bound) {
   const { source, definitions } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === page.object.name;
@@ -53,7 +56,10 @@ function TableWidget({ page, section, onSelect, selected, narrowed }: Bound) {
     ? (query?.by ? info?.fields.find((f) => f.name === query.by) : relatedField(info?.fields, page, section))
     : undefined;
 
-  if (refField && !selected) {
+  if ((section.relation || section.parentSelection) && !refField) return <p role="alert" className="text-sm text-danger">
+    {t("This section's parent reference is unavailable.")}</p>;
+
+  if (refField && !master) {
     return (
       <div className="flex h-40 items-center justify-center rounded-md border border-dashed border-border p-4 text-center">
         <p className="text-sm text-muted">
@@ -63,26 +69,24 @@ function TableWidget({ page, section, onSelect, selected, narrowed }: Bound) {
     );
   }
 
-  const relationDomain = refField && selected ? [[refField.name, "=", selected.id]] : [];
+  const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
   const queryDomain = (query?.domain as unknown[] | undefined) ?? [];
   const domain = [...queryDomain, ...domainOf(narrowed, type), ...relationDomain];
 
   return (
-    <RecordList source={source} type={type} fields={section.fields} height={320} domain={domain}
-      onOpen={isMaster ? (record) => onSelect(record.id === selected?.id ? undefined : record) : undefined} />
+    <RecordList key={refField ? `${type}/${refField.name}/${master?.id}` : type}
+      source={source} type={type} fields={section.fields} height={320} domain={domain}
+      onOpen={(record) => onSelect(record.id === selected?.id ? undefined : record)} />
   );
 }
 
 /** The record the page has selected, with the fields the builder chose. */
 function DetailWidget({ page, section, selected }: Bound) {
+  const { source } = useHost();
   const type = objectOf(page, section);
-  const isMaster = type === page.object.name;
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
-  if (!isMaster && selected.type && selected.type !== type) {
-    return <p className="text-sm text-muted">{t("Select a {object} to see it here.", { object: type })}</p>;
-  }
   // The fields alone: what people do with it is the actions widget's (ADR-0035 D2).
-  return <RecordDetail type={type} id={selected.id} fields={section.fields} allowed={[]} />;
+  return <RecordPage key={`${type}/${selected.id}`} source={source} type={type} id={selected.id} fields={section.fields} detailOnly />;
 }
 
 /** The actions the builder chose, on what is selected (Workshop's button group). */
@@ -114,14 +118,19 @@ function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]
   };
 }
 
-function ChartWidget({ page, section, kpi, narrowed, selected }: Bound & { kpi: boolean }) {
+function ChartWidget({ page, section, kpi, narrowed, master }: Bound & { kpi: boolean }) {
   const { source } = useHost();
   const aggregate = source.aggregate;
   const type = objectOf(page, section);
   const isMaster = type === page.object.name;
   const info = source.entity(type);
   const refField = !isMaster ? relatedField(info?.fields, page, section) : undefined;
-  const relationDomain = refField && selected ? [[refField.name, "=", selected.id]] : [];
+  if ((section.relation || section.parentSelection) && !refField) return <p role="alert" className="text-sm text-danger">
+    {t("This section's parent reference is unavailable.")}</p>;
+  if (refField && !master) return <p className="text-sm text-muted">
+    {t("Select a record to see related {records}.", { records: info?.plural?.toLowerCase() ?? type })}
+  </p>;
+  const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
   const domain = [...domainOf(narrowed, type), ...relationDomain];
 
   return <Chart spec={chartSpec(page, section, kpi, domain)} frame={false} height={kpi ? 120 : 240}
@@ -132,6 +141,7 @@ function ChartWidget({ page, section, kpi, narrowed, selected }: Bound & { kpi: 
  *  the builder chose. What it sets is the page's second variable. */
 function FilterWidget({ page, section, narrowed, onNarrow }: Bound) {
   const { source } = useHost();
+  const prefix = useId();
   const type = objectOf(page, section);
   const info = source.entity(type);
   const set = narrowed[type] ?? {};
@@ -140,13 +150,13 @@ function FilterWidget({ page, section, narrowed, onNarrow }: Bound) {
       {(section.fields ?? []).map((name) => {
         const f = info?.fields.find((x) => x.name === name);
         if (!f) return null; // not a field this member reads
-        const id = `filter-${type}-${name}`;
+        const id = `${prefix}-${type}-${name}`;
         const value = set[name];
         return (
           <label key={name} htmlFor={id} className="grid gap-1 text-xs text-muted">{f.title}
             {f.type === "reference" && f.ref
               ? <RecordLookup id={id} source={source} type={f.ref} value={value as string | undefined} onChange={(v) => onNarrow(type, name, v)} />
-              : <Select id={id} className="w-40" value={value === undefined ? "" : String(value)}
+              : <Select id={id} aria-label={f.title} className="w-40" value={value === undefined ? "" : String(value)}
                   onChange={(e) => onNarrow(type, name, e.target.value === "" ? undefined : f.type === "boolean" ? e.target.value === "true" : e.target.value)}>
                   <option value="">{t("Any")}</option>
                   {f.type === "boolean"
@@ -164,17 +174,26 @@ function FilterWidget({ page, section, narrowed, onNarrow }: Bound) {
 
 /** The form (16b): a new record of the object, made through its own create
  *  action with the fields the builder chose; the host checks it like any other. */
-function FormWidget({ page, section, live }: Bound) {
-  const { decide } = useHost();
+function FormWidget({ page, section, live, master }: Bound) {
+  const { decide, source } = useHost();
   const type = objectOf(page, section);
+  // Explicit relation binding leaves independent forms unchanged.
+  const refField = section.relation ? relatedField(source.entity(type)?.fields, page, section) : undefined;
   const [round, setRound] = useState(0); // a fresh, empty form after each record
+  if (section.relation && (!refField || refField.readOnly)) return <p role="alert" className="text-sm text-danger">
+    {t("This form's parent reference is unavailable.")}</p>;
+  if (refField && !master) return <p className="text-sm text-muted">{t("Select a parent record before creating a related record.")}</p>;
+  const fields = refField ? (section.fields ?? source.entity(type)?.fields.map((f) => f.name) ?? []).filter((name) => name !== refField.name) : section.fields;
+  const parentInfo = source.entity(page.object.name);
   return (
     <div className="grid gap-2">
       {!live && <p className="text-xs text-muted">{t("The form does not submit while you compose.")}</p>}
-      <GeneratedForm key={round} type={type} fields={section.fields} submitLabel={t("Create")} onCancel={() => setRound((r) => r + 1)}
+      {refField && master && <PropertyList items={[[refField.title, String(master[parentInfo?.display ?? "id"] ?? master.id)]]} />}
+      <GeneratedForm key={round} type={type} fields={fields} submitLabel={t("Create")} onCancel={() => setRound((r) => r + 1)}
         onSubmit={async (values) => {
           if (!live) return;
-          if (await decide(`${type}.create`, { type, id: newId(prefixOf(type)) }, values, { expectedRevision: 0 })) setRound((r) => r + 1);
+          const payload = refField && master ? { ...values, [refField.name]: master.id } : values;
+          if (await decide(`${type}.create`, { type, id: newId(prefixOf(type)) }, payload, { expectedRevision: 0 })) setRound((r) => r + 1);
         }} />
     </div>
   );
@@ -185,8 +204,10 @@ function useRecordView(type: string, id?: string) {
   const { source } = useHost();
   const [view, setView] = useState<RecordView>();
   useEffect(() => {
+    let current = true;
     setView(undefined);
-    if (id) source.get(type, id).then(setView, () => setView(undefined));
+    if (id) source.get(type, id).then((value) => { if (current) setView(value); }, () => { if (current) setView(undefined); });
+    return () => { current = false; };
   }, [source, type, id, source.revision]);
   return view;
 }
@@ -286,7 +307,7 @@ export function SectionView(bound: Bound & Composing) {
       case "metric": return <ChartWidget {...bound} kpi />;
       case "text": return <Markdown content={section.text} className="text-sm" />;
       case "filter": return <FilterWidget {...bound} />;
-      case "form": return <FormWidget {...bound} />;
+      case "form": return <FormWidget key={`${objectOf(bound.page, section)}/${section.relation ?? ""}/${section.parentSelection ?? ""}/${section.relation ? bound.master?.id ?? "" : ""}`} {...bound} />;
       case "timeline": return <TimelineWidget {...bound} />;
       case "tasks": return <TasksWidget {...bound} />;
       case "function": return <FunctionWidget {...bound} />;
@@ -307,24 +328,70 @@ export function SectionView(bound: Bound & Composing) {
 
 /**
  * A composed page as people use it: the sections in order, sharing what is
- * selected. `live` false is the builder's canvas — the same widgets over the
+ * selected for each typed slot. Related lists follow their declared parent;
+ * detail/actions read their own object's selection. `live` false is the builder's canvas — the same widgets over the
  * same records, with nothing that writes.
  */
 export function ComposedPage({ page, live = true, notice, chosen, onChoose }: {
   page: Page; live?: boolean; notice?: ReactNode;
 } & Composing) {
-  const [selected, setSelected] = useState<EntityRecord>();
+  const { source } = useHost();
+  const [selected, setSelected] = useState<Record<string, EntityRecord | undefined>>({});
   const [narrowed, setNarrowed] = useState<Narrowed>({});
+  const masterType = page.object.name;
+  const slots = new Map([
+    [selectionKey(masterType), masterType],
+    ...(page.sections ?? []).map((section) => [selectionKey(objectOf(page, section)), objectOf(page, section)] as const),
+    ...(page.selections ?? []).map((variable) => [selectionKey(variable.object.name, variable.name), variable.object.name] as const),
+  ]);
+  const children = new Map<string, Set<string>>();
+  for (const section of page.sections ?? []) {
+    const type = objectOf(page, section);
+    if (section.widget !== "table" || type === masterType || !(section.relation || section.parentSelection || relatedField(source.entity(type)?.fields, page, section))) continue;
+    const parent = selectionKey(masterType, section.parentSelection), child = selectionKey(type, section.selection);
+    if (!children.has(parent)) children.set(parent, new Set());
+    children.get(parent)!.add(child);
+  }
+  const clear = (records: typeof selected, keys: string[]) => {
+    const next = { ...records }, seen = new Set<string>();
+    const remove = (key: string) => {
+      if (seen.has(key)) return;
+      seen.add(key); delete next[key];
+      for (const child of children.get(key) ?? []) remove(child);
+    };
+    keys.forEach(remove);
+    return next;
+  };
+  const references = JSON.stringify(Object.entries(selected).flatMap(([key, record]) => record && slots.has(key) ? [[key, slots.get(key), record.id]] : []));
+  // Decisions refresh the host source. Re-read selected records so lifecycle
+  // actions use the current state/revision rather than the table's old snapshot.
+  useEffect(() => {
+    let current = true;
+    for (const [key, type, id] of JSON.parse(references) as [string, string, string][]) {
+      source.get(type, id).then((view) => {
+        if (current) setSelected((records) => records[key]?.id === id ? { ...records, [key]: view.record } : records);
+      }, () => {
+        if (current) setSelected((records) => records[key]?.id !== id ? records : clear(records, [key]));
+      });
+    }
+    return () => { current = false; };
+  }, [source, source.revision, masterType, references]);
+  const onSelect = (key: string, record?: EntityRecord) => {
+    // Child selections belong to the current master. Changing the master must
+    // never leave a detail or an action aimed at the previous master's child.
+    setSelected((records) => ({ ...clear(records, [key]), [key]: record }));
+  };
   const onNarrow = (object: string, field: string, value: unknown) => {
     setNarrowed((n) => ({ ...n, [object]: { ...n[object], [field]: value } }));
-    setSelected(undefined); // what was selected may no longer be among them
+    setSelected((records) => clear(records, [...slots].filter(([, type]) => type === object).map(([key]) => key)));
   };
   return (
     <div className="grid gap-3">
       {notice}
       <div className="grid gap-3 md:grid-cols-2">
         {(page.sections ?? []).map((section, i) => (
-          <SectionView key={i} page={page} section={section} selected={selected} onSelect={setSelected} live={live} narrowed={narrowed} onNarrow={onNarrow}
+          <SectionView key={i} page={page} section={section} selected={selected[selectionKey(objectOf(page, section), section.selection)]}
+            master={selected[selectionKey(masterType, section.parentSelection)]} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
             chosen={chosen} onChoose={onChoose} at={i} />
         ))}
       </div>

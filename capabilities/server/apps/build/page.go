@@ -34,8 +34,9 @@ type Page struct {
 	Actions     []string `json:"actions,omitempty" title:"Actions it offers" help:"Actions of that object, by their schema" example:"crm.opportunity.close"`
 	// Sections are what the page is laid out from when someone composes it in
 	// the editor (ADR-0035); with none, the page is the list and detail above.
-	Sections []Section `json:"sections,omitempty" field:"aside" title:"What is on the page"`
-	State    string    `json:"state" field:"readonly" choices:"draft,published"`
+	Sections   []Section                    `json:"sections,omitempty" field:"aside" title:"What is on the page"`
+	Selections []platform.SelectionVariable `json:"selections,omitempty" field:"aside" title:"Record selections"`
+	State      string                       `json:"state" field:"readonly" choices:"draft,published"`
 	// Published is the page as it was last published: what people open, and
 	// what a restore puts back — not the draft beside it.
 	Published string `json:"published,omitempty" field:"readonly" type:"longtext" title:"What is installed"`
@@ -43,12 +44,14 @@ type Page struct {
 
 // Section is one widget on a composed page, as someone lays it out.
 type Section struct {
-	Widget string `json:"widget" field:"required" choices:"table,detail,actions,chart,metric,text,filter,form,timeline,tasks,function,compute" help:"What it shows"`
-	Title  string `json:"title,omitempty"`
-	Width  string `json:"width,omitempty" choices:"full,half"`
-	Object string `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
+	Widget          string `json:"widget" field:"required" choices:"table,detail,actions,chart,metric,text,filter,form,timeline,tasks,function,compute" help:"What it shows"`
+	Title           string `json:"title,omitempty"`
+	Width           string `json:"width,omitempty" choices:"full,half"`
+	Object          string `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
+	Selection       string `json:"selection,omitempty"`
+	ParentSelection string `json:"parentSelection,omitempty"`
 	// Relation is the named relation from the page's object the section follows (ADR-0040 21b D3).
-	Relation string `json:"relation,omitempty" title:"Through" help:"For a table, chart or metric of another object: the relation from the selected record it follows"`
+	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
 	// Query is a named query "<app>.<name>" the section lists (ADR-0040 21c).
 	Query     string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like crm.open-opportunities"`
 	Fields    []string                    `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
@@ -115,12 +118,13 @@ func descriptor(p Page) platform.Page {
 	out := platform.Page{Name: p.Name, Title: p.Title, Description: p.Description, Layout: "list-detail",
 		Object:     platform.AssetRef{App: app, Kind: platform.AssetObject, Name: p.Object},
 		ListFields: slices.Clone(p.List), DetailFields: slices.Clone(p.Detail), Actions: actions}
+	out.Selections = slices.Clone(p.Selections)
 	if len(p.Sections) == 0 {
 		return out
 	}
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
-		section := platform.Section{Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Fields: slices.Clone(s.Fields),
+		section := platform.Section{Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
 			Group: s.Group, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
 		if s.Function != nil {
 			section.Function = &platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: s.Function.Name},

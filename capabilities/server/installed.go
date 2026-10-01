@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -130,6 +131,9 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	if !known {
 		return fmt.Errorf("page %s: no object %s", p.Name, p.Object.Name)
 	}
+	if len(p.Selections) != 0 && len(p.Sections) == 0 {
+		return fmt.Errorf("page %s: selections need composed sections", p.Name)
+	}
 	if len(p.Sections) > 0 {
 		if err := t.checkSections(p, info); err != nil {
 			return err
@@ -155,10 +159,24 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	return nil
 }
 
+var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+
 // checkSections holds a composed page to what this tenant has: a widget it
 // knows, an object, the fields, actions and measures that object declares
 // (ADR-0035). What the registry offers must open.
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
+	selections := map[string]string{}
+	for _, selection := range p.Selections {
+		if !selectionName.MatchString(selection.Name) || selections[selection.Name] != "" {
+			return fmt.Errorf("page %s: selection names must be unique lowercase identifiers", p.Name)
+		}
+		info, known := t.entity(selection.Object.Name)
+		if selection.Object.Check() != nil || selection.Object.Kind != platform.AssetObject || !known || selection.Object.App != info.App {
+			return fmt.Errorf("page %s: selection %s needs a known object", p.Name, selection.Name)
+		}
+		selections[selection.Name] = selection.Object.Name
+	}
+	parentBindings := map[string]string{}
 	for i, s := range p.Sections {
 		where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
 		if !slices.Contains(platform.Widgets, s.Widget) {
@@ -169,7 +187,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 		}
 		if s.Widget == "function" {
 			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-				return other.Widget == "table" && (other.Object.Name == "" || other.Object == p.Object)
+				return other.Widget == "table" && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.Selection
 			}) {
 				return fmt.Errorf("%s: add a table that selects a source record", where)
 			}
@@ -212,14 +230,68 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 			info = shown
 		}
-		if s.Relation != "" {
-			if s.Widget != "table" && s.Widget != "chart" && s.Widget != "metric" {
-				return fmt.Errorf("%s: only a table, chart or metric follows a relation", where)
+		if s.Selection != "" {
+			if selections[s.Selection] != info.Type {
+				return fmt.Errorf("%s: selection %q does not hold %s records", where, s.Selection, info.Type)
 			}
-			if info.Type == p.Object.Name || !slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool {
-				return f.Type == "reference" && f.Ref == p.Object.Name && f.Inverse == s.Relation
+			if !slices.Contains([]string{"table", "detail", "actions", "timeline", "tasks", "function", "compute"}, s.Widget) {
+				return fmt.Errorf("%s: this widget does not use a record selection", where)
+			}
+			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
+				return other.Widget == "table" && other.Selection == s.Selection
 			}) {
+				return fmt.Errorf("%s: add a table that supplies selection %q", where, s.Selection)
+			}
+		}
+		if s.ParentSelection != "" {
+			if selections[s.ParentSelection] != p.Object.Name {
+				return fmt.Errorf("%s: parent selection %q does not hold %s records", where, s.ParentSelection, p.Object.Name)
+			}
+			if !slices.Contains([]string{"table", "chart", "metric", "form"}, s.Widget) || info.Type == p.Object.Name ||
+				!slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == p.Object.Name }) || s.Widget == "form" && s.Relation == "" {
+				return fmt.Errorf("%s: parent selection needs a related table, chart, metric or bound form", where)
+			}
+			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
+				return other.Widget == "table" && other.Selection == s.ParentSelection && (other.Object.Name == "" || other.Object == p.Object)
+			}) {
+				return fmt.Errorf("%s: add a table that supplies parent selection %q", where, s.ParentSelection)
+			}
+		}
+		if s.Widget == "table" && info.Type != p.Object.Name && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Type == "reference" && f.Ref == p.Object.Name }) {
+			key := "object:" + info.Type
+			if s.Selection != "" {
+				key = "selection:" + s.Selection
+			}
+			parent := "object:" + p.Object.Name
+			if s.ParentSelection != "" {
+				parent = "selection:" + s.ParentSelection
+			}
+			if previous := parentBindings[key]; previous != "" && previous != parent {
+				return fmt.Errorf("%s: record selection has conflicting parent bindings", where)
+			}
+			parentBindings[key] = parent
+		}
+		boundParent := ""
+		if s.Relation != "" {
+			if s.Widget != "table" && s.Widget != "chart" && s.Widget != "metric" && s.Widget != "form" {
+				return fmt.Errorf("%s: only a table, chart, metric or form follows a relation", where)
+			}
+			at := slices.IndexFunc(info.Fields, func(f platform.FieldInfo) bool {
+				return f.Type == "reference" && f.Ref == p.Object.Name && f.Inverse == s.Relation
+			})
+			if info.Type == p.Object.Name || at < 0 {
 				return fmt.Errorf("%s: %s declares no relation %q from %s", where, info.Type, s.Relation, p.Object.Name)
+			}
+			if s.Widget == "form" {
+				if info.Fields[at].ReadOnly {
+					return fmt.Errorf("%s: parent reference %s is read only", where, info.Fields[at].Name)
+				}
+				if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
+					return other.Widget == "table" && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.ParentSelection
+				}) {
+					return fmt.Errorf("%s: add a table that selects a parent record", where)
+				}
+				boundParent = info.Fields[at].Name
 			}
 		}
 		if s.Query.Name != "" {
@@ -302,11 +374,12 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 		case "form":
 			// A form makes a new record through the object's own create action,
-			// so it asks for everything that action needs.
+			// so it asks for everything that action needs, except a parent
+			// reference supplied by its explicitly declared relation.
 			if err := t.checkAction(p.Name, info.Type+".create", info.Type); err != nil {
 				return fmt.Errorf("%s: %s cannot be created here", where, info.Type)
 			}
-			if len(s.Fields) == 0 {
+			if len(s.Fields) == 0 && boundParent == "" {
 				return fmt.Errorf("%s: no fields to fill in", where)
 			}
 			for _, name := range s.Fields {
@@ -315,7 +388,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				}
 			}
 			for _, f := range info.Fields {
-				if f.Required && !f.ReadOnly && !slices.Contains(s.Fields, f.Name) {
+				if f.Required && !f.ReadOnly && f.Name != boundParent && !slices.Contains(s.Fields, f.Name) {
 					return fmt.Errorf("%s: %s needs %s, which the form does not ask for", where, info.Type, f.Name)
 				}
 			}

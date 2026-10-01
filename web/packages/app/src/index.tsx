@@ -9,9 +9,10 @@ import {
   type ChartSpec, type EntityInfo, type EntityRecord, type ListState, type NavSection, type RecordSource, type Route, type ShellCommand, type View,
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { NewActions, RecordActions, useTransition } from "./actions";
+import { NewActions, RecordActions, useTransition, useRecordArchive } from "./actions";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 export { ComputeCall } from "./capability";
+export { FlowInstanceView } from "./flows";
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
 export type AppEntry = Api.AppEntry;
@@ -111,12 +112,12 @@ export function findDefinition(definitions: Definition[], ref: AssetRef): Defini
  * in the view the owning app registers for its type, else the generic record
  * page. Apps link to each other's records without knowing each other (D5).
  */
-export function useOpenRecord(): (ref: string | { type: string; id: string }) => void {
+export function useOpenRecord(): (ref: string | { type: string; id: string }, options?: { window: "tab" | "float" | "popout" }) => void {
   const { opens } = useHost();
   const { open } = useWorkspace();
-  return (ref) => {
+  return (ref, options) => {
     const { type, id } = typeof ref === "string" ? { type: ref.split("/")[0]!, id: ref.split("/").slice(1).join("/") } : ref;
-    open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, { window: "float" });
+    open({ view: opens.get(type) ?? "record", params: opens.has(type) ? { id } : { type, id } }, options ?? { window: "float" });
   };
 }
 
@@ -262,6 +263,7 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
+  const archive = useRecordArchive(type);
   const transition = useTransition(type);
   // Files (ADR-0028): upload the bytes, then attach them to this record by a decision.
   // Comments and following (ADR-0028 D6).
@@ -300,8 +302,9 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
           <RecordActions type={type} record={r} allowed={advice ? (allowed ?? catalog.map((a) => a.schema)).filter((schema) => schema !== advice!.action) : allowed} />
           {can("agent.run.start") && <Button size="sm" onClick={() => open({ view: "assistant", params: { about: `${type}/${r.id}` } }, { window: "float" })}>{t("Ask the assistant")}</Button>}
           {can(`${type}.edit`) && (!allowed || allowed.includes(`${type}.edit`)) && !r.archived && <Button size="sm" onClick={() => setEditing(r)}>{t("Edit")}</Button>}
-          {can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived && <Button size="sm" variant="danger" onClick={() => void act(`${type}.archive`, r, {})}>{t("Archive")}</Button>}
+          {can(`${type}.archive`) && (!allowed || allowed.includes(`${type}.archive`)) && !r.archived && <Button size="sm" variant="danger" onClick={() => archive.take(r)}>{t("Archive")}</Button>}
         </>} />
+      {archive.dialog}
       {transition.dialog}
       <Dialog wide={source.entity(type)?.fields.some((f) => f.type === "lines")} open={!!editing} onOpenChange={(o) => !o && setEditing(undefined)} title={t("Edit {id}", { id: editing?.id ?? "" })}>
         {editing && <GeneratedForm type={type} record={editing} submitLabel={t("Save")} onCancel={() => setEditing(undefined)}
@@ -333,6 +336,6 @@ export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(
 
 export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type AgentRun, type Citation, type Memory, type Passage, type RunDraft, type RunSignal, type RunStep } from "./agents";
 
-export { NewActions, PayloadFields, RecordActions } from "./actions";
+export { NewActions, PayloadFields, RecordActions, useRecordArchive } from "./actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";
 export { ComposedPage, SectionView, isComposed } from "./sections";

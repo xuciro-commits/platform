@@ -3,7 +3,7 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { Assistant, DashboardView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -26,11 +26,11 @@ function Home({ apps: appsOf, onSelect }: { apps: () => AppUI[]; onSelect: (id: 
       <PageHeader title={t("Welcome, {name}", { name: me.principalId })} description={t("The apps of {tenant} you hold a role in. One sign-in opens all of them.", { tenant: me.tenantId })} />
       <div className="grid max-w-4xl grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
         {apps.map((a) => (
-          <button key={a.id} type="button" onClick={() => onSelect(a.id)}
-            className="grid justify-items-center gap-2 rounded-md border border-border bg-surface p-4 text-sm hover:bg-row-hover [&_svg]:size-7 [&_svg]:text-primary">
+          <Button key={a.id} type="button" onClick={() => onSelect(a.id)}
+            className="grid h-auto justify-items-center gap-2 whitespace-normal p-4 text-sm [&_svg]:size-7 [&_svg]:text-primary">
             {a.icon}<span className="font-medium">{a.title}</span>
             <span className="text-xs text-muted">{me.apps.find((e) => e.id === a.id)?.role ?? ""}</span>
-          </button>
+          </Button>
         ))}
       </div>
     </>
@@ -229,6 +229,7 @@ export const chromeViews = (apps: () => AppUI[], select: (id: string) => void, d
   { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview /> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} /> },
+  { id: "flow", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} /> },
   { id: "assistant", title: (p) => p.about ? `${t("Assistant")}: ${p.about}` : t("Assistant"), render: (p) => <Assistant about={p.about} /> },
   { id: "search", title: () => t("Search"), render: () => <Search /> },
 ];

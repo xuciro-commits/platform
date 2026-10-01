@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Release unavailable": "发布标识不可用",
+  "Checking release…": "正在核对发布…",
+  "No activated release": "尚无已激活发布",
+  "Refresh release": "刷新发布标识",
+  "The active release could not be read. Retry to check the current identifier.": "无法读取活跃发布。请重试以核对当前标识。",
+  "This identifies the last activated release. Existing workflows keep their startup release.": "这里标识最后激活的发布；已有流程保留其启动时的发布。",
+  "Direct installs may change workspace definitions outside this release.": "直接安装可能在此发布之外改变工作区定义。",
+  "Flow": "流程",
+  "Platform Catalog": "平台资产库",
   "refused": "被拒绝",
   "done": "已完成",
   "sent for approval": "已提交审批",

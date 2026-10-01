@@ -61,6 +61,22 @@ func TestAcceptedReleaseCandidateCommitRetryAndRecovery(t *testing.T) {
 	if err != nil || preview.CandidateID == "" || preview.Diagnostic != "" {
 		t.Fatalf("expected a valid saved draft candidate: %+v, %v", preview, err)
 	}
+	// A saved but unpublished draft exposes its owner-compiled input fields,
+	// without installing the action in the member's production catalog.
+	var create *platform.Action
+	for i := range preview.CandidateActions {
+		if preview.CandidateActions[i].Schema == "build.visit.create" {
+			create = &preview.CandidateActions[i]
+		}
+	}
+	if create == nil || len(create.Payload) != 1 || create.Payload[0].Name != "guest" || create.Payload[0].Type != "string" {
+		t.Fatalf("candidate inputs: %+v", preview.CandidateActions)
+	}
+	for _, action := range live.Catalog(member) {
+		if action.Schema == "build.visit.create" {
+			t.Fatal("preview installed a draft action")
+		}
+	}
 	foreign := member
 	foreign.Tenant = "foreign"
 	if out, err := live.PreviewRelease(foreign, platform.AssetObject, "O1"); err == nil || out.CandidateID != "" {

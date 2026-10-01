@@ -53,15 +53,15 @@ export function schemaIssue(schema: ValueSchema, value: unknown): string | undef
   return undefined;
 }
 
-const defaults = (schema?: ValueSchema): unknown => {
-  if (schema?.type === "variant") return defaults(Object.values(schema.variants ?? {})[0]);
-  if (schema?.type === "object") return Object.fromEntries((schema.required ?? []).map((name) => [name, defaults(schema.properties?.[name])]));
+export const schemaDefault = (schema?: ValueSchema): unknown => {
+  if (schema?.type === "variant") return schemaDefault(Object.values(schema.variants ?? {})[0]);
+  if (schema?.type === "object") return Object.fromEntries((schema.required ?? []).map((name) => [name, schemaDefault(schema.properties?.[name])]));
   return schema?.type === "array" ? [] : schema?.type === "boolean" ? false : schema?.type === "number" || schema?.type === "integer" ? 0 : schema?.enum?.[0] ?? "";
 };
 export function BindingEditor({ label, value, onChange, steps, schema, optional = false, sources }: {
   label: string; value?: Binding; onChange: (value: Binding | undefined) => void; steps: WorkflowStep[]; schema?: ValueSchema; optional?: boolean; sources?: Binding["source"][];
 }) {
-  const binding = value ?? { source: "literal" as const, value: defaults(schema) };
+  const binding = value ?? { source: "literal" as const, value: schemaDefault(schema) };
   const choices: Binding["source"][] = sources ?? ["literal", "input", "step", "subject", "item", "index", "answer"];
   return <div className="grid gap-2 rounded-lg border border-border bg-background/50 p-2"
     onDragOver={(event) => { if (event.dataTransfer.types.includes(bindingMime)) event.preventDefault(); }}
@@ -74,12 +74,12 @@ export function BindingEditor({ label, value, onChange, steps, schema, optional 
     {!value ? <Button variant="ghost" onClick={() => onChange(binding)}>{t("Add binding")}</Button> : <>
       <Select aria-label={t("Binding source")} value={binding.source} onChange={(event) => {
         const source = event.target.value as Binding["source"];
-        onChange(source === "literal" ? { source, value: defaults(schema) } : source === "step" ? { source, step: steps[0]?.name ?? "", path: [] } : { source, path: [] });
+        onChange(source === "literal" ? { source, value: schemaDefault(schema) } : source === "step" ? { source, step: steps[0]?.name ?? "", path: [] } : { source, path: [] });
       }}>{choices.map((source) => <option key={source} value={source}>{t(({ literal: "Constant", input: "Workflow input", step: "Upstream output", subject: "Source record", item: "Current item", index: "Iteration index", answer: "Human answer" })[source])}</option>)}</Select>
       {binding.source === "step" && <Select aria-label={t("Upstream step")} value={binding.step ?? ""} onChange={(event) => onChange({ ...binding, step: event.target.value })}>
         <option value="">{t("Choose a step")}</option>{steps.map((step) => <option key={step.name} value={step.name}>{step.title || step.name}</option>)}
       </Select>}
-      {binding.source === "literal" && schema?.nullable && <Checkbox checked={binding.value === null} onChange={(nullValue) => onChange({ source: "literal", value: nullValue ? null : defaults(schema) })}>{t("Use null")}</Checkbox>}
+      {binding.source === "literal" && schema?.nullable && <Checkbox checked={binding.value === null} onChange={(nullValue) => onChange({ source: "literal", value: nullValue ? null : schemaDefault(schema) })}>{t("Use null")}</Checkbox>}
       {binding.source === "literal" ? binding.value === null && schema?.nullable ? <code className="px-1 py-2 text-xs text-muted">null</code> : schema?.type === "string"
         ? schema.enum?.length ? <Select aria-label={label} value={String(binding.value ?? "")} onChange={(event) => onChange({ source: "literal", value: event.target.value })}><option value="">{t("Choose an option")}</option>{schema.enum.map((item) => <option key={item}>{item}</option>)}</Select>
           : <Input aria-label={label} value={typeof binding.value === "string" ? binding.value : ""} onChange={(event) => onChange({ source: "literal", value: event.target.value })} />

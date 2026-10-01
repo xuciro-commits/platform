@@ -180,12 +180,12 @@ export function ReleaseReview({ initialKind = "object", initialID = "", embedded
       </div>
       {review.currentId && <p className="break-all text-xs">{t("Installed candidate")}: <code>{review.currentId}</code></p>}
       {review.candidateId && <p className="break-all text-xs">{savedReview ? t("Saved candidate") : t("Draft candidate")}: <code>{review.candidateId}</code></p>}
-      {savedReview && <p className="text-sm" role="status">{runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release.")}</p>}
-      {savedReview && !runningMatches && canActivate && <p className="text-sm">{t("Activation will install the saved objects, pages and application together.")}</p>}
+      {savedReview && <p className="text-sm" role="status">{runningDiagnostic ? t("Current definitions could not be compared with this candidate.") : runningMatches ? t("Running definitions match this saved release.") : t("Running definitions differ from this saved release.")}</p>}
+      {savedReview && !runningMatches && canActivate && <p className="text-sm">{t("Activation installs the candidate's included objects, pages, applications, workflows, AI functions and code functions together.")}</p>}
       {savedReview && activationDiagnostic && <p role="alert" className="text-sm text-warning">{activationDiagnostic}</p>}
-      {savedReview && runningDiagnostic && !canActivate && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
+      {savedReview && runningDiagnostic && <p className="break-words text-xs text-warning">{runningDiagnostic}</p>}
       {review.diagnostic && <p role="alert" className="text-sm text-danger">{review.diagnostic}</p>}
-      {!review.diagnostic && <div className="grid gap-3 sm:grid-cols-3">
+      {!review.diagnostic && !(savedReview && runningDiagnostic) && <div className="grid gap-3 sm:grid-cols-3">
         {changed("Added", review.added)}
         {changed("Changed", review.changed)}
         {changed("Removed", review.removed)}

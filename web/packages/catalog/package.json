@@ -1,0 +1,8 @@
+{
+  "name": "@platform/catalog",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc -p .", "test": "vitest run && node --test ../../../scripts/catalog-check.test.mjs", "build": "true" },
+  "devDependencies": { "@types/node": "^26.6.2", "typescript": "^7.0.2", "typescript-syntax": "npm:typescript@5.4.5", "vitest": "^5.0.1" }
+}

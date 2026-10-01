@@ -853,6 +853,7 @@ export type Page = {
   detailFields: string[];
   actions: AssetRef[];
   sections?: Section[];
+  selections?: SelectionVariable[];
 };
 
 export type Passage = {
@@ -1046,6 +1047,7 @@ export type ReleasePreview = {
   removed: AssetRef[];
   changed: AssetRef[];
   diagnostic?: string;
+  candidateActions: Action[];
 };
 
 export type ReleasePreviewRequest = {
@@ -1106,6 +1108,8 @@ export type Section = {
   title?: string;
   width?: string;
   object?: AssetRef;
+  selection?: string;
+  parentSelection?: string;
   relation?: string;
   query?: AssetRef;
   fields?: string[];
@@ -1116,6 +1120,11 @@ export type Section = {
   function?: AssetBinding;
   operation?: AssetBinding;
   inputs?: Record<string, Binding>;
+};
+
+export type SelectionVariable = {
+  name: string;
+  object: AssetRef;
 };
 
 export type SettingValue = {

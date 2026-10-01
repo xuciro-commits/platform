@@ -1,8 +1,9 @@
+import { AssetControls } from "./asset-controls";
 import { useHost, useReadQuery, useInvokeCapability } from "@platform/app";
 import { apiErrorMessage, type Api } from "@platform/kernel";
-import { Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace } from "@platform/ui";
+import { Button, Card, Checkbox, Disclosure, Input, PageHeader, Panel, RecordList, Select, Textarea, t, useWorkspace, useUnsavedChanges } from "@platform/ui";
 import { useCallback, useEffect, useState } from "react";
-import { JSONEditor, SchemaEditor, WorkflowFormProblems } from "./workflow-binding";
+import { JSONEditor, SchemaEditor, WorkflowFormProblems, schemaDefault } from "./workflow-binding";
 import type { ValueSchema } from "./workflow-model";
 
 type CodeDraft = {
@@ -31,10 +32,15 @@ export function CodeEditor({ id }: { id: string }) {
   const { decide, client, role } = useHost(), { open, close } = useWorkspace(), invoke = useInvokeCapability();
   const [draft, setDraft] = useState<CodeDraft>(empty), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [tab, setTab] = useState<"source" | "contract" | "sdk" | "test">("source"), [sdk, setSDK] = useState("");
-  const [input, setInput] = useState<unknown>({ value: 2 }), [call, setCall] = useState(""), [problems, setProblems] = useState<Record<string, string>>({});
+  const [input, setInput] = useState<unknown>({}), [executedInput, setExecutedInput] = useState<unknown>(), [call, setCall] = useState(""), [problems, setProblems] = useState<Record<string, string>>({});
   const query = useReadQuery<{ record?: CodeDraft }>(`/v1/records/build.code/${encodeURIComponent(id)}`, draft.state === "compiling" ? 1000 : undefined);
+  const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => { setDraft(query.data?.record ?? empty); setDirty(false); setError(""); setSDK(""); setProblems({}); });
   const result = useReadQuery<Api.OperationResult>(`/v1/capabilities/calls/compute/${encodeURIComponent(call)}`, 1000, !!call && tab === "test");
   useEffect(() => { if (query.data?.record && !dirty) setDraft(query.data.record); }, [query.data, dirty]);
+  const testSchemaKey = JSON.stringify((() => { try { return JSON.parse(draft.published ?? "").input; } catch { return draft.input; } })());
+  useEffect(() => { setInput(schemaDefault(JSON.parse(testSchemaKey))); setCall(""); setExecutedInput(undefined); }, [testSchemaKey]);
+  const [testProblems, setTestProblems] = useState<Record<string, string>>({});
+  const reportTest = useCallback((key: string, problem: string) => setTestProblems((old) => old[key] === problem ? old : { ...old, [key]: problem }), []);
   const change = (patch: Partial<CodeDraft>) => { setDraft((old) => ({ ...old, ...patch })); setDirty(true); setError(""); setSDK(""); };
   const report = useCallback((key: string, problem: string) => setProblems((old) => old[key] === problem ? old : { ...old, [key]: problem }), []);
   const perform = async (action: () => Promise<unknown>) => { setBusy(true); setError(""); try { await action(); } catch (failure) { setError(failure instanceof Error ? failure.message : t("The code function could not be saved or loaded.")); } finally { setBusy(false); } };
@@ -42,10 +48,10 @@ export function CodeEditor({ id }: { id: string }) {
     const target = draft.id || crypto.randomUUID(), { name, title, description, language, source, input, output, roles, limits } = draft;
     if (!await decide(`build.code.${draft.id ? "edit" : "create"}`, { type: "build.code", id: target }, { name, title, description, language, source, input, output, roles, limits },
       { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError })) return;
-    if (!draft.id) { open({ view: "code", params: { id: target } }); close({ view: "code", params: { id } }); return 1; }
+    if (!draft.id) { markSaved(); setDirty(false); open({ view: "code", params: { id: target } }); close({ view: "code", params: { id } }); return 1; }
     const saved = await query.refetch();
     if (!saved.data?.record) { setError(t("Reload the saved code function before editing again.")); return; }
-    setDraft(saved.data.record); setDirty(false); return saved.data.record.revision;
+    setDraft(saved.data.record); markSaved(); setDirty(false); return saved.data.record.revision;
   };
   const compile = async () => {
     const revision = dirty ? await save() : draft.revision;
@@ -58,6 +64,7 @@ export function CodeEditor({ id }: { id: string }) {
     setSDK(answer.body.source); setTab("sdk");
   };
   const run = async () => {
+    setCall(""); setExecutedInput(JSON.parse(JSON.stringify(input)));
     const answer = await invoke({ ref: { app: "build", kind: "compute", name: draft.name }, key: crypto.randomUUID(), version: draft.version, inputs: input });
     setCall(answer.call ?? "");
   };
@@ -70,6 +77,7 @@ export function CodeEditor({ id }: { id: string }) {
     <PageHeader title={draft.title || t("New code function")} description={t("Define its contract, compile an artifact, then review and activate its application candidate.")}
       actions={<div className="flex flex-wrap gap-2">
         <Button onClick={() => open({ view: "code" })}>{t("Code functions")}</Button>
+<AssetControls type="build.code" record={draft} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "code", params: { id } }} />
         <Button disabled={busy || invalid || (!dirty && !!draft.id)} onClick={() => void perform(save)}>{t("Save function")}</Button>
         <Button disabled={busy || invalid || !draft.id || draft.state === "compiling"} onClick={() => void perform(compile)}>{t("Compile function")}</Button>
         <Button variant="primary" disabled={busy || dirty || !draft.module || draft.state === "compiling"} onClick={() => open({ view: "release-review", params: { kind: "compute", id: draft.id } })}>{t("Review selected release")}</Button>
@@ -92,13 +100,22 @@ export function CodeEditor({ id }: { id: string }) {
           {sdk && <pre className="max-h-[36rem] overflow-auto rounded-lg bg-background p-3 text-[11px]" aria-label={t("Generated SDK")}>{sdk}</pre>}</>}
         {tab === "test" && <>
           <p className="text-xs text-muted">{t("This calls the installed version with the current member and saves its accepted result.")}</p>
-          <JSONEditor label={t("Test input")} value={input} onChange={setInput} schema={published?.input ?? draft.input} rows={6} />
-          <Button disabled={busy || invalid || !draft.version} onClick={() => void perform(run)}>{t("Run function")}</Button>
-          {call && <Panel role="status" className="grid gap-2 text-xs"><span>{t("Call")} <code className="break-all">{call}</code></span>
-            {result.isError ? <span>{t("The function result could not be loaded.")}</span> : <><span>{t("State")}: {result.data?.state ?? t("Pending")}</span>
-              {result.data?.output !== undefined && <pre className="overflow-auto">{JSON.stringify(result.data.output, null, 2)}</pre>}
-              {result.data?.error && <span className="text-danger">{result.data.error}</span>}</>}
-          </Panel>}
+          <WorkflowFormProblems.Provider value={reportTest}>
+            <JSONEditor label={t("Test input")} value={input} onChange={setInput} schema={published?.input ?? draft.input} rows={6} />
+          </WorkflowFormProblems.Provider>
+          <Button disabled={busy || Object.values(testProblems).some(Boolean) || !draft.version} onClick={() => void perform(run)}>{busy ? t("Running function…") : t("Run function")}</Button>
+          <Panel title={t("Function output")} role="status" className="grid gap-2 text-sm">
+            {!call ? <p className="text-muted">{t(busy ? "Running function…" : "Run the function to see its output here.")}</p> : <>
+              <p>{t("State")}: {t(({ pending: "Pending", running: "Running", completed: "Completed", failed: "Failed", cancelled: "Cancelled" } as Record<string, string>)[result.data?.state ?? "pending"] ?? result.data?.state ?? "Pending")}</p>
+              {result.isError ? <p role="alert" className="text-danger">{t("The function result could not be loaded.")}</p> : <>
+                {result.data?.output !== undefined && <pre aria-label={t("Function output")} className="overflow-auto rounded bg-background p-3 font-mono text-sm">{JSON.stringify(result.data.output, null, 2)}</pre>}
+                {result.data?.error && <p role="alert" className="text-danger">{result.data.error}</p>}
+              </>}
+              {JSON.stringify(input) !== JSON.stringify(executedInput) && <p className="text-muted">{t("Inputs have changed. Run again to update the output.")}</p>}
+              <Disclosure summary={t("Inputs used for this run")}><pre className="overflow-auto text-xs">{JSON.stringify(executedInput, null, 2)}</pre></Disclosure>
+              <p className="break-all text-xs text-muted">{t("Call")}: {call}</p>
+            </>}
+          </Panel>
         </>}
       </Card>
       <Panel className="grid content-start gap-3 p-4" aria-label={t("Function settings")}>

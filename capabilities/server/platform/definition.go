@@ -74,6 +74,14 @@ type Page struct {
 	// Sections are the widgets a composed page is laid out from (ADR-0035);
 	// with sections, Layout is "composed" and the fields above are unused.
 	Sections []Section `json:"sections,omitempty"`
+	// Selections are named record variables; Object fixes each record's type.
+	// Sections without a binding share the original selection for their object.
+	Selections []SelectionVariable `json:"selections,omitempty"`
+}
+
+type SelectionVariable struct {
+	Name   string   `json:"name"`
+	Object AssetRef `json:"object"`
 }
 
 // Section is one place on a composed page: a widget, what it is bound to, and
@@ -88,9 +96,14 @@ type Section struct {
 	Width string `json:"width,omitempty"`
 	// Object is what it shows; empty: the page's own object.
 	Object AssetRef `json:"object,omitempty"`
+	// Selection is the record variable a table writes or detail/actions read.
+	Selection string `json:"selection,omitempty"`
+	// ParentSelection supplies the page's parent record to a related section.
+	ParentSelection string `json:"parentSelection,omitempty"`
 	// Relation is the named inverse (FieldInfo.Inverse) of Object's reference to
 	// the page's object: the section shows the selected record's related records
-	// through it (ADR-0040 21b D3). Empty: no declared relation.
+	// through it, or a form supplies that reference when creating a related
+	// record (ADR-0040 21b D3). Empty: no declared relation binding.
 	Relation string `json:"relation,omitempty"`
 	// Query is a named query (AssetQuery) the section lists instead of all of
 	// Object: its conditions, and the selected record when it takes one (21c).

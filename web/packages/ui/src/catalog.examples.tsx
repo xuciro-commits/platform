@@ -1,0 +1,263 @@
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { Plus } from "lucide-react";
+import { z } from "zod";
+import {
+  Button, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
+  defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
+  RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, notify, t,
+  type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
+  type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
+  type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
+} from "./index";
+import { WorkspaceContext } from "./shell/Workspace";
+
+// Runnable owner examples use public APIs and synthetic values only. Nothing in
+// this bundle fetches a host or suggests that a fixture proves authorization.
+export function PreviewWorkspace({ children, onOpen }: { children: ReactNode; onOpen?: (route: Route) => void }) {
+  const workspace = useMemo(() => ({ open: (route: Route) => onOpen?.(route), close: () => {}, notify }), [onOpen]);
+  return <WorkspaceContext.Provider value={workspace}>{children}</WorkspaceContext.Provider>;
+}
+
+const stamp = { by: "demo", at: "2026-09-30T12:00:00Z" };
+const lifecycle: LifecycleInfo = { field: "state", initial: "open",
+  states: [{ name: "open", title: t("Pending"), tone: "info" }, { name: "done", title: t("Done"), tone: "success" }],
+  transitions: [{ name: "finish", from: ["open"], to: ["done"], schema: "demo.finish", title: t("Done") }],
+};
+export const demoInfo: EntityInfo = { type: "demo.record", app: "demo", title: t("Record"), plural: t("Records"), display: "name", standard: [], lifecycle,
+  fields: [{ name: "name", title: t("Name"), type: "text", required: true, search: true },
+    { name: "quantity", title: t("Quantity"), type: "integer" },
+    { name: "state", title: t("Status"), type: "choice", choices: ["open", "done"], choiceTitles: [t("Pending"), t("Done")] }],
+};
+const demoRows: EntityRecord[] = [
+  { id: "DEMO-001", revision: 1, name: "Sample Alpha", quantity: 12, state: "open", created: stamp, changed: stamp },
+  { id: "DEMO-002", revision: 1, name: "Sample Beta", quantity: 24, state: "done", created: stamp, changed: stamp },
+];
+const history = [{ change: "demo-change", schema: "demo.create", by: "demo", at: stamp.at, fields: [{ field: "quantity", after: 12 }] }];
+export const demoSource: RecordSource = {
+  entity: (type) => type === demoInfo.type ? demoInfo : undefined,
+  list: async (_type, query) => {
+    const rows = demoRows.filter((row) => Boolean(row.archived) === Boolean(query.archived) && `${row.id} ${row.name}`.toLowerCase().includes((query.search ?? "").toLowerCase()));
+    const sort = query.sort?.[0] ?? "id", key = sort.replace(/^-/, ""), direction = sort.startsWith("-") ? -1 : 1;
+    rows.sort((a, b) => direction * (key === "quantity" ? Number(a[key]) - Number(b[key]) : String(a[key] ?? "").localeCompare(String(b[key] ?? ""))));
+    return { total: rows.length, records: rows.slice(query.offset ?? 0, (query.offset ?? 0) + (query.limit ?? rows.length)) };
+  },
+  get: async (_type, id): Promise<RecordView> => {
+    const record = demoRows.find((row) => row.id === id);
+    if (!record) throw new Error("The record was not found or is outside your scope.");
+    return { record, history, related: [], linked: [], activity: [], processes: [], approvals: [], tasks: [], files: [], comments: [], following: false };
+  },
+};
+const demoEntity = defineEntity<{ id: string; name: string; quantity: number }>({ name: "demo", primary: "name", fields: {
+  name: field.text({ label: t("Name"), required: true }), quantity: field.number({ label: t("Quantity"), min: 0 }),
+} });
+const tableRows = [{ id: "DEMO-001", name: "Sample Alpha", quantity: 12 }, { id: "DEMO-002", name: "Sample Beta", quantity: 24 }];
+
+export function Tokens() {
+  return <div className="grid gap-3 sm:grid-cols-2">
+    {["background", "surface", "foreground", "muted", "border", "ring", "row-selected"].map((token) =>
+      <Card key={token} className="flex items-center gap-3 p-3"><span className="size-8 shrink-0 rounded border border-border" style={{ background: `var(--${token})` }} /><code className="text-xs">--{token}</code></Card>)}
+    <div className="flex flex-wrap items-center gap-2">{(["neutral", "info", "success", "warning", "danger"] as const).map((tone) => <Tag key={tone} label={tone} tone={tone} />)}</div>
+  </div>;
+}
+export function Buttons() {
+  const [count, setCount] = useState(0);
+  return <div className="grid gap-3"><div className="flex flex-wrap gap-2">
+    {(["default", "primary", "ghost", "danger", "link", "row"] as const).map((variant) => <Button key={variant} variant={variant} onClick={() => setCount(count + 1)}>{variant}</Button>)}
+  </div><div className="flex items-center gap-2"><Button size="sm">{t("Small")}</Button><Button size="icon" aria-label={t("Add")}><Plus /></Button><Button disabled>{t("Disabled")}</Button><span className="text-xs text-muted">{t("Clicks")}: {count}</span></div></div>;
+}
+export function Inputs() {
+  return <div className="grid max-w-lg gap-3"><label className="grid gap-1 text-sm">{t("Name")}<Input defaultValue="Sample Alpha" /></label>
+    <label className="grid gap-1 text-sm">{t("Status")}<Select defaultValue="open"><option value="open">{t("Pending")}</option><option value="done">{t("Done")}</option></Select></label>
+    <label className="grid gap-1 text-sm">{t("Description")}<Textarea defaultValue="Synthetic example data." /></label>
+    <Input disabled aria-label={t("Disabled")} value={t("Disabled")} /><Input aria-label={t("Invalid")} aria-invalid defaultValue="Invalid" />
+  </div>;
+}
+export function Checkboxes() {
+  const [checked, setChecked] = useState(false);
+  return <div className="grid gap-2"><Checkbox checked={checked} onChange={setChecked}>{t("Select this item")}</Checkbox><Checkbox checked disabled onChange={() => {}}>{t("Disabled")}</Checkbox></div>;
+}
+export function Panels() {
+  return <div className="grid gap-3"><Card className="p-3">{t("Shared content surface")}</Card><Panel title={t("Inspector")} description={t("A heading, properties and actions share one panel.")} actions={<Button size="sm">{t("Edit")}</Button>}><PropertyList items={[[t("Name"), "Sample Alpha"], [t("Status"), <Tag label={t("Pending")} tone="info" />]]} /></Panel></div>;
+}
+export function Forms() {
+  const [submitted, setSubmitted] = useState(false);
+  return <Form className="flex flex-wrap items-center gap-2" onSubmit={() => setSubmitted(true)}><Input aria-label={t("Name")} required placeholder={t("Name")} /><Button type="submit">{t("Save")}</Button>{submitted && <Tag tone="success" label={t("Submitted locally")} />}</Form>;
+}
+export function Disclosures() { return <Disclosure summary={t("Supporting details")}><p className="text-sm">{t("Details remain beside their summary.")}</p></Disclosure>; }
+export function FilePicking() {
+  const [file, setFile] = useState<File>();
+  return <div className="flex items-center gap-3"><FilePicker onFile={setFile}>{t("Choose file")}</FilePicker><span className="text-sm">{file?.name ?? t("No files")}</span></div>;
+}
+export function Choices() {
+  const [value, setValue] = useState(["name"]);
+  return <Toggles options={[{ value: "name", label: t("Name") }, { value: "quantity", label: t("Quantity") }, { value: "state", label: t("Status") }]} value={value} onChange={setValue} />;
+}
+type Branch = { id: string; children: Branch[] };
+const branches: Branch[] = [{ id: "Organization", children: [{ id: "Operations", children: [{ id: "Team Alpha", children: [] }] }, { id: "Finance", children: [] }] }];
+export function Hierarchy() {
+  const [selected, setSelected] = useState<string>();
+  return <Tree roots={branches} children={(node) => node.children} row={(node) => node.id} id={(node) => node.id} selected={selected} onSelect={(node) => setSelected(node.id)} />;
+}
+export function Dialogs() {
+  const [open, setOpen] = useState(false);
+  return <><Button onClick={() => setOpen(true)}>{t("Open dialog")}</Button><Dialog open={open} onOpenChange={setOpen} title={t("Confirm action")}><p className="mb-3 text-sm">{t("This example only changes local preview state.")}</p><Button onClick={() => setOpen(false)}>{t("Done")}</Button></Dialog></>;
+}
+export function Sheets() {
+  const [open, setOpen] = useState(false);
+  return <><Button onClick={() => setOpen(true)}>{t("Open inspector")}</Button><Sheet open={open} onOpenChange={setOpen} title={t("Inspector")}><RecordSummaries /></Sheet></>;
+}
+export function Statuses() {
+  return <div className="flex flex-wrap gap-2">{Object.keys(submissionStatuses).map((status) => <StatusTag key={status} status={status} registry={submissionStatuses} />)}<StatusTag status="demo-unmapped" registry={submissionStatuses} /></div>;
+}
+export function Tables() {
+  const [rows, setRows] = useState(tableRows);
+  return <DataTable data={rows} columns={columnsFor(demoEntity)} getRowId={(row) => row.id} height={230}
+    onCellEdit={(row, key, value) => setRows(rows.map((item) => item.id === row.id ? { ...item, [key]: value } : item))} />;
+}
+export function MarkdownContent() {
+  const [value, setValue] = useState<string | undefined>("## Sample notes\n\nA **shared** editor with a [reference](https://example.com).\n\n- Read\n- Edit");
+  return <div className="grid gap-3 sm:grid-cols-2"><Markdown content={value ?? ""} /><MarkdownEditor value={value} onChange={setValue} /></div>;
+}
+export function Headers() { return <PageHeader title={t("Records")} description={t("Browse declared records and their available work.")} actions={<Button variant="primary">{t("Add")}</Button>} />; }
+
+const fieldSamples: [string, FieldType, unknown][] = [
+  ["text", field.text({ label: "text" }), "Sample"], ["longText", field.longText({ label: "longText" }), "Several lines of text."],
+  ["markdown", field.markdown({ label: "markdown" }), "**Sample**"], ["number", field.number({ label: "number" }), 12],
+  ["currency", field.currency({ label: "currency", currency: "EUR" }), 42.5], ["percent", field.percent({ label: "percent" }), 0.65],
+  ["checkbox", field.checkbox({ label: "checkbox" }), true], ["date", field.date({ label: "date" }), "2026-09-30"],
+  ["datetime", field.datetime({ label: "datetime" }), "2026-09-30T12:00"], ["duration", field.duration({ label: "duration" }), 90],
+  ["singleSelect", field.singleSelect({ label: "singleSelect", options: [{ value: "alpha", label: "Alpha" }, { value: "beta", label: "Beta" }] }), "alpha"],
+  ["multiSelect", field.multiSelect({ label: "multiSelect", options: [{ value: "alpha", label: "Alpha" }, { value: "beta", label: "Beta" }] }), ["alpha"]],
+  ["tags", field.tags({ label: "tags" }), ["sample", "preview"]], ["email", field.email({ label: "email" }), "demo@example.com"],
+  ["url", field.url({ label: "url" }), "https://example.com"], ["phone", field.phone({ label: "phone" }), "+1 555 0100"],
+  ["barcode", field.barcode({ label: "barcode" }), "DEMO-001"], ["rating", field.rating({ label: "rating" }), 3],
+  ["attachment", field.attachment({ label: "attachment", upload: async (file) => ({ name: file.name, url: "https://example.com", size: file.size }) }), []],
+  ["link", field.link({ label: "link", to: (id) => ({ view: "demo", params: { id } }) }), "DEMO-001"],
+  ["formula", field.formula({ label: "formula", compute: () => 24, as: field.number({ label: "formula" }) }), 24],
+  ["timestamp", field.timestamp({ label: "timestamp", of: () => "2026-09-30T12:00" }), "2026-09-30T12:00"],
+];
+function FieldSample({ name, type, initial }: { name: string; type: FieldType; initial: unknown }) {
+  const [value, setValue] = useState(initial);
+  return <Panel title={<code>{name}</code>}><div className="mb-2 text-sm">{type.display(value, {})}</div>{type.editor?.({ id: `catalog-${name}`, value, onChange: setValue })}</Panel>;
+}
+export function Fields() { return <div className="grid gap-3 md:grid-cols-2">{fieldSamples.map(([name, type, value]) => <FieldSample key={name} name={name} type={type} initial={value} />)}</div>; }
+const schema = z.object({ name: z.string().min(1), quantity: z.number().min(0) });
+export function SchemaForms() {
+  const [saved, setSaved] = useState(false);
+  return <div className="grid max-w-lg gap-3"><EntityForm schema={schema} fields={[{ name: "name", label: t("Name"), required: true }, { name: "quantity", label: t("Quantity"), kind: "number" }]} defaultValues={{ name: "Sample Alpha", quantity: 12 }} onSubmit={() => setSaved(true)} />{saved && <Tag label={t("Submitted locally")} tone="success" />}</div>;
+}
+export function RecordForms() {
+  const [saved, setSaved] = useState(false);
+  return <div className="grid max-w-lg gap-3"><RecordForm entity={demoEntity} defaultValues={tableRows[0]} onSubmit={() => setSaved(true)} />{saved && <Tag label={t("Submitted locally")} tone="success" />}</div>;
+}
+export function Filters() {
+  const [filters, setFilters] = useState<Filter[]>([{ field: "name", operator: "contains", arg: "Alpha" }]);
+  return <div className="grid gap-3"><FilterBar entity={demoEntity} filters={filters} onChange={setFilters} /><DataTable data={applyFilters(demoEntity, tableRows, filters)} columns={columnsFor(demoEntity)} getRowId={(row) => row.id} height={180} /></div>;
+}
+export function RecordSummaries() { return <EntityCard title="Sample Alpha" subtitle="DEMO-001" status={<Tag label={t("Pending")} tone="info" />} properties={[[t("Quantity"), 12], [t("Name"), "Sample Alpha"]]} />; }
+export function Notifications() {
+  const [items, setItems] = useState([{ id: "notice-1", title: "Sample Alpha changed", body: "Quantity updated to 12", at: stamp.at, read: false }]);
+  return <NotificationList items={items} onRead={(notice) => setItems(items.map((item) => item.id === notice.id ? { ...item, read: true } : item))} />;
+}
+export function RecordLists() {
+  const [mode, setMode] = useState("ready"), [selected, setSelected] = useState<string>();
+  const source = useMemo(() => mode === "ready" ? demoSource : { ...demoSource, list: async () => { if (mode === "error") throw new Error("Preview read failed"); return { records: [], total: 0 }; } }, [mode]);
+  return <div className="grid gap-3"><Select aria-label={t("Preview state")} value={mode} onChange={(event) => setMode(event.target.value)}><option value="ready">{t("Ready")}</option><option value="empty">{t("Empty")}</option><option value="error">{t("Error")}</option></Select><RecordList source={source} type={demoInfo.type} height={260} onOpen={(record) => setSelected(record.id)} />{selected && <span className="text-xs">{t("Selected record")}: {selected}</span>}</div>;
+}
+export function RecordDetails() { return <div className="grid gap-3"><RecordPage source={demoSource} type={demoInfo.type} id="DEMO-001" /><RecordHistory info={demoInfo} history={history} /></div>; }
+export function RecordLookups() {
+  const [value, setValue] = useState<string>();
+  return <div className="max-w-lg"><label className="mb-1 block text-sm" htmlFor="catalog-record-lookup">{t("Record")}</label><RecordLookup id="catalog-record-lookup" source={demoSource} type={demoInfo.type} value={value} onChange={setValue} /></div>;
+}
+const task: InboxTask = { id: "demo-task", revision: 1, created: stamp, changed: stamp, title: "Review Sample Alpha", body: "Synthetic task for preview only", app: "demo", candidates: ["demo"], state: "open", answers: ["approve", "reject"], answerTitles: [t("Approved"), t("Rejected")] };
+export function TaskInbox() {
+  const [tasks, setTasks] = useState([task]);
+  return <div className="grid gap-4"><Inbox tasks={tasks} /><Tasks list={tasks} tasks={{ answer: async (answered) => setTasks(tasks.filter((item) => item.id !== answered.id)) }} />{tasks.length === 0 && <Inbox tasks={[]} />}</div>;
+}
+export function Lifecycle() {
+  const [state, setState] = useState("open");
+  return <StatusBar lifecycle={lifecycle} state={state} can={(schema) => schema === "demo.finish"} onTransition={() => setState("done")} />;
+}
+const chart: ChartSpec = { title: t("Quantity by group"), data: { values: [{ group: "Alpha", quantity: 12 }, { group: "Beta", quantity: 24 }] }, mark: "bar", encoding: { x: { field: "group", type: "nominal" }, y: { field: "quantity", type: "quantitative", aggregate: "sum" } } };
+export function Charts() { return <Chart spec={chart} height={240} />; }
+const aggregateSource = { aggregate: async () => ({ columns: [{ name: "group", title: t("Group"), kind: "group" as const, type: "nominal" as const }, { name: "count", title: t("Count"), kind: "measure" as const, type: "quantitative" as const }], rows: [{ group: "Alpha", count: 12 }, { group: "Beta", count: 24 }] }) };
+export function Pivots() { return <Pivot source={aggregateSource} type="demo.record" query={{}} rows="group" measure="count" />; }
+export function Graphs() { return <Graph nodes={[{ id: "a", label: "Sample Alpha", tone: "success" }, { id: "b", label: "Sample Beta", tone: "info", current: true }]} edges={[{ from: "a", to: "b", label: t("Next") }]} height={230} />; }
+const nodeCatalog: NodeCatalog = [{ id: "value", title: t("Value"), category: "data", inputs: [], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }, { id: "transform", title: t("Transform"), category: "logic", inputs: [{ id: "in", label: t("Quantity"), type: "number" }], outputs: [{ id: "out", label: t("Quantity"), type: "number" }] }];
+export function Blocks() {
+  const counter = useRef(3);
+  const [nodes, setNodes] = useState<CanvasNode[]>([{ id: "n1", kind: "value", label: t("Value"), position: { x: 30, y: 60 } }, { id: "n2", kind: "transform", label: t("Transform"), position: { x: 320, y: 60 } }]);
+  const [edges, setEdges] = useState<CanvasEdge[]>([{ id: "e1", source: "n1", sourcePort: "out", target: "n2", targetPort: "in" }]);
+  const [selected, setSelected] = useState<string>();
+  return <BlockCanvas catalog={nodeCatalog} nodes={nodes} edges={edges} height={360} mode="edit" selected={selected} onSelect={setSelected}
+    onAdd={(kind, context) => setNodes([...nodes.map((node) => ({ ...node, position: context.positions?.[node.id] ?? node.position })), { id: `n${counter.current++}`, kind, label: nodeCatalog.find((item) => item.id === kind)!.title, position: context.position }])}
+    onConnect={(connection) => setEdges([...edges, { id: `e${counter.current++}`, source: connection.source, target: connection.target, sourcePort: connection.sourceHandle ?? "out", targetPort: connection.targetHandle ?? "in" }])}
+    onDisconnect={(disconnected) => setEdges(edges.filter((edge) => !disconnected.some((item) => item.id === edge.id)))}
+    onPositionsChange={(positions) => setNodes(nodes.map((node) => ({ ...node, position: positions[node.id] ?? node.position })))}
+    onLayout={(positions) => setNodes(nodes.map((node) => ({ ...node, position: positions[node.id] ?? node.position })))}
+    onDelete={(deleted, disconnected) => { setNodes(nodes.filter((node) => !deleted.some((item) => item.id === node.id))); setEdges(edges.filter((edge) => !disconnected.some((item) => item.id === edge.id))); }} />;
+}
+const definition: FlowDefinition = { id: "demo.review", app: "demo", title: "Sample review", version: 1, start: ["demo.created"], steps: [{ name: "prepare", title: t("Prepare"), kind: "action", next: ["review"] }, { name: "review", title: t("Review"), kind: "ask", next: [] }] };
+const instance: FlowInstanceData = { id: "demo-flow", flow: "demo.review", title: "Sample Alpha review", version: 1, key: "preview", state: "waiting", tokens: [{ id: 1, step: "review", waits: "ask" }], undo: [], trace: [{ at: stamp.at, step: "prepare", what: "done", by: "demo" }] };
+export function FlowObservation() { return <div className="grid gap-4"><FlowGraph definition={definition} height={200} /><FlowView definition={definition} instance={instance} /></div>; }
+export function MasterDetail() {
+  const [selected, setSelected] = useState<string>();
+  return <RecordWorkspace title={t("Records")} source={demoSource} type={demoInfo.type} selected={selected} onSelect={setSelected} detail={(id) => <RecordPage source={demoSource} type={demoInfo.type} id={id} />} />;
+}
+const views = [{ id: "catalog-records", title: () => t("Records"), render: () => <MasterDetail /> }, { id: "catalog-graph", title: () => t("Steps"), render: () => <Blocks /> }];
+export function WorkspaceShell() {
+  return <Workspace product={t("Catalog preview")} storageKey="platform.catalog.workspace-preview" views={views} home={{ view: "catalog-records" }} nav={[{ label: t("Preview"), items: [{ label: t("Records"), route: { view: "catalog-records" } }, { label: t("Steps"), route: { view: "catalog-graph" } }] }]} />;
+}
+
+export function MetalButtons() {
+  const [clicked, setClicked] = useState("");
+  return <div className="grid gap-5">
+    <div className="space-y-2">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">{t("Metallic variants")}</h4>
+      <div className="flex flex-wrap items-center gap-3">
+        {(["default", "primary", "success", "error", "gold", "bronze"] as const).map((variant) => (
+          <MetalButton key={variant} variant={variant} onClick={() => setClicked(`Metal ${variant}`)}>
+            {variant.charAt(0).toUpperCase() + variant.slice(1)}
+          </MetalButton>
+        ))}
+      </div>
+    </div>
+    <div className="space-y-2">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">{t("Liquid glass buttons")}</h4>
+      <div className="flex flex-wrap items-center gap-3">
+        <LiquidButton size="default" onClick={() => setClicked("Liquid default")}>Liquid Default</LiquidButton>
+        <LiquidButton size="lg" variant="destructive" onClick={() => setClicked("Liquid destructive")}>Liquid Destructive</LiquidButton>
+        <LiquidButton size="xl" onClick={() => setClicked("Liquid XL")}>Liquid XL</LiquidButton>
+      </div>
+    </div>
+    {clicked && <p className="text-xs text-muted">{t("Last clicked")}: {clicked}</p>}
+  </div>;
+}
+
+export function RetroButtons() {
+  const [pressed, setPressed] = useState("");
+  return <div className="grid gap-5">
+    <div className="space-y-2">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">{t("Retro variants")}</h4>
+      <div className="flex flex-wrap items-center gap-3">
+        {(["default", "darkGray", "white", "lightGray", "gray"] as const).map((variant) => (
+          <RetroButton key={variant} variant={variant} onClick={() => setPressed(variant)}>
+            {variant}
+          </RetroButton>
+        ))}
+      </div>
+    </div>
+    <div className="space-y-2">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">{t("Mechanical keypad")}</h4>
+      <div className="flex flex-wrap items-center gap-3">
+        <RetroButton variant="default" onClick={() => setPressed("Run")}>RUN</RetroButton>
+        <RetroButton variant="darkGray" onClick={() => setPressed("Step")}>STEP</RetroButton>
+        <RetroButton variant="white" onClick={() => setPressed("Reset")}>RESET</RetroButton>
+        <RetroButton variant="default" disabled>HALT</RetroButton>
+      </div>
+    </div>
+    {pressed && <p className="text-xs text-muted">{t("Last clicked")}: {pressed}</p>}
+  </div>;
+}
