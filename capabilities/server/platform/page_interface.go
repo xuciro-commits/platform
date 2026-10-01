@@ -123,7 +123,7 @@ func CheckPageNavigation(source Page, target Page, nav PageNavigation) error {
 	for id, variable := range nav.Results {
 		port, ok := outputs[id]
 		v := source.Document.Variables[variable]
-		if !ok || v.Mode != "state" || v.Type != port.Type || v.Type == "record" {
+		if !ok || !v.IsWritable() || v.Type != port.Type || v.Type == "record" {
 			return fmt.Errorf("page navigation output %s type differs", id)
 		}
 	}

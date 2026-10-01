@@ -1,4 +1,6 @@
 {
+ "UI profile": "界面契约版本",
+ "Application variables": "应用变量",
  "An application this organisation hands to its people: a name, an icon, its pages and shared resource references. It gives nobody new access; each page is offered to whoever may read what it shows.": "本组织交付给成员的应用：名称、图标、页面及共享资源引用。应用不授予额外权限，各页面仅向有权读取其内容的人提供。",
  "Application resources": "应用资源",
  "Published objects, workflows and functions included in its release; ownership and permissions stay with each resource": "纳入发布的已发布对象、流程和函数；归属和权限仍由各资源管理",

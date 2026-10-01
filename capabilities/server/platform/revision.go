@@ -85,6 +85,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 // ApplicationReleaseAsset binds ordered navigation and explicit resources.
 // Frozen closure dependencies retain their original owner and exact bytes.
 func ApplicationReleaseAsset(app, sourceVersion string, application Application) (ReleaseAsset, error) {
+	if err := application.CheckVariables(); err != nil {
+		return ReleaseAsset{}, err
+	}
 	if err := application.CheckResources(); err != nil {
 		return ReleaseAsset{}, err
 	}
@@ -175,6 +178,26 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 		}
 		if err := checkReleaseBindings(ref, body, asset.Requires); err != nil {
 			return err
+		}
+		if ref.Kind == AssetApp {
+			var application Application
+			if err := json.Unmarshal(body, &application); err != nil {
+				return err
+			}
+			if err := application.CheckVariables(); err != nil {
+				return err
+			}
+			for _, name := range application.Pages {
+				pageRef := AssetRef{App: ref.App, Kind: AssetPage, Name: name}
+				target, ok := lookup[pageRef]
+				var page Page
+				if !ok || json.Unmarshal(target.Body, &page) != nil {
+					return fmt.Errorf("application page %s is unavailable", pageRef)
+				}
+				if err := application.CheckPageVariables(page); err != nil {
+					return err
+				}
+			}
 		}
 		if ref.Kind == AssetFlow || ref.Kind == AssetPage {
 			var bindings []AssetBinding

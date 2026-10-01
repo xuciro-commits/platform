@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.7",
+  "uiProfile": "platform.page.v2.8",
   "widgets": [
     {
       "componentID": "table",
@@ -494,7 +494,8 @@
     "platform.page.v2.4",
     "platform.page.v2.5",
     "platform.page.v2.6",
-    "platform.page.v2.7"
+    "platform.page.v2.7",
+    "platform.page.v2.8"
   ],
   "runtime": {
     "scope": "page",
@@ -606,6 +607,19 @@
         "constant",
         "derived"
       ]
+    },
+    "application": {
+      "scope": "application",
+      "valueTypes": [
+        "string",
+        "boolean"
+      ],
+      "modes": [
+        "state",
+        "constant",
+        "derived"
+      ],
+      "bindingMode": "shared"
     }
   }
 }

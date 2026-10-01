@@ -27,11 +27,13 @@ const (
 // Application is an application this organisation hands to its people.
 type Application struct {
 	platform.Record
-	Name        string   `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"frontdesk"`
-	Title       string   `json:"title" field:"required,search" title:"What people call it" example:"Front desk"`
-	Description string   `json:"description,omitempty" type:"longtext" help:"What people do in it"`
-	Icon        string   `json:"icon,omitempty" choices:"boxes,clipboard,people,calendar,wrench,map,chart,sparkles" help:"How it is drawn in the launcher"`
-	Pages       []string `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
+	UIProfile   string                           `json:"uiProfile,omitempty" field:"aside" title:"UI profile"`
+	Variables   map[string]platform.PageVariable `json:"variables,omitempty" field:"aside" type:"json" title:"Application variables"`
+	Name        string                           `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"frontdesk"`
+	Title       string                           `json:"title" field:"required,search" title:"What people call it" example:"Front desk"`
+	Description string                           `json:"description,omitempty" type:"longtext" help:"What people do in it"`
+	Icon        string                           `json:"icon,omitempty" choices:"boxes,clipboard,people,calendar,wrench,map,chart,sparkles" help:"How it is drawn in the launcher"`
+	Pages       []string                         `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
 	// Groups are the headings of its navigation (17b); a page in none of them
 	// sits under the application's own name.
 	Resources []platform.AssetRef `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
@@ -96,7 +98,7 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources)}
+	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables}
 }
 
 // checkApplication refuses an application people could not open: a name that is
@@ -119,6 +121,9 @@ func (b *Build) checkApplication(a Application) error {
 		seen[name] = true
 	}
 	if err := applicationDescriptor(a).CheckResources(); err != nil {
+		return err
+	}
+	if err := applicationDescriptor(a).CheckVariables(); err != nil {
 		return err
 	}
 	return applicationDescriptor(a).CheckGroups()

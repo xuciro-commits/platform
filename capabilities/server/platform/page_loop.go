@@ -68,7 +68,7 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 	}
 	accessible := func(variable, owner, overlay string) bool {
 		v, ok := d.Variables[variable]
-		return variable == "" || ok && (v.Scope == "page" || v.Scope == "loop-item" && v.Owner == owner && owner != "" || v.Scope == "overlay" && v.Owner == overlay && overlay != "")
+		return variable == "" || ok && (v.Scope == "page" || v.Scope == "application" || v.Scope == "loop-item" && v.Owner == owner && owner != "" || v.Scope == "overlay" && v.Owner == overlay && overlay != "")
 	}
 	count, total := 0, 0
 	for id, node := range d.Nodes {

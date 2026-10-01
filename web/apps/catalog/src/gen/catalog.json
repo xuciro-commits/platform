@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ca628ddc58f86508",
+  "revision": "sha256:b4ad216c5eb6e125",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -65,6 +65,43 @@
         "withheld"
       ],
       "snippet": "import { RunView } from \"@platform/app\";\n<RunView id={runID} />"
+    },
+    {
+      "id": "app/application-sessions",
+      "owner": "@platform/app",
+      "name": "Application sessions",
+      "summary": "Share declared presentation state across pages of one scoped application instance.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "application",
+        "scope",
+        "instance",
+        "state"
+      ],
+      "source": "web/packages/app/src/runtime/ApplicationRuntime.tsx",
+      "exports": [
+        "ApplicationPage",
+        "ApplicationSessionsProvider"
+      ],
+      "example": "ApplicationSessionsExample",
+      "constraints": [
+        "Application owns scalar declarations. Pages use typed shared bindings; instance values are ephemeral and grant no permissions."
+      ],
+      "dependencies": [
+        "app/composed-page",
+        "pattern/workspace"
+      ],
+      "states": [
+        "Shared",
+        "Isolated",
+        "Closed"
+      ]
     },
     {
       "id": "app/composed-page",
@@ -1812,8 +1849,10 @@
       "Agent run and execution chain": "智能体运行与执行链",
       "An inbox preview is not an approval or permission engine.": "收件箱预览不承担审批或权限引擎职责。",
       "App Shell / Workspace": "应用外壳 / 工作区",
+      "Application owns scalar declarations. Pages use typed shared bindings; instance values are ephemeral and grant no permissions.": "应用拥有标量声明，页面使用类型化共享绑定；实例值为临时展示状态，不授予权限。",
       "Application release workbench": "整应用发布工作台",
       "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path.": "应用资源引用原归属方；加入应用不会授予权限。发布审查通过原候选路径冻结已发布依赖。",
+      "Application sessions": "应用会话",
       "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
       "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.": "组合组件库、画布与检查器，支持键盘和指针调整面板宽度。",
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
@@ -1876,6 +1915,7 @@
       "Inspect the original run trace, structured drafts and cross-application execution links.": "查看原运行轨迹、结构化草稿和跨应用执行关系。",
       "Installed blocks, versions, permissions, testing and activation come from the connected owner APIs.": "已安装区块、版本、权限、测试和激活均来自已连接的原能力 API。",
       "Invalid": "无效",
+      "Isolated": "隔离",
       "Keep record browsing and focused detail in one responsive task frame.": "在响应式任务框架中同时保留记录浏览与聚焦详情。",
       "Keep selection and detail together using the existing record workspace or controlled table/detail sections.": "使用原记录工作台或受控表格与详情区块，保持选择与详情连贯。",
       "Keyboard focus": "键盘焦点",
@@ -1943,6 +1983,8 @@
       "Selected": "已选中",
       "Semantic status tags": "语义状态标签",
       "Semantic tokens": "语义令牌",
+      "Share declared presentation state across pages of one scoped application instance.": "在同一受控应用实例的页面间共享声明式展示状态。",
+      "Shared": "共享",
       "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
       "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.": "工坊要求绑定对象和可见字段，动作来自当前成员的原动作目录。",
       "Submit an ad hoc form on Enter without reloading the page.": "按回车提交临时表单，不刷新页面。",
@@ -2003,6 +2045,7 @@
       "web/packages/app/src/flows.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/asset-controls.tsx",
@@ -2044,6 +2087,7 @@
       "web/packages/app/src/agents.tsx",
       "web/packages/app/src/capability.tsx",
       "web/packages/app/src/index.tsx",
+      "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/build/src/application.tsx",
@@ -2122,6 +2166,7 @@
       "web/packages/app/src/catalog.fixtures.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/application.tsx",
@@ -2299,6 +2344,11 @@
     "app/composed-page": [
       "web/packages/build/src/catalog.examples.tsx",
       "web/packages/build/src/editor.tsx"
+    ],
+    "app/application-sessions": [
+      "web/packages/build/src/editor.tsx",
+      "web/apps/workspace/src/App.tsx",
+      "web/apps/workspace/src/chrome.tsx"
     ],
     "app/record-actions": [
       "web/packages/build/src/editor.tsx",
@@ -2531,6 +2581,7 @@
         "pageUIProfile",
         "pageVariableContract",
         "pageVariableDiagnostics",
+        "pageVariableValues",
         "propertyKey",
         "relationKey",
         "runStates",

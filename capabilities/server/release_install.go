@@ -176,7 +176,25 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 			}
 		}
 	}
+	pages := map[platform.AssetRef]platform.Page{}
 	for _, definition := range draft.definitions {
+		if definition.Page != nil {
+			pages[definition.Ref] = *definition.Page
+		}
+	}
+	for _, definition := range draft.definitions {
+		if definition.Application != nil {
+			for _, name := range definition.Application.Pages {
+				ref := platform.AssetRef{App: definition.Ref.App, Kind: platform.AssetPage, Name: name}
+				page, ok := pages[ref]
+				if !ok {
+					return nil, fmt.Errorf("application page %s is unavailable", ref)
+				}
+				if err := definition.Application.CheckPageVariables(page); err != nil {
+					return nil, err
+				}
+			}
+		}
 		if definition.Page != nil {
 			if err := draft.checkPageNavigation(*definition.Page, definition.Ref.App); err != nil {
 				return nil, err

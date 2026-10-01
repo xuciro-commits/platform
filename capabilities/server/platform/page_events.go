@@ -62,7 +62,7 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 			bound[event.Source] = true
 			continue
 		}
-		if variable.Mode != "state" || pageLiteralType(event.Value) != variable.Type {
+		if !variable.IsWritable() || pageLiteralType(event.Value) != variable.Type {
 			return fmt.Errorf("page event %s needs a matching state value", event.Source)
 		}
 		for _, node := range d.Nodes {

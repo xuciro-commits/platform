@@ -4,6 +4,7 @@ import type { ComponentType } from "react";
 export const previewLoaders: Record<string, () => Promise<{ default: ComponentType }>> = {
   "app/agent-assistant": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.AssistantExample })),
   "app/agent-run": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.AgentRunExample })),
+  "app/application-sessions": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ApplicationSessionsExample })),
   "app/composed-page": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ComposedPageExample })),
   "app/compute-call": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.ComputeExample })),
   "app/dashboard": () => import("@platform/app/catalog/examples").then((module) => ({ default: module.DashboardExample })),

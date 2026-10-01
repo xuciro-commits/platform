@@ -181,6 +181,13 @@ func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) er
 		}
 	}
 	if targets {
+		for _, d := range t.definitions {
+			if d.Application != nil && d.Ref.App == id && slices.Contains(d.Application.Pages, p.Name) {
+				if err := d.Application.CheckPageVariables(p); err != nil {
+					return err
+				}
+			}
+		}
 		if err := t.checkPageNavigation(p, id); err != nil {
 			return err
 		}
@@ -508,9 +515,18 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	}
 	for _, page := range a.Pages {
 		ref := platform.AssetRef{App: id, Kind: platform.AssetPage, Name: page}
-		if !slices.ContainsFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref }) {
+		pageDefinition := slices.IndexFunc(t.definitions, func(d platform.Definition) bool { return d.Ref == ref && d.Page != nil })
+		if pageDefinition >= 0 {
+			if err := a.CheckPageVariables(*t.definitions[pageDefinition].Page); err != nil {
+				return err
+			}
+		}
+		if pageDefinition < 0 {
 			return fmt.Errorf("application %s: no page %s", a.Name, page)
 		}
+	}
+	if err := a.CheckVariables(); err != nil {
+		return err
 	}
 	if err := a.CheckResources(); err != nil {
 		return fmt.Errorf("application %s: %w", a.Name, err)

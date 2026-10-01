@@ -7,6 +7,10 @@ const asset = (id: string, name: string, summary: string, exports: string[], exa
 });
 
 export const entries: CatalogEntry[] = [
+  asset("application-sessions", "Application sessions", "Share declared presentation state across pages of one scoped application instance.", ["ApplicationPage", "ApplicationSessionsProvider"], "ApplicationSessionsExample", {
+    source:"web/packages/app/src/runtime/ApplicationRuntime.tsx", tags:["application","scope","instance","state"], dependencies:["app/composed-page","pattern/workspace"], states:["Shared","Isolated","Closed"],
+    constraints:["Application owns scalar declarations. Pages use typed shared bindings; instance values are ephemeral and grant no permissions."],
+  }),
   asset("generated-form", "Generated record form", "Edit fields from the original object declaration; submit through the owning action.", ["GeneratedForm"], "GeneratedFormExample", {
     dependencies: ["ui/record-form"], uses: ["code", "widget"], widgets: ["form"], states: ["dirty", "pending", "validation"],
     snippet: 'import { GeneratedForm } from "@platform/app";\n<GeneratedForm type="your.object" submitLabel="Create" onSubmit={submit} onCancel={cancel} />',
@@ -71,4 +75,4 @@ export const entries: CatalogEntry[] = [
 /** Nonvisual public API, attached to the existing public owner rather than visual cards. */
 export const api = ["AppEntry", "AssetRef", "Definition", "Me", "Decision", "Host", "HostContext", "useHost", "useRecordArchive", "useReadQuery", "useRead", "useRecordInventory",
   "useDefinitions", "useCapabilities", "useInvokeCapability", "assetKey", "findDefinition", "useOpenRecord", "Dashboard", "AppUI", "defineApp", "SavedView", "newId",
-  "runStates", "AgentInfo", "AgentRun", "Citation", "Memory", "Passage", "RunDraft", "RunSignal", "RunStep", "isPageDefinition", "isComposed", "pageDocumentFromSections", "createWidgetRegistry", "WidgetRegistry", "widgetContracts", "widgetContract", "pageUIProfile", "supportsPageUIProfile", "pageVariableContract", "pageVariableDiagnostics", "PageVariableValue", "WidgetContract", "WidgetID", "semanticModelView", "propertyKey", "relationKey", "PropertyRef", "ReferenceRelationRef", "SemanticRelation", "SemanticModelView"];
+  "runStates", "AgentInfo", "AgentRun", "Citation", "Memory", "Passage", "RunDraft", "RunSignal", "RunStep", "isPageDefinition", "isComposed", "pageDocumentFromSections", "createWidgetRegistry", "WidgetRegistry", "widgetContracts", "widgetContract", "pageUIProfile", "supportsPageUIProfile", "pageVariableContract", "pageVariableValues", "pageVariableDiagnostics", "PageVariableValue", "WidgetContract", "WidgetID", "semanticModelView", "propertyKey", "relationKey", "PropertyRef", "ReferenceRelationRef", "SemanticRelation", "SemanticModelView"];

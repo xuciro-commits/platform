@@ -136,9 +136,11 @@ var Filterable = []string{"choice", "boolean", "reference"}
 // name, an icon from the platform's set, and the pages it holds in order. It
 // grants nothing; each page is offered to whoever may read what it shows.
 type Application struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
+	UIProfile   string                  `json:"uiProfile,omitempty"`
+	Variables   map[string]PageVariable `json:"variables,omitempty"`
+	Name        string                  `json:"name"`
+	Title       string                  `json:"title"`
+	Description string                  `json:"description,omitempty"`
 	// Icon is one of Icons: the workspace draws it in the launcher and the navigation.
 	Icon  string   `json:"icon,omitempty"`
 	Pages []string `json:"pages"` // page names, in the order people see them

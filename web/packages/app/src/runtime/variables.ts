@@ -25,11 +25,15 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (visiting.has(id)) return fail(id, "Cyclic variable dependency");
     if (visited.has(id)) return variable.type;
     visited.add(id); visiting.add(id);
-    if (!validID.test(id) || (variable.scope !== contract.scope && variable.scope !== contract.loop.scope && variable.scope !== contract.overlay.scope) || (variable.scope === contract.scope ? !!variable.owner : !validID.test(variable.owner ?? "")) || !(contract.valueTypes as readonly string[]).includes(variable.type) || bytes(variable.title ?? "") > 1024) fail(id, "Unsupported variable type or scope");
+    if (!validID.test(id) || (variable.scope !== contract.scope && variable.scope !== contract.loop.scope && variable.scope !== contract.overlay.scope && variable.scope !== contract.application.scope) || ([contract.scope,contract.application.scope].includes(variable.scope as "page" | "application") ? !!variable.owner : !validID.test(variable.owner ?? "")) || !(contract.valueTypes as readonly string[]).includes(variable.type) || bytes(variable.title ?? "") > 1024) fail(id, "Unsupported variable type or scope");
     if (variable.scope === contract.overlay.scope && (!(contract.overlay.valueTypes as readonly string[]).includes(variable.type) || !(contract.overlay.modes as readonly string[]).includes(variable.mode))) fail(id, "Overlay variable needs a scalar state, constant or expression");
-    if (variable.mode !== "resource" && variable.source) fail(id, "Only resource variables may declare a source");
-    if (variable.mode === "resource") {
-      if (!variable.source || (variable.scope === contract.loop.scope ? variable.type !== "record" || variable.source.kind !== contract.loop.source || variable.source.node !== variable.owner || !!variable.source.section : !validID.test(variable.source.section ?? "") || !!variable.source.node) || variable.expression || variable.initial !== undefined || (variable.scope !== contract.loop.scope && !contract.resources.some((resource) => resource.kind === variable.source!.kind && resource.type === variable.type))) fail(id, "Resource source type mismatch");
+    if (variable.scope === contract.application.scope && !(contract.application.valueTypes as readonly string[]).includes(variable.type)) fail(id,"Application variable must be scalar");
+    if (variable.writable && variable.mode !== "shared") fail(id,"Only shared bindings declare writable");
+    if (variable.mode !== "resource" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
+    if (variable.mode === "shared") {
+      if (variable.scope !== "application" || !variable.source || variable.source.kind !== "application" || !validID.test(variable.source.variable ?? "") || variable.source.section || variable.source.node || variable.initial !== undefined || variable.expression) fail(id,"Shared binding needs only an application variable source");
+    } else if (variable.mode === "resource") {
+      if (!variable.source || variable.source.variable || variable.scope === "application" || (variable.scope === contract.loop.scope ? variable.type !== "record" || variable.source.kind !== contract.loop.source || variable.source.node !== variable.owner || !!variable.source.section : !validID.test(variable.source.section ?? "") || !!variable.source.node) || variable.expression || variable.initial !== undefined || (variable.scope !== contract.loop.scope && !contract.resources.some((resource) => resource.kind === variable.source!.kind && resource.type === variable.type))) fail(id, "Resource source type mismatch");
     } else if (variable.mode === "input") {
       if (variable.scope !== "page" || variable.source || variable.expression || !(contract.interface.valueTypes as readonly string[]).includes(variable.type) || variable.initial !== undefined && valueType(variable.initial, contract) !== variable.type) fail(id, "Invalid page input variable");
     } else if (variable.mode === "state" || variable.mode === "constant") {
@@ -69,7 +73,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
   for (const id of compiled.order) {
     const variable = variables[id]!;
     if (variable.scope === contract.loop.scope && variable.owner !== owner || variable.scope === contract.overlay.scope && variable.owner !== overlay) { result[id] = { status: "empty" }; continue; }
-    if (variable.mode === "input") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
+    if (variable.mode === "input" || variable.mode === "shared") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
     if (variable.mode === "resource") {
       const value = resources[id] ?? { status: "empty" };
       result[id] = (value.status === "value" || value.status === "empty") && value.value !== undefined && (value.value === null || typeof value.value !== "object" || value.value.kind !== variable.type)

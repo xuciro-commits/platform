@@ -4,6 +4,7 @@ import { findDefinition, useHost } from "../index";
 import type { Api } from "@platform/kernel";
 import type { PageSessionStore, PageSessionSnapshot } from "./Session";
 import type { VariableResult } from "./variables";
+import { useApplicationContext } from "./ApplicationRuntime";
 import { checkPortValues, navigationValues, portValues, readPageEnvelope } from "./page-values";
 
 type EventContext = { values: Record<string, VariableResult>; set: (id: string, value: string | boolean) => void; isActive: () => boolean };
@@ -40,9 +41,11 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
 
 export function usePageNavigation(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: string | boolean) => void) {
   const { definitions, source } = useHost(), workspace = useWorkspace(), call = useViewCall();
+  const application = useApplicationContext();
   const [error, setError] = useState<string>();
   const active = useRef(true); useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const currentScope = useRef(source.scope); currentScope.current = source.scope;
+  const currentApplication = useRef(application?.identity); currentApplication.current = application?.identity;
   const iface = page.document?.interface;
   const emit = (event: Api.PageEventBinding, context?: EventContext) => {
     try {
@@ -61,9 +64,9 @@ export function usePageNavigation(page: Api.Page, live: boolean, values: Record<
       if ((targetInterface?.version ?? 0) !== navigation.interfaceVersion) throw new Error("The target page interface changed.");
       const input = navigationValues(navigation.inputs ?? {}, context?.values ?? values), problem = checkPortValues(targetInterface?.inputs ?? {}, input);
       if (problem) throw new Error(problem);
-      const scope = source.scope;
-      workspace.transfer("", { view: live ? "page" : "page-preview", params: { app: navigation.page.app, kind: "page", name: navigation.page.name } }, { version: navigation.interfaceVersion, values: input }, (raw) => {
-        if (!active.current || currentScope.current !== scope || context && !context.isActive()) return;
+      const scope = source.scope, applicationIdentity = application?.identity;
+      workspace.transfer("", { view: live ? "page" : "page-preview", params: { app: navigation.page.app, kind: "page", name: navigation.page.name, ...(application?.definition.ref.app === navigation.page.app && application.definition.application?.pages.includes(navigation.page.name) ? { application: `${application.definition.ref.app}:${application.definition.ref.name}`, instance: application.instance } : {}) } }, { version: navigation.interfaceVersion, values: input }, (raw) => {
+        if (!active.current || currentScope.current !== scope || currentApplication.current !== applicationIdentity || context && !context.isActive()) return;
         const returned = readPageEnvelope(raw);
         if (!returned || returned.version !== navigation.interfaceVersion || checkPortValues(targetInterface?.outputs ?? {}, returned.values)) { setError("The returned page values do not match the interface."); return; }
         for (const [output, id] of Object.entries(navigation.results ?? {})) {

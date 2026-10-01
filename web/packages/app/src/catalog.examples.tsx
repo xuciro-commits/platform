@@ -1,7 +1,7 @@
 import "./i18n";
 import { useState } from "react";
 import { Panel, t } from "@platform/ui";
-import { Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, type AssetRef } from "./index";
+import { ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, type Definition, type AssetRef } from "./index";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 
 export function GeneratedFormExample() {
@@ -49,3 +49,10 @@ function SemanticChoices() {
     {object && <SemanticPropertySelect object={object} value={property} label={t("Property")} onChange={(ref) => setProperty(ref?.field)} />}</div>;
 }
 export const SemanticSelectionExample = () => <CatalogFixture><SemanticChoices /></CatalogFixture>;
+
+export function ApplicationSessionsExample() {
+  const variables = { draft: { scope:"application",type:"string",mode:"state",initial:"" } };
+  const definition: typeof samplePage = { ...samplePage, ref:{app:"catalog",kind:"page",name:"shared"}, page:{...samplePage.page,name:"shared",layout:"composed",sections:[{id:"input",widget:"input",configVersion:1,title:t("Application draft")}], document:{formatVersion:2,uiProfile:"platform.page.v2.8",root:"root",nodes:{root:{kind:"rows",children:["input"]},input:{kind:"widget",section:"input",valueVariable:"draft"}},variables:{draft:{scope:"application",type:"string",mode:"shared",writable:true,source:{kind:"application",variable:"draft"}}}}} };
+  const definitions: Definition[] = [...sampleDefinitions, definition, {ref:{app:"catalog",kind:"app",name:"shared"},source:"code",version:"fixture-1",contractVersion:1,requires:[],application:{name:"shared",title:t("Shared application"),pages:["shared"],uiProfile:"platform.page.v2.8",variables}}];
+  return <CatalogFixture definitions={definitions}><ApplicationSessionsProvider><div className="grid gap-3 md:grid-cols-2">{["first","second"].map((view) => <ApplicationPage key={view} pageRef={definition.ref} route={{view,params:{application:"catalog:shared",instance:"example"}}}><ComposedPage page={definition.page} live={false} /></ApplicationPage>)}</div></ApplicationSessionsProvider></CatalogFixture>;
+}

@@ -268,6 +268,14 @@ Button click有互斥的state写入、navigate、return三种处理。navigate�
 
 每个页面实例保存局部状态。关闭或切换 Overlay 原子恢复该 owner 的 state 初值；查询/Loop 在原卸载路径清理。工作区通过共享视图可见性暂停隐藏标签页的全局焦点/指针层；内容使用稳定Portal body暂时脱离DOM，保留原组件、Loop和输入身份。重新显示恢复该次打开，真实关闭才卸载。导航返回只在发起 Overlay 的同一次打开仍有效时应用，关闭再打开不能接收旧返回。成员/定义版本变化仍销毁原页面会话。Overlay 中的 Loop 可读节点所属 Overlay 条件，但 item 表达式跨 scope 读取暂未支持；资源输出仍走已有 page/widget 查询声明，不宣称已完成 Overlay 资源作用域。
 
+### 6.7 应用声明与共享实例
+
+`v2.8` 的Application声明uiProfile及variables，唯一拥有application作用域string/boolean state/constant/derived的初值与表达式，不引用page、Overlay、item或业务资源。页面声明`scope=application, mode=shared, source={kind:application,variable:<声明ID>}`的标量绑定；无副本初值，可用writable声明写入需求。输入和按钮写入需state或writable共享绑定；应用安装与候选检查所持页面的ID、类型和写入需求，激活对全部受影响应用复核。直接安装页面不能破坏已有应用绑定。
+
+共享绑定是页面对应用的展示端口，不固定某个应用AssetRef，因此保留页面多应用复用，依赖方向仍是Application→Pages。相比页面反向依赖应用，这避免新增归属环；相比逐页复制声明，应用只有一份初值/表达式。原应用候选冻结变量和所持页面，单页候选只能使用兼容的现有应用声明，不隐式发布应用草稿。当前页面共享端口为标量，资源、持久跨页会话和后台执行保持后续归属。
+
+Workspace内的ApplicationSessions按成员/定义范围、应用身份/版本/声明内容及显式instance标识保存展示状态，不用进程单例或localStorage保存值。应用导航复用实例，页面call/return在目标属于同一应用时保留application/instance上下文；预览使用独立实例。新实例用独立标识，关闭实例关闭其页面；最后一个页面销毁、身份或定义范围变化清理状态。路由只保存身份标识，刷新不恢复值。无应用、成员不可见、类型/写入不兼容时呈现定位诊断，不能降为page初值。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -446,4 +454,6 @@ F3e实现 `v2.6` 的页面接口、input变量与Button navigate/return。构建
 
 F3f1实现 `v2.7` 的Overlay标量局部变量和Input绑定。变量面板选择Overlay owner，节点/Input、按钮、Tabs及导航映射按所在根过滤；页面、其他Overlay与item表达式跨读局部值被拒绝。新增Input注册使用共享控件，添加时生成当前page/Overlay/item文本状态，复制保留节点绑定；保存/冻结/激活沿原PageDocument。每个页面实例保存局部值，关闭/切换原子清理指定owner，并按opening epoch拦截旧返回；隐藏标签页暂停全局层且保留原内容身份。工程路线验证编辑器owner/输入绑定、冻结后业务成员操作、两个Overlay独立值与切换清理、正常返回/关闭重开后的旧返回拒绝、刷新；成员/定义作用域清理由会话回归验证，普通/窄屏截图已观察。此批仅支持Overlay标量，不完成应用共享状态或Overlay资源输出。
 
-F3仍未完成：独立查询计划/集合运算及application/widget-local作用域与Overlay资源输出，嵌套Loop和其他Widget的item端口仍待扩展。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+F3f2实现 `v2.8` 的应用级纯标量声明与页面共享绑定。Application独占state/constant/derived声明，页面以ID/类型/writable展示端口读取或写入；宿主检查所持页面、候选冻结及安装后的所有应用，单页直接替换不能破坏已有绑定。应用编辑器复用变量检查器，页面选择已发布声明并保留原页面与多应用成员关系；不新增反向应用依赖或独立状态服务。Workspace的ApplicationSessions按成员/定义范围、应用身份/版本/声明内容及实例管理值，应用导航/同应用call保留实例，预览独立；关闭实例关闭其页面，最后页面卸载清理，退休句柄不写回重开实例。Catalog提供公开组合入口与双页本地示例。工程路线验证应用/页面编写、冻结后改草稿仍按候选初值激活、两页文本/派生条件共享、第二实例独立与关闭、预览隔离、成员切换、活跃页面随新应用声明清理及刷新；Go内存重放保留冻结应用声明，不扩展物理恢复保证，普通/窄屏截图已观察。该批仅支持标量共享端口，不提供持久跨页数据或应用级资源执行。
+
+F3仍未完成：独立查询计划/集合运算、应用/Overlay资源输出及widget-local作用域，嵌套Loop和其他Widget的item端口仍待扩展。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

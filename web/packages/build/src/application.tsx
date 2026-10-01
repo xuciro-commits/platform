@@ -1,5 +1,6 @@
+import { VariablesPanel } from "./page-editor/VariablesPanel";
 import { AssetControls } from "./asset-controls";
-import { useHost, useReadQuery, useRecordInventory } from "@platform/app";
+import { pageUIProfile, pageVariableValues, useHost, useReadQuery, useRecordInventory } from "@platform/app";
 import { newId } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { Button, Card, Checkbox, Input, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, defineStatuses, t, useUnsavedChanges, useWorkspace } from "@platform/ui";
@@ -51,8 +52,8 @@ export function ApplicationEditor({ id }: { id: string }) {
     setBusy(true); setError("");
     try {
       const target = draft.id || newId("APP");
-      const { name, title, description, icon, pages, groups, resources } = draft;
-      const ok = await decide(`build.app.${draft.id ? "edit" : "create"}`, { type: "build.app", id: target }, { name, title, description, icon, pages, groups, resources },
+      const { name, title, description, icon, pages, groups, resources, variables, uiProfile } = draft;
+      const ok = await decide(`build.app.${draft.id ? "edit" : "create"}`, { type: "build.app", id: target }, { name, title, description, icon, pages, groups, resources, variables, uiProfile },
         { expectedRevision: draft.id ? draft.revision : undefined, quiet: true, onRefused: setError });
       if (!ok) return;
       if (!draft.id) { markSaved(); setDirty(false); open({ view: "application", params: { id: target } }); close({ view: "application", params: { id } }); return; }
@@ -102,6 +103,7 @@ export function ApplicationEditor({ id }: { id: string }) {
           <Button size="sm" onClick={() => change({ groups: [...(draft.groups ?? []), { title: t("New group"), pages: [] }] })}>{t("Add group")}</Button>
         </fieldset>
       </Card>
+      <div className="grid content-start gap-3"><VariablesPanel application document={{formatVersion:2,uiProfile:draft.uiProfile ?? pageUIProfile,root:"root",nodes:{},variables:draft.variables}} sections={[]} values={pageVariableValues(draft.variables ?? {})} onChange={(document) => change({uiProfile:pageUIProfile,variables:document.variables})} />
       <Panel title={t("Application resources")} className="grid min-w-0 content-start gap-3">
         <StatusTag status={draft.state} registry={states} />
         <p className="text-xs text-muted">{t("Resources keep their original ownership and permissions. They may be shared by multiple applications.")}</p>
@@ -117,7 +119,7 @@ export function ApplicationEditor({ id }: { id: string }) {
           </Checkbox>)}
         </fieldset>
         <p className="text-xs">{t("{n} explicit resources; dependent assets are resolved in release review.", { n: selected.length })}</p>
-      </Panel>
+      </Panel></div>
     </div>
   </div>;
 }

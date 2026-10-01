@@ -21,7 +21,7 @@ const icons: Record<string, ReactNode> = {
  * The host has already left out the pages they may not open and the
  * applications that would be empty; nothing here decides who sees what.
  */
-export function tenantApps(definitions: Definition[]): AppUI[] {
+export function tenantApps(definitions: Definition[], context?: { application?: string; instance?: string }): AppUI[] {
   return definitions.flatMap((definition) => {
     const application = definition.application;
     if (definition.ref.kind !== "app" || !application) return [];
@@ -30,7 +30,7 @@ export function tenantApps(definitions: Definition[]): AppUI[] {
     if (held.length === 0) return [];
     const icon = icons[application.icon ?? ""] ?? <Boxes />;
     const id = `${definition.ref.app}:${application.name}`;
-    const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id } });
+    const route = (name: string): Route => ({ view: "page", params: { app: definition.ref.app, kind: "page", name, application: id, ...(context?.application === id && context.instance ? { instance: context.instance } : {}) } });
     const item = (name: string) => ({ label: pages.get(name)?.title ?? name, icon, route: route(name) });
     // Its pages under their headings (17b): those in no group first, under the
     // application's own name, then each group in the order the builder chose.

@@ -128,6 +128,8 @@ export type AppSettings = {
 };
 
 export type Application = {
+  uiProfile?: string;
+  variables?: Record<string, PageVariable>;
   name: string;
   title: string;
   description?: string;
@@ -930,6 +932,7 @@ export type PagePort = {
 };
 
 export type PageResourceSource = {
+  variable?: string;
   kind: string;
   section?: string;
   node?: string;
@@ -941,6 +944,7 @@ export type PageValue = {
 };
 
 export type PageVariable = {
+  writable?: boolean;
   title?: string;
   scope: string;
   owner?: string;
@@ -1505,7 +1509,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.7",
+  "uiProfile": "platform.page.v2.8",
   "widgets": [
     {
       "componentID": "table",
@@ -2000,7 +2004,8 @@ export const pageUIManifest = {
     "platform.page.v2.4",
     "platform.page.v2.5",
     "platform.page.v2.6",
-    "platform.page.v2.7"
+    "platform.page.v2.7",
+    "platform.page.v2.8"
   ],
   "runtime": {
     "scope": "page",
@@ -2112,6 +2117,19 @@ export const pageUIManifest = {
         "constant",
         "derived"
       ]
+    },
+    "application": {
+      "scope": "application",
+      "valueTypes": [
+        "string",
+        "boolean"
+      ],
+      "modes": [
+        "state",
+        "constant",
+        "derived"
+      ],
+      "bindingMode": "shared"
     }
   }
 } as const;

@@ -3,7 +3,7 @@ import { AssetControls } from "./asset-controls";
 // Application Studio page design (ADR-0046). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
-import { ComposedPage, NewActions, SemanticObjectSelect, SemanticPropertySelect, pageDocumentFromSections, pageUIProfile, supportsPageUIProfile, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
+import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, SemanticPropertySelect, pageDocumentFromSections, pageUIProfile, supportsPageUIProfile, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
   Button, Card, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
   type EntityInfo,
@@ -132,7 +132,7 @@ export function PageEditor({ id }: { id: string }) {
   const inputProblem = Object.entries(document.nodes).some(([id, node]) => {
     if (!sections.some((s) => s.id === node.section && s.widget === "input")) return false;
     const variable = document.variables?.[node.valueVariable ?? ""];
-    return !variable || variable.mode !== "state" || variable.type !== "string" || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
+    return !variable || !(variable.mode === "state" || variable.mode === "shared" && variable.writable) || variable.type !== "string" || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
   });
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
   const invalid = inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
@@ -266,7 +266,7 @@ export function PageEditor({ id }: { id: string }) {
           </div>
           <div className="min-h-[24rem] flex-1 overflow-auto bg-canvas p-4">
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
-              <ComposedPage editingRoot={(() => {
+              <ApplicationPage pageRef={{app:"build",kind:"page",name:page.name}} route={{view:"compose",params:{id}}} preview><ComposedPage editingRoot={(() => {
                 const node = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id)?.[0];
                 return Object.values(document.overlays ?? {}).find((overlay) => {
                   const includes = (id: string): boolean => id === node || (document.nodes[id]?.children ?? []).some(includes);
@@ -284,7 +284,7 @@ export function PageEditor({ id }: { id: string }) {
                   }}>
                   {container === id && <Button size="sm" variant="primary" className="absolute -top-3 left-2 z-10" onClick={() => select({ kind: "container", id })}>{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows")}</Button>}
                   {body}
-                </div>} />
+                </div>} /></ApplicationPage>
             </div>
           </div>
           <div className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted" role="status">{t("Your records, as they are. Actions do not run while you compose.")}</div>

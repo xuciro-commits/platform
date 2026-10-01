@@ -2,6 +2,24 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Shared":"共享",
+  "Isolated":"隔离",
+  "Application sessions": "应用会话",
+  "Share declared presentation state across pages of one scoped application instance.": "在同一受控应用实例的页面间共享声明式展示状态。",
+  "Application owns scalar declarations. Pages use typed shared bindings; instance values are ephemeral and grant no permissions.": "应用拥有标量声明，页面使用类型化共享绑定；实例值为临时展示状态，不授予权限。",
+  "Application draft": "应用草稿",
+  "Shared application": "共享应用",
+
+  "Page application": "页面所属应用",
+  "Choose an application": "选择应用",
+  "New application instance": "新建应用实例",
+  "Close application instance": "关闭应用实例",
+  "Instance": "实例",
+  "The application instance is unavailable.": "应用实例不可用。",
+  "Choose an application to use its shared variables.": "请选择应用以使用其共享变量。",
+  "The application does not satisfy this page's shared bindings.": "应用声明不满足此页面的共享绑定。",
+  "Application instance limit exceeded.": "应用实例数量超出限制。",
+
   "Text input": "文本输入",
 
   "Page values do not match the interface.": "页面值与接口不匹配。",

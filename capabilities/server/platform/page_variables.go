@@ -10,6 +10,7 @@ import (
 // PageVariable is presentation state, never a business record or authorization.
 // Additional types/scopes require a versioned runtime contract.
 type PageVariable struct {
+	Writable   bool                `json:"writable,omitempty"`
 	Title      string              `json:"title,omitempty"`
 	Scope      string              `json:"scope"`
 	Owner      string              `json:"owner,omitempty"`
@@ -20,12 +21,13 @@ type PageVariable struct {
 	Source     *PageResourceSource `json:"source,omitempty"`
 }
 
-// PageResourceSource names an existing widget's typed output. It inherits
-// that section's object, query, selections and member-filtered read boundary.
+// PageResourceSource names a typed widget output, loop item or application
+// presentation port. Widget sources retain their original read boundary.
 type PageResourceSource struct {
-	Kind    string `json:"kind"`
-	Section string `json:"section,omitempty"`
-	Node    string `json:"node,omitempty"`
+	Variable string `json:"variable,omitempty"`
+	Kind     string `json:"kind"`
+	Section  string `json:"section,omitempty"`
+	Node     string `json:"node,omitempty"`
 }
 type PageExpression struct {
 	Op   string      `json:"op"`
@@ -36,7 +38,13 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
-	Scope   string `json:"scope"`
+	Scope       string `json:"scope"`
+	Application struct {
+		Scope       string   `json:"scope"`
+		ValueTypes  []string `json:"valueTypes"`
+		Modes       []string `json:"modes"`
+		BindingMode string   `json:"bindingMode"`
+	} `json:"application"`
 	Overlay struct {
 		Scope      string   `json:"scope"`
 		ValueTypes []string `json:"valueTypes"`
@@ -116,23 +124,33 @@ func (d *PageDocument) CheckVariables() error {
 		if visited[id] {
 			return v.Type, nil
 		}
-		if !pageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope && v.Scope != contract.Overlay.Scope) || (v.Scope == contract.Scope && v.Owner != "") || (v.Scope != contract.Scope && !pageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
+		if !pageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope && v.Scope != contract.Overlay.Scope && v.Scope != contract.Application.Scope) || ((v.Scope == contract.Scope || v.Scope == contract.Application.Scope) && v.Owner != "") || ((v.Scope == contract.Loop.Scope || v.Scope == contract.Overlay.Scope) && !pageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
 			return fail("unsupported identity, scope or type")
 		}
 		if v.Scope == contract.Overlay.Scope && (!slices.Contains(contract.Overlay.ValueTypes, v.Type) || !slices.Contains(contract.Overlay.Modes, v.Mode)) {
 			return fail("overlay variable needs a scalar state, constant or expression")
 		}
 		visiting[id] = true
-		if v.Mode != "resource" && v.Source != nil {
-			return fail("only a resource variable may declare a source")
+		if v.Scope == contract.Application.Scope && !slices.Contains(contract.Application.ValueTypes, v.Type) {
+			return fail("application variable must be scalar")
+		}
+		if v.Writable && v.Mode != contract.Application.BindingMode {
+			return fail("only shared bindings declare writable")
+		}
+		if v.Mode != "resource" && v.Mode != contract.Application.BindingMode && v.Source != nil {
+			return fail("only resource or shared variables may declare a source")
 		}
 		switch v.Mode {
+		case "shared":
+			if v.Scope != "application" || v.Source == nil || v.Source.Kind != "application" || !pageNodeID.MatchString(v.Source.Variable) || v.Source.Section != "" || v.Source.Node != "" || v.Expression != nil || len(v.Initial) != 0 {
+				return fail("shared binding needs only an application variable source")
+			}
 		case "input":
 			if v.Scope != "page" || v.Source != nil || v.Expression != nil || !slices.Contains(contract.Interface.ValueTypes, v.Type) || v.Type == "record" && len(v.Initial) != 0 || len(v.Initial) != 0 && pageLiteralType(v.Initial) != v.Type {
 				return fail("input needs a typed page value without a source")
 			}
 		case "resource":
-			if v.Source == nil || v.Expression != nil || len(v.Initial) != 0 {
+			if v.Source == nil || v.Source.Variable != "" || v.Scope == "application" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
 			}
 			if v.Scope == contract.Loop.Scope {

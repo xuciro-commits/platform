@@ -3,7 +3,7 @@
 // (ADR-0013), the outbox (K5), every record the member may read (ADR-0016),
 // and the assistant, agent runs and global search (ADR-0021).
 import "./i18n";
-import { Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
+import { ApplicationPage, Assistant, DashboardView, FlowInstanceView, PagePreview, PageWorkspace, RecordDetail, Records, RunView, Search, assetKey, findDefinition, isPageDefinition, useDefinitions, useHost, useOpenRecord, useRead, type AppUI, type AssetRef, type Definition, type SavedView } from "@platform/app";
 import type { Entry, Api } from "@platform/kernel";
 import {
   Button, DataTable, Inbox, NotificationList, PageHeader, Panel, RecordList, Select, StatusTag, defineStatuses, submissionStatuses,
@@ -182,13 +182,13 @@ function DefinitionView({ ref }: { ref: AssetRef }) {
   </>;
 }
 
-function PageDefinitionView({ ref, preview }: { ref: AssetRef; preview: boolean }) {
+function PageDefinitionView({ ref, preview, params }: { ref: AssetRef; preview: boolean; params: Record<string,string> }) {
   const { data, isPending, error } = useDefinitions();
   if (error) return <p role="alert" className="text-sm text-danger">{t("Definitions could not be loaded.")}</p>;
   if (isPending) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const definition = findDefinition(data ?? [], ref);
   if (!isPageDefinition(definition)) return <ClosedPage />;
-  return preview ? <PagePreview definition={definition} definitions={data ?? []} /> : <PageWorkspace definition={definition} />;
+  return <ApplicationPage pageRef={definition.ref} route={{ view: preview ? "page-preview" : "page", params }} preview={preview}>{preview ? <PagePreview definition={definition} definitions={data ?? []} /> : <PageWorkspace definition={definition} />}</ApplicationPage>;
 }
 
 // A page this member may not open, reached by a link, a remembered place or an
@@ -225,8 +225,8 @@ export const chromeViews = (apps: () => AppUI[], select: (id: string) => void, d
   { id: "records", title: () => t("Records"), render: () => <AllRecords /> },
   { id: "definitions", title: () => t("Definitions"), render: () => <DefinitionsCatalog /> },
   { id: "definition", title: (p) => p.name ?? t("Definition"), render: (p) => <DefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} /> },
-  { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} /> },
-  { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview /> },
+  { id: "page", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview={false} params={p} /> },
+  { id: "page-preview", title: (p) => definitions().find((d) => d.ref.kind === "page" && d.ref.app === p.app && d.ref.name === p.name)?.page?.title ?? p.name ?? t("Page preview"), render: (p) => <PageDefinitionView ref={{ app: p.app ?? "", kind: p.kind ?? "", name: p.name ?? "" }} preview params={p} /> },
   { id: "record", title: (p) => p.id ?? t("Record"), render: (p) => <RecordDetail type={p.type ?? ""} id={p.id ?? ""} /> },
   { id: "run", title: (p) => p.id ?? t("Run"), render: (p) => <RunView id={p.id ?? ""} /> },
   { id: "flow", title: (p) => p.id ?? t("Flow"), render: (p) => <FlowInstanceView id={p.id ?? ""} /> },

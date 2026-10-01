@@ -53,6 +53,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
+		if variable.Scope == "application" && (!PageUIProfileSupports(d.UIProfile, "platform.page.v2.8") || variable.Mode != "shared") {
+			return fmt.Errorf("page variable %s needs v2.8 and a shared application binding", id)
+		}
 		if variable.Scope == "overlay" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") {
 			return fmt.Errorf("page variable %s requires UI profile v2.7", id)
 		}
@@ -92,7 +95,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 	}
 	for id, variable := range d.Variables {
-		if variable.Source == nil || variable.Source.Kind == pageWidgets.Runtime.Loop.Source {
+		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application") {
 			continue
 		}
 		found := false
@@ -151,7 +154,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		input := slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && s.Widget == "input" })
 		if input || node.ValueVariable != "" {
 			v, ok := d.Variables[node.ValueVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") || node.Kind != "widget" || !input || !ok || v.Type != "string" || v.Mode != "state" {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") || node.Kind != "widget" || !input || !ok || v.Type != "string" || !v.IsWritable() {
 				return fmt.Errorf("page node %s input needs v2.7 and a text state binding", id)
 			}
 		}
@@ -275,7 +278,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 	}
 	variables := map[string]PageVariable{}
 	for id, variable := range d.Variables {
-		if variable.Source == nil || variable.Source.Kind == pageWidgets.Runtime.Loop.Source || allowed[variable.Source.Section] {
+		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application") || allowed[variable.Source.Section] {
 			variables[id] = variable
 		}
 	}

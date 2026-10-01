@@ -185,7 +185,7 @@ export function overlayOwner(document: Document, node: string): string | undefin
 }
 
 export function variableAccessible(variable: Api.PageVariable, loop?: string, overlay?: string) {
-  return variable.scope === "page" || variable.scope === "loop-item" && !!loop && variable.owner === loop || variable.scope === "overlay" && !!overlay && variable.owner === overlay;
+  return variable.scope === "page" || variable.scope === "application" || variable.scope === "loop-item" && !!loop && variable.owner === loop || variable.scope === "overlay" && !!overlay && variable.owner === overlay;
 }
 
 export function synchronizeLoopBindings<T extends { id?: string; widget: string; selection?: string; recordVariable?: string }>(document: Document, sections: T[]): { document: Document; sections: T[] } {

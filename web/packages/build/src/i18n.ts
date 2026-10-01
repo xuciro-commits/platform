@@ -2,6 +2,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Only resource or shared variables may declare a source": "只有资源变量或共享绑定可声明来源",
+  "UI profile":"界面契约版本",
+  "Application variables": "应用变量",
+  "Choose application variable": "选择应用变量",
+  "Application binding": "应用共享绑定",
+  "Application variable": "应用变量",
+  "Choose an application variable": "选择应用变量",
+  "These values are shared by pages of one application instance. Refresh restores initial values.": "这些值在同一应用实例的页面间共享，刷新恢复初值。",
+  "Application variable must be scalar": "应用变量必须为标量",
+  "Only shared bindings declare writable": "只有共享绑定可声明写入需求",
+  "Shared binding needs only an application variable source": "共享绑定只能声明应用变量来源",
+
   "Input state variable": "输入状态变量",
   "Choose a text state variable": "选择文本状态变量",
   "Text input": "文本输入",

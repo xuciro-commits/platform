@@ -300,7 +300,7 @@
     "name": "unknown scope",
     "variables": {
       "tab": {
-        "scope": "application",
+        "scope": "unsupported",
         "type": "string",
         "mode": "state",
         "initial": "first"
@@ -1186,6 +1186,79 @@
         "source": {
           "kind": "record",
           "section": "table"
+        }
+      }
+    }
+  },
+  {
+    "name": "application scalar declaration",
+    "valid": true,
+    "variables": {
+      "shared": {
+        "scope": "application",
+        "type": "string",
+        "mode": "state",
+        "initial": "app"
+      },
+      "visible": {
+        "scope": "application",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "shared"
+            },
+            {
+              "literal": "app"
+            }
+          ]
+        }
+      }
+    },
+    "values": {
+      "shared": "app",
+      "visible": true
+    }
+  },
+  {
+    "name": "typed application binding",
+    "valid": true,
+    "variables": {
+      "shared": {
+        "scope": "application",
+        "type": "string",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "shared"
+        }
+      }
+    },
+    "resources": {
+      "shared": {
+        "status": "value",
+        "value": "current"
+      }
+    },
+    "values": {
+      "shared": "current"
+    }
+  },
+  {
+    "name": "shared binding cannot own initial value",
+    "valid": false,
+    "variables": {
+      "shared": {
+        "scope": "application",
+        "type": "string",
+        "mode": "shared",
+        "initial": "copy",
+        "source": {
+          "kind": "application",
+          "variable": "shared"
         }
       }
     }

@@ -3,7 +3,7 @@
 // and the member holds a role in (`/v1/me`), the actions of their catalog — and
 // each app's UI package contributes its views and navigation through defineApp.
 import "./i18n";
-import { HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
+import { ApplicationSessionsProvider, HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
 import { Button, Card, Dialog, Workspace, humanizeKernelError, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
@@ -190,7 +190,8 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const [current, setCurrent] = useState(remembered("workspace:app"));
   // The apps this member may open: the code packages above, and the
   // applications this tenant handed to its people (ADR-0036).
-  const all = useMemo(() => [...(apps ?? []), ...tenantApps(definitions)], [apps, definitions]);
+  const [activeRoute, setActiveRoute] = useState<Route>();
+  const all = useMemo(() => [...(apps ?? []), ...tenantApps(definitions, { application: activeRoute?.params?.application, instance: activeRoute?.params?.instance })], [apps, definitions, activeRoute?.params?.application, activeRoute?.params?.instance]);
   // The launcher is drawn inside a panel that outlives this render, so it reads
   // the apps through a reference: one handed over while the workspace is open
   // belongs there too (ADR-0036).
@@ -199,7 +200,6 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const registry = useRef<Definition[]>([]); // read by tab titles, as the launcher reads `open`
   registry.current = definitions;
   const app = all.find((a) => a.id === current);
-  const [activeRoute, setActiveRoute] = useState<Route>();
   const owner = useMemo(() => new Map((apps ?? []).flatMap((a) => a.views.map((v) => [v.id, a.id] as const))), [apps]);
   const select = useCallback((id: string) => { setCurrent(id); remember("workspace:app", id); }, []);
   useEffect(() => {
@@ -249,7 +249,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
 
   return (
     <HostContext.Provider value={host}>
-      <Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
+      <ApplicationSessionsProvider><Workspace key={`${token}:${me!.tenantId}`} product={app?.title ?? t("Workspace")} storageKey={`workspace.layout:${me!.tenantId}:${me!.principalId}`}
         views={views} home={{ view: "home" }}
         onLanguage={(id) => decide("platform.member.language", { type: "platform.member", id: me!.principalId }, { language: id })}
         launcher={{ apps: all.map((a) => ({ id: a.id, title: a.title, icon: a.icon })), current: app?.id,
@@ -289,7 +289,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
         </div>}
         session={{ tenant: me!.tenantId, principal: me!.principalId, detail: signedIn?.session.email, options: sessionOptions,
           current: signedIn ? "" : `as:${token}`, onSwitch }} />
-      <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} />
+      <ReleaseInformation query={release} open={releaseOpen} onOpenChange={setReleaseOpen} /></ApplicationSessionsProvider>
     </HostContext.Provider>
   );
 }

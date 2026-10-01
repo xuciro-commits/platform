@@ -5,6 +5,7 @@ import { pageUIManifest, type Api } from "@platform/kernel";
 import { compileVariables, evaluateVariables, type VariableResult } from "./variables";
 
 export const pageVariableContract = pageUIManifest.runtime;
+export const pageVariableValues = (variables: Record<string,Api.PageVariable>, state:Record<string,unknown> = {}) => evaluateVariables(variables,state,pageVariableContract);
 export const pageVariableDiagnostics = (variables: Record<string, Api.PageVariable>) => compileVariables(variables, pageVariableContract).issues;
 
 /** Component-local state. Its containing page session is keyed by member and

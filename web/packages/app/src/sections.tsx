@@ -13,6 +13,7 @@ import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, typ
 import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
+import { useApplicationVariables } from "./runtime/ApplicationRuntime";
 import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
@@ -433,7 +434,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot);
-  const allResources = useMemo(() => ({ ...resources, ...incoming.inputs }), [resources, JSON.stringify(incoming.inputs)]);
+  const application = useApplicationVariables(initialVariables);
+  const allResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources)]);
   const variables = usePageVariables(initialVariables, snapshot.scalars, session, allResources);
   const overlayValues = useMemo(() => Object.fromEntries(Object.keys(page.document?.overlays ?? {}).map((id) => [id, evaluateVariables(initialVariables, snapshot.scalars, pageVariableContract, allResources, undefined, id)])), [initialVariables, snapshot.scalars, allResources]);
   const overlayForRoot = (root: string) => Object.entries(page.document?.overlays ?? {}).find(([, overlay]) => overlay.root === root)?.[0];
@@ -445,6 +447,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const indexed = new Map((page.sections ?? []).map((section, i) => [section.id, { section, i }]));
   const writeState = (id: string, value: string | boolean, owner?: string) => {
     const variable = initialVariables[id];
+    if (variable?.mode === "shared") { application.set(id,value); return; }
     if (variable?.mode !== "state" || !(variable.scope === "page" || variable.scope === "overlay" && variable.owner === owner) || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > pageVariableContract.maxStringBytes) return;
     const entries = Object.entries(page.document?.overlays ?? {}), target = entries.find(([, overlay]) => overlay.openVariable === id);
     const changes: Record<string, string | boolean> = { [id]: value }, reset: string[] = [];
@@ -527,6 +530,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   return (
     <div ref={pageFocus} tabIndex={-1} className="@container/page grid gap-3 outline-none">
       {notice}
+      {application.error && <Panel role="alert">{t(application.error)}</Panel>}
       {(incoming.error || navigation.error) && <Panel role="alert">{t(incoming.error ?? navigation.error!)}</Panel>}
       {incoming.error && !onChoose ? null : page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)
         ? <Panel role="alert">{t("This page needs a newer workspace version. Refresh after updating the workspace.")}</Panel>

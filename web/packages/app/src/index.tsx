@@ -345,5 +345,7 @@ export { NewActions, PayloadFields, RecordActions, useRecordArchive } from "./ac
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";
 export { ComposedPage, SectionView, isComposed } from "./sections";
 export { createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetContract, type WidgetID } from "./widgets/registry";
-export { pageVariableContract, pageVariableDiagnostics } from "./runtime/PageRuntime";
+export { pageVariableContract, pageVariableValues, pageVariableDiagnostics } from "./runtime/PageRuntime";
 export type { VariableResult as PageVariableValue } from "./runtime/variables";
+
+export { ApplicationPage, ApplicationSessionsProvider } from "./runtime/ApplicationRuntime";
