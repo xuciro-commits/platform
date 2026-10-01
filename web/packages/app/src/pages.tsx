@@ -27,7 +27,7 @@ export function PageWorkspace({ definition }: { definition: PageDefinition }) {
   if (isComposed(page)) { // laid out from sections someone composed (ADR-0035)
     return <>
       <PageHeader title={page.title} description={page.description} />
-      <ComposedPage page={page} />
+      <ComposedPage page={page} definitionKey={`${definition.ref.app}/${definition.ref.name}@${definition.version}`} />
     </>;
   }
   return <RecordWorkspace title={page.title} description={page.description} source={source} type={page.object.name} listFields={page.listFields}

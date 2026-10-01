@@ -46,6 +46,9 @@ type AssetBinding struct {
 // PageReleaseAsset is the single descriptor path for a code page and a page
 // assembled by the builder. Its bindings become closure dependencies.
 func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error) {
+	if err := page.Document.Check(page.Sections); err != nil {
+		return ReleaseAsset{}, err
+	}
 	body, err := json.Marshal(page)
 	if err != nil {
 		return ReleaseAsset{}, err
@@ -328,6 +331,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 	case AssetPage:
 		var page Page
 		if err := json.Unmarshal(body, &page); err != nil {
+			return fmt.Errorf("release page %s: %w", ref, err)
+		}
+		if err := page.Document.Check(page.Sections); err != nil {
 			return fmt.Errorf("release page %s: %w", ref, err)
 		}
 		required = append(required, page.Object)

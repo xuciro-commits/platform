@@ -49,6 +49,37 @@ test("two selections of one object keep their details and actions independent af
   await open(page, "manager", `/compose?id=${pageID}`);
   const layout = page.getByRole("region", { name: "Widgets and layout", exact: true });
   const inspector = page.getByRole("region", { name: "The widget in hand", exact: true });
+  // Lift a V1 page into stable V2 instances; title edits, copy and grouping
+  // remain reversible without changing the original business bindings.
+  await layout.getByRole("button", { name: "Left list", exact: true }).click();
+  await inspector.getByLabel("Title", { exact: true }).fill("Temporary title");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(inspector.getByLabel("Title", { exact: true })).toHaveValue("Left list");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(inspector.getByLabel("Title", { exact: true })).toHaveValue("Temporary title");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Duplicate widget", exact: true }).click();
+  await expect(layout.getByRole("button", { name: "Left list", exact: true })).toHaveCount(2);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(layout.getByRole("button", { name: "Left list", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(layout.getByRole("button", { name: "Left list", exact: true })).toHaveCount(2);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await layout.getByRole("button", { name: "Left detail", exact: true }).scrollIntoViewIfNeeded();
+  await layout.getByRole("button", { name: "Right detail", exact: true }).scrollIntoViewIfNeeded();
+  await layout.getByRole("button", { name: "Left detail", exact: true }).dragTo(layout.getByRole("button", { name: "Right detail", exact: true }));
+  await layout.getByRole("button", { name: "Text", exact: true }).dragTo(page.getByRole("region", { name: "The page", exact: true }).getByRole("heading", { name: "Left list", exact: true }));
+  await expect(layout.getByRole("button", { name: "Text", exact: true })).toHaveCount(2);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(layout.getByRole("button", { name: "Text", exact: true })).toHaveCount(1);
+  await layout.getByRole("button", { name: "Left list", exact: true }).click();
+  await layout.getByRole("button", { name: "Group with next in rows", exact: true }).click();
+  await expect(inspector.getByRole("combobox", { name: "Layout", exact: true })).toHaveValue("rows");
+  await inspector.getByRole("combobox", { name: "Layout", exact: true }).selectOption("columns");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(inspector.getByRole("combobox", { name: "Layout", exact: true })).toHaveValue("rows");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(inspector.getByRole("combobox", { name: "Layout", exact: true })).toHaveValue("columns");
   await layout.getByRole("button", { name: "Page settings", exact: true }).click();
   for (const [i, name] of ["left", "right"].entries()) {
     await inspector.getByRole("button", { name: "Add record selection", exact: true }).click();
@@ -82,7 +113,22 @@ test("two selections of one object keep their details and actions independent af
   await inspector.getByRole("combobox", { name: "Parent selection", exact: true }).selectOption("line");
   await inspector.getByRole("combobox", { name: "Through", exact: true }).selectOption("tasks");
   await inspector.getByRole("combobox", { name: "Input source for Size", exact: true }).selectOption("path:parent.packsize");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await expect(page.getByRole("region", { name: "The page", exact: true }).getByRole("row").filter({ hasText: "ITEM-A" }).first()).toBeVisible();
+  if (process.env.PLATFORM_SCREENSHOTS) await page.screenshot({ path: testInfo.outputPath("studio-v2-editor.png"), fullPage: true });
   await page.getByRole("button", { name: "Review release", exact: true }).click();
+  const savedDraft = (await (await request.get(`/v1/records/build.page/${pageID}`, { headers: builder })).json()).record;
+  expect(savedDraft.document.formatVersion).toBe(2);
+  expect(savedDraft.document.uiProfile).toBe("platform.page.v2.3");
+  expect(new Set(savedDraft.sections.map((s: { id: string }) => s.id)).size).toBe(11);
+  expect(savedDraft.sections.every((s: { configVersion: number }) => s.configVersion === 1)).toBe(true);
+  expect(savedDraft.document.nodes.v1columns2.children).toEqual(["v1node3", "v1node2"]);
+  expect(Object.values(savedDraft.document.nodes).filter((n) => (n as { kind: string }).kind === "columns").length).toBeGreaterThan(3);
   await page.getByRole("button", { name: "Check draft and dependencies", exact: true }).click();
   await page.getByRole("button", { name: "Save immutable candidate", exact: true }).click();
   await expect(page.getByRole("button", { name: "Activate release", exact: true })).toBeEnabled();
@@ -90,6 +136,7 @@ test("two selections of one object keep their details and actions independent af
   await expect(page.getByRole("status").filter({ hasText: "Release active for operators." })).toBeVisible();
   const definitions = await (await request.get("/v1/definitions", { headers: builder })).json();
   const installed = definitions.find((d: { ref: { kind: string; name: string } }) => d.ref.kind === "page" && d.ref.name === pageName).page;
+  expect(installed.document).toEqual(savedDraft.document);
   expect(installed.selections).toEqual([
     ...["left", "right"].map((name) => ({ name, object: { app: "build", kind: "object", name: type } })),
     { name: "line", object: { app: "build", kind: "object", name: child } },
@@ -138,4 +185,42 @@ test("two selections of one object keep their details and actions independent af
   await expect(section("Left detail").getByRole("heading", { name: "ITEM-A", exact: true })).toBeVisible();
   await expect(section("Task detail").getByText("Select a record to see it here.", { exact: true })).toBeVisible();
   await expect(taskForm.getByLabel("Number *", { exact: true })).toHaveCount(0);
+  // A fresh operator session still reads the activated layout and persisted
+  // action result; transient record selections correctly start empty.
+  await operation.reload();
+  await expect(section("Left detail").getByText("Select a record to see it here.", { exact: true })).toBeVisible();
+  await section("Left list").getByRole("row").filter({ hasText: "ITEM-A" }).click();
+  await section("Right list").getByRole("row").filter({ hasText: "ITEM-B" }).click();
+  await expect(section("Left detail").getByRole("heading", { name: "ITEM-A", exact: true })).toBeVisible();
+  await expect(section("Right detail").getByRole("heading", { name: "ITEM-B", exact: true })).toBeVisible();
+  await expect(section("Right actions").getByRole("button", { name: "Complete item", exact: true })).toHaveCount(0);
+});
+
+test("page save conflicts retain the local draft until the builder discards it", async ({ page, request }) => {
+  const suffix = fresh("conflict").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const objectID = fresh("OBJ"), pageID = fresh("PAGE"), name = `notes${suffix}`;
+  await decide(request, "manager", "build", "build.object.create", { type: "build.object", id: objectID }, {
+    name, title: "Note", fields: [{ name: "note", title: "Note", type: "text" }],
+  });
+  await decide(request, "manager", "build", "build.object.publish", { type: "build.object", id: objectID }, {});
+  await decide(request, "manager", "build", "build.page.create", { type: "build.page", id: pageID }, {
+    name, title: "Saved page", object: `build.${name}`, sections: [{ widget: "text", title: "Notes", text: "Saved words" }],
+  });
+  await open(page, "manager", `/compose?id=${pageID}`);
+  const layout = page.getByRole("region", { name: "Widgets and layout", exact: true });
+  const inspector = page.getByRole("region", { name: "The widget in hand", exact: true });
+  await layout.getByRole("button", { name: "Page settings", exact: true }).click();
+  await inspector.getByLabel("What people call it", { exact: true }).fill("Local unsaved title");
+  await decide(request, "manager", "build", "build.page.edit", { type: "build.page", id: pageID }, { title: "Remote title" });
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: /CONFLICT|changed|revision/i })).toBeVisible();
+  await expect(inspector.getByLabel("What people call it", { exact: true })).toHaveValue("Local unsaved title");
+  // Refetching the newer record must not silently advance the draft's base
+  // revision and turn the next click into an overwrite.
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: /CONFLICT|changed|revision/i })).toBeVisible();
+  const saved = (await (await request.get(`/v1/records/build.page/${pageID}`, { headers: { Authorization: "Bearer manager" } })).json()).record;
+  expect(saved.title).toBe("Remote title");
+  await page.getByRole("button", { name: "Cancel changes", exact: true }).click();
+  await expect(inspector.getByLabel("What people call it", { exact: true })).toHaveValue("Remote title");
 });

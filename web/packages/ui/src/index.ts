@@ -5,6 +5,8 @@ export { MetalButton, LiquidButton } from "./primitives/metalButton";
 export { RetroButton, type RetroButtonProps } from "./primitives/retroButton";
 export { Input, Select, Textarea } from "./primitives/input";
 export { Card, Panel } from "./primitives/card";
+export { EditorWorkbench } from "./layout/EditorWorkbench";
+export { ContentTabs } from "./layout/ContentTabs";
 export { Checkbox, Form, Disclosure, FilePicker, Toggles, Tree } from "./primitives/controls";
 export { Dialog } from "./primitives/dialog";
 export { StatusTag, Tag, defineStatuses, submissionStatuses, type StatusRegistry, type Tone } from "./components/StatusTag";

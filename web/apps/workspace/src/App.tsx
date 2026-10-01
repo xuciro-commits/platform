@@ -161,6 +161,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
   const host = useMemo<Host | undefined>(() => {
     if (!me) return undefined;
     const source: RecordSource = {
+      scope: JSON.stringify([me, definitions.map((definition) => [definition.ref, definition.version])]),
       entity: (type) => entities.find((e) => e.type === type),
       list: (type, q) => client.records<RecordPageData>(type, q),
       get: (type, id) => client.record<RecordView>(type, id),

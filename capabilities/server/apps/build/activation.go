@@ -118,12 +118,12 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				return nil, nil, fmt.Errorf("page %s changes AI function bindings; publish the binding through its owner before release activation", asset.Ref)
 			}
 			frozen := Page{Record: pages[i].Record, Name: pageDescriptor.Name, Title: pageDescriptor.Title, Description: pageDescriptor.Description,
-				Object: pageDescriptor.Object.Name, List: pageDescriptor.ListFields, Detail: pageDescriptor.DetailFields, Selections: slices.Clone(pageDescriptor.Selections)}
+				Object: pageDescriptor.Object.Name, List: pageDescriptor.ListFields, Detail: pageDescriptor.DetailFields, Selections: slices.Clone(pageDescriptor.Selections), Document: pageDescriptor.Document}
 			for _, action := range pageDescriptor.Actions {
 				frozen.Actions = append(frozen.Actions, action.Name)
 			}
 			for _, s := range pageDescriptor.Sections {
-				section := Section{Widget: s.Widget, Title: s.Title, Width: s.Width, Object: s.Object.Name, Relation: s.Relation, Selection: s.Selection, ParentSelection: s.ParentSelection,
+				section := Section{ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Object: s.Object.Name, Relation: s.Relation, Selection: s.Selection, ParentSelection: s.ParentSelection,
 					Fields: s.Fields, Group: s.Group, Measure: s.Measure, Text: s.Text, Operation: s.Operation, Inputs: s.Inputs}
 				if s.Query.Name != "" {
 					section.Query = s.Query.App + "." + s.Query.Name

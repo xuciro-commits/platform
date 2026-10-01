@@ -127,6 +127,12 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	if p.Name == "" || (p.Layout != "list-detail" && p.Layout != "composed") {
 		return fmt.Errorf("page %q: a page is list-detail, or composed of sections (ADR-0035)", p.Name)
 	}
+	if p.Document != nil && p.Layout != "composed" {
+		return fmt.Errorf("page %s: a structured layout needs composed sections", p.Name)
+	}
+	if err := p.Document.Check(p.Sections); err != nil {
+		return fmt.Errorf("page %s: %w", p.Name, err)
+	}
 	info, known := t.entity(p.Object.Name)
 	if !known {
 		return fmt.Errorf("page %s: no object %s", p.Name, p.Object.Name)
@@ -165,6 +171,9 @@ var selectionName = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 // knows, an object, the fields, actions and measures that object declares
 // (ADR-0035). What the registry offers must open.
 func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error {
+	if err := p.Document.Check(p.Sections); err != nil {
+		return fmt.Errorf("page %s: %w", p.Name, err)
+	}
 	selections := map[string]string{}
 	for _, selection := range p.Selections {
 		if !selectionName.MatchString(selection.Name) || selections[selection.Name] != "" {

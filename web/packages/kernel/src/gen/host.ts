@@ -854,7 +854,50 @@ export type Page = {
   detailFields: string[];
   actions: AssetRef[];
   sections?: Section[];
+  document?: PageDocument;
   selections?: SelectionVariable[];
+};
+
+export type PageDocument = {
+  formatVersion: number;
+  uiProfile: string;
+  root: string;
+  nodes: Record<string, PageLayoutNode>;
+  variables?: Record<string, PageVariable>;
+};
+
+export type PageExpression = {
+  op: string;
+  args: PageValue[];
+};
+
+export type PageLayoutNode = {
+  kind: string;
+  children?: string[];
+  section?: string;
+  title?: string;
+  activeVariable?: string;
+  visibleWhen?: string;
+};
+
+export type PageResourceSource = {
+  kind: string;
+  section: string;
+};
+
+export type PageValue = {
+  variable?: string;
+  literal?: unknown;
+};
+
+export type PageVariable = {
+  title?: string;
+  scope: string;
+  type: string;
+  mode: string;
+  initial?: unknown;
+  expression?: PageExpression;
+  source?: PageResourceSource;
 };
 
 export type Passage = {
@@ -1105,6 +1148,8 @@ export type SavedView = {
 };
 
 export type Section = {
+  id?: string;
+  configVersion?: number;
   widget: string;
   title?: string;
   width?: string;
@@ -1405,3 +1450,501 @@ export type WorkTask = {
   answers?: string[];
   answer?: string;
 };
+
+/** Shared build-time page UI contracts (ADR-0046). */
+export const pageUIManifest = {
+  "uiProfile": "platform.page.v2.3",
+  "widgets": [
+    {
+      "componentID": "table",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Table",
+      "category": "Records",
+      "fieldPreset": "list",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "fields",
+        "query",
+        "relation",
+        "selection"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "componentID": "detail",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Detail",
+      "category": "Records",
+      "fieldPreset": "list",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "fields",
+        "selection"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "componentID": "actions",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Actions",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "actions",
+        "selection"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "componentID": "chart",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Chart",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "measure": "count"
+      },
+      "bindingKinds": [
+        "object",
+        "relation",
+        "aggregate"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "measure": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    {
+      "componentID": "metric",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Metric",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "half",
+        "measure": "count"
+      },
+      "bindingKinds": [
+        "object",
+        "relation",
+        "aggregate"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "measure": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    {
+      "componentID": "text",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Text",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 65536
+          }
+        }
+      }
+    },
+    {
+      "componentID": "filter",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Filter",
+      "category": "Records",
+      "fieldPreset": "filter",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "fields"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "componentID": "form",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Form",
+      "category": "Records",
+      "fieldPreset": "create",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "fields",
+        "relation",
+        "inputs"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "componentID": "timeline",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Timeline",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "selection"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "componentID": "tasks",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Tasks",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "selection"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "componentID": "function",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "AI function",
+      "category": "Logic",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "function",
+        "selection"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "componentID": "compute",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.1",
+      "title": "Code function",
+      "category": "Logic",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "operation",
+        "inputs",
+        "selection"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "supportedProfiles": [
+    "platform.page.v2.1",
+    "platform.page.v2.2",
+    "platform.page.v2.3"
+  ],
+  "runtime": {
+    "scope": "page",
+    "valueTypes": [
+      "string",
+      "boolean",
+      "record",
+      "filter",
+      "object-set"
+    ],
+    "maxVariables": 64,
+    "maxStringBytes": 4096,
+    "operators": [
+      {
+        "id": "equal",
+        "input": "same",
+        "output": "boolean",
+        "minArgs": 2,
+        "maxArgs": 2
+      },
+      {
+        "id": "not",
+        "input": "boolean",
+        "output": "boolean",
+        "minArgs": 1,
+        "maxArgs": 1
+      },
+      {
+        "id": "and",
+        "input": "boolean",
+        "output": "boolean",
+        "minArgs": 2,
+        "maxArgs": 8
+      },
+      {
+        "id": "or",
+        "input": "boolean",
+        "output": "boolean",
+        "minArgs": 2,
+        "maxArgs": 8
+      },
+      {
+        "id": "concat",
+        "input": "string",
+        "output": "string",
+        "minArgs": 2,
+        "maxArgs": 8
+      },
+      {
+        "id": "present",
+        "input": "resource",
+        "output": "boolean",
+        "minArgs": 1,
+        "maxArgs": 1
+      }
+    ],
+    "resources": [
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "table"
+      },
+      {
+        "kind": "filter",
+        "type": "filter",
+        "widget": "filter"
+      },
+      {
+        "kind": "query",
+        "type": "object-set",
+        "widget": "table"
+      }
+    ]
+  }
+} as const;

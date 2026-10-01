@@ -13,6 +13,9 @@ import { NewActions, RecordActions, useTransition, useRecordArchive } from "./ac
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 export { ComputeCall } from "./capability";
 export { FlowInstanceView } from "./flows";
+export { pageDocumentFromSections } from "./pageDocument";
+export { semanticModelView, propertyKey, relationKey, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
+export { SemanticObjectSelect, SemanticPropertySelect } from "./semantic/Selector";
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
 export type AppEntry = Api.AppEntry;
@@ -341,3 +344,6 @@ export { Assistant, ChainGraph, RunView, Search, runStates, type AgentInfo, type
 export { NewActions, PayloadFields, RecordActions, useRecordArchive } from "./actions";
 export { PageWorkspace, PagePreview, isPageDefinition } from "./pages";
 export { ComposedPage, SectionView, isComposed } from "./sections";
+export { createWidgetRegistry, widgetContracts, widgetContract, pageUIProfile, supportsPageUIProfile, type WidgetRegistry, type WidgetContract, type WidgetID } from "./widgets/registry";
+export { pageVariableContract, pageVariableDiagnostics } from "./runtime/PageRuntime";
+export type { VariableResult as PageVariableValue } from "./runtime/variables";

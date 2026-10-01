@@ -27,8 +27,8 @@ async function generate(check) {
     return inputs.get(absolute);
   };
   const entries = [], translations = {}, errors = [], packages = new Map(), apis = {};
-  const definition = await read("capabilities/server/platform/definition.go");
-  const widgets = new Set([...definition.match(/var Widgets = \[\]string\{([^}]+)\}/)[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]));
+  const pageUI = JSON.parse(await read("capabilities/server/platform/pageui/widgets.json"));
+  const widgets = new Set(pageUI.widgets.map((widget) => widget.componentID));
   for (const owner of owners) {
     const directory = ownerDirectory(owner);
     const metadata = `${directory}/src/catalog.ts`;

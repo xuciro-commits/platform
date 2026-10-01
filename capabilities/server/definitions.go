@@ -102,6 +102,12 @@ func (t *Tenant) registerDefinitions() error {
 			if page.Layout != "list-detail" && page.Layout != "composed" {
 				return fmt.Errorf("asset %s has unsupported layout %q", ref, page.Layout)
 			}
+			if page.Document != nil && page.Layout != "composed" {
+				return fmt.Errorf("asset %s: a structured layout needs composed sections", ref)
+			}
+			if err := page.Document.Check(page.Sections); err != nil {
+				return fmt.Errorf("asset %s: %w", ref, err)
+			}
 			if page.Object.Kind != platform.AssetObject || objects[page.Object.Name] != page.Object {
 				return fmt.Errorf("asset %s requires missing object %s", ref, page.Object)
 			}
@@ -407,6 +413,25 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					sections = append(sections, section)
 				}
 				page.Sections = sections
+				page.Document = page.Document.Visible(sections)
+				// Removing a resource producer also removes dependent visibility
+				// branches. Repeat to closure without exposing orphan inputs.
+				if page.Document != nil {
+					for {
+						visible := map[string]bool{}
+						for _, node := range page.Document.Nodes {
+							if node.Kind == "widget" {
+								visible[node.Section] = true
+							}
+						}
+						before := len(page.Sections)
+						page.Sections = slices.DeleteFunc(page.Sections, func(section platform.Section) bool { return !visible[section.ID] })
+						if len(page.Sections) == before {
+							break
+						}
+						page.Document = page.Document.Visible(page.Sections)
+					}
+				}
 			}
 			def.Requires = append([]platform.AssetRef{page.Object}, page.Actions...)
 			def.Page = &page

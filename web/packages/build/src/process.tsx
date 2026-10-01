@@ -5,13 +5,15 @@ import { AssetControls } from "./asset-controls";
 // left, what a person will see in the middle, the piece in hand on the right.
 // It writes the object's own record through its own action; the host checks
 // everything again when the object is published.
-import { NewActions, PayloadFields, useHost, useReadQuery } from "@platform/app";
+import { PayloadFields, SemanticObjectSelect, useHost, useReadQuery } from "@platform/app";
 import {
-  Button, Card, Checkbox, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, canvasNodeWidth, cn, defineStatuses, layout, notify, t, useWorkspace, useUnsavedChanges,
+  Button, Card, Checkbox, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, canvasNodeWidth, cn, defineStatuses, layout, notify, t, useWorkspace, useUnsavedChanges,
   type CanvasEdge, type CanvasNode, type NodeCatalog, type EntityInfo,
 } from "@platform/ui";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ModelWorkbench } from "./model-editor/ModelWorkbench";
+import { useDraftSession } from "./session/DraftSession";
 
 type Field = { name: string; title: string; type: string; choices?: string; required?: boolean; search?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 type State = { name: string; title: string; tone?: string; description?: string };
@@ -120,40 +122,45 @@ const nameOf = (title: string, taken: string[]) => {
 
 /** The objects of this organisation: open one to give it states and actions. */
 export function Objects() {
-  const { source } = useHost();
-  const { open } = useWorkspace();
-  return (
-    <div className="grid gap-3">
-      <PageHeader title={t("Objects")} description={t("Define fields, relationships, actions and access.")} actions={<NewActions type="build.object" />} />
-      <RecordList source={source} type="build.object" fields={["title", "name", "state"]} onOpen={(record) => open({ view: "process", params: { id: record.id } })} />
-    </div>
-  );
+  return <ModelWorkbench />;
 }
 
-export function ProcessEditor({ id }: { id: string }) {
+export function ProcessEditor({ id, initialField, initialAction, initialAccess }: { id: string; initialField?: string; initialAction?: string; initialAccess?: boolean }) {
   const { decide, entities, definitions } = useHost();
   const { open } = useWorkspace();
-  const read = useReadQuery<{ record?: ObjectRecord }>(`/v1/records/${encodeURIComponent("build.object")}/${encodeURIComponent(id)}`).data;
-  const object = read?.record;
-  const [process, setProcess] = useState<Process>({ states: [], actions: [], access: [], fields: [] });
+  const query = useReadQuery<{ record?: ObjectRecord }>(`/v1/records/build.object/${encodeURIComponent(id)}`);
+  const object = query.data?.record;
+  const session = useDraftSession<Process>({ states: [], actions: [], access: [], fields: [] });
+  const { draft: process, dirty } = session;
+  const loaded = useRef(""), baseRevision = useRef(0), lock = useRef(false);
+  const hydrate = (record: ObjectRecord): Process => ({ states: record.states ?? [], actions: record.actions ?? [], access: record.access ?? [], fields: record.fields ?? [] });
   const [chosen, setChosen] = useState<Chosen>();
+  const initiallyChosen = useRef("");
   const [center, setCenter] = useState<"map" | "preview">("map");
-  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string>(); // why the host refused, kept on screen
   const { markSaved, discardChanges } = useUnsavedChanges(dirty, () => {
-    setProcess({ states: object?.states ?? [], actions: object?.actions ?? [], access: object?.access ?? [], fields: object?.fields ?? [] });
-    setDirty(false); setRefused(undefined); setChosen(undefined);
+    if (object) { session.load(hydrate(object)); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`; }
+    setRefused(undefined); setChosen(undefined);
   });
   useEffect(() => {
-    if (object && !dirty) setProcess({ states: object.states ?? [], actions: object.actions ?? [], access: object.access ?? [], fields: object.fields ?? [] });
-  }, [object, dirty]);
+    if (!object || dirty || busy || loaded.current === `${object.id}:${object.revision}`) return;
+    session.load(hydrate(object)); baseRevision.current = object.revision; loaded.current = `${object.id}:${object.revision}`;
+  }, [object, dirty, busy, session.load]);
+  useEffect(() => {
+    const key = `${id}:${initialField ?? ""}:${initialAction ?? ""}:${initialAccess ?? false}`;
+    if (!object || initiallyChosen.current === key) return;
+    initiallyChosen.current = key;
+    if (initialField) { const at = object.fields.findIndex((field) => field.name === initialField); if (at >= 0) setChosen({ kind: "field", at }); }
+    else if (initialAction) { const at = object.actions?.findIndex((action) => action.name === initialAction) ?? -1; if (at >= 0) setChosen({ kind: "action", at }); }
+    else if (initialAccess && object.access?.length) setChosen({ kind: "access", at: 0 });
+  }, [object, id, initialField, initialAction, initialAccess]);
   if (!object) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const parent = `build.${object.name}`;
   const targets = entities.filter((entity) => entity.type !== parent && entity.fields.some((field) => field.type === "reference" && field.ref === parent)
     && definitions.some((definition) => definition.source === "tenant" && definition.ref.app === "build" && definition.ref.kind === "object" && definition.ref.name === entity.type));
   const issues = process.actions.flatMap((a) => actionIssues(a, process, parent, targets, entities).map((message) => `${a.title || a.name}: ${message}`));
-  const change = (next: Process) => { setProcess(next); setDirty(true); };
+  const change = (next: Process) => { if (!lock.current) session.edit(next); };
   const addState = () => {
     const title = process.states.length === 0 ? t("New") : t("State {n}", { n: process.states.length + 1 });
     change({ ...process, states: [...process.states, { name: nameOf("state", process.states.map((s) => s.name)), title, tone: "info" }] });
@@ -167,8 +174,14 @@ export function ProcessEditor({ id }: { id: string }) {
   };
   const save = async () => {
     setRefused(undefined);
-    const ok = await decide("build.object.edit", { type: "build.object", id }, process, { expectedRevision: object.revision, onRefused: setRefused });
-    if (ok) { markSaved(); setDirty(false); }
+    const expectedRevision = baseRevision.current;
+    const ok = await decide("build.object.edit", { type: "build.object", id }, process, { expectedRevision, onRefused: setRefused });
+    if (ok) {
+      const result = await query.refetch();
+      const confirmed = result.isSuccess && result.data?.record?.revision === expectedRevision + 1 ? result.data.record : undefined;
+      baseRevision.current = expectedRevision + 1; loaded.current = `${id}:${baseRevision.current}`;
+      session.saved(process, confirmed ? hydrate(confirmed) : undefined); markSaved();
+    }
     return ok;
   };
   const publish = async () => {
@@ -182,9 +195,9 @@ export function ProcessEditor({ id }: { id: string }) {
     open({ view: "release-review", params: { kind: "object", id } });
   };
   const perform = async (action: () => Promise<unknown>) => {
-    setBusy(true); setRefused(undefined);
+    if (lock.current) return; lock.current = true; setBusy(true); setRefused(undefined);
     try { await action(); } catch { setRefused(t("The object request could not be completed. Your draft is still here.")); }
-    finally { setBusy(false); }
+    finally { lock.current = false; setBusy(false); }
   };
   const action = chosen?.kind === "action" ? process.actions[chosen.at] : undefined;
   const state = chosen?.kind === "state" ? process.states[chosen.at] : undefined;
@@ -198,6 +211,8 @@ export function ProcessEditor({ id }: { id: string }) {
           <Button onClick={() => open({ view: "process" })}>{t("Back to objects")}</Button>
           {object.state === "published" && <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: object.name } })}>{t("Open records")}</Button>}
 <AssetControls type="build.object" record={object} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "process", params: { id } }} />
+          <Button variant="ghost" aria-label={t("Undo")} title={t("Undo")} disabled={!session.canUndo || busy} onClick={() => { session.undo(); setChosen(undefined); }}><Undo2 /></Button>
+          <Button variant="ghost" aria-label={t("Redo")} title={t("Redo")} disabled={!session.canRedo || busy} onClick={() => { session.redo(); setChosen(undefined); }}><Redo2 /></Button>
           <Button onClick={() => void perform(save)} disabled={!dirty || busy}>{t("Save")}</Button>
           <Button disabled={busy || issues.length > 0} onClick={() => void perform(publish)} title={t("Direct install changes the current workspace immediately. It does not save or activate a release candidate.")}>{t("Direct install")}</Button>
           <Button variant="primary" disabled={busy || issues.length > 0} onClick={() => void perform(review)}>{t("Review release")}</Button>
@@ -207,24 +222,17 @@ export function ProcessEditor({ id }: { id: string }) {
       {issues.length > 0 && <Panel role="alert" className="text-xs text-[var(--tone-danger)]"><strong>{t("Check these rules before installing or reviewing a release:")}</strong>
         <ul className="ml-4 list-disc">{issues.map((message, i) => <li key={i}>{message}</li>)}</ul></Panel>}
       {dirty && <Panel role="status" className="text-xs text-muted">{t("Unsaved changes. Direct install and release review save first.")}</Panel>}
-      <div className="grid gap-3 lg:min-h-0 lg:flex-1 lg:grid-cols-[15rem_minmax(0,1fr)_21rem]">
-        <div role="region" aria-label={t("States and actions")} className="lg:min-h-0 lg:overflow-y-auto">
+      <fieldset disabled={busy} className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
+        <EditorWorkbench leftLabel={t("States and actions")} centerLabel={t("What people see")} rightLabel={t("The piece in hand")}
+          left={<div className="p-2">
           <FieldsOutline fields={process.fields} chosen={chosen} onChoose={setChosen}
             onAdd={() => { change({ ...process, fields: [...process.fields, { name: nameOf("field", process.fields.map((f) => f.name)), title: t("Field"), type: "text" }] }); setChosen({ kind: "field", at: process.fields.length }); }} />
           <Outline process={process} chosen={chosen} onChoose={setChosen} onAddState={addState} onAddAction={addAction} onChange={change} />
           <AccessOutline access={process.access} chosen={chosen} onChoose={setChosen}
             onAdd={() => { change({ ...process, access: [...process.access, { role: nameOf("role", process.access.map((a) => a.role)), read: "own", create: true, edit: true }] }); setChosen({ kind: "access", at: process.access.length }); }}
             onRemove={(i) => { change({ ...process, access: process.access.filter((_, at) => at !== i) }); setChosen(undefined); }} />
-        </div>
-        <div role="region" aria-label={t("What people see")} className="min-w-0 rounded-md border border-dashed border-border p-3 lg:min-h-0 lg:overflow-y-auto">
-          <div role="tablist" aria-label={t("Object view")} className="mb-3 flex gap-1 border-b border-border pb-2">
-            <Button role="tab" aria-selected={center === "map"} size="sm" variant={center === "map" ? "primary" : "ghost"} onClick={() => setCenter("map")}>{t("Process map")}</Button>
-            <Button role="tab" aria-selected={center === "preview"} size="sm" variant={center === "preview" ? "primary" : "ghost"} onClick={() => setCenter("preview")}>{t("Record preview")}</Button>
-          </div>
-          {center === "map" ? <ProcessGraph key={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
-            : <Preview object={object} process={process} action={action} />}
-        </div>
-        <div role="region" aria-label={t("The piece in hand")} className="lg:min-h-0 lg:overflow-y-auto">
+          </div>}
+          right={<div className="p-2">
           {field && chosen && <FieldProperties field={field} onRemove={() => { change({ ...process, fields: process.fields.filter((_, at) => at !== chosen.at) }); setChosen(undefined); }} onChange={(patch) => change({ ...process, fields: process.fields.map((f, i) => i === chosen.at ? { ...f, ...patch } : f) })} />}
           {state && chosen && <StateProperties state={state} onChange={(patch) => change({ ...process, states: process.states.map((s, i) => i === chosen.at ? { ...s, ...patch } : s) })} />}
           {chosen?.kind === "access" && process.access[chosen.at] && <AccessProperties access={process.access[chosen.at]!} fields={process.fields}
@@ -233,8 +241,17 @@ export function ProcessEditor({ id }: { id: string }) {
           {action && chosen && <ActionProperties action={action} states={process.states} fields={process.fields} parent={parent} targets={targets} entities={entities} roles={process.access.map((a) => a.role).filter((r) => process.access.find((x) => x.role === r)?.read !== "none")} approverRoles={["builder", ...(process.access.length ? process.access.filter((a) => a.read === "all").map((a) => a.role) : ["user"])]}
             onChange={(patch) => change({ ...process, actions: process.actions.map((a, i) => i === chosen.at ? { ...a, ...patch } : a) })} />}
           {!chosen && <Card className="p-3 text-xs text-muted">{t("Choose a field, state or action to configure it.")}</Card>}
-        </div>
-      </div>
+          </div>}>
+          <div className="min-h-0 flex-1 overflow-auto p-3">
+          <div role="tablist" aria-label={t("Object view")} className="mb-3 flex gap-1 border-b border-border pb-2">
+            <Button role="tab" aria-selected={center === "map"} size="sm" variant={center === "map" ? "primary" : "ghost"} onClick={() => setCenter("map")}>{t("Process map")}</Button>
+            <Button role="tab" aria-selected={center === "preview"} size="sm" variant={center === "preview" ? "primary" : "ghost"} onClick={() => setCenter("preview")}>{t("Record preview")}</Button>
+          </div>
+          {center === "map" ? <ProcessGraph key={id} process={process} chosen={chosen} onChoose={setChosen} onChange={change} onAddState={addState} onAddAction={addAction} />
+            : <Preview object={object} process={process} action={action} />}
+          </div>
+        </EditorWorkbench>
+      </fieldset>
     </div>
   );
 }
@@ -323,7 +340,7 @@ function FieldProperties({ field, onChange, onRemove }: { field: Field; onChange
     <Label text={t("Name")}><Input className="font-mono" value={field.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
     <Label text={t("Type")}><Select value={field.type} onChange={(e) => onChange({ type: e.target.value })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
-    {field.type === "reference" && <Label text={t("Reference object")}><Input value={field.ref ?? ""} onChange={(e) => onChange({ ref: e.target.value })} /></Label>}
+    {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
     {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}
     <Checkbox checked={!!field.required} onChange={(required) => onChange({ required })}>{t("Required")}</Checkbox>
     <Checkbox checked={!!field.search} onChange={(search) => onChange({ search })}>{t("Searchable")}</Checkbox>

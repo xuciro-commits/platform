@@ -1,0 +1,836 @@
+[
+  {
+    "name": "typed dependency graph",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": true,
+    "values": {
+      "tab": "first",
+      "first": true,
+      "other": false,
+      "label": "Tab: first"
+    },
+    "state": {
+      "tab": "second"
+    },
+    "updated": {
+      "tab": "second",
+      "first": false,
+      "other": true,
+      "label": "Tab: second"
+    }
+  },
+  {
+    "name": "cycle",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "other"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "missing dependency",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "missing"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong initial type",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": false
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "mixed equal",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": true
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown scope",
+    "variables": {
+      "tab": {
+        "scope": "application",
+        "type": "string",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown type",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "decimal",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "unknown operator",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "eval",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "ambiguous argument",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first",
+              "literal": true
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "wrong result type",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "first"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "oversize text",
+    "variables": {
+      "tab": {
+        "scope": "page",
+        "type": "string",
+        "mode": "state",
+        "initial": "界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界"
+      },
+      "first": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "tab"
+            },
+            {
+              "literal": "first"
+            }
+          ]
+        }
+      },
+      "other": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "not",
+          "args": [
+            {
+              "variable": "first"
+            }
+          ]
+        }
+      },
+      "label": {
+        "scope": "page",
+        "type": "string",
+        "mode": "derived",
+        "expression": {
+          "op": "concat",
+          "args": [
+            {
+              "literal": "Tab: "
+            },
+            {
+              "variable": "tab"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "all boolean operators",
+    "variables": {
+      "yes": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": true
+      },
+      "no": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "state",
+        "initial": false
+      },
+      "both": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "and",
+          "args": [
+            {
+              "variable": "yes"
+            },
+            {
+              "variable": "no"
+            }
+          ]
+        }
+      },
+      "either": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "or",
+          "args": [
+            {
+              "variable": "yes"
+            },
+            {
+              "variable": "no"
+            }
+          ]
+        }
+      }
+    },
+    "valid": true,
+    "values": {
+      "yes": true,
+      "no": false,
+      "both": false,
+      "either": true
+    }
+  },
+  {
+    "name": "typed record output",
+    "variables": {
+      "selected": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "list"
+        }
+      },
+      "hasRecord": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "present",
+          "args": [
+            {
+              "variable": "selected"
+            }
+          ]
+        }
+      }
+    },
+    "valid": true,
+    "resources": {
+      "selected": {
+        "status": "value",
+        "value": {
+          "kind": "record",
+          "reference": {
+            "object": "sample.item",
+            "id": "one"
+          }
+        }
+      }
+    },
+    "values": {
+      "selected": {
+        "kind": "record",
+        "reference": {
+          "object": "sample.item",
+          "id": "one"
+        }
+      },
+      "hasRecord": true
+    }
+  },
+  {
+    "name": "resource output mismatch",
+    "variables": {
+      "selected": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "query",
+          "section": "list"
+        }
+      },
+      "hasRecord": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "present",
+          "args": [
+            {
+              "variable": "selected"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "resource with initial literal",
+    "variables": {
+      "selected": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "list"
+        },
+        "initial": "one"
+      },
+      "hasRecord": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "present",
+          "args": [
+            {
+              "variable": "selected"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "record equality is not scalar equality",
+    "variables": {
+      "selected": {
+        "scope": "page",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "section": "list"
+        }
+      },
+      "hasRecord": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "equal",
+          "args": [
+            {
+              "variable": "selected"
+            },
+            {
+              "variable": "selected"
+            }
+          ]
+        }
+      }
+    },
+    "valid": false
+  }
+]

@@ -452,6 +452,7 @@ func TypeScript(doc map[string]any, kernelModules map[string]string) string {
 		}
 		fmt.Fprintf(&b, "\nexport type %s = %s;\n", name, tsOf(d, 0))
 	}
+	fmt.Fprintf(&b, "\n/** Shared build-time page UI contracts (ADR-0046). */\nexport const pageUIManifest = %s as const;\n", strings.TrimSpace(platform.PageUIManifest()))
 	return b.String()
 }
 

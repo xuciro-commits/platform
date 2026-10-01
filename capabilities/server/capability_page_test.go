@@ -53,11 +53,20 @@ func TestNestedPageFormBindings(t *testing.T) {
 		{Widget: "table", Object: ref("task"), Selection: "task", ParentSelection: "line", Relation: "tasks", Fields: []string{"size"}},
 		{Widget: "form", Object: ref("task"), ParentSelection: "line", Relation: "tasks", Inputs: map[string]platform.Binding{"size": {Source: "subject", Path: []string{"item", "size"}}}},
 	}}
+	page.Document = &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{
+		"root":    {Kind: "rows", Children: []string{"columns", "tasks", "form"}},
+		"columns": {Kind: "columns", Children: []string{"source", "lines"}},
+		"source":  {Kind: "widget", Section: "source"}, "lines": {Kind: "widget", Section: "lines"},
+		"tasks": {Kind: "widget", Section: "tasks"}, "form": {Kind: "widget", Section: "form"},
+	}}
+	for i, id := range []string{"source", "lines", "tasks", "form"} {
+		page.Sections[i].ID, page.Sections[i].ConfigVersion = id, 1
+	}
 	sections := make([]build.Section, len(page.Sections))
 	for i, section := range page.Sections {
-		sections[i] = build.Section{Widget: section.Widget, Object: section.Object.Name, Selection: section.Selection, ParentSelection: section.ParentSelection, Relation: section.Relation, Fields: section.Fields, Inputs: section.Inputs}
+		sections[i] = build.Section{ID: section.ID, ConfigVersion: section.ConfigVersion, Widget: section.Widget, Object: section.Object.Name, Selection: section.Selection, ParentSelection: section.ParentSelection, Relation: section.Relation, Fields: section.Fields, Inputs: section.Inputs}
 	}
-	submit(build.PageType, "P", "create", map[string]any{"name": page.Name, "title": "Nested form", "object": page.Object.Name, "sections": sections, "selections": page.Selections})
+	submit(build.PageType, "P", "create", map[string]any{"name": page.Name, "title": "Nested form", "object": page.Object.Name, "sections": sections, "selections": page.Selections, "document": page.Document})
 	submit(build.PageType, "P", "publish", map[string]any{})
 	submit("build.item", "I", "create", map[string]any{"size": 50})
 	submit("build.root", "R", "create", map[string]any{"name": "Root"})
@@ -88,8 +97,16 @@ func TestNestedPageFormBindings(t *testing.T) {
 		t.Fatal("a hidden leaf supplied a business write")
 	}
 	for _, definition := range tn.Definitions(user) {
-		if definition.Ref.Kind == platform.AssetPage && definition.Ref.Name == page.Name && slices.ContainsFunc(definition.Page.Sections, func(s platform.Section) bool { return s.Widget == "form" }) {
-			t.Fatal("the private form binding remained discoverable")
+		if definition.Ref.Kind == platform.AssetPage && definition.Ref.Name == page.Name {
+			if slices.ContainsFunc(definition.Page.Sections, func(s platform.Section) bool { return s.Widget == "form" }) {
+				t.Fatal("the private form binding remained discoverable")
+			}
+			if _, exists := definition.Page.Document.Nodes["form"]; exists {
+				t.Fatal("the private form's layout node remained discoverable")
+			}
+			if err := definition.Page.Document.Check(definition.Page.Sections); err != nil {
+				t.Fatalf("member pruning left a broken layout: %v", err)
+			}
 		}
 	}
 	if _, problem := tn.RecordOf(user, "build.task", "DENIED", at); problem == nil {

@@ -3,7 +3,7 @@
 // search, sort and paging, a record page (fields, related records, history) and
 // generated forms. Components take a RecordSource, so the kit knows no client.
 import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { DataTable } from "../components/DataTable";
 import { PropertyList } from "../components/EntityCard";
@@ -58,6 +58,8 @@ export type Money = { amount: number; currency: string };
 
 /** Where records come from: the host's reads, wired by the app; with aggregates, lists can group, pivot and chart (ADR-0019). */
 export type RecordSource = {
+  /** Stable member/definition scope; changing it discards cached view data. */
+  scope?: string;
   entity: (type: string) => EntityInfo | undefined;
   list: (type: string, query: RecordQuery) => Promise<RecordPageData>;
   get: (type: string, id: string) => Promise<RecordView>;
@@ -232,7 +234,8 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const [sort, setSort] = useState(initial.sort ?? "-changed");
   const [offset, setOffset] = useState(0);
   const [archived, setArchived] = useState(initial.archived ?? false);
-  const [page, setPage] = useState<RecordPageData>();
+  const [loadedPage, setLoadedPage] = useState<{ scope?: string; page: RecordPageData }>();
+  const page = loadedPage?.scope === source.scope ? loadedPage?.page : undefined;
   const [error, setError] = useState<string>();
   const [view, setView] = useState<ListView>(initial.view ?? "list");
   const [drilled, setDrilled] = useState<unknown[] | undefined>(initial.drilled);
@@ -243,18 +246,23 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const [measure, setMeasure] = useState(initial.measure ?? "count");
   const [mark, setMark] = useState<Mark>(initial.mark ?? "bar");
   const rows = group || (info?.lifecycle?.field ?? groups[0]?.value ?? "");
-  const domain = useMemo(() => [...(fixed ?? []), ...(drilled ?? [])], [fixed, drilled]);
+  const fixedKey = JSON.stringify(fixed ?? []);
+  useEffect(() => { setOffset(0); }, [fixedKey, type]);
+  const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? [])], [fixedKey, drilled]);
   const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
   useEffect(() => {
     if (!info || view !== "list") return;
+    let current = true;
+    const scope = source.scope;
+    setLoadedPage(undefined); setError(undefined);
     const field = sort.replace(/^-/, "");
     const known = ["id", "created", "changed"].includes(field) || info.fields.some((f) => f.name === field);
     const handle = setTimeout(() => {
       source.list(type, { domain, search, sort: known ? [sort] : ["id"], offset, limit: pageSize, archived })
-        .then((p) => { setPage(p); setError(undefined); }, (e) => setError(String(e)));
+        .then((p) => { if (current && source.scope === scope) { setLoadedPage({ scope, page: p }); setError(undefined); } }, (e) => { if (current && source.scope === scope) setError(String(e)); });
     }, 150);
-    return () => clearTimeout(handle);
-  }, [source, type, info, search, sort, offset, archived, pageSize, domain, view]);
+    return () => { current = false; clearTimeout(handle); };
+  }, [source, source.scope, source.revision, type, info, search, sort, offset, archived, pageSize, domain, view]);
   if (!info || !entity) return <p className="text-sm text-muted">{t("Unknown entity type")} {type}.</p>;
   const columnsOf = [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity, listed(entity).filter((name) => !fields || fields.includes(name))).map((c) => ({ ...c, enableSorting: false }))];
@@ -380,13 +388,19 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   can?: (schema: string) => boolean; onTransition?: (schema: string, r: EntityRecord) => void;
 }) {
   const info = source.entity(type);
-  const [view, setView] = useState<RecordView>();
+  const [loaded, setLoaded] = useState<{ type: string; id: string; scope?: string; view: RecordView }>();
+  const view = loaded?.type === type && loaded.id === id && loaded.scope === source.scope ? loaded.view : undefined;
   const [error, setError] = useState<string>();
+  const request = useRef(0);
   const load = useCallback(() => {
+    const epoch = ++request.current;
+    const scope = source.scope;
     setError(undefined);
-    source.get(type, id).then(setView, (e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [source, type, id]);
-  useEffect(() => { load(); }, [load, reload]);
+    source.get(type, id).then((value) => { if (request.current === epoch && source.scope === scope) setLoaded({ type, id, scope, view: value }); }, (e) => {
+      if (request.current === epoch && source.scope === scope) setError(e instanceof Error ? e.message : String(e));
+    });
+  }, [source, source.scope, type, id]);
+  useEffect(() => { load(); return () => { request.current++; }; }, [load, reload, source.revision]);
   const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
   if (error) {
     return (

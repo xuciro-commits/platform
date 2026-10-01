@@ -148,6 +148,7 @@
 | 知识库 (ADR-0022) | 平台应用 `knowledge` | 权限内文本/向量检索、增量索引与引用来源；规模证据归 ADR-0033。 | knowledge.go, index.postings；[ADR-0022](ADR/0022-knowledge-memory-a2a.md) |
 | 协议 (ADR-0011) | 协议 | 版本化跨应用动作/读取/应答；住宿暂留与生产确认。 | platform.Protocol, Caller.Probe；[ADR-0011](ADR/0011-apps-interoperate-through-protocols.md) |
 | UI 库 | Web | 共享表格/表单/详情/工作区/画布；记录工作区集中任务、审批、流程，窄屏属性单列。 | @platform/ui |
+| 应用设计台融合 (ADR-0046，F1/F2/F3a/F3b实现) | 应用 API、Build、共享 UI | V2嵌套页面树、稳定组件实例、版本化基础注册、三栏编辑与历史；原生/租户模型目录、字段支持的引用图及属性/关系→页面绑定；页面级标量与记录/筛选/查询窗口变量、Tabs及显示条件；成员/定义作用域隔离与旧响应拦截，沿原保存/候选/激活路径。其他复合布局、独立查询计划/关系及92组件迁移仍待实施。 | platform/pageui、PageDocument、EditorWorkbench、app/semantic；[ADR-0046 §14](ADR/0046-application-studio-fusion.md#14-代价审阅点与当前实现边界) |
 | Platform Catalog (ADR-0045) | UI/app/build owner、Web 目录 | 六层复用发现、真实示例、开发/构建视角与有界查询；Studio 模板沿原草稿创建，租户能力沿原作用域读取。 | web/apps/catalog、scripts/catalog.mjs；[ADR-0045 §11](ADR/0045-platform-catalog.md#11-当前实现边界) |
 | 工作区与 UI 应用 API (ADR-0018) | Web | 统一登录/应用导航、记录与收件箱返回、编辑标签上下文；CRM/MES 建议复用记录与动作。 | @platform/app, web/apps/workspace；[ADR-0018](ADR/0018-one-workspace.md) |
 | 边缘客户端与登录 | Web | HTTP 边缘客户端、发件箱、PKCE/OIDC 与可读拒绝。 | @platform/kernel |

@@ -15,7 +15,11 @@ import (
 )
 
 func TestSavedReleaseInstallsFrozenClosureAndRecovers(t *testing.T) {
-	checkSavedReleaseInstallation(t, nil, "install-release")
+	checkSavedReleaseInstallation(t, nil, "install-release", false)
+}
+
+func TestSavedV2ReleaseInstallsFrozenLayoutAndRecovers(t *testing.T) {
+	checkSavedReleaseInstallation(t, nil, "install-v2-release", true)
 }
 
 func TestJournalAcceptedSavedReleaseInstallation(t *testing.T) {
@@ -33,10 +37,10 @@ func TestJournalAcceptedSavedReleaseInstallation(t *testing.T) {
 	if _, err := journal.Entries(context.Background(), id, 0); err != nil {
 		t.Fatal(err)
 	}
-	checkSavedReleaseInstallation(t, journal, id)
+	checkSavedReleaseInstallation(t, journal, id, false)
 }
 
-func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string) {
+func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string, v2 bool) {
 	compose := func() *Tenant {
 		tn, err := NewTenant(id, NewConsole(id, Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}},
 			Seat{Subjects: []string{"operator"}, Member: platform.Member{ID: "operator", Roles: map[string]string{build.ID: build.User}}}), build.New(id))
@@ -153,8 +157,23 @@ func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string) {
 		t.Fatalf("activation overwrote the mutable draft: %+v", row)
 	}
 	do(operator, "build.visit", "V1", "build.visit.create", `{"note":"Operator's record"}`)
-	do(builder, build.PageType, "P1", build.PageType+".create", `{"name":"visits","title":"Visit desk","object":"build.visit","list":["note"],"detail":["note"]}`)
+	pageDraft := `{"name":"visits","title":"Visit desk","object":"build.visit","list":["note"],"detail":["note"]}`
+	if v2 {
+		pageDraft = fmt.Sprintf(`{"name":"visits","title":"Visit desk","object":"build.visit","sections":[{"id":"list","configVersion":1,"widget":"table","fields":["note"]},{"id":"detail","configVersion":1,"widget":"detail","fields":["note"]}],"document":{"formatVersion":2,"uiProfile":%q,"root":"root","nodes":{"root":{"kind":"rows","children":["columns"]},"columns":{"kind":"tabs","activeVariable":"active","children":["list","detail"]},"list":{"kind":"widget","section":"list"},"detail":{"kind":"widget","section":"detail"}},"variables":{"active":{"scope":"page","type":"string","mode":"state","initial":"list"},"record":{"scope":"page","type":"record","mode":"resource","source":{"kind":"record","section":"list"}}}}}`, platform.PageUIProfile())
+	}
+	do(builder, build.PageType, "P1", build.PageType+".create", pageDraft)
 	page := save(platform.AssetPage, "P1")
+	if v2 {
+		// Alter the mutable layout after freezing. Activation must retain the
+		// saved tree while preserving this later draft beside it.
+		stored, _ := platform.Get[build.Page](live.caller(builder, live.app(build.ID), false), "P1")
+		raw, _ := json.Marshal(stored.Document)
+		var edited platform.PageDocument
+		_ = json.Unmarshal(raw, &edited)
+		edited.Nodes["root"] = platform.PageLayoutNode{Kind: "columns", Children: []string{"columns"}}
+		payload, _ := json.Marshal(map[string]any{"title": "Later page draft", "document": edited})
+		do(builder, build.PageType, "P1", build.PageType+".edit", string(payload))
+	}
 	if _, err := live.ActivateRelease(builder, page, "activate-page", at); err != nil {
 		t.Fatal(err)
 	}
@@ -189,6 +208,21 @@ func checkSavedReleaseInstallation(t *testing.T, journal *Journal, id string) {
 		stored, ok := platform.Get[build.Object](tn.caller(builder, tn.app(build.ID), false), "O1")
 		if !ok || stored.Title != "Later Draft" {
 			t.Fatal("recovery discarded the draft beside its publication")
+		}
+		if v2 {
+			var installed *platform.Page
+			for _, definition := range tn.Definitions(operator) {
+				if definition.Ref.Kind == platform.AssetPage && definition.Ref.Name == "visits" {
+					installed = definition.Page
+				}
+			}
+			if installed == nil || installed.Document == nil || installed.Document.Nodes["root"].Kind != "rows" || installed.Sections[0].ID != "list" || installed.Sections[1].ConfigVersion != 1 || installed.Document.Nodes["columns"].Kind != "tabs" || string(installed.Document.Variables["active"].Initial) != `"list"` || installed.Document.Variables["record"].Source == nil || installed.Document.Variables["record"].Source.Section != "list" {
+				t.Fatalf("recovery lost the frozen V2 layout: %+v", installed)
+			}
+			draft, _ := platform.Get[build.Page](tn.caller(builder, tn.app(build.ID), false), "P1")
+			if draft.Title != "Later page draft" || draft.Document.Nodes["root"].Kind != "columns" {
+				t.Fatal("activation or recovery discarded the later layout draft")
+			}
 		}
 	}
 	// A candidate can become incompatible between save and activation: do not

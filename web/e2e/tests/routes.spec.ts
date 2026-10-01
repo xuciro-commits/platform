@@ -22,6 +22,7 @@ test("route 4: an approval reaches the requester's page", async ({ page, request
   const leave = fresh("LEA");
   const day = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
   await open(page, "sales", "/definitions");
+  await page.getByRole("textbox", { name: "Filter rows", exact: true }).fill("hcm/page/leaves");
   await page.getByRole("row").filter({ hasText: "hcm/page/leaves" }).click();
   await page.getByRole("button", { name: "Open page" }).click();
   await page.getByRole("button", { name: /Draft leave request/ }).click();
@@ -58,6 +59,7 @@ test("route 4: an approval reaches the requester's page", async ({ page, request
 
 test("route 28: preview cannot submit an action", async ({ page }) => {
   await open(page, "sales", "/definitions");
+  await page.getByRole("textbox", { name: "Filter rows", exact: true }).fill("crm/page/opportunities");
   await page.getByRole("row").filter({ hasText: "crm/page/opportunities" }).click();
   await page.getByRole("button", { name: "Preview page" }).click();
   await expect(page.getByText("Preview uses sample data. Actions do not run.")).toBeVisible();

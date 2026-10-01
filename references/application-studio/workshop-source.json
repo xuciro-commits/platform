@@ -1,0 +1,321 @@
+{
+  "source": "Owner-supplied palantir-workshop-replica-specification-4",
+  "snapshotDate": "2026-10-01",
+  "digest": "afb6bc77e3e25233573c37750eab4181c56a1e24d43ea6ad55c0771cb196f99d",
+  "digestAlgorithm": "SHA-256 of sorted path UTF-8 + NUL + raw file SHA-256",
+  "archive": "workshop-source.tar.gz",
+  "license": "No standalone license or notice was supplied. This snapshot preserves provenance for the owner-authorized internal fusion; third-party dependencies retain their respective licenses.",
+  "exclusions": [
+    "dependencies",
+    "build outputs",
+    "browser state",
+    "environment files",
+    "credentials"
+  ],
+  "files": [
+    {
+      "path": "next.config.ts",
+      "sha256": "ab4c61f6ee100ae43610a18512f1ebcec842bb2405431e1009266173f21cf772"
+    },
+    {
+      "path": "package.json",
+      "sha256": "c50cd2cef19a65a195d3b633bf537e09facc4c1123555156b885c88e374ffa55"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "05362100557d9f4e0e79ec0c5c67d566c1312cf525f701a09fcc28bb62a57e60"
+    },
+    {
+      "path": "public/models/industrial-robot-cell.glb",
+      "sha256": "aac6e35b6b1d6a2ada8ed513a2e45e65c021e19b13eebcc1493b279bf3708423"
+    },
+    {
+      "path": "public/telemetry-worker.js",
+      "sha256": "4d4036e5272f1669c0bb87c9c3dc8880019d9c5ccda8bd1f6d5b9e3fc880f769"
+    },
+    {
+      "path": "scripts/build-wasm.mjs",
+      "sha256": "44f089345d61d7e8ee933c75763c86ced18a3cd419e01f19fc872a475f1c993f"
+    },
+    {
+      "path": "scripts/generate-robot-glb.mjs",
+      "sha256": "9df69bb4177374000b707187286beab66665df532786ae11868e942989e15fdc"
+    },
+    {
+      "path": "src/app/api/health/route.ts",
+      "sha256": "85ecde9db86952d444d593f4133df2b517ed768accc487350d35bb0db498357f"
+    },
+    {
+      "path": "src/app/api/workshop/flow-runs/route.ts",
+      "sha256": "d4c4ddedcf3d53b25429c38ea3d1e02cb86aac5f8b7169d3679d9ed284df5d0d"
+    },
+    {
+      "path": "src/app/api/workshop/models/[id]/route.ts",
+      "sha256": "5b3e990093ff527830ce3c2d2e48c23f484a31ede656e62b4cdf8913785f0de8"
+    },
+    {
+      "path": "src/app/api/workshop/models/route.ts",
+      "sha256": "e48fb5cc916c7e41ab72af8a38b5e1d7b73a0da22f3e074556cbbc236f69a2a6"
+    },
+    {
+      "path": "src/app/api/workshop/module/route.ts",
+      "sha256": "09ed66f1477a18e81951f50897b43bf8530f0e0133368ce169adc3aefacf6670"
+    },
+    {
+      "path": "src/app/globals.css",
+      "sha256": "0a224e794c91957e1cab1aef8b93c46dfe1be3889204b08caef12233b250e730"
+    },
+    {
+      "path": "src/app/layout.tsx",
+      "sha256": "80e69276f4f6f75845b78ae54a0df18580713ce3f6d1629f8f288b4b3fae8efd"
+    },
+    {
+      "path": "src/app/page.tsx",
+      "sha256": "3b193ff0e2c28b1d6e2d1dbced85276a15078689ff43b0b23d1856468a524e66"
+    },
+    {
+      "path": "src/app/workshop/WorkshopApp.tsx",
+      "sha256": "0269adeb7812a1d704bbc6846e5181c33501330101eb4f63aea559bcd63bf048"
+    },
+    {
+      "path": "src/app/workshop/page.tsx",
+      "sha256": "682f26a268029fc3ba140e663d245d62c886f8676c2a2775e4a7bb0102df0fca"
+    },
+    {
+      "path": "src/db/index.ts",
+      "sha256": "44d8e984cf4d238facb3e984c6a2ffa7abfca11768da1304ff439d2b7246990b"
+    },
+    {
+      "path": "src/db/schema.ts",
+      "sha256": "3a021f74f14e4534a4b9fd2821f7c7f54a4d67492d2d47933d1ba3e2dd84d088"
+    },
+    {
+      "path": "src/workshop/WorkshopContext.tsx",
+      "sha256": "97783cc13942632cf70b2581d6ac3aaa091fe38ae62b75b2e48161bbac9428e2"
+    },
+    {
+      "path": "src/workshop/dnd.ts",
+      "sha256": "b0864fe74748f9e2ce1749b62884b5b479bfb98659a714de57a4c7c27c5e819a"
+    },
+    {
+      "path": "src/workshop/elk.ts",
+      "sha256": "b37fb68282c0cbf8240dad6d59f5095211088c794eccf713da20fff7d0f58135"
+    },
+    {
+      "path": "src/workshop/engine.ts",
+      "sha256": "ea9c7777aaf86fbaad30f308c725336185938a6894c0b32d1d313190732756cf"
+    },
+    {
+      "path": "src/workshop/flowCatalog.ts",
+      "sha256": "4d936ed495da39f12c874619fc63d49f030d3bdb7865f3a0cee7f9023849e020"
+    },
+    {
+      "path": "src/workshop/flowEngine.ts",
+      "sha256": "42e2f8027c544fa3c50e7eec0cf62e675eb8303a84acbfb2b07096ea2675886e"
+    },
+    {
+      "path": "src/workshop/flowTypes.ts",
+      "sha256": "8439d6c1c0fcc78087090ed44a43a5cd191df9fe317814ae4fe6c9ccd5e2db30"
+    },
+    {
+      "path": "src/workshop/layoutOps.ts",
+      "sha256": "6758636db0902fdb07c1ea1f55c8c7037fc026d7ece09e1149d431bb2a04b643"
+    },
+    {
+      "path": "src/workshop/moduleMigration.ts",
+      "sha256": "4a5681e24dc658298fe49ba2e5aa604e86f97627f86c9d163c86290458e63b26"
+    },
+    {
+      "path": "src/workshop/moduleOps.ts",
+      "sha256": "fe94f8009c818f91e15cbb92c70af653c73304877bf9595b0e2004cd46600d0c"
+    },
+    {
+      "path": "src/workshop/ontology.ts",
+      "sha256": "ec1732249b26d4d5eb78fd42a4684f71e5eabf6a0340a0b4151dfdcfaecd239c"
+    },
+    {
+      "path": "src/workshop/ontologyMeta.ts",
+      "sha256": "6beb0753029fbdf80387535d35718a09fe430ffec0a0d4d6fe463eb0cb193a1d"
+    },
+    {
+      "path": "src/workshop/panels/FlowBuilder.tsx",
+      "sha256": "d247a84ede6e5ffe3ca90ec7a1c04cb1573146e7494db75170dab9f3b9e7df4b"
+    },
+    {
+      "path": "src/workshop/panels/FlowCanvas.tsx",
+      "sha256": "134609b890d1f7df254eb23768b80c1d9e03733146bd5a186a1a743f13ac4284"
+    },
+    {
+      "path": "src/workshop/panels/FlowNav.tsx",
+      "sha256": "9d4b417f8d60baf5c73d133d7d2f8be6e2d6f0200f4cd5112f23ce6fc679e494"
+    },
+    {
+      "path": "src/workshop/panels/FlowNodeCard.tsx",
+      "sha256": "3ce588af00eafaf5a2e290cab17bc50532c62740e706b73181806fe1c7d7418c"
+    },
+    {
+      "path": "src/workshop/panels/FlowNodeInspector.tsx",
+      "sha256": "c7fd68288a8123476edc9e901c03c7c69ed5b86cf86b9e6b19c7726f3aa07fb7"
+    },
+    {
+      "path": "src/workshop/panels/FlowSettingsInspector.tsx",
+      "sha256": "f53ba5b81359b9cb220ea98e5563120b9cea572204617e45b52527630dc3b8d5"
+    },
+    {
+      "path": "src/workshop/panels/GraphViews.tsx",
+      "sha256": "e8574c4657b106fc235659c705bfe95902c6cbf32fbfd2602008be31574fabe0"
+    },
+    {
+      "path": "src/workshop/panels/Inspector.tsx",
+      "sha256": "92626c4fa2a92fc65066881e0845bfda1265ea14dab4a5e07005b5c551889832"
+    },
+    {
+      "path": "src/workshop/panels/LayoutTree.tsx",
+      "sha256": "8129e9b7a13f15dffbff6bf7f83f0317db1817b2ce88d5ecc505841b6402e460"
+    },
+    {
+      "path": "src/workshop/panels/OntologyManager.tsx",
+      "sha256": "2e1c536479e19adc700be36b9d88fc6fa2d0453a7a09ba3ddd1632e051cd03f9"
+    },
+    {
+      "path": "src/workshop/panels/OtherPanels.tsx",
+      "sha256": "a601c74cbe61ba00c9c404d644315435762d19fc826943e6096e5eeb5dea2070"
+    },
+    {
+      "path": "src/workshop/panels/VariablesPanel.tsx",
+      "sha256": "ba8918f0c4c22b9a9cd69243365869121ebf9fa15a1eee1e98fc416eafe3b340"
+    },
+    {
+      "path": "src/workshop/panels/WidgetSelector.tsx",
+      "sha256": "f6e215d71ff23b118d33138edbe1ccda4117e2e95a39c85fc7be0b472869d59a"
+    },
+    {
+      "path": "src/workshop/panels/WidgetsPalette.tsx",
+      "sha256": "9c0823e7b40d6e6eda95d047465df10ff014b31581ec2ac1426bbade3038b41a"
+    },
+    {
+      "path": "src/workshop/runtime/OverlayHost.tsx",
+      "sha256": "358b7061849c6f8abf9ff83355201f449520b0531d8473ba5c291465859b2876"
+    },
+    {
+      "path": "src/workshop/runtime/RuntimeShell.tsx",
+      "sha256": "b3930fde8beebe6de65a8e1cbeb0a3c4df0783b049f0fdbab78b5448988e5fe6"
+    },
+    {
+      "path": "src/workshop/runtimeStores.ts",
+      "sha256": "835876c915f260b16f73a26874aac42451233d275dfda637b9086b7965500451"
+    },
+    {
+      "path": "src/workshop/scene3d/mapping.ts",
+      "sha256": "e1ff48cd828f5a3ac37863a6d2fda3547ecc1055b34313b27b3b22e586ccdc3a"
+    },
+    {
+      "path": "src/workshop/seedModule.ts",
+      "sha256": "49a1feeb50cdf6a41379d8565f494ad97eb5938bff6f1eaa2208597be4e6d528"
+    },
+    {
+      "path": "src/workshop/shell/BuilderShell.tsx",
+      "sha256": "45ebfa895784d7d03c2f65797e69a318f4a480ee3dff43cf1955fe4e86445caf"
+    },
+    {
+      "path": "src/workshop/shell/Canvas.tsx",
+      "sha256": "c428126dac4715d3b7a9e3179026997718485a94d5e67a09f85f19288eb8a871"
+    },
+    {
+      "path": "src/workshop/shell/CanvasChrome.tsx",
+      "sha256": "d9c079568c95495669b117cd6940d05cb9ab371a81869e65e50beecfe39043fd"
+    },
+    {
+      "path": "src/workshop/shell/LeftSidebar.tsx",
+      "sha256": "9306bf07a64b718bfebe7afa01941658b6d2fb170acf24dc358f64a3b2c9ab68"
+    },
+    {
+      "path": "src/workshop/shell/Toasts.tsx",
+      "sha256": "a3483791f05f43093b93b269c04386a18a633b67a9c532c62bea01ffe552db92"
+    },
+    {
+      "path": "src/workshop/shell/TopBar.tsx",
+      "sha256": "1081a4c5ad79a42ba4a0091a596d78c76a097b69d03c26d8ca13d3d8f141d2dd"
+    },
+    {
+      "path": "src/workshop/telemetry/telemetryStore.ts",
+      "sha256": "24756796f513cdce2268eb5f6c170552037044ec36e10f20c09a3e47a9b446f5"
+    },
+    {
+      "path": "src/workshop/telemetry/telemetry_stats.wat",
+      "sha256": "06b714252a0522486d0bb9ec1420cc8ed36b1bb57422d9594a392596420b3e2a"
+    },
+    {
+      "path": "src/workshop/telemetry/wasmKernel.ts",
+      "sha256": "7f86c56d95776c713d484a430e95a2bd2b235f0edb9f9a58c9f10542a075651d"
+    },
+    {
+      "path": "src/workshop/types.ts",
+      "sha256": "125db29df45165dc88bbcb6191e67e8a4cef00792ddabb687e758538827ab133"
+    },
+    {
+      "path": "src/workshop/ui/CommandPalette.tsx",
+      "sha256": "e559caaba729a0dfac82540ebac4a1d6397f87df9861d6e7396cf0a313b73e57"
+    },
+    {
+      "path": "src/workshop/ui/ConfirmDialog.tsx",
+      "sha256": "e7512dca24ec1dd2f9b0fcf61e234cd448a5906b9e2196086c08bd7f02abfcb8"
+    },
+    {
+      "path": "src/workshop/ui/ContextMenu.tsx",
+      "sha256": "0b85aaed904f3bf69346591922d6e39f8c10f0a7d88bbe4c60f33fc6ea0e66a9"
+    },
+    {
+      "path": "src/workshop/ui/ResourcePicker.tsx",
+      "sha256": "1110a57e77b9bd34654722f2142d2728e8e22f8503dff98c898cb6d48bb05080"
+    },
+    {
+      "path": "src/workshop/widgets/ExtraWidgets.tsx",
+      "sha256": "d71a01efe7fd9b0409f7d5de50ce4a2f863ce9b4d19957710cca05ad30148308"
+    },
+    {
+      "path": "src/workshop/widgets/MapWidgetImpl.tsx",
+      "sha256": "7f75514d9a6c9e5da38f8f6825bb96dad3917867c0403401363f36b7bb5538b5"
+    },
+    {
+      "path": "src/workshop/widgets/MoreWidgets.tsx",
+      "sha256": "2e67c6bace1d1051445a7af37bdf1243ee80500a4936cd300cd6de4fb70c4daa"
+    },
+    {
+      "path": "src/workshop/widgets/ObjectTableWidget.tsx",
+      "sha256": "c52df374e2f17af62aa1cb28ed7a6ade7d78d783f2580bae2e65ea661b291f74"
+    },
+    {
+      "path": "src/workshop/widgets/OntologyWidgets.tsx",
+      "sha256": "dd4aeadc7c33f50b8d676c620685c44160c918e43b7a9a03052474edb8fc19dc"
+    },
+    {
+      "path": "src/workshop/widgets/Scene3D.tsx",
+      "sha256": "bdc8b4fe56dd850a7d272540fb1be116be5fffce4265be097772af2293d38519"
+    },
+    {
+      "path": "src/workshop/widgets/SectionRenderer.tsx",
+      "sha256": "4bcf4f1fb942f14de9554e055cfa029e0d25b7c106c59bacbce7257f3cca4024"
+    },
+    {
+      "path": "src/workshop/widgets/TelemetryStats.tsx",
+      "sha256": "a9002f37f27e6418c4e53a0fa98529aa36a21aa6127bac32e8fe3770a0939323"
+    },
+    {
+      "path": "src/workshop/widgets/TelemetryTable.tsx",
+      "sha256": "b6bb86c5b7bc0160e368d5bd62993f5dd5b28ac7db2c36416be856d363a62279"
+    },
+    {
+      "path": "src/workshop/widgets/WidgetRenderer.tsx",
+      "sha256": "91fd50fdea50cc6d7e51fb32fc393a715a80a29591863d613ac231282f0f2491"
+    },
+    {
+      "path": "src/workshop/widgets/icons.tsx",
+      "sha256": "b76837102fe29a24c4d977ca2573677f701087e7df2907b12a5136a5ed0f599c"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "4ea5303fb21d01b83151db57d43246ba2ac0bbb4e79b9e83b3a120b2599c4351"
+    }
+  ]
+}

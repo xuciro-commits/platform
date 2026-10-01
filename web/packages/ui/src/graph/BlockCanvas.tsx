@@ -200,7 +200,7 @@ function CanvasContent({ catalog, nodes, edges, selected, onSelect, onOpen, onCo
         <EdgeInteraction.Provider value={{ onInsert: (edge, position) => setPalette({ edge, position }) }}>
           <ReactFlow<FlowBlockNode, FlowBlockEdge> nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} fitView fitViewOptions={fitting}
-            colorMode="system" minZoom={0.15} maxZoom={2} zoomOnScroll={false} zoomOnPinch panOnScroll={editable} preventScrolling={editable}
+            colorMode="system" minZoom={0.15} maxZoom={2} zoomOnScroll={false} zoomOnPinch zoomOnDoubleClick={!onOpen} panOnScroll={editable} preventScrolling={editable}
             panOnDrag={editable ? [1, 2] : true} selectionOnDrag={editable} selectionMode={SelectionMode.Partial} multiSelectionKeyCode={["Meta", "Control", "Shift"]}
             nodesDraggable={editable} nodesConnectable={editable && !!onConnect} edgesFocusable={editable} deleteKeyCode={null}
             connectionLineType={ConnectionLineType.SmoothStep} isValidConnection={(connection) => valid(connection as Connection)}

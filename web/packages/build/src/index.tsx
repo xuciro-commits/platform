@@ -4,6 +4,7 @@ import "./i18n";
 import { defineApp } from "@platform/app";
 import { PageEditor, PagesList } from "./editor";
 import { ProcessEditor, Objects } from "./process";
+import { ModelWorkbench } from "./model-editor/ModelWorkbench";
 import { WorkflowEditor, Workflows } from "./workflow";
 import { FunctionEditor, Functions } from "./function";
 import { ApplicationEditor, Applications } from "./application";
@@ -27,7 +28,8 @@ export default defineApp({
     { id: "application", title: () => t("Application design"), render: (p) => <ApplicationEditor key={p.id ?? "new"} id={p.id ?? "new"} /> },
     { id: "pages", title: () => t("Pages"), render: () => <PagesList /> },
     { id: "compose", title: () => t("Compose a page"), render: (p) => <PageEditor id={p.id ?? ""} /> },
-    { id: "process", title: (p) => p.id ? t("Object design") : t("Objects"), render: (p) => p.id ? <ProcessEditor id={p.id} /> : <Objects /> },
+    { id: "process", title: (p) => p.id ? t("Object design") : t("Objects"), render: (p) => p.id ? <ProcessEditor id={p.id} initialField={p.field} initialAction={p.action} initialAccess={p.access === "true"} /> : <Objects /> },
+    { id: "model", title: () => t("Business model"), render: (p) => <ModelWorkbench key={p.object ?? "catalog"} initialObject={p.object} initialTab={p.tab} /> },
     { id: "workflow", title: () => t("Workflows"), render: (p) => p.id ? <WorkflowEditor key={p.id} id={p.id} /> : <Workflows /> },
     { id: "function", title: () => t("AI functions"), render: (p) => p.id ? <FunctionEditor key={p.id} id={p.id} /> : <Functions /> },
     { id: "code", title: () => t("Code functions"), render: (p) => p.id ? <CodeEditor key={p.id} id={p.id} /> : <CodeFunctions /> },

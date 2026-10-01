@@ -1,7 +1,7 @@
 import "./i18n";
 import { useState } from "react";
 import { Panel, t } from "@platform/ui";
-import { Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, RecordActions, RecordDetail, Records, RunView, Search } from "./index";
+import { Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, type AssetRef } from "./index";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 
 export function GeneratedFormExample() {
@@ -42,3 +42,10 @@ export const AgentRunExample = () => <CatalogFixture><RunView id="RUN-SAMPLE" />
 export const SearchExample = () => <CatalogFixture><Search initial="order" /></CatalogFixture>;
 export const ComputeExample = () => <CatalogFixture><ComputeCall recordType={sampleObject.type} live={false}
   binding={{ ref: { app: "build", kind: "compute", name: "sample" }, sourceVersion: "fixture.compute-1" }} /></CatalogFixture>;
+
+function SemanticChoices() {
+  const [object, setObject] = useState<AssetRef>(), [property, setProperty] = useState<string>();
+  return <div className="grid gap-3"><SemanticObjectSelect label={t("Object")} value={object?.name} onChange={(ref) => { setObject(ref); setProperty(undefined); }} />
+    {object && <SemanticPropertySelect object={object} value={property} label={t("Property")} onChange={(ref) => setProperty(ref?.field)} />}</div>;
+}
+export const SemanticSelectionExample = () => <CatalogFixture><SemanticChoices /></CatalogFixture>;

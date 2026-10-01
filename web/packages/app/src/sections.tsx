@@ -5,12 +5,18 @@
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
+  Button, Card, Chart, ContentTabs, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, type ChartSpec, type Encoding, type EntityRecord, type RecordView,
 } from "@platform/ui";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { Component, useEffect, useId, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
 import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
+import type { Api } from "@platform/kernel";
+import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
+import type { PageSessionStore } from "./runtime/Session";
+import { recordSlot, resourceVariables } from "./runtime/resources";
+import type { VariableResult } from "./runtime/variables";
+import { usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
@@ -23,17 +29,19 @@ type Narrowed = Record<string, Record<string, unknown>>;
 type Bound = {
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
+  session?: PageSessionStore;
   narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
 
 /** Composing: the section in hand, and choosing another by clicking it. */
-type Composing = { chosen?: number; onChoose?: (at: number) => void; at?: number };
+type Composing = { chosen?: number; onChoose?: (at: number) => void; at?: number; nested?: boolean;
+  wrapLayout?: (id: string, node: Api.PageLayoutNode, body: ReactNode) => ReactNode };
 
 const objectOf = (page: Page, section: Section) => section.object?.name || page.object.name;
 const parentTypeOf = (page: Page, section: Section) => section.parentSelection
   ? page.selections?.find((selection) => selection.name === section.parentSelection)?.object.name ?? "" : page.object.name;
 // Named and unnamed selections use one typed slot model.
-const selectionKey = (type: string, name?: string) => `${name ? `selection:${name}` : "object"}/${type}`;
+const selectionKey = recordSlot;
 
 /** The filters' conditions over an object, as the host's domain (ADR-0019). */
 const domainOf = (narrowed: Narrowed, object: string): unknown[] =>
@@ -46,7 +54,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableWidget({ page, section, onSelect, selected, master, narrowed }: Bound) {
+function TableWidget({ page, section, onSelect, selected, master, narrowed, session }: Bound) {
   const { source, definitions } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -77,7 +85,7 @@ function TableWidget({ page, section, onSelect, selected, master, narrowed }: Bo
 
   return (
     <RecordList key={refField ? `${type}/${refField.name}/${master?.id}` : type}
-      source={source} type={type} fields={section.fields} height={320} domain={domain}
+      source={session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source} type={type} fields={section.fields} height={320} domain={domain}
       onOpen={(record) => onSelect(record.id === selected?.id ? undefined : record)} />
   );
 }
@@ -336,32 +344,34 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
+const widgets = createWidgetRegistry<Bound>({
+  table: TableWidget, detail: DetailWidget, actions: ActionsWidget,
+  chart: (bound) => <ChartWidget {...bound} kpi={false} />,
+  metric: (bound) => <ChartWidget {...bound} kpi />,
+  text: ({ section }) => <Markdown content={section.text} className="text-sm" />,
+  filter: FilterWidget,
+  form: (bound) => <FormWidget key={`${objectOf(bound.page, bound.section)}/${bound.section.relation ?? ""}/${bound.section.parentSelection ?? ""}/${bound.section.relation ? bound.master?.id ?? "" : ""}`} {...bound} />,
+  timeline: TimelineWidget, tasks: TasksWidget, function: FunctionWidget,
+  compute: (bound) => <ComputeCall binding={bound.section.operation} bindings={bound.section.inputs} record={bound.selected} recordType={bound.page.object.name} live={bound.live} />,
+});
+
+class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? <Panel role="alert">{t("This widget could not be displayed.")}</Panel> : this.props.children; }
+}
+
 export function SectionView(bound: Bound & Composing) {
-  const { section, chosen, onChoose, at } = bound;
-  const body: ReactNode = (() => {
-    switch (section.widget) {
-      case "table": return <TableWidget {...bound} />;
-      case "detail": return <DetailWidget {...bound} />;
-      case "actions": return <ActionsWidget {...bound} />;
-      case "chart": return <ChartWidget {...bound} kpi={false} />;
-      case "metric": return <ChartWidget {...bound} kpi />;
-      case "text": return <Markdown content={section.text} className="text-sm" />;
-      case "filter": return <FilterWidget {...bound} />;
-      case "form": return <FormWidget key={`${objectOf(bound.page, section)}/${section.relation ?? ""}/${section.parentSelection ?? ""}/${section.relation ? bound.master?.id ?? "" : ""}`} {...bound} />;
-      case "timeline": return <TimelineWidget {...bound} />;
-      case "tasks": return <TasksWidget {...bound} />;
-      case "function": return <FunctionWidget {...bound} />;
-      case "compute": return <ComputeCall binding={section.operation} bindings={section.inputs} record={bound.selected} recordType={bound.page.object.name} live={bound.live} />;
-      default: return <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
-    }
-  })();
+  const { section, chosen, onChoose, at, nested } = bound;
+  const Renderer = widgets.resolve(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
+  const body = Renderer ? <Renderer {...bound} /> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
   const inHand = onChoose !== undefined && chosen === at;
   return (
     <Card onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined}
-      className={cn("grid content-start gap-2 p-3", section.width === "half" ? "md:col-span-1" : "md:col-span-2",
+      className={cn("grid min-w-0 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
         onChoose && "cursor-pointer", inHand && "outline outline-2 outline-primary")}>
       {section.title && section.widget !== "metric" && <h3 className="text-sm font-semibold">{section.title}</h3>}
-      {body}
+      <WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary>
     </Card>
   );
 }
@@ -372,12 +382,27 @@ export function SectionView(bound: Bound & Composing) {
  * detail/actions read their own object's selection. `live` false is the builder's canvas — the same widgets over the
  * same records, with nothing that writes.
  */
-export function ComposedPage({ page, live = true, notice, chosen, onChoose }: {
-  page: Page; live?: boolean; notice?: ReactNode;
-} & Composing) {
+type ComposedPageProps = {
+  page: Page; live?: boolean; notice?: ReactNode; definitionKey?: string;
+  onVariableValues?: (values: Record<string, VariableResult>) => void;
+} & Composing;
+export function ComposedPage(props: ComposedPageProps) {
+  const { me } = useHost();
+  return <PageSession key={JSON.stringify([me, props.definitionKey, props.page])} {...props} />;
+}
+
+function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, onVariableValues }: ComposedPageProps) {
   const { source } = useHost();
-  const [selected, setSelected] = useState<Record<string, EntityRecord | undefined>>({});
-  const [narrowed, setNarrowed] = useState<Narrowed>({});
+  const initialVariables = useMemo(() => {
+    const values = { ...page.document?.variables };
+    for (const node of Object.values(page.document?.nodes ?? {})) {
+      const id = node.activeVariable, variable = id ? values[id] : undefined;
+      if (id && node.kind === "tabs" && node.children?.length && variable?.mode === "state" && variable.type === "string" && !node.children.includes(String(variable.initial))) {
+        values[id] = { ...variable, initial: node.children[0] };
+      }
+    }
+    return values;
+  }, [page.document]);
   const masterType = page.object.name;
   const slots = new Map([
     [selectionKey(masterType), masterType],
@@ -385,56 +410,71 @@ export function ComposedPage({ page, live = true, notice, chosen, onChoose }: {
     ...(page.selections ?? []).map((variable) => [selectionKey(variable.object.name, variable.name), variable.object.name] as const),
   ]);
   const children = new Map<string, Set<string>>();
+  const queryParents = new Map<string, string>();
   for (const section of page.sections ?? []) {
     const type = objectOf(page, section);
     if (section.widget !== "table" || type === masterType && !section.parentSelection || !(section.relation || section.parentSelection || relatedField(source.entity(type)?.fields, page, section))) continue;
     const parent = selectionKey(parentTypeOf(page, section), section.parentSelection), child = selectionKey(type, section.selection);
     if (!children.has(parent)) children.set(parent, new Set());
     children.get(parent)!.add(child);
+    queryParents.set(section.id ?? `section:${page.sections!.indexOf(section)}`, parent);
   }
-  const clear = (records: typeof selected, keys: string[]) => {
-    const next = { ...records }, seen = new Set<string>();
-    const remove = (key: string) => {
-      if (seen.has(key)) return;
-      seen.add(key); delete next[key];
-      for (const child of children.get(key) ?? []) remove(child);
-    };
-    keys.forEach(remove);
-    return next;
-  };
-  const references = JSON.stringify(Object.entries(selected).flatMap(([key, record]) => record && slots.has(key) ? [[key, slots.get(key), record.id]] : []));
-  // Decisions refresh the host source. Re-read selected records so lifecycle
-  // actions use the current state/revision rather than the table's old snapshot.
-  useEffect(() => {
-    let current = true;
-    for (const [key, type, id] of JSON.parse(references) as [string, string, string][]) {
-      source.get(type, id).then((view) => {
-        if (current) setSelected((records) => records[key]?.id === id ? { ...records, [key]: view.record } : records);
-      }, () => {
-        if (current) setSelected((records) => records[key]?.id !== id ? records : clear(records, [key]));
-      });
+  const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents });
+  const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
+  const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
+  const variables = usePageVariables(initialVariables, snapshot.scalars, session, resources);
+  useEffect(() => { onVariableValues?.(variables.values); }, [onVariableValues, variables.values]);
+  const narrowed = snapshot.filters;
+  const onSelect = (key: string, record?: EntityRecord) => session.select(key, record);
+  const onNarrow = (object: string, field: string, value: unknown) => session.filter(object, field, value);
+  const indexed = new Map((page.sections ?? []).map((section, i) => [section.id, { section, i }]));
+  const renderSection = (section: Section, i: number, nested: boolean) => (
+    <SectionView key={section.id || i} page={page} section={section} session={session} selected={session.selected(selectionKey(objectOf(page, section), section.selection))}
+      master={session.selected(selectionKey(parentTypeOf(page, section), section.parentSelection))} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
+      chosen={chosen} onChoose={onChoose} at={i} nested={nested} />
+  );
+  const renderNode = (id: string, ancestors: Set<string>): ReactNode => {
+    if (!page.document || ancestors.has(id)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    const node = page.document.nodes[id];
+    if (!node) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    if (node.visibleWhen) {
+      const visible = variables.values[node.visibleWhen];
+      if (!visible || visible.status === "error") return <Panel role="alert">{t("This page variable could not be evaluated.")} {node.visibleWhen}</Panel>;
+      if (visible.status === "pending") return <Panel role="status">{t("Loading page variable…")}</Panel>;
+      if (visible.value !== true) return wrapLayout ? wrapLayout(id, node, <Panel>{t("Hidden by page variable")}: {node.visibleWhen}</Panel>) : null;
     }
-    return () => { current = false; };
-  }, [source, source.revision, masterType, references]);
-  const onSelect = (key: string, record?: EntityRecord) => {
-    // Child selections belong to the current master. Changing the master must
-    // never leave a detail or an action aimed at the previous master's child.
-    setSelected((records) => ({ ...clear(records, [key]), [key]: record }));
-  };
-  const onNarrow = (object: string, field: string, value: unknown) => {
-    setNarrowed((n) => ({ ...n, [object]: { ...n[object], [field]: value } }));
-    setSelected((records) => clear(records, [...slots].filter(([, type]) => type === object).map(([key]) => key)));
+    if (node.kind === "widget") {
+      const item = indexed.get(node.section);
+      if (!item) return null; // server filtered this widget for the reader
+      const body = renderSection(item.section, item.i, true);
+      return wrapLayout ? wrapLayout(id, node, body) : body;
+    }
+    if (!["rows", "columns", "tabs"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    const next = new Set(ancestors); next.add(id);
+    if (node.kind === "tabs") {
+      const active = variables.values[node.activeVariable ?? ""];
+      if (!active || active.status !== "value" || typeof active.value !== "string") return <Panel role="alert">{t("This page variable could not be evaluated.")} {node.activeVariable}</Panel>;
+      const body = <ContentTabs label={node.title || t("Page tabs")} value={active.value} onChange={(value) => variables.set(node.activeVariable!, value)}
+        items={(node.children ?? []).map((child, index) => ({ id: child,
+          title: page.document!.nodes[child]?.title || indexed.get(page.document!.nodes[child]?.section)?.section.title || t("Tab {n}", { n: index + 1 }), content: renderNode(child, next) }))} />;
+      return wrapLayout ? wrapLayout(id, node, body) : body;
+    }
+    const body = <div key={id} className={node.kind === "columns" ? "grid min-w-0 grid-cols-1 gap-3 @md:grid-cols-[repeat(var(--page-columns),minmax(0,1fr))]" : "flex min-w-0 flex-col gap-3"}
+      style={node.kind === "columns" ? { "--page-columns": Math.max(1, node.children?.length ?? 0) } as CSSProperties : undefined}>
+      {node.children?.map((child) => <div key={child} className="@container min-w-0">{renderNode(child, next)}</div>)}
+    </div>;
+    return wrapLayout ? wrapLayout(id, node, body) : body;
   };
   return (
-    <div className="grid gap-3">
+    <div className="@container/page grid gap-3">
       {notice}
-      <div className="grid gap-3 md:grid-cols-2">
+      {page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)
+        ? <Panel role="alert">{t("This page needs a newer workspace version. Refresh after updating the workspace.")}</Panel>
+        : renderNode(page.document.root, new Set()) : <div className="grid gap-3 md:grid-cols-2">
         {(page.sections ?? []).map((section, i) => (
-          <SectionView key={i} page={page} section={section} selected={selected[selectionKey(objectOf(page, section), section.selection)]}
-            master={selected[selectionKey(parentTypeOf(page, section), section.parentSelection)]} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
-            chosen={chosen} onChoose={onChoose} at={i} />
+          renderSection(section, i, false)
         ))}
-      </div>
+      </div>}
       {(page.sections ?? []).length === 0 && <Panel role="status" className="text-sm text-muted">{t("Nothing is on this page yet.")}</Panel>}
     </div>
   );

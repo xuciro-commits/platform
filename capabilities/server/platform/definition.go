@@ -74,6 +74,9 @@ type Page struct {
 	// Sections are the widgets a composed page is laid out from (ADR-0035);
 	// with sections, Layout is "composed" and the fields above are unused.
 	Sections []Section `json:"sections,omitempty"`
+	// Document orders these sections in a stable, nested presentation tree.
+	// The sections above remain the authoritative business bindings.
+	Document *PageDocument `json:"document,omitempty"`
 	// Selections are named record variables; Object fixes each record's type.
 	// Sections without a binding share the original selection for their object.
 	Selections []SelectionVariable `json:"selections,omitempty"`
@@ -88,6 +91,9 @@ type SelectionVariable struct {
 // how wide it sits (ADR-0035). A table outputs the record someone selects; a
 // detail and the actions read it.
 type Section struct {
+	// ID is required when Document references this section; older pages omit it.
+	ID            string `json:"id,omitempty"`
+	ConfigVersion int    `json:"configVersion,omitempty"`
 	// Widget is table, detail, actions, chart, metric, text, filter, form,
 	// timeline, tasks or a published function.
 	Widget string `json:"widget"`
@@ -122,8 +128,6 @@ type Section struct {
 // Widgets are the widget kinds a composed page may hold (ADR-0035 D2).
 // A filter outputs the page's second variable — the records it narrows to —
 // which the table, chart and metric over the same object read (16b).
-var Widgets = []string{"table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function", "compute"}
-
 // Filterable are the field types a filter widget offers: values that repeat.
 var Filterable = []string{"choice", "boolean", "reference"}
 

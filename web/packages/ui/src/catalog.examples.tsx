@@ -6,12 +6,20 @@ import {
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
-  Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, notify, t,
+  Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, ContentTabs, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
 } from "./index";
 import { WorkspaceContext } from "./shell/Workspace";
+
+export function EditorPanels() {
+  return <div className="flex h-[30rem] flex-col"><EditorWorkbench leftLabel={t("Library")} centerLabel={t("Canvas")} rightLabel={t("Inspector")}
+    left={<Panel title={t("Library")}><Button>{t("Table")}</Button></Panel>}
+    right={<Panel title={t("Inspector")}><Input aria-label={t("Title")} defaultValue={t("Example")} /></Panel>}>
+    <Panel title={t("Canvas")} description={t("Example")} />
+  </EditorWorkbench></div>;
+}
 
 // Runnable owner examples use public APIs and synthetic values only. Nothing in
 // this bundle fetches a host or suggests that a fixture proves authorization.
@@ -260,4 +268,12 @@ export function RetroButtons() {
     </div>
     {pressed && <p className="text-xs text-muted">{t("Last clicked")}: {pressed}</p>}
   </div>;
+}
+
+export function ContentTabsExample() {
+  const [value, setValue] = useState("overview");
+  return <ContentTabs label={t("Content tabs")} value={value} onChange={setValue} items={[
+    { id: "overview", title: t("Overview"), content: <p>{t("Choose a tab to see its content.")}</p> },
+    { id: "notes", title: t("Notes"), content: <Input aria-label={t("Notes")} /> },
+  ]} />;
 }

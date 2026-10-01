@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:be3137008fb6eb66",
+  "revision": "sha256:27ae586d984c941c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -451,6 +451,37 @@
       "snippet": "import { Records } from \"@platform/app\";\n<Records type=\"your.object\" />"
     },
     {
+      "id": "app/semantic-selection",
+      "owner": "@platform/app",
+      "name": "Typed semantic selection",
+      "summary": "Choose an authorized object or property from the existing registry without writing internal identifiers.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "semantic",
+        "object",
+        "property",
+        "binding"
+      ],
+      "source": "web/packages/app/src/semantic/Selector.tsx",
+      "exports": [
+        "SemanticObjectSelect",
+        "SemanticPropertySelect"
+      ],
+      "example": "SemanticSelectionExample",
+      "constraints": [
+        "The selector returns typed references. Host validation and original permissions remain authoritative."
+      ],
+      "dependencies": [
+        "ui/input"
+      ]
+    },
+    {
       "id": "foundation/semantic-tokens",
       "owner": "@platform/ui",
       "name": "Semantic tokens",
@@ -791,6 +822,32 @@
       ]
     },
     {
+      "id": "ui/content-tabs",
+      "owner": "@platform/ui",
+      "name": "Content tabs",
+      "summary": "Switch stable named panels with keyboard navigation and retain visited content.",
+      "layer": 2,
+      "source": "web/packages/ui/src/layout/ContentTabs.tsx",
+      "exports": [
+        "ContentTabs"
+      ],
+      "example": "ContentTabsExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "tabs",
+        "layout",
+        "state"
+      ],
+      "dependencies": [
+        "ui/button"
+      ]
+    },
+    {
       "id": "ui/data-table",
       "owner": "@platform/ui",
       "name": "Data table",
@@ -871,6 +928,34 @@
       "states": [
         "Expanded",
         "Collapsed"
+      ]
+    },
+    {
+      "id": "ui/editor-workbench",
+      "owner": "@platform/ui",
+      "name": "Editor workbench",
+      "summary": "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.",
+      "layer": 2,
+      "source": "web/packages/ui/src/layout/EditorWorkbench.tsx",
+      "exports": [
+        "EditorWorkbench"
+      ],
+      "example": "EditorPanels",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "editor",
+        "layout",
+        "inspector",
+        "resize"
+      ],
+      "dependencies": [
+        "ui/panels",
+        "foundation/semantic-tokens"
       ]
     },
     {
@@ -1679,6 +1764,7 @@
       "Application release workbench": "整应用发布工作台",
       "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path.": "应用资源引用原归属方；加入应用不会授予权限。发布审查通过原候选路径冻结已发布依赖。",
       "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
+      "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.": "组合组件库、画布与检查器，支持键盘和指针调整面板宽度。",
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
       "Authorized cross-application search": "受权跨应用搜索",
       "Authorized record detail": "受权记录详情",
@@ -1695,6 +1781,7 @@
       "Chart": "图表",
       "Checkbox": "复选框",
       "Checked": "已选中",
+      "Choose an authorized object or property from the existing registry without writing internal identifiers.": "从现有注册表选择受权对象或属性，无需填写内部标识。",
       "Closed": "关闭",
       "Collapsed": "收起",
       "Compare aggregate groups with totals and explicit drill-down.": "比较聚合分组，展示合计并提供明确的下钻。",
@@ -1702,6 +1789,7 @@
       "Compose nodes through typed ports with one shared graph interaction model.": "通过类型化端口装配节点，使用统一的图交互模型。",
       "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
       "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions.": "通过工作区 Host 接入。目录预览使用本地示例，不授予权限。",
+      "Content tabs": "内容标签页",
       "Controlled page composition": "受控页面装配",
       "Data table": "数据表格",
       "Declared action controls": "声明式动作控件",
@@ -1712,6 +1800,7 @@
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
       "Editing": "编辑中",
+      "Editor workbench": "编辑工作台",
       "Empty": "空状态",
       "Enabled": "启用",
       "Entity form": "实体表单",
@@ -1806,6 +1895,7 @@
       "Submit an ad hoc form on Enter without reloading the page.": "按回车提交临时表单，不刷新页面。",
       "Submitting": "提交中",
       "Switch several named choices on or off without a custom control.": "开启或关闭多项命名选项，无需另写控件。",
+      "Switch stable named panels with keyboard navigation and retain visited content.": "使用键盘切换具有稳定标识的面板，并保留已访问的内容。",
       "Tactile mechanical keycap buttons styled after industrial equipment.": "仿工业仪器和机械键帽质感的复古实体按键。",
       "Tactile metallic and liquid glass styled buttons for prominent actions.": "用于重点操作的拟物金属与流体玻璃质感按钮。",
       "Tasks and inbox": "任务与收件箱",
@@ -1818,6 +1908,7 @@
       "The offline preview shows the binding only and never executes Wasm or reads tenant data.": "离线预览仅展示绑定，不执行 Wasm 或读取租户数据。",
       "The output is a build.page draft. It never publishes, generates tenant TSX or bypasses release validation.": "产物是 build.page 草稿；不会直接发布、生成租户 TSX 或绕过发布校验。",
       "The same list-detail descriptor serves a live workspace and a read-only sample preview.": "同一列表详情声明用于实际工作台和只读样例预览。",
+      "The selector returns typed references. Host validation and original permissions remain authoritative.": "选择器返回类型化引用；宿主校验和原权限仍为准。",
       "This is the existing ProcessEditor with synthetic local data. Save and publish are refused in Catalog.": "这是使用本地合成数据的原 ProcessEditor；目录拒绝保存和发布。",
       "This pattern recommends a composition; it does not grant widget eligibility or permissions.": "此模式推荐一种组合，不授予区块资格或权限。",
       "This search currently has no dedicated error or pending feedback; callers must not claim otherwise.": "当前搜索没有专门的错误或等待反馈；调用方须如实说明。",
@@ -1825,6 +1916,7 @@
       "Typed block canvas": "类型化节点画布",
       "Typed field vocabulary": "类型化字段词汇",
       "Typed filters": "类型化筛选",
+      "Typed semantic selection": "类型化语义选择",
       "Unchecked": "未选中",
       "Unread": "未读",
       "Use exact registry keys; unknown states fall back to a neutral label.": "使用登记表的精确键；未知状态回退为中性色标签。",
@@ -1861,6 +1953,9 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -1892,10 +1987,14 @@
       "web/packages/app/src/capability.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/semantic/Selector.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -1922,6 +2021,8 @@
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/simulate.tsx",
       "web/packages/build/src/template-ui.tsx",
@@ -1961,6 +2062,9 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -1982,6 +2086,7 @@
     "ui/form": [
       "web/packages/app/src/agents.tsx",
       "web/packages/app/src/index.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/template-ui.tsx",
       "web/packages/platform/src/ai.tsx",
       "web/packages/platform/src/knowledge.tsx",
@@ -2003,6 +2108,7 @@
       "web/packages/app/src/agents.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/studio.tsx",
@@ -2030,6 +2136,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -2069,6 +2176,8 @@
     "ui/entity-card": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/mes/src/index.tsx",
       "web/packages/platform/src/people.tsx",
       "web/packages/pms/src/index.tsx"
@@ -2080,7 +2189,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
-      "web/packages/build/src/process.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/workflow.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
@@ -2095,6 +2204,9 @@
     ],
     "ui/record-workspace": [
       "web/packages/app/src/pages.tsx"
+    ],
+    "ui/content-tabs": [
+      "web/packages/app/src/sections.tsx"
     ],
     "ui/markdown": [
       "web/packages/app/src/sections.tsx",
@@ -2111,8 +2223,18 @@
     ],
     "app/record-actions": [
       "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/simulate.tsx"
+    ],
+    "app/semantic-selection": [
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/process.tsx"
+    ],
+    "ui/editor-workbench": [
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/process.tsx"
     ],
     "ui/toggles": [
       "web/packages/build/src/editor.tsx",
@@ -2120,15 +2242,14 @@
     ],
     "ui/block-canvas": [
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/studio.tsx",
       "web/packages/build/src/workflow-runs.tsx",
       "web/packages/build/src/workflow.tsx"
     ],
-    "ui/lifecycle": [
-      "web/packages/build/src/process.tsx"
-    ],
     "ui/data-table": [
+      "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/workflow-runs.tsx",
       "web/packages/erp/src/index.tsx",
       "web/packages/mes/src/index.tsx",
@@ -2140,6 +2261,9 @@
       "web/packages/pms/src/index.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/lifecycle": [
+      "web/packages/build/src/process.tsx"
     ],
     "app/records": [
       "web/packages/crm/src/index.tsx",
@@ -2318,12 +2442,21 @@
       "symbols": [
         "HostContext",
         "assetKey",
+        "createWidgetRegistry",
         "defineApp",
         "findDefinition",
         "isComposed",
         "isPageDefinition",
         "newId",
+        "pageDocumentFromSections",
+        "pageUIProfile",
+        "pageVariableContract",
+        "pageVariableDiagnostics",
+        "propertyKey",
+        "relationKey",
         "runStates",
+        "semanticModelView",
+        "supportsPageUIProfile",
         "useCapabilities",
         "useDefinitions",
         "useHost",
@@ -2332,7 +2465,9 @@
         "useRead",
         "useReadQuery",
         "useRecordArchive",
-        "useRecordInventory"
+        "useRecordInventory",
+        "widgetContract",
+        "widgetContracts"
       ],
       "types": [
         "AgentInfo",
@@ -2347,11 +2482,19 @@
         "Host",
         "Me",
         "Memory",
+        "PageVariableValue",
         "Passage",
+        "PropertyRef",
+        "ReferenceRelationRef",
         "RunDraft",
         "RunSignal",
         "RunStep",
-        "SavedView"
+        "SavedView",
+        "SemanticModelView",
+        "SemanticRelation",
+        "WidgetContract",
+        "WidgetID",
+        "WidgetRegistry"
       ]
     },
     "@pkg/build": {

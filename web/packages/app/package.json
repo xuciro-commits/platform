@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "true",
+    "test": "node --test src/*/*.test.mjs",
     "build": "true"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 # ADR-0046: 融合外包编辑体验与平台语义的应用设计台
 
-**状态：** 设计提案，2026-10-01（#141，关联 #123/#132/#138）。负责人已明确选择外包项目的页面编辑与本体设计交互作为应用设计台的目标体验，并要求融合设计；这是产品方向授权。本文的 V2 文档形状、组件契约和迁移顺序是本次提出的具体方案，尚未作为已实施或已验收能力。活动状态只在 [WorkQueue](../WorkQueue.md)。
+**状态：** 已接受，分批实施，2026-10-01（#141，关联 #123/#132/#138）。负责人明确要求“开始执行落地ADR0046”；按 F1–F6 推进，产品方向、文档/组件契约和迁移路线已有实施授权。活动批次只在 [WorkQueue](../WorkQueue.md)，工程检查与体验验收保持区分。
 
 **与既有决策的关系：** 延续 [ADR-0018](0018-one-workspace.md) 的一个工作区、[ADR-0040](0040-semantic-builder-and-relationship-model.md) 的统一语义及多种创作界面、[ADR-0039](0039-minimal-definition-release.md) 的冻结候选与激活、[ADR-0044](0044-capability-fabric.md) 的原能力执行路径，以及 [ADR-0045](0045-platform-catalog.md) 的规范主人与 Catalog。接受本文后，扩展 [ADR-0035](0035-a-page-is-a-layout-of-bound-widgets.md) 的平铺页面表达范围；不改变 K1–K9，也不改变原应用的业务权威。
 
@@ -19,9 +19,9 @@
 
 平台基线为 `53e913e` 加审查时的工作树，其中已有未提交的页面选择、应用交付、动作条件等工作。下表以工作树源码为证据，不把未提交状态称为主线交付，也不重复原有验收。
 
-外包来源为本机 `palantir-workshop-replica-specification-4`。审查时对其 `src/`、`public/`、`scripts/` 及 `package.json`、`pnpm-lock.yaml`、`next.config.ts`、`tsconfig.json` 共 76 个文件计算快照摘要：`afb6bc77e3e25233573c37750eab4181c56a1e24d43ea6ad55c0771cb196f99d`。算法为相对路径排序，逐项拼接路径 UTF-8、NUL、文件 SHA-256 原始字节，再取整体 SHA-256。排除依赖目录、构建产物、浏览器状态和凭据。首次移植前保存这份来源快照及许可/归属信息，避免只依赖 Downloads 目录。
+外包来源为本机 `palantir-workshop-replica-specification-4`。审查时对其 `src/`、`public/`、`scripts/` 及 `package.json`、`pnpm-lock.yaml`、`next.config.ts`、`tsconfig.json` 共 76 个文件计算快照摘要：`afb6bc77e3e25233573c37750eab4181c56a1e24d43ea6ad55c0771cb196f99d`。算法为相对路径排序，逐项拼接路径 UTF-8、NUL、文件 SHA-256 原始字节，再取整体 SHA-256。排除依赖目录、构建产物、浏览器状态和凭据。来源已固定在 [workshop-source.tar.gz](../../references/application-studio/workshop-source.tar.gz)，逐文件摘要和归属说明在 [workshop-source.json](../../references/application-studio/workshop-source.json)。原交付未包含独立许可文件；这是负责人提供并授权内部融合的材料，依赖继续遵循各自许可。归档不包含环境文件、凭据或构建产物，不作为第二条运行路径。
 
-| 对象 | 当前事实 | 融合含义 |
+| 对象 | 审查时事实 | 融合含义 |
 |---|---|---|
 | 平台定义 | [Page/Section/Application](../../capabilities/server/platform/definition.go) 具有具名选择、关系、查询、动作和固定计算引用；页面仍为平铺部件 | 保留资产与绑定语义，扩展页面文档结构 |
 | 平台编辑/运行 | [PageEditor](../../web/packages/build/src/editor.tsx) 使用原动作与 revision；[ComposedPage](../../web/packages/app/src/sections.tsx) 使用调用者数据源和共享组件 | 复用保存、授权与运行基础，更新编辑体验和共同渲染路径 |
@@ -126,7 +126,7 @@ platform/
 
 外包 `ModuleDef` 的应用名、Header、Pages、Overlay、变量、Flow 和本体引用不作为一个新 JSON blob 原样持久化。它们映射为已有 Application/Page 与具名资源；流程、对象、函数保持独立 owner 与版本。应用工作台提供整应用视图，候选冻结仍走原应用闭包。
 
-在原 Page 增加可辨识的 V2 文档字段。以下是拟定的结构语义，最终 Go 定义及生成 JSON 名称在首批契约实现中固定：
+在原 Page 增加可辨识的 V2 文档字段。组件实例继续存放在原 `Page.Sections` 中，获得稳定身份与版本；`Document` 只表达布局与后续交互声明。这样原业务绑定、权限裁剪、依赖提取和候选冻结不出现第二份可写真相。F1 固定了 Go 定义和生成 JSON 名称；下图的扩展项由后续批次实现：
 
 ```text
 Application（原资产）
@@ -135,24 +135,27 @@ Application（原资产）
 └── Interaction（扩展）：应用接口、跨页面共享变量与事件声明
 
 Page（原资产）
-├── 原名称、标题、描述、资产身份与修订
-└── Document: PageDocumentV2
+├── 原名称、标题、描述、资产身份、对象与修订
+├── sections: WidgetInstance[]（原 Section，业务绑定唯一归属）
+└── document: PageDocumentV2
     ├── formatVersion: 2
+    ├── uiProfile: 固定的共同呈现契约
     ├── root: LayoutNodeID
     ├── nodes: Map<LayoutNodeID, ContainerNode | WidgetNode>
-    ├── widgets: Map<WidgetID, WidgetInstance>
-    ├── unusedWidgets: WidgetID[]
-    ├── variables: VariableDefinition[]
-    ├── events: EventBinding[]
-    ├── overlays: OverlayDefinition[]
-    └── interface: TypedInputOutput[]
+    ├── unusedWidgets: WidgetID[]          [后续]
+    ├── variables: VariableDefinition[]   [后续]
+    ├── events: EventBinding[]            [后续]
+    ├── overlays: OverlayDefinition[]    [后续]
+    └── interface: TypedInputOutput[]     [后续]
 
 ContainerNode
-    id / kind / orderedChildren / layoutProps / visibilityBinding
+    node ID（nodes键） / kind / children / section（组件叶的稳定引用）
+    layoutProps / visibilityBinding       [后续]
     kind = rows | columns | tabs | flow | toolbar | loop
 
 WidgetInstance
-    id / componentID / configVersion / props / bindings / events / display
+    id / widget（componentID） / configVersion / 原类型化绑定
+    通用props / ports / events / display  [后续扩展，不复制业务绑定]
 ```
 
 每个布局节点和组件实例具有稳定 ID；复制时生成新 ID 并重写内部引用，移动时保持 ID。容器树不能成环或多重父属；Overlay 有独立根；unused 组件显式列出。变量依赖图、页面导航图与本体关系图不混为一个图：布局必须是树，变量求值拒绝循环，本体关系和页面导航可以有环。
@@ -209,6 +212,28 @@ ObjectSet 是带来源、条件、排序、分页/游标、完整性与授权上
 
 事件处理区分同步UI更新与异步Action结果。Action成功必须来自原确认结果，结果到达后失效相关查询。重试保留原操作身份，事件连线不获得越权能力。预览模式在服务能力入口阻止业务提交，不能只靠按钮 disabled。
 
+### 6.1 首个变量运行契约（F3a）
+
+`platform.page.v2.2` 增加 `Document.variables` 与Tabs；运行时继续支持不含新字段的 `v2.1`。变量以稳定ID为键，声明 `scope=page`、`type=string|boolean`、`mode=constant|state|derived`；前两者有类型匹配的initial，derived仅有expression。最多64变量，字符串最多4096 UTF-8字节。v2.2只接受上述标量；v2.3资源值见§6.2。应用/Overlay/Loop作用域仍待扩展，不默认降为字符串或普通数组。
+
+表达式只有算子身份及显式参数（variable或literal二选一），不接受源码。共同机器契约归 `platform/pageui/widgets.json.runtime`：equal要求两个同类型值，not/and/or接收布尔，concat接收文本；参数数量及输出类型由描述声明。缺失依赖、类型不匹配、循环和超限拒绝候选；前端显示定位到变量ID的错误。求值输出有value/error，超长拼接保留错误，不截断。前端状态只允许更新state且必须通过同类型检查；页面会话、文档变更、成员身份变化互相隔离，刷新从initial重建，不写浏览器持久化。
+
+Tabs的有序children同时是稳定tab身份，标题取子节点title或原组件标题；`activeVariable`必须是文本state，initial指向一个孩子。每个Tab首次访问才挂载，切换后保留已访问内容和局部输入；隐藏Tab不获得任何新权限。成员过滤裁去节点后，无法使用的选中值回退到首个可见孩子，过滤结果不修改已发布文档。节点 `visibleWhen` 只能引用布尔变量，false时卸载该分支；设计画布保留可定位的隐藏提示。UI状态不替代服务端授权。依赖/类型及布局验证仍由原保存/候选路径执行。
+
+### 6.2 资源会话与读取结果（F3b）
+
+页面会话统一持有纯交互值、记录引用、筛选条件与查询结果状态。既有具名选择和对象默认选择作为兼容输入生成类型化槽位；每个记录值只有对象类型与记录ID，字段和revision保存在独立读取缓存。父选择更换/清除、对象筛选变更及读取拒绝递归清理后代槽位，并使其在途读取失效。
+
+表格查询仍由原 `RecordSource` 发出，页面会话以组件身份、对象、完整查询参数及宿主revision标记结果窗口；状态区分pending/value/empty/error，结果只声明窗口内引用、offset/limit及授权读取返回的total，不冒充全量ObjectSet或聚合。相同窗口的在途请求可复用；参数/来源变化或会话销毁后，旧响应不得重新发布为当前查询或当前选择。共享列表本身也必须拦截旧响应，不能只保护变量面板而让旧数据重现到表格。
+
+`platform.page.v2.3` 增加 `mode=resource`，其source以kind和稳定Section ID引用原组件输出：record从表格取得当前具名/默认记录引用，filter从筛选器取得该对象共享的筛选条件，query从表格取得当前读取窗口，类型分别为record/filter/object-set。原绑定继续决定对象、关系、具名查询和参数，不复制查询定义或业务规则。资源值不允许initial或expression；`present`读取资源是否有值并返回布尔，pending/error继续传播，空窗口返回false。标量equal不接受记录或集合对象比较。v2.1/v2.2仍可读，资源声明必须使用v2.3。
+
+变量检查器支持选来源组件、声明资源变量、用派生条件绑定可见性，并显示当前状态、引用、窗口记录数/total/offset及完整性。声明保存在原PageDocument，冻结、激活及恢复沿原发布路径。发布校验包括来源组件/输出类型匹配，以及纯依赖与来源组件显示条件共同形成的环；成员过滤移除不可见来源及其派生消费者到闭包。
+
+共享 `RecordSource.scope` 标记成员与定义作用域。当前工作区以成员信息及可见定义版本构成该标记，变化时清空页面值/读取缓存；普通数据revision变化刷新原选择并失效查询窗口。同一记录、同一作用域刷新保留已显示视图和表单输入；记录身份或作用域改变后不显示旧视图。读取请求有世代/作用域检查，列表和详情也直接拒绝旧响应。
+
+当前查询变量是已有表格读取的输出，保留其分页/搜索/排序状态；来源未挂载或父记录未选择时不会另发隐式查询。独立于组件的查询计划、集合运算、完整对象集聚合、记录属性派生及跨页面传值仍未实现。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -262,7 +287,7 @@ WidgetImplementation（同一个contract身份）
 └── contract tests / examples / Catalog entry
 ```
 
-描述规则使用/复用平台现有有界 `ValueSchema` profile；属性/插槽/事件由共享组件owner负责，资源/动作绑定由应用API负责。实现采用一份受版本控制的机器可读描述，生成宿主校验描述与TS类型，不在Go枚举、Palette、Inspector和Renderer各自维护同一组规则。描述可置于应用API层的 `platform/pageui/` 数据文件；它不属于 K1–K9 的 `contract/`，不含租户脚本。生成与一致性检查接入原 `cmd/api-types` 和 Catalog 工具链。
+描述规则使用/复用平台现有有界 `ValueSchema` profile；属性/插槽/事件由共享组件owner负责，资源/动作绑定由应用API负责。实现采用一份受版本控制的机器可读描述，生成宿主校验描述与TS类型，不在Go枚举、Palette、Inspector和Renderer各自维护同一组规则。描述归应用API层的 `platform/pageui/widgets.json` 数据文件；它不属于 K1–K9 的 `contract/`，不含租户脚本。生成与一致性检查接入原 `cmd/api-types` 和 Catalog 工具链。
 
 `WidgetRegistry` 索引可用实现，`WidgetHost` 负责加载、类型化绑定、作用域、错误边界、挂载、订阅清理与指标。Inspector、Palette、默认配置、布局推荐、编译校验均消费同一份契约。通用组件只接收 props/ports/services，不访问全量 WorkshopContext 或其他组件私有状态。
 
@@ -361,6 +386,22 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 主要代价是V2页面契约、共享前端运行机制、语义投影与原发布闭包需要一起演进；单做视觉或单做后端都不能完成融合。收益是负责人要求的设计台可以成为真实平台前端，同时避免两份数据/动作/发布语义。
 
-需要审阅的具体设计选择为：D3采用V2结构化文档并兼容旧页；D4允许受控、共享的前端纯交互运行时；D5用语义投影逐步补齐本体能力；D6在既有owner下建立组件契约而非新插件平台。本文均给出推荐实现及约束。D1的体验方向和D2的原平台权威来自负责人请求与既有ADR，不重复申请方向授权。
+已接受的具体设计选择为：D3采用V2结构化文档并兼容旧页；D4允许受控、共享的前端纯交互运行时；D5用语义投影逐步补齐本体能力；D6在既有owner下建立组件契约。F1将原Section保留为组件实例与业务绑定的唯一存储，Document引用它；后续扩展沿同一资产演进。
 
-**当前实现边界：** 本批交付融合设计与ADR，没有迁入外包源码、修改Go/前端契约、创建新数据库或改变运行入口。F1–F6均为待实施范围；本轮视觉观察不等于融合后验收。
+**当前实现边界：** F1首个V2页面闭环已接入原入口并通过适用工程检查；融合后的手感仍需负责人体验确认。`PageDocument(formatVersion=2, uiProfile)` 支持嵌套Rows/Columns，Section有稳定ID和配置版本；宿主拒绝环、多父属、悬空/重复引用、未用节点及不支持的布局/组件版本，成员隐藏区块同步裁掉其布局节点。冻结/激活适配保留树、ID和版本，原候选字节、授权、动作和日志路径保持唯一归属。
+
+编辑器使用共享 `EditorWorkbench` 的可调整三栏，支持树/画布/检查器同步选择、分组/取消分组、移动/拖放、复制、撤销重做、设备宽度和缩放预览。`build/session/DraftSession` 原子记录文档及绑定编辑，UI选中独立；保存串行且携带期望revision，拒绝保留草稿。V1平铺和list-detail页保留原发布渲染，在编辑器转换并显式保存为V2。
+
+`platform/pageui/widgets.json` 是首批12种组件的身份、配置版本、UI profile、默认属性、字段预设、绑定种类、选择方向和展示Schema来源；Go校验、生成的Web契约、Palette及基础Renderer Registry共同消费。每个组件仍调用原共享UI/应用API。复杂检查器复用原绑定编辑；完整ports/events、按组件拆分检查器、懒加载和92种外包组件迁移尚未完成，基础注册不能称为完整Plugin Architecture。
+
+F2在原“对象”入口提供统一资源目录、原生/租户来源筛选、搜索和有界关系图；图节点支持选择检查、双击及键盘打开详情。对象详情包含概览、属性、引用关系、动作、数据、用途和访问页签。`@platform/app/semantic` 从当前成员的原定义目录投影对象、字段支持的引用及声明用途，不建立第二份本体缓存；隐藏目标不生成占位节点，引用不推断基数、唯一性或删除保证。关系图最多显示当前筛选的80个对象，不能据此声称大模型性能已验证。
+
+原生对象由代码owner维护，在工作台只读检查。租户字段、状态、动作和访问仍打开原 `ProcessEditor`，支持属性/动作/访问定位，复用三栏框架和 `DraftSession` 历史；保存后保留撤销重做，并发拒绝不推进草稿基准revision，取消修改才载入新版本。原生动作检查仅展示当前成员可见的公共描述和输入，不承诺完整原生规则可视化。
+
+共享对象/属性选择器提供类型化引用。选择属性可创建绑定该字段的V2页面草稿；选择带声明inverse的入向单值引用，可创建父表/相关表/相关详情及具名父子选择。创建后进入原页面编辑器，发布继续走候选冻结与激活。工程路线已验证真实CRM账户/商机的关系绑定、业务成员操作及刷新、原生只读、租户字段编辑、保存后历史与并发拒绝。多值引用及独立关系资产尚不支持这条相关页面创建路线。
+
+F3a实现 `v2.2` 的页面级文本/布尔变量、constant/state/derived、显式依赖与equal/not/and/or/concat。Go与Web消费共同算子描述及合法/拒绝用例；Go负责定义校验，前端在组件局部会话执行纯求值。变量面板可编辑初始值和表达式，Tabs检查器提供稳定子节点标题和选中变量，节点可绑定布尔显示条件。当前组件连线覆盖Tabs的状态输出及节点可见性输入，其他Widget端口和事件仍需后续批次接入。Tabs复用共享 `ContentTabs`，首次访问挂载、保留访问过的内容并支持键盘切换；页面定义或成员变化重建运行会话，刷新从初始值开始。原 `v2.1` 文档继续可读，新字段必须使用 `v2.2`。工程路线覆盖设计器声明派生条件、保存候选、激活、操作员读取选中记录、显示联动、会话独立及刷新；冻结文档中的Tabs/变量随原发布与恢复路径保留。
+
+F3b将选择、筛选、标量及查询窗口纳入 `runtime/PageSessionStore`；类型化资源输出进入保存文档、变量面板及派生条件，运行状态覆盖pending/value/empty/error。记录字段/revision与引用分开缓存，父子切换/筛选/拒绝清理后代，旧响应不恢复过期状态；成员与定义作用域变化清空缓存，列表和详情同步拦截旧响应。工程路线验证CRM具名父子查询、记录/筛选/查询变量控制多组件、候选激活与刷新；共同用例覆盖依赖环、来源隐藏闭包、类型错误、请求反序及作用域切换，冻结恢复保留资源来源。
+
+F3仍未完成：独立查询计划/集合运算、跨页面输入输出、application/overlay/loop-item/widget-local作用域及Flow/Toolbar/Loop/Overlay待实施。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
