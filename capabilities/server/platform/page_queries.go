@@ -48,7 +48,7 @@ func (q PageQuery) Variables() []string {
 	}
 	return ids
 }
-func (d *PageDocument) CheckQueries() error {
+func (d *PageDocument) CheckQueries(sections []Section) error {
 	c := pageWidgets.Runtime.Query
 	if len(d.Queries) > c.MaxPlans || len(d.Queries) > 0 && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") {
 		return fmt.Errorf("page query plans need v2.9 and a bounded plan count")
@@ -60,8 +60,17 @@ func (d *PageDocument) CheckQueries() error {
 		}
 		seen[id] = true
 		v := d.Variables[id]
-		if v.Source != nil && v.Source.Kind == "plan" {
-			return true
+		if v.Source != nil {
+			if v.Source.Kind == "plan" {
+				return true
+			}
+			if v.Source.Kind == "query" {
+				for _, s := range sections {
+					if s.ID == v.Source.Section && s.CollectionVariable != "" {
+						return true
+					}
+				}
+			}
 		}
 		if v.Expression != nil {
 			for _, arg := range v.Expression.Args {
@@ -232,6 +241,31 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 			if _, ok := fieldType(field); !ok {
 				return fmt.Errorf("named query field is unavailable")
 			}
+		}
+	}
+	return nil
+}
+
+// CheckCollectionPorts keeps table object identity on the same frozen edge.
+func (p Page) CheckCollectionPorts() error {
+	for _, s := range p.Sections {
+		if s.CollectionVariable == "" {
+			continue
+		}
+		if p.Document == nil {
+			return fmt.Errorf("table window needs a document")
+		}
+		v := p.Document.Variables[s.CollectionVariable]
+		if v.Source == nil {
+			return fmt.Errorf("table window source is unavailable")
+		}
+		q, ok := p.Document.Queries[v.Source.Query]
+		object := s.Object.Name
+		if object == "" {
+			object = p.Object.Name
+		}
+		if !ok || object != q.Object.Name {
+			return fmt.Errorf("table window object does not match its plan")
 		}
 	}
 	return nil

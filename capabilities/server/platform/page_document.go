@@ -67,7 +67,7 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page variable %s requires UI profile v2.3", id)
 		}
 	}
-	if err := d.CheckQueries(); err != nil {
+	if err := d.CheckQueries(sections); err != nil {
 		return err
 	}
 	if err := d.CheckVariables(); err != nil {
@@ -94,6 +94,12 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if section.CollectionVariable != "" {
+			v, ok := d.Variables[section.CollectionVariable]
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.10") || section.Widget != "table" || !ok || v.Scope != "page" || v.Mode != "resource" || v.Type != "object-set" || v.Source == nil || v.Source.Kind != "plan" || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
+				return fmt.Errorf("page section %s needs an exclusive plan window binding", section.ID)
+			}
+		}
 		if err := checkPageWidget(section); err != nil {
 			return fmt.Errorf("page section %s: %w", section.ID, err)
 		}
@@ -251,6 +257,13 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		if variable.Source != nil {
 			dependencies = append(dependencies, controls[variable.Source.Section]...)
+			if variable.Source.Kind == "query" {
+				for _, s := range sections {
+					if s.ID == variable.Source.Section && s.CollectionVariable != "" {
+						dependencies = append(dependencies, s.CollectionVariable)
+					}
+				}
+			}
 			if variable.Source.Kind == "plan" {
 				dependencies = append(dependencies, d.Queries[variable.Source.Query].Variables()...)
 			}
@@ -366,6 +379,13 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 			}
 		}
 		if node.Kind == "widget" {
+			for _, s := range sections {
+				if s.ID == node.Section && s.CollectionVariable != "" {
+					if _, ok := variables[s.CollectionVariable]; !ok {
+						return false
+					}
+				}
+			}
 			if !allowed[node.Section] {
 				return false
 			}

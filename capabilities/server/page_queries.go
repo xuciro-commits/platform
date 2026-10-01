@@ -9,6 +9,9 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 	if p.Document == nil {
 		return nil
 	}
+	if err := p.CheckCollectionPorts(); err != nil {
+		return err
+	}
 	for id, q := range p.Document.Queries {
 		object, ok := t.entity(q.Object.Name)
 		if !ok || object.App != q.Object.App {

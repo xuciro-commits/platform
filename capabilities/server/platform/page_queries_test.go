@@ -2,6 +2,7 @@ package platform
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 )
 
@@ -97,5 +98,76 @@ func TestQueryBindingFreezesOriginalNamedVersion(t *testing.T) {
 	query.SourceVersion = "query-2"
 	if _, err = Candidate([]AssetRef{page.Ref}, []ReleaseAsset{page, object, query}); err == nil {
 		t.Fatal("candidate ignored exact query binding")
+	}
+}
+
+func TestTableCollectionPortIsVersionedAndExclusive(t *testing.T) {
+	p := queryPlanPage()
+	for i := range p.Sections {
+		if p.Sections[i].Widget == "table" {
+			p.Sections[i].CollectionVariable = "window"
+		}
+	}
+	if err := p.Document.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.CheckCollectionPorts(); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name   string
+		change func(*Page)
+	}{
+		{"old profile", func(p *Page) { p.Document.UIProfile = "platform.page.v2.9" }},
+		{"wrong variable", func(p *Page) {
+			for i := range p.Sections {
+				if p.Sections[i].Widget == "table" {
+					p.Sections[i].CollectionVariable = "bucket"
+				}
+			}
+		}},
+		{"mixed query", func(p *Page) {
+			for i := range p.Sections {
+				if p.Sections[i].Widget == "table" {
+					p.Sections[i].Query = AssetRef{App: "sample", Kind: AssetQuery, Name: "other"}
+				}
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			q := p
+			q.Sections = slices.Clone(p.Sections)
+			doc := *p.Document
+			q.Document = &doc
+			test.change(&q)
+			if q.Document.Check(q.Sections) == nil {
+				t.Fatal("invalid collection port accepted")
+			}
+		})
+	}
+	wrong := p
+	wrong.Sections = slices.Clone(p.Sections)
+	for i := range wrong.Sections {
+		if wrong.Sections[i].Widget == "table" {
+			wrong.Sections[i].Object = AssetRef{App: "sample", Kind: AssetObject, Name: "sample.other"}
+		}
+	}
+	if wrong.CheckCollectionPorts() == nil {
+		t.Fatal("object mismatch accepted")
+	}
+	if _, err := PageReleaseAsset("sample", "page-1", wrong); err == nil {
+		t.Fatal("candidate allowed object mismatch")
+	}
+	cycle := p
+	cycle.Document = &PageDocument{}
+	raw, _ := json.Marshal(p.Document)
+	json.Unmarshal(raw, cycle.Document)
+	cycle.Document.Variables["tableWindow"] = PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &PageResourceSource{Kind: "query", Section: "table"}}
+	cycle.Document.Variables["present"] = PageVariable{Scope: "page", Type: "boolean", Mode: "derived", Expression: &PageExpression{Op: "present", Args: []PageValue{{Variable: "tableWindow"}}}}
+	query := cycle.Document.Queries["read"]
+	query.Conditions[0].Value = PageValue{Variable: "present"}
+	cycle.Document.Queries["read"] = query
+	if cycle.Document.Check(cycle.Sections) == nil {
+		t.Fatal("table output introduced a plan dependency cycle")
 	}
 }

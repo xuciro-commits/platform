@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Table query window": "表格查询窗口",
+  "Use the table's own query": "使用表格自身查询",
+
   "Query plans": "查询计划",
   "Query plan": "查询计划",
   "Choose query plan": "选择查询计划",

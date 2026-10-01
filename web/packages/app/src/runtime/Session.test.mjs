@@ -144,3 +144,20 @@ test("ending an overlay clears only its states atomically and invalidates the ol
   source.scope = "different-member-or-version"; store.updateSource(source);
   assert.deepEqual(store.snapshot().scalars, {});
 });
+
+test("shared plan windows own table selections and fields while views and obsolete replies are isolated",async()=>{
+ const old=deferred(),source={scope:"one",entity:()=>({fields:[]}),get:async(_,id)=>({record:record(id)}),list:async(_,q)=>q.offset?{records:[record("B")],total:2}:old.promise};
+ const selections=plan();selections.querySelections=new Map([["plan/read",new Set(["parent"])]]);
+ const store=new PageSessionStore(source,selections);
+ store.select("parent",record("A"));await tick();
+ const first=store.querySource("plan/read").list("sample.parent",{offset:0,limit:1});
+ store.setQueryView("plan/read","base",{offset:1});
+ assert.equal(store.selected("parent"),undefined);
+ const current=store.querySource("plan/read").list("sample.parent",{offset:1,limit:1});await current;
+ old.resolve({records:[record("A")],total:2});await first;
+ const signature=JSON.stringify(["sample.parent",{offset:1,limit:1}]);
+ assert.equal(store.queryPage("plan/read",signature).records[0].id,"B");
+ assert.equal(store.queryPage("plan/read",JSON.stringify(["sample.parent",{offset:0,limit:1}])),undefined);
+ store.select("parent",record("B"));await tick();source.scope="two";store.updateSource(source);
+ assert.deepEqual(store.snapshot().views,{});assert.equal(store.selected("parent"),undefined);
+});

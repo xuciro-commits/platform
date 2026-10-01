@@ -1230,6 +1230,7 @@ export type Section = {
   width?: string;
   object?: AssetRef;
   selection?: string;
+  collectionVariable?: string;
   recordVariable?: string;
   parentSelection?: string;
   relation?: string;
@@ -1529,7 +1530,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.9",
+  "uiProfile": "platform.page.v2.10",
   "widgets": [
     {
       "componentID": "table",
@@ -1546,7 +1547,8 @@ export const pageUIManifest = {
         "fields",
         "query",
         "relation",
-        "selection"
+        "selection",
+        "collection-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -2026,7 +2028,8 @@ export const pageUIManifest = {
     "platform.page.v2.6",
     "platform.page.v2.7",
     "platform.page.v2.8",
-    "platform.page.v2.9"
+    "platform.page.v2.9",
+    "platform.page.v2.10"
   ],
   "runtime": {
     "scope": "page",

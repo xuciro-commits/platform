@@ -220,24 +220,32 @@ export type ListState = {
   group?: string; columns?: string; measure?: string; mark?: Mark;
 };
 
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields }: {
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window }: {
   source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
   /** Presentation subset. The source's permission-filtered entity is still authoritative. */
   fields?: string[];
+  /** A caller-owned authorized window. Controls emit view changes and never
+   * issue another list/aggregate read or override the owning plan's domain. */
+  window?: { query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; maxOffset:number; onChange:(change:{search?:string;sort?:string[];offset?:number})=>void };
   /** Always applied, like an app's own view of the type. */
   domain?: unknown[];
   /** Where the list starts, such as a saved view; `onSave` offers to save where it is. */
   initial?: ListState; onSave?: (state: ListState) => void;
 }) {
   const info = source.entity(type);
-  const [search, setSearch] = useState(initial.search ?? "");
-  const [sort, setSort] = useState(initial.sort ?? "-changed");
-  const [offset, setOffset] = useState(0);
+  const [localSearch, setSearch] = useState(initial.search ?? "");
+  const [localSort, setSort] = useState(initial.sort ?? "-changed");
+  const [localOffset, setOffset] = useState(0);
   const [archived, setArchived] = useState(initial.archived ?? false);
   const [loadedPage, setLoadedPage] = useState<{ scope?: string; page: RecordPageData }>();
-  const page = loadedPage?.scope === source.scope ? loadedPage?.page : undefined;
-  const [error, setError] = useState<string>();
-  const [view, setView] = useState<ListView>(initial.view ?? "list");
+  const page = window ? window.page : loadedPage?.scope === source.scope ? loadedPage?.page : undefined;
+  const search = window ? window.query.search ?? "" : localSearch, sort = window ? window.query.sort?.[0] ?? "id" : localSort, offset = window ? window.query.offset ?? 0 : localOffset;
+  if (window) pageSize = window.query.limit ?? pageSize;
+  const windowKey = JSON.stringify(window?.query);
+  const [localError, setError] = useState<string>();
+  const error = window ? window.error : localError;
+  const [localView, setView] = useState<ListView>(initial.view ?? "list");
+  const view = window ? "list" : localView;
   const [drilled, setDrilled] = useState<unknown[] | undefined>(initial.drilled);
   const groups = useMemo(() => (info ? groupable(info) : []), [info]);
   const measures = useMemo(() => (info ? measurable(info) : []), [info]);
@@ -251,7 +259,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? [])], [fixedKey, drilled]);
   const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
   useEffect(() => {
-    if (!info || view !== "list") return;
+    if (window || !info || view !== "list") return;
     let current = true;
     const scope = source.scope;
     setLoadedPage(undefined); setError(undefined);
@@ -262,12 +270,12 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         .then((p) => { if (current && source.scope === scope) { setLoadedPage({ scope, page: p }); setError(undefined); } }, (e) => { if (current && source.scope === scope) setError(String(e)); });
     }, 150);
     return () => { current = false; clearTimeout(handle); };
-  }, [source, source.scope, source.revision, type, info, search, sort, offset, archived, pageSize, domain, view]);
+  }, [source, source.scope, source.revision, type, info, search, sort, offset, archived, pageSize, domain, view, windowKey]);
   if (!info || !entity) return <p className="text-sm text-muted">{t("Unknown entity type")} {type}.</p>;
   const columnsOf = [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
     ...columnsFor(entity, listed(entity).filter((name) => !fields || fields.includes(name))).map((c) => ({ ...c, enableSorting: false }))];
   const total = page?.total ?? 0;
-  const aggregate = source.aggregate;
+  const aggregate = window ? undefined : source.aggregate;
   const query = { domain, search, archived };
   const measureEncoding = measure === "count" ? { type: "quantitative" as const, aggregate: "count" as const }
     : { type: "quantitative" as const, aggregate: measure.split(":")[0] as "sum" | "avg", field: measure.split(":")[1] };
@@ -279,10 +287,10 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Input aria-label={t("Search")} placeholder={t("Search {things}", { things: info.plural.toLowerCase() })} value={search} className="w-56"
-          onChange={(e) => { setSearch(e.target.value); setOffset(0); }} />
+        <Input aria-label={t("Search")} placeholder={t("Search {things}", { things: info.plural.toLowerCase() })} value={search} disabled={window?.searchLocked} className="w-56"
+          onChange={(e) => { if(window)window.onChange({search:e.target.value,offset:0});else {setSearch(e.target.value);setOffset(0);} }} />
         {view === "list" ? (
-          <Select aria-label={t("Sort")} value={sort} className="w-48" onChange={(e) => { setSort(e.target.value); setOffset(0); }}>
+          <Select aria-label={t("Sort")} value={sort} disabled={window?.sortLocked} className="w-48" onChange={(e) => { if(window)window.onChange({sort:[e.target.value],offset:0});else {setSort(e.target.value);setOffset(0);} }}>
             {[["-changed", t("Recently changed")], ["id", t("ID")], ...info.fields.filter((f) => f.type !== "references" && f.type !== "tags").flatMap((f) =>
               [[f.name, `${f.title} ↑`], [`-${f.name}`, `${f.title} ↓`]])].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </Select>
@@ -305,7 +313,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
             </Select>
           )}
         </>}
-        <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />archived</label>
+        {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />archived</label>}
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
         {toolbar}
         {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark })}>{t("Save view…")}</Button>}
@@ -320,8 +328,8 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         {view === "list" && (
           <span className="ml-auto flex items-center gap-1 text-xs text-muted">
             {error ?? (total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : "none")}
-            <Button size="sm" variant="ghost" aria-label={t("Previous page")} disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}><ChevronLeft /></Button>
-            <Button size="sm" variant="ghost" aria-label={t("Next page")} disabled={offset + pageSize >= total} onClick={() => setOffset(offset + pageSize)}><ChevronRight /></Button>
+            <Button size="sm" variant="ghost" aria-label={t("Previous page")} disabled={offset === 0} onClick={() => window ? window.onChange({offset:Math.max(0,offset-pageSize)}) : setOffset(Math.max(0, offset - pageSize))}><ChevronLeft /></Button>
+            <Button size="sm" variant="ghost" aria-label={t("Next page")} disabled={offset + pageSize >= total || !!window && offset+pageSize>window.maxOffset} onClick={() => window ? window.onChange({offset:offset+pageSize}) : setOffset(offset + pageSize)}><ChevronRight /></Button>
           </span>
         )}
       </div>

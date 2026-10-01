@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { RecordList, RecordPage, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
 
 afterEach(cleanup);
@@ -8,6 +8,19 @@ for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as cons
 const pending = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; };
 const entity = { app: "sample", type: "sample.item", title: "Item", plural: "Items", display: "id", fields: [], standard: [] };
 const record = (id: string) => ({ id, revision: 1, created: {}, changed: {} } as EntityRecord);
+
+test("a controlled RecordList renders its caller window without a second read and emits bounded view changes",()=>{
+  const list=vi.fn(),change=vi.fn();
+  const source:RecordSource={entity:()=>entity,list,get:async()=>{throw new Error("unused")}};
+  const {rerender}=render(<RecordList source={source} type={entity.type} window={{query:{sort:["id"],offset:0,limit:1},page:{records:[record("WINDOW")],total:2},maxOffset:10,onChange:change}}/>);
+  expect(screen.getByRole("cell",{name:"WINDOW"})).toBeTruthy();expect(list).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button",{name:"Next page"}));expect(change).toHaveBeenLastCalledWith({offset:1});
+  fireEvent.change(screen.getByRole("textbox",{name:"Search"}),{target:{value:"term"}});expect(change).toHaveBeenLastCalledWith({search:"term",offset:0});
+  rerender(<RecordList source={source} type={entity.type} window={{query:{search:"fixed",sort:["id"],limit:1},page:{records:[],total:0},searchLocked:true,sortLocked:true,maxOffset:10,onChange:change}}/>);
+  expect((screen.getByRole("textbox",{name:"Search"}) as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole("combobox",{name:"Sort"}) as HTMLSelectElement).disabled).toBe(true);
+  expect(screen.queryByRole("cell",{name:"WINDOW"})).toBeNull();expect(list).not.toHaveBeenCalled();
+});
 
 test("RecordList cannot replace a newer query result with an earlier response", async () => {
   const requests = new Map<string, ReturnType<typeof pending<RecordPageData>>>();

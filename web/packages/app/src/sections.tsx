@@ -15,7 +15,7 @@ import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
 import { useApplicationVariables } from "./runtime/ApplicationRuntime";
 import { usePageQueries } from "./runtime/PageQueries";
-import { planKey } from "./runtime/query-plans";
+import { planKey, variablePlan } from "./runtime/query-plans";
 import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
@@ -35,6 +35,7 @@ type Bound = {
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
   session?: PageSessionStore;
+  window?: NonNullable<Parameters<typeof RecordList>[0]["window"]>;
   onClick?: () => void; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
   narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
@@ -60,7 +61,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableWidget({ page, section, onSelect, selected, master, narrowed, session }: Bound) {
+function TableWidget({ page, section, onSelect, selected, master, narrowed, session, window }: Bound) {
   const { source, definitions } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -71,6 +72,9 @@ function TableWidget({ page, section, onSelect, selected, master, narrowed, sess
   const refField = !isMaster
     ? (query?.by ? info?.fields.find((f) => f.name === query.by) : relatedField(info?.fields, page, section))
     : undefined;
+
+  if(section.collectionVariable && !window) return <Panel role="status">{t("Query window is unavailable.")}</Panel>;
+  if(section.collectionVariable) return <RecordList source={source} type={type} fields={section.fields} height={320} window={window} onOpen={(record)=>onSelect(record.id===selected?.id?undefined:record)}/>;
 
   if ((section.relation || section.parentSelection) && !refField) return <p role="alert" className="text-sm text-danger">
     {t("This section's parent reference is unavailable.")}</p>;
@@ -432,7 +436,9 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     children.get(parent)!.add(child);
     queryParents.set(section.id ?? `section:${page.sections!.indexOf(section)}`, parent);
   }
-  const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents });
+  const querySelections = new Map<string,Set<string>>();
+  for(const section of page.sections??[]){const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionKey(objectOf(page,section),section.selection));}}
+  const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents, querySelections });
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot);
@@ -478,6 +484,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable ? context ? context.record : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionKey(objectOf(page, section), section.selection))}
         master={session.selected(selectionKey(parentTypeOf(page, section), section.parentSelection))} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
+        window={section.collectionVariable?queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
         value={value?.status === "value" && typeof value.value === "string" ? value.value : undefined} onValue={valueVariable ? (value) => setContextState(valueVariable, value, context, overlay) : undefined}
         onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
           const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
@@ -509,9 +516,9 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     if (node.kind === "loop") {
       if (context) return <Panel role="alert">{t("Nested loops are not supported by this UI profile.")}</Panel>;
       if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
-      const collection = initialVariables[node.loop.collection]?.source;
-      const queryKey = collection?.kind === "plan" ? planKey(collection.query ?? "") : collection?.section ?? "";
-      const body = <LoopRuntime queryKey={queryKey} expectedSignature={collection?.kind === "plan" ? queries.signatures[collection.query ?? ""] ?? "" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
+      const collection = initialVariables[node.loop.collection]?.source, queryID=variablePlan(page,node.loop.collection);
+      const queryKey = queryID!==undefined?planKey(queryID):collection?.section??"";
+      const body = <LoopRuntime queryKey={queryKey} expectedSignature={queryID!==undefined ? queries.signatures[queryID]??"" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
         {(item) => <>{node.children?.map((child) => <div key={child} className="min-w-0">{renderNode(child, next, item, overlay)}</div>)}</>}
       </LoopRuntime>;
       return wrapLayout ? wrapLayout(id, node, body) : body;

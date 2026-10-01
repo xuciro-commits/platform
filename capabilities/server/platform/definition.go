@@ -103,8 +103,9 @@ type Section struct {
 	// Object is what it shows; empty: the page's own object.
 	Object AssetRef `json:"object,omitempty"`
 	// Selection is the record variable a table writes or detail/actions read.
-	Selection      string `json:"selection,omitempty"`
-	RecordVariable string `json:"recordVariable,omitempty"`
+	Selection          string `json:"selection,omitempty"`
+	CollectionVariable string `json:"collectionVariable,omitempty"`
+	RecordVariable     string `json:"recordVariable,omitempty"`
 	// ParentSelection supplies a typed parent record to a related section;
 	// empty uses the page object's shared selection.
 	ParentSelection string `json:"parentSelection,omitempty"`

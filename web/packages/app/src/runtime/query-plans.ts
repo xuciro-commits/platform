@@ -1,7 +1,14 @@
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
+import type { QueryView } from "./Session";
 
+export function variablePlan(page:Api.Page,variableID:string):string|undefined {
+ const variable=page.document?.variables?.[variableID],source=variable?.source;
+ if(source?.kind==="plan")return source.query;
+ if(source?.kind==="query"){const section=page.sections?.find((s)=>s.id===source.section);const bound=page.document?.variables?.[section?.collectionVariable??""];if(bound?.source?.kind==="plan")return bound.source.query;}
+ return undefined;
+}
 export const planKey = (id: string) => `plan/${id}`;
 type Contract = typeof pageUIManifest.runtime.query;
 export type QueryPlanResult = { status: "value"; object: string; query: RecordQuery; signature: string } | { status: "empty" | "pending" } | { status: "error"; code: string };
@@ -9,12 +16,21 @@ const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|ResourceValue};
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 
+export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract): QueryPlanResult {
+  if(base.status!=="value" || !view) return base;
+  const query={...base.query};
+  if(view.offset!==undefined){if(!Number.isInteger(view.offset)||view.offset<0||view.offset>contract.maxOffset)return failed("Query window offset exceeds its budget.");query.offset=view.offset;}
+  if(view.search!==undefined){if(plan.search)return failed("This plan owns its search parameter.");if(new TextEncoder().encode(view.search).length>4096)return failed("Query search requires text.");query.search=view.search;}
+  if(view.sort!==undefined){if(named?.query?.sort?.length)return failed("The named query owns its ordering.");if(view.sort.length<1||view.sort.length>contract.maxSort||view.sort.some((key)=>{const field=key.replace(/^-/,"");return !validID.test(field)||!["id","created","changed"].includes(field)&&!info?.fields.some((f)=>f.name===field&&!['references','tags','lines','json'].includes(f.type));}))return failed("Query sort field is unavailable.");query.sort=view.sort;}
+  return {...base,query,signature:JSON.stringify([base.object,query])};
+}
+
 /** Build the finite read shape from member-visible descriptors and explicit
  * values. It emits the original RecordQuery, never source text or SQL. */
-export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract): QueryPlanResult {
+export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[]): QueryPlanResult {
   if (!info || info.type !== plan.object.name || plan.object.kind !== "object" || plan.limit < 1 || plan.limit > contract.maxLimit || !Number.isInteger(plan.limit) || !Number.isInteger(plan.offset ?? 0) || (plan.offset ?? 0) < 0 || (plan.offset ?? 0) > contract.maxOffset || (plan.conditions?.length ?? 0) > contract.maxConditions || (plan.sort?.length ?? 0) > contract.maxSort) return failed("Query plan is unavailable or exceeds its budget.");
   const field = (name: string) => ["id", "created", "changed"].includes(name) ? { name, type: name === "id" ? "text" : "datetime", ref: undefined } : info.fields.find((field) => field.name === name);
-  const usesPlan = (id: string, seen = new Set<string>()): boolean => { if (seen.has(id)) return false; seen.add(id); const variable = variables[id]; return variable?.source?.kind === "plan" || !!variable?.expression?.args.some((arg) => arg.variable && usesPlan(arg.variable, seen)); };
+  const usesPlan = (id: string, seen = new Set<string>()): boolean => { if (seen.has(id)) return false; seen.add(id); const variable = variables[id]; return variable?.source?.kind === "plan" || variable?.source?.kind === "query" && !!sections.find((s)=>s.id===variable.source!.section)?.collectionVariable || !!variable?.expression?.args.some((arg) => arg.variable && usesPlan(arg.variable, seen)); };
   const read = (binding: Api.PageValue): QueryValueResult => {
     if (!!binding.variable === (binding.literal !== undefined)) return { status: "error", code: "Query value needs one variable or literal." };
     if (!binding.variable) {

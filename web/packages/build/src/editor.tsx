@@ -29,7 +29,7 @@ type PageRecord = {
   list?: string[]; detail?: string[]; actions?: string[];
   selections?: HostApi.SelectionVariable[];
   document?: HostApi.PageDocument;
-  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; recordVariable?: string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
+  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; recordVariable?: string; collectionVariable?:string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
@@ -61,7 +61,7 @@ const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDo
   selections: record.selections,
   document,
   sections: sections.map((s) => ({
-    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
+    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
     query: s.query ? { app: s.query.split(".")[0] ?? "", kind: "query", name: s.query.split(".").slice(1).join(".") } : undefined,
     function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,
@@ -335,9 +335,10 @@ function Properties({ section, document, info, catalog, object, selections, rela
         <label className="grid gap-1 text-xs">{t("Object")}
           <SemanticObjectSelect label={t("Object")} value={section.object ?? object} filter={(definition) => definition.ref.name === object || relatedObjects.includes(definition.ref.name)}
             onChange={(ref) => { if (ref) onChange({ object: ref.name === object ? undefined : ref.name,
-              selection: undefined, parentSelection: undefined, relation: undefined, query: undefined, inputs: undefined, fields: [], actions: [] }); }} />
+              selection: undefined, collectionVariable:undefined, parentSelection: undefined, relation: undefined, query: undefined, inputs: undefined, fields: [], actions: [] }); }} />
         </label>
       )}
+      {section.widget === "table" && <label className="grid gap-1 text-xs">{t("Table query window")}<Select value={section.collectionVariable??""} onChange={(event)=>{const variable=document.variables?.[event.target.value],query=variable?.source?.query?document.queries?.[variable.source.query]:undefined;onChange({collectionVariable:event.target.value||undefined,query:undefined,parentSelection:undefined,relation:undefined,...(query?{object:query.object.name===object?undefined:query.object.name}:{} )});}}><option value="">{t("Use the table's own query")}</option>{Object.entries(document.variables??{}).filter(([,v])=>v.type==="object-set"&&v.source?.kind==="plan").map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
       {(["detail", "actions", "timeline", "tasks"].includes(section.widget)) && <label className="grid gap-1 text-xs">{t("Input record binding")}<Select value={document.variables?.[section.recordVariable ?? ""]?.mode === "input" ? section.recordVariable : ""} onChange={(e) => onChange({ recordVariable: e.target.value || undefined, selection: undefined })}><option value="">{t("Use page selection")}</option>{Object.entries(document.interface?.inputs ?? {}).filter(([, p]) => p.type === "record").map(([id, p]) => <option key={id} value={p.variable}>{id}</option>)}</Select></label>}
       {section.recordVariable && <p className="text-xs text-muted">{t(document.variables?.[section.recordVariable]?.mode === "input" ? "This widget reads the input record." : "This widget reads the current loop record.")}</p>}
       {!section.recordVariable && (selections.length > 0 || section.selection) && contract?.selectionMode !== "none" &&
@@ -350,7 +351,7 @@ function Properties({ section, document, info, catalog, object, selections, rela
           </Select>
         </label>}
       {(selections.length > 0 || section.parentSelection) && section.object && relatedObjects.includes(section.object) &&
-        allows("relation") &&
+        !section.collectionVariable && allows("relation") &&
         <label className="grid gap-1 text-xs">{t("Parent selection")}
           <Select value={section.parentSelection ?? ""} onChange={(e) => { const nextType = e.target.value ? selections.find((selection) => selection.name === e.target.value)?.object.name : object; onChange({ parentSelection: e.target.value || undefined, ...(nextType !== parentType ? { relation: undefined, inputs: undefined } : {}) }); }}>
             <option value="">{t("Page's shared selection")}</option>
@@ -359,7 +360,7 @@ function Properties({ section, document, info, catalog, object, selections, rela
             {selections.filter((v) => fields.some((field) => field.type === "reference" && field.ref === v.object.name)).map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
           </Select>
         </label>}
-      {section.object && relations.length > 0 && allows("relation") && (
+      {section.object && relations.length > 0 && !section.collectionVariable && allows("relation") && (
         <label className="grid gap-1 text-xs">{t("Through")}
           <Select value={section.relation ?? ""} onChange={(e) => {
             const parent = fields.find((f) => f.type === "reference" && f.ref === parentType && f.inverse === e.target.value);
@@ -371,7 +372,7 @@ function Properties({ section, document, info, catalog, object, selections, rela
           </Select>
         </label>
       )}
-      {allows("query") && queriesOf(section.object || object).length > 0 && (
+      {!section.collectionVariable && allows("query") && queriesOf(section.object || object).length > 0 && (
         <label className="grid gap-1 text-xs">{t("Query")}
           <Select value={section.query ?? ""} onChange={(e) => onChange({ query: e.target.value || undefined })}>
             <option value="">{t("All records it may read")}</option>

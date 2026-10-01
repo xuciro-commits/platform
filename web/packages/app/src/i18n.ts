@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Query window is unavailable.": "查询窗口不可用。",
+  "Query window offset exceeds its budget.": "查询窗口起点超出预算。",
+  "This plan owns its search parameter.": "此计划拥有搜索参数。",
+  "The named query owns its ordering.": "具名查询拥有排序约束。",
+
   "Retry query": "重试查询",
   "Query plan is unavailable or exceeds its budget.": "查询计划不可用或超出预算。",
   "Query value needs one variable or literal.": "查询值需选择变量或固定值。",

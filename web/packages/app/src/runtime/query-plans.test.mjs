@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { compileQueryPlan } from "./query-plans.ts";
+import { compileQueryPlan, queryView } from "./query-plans.ts";
 const contract = JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))).runtime.query;
 const info={type:"sample.note",fields:[{name:"bucket",type:"text"},{name:"active",type:"boolean"},{name:"count",type:"integer"}]};
 const variables={bucket:{scope:"page",type:"string",mode:"state",initial:"A"}};
@@ -22,4 +22,14 @@ test("original named query conditions, ordering, limit and version constrain an 
   assert.deepEqual(result.query,{domain:[["active","=",true],["bucket","=","B"]],sort:["-bucket"],offset:0,limit:5});
   assert.equal(compileQueryPlan(bound,variables,values,info,{...named,version:"q2"},contract).status,"error");
   assert.equal(compileQueryPlan({...plan,conditions:[{field:"count",op:">",value:{literal:4}}]},variables,{},info,undefined,contract).status,"value");
+});
+
+test("query views preserve domain and limit and reject locked or unauthorized overrides",()=>{
+ const values={bucket:{status:"value",value:"A"}},base=compileQueryPlan(plan,variables,values,info,undefined,contract);
+ const view=queryView(plan,base,{search:"note",offset:20,sort:["-bucket"]},info,undefined,contract);
+ assert.deepEqual(view.query,{domain:[["bucket","=","A"]],sort:["-bucket"],offset:20,limit:20,search:"note"});
+ assert.equal(queryView(plan,base,{sort:["private"]},info,undefined,contract).status,"error");
+ assert.equal(queryView(plan,base,{offset:contract.maxOffset+1},info,undefined,contract).status,"error");
+ assert.equal(queryView({...plan,search:{literal:"fixed"}},base,{search:"replace"},info,undefined,contract).status,"error");
+ assert.equal(queryView(plan,base,{sort:["id"]},info,{query:{sort:["-bucket"]}},contract).status,"error");
 });

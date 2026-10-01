@@ -49,6 +49,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 	if err := page.Document.Check(page.Sections); err != nil {
 		return ReleaseAsset{}, err
 	}
+	if err := page.CheckCollectionPorts(); err != nil {
+		return ReleaseAsset{}, err
+	}
 	if err := page.CheckRecordPorts(); err != nil {
 		return ReleaseAsset{}, err
 	}
@@ -411,6 +414,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		}
 		if err := page.Document.Check(page.Sections); err != nil {
 			return fmt.Errorf("release page %s: %w", ref, err)
+		}
+		if err := page.CheckCollectionPorts(); err != nil {
+			return err
 		}
 		if err := page.CheckRecordPorts(); err != nil {
 			return err
