@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.5",
+  "uiProfile": "platform.page.v2.6",
   "widgets": [
     {
       "componentID": "table",
@@ -461,7 +461,8 @@
     "platform.page.v2.2",
     "platform.page.v2.3",
     "platform.page.v2.4",
-    "platform.page.v2.5"
+    "platform.page.v2.5",
+    "platform.page.v2.6"
   ],
   "runtime": {
     "scope": "page",
@@ -550,6 +551,15 @@
       "presentationWidgets": [
         "text",
         "button"
+      ]
+    },
+    "interface": {
+      "maxPorts": 16,
+      "maxVersion": 65535,
+      "valueTypes": [
+        "string",
+        "boolean",
+        "record"
       ]
     }
   }

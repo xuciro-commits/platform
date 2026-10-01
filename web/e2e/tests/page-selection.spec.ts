@@ -124,7 +124,7 @@ test("two selections of one object keep their details and actions independent af
   await page.getByRole("button", { name: "Review release", exact: true }).click();
   const savedDraft = (await (await request.get(`/v1/records/build.page/${pageID}`, { headers: builder })).json()).record;
   expect(savedDraft.document.formatVersion).toBe(2);
-  expect(savedDraft.document.uiProfile).toBe("platform.page.v2.5");
+  expect(savedDraft.document.uiProfile).toBe("platform.page.v2.6");
   expect(new Set(savedDraft.sections.map((s: { id: string }) => s.id)).size).toBe(11);
   expect(savedDraft.sections.every((s: { configVersion: number }) => s.configVersion === 1)).toBe(true);
   expect(savedDraft.document.nodes.v1columns2.children).toEqual(["v1node3", "v1node2"]);

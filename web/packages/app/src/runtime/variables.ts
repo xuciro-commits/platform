@@ -29,6 +29,8 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (variable.mode !== "resource" && variable.source) fail(id, "Only resource variables may declare a source");
     if (variable.mode === "resource") {
       if (!variable.source || (variable.scope === contract.loop.scope ? variable.type !== "record" || variable.source.kind !== contract.loop.source || variable.source.node !== variable.owner || !!variable.source.section : !validID.test(variable.source.section ?? "") || !!variable.source.node) || variable.expression || variable.initial !== undefined || (variable.scope !== contract.loop.scope && !contract.resources.some((resource) => resource.kind === variable.source!.kind && resource.type === variable.type))) fail(id, "Resource source type mismatch");
+    } else if (variable.mode === "input") {
+      if (variable.scope !== "page" || variable.source || variable.expression || !(contract.interface.valueTypes as readonly string[]).includes(variable.type) || variable.initial !== undefined && valueType(variable.initial, contract) !== variable.type) fail(id, "Invalid page input variable");
     } else if (variable.mode === "state" || variable.mode === "constant") {
       if (variable.expression || valueType(variable.initial, contract) !== variable.type) fail(id, "Initial value type mismatch");
     } else if (variable.mode === "derived") {
@@ -65,6 +67,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
   for (const id of compiled.order) {
     const variable = variables[id]!;
     if (variable.scope === contract.loop.scope && variable.owner !== owner) { result[id] = { status: "empty" }; continue; }
+    if (variable.mode === "input") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
     if (variable.mode === "resource") {
       const value = resources[id] ?? { status: "empty" };
       result[id] = (value.status === "value" || value.status === "empty") && value.value !== undefined && (value.value === null || typeof value.value !== "object" || value.value.kind !== variable.type)

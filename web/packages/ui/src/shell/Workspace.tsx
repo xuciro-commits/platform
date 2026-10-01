@@ -9,6 +9,7 @@ import { routeFromHash, routeKey, routeToHash, type Route } from "./route";
 import { language, languages, setLanguage, t } from "../i18n";
 import { Dialog } from "../primitives/dialog";
 import { Button } from "../primitives/button";
+import { ViewTransfers } from "./ViewTransfers";
 
 export type View = {
   id: string;
@@ -34,16 +35,20 @@ type Unsaved = {
   register: (panel: string, owner: symbol, discard?: () => void) => void;
   ask: (panels: string[], run: () => void) => void;
 };
-type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; notify: typeof toast; unsaved?: Unsaved };
+type WorkspaceApi = { open: (route: Route, options?: OpenOptions) => void; close: (route: Route) => void; notify: typeof toast; unsaved?: Unsaved;
+  transfer?: (from: string, route: Route, input: unknown, result: (value: unknown) => void) => void };
 const PanelContext = createContext<string | undefined>(undefined);
+const ViewCallContext = createContext<{ input?: unknown; expired?: boolean; returnValue?: (value: unknown) => void } | undefined>(undefined);
+export const useViewCall = () => useContext(ViewCallContext);
 
 export const WorkspaceContext = createContext<WorkspaceApi | null>(null);
 
 /** Opens routes as tabs, floats or separate windows, from any view. */
 export function useWorkspace(): WorkspaceApi {
   const api = useContext(WorkspaceContext);
+  const panel = useContext(PanelContext);
   if (!api) throw new Error("useWorkspace outside <Workspace>");
-  return api;
+  return { ...api, transfer: api.transfer && panel ? (_from, route, input, result) => api.transfer!(panel, route, input, result) : undefined };
 }
 
 /** Editors own their draft; the shell owns close/reload confirmation. */
@@ -120,6 +125,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
 }) {
   const dock = useRef<DockviewApi>(null);
   const drafts = useRef(new Map<string, Map<symbol, () => void>>());
+  const transfers = useRef(new ViewTransfers());
   const [pending, setPending] = useState<{ panels: string[]; run: () => void }>();
   const unsaved = useMemo<Unsaved>(() => ({
     register: (panel, owner, discard) => {
@@ -208,6 +214,11 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
 
   const workspace = useMemo<WorkspaceApi>(() => ({
     open, notify: toast, close: (route) => closePanel(routeKey(route)), unsaved,
+    transfer: (from, route, input, result) => {
+      if (!dock.current?.getPanel(from)) return;
+      const id = transfers.current.start(from, input, result), called = { ...route, params: { ...route.params, call: id } };
+      transfers.current.bind(id, routeKey(called)); open(called);
+    },
   }), [open, closePanel, unsaved]);
 
   const tab = useCallback((props: IDockviewPanelHeaderProps) =>
@@ -216,15 +227,22 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   const components = useMemo(() => ({
     view: ({ params, api }: IDockviewPanelProps<{ route: Route }>) => {
       const view = byId.get(params.route.view);
+      const ticket = params.route.params?.call;
+      const call = ticket ? transfers.current.read(ticket, api.id) : undefined;
+      const returned = (value: unknown) => {
+        if (!ticket) return;
+        const origin = transfers.current.finish(ticket, api.id, value);
+        if (origin && dock.current?.getPanel(origin)) { dock.current.getPanel(origin)!.api.setActive(); closePanel(api.id); }
+      };
       const [visible, setVisible] = useState(api.isVisible);
       useEffect(() => {
         const changed = api.onDidVisibilityChange((event) => setVisible(event.isVisible));
         return () => changed.dispose();
       }, [api]);
       return <div style={{ display: visible ? undefined : "none" }} role="region" aria-label={view?.title(params.route.params ?? {}) ?? t("Workspace view")} className="h-full overflow-auto bg-background p-4">
-        <PanelContext.Provider value={api.id}><ViewBoundary onClose={() => closePanel(api.id)}>
+        <PanelContext.Provider value={api.id}><ViewCallContext.Provider value={ticket ? { input: call?.input, expired: !call, returnValue: call ? returned : undefined } : undefined}><ViewBoundary onClose={() => closePanel(api.id)}>
           {view ? view.render(params.route.params ?? {}) : <p className="text-sm text-muted">{t("This view no longer exists.")}</p>}
-        </ViewBoundary></PanelContext.Provider>
+        </ViewBoundary></ViewCallContext.Provider></PanelContext.Provider>
       </div>;
     },
   }), [byId, closePanel]);
@@ -232,6 +250,7 @@ export function Workspace({ product, storageKey, views, nav, home, menus = [], c
   const onReady = useCallback(({ api }: { api: DockviewApi }) => {
     dock.current = api;
     api.onDidRemovePanel((panel) => {
+      transfers.current.remove(panel.id);
       drafts.current.delete(panel.id);
       setPending((request) => {
         if (!request) return request;

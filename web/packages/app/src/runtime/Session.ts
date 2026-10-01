@@ -33,6 +33,8 @@ export class PageSessionStore {
   private queryObjects = new Map<string, string>();
   private version = 0;
   private itemOwners = new Map<string, string>();
+  private loopItems = new Map<string, Set<string>>();
+  hasLoopItem(owner: string, key: string) { return this.loopItems.get(owner)?.has(key) === true; }
   private loopQueries = new Map<string, string>();
   private reads = new Map<string, Promise<RecordView>>();
   private readAdapter?: RecordSource;
@@ -67,7 +69,7 @@ export class PageSessionStore {
     const changed = this.loopQueries.get(owner) !== signature, allowed = new Set(keys), items = { ...this.state.items };
     let removed = false;
     for (const [key, parent] of this.itemOwners) if (parent === owner && (changed || !allowed.has(key))) { delete items[key]; this.itemOwners.delete(key); removed = true; }
-    this.loopQueries.set(owner, signature);
+    this.loopQueries.set(owner, signature); this.loopItems.set(owner, allowed);
     if (removed) this.publish({ items });
   }
   itemValues(owner: string, signature: string, key: string) { return this.loopQueries.get(owner) === signature ? this.state.items[key] : undefined; }
@@ -136,6 +138,11 @@ export class PageSessionStore {
     this.publish({ records, queries });
     void this.read(key, { object, id: record.id });
   }
+  selectReference(key: string, reference?: RecordReference) {
+    if (this.disposed || !this.plan.objects.has(key) || reference && (reference.object !== this.plan.objects.get(key) || !reference.id)) return;
+    this.publish({ records: this.clear([key]), queries: this.invalidate([key]) });
+    if (reference) void this.read(key, reference);
+  }
   filter(object: string, field: string, value: unknown) {
     const descriptor = this.source.entity(object)?.fields.find((item) => item.name === field);
     if (!descriptor || !["choice", "boolean", "reference"].includes(descriptor.type)) return;
@@ -171,7 +178,7 @@ export class PageSessionStore {
     this.queries.clear(); this.reads.clear();
     this.publish({ queries: Object.fromEntries(Object.keys(this.state.queries).map((key) => [key, { status: "empty" }])) });
     if (changedScope) {
-      this.itemOwners.clear(); this.loopQueries.clear(); this.querySignatures.clear();
+      this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear(); this.querySignatures.clear();
       this.publish({ scalars: {}, items: {}, filters: {}, records: this.clear([...this.plan.objects.keys()]) });
       return;
     }
@@ -224,7 +231,7 @@ export class PageSessionStore {
     return request.promise;
   }
   dispose() {
-    this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear(); this.recordCache.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear();
+    this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear(); this.recordCache.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
     this.state = { scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
     this.listeners.clear();

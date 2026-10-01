@@ -866,18 +866,27 @@ export type PageDocument = {
   variables?: Record<string, PageVariable>;
   overlays?: Record<string, PageOverlay>;
   events?: PageEventBinding[];
+  interface?: PageInterface;
 };
 
 export type PageEventBinding = {
   source: string;
   event: string;
   target: string;
-  value: unknown;
+  value?: unknown;
+  navigate?: PageNavigation;
+  return?: boolean;
 };
 
 export type PageExpression = {
   op: string;
   args: PageValue[];
+};
+
+export type PageInterface = {
+  version: number;
+  inputs?: Record<string, PagePort>;
+  outputs?: Record<string, PagePort>;
 };
 
 export type PageLayoutNode = {
@@ -898,11 +907,25 @@ export type PageLoop = {
   limit: number;
 };
 
+export type PageNavigation = {
+  page: AssetRef;
+  interfaceVersion: number;
+  inputs?: Record<string, PageValue>;
+  results?: Record<string, string>;
+};
+
 export type PageOverlay = {
   root: string;
   kind: string;
   title: string;
   openVariable: string;
+};
+
+export type PagePort = {
+  variable: string;
+  type: string;
+  object?: AssetRef;
+  required?: boolean;
 };
 
 export type PageResourceSource = {
@@ -1481,7 +1504,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.5",
+  "uiProfile": "platform.page.v2.6",
   "widgets": [
     {
       "componentID": "table",
@@ -1943,7 +1966,8 @@ export const pageUIManifest = {
     "platform.page.v2.2",
     "platform.page.v2.3",
     "platform.page.v2.4",
-    "platform.page.v2.5"
+    "platform.page.v2.5",
+    "platform.page.v2.6"
   ],
   "runtime": {
     "scope": "page",
@@ -2032,6 +2056,15 @@ export const pageUIManifest = {
       "presentationWidgets": [
         "text",
         "button"
+      ]
+    },
+    "interface": {
+      "maxPorts": 16,
+      "maxVersion": 65535,
+      "valueTypes": [
+        "string",
+        "boolean",
+        "record"
       ]
     }
   }

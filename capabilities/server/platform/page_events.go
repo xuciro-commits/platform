@@ -17,10 +17,12 @@ type PageOverlay struct {
 
 // A finite presentation event can only write a typed scalar state literal.
 type PageEventBinding struct {
-	Source string          `json:"source"`
-	Event  string          `json:"event"`
-	Target string          `json:"target"`
-	Value  json.RawMessage `json:"value"`
+	Source   string          `json:"source"`
+	Event    string          `json:"event"`
+	Target   string          `json:"target"`
+	Value    json.RawMessage `json:"value,omitempty"`
+	Navigate *PageNavigation `json:"navigate,omitempty"`
+	Return   bool            `json:"return,omitempty"`
 }
 
 func (d *PageDocument) checkEvents(sections []Section) error {
@@ -50,8 +52,18 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 			}
 		}
 		variable := d.Variables[event.Target]
-		if !found || event.Event != "click" || bound[event.Source] || variable.Mode != "state" || pageLiteralType(event.Value) != variable.Type {
+		if !found || event.Event != "click" || bound[event.Source] {
 			return fmt.Errorf("page event %s needs one button click and a matching state value", event.Source)
+		}
+		if event.Navigate != nil || event.Return {
+			if err := d.checkNavigationEvent(event); err != nil {
+				return err
+			}
+			bound[event.Source] = true
+			continue
+		}
+		if variable.Mode != "state" || pageLiteralType(event.Value) != variable.Type {
+			return fmt.Errorf("page event %s needs a matching state value", event.Source)
 		}
 		for _, node := range d.Nodes {
 			if node.Kind == "tabs" && node.ActiveVariable == event.Target {

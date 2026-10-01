@@ -968,5 +968,53 @@
         }
       }
     }
+  },
+  {
+    "name": "typed page input scalar",
+    "valid": true,
+    "variables": {
+      "input": {
+        "scope": "page",
+        "type": "string",
+        "mode": "input",
+        "initial": "default"
+      }
+    },
+    "resources": {
+      "input": {
+        "status": "value",
+        "value": "supplied"
+      }
+    },
+    "values": {
+      "input": "supplied"
+    }
+  },
+  {
+    "name": "page input cannot have a widget source",
+    "valid": false,
+    "variables": {
+      "input": {
+        "scope": "page",
+        "type": "record",
+        "mode": "input",
+        "source": {
+          "kind": "record",
+          "section": "table"
+        }
+      }
+    }
+  },
+  {
+    "name": "page input cannot enter item scope",
+    "valid": false,
+    "variables": {
+      "input": {
+        "scope": "loop-item",
+        "owner": "loop",
+        "type": "string",
+        "mode": "input"
+      }
+    }
   }
 ]

@@ -2,6 +2,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Page values do not match the interface.": "页面值与接口不匹配。",
+  "A required page input is missing.": "缺少必填的页面输入。",
+  "Page value type does not match the interface.": "页面值类型与接口不匹配。",
+  "A navigation value is unavailable.": "导航参数尚不可用。",
+  "Invalid page input variable": "页面输入变量无效",
+  "The page navigation context expired. Open it again from its caller.": "页面导航上下文已过期，请从调用页面重新打开。",
+  "The page interface version changed. Open it again from its caller.": "页面接口版本已变化，请从调用页面重新打开。",
+  "This page has no active caller.": "此页面没有有效的调用者。",
+  "This workspace cannot transfer page context.": "此工作区不支持页面上下文传递。",
+  "The target page is unavailable.": "目标页面不可用。",
+  "The target page interface changed.": "目标页面接口已变化。",
+  "The returned page values do not match the interface.": "返回的页面值与接口不匹配。",
+  "A page record input is unavailable.": "页面记录输入不可用。",
+  "Page navigation failed.": "页面导航失败。",
+
   "This widget is not supported in a loop.": "循环中暂不支持此组件。",
   "Nested loops are not supported by this UI profile.": "此界面版本不支持嵌套循环。",
   "Refreshing loop records…": "正在刷新循环记录…",

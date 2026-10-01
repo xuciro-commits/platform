@@ -32,9 +32,9 @@ export function VariablesPanel({ document, sections, values, onChange }: { docum
     {variable && <>
       <label className="grid gap-1 text-xs">{t("Variable label")}<Input value={variable.title ?? ""} onChange={(event) => patch({ title: event.target.value })} /></label>
       <p className="break-all font-mono text-[10px] text-muted">{id}</p>
-      <label className="grid gap-1 text-xs">{t("Variable scope")}<Select value={variable.owner ?? "page"} disabled={variable.source?.kind === "item"} onChange={(event) => patch({ scope: event.target.value === "page" ? "page" : "loop-item", owner: event.target.value === "page" ? undefined : event.target.value })}><option value="page">{t("Page")}</option>{Object.entries(document.nodes).filter(([, node]) => node.kind === "loop").map(([id, node], at) => <option key={id} value={id}>{node.title || t("Loop {n}", { n: at + 1 })}</option>)}</Select></label>
+      <label className="grid gap-1 text-xs">{t("Variable scope")}<Select value={variable.owner ?? "page"} disabled={variable.source?.kind === "item" || variable.mode === "input"} onChange={(event) => patch({ scope: event.target.value === "page" ? "page" : "loop-item", owner: event.target.value === "page" ? undefined : event.target.value })}><option value="page">{t("Page")}</option>{Object.entries(document.nodes).filter(([, node]) => node.kind === "loop").map(([id, node], at) => <option key={id} value={id}>{node.title || t("Loop {n}", { n: at + 1 })}</option>)}</Select></label>
       {variable.scope === "loop-item" && <p className="text-xs text-muted">{t("Values are local to each loop record; the page inspector has no active item.")}</p>}
-      <label className="grid gap-1 text-xs">{t("Variable mode")}<Select value={variable.mode} disabled={variable.source?.kind === "item"} onChange={(event) => {
+      <label className="grid gap-1 text-xs">{t("Variable mode")}<Select value={variable.mode} disabled={variable.source?.kind === "item" || variable.mode === "input"} onChange={(event) => {
         const mode = event.target.value;
         if (mode === "resource") {
           const resource = pageVariableContract.resources[0];
@@ -43,8 +43,8 @@ export function VariablesPanel({ document, sections, values, onChange }: { docum
           const type = variable.type === "string" ? "string" : "boolean";
           patch({ mode, type, source: undefined, initial: mode === "derived" ? undefined : initial(type), expression: mode === "derived" ? expression(type === "string" ? "concat" : "equal") : undefined });
         }
-      }}><option value="state">{t("State")}</option><option value="constant">{t("Constant")}</option><option value="derived">{t("Derived")}</option>{variable.scope === "page" || variable.source?.kind === "item" ? <option value="resource">{t("Resource output")}</option> : null}</Select></label>
-      <label className="grid gap-1 text-xs">{t("Value type")}<Select value={variable.type} disabled={variable.mode === "derived" || variable.mode === "resource"} onChange={(event) => patch({ type: event.target.value, initial: initial(event.target.value) })}>
+      }}>{variable.mode === "input" && <option value="input">{t("Page input")}</option>}<option value="state">{t("State")}</option><option value="constant">{t("Constant")}</option><option value="derived">{t("Derived")}</option>{variable.scope === "page" || variable.source?.kind === "item" ? <option value="resource">{t("Resource output")}</option> : null}</Select></label>
+      <label className="grid gap-1 text-xs">{t("Value type")}<Select value={variable.type} disabled={variable.mode === "derived" || variable.mode === "resource" || variable.mode === "input"} onChange={(event) => patch({ type: event.target.value, initial: initial(event.target.value) })}>
         <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option>{variable.mode === "resource" && <option value={variable.type}>{t(variable.type)}</option>}</Select></label>
       {(variable.mode === "state" || variable.mode === "constant") && (targets.length ? <label className="grid gap-1 text-xs">{t("Initial tab")}<Select value={String(variable.initial)} onChange={(event) => patch({ initial: event.target.value })}>
         {[...new Set(targets)].map((child, i) => <option key={child} value={child}>{document.nodes[child]?.title || t("Tab {n}", { n: i + 1 })}</option>)}</Select></label>

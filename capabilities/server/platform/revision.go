@@ -49,11 +49,14 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 	if err := page.Document.Check(page.Sections); err != nil {
 		return ReleaseAsset{}, err
 	}
+	if err := page.CheckRecordPorts(); err != nil {
+		return ReleaseAsset{}, err
+	}
 	body, err := json.Marshal(page)
 	if err != nil {
 		return ReleaseAsset{}, err
 	}
-	requires := []AssetRef{page.Object}
+	requires := append([]AssetRef{page.Object}, page.NavigationTargets()...)
 	requires = append(requires, page.Actions...)
 	for _, selection := range page.Selections {
 		requires = append(requires, selection.Object)
@@ -128,6 +131,7 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 		lookup[asset.Ref] = asset
 	}
 	visiting := map[AssetRef]bool{}
+	var path []AssetRef
 	visited := map[AssetRef]bool{}
 	var closed []ReleaseAsset
 	var visit func(AssetRef, AssetRef) error
@@ -142,6 +146,16 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			// A self-dependency or a structural page/action cycle is invalid.
 			if from.Kind == AssetObject && ref.Kind == AssetObject && from != ref {
 				return nil
+			}
+			if pageNavigationEdge(lookup[from], ref) {
+				start := slices.Index(path, ref)
+				navigation := start >= 0
+				for i := start; i >= 0 && i+1 < len(path); i++ {
+					navigation = navigation && pageNavigationEdge(lookup[path[i]], path[i+1])
+				}
+				if navigation {
+					return nil
+				}
 			}
 			return fmt.Errorf("release dependency cycle at %s", ref)
 		}
@@ -175,6 +189,20 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 				if err := json.Unmarshal(body, &page); err != nil {
 					return err
 				}
+				if page.Document != nil {
+					for _, event := range page.Document.Events {
+						if event.Navigate != nil {
+							target, ok := lookup[event.Navigate.Page]
+							var targetPage Page
+							if !ok || json.Unmarshal(target.Body, &targetPage) != nil {
+								return fmt.Errorf("page navigation target %s is unavailable", event.Navigate.Page)
+							}
+							if err := CheckPageNavigation(page, targetPage, *event.Navigate); err != nil {
+								return err
+							}
+						}
+					}
+				}
 				for _, section := range page.Sections {
 					if section.Function != nil {
 						bindings = append(bindings, *section.Function)
@@ -194,6 +222,7 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			}
 		}
 		visiting[ref] = true
+		path = append(path, ref)
 		deps := slices.Clone(asset.Requires)
 		slices.SortFunc(deps, compareRef)
 		for i, dep := range deps {
@@ -205,6 +234,7 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			}
 		}
 		visiting[ref] = false
+		path = path[:len(path)-1]
 		visited[ref] = true
 		asset.Requires = deps
 		if asset.Requires == nil {
@@ -336,7 +366,11 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		if err := page.Document.Check(page.Sections); err != nil {
 			return fmt.Errorf("release page %s: %w", ref, err)
 		}
+		if err := page.CheckRecordPorts(); err != nil {
+			return err
+		}
 		required = append(required, page.Object)
+		required = append(required, page.NavigationTargets()...)
 		required = append(required, page.Actions...)
 		for _, selection := range page.Selections {
 			required = append(required, selection.Object)

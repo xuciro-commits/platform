@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:951945343b033963",
+  "revision": "sha256:8b81c3ef2580ba9c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2010,6 +2010,7 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
@@ -2050,7 +2051,9 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
@@ -2080,6 +2083,8 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/InterfacePanel.tsx",
+      "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
@@ -2124,7 +2129,9 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
+      "web/packages/build/src/page-editor/NavigationPanel.tsx",
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
@@ -2301,6 +2308,7 @@
     ],
     "app/semantic-selection": [
       "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/process.tsx"
     ],
     "ui/editor-workbench": [
@@ -2431,6 +2439,7 @@
         "t",
         "useChartData",
         "useUnsavedChanges",
+        "useViewCall",
         "useWorkspace",
         "validateCanvasConnection",
         "valueOf"

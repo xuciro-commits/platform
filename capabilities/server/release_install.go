@@ -150,7 +150,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 				return nil, err
 			}
 		case build.SchemaRelease:
-			if err := draft.InstallPage(owner, decl.Pages[0]); err != nil {
+			if err := draft.installPage(owner, decl.Pages[0], false); err != nil {
 				return nil, err
 			}
 		case build.SchemaHandOver:
@@ -172,6 +172,13 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 				return nil, fmt.Errorf("flow runtime is unavailable")
 			}
 			if err := t.procs.Validate(owner, *decl.Flow); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, definition := range draft.definitions {
+		if definition.Page != nil {
+			if err := draft.checkPageNavigation(*definition.Page, definition.Ref.App); err != nil {
 				return nil, err
 			}
 		}

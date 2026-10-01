@@ -123,6 +123,10 @@ func (t *Tenant) reinstall() error {
 // workspace can always open what the registry offers (ADR-0034, #132). The
 // member's own reads and catalog still decide what they see on it.
 func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
+	return t.installPage(app, p, true)
+}
+
+func (t *Tenant) installPage(app platform.App, p platform.Page, targets bool) error {
 	id := app.Manifest().ID
 	if p.Name == "" || (p.Layout != "list-detail" && p.Layout != "composed") {
 		return fmt.Errorf("page %q: a page is list-detail, or composed of sections (ADR-0035)", p.Name)
@@ -132,6 +136,21 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	}
 	if err := p.Document.Check(p.Sections); err != nil {
 		return fmt.Errorf("page %s: %w", p.Name, err)
+	}
+	if err := p.CheckRecordPorts(); err != nil {
+		return err
+	}
+	if p.Document != nil && p.Document.Interface != nil {
+		for _, ports := range []map[string]platform.PagePort{p.Document.Interface.Inputs, p.Document.Interface.Outputs} {
+			for id, port := range ports {
+				if port.Object != nil {
+					info, ok := t.entity(port.Object.Name)
+					if !ok || info.App != port.Object.App {
+						return fmt.Errorf("page port %s has an unknown object", id)
+					}
+				}
+			}
+		}
 	}
 	info, known := t.entity(p.Object.Name)
 	if !known {
@@ -158,6 +177,11 @@ func (t *Tenant) InstallPage(app platform.App, p platform.Page) error {
 	}
 	for _, ref := range p.Actions {
 		if err := t.checkAction(p.Name, ref.Name, p.Object.Name); err != nil {
+			return err
+		}
+	}
+	if targets {
+		if err := t.checkPageNavigation(p, id); err != nil {
 			return err
 		}
 	}
@@ -241,7 +265,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 		}
 		if s.RecordVariable != "" {
 			producer := p.Document.LoopRecordSource(s.RecordVariable)
-			sourceType := ""
+			sourceType := p.RecordVariableObject(s.RecordVariable)
 			for _, candidate := range p.Sections {
 				if candidate.ID == producer {
 					sourceType = candidate.Object.Name

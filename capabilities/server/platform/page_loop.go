@@ -102,14 +102,27 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 		if section.RecordVariable != "" {
 			v := d.Variables[section.RecordVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || owner == "" || v.Owner != owner || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || (owner == "" || v.Owner != owner) && !(v.Scope == "page" && v.Mode == "input") || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) {
 				return fmt.Errorf("page section %s record binding escapes its loop scope", section.ID)
 			}
 		}
 	}
 	for _, event := range d.Events {
 		if !accessible(event.Target, sectionOwners[event.Source]) {
+
 			return fmt.Errorf("page event %s target escapes its loop scope", event.Source)
+		}
+		if event.Navigate != nil {
+			for _, arg := range event.Navigate.Inputs {
+				if !accessible(arg.Variable, sectionOwners[event.Source]) {
+					return fmt.Errorf("page navigation input escapes its loop scope")
+				}
+			}
+			for _, target := range event.Navigate.Results {
+				if !accessible(target, sectionOwners[event.Source]) {
+					return fmt.Errorf("page navigation output escapes its loop scope")
+				}
+			}
 		}
 	}
 	return nil

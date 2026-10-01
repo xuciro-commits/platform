@@ -14,6 +14,8 @@ import type { Api as HostApi } from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
 import { loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
+import { InterfacePanel } from "./page-editor/InterfacePanel";
+import { NavigationPanel } from "./page-editor/NavigationPanel";
 import { OverlayProperties, ButtonEventProperties } from "./page-editor/OverlayPanel";
 import { LayoutProperties, LayoutTree } from "./page-editor/LayoutTree";
 import { useDraftSession } from "./session/DraftSession";
@@ -35,7 +37,7 @@ const pageStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" 
 const widgets = widgetContracts.map((contract) => contract.componentID);
 const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetContracts.map((contract) => [contract.componentID, () => t(contract.title)]));
 type PageDraft = { sections: Draft[]; document: HostApi.PageDocument; selections: HostApi.SelectionVariable[]; title: string; description: string };
-type StudioSelection = { kind: "page" | "variables" } | { kind: "widget" | "container"; id: string };
+type StudioSelection = { kind: "page" | "variables" | "interface" } | { kind: "widget" | "container"; id: string };
 const emptyDraft = (): PageDraft => ({ sections: [], document: pageDocumentFromSections<Draft>([]).document, selections: [], title: "", description: "" });
 const loadDraft = (record: PageRecord): PageDraft => {
   const shorthand: Draft[] = (record.list ?? []).length ? [
@@ -214,14 +216,14 @@ export function PageEditor({ id }: { id: string }) {
       {incompatible && <Panel role="alert" className="text-xs text-danger">{t("This draft needs a newer workspace version. Its saved content has been preserved.")}</Panel>}
       <fieldset disabled={busy || incompatible} className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
         <EditorWorkbench leftLabel={t("Widgets and layout")} centerLabel={t("The page")} rightLabel={t("The widget in hand")}
-          left={leftOpen && <><Button className="m-3" aria-pressed={selection.kind === "variables"} onClick={() => { select({ kind: "variables" }); setRightOpen(true); }}>{t("Page variables")}</Button><LayoutTree document={document} sections={sections} chosen={chosen} container={container} widgetTitles={widgetTitles} widgets={widgets}
+          left={leftOpen && <><Button className="m-3" aria-pressed={selection.kind === "interface"} onClick={() => { select({ kind: "interface" }); setRightOpen(true); }}>{t("Page interface")}</Button><Button className="m-3" aria-pressed={selection.kind === "variables"} onClick={() => { select({ kind: "variables" }); setRightOpen(true); }}>{t("Page variables")}</Button><LayoutTree document={document} sections={sections} chosen={chosen} container={container} widgetTitles={widgetTitles} widgets={widgets}
             onChoose={choose} onContainer={(id) => { select({ kind: "container", id }); setRightOpen(true); }} title={title || page.title} onAdd={add} onMove={move}
             onInsert={(widget, container, after) => add(widget, { container, after })}
             onRelocate={(section, target, after) => edit((old) => ({ ...old, document: relocateWidget(old.document, section, target, after) }))}
             onGroup={(kind) => { const section = sections[chosen]; if (!section?.id) return; const result = groupWidget(document, section.id, kind); edit({ document: result.document }); if (result.id) select({ kind: "container", id: result.id }); }}
             onAddOverlay={() => { const result = addOverlay(document, t("Overlay {n}", { n: Object.keys(document.overlays ?? {}).length + 1 })); edit({ document: result.document }); select({ kind: "container", id: result.root }); setRightOpen(true); }}
             onRemove={(index) => { const section = sections[index]; if (!section?.id) return; edit((old) => ({ ...old, document: removeWidget(old.document, section.id!), sections: old.sections.filter((s) => s.id !== section.id) })); select({ kind: "page" }); }} /></>}
-          right={rightOpen && (selection.kind === "variables" ? <VariablesPanel document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
+          right={rightOpen && (selection.kind === "interface" ? <InterfacePanel document={document} object={{ app: page.object.split(".")[0]!, kind: "object", name: page.object }} onChange={(document) => edit({ document })} /> : selection.kind === "variables" ? <VariablesPanel document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
             onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
             onRemove={() => { const result = removeOverlay(document, id); edit({ document: result.document, sections: sections.filter((section) => !result.sections.has(section.id!)) }); select({ kind: "page" }); }} />)}{container ? <LayoutProperties document={document} id={container}
             onPatch={patchNode} onChange={(kind) => edit((old) => ({ ...old, document: setLayoutKind(old.document, container, kind) }))}
@@ -231,9 +233,10 @@ export function PageEditor({ id }: { id: string }) {
             onSelections={(next, rename) => edit((old) => ({ ...old, selections: next, sections: rename ? old.sections.map((s) => ({ ...s, selection: s.selection === rename.from ? rename.to : s.selection, parentSelection: s.parentSelection === rename.from ? rename.to : s.parentSelection })) : old.sections }))}
             onChange={(patch) => edit(patch, `settings:${Object.keys(patch).join(",")}`)} /> :
           <Properties section={canvasSelection} info={source.entity(canvasSelection?.object || page.object)} catalog={catalog.map((a) => ({ schema: a.schema, title: a.title, target: a.target }))}
-            object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
+            document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
             {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
-            {canvasSelection?.widget === "button" && <ButtonEventProperties document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}
+            {canvasSelection?.widget === "button" && <NavigationPanel document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}
+            {canvasSelection?.widget === "button" && !document.events?.some((e) => e.source === canvasSelection.id && (e.navigate || e.return)) && <ButtonEventProperties document={document} section={canvasSelection.id!} owner={nodeID ? loopOwner(document, nodeID) : undefined} onChange={(document) => edit({ document })} />}
             {nodeID && <NodeBindings document={document} id={nodeID} button={canvasSelection?.widget === "button"} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-1.5">
             <span className="mr-auto truncate text-xs font-medium">{title || page.title}</span>
@@ -271,8 +274,8 @@ export function PageEditor({ id }: { id: string }) {
 }
 
 /** The panel that configures the widget in hand: only what that widget binds. */
-function Properties({ section, info, catalog, object, selections, relatedObjects = [], onChange }: {
-  section?: Draft; info?: EntityInfo; object: string; relatedObjects?: string[];
+function Properties({ section, document, info, catalog, object, selections, relatedObjects = [], onChange }: {
+  section?: Draft; document: HostApi.PageDocument; info?: EntityInfo; object: string; relatedObjects?: string[];
   selections: HostApi.SelectionVariable[];
   catalog: { schema: string; title: string; target: string }[];
   onChange: (patch: Partial<Draft>) => void;
@@ -312,7 +315,8 @@ function Properties({ section, info, catalog, object, selections, relatedObjects
               selection: undefined, parentSelection: undefined, relation: undefined, query: undefined, inputs: undefined, fields: [], actions: [] }); }} />
         </label>
       )}
-      {section.recordVariable && <p className="text-xs text-muted">{t("This widget reads the current loop record.")}</p>}
+      {(["detail", "actions", "timeline", "tasks"].includes(section.widget)) && <label className="grid gap-1 text-xs">{t("Input record binding")}<Select value={document.variables?.[section.recordVariable ?? ""]?.mode === "input" ? section.recordVariable : ""} onChange={(e) => onChange({ recordVariable: e.target.value || undefined, selection: undefined })}><option value="">{t("Use page selection")}</option>{Object.entries(document.interface?.inputs ?? {}).filter(([, p]) => p.type === "record").map(([id, p]) => <option key={id} value={p.variable}>{id}</option>)}</Select></label>}
+      {section.recordVariable && <p className="text-xs text-muted">{t(document.variables?.[section.recordVariable]?.mode === "input" ? "This widget reads the input record." : "This widget reads the current loop record.")}</p>}
       {!section.recordVariable && (selections.length > 0 || section.selection) && contract?.selectionMode !== "none" &&
         <label className="grid gap-1 text-xs">{section.widget === "table" ? t("Writes selection") : t("Reads selection")}
           <Select value={section.selection ?? ""} onChange={(e) => onChange({ selection: e.target.value || undefined })}>

@@ -146,7 +146,7 @@ Page（原资产）
     ├── variables: Map<VariableID, Definition> [page级已实现，其余后续]
     ├── events: EventBinding[]            [button click写入标量state已实现]
     ├── overlays: Map<OverlayID, Definition> [独立root、modal/drawer已实现]
-    └── interface: TypedInputOutput[]     [后续]
+    └── interface: TypedInputOutput      [页面call/return已实现，application后续]
 
 ContainerNode
     node ID（nodes键） / kind / children / section（组件叶的稳定引用）
@@ -249,6 +249,16 @@ Overlay复用共享Dialog/Sheet的焦点陷阱、Escape和响应式滚动；打�
 item变量为record资源，scope=loop-item、owner=Loop节点ID、source={kind:item,node:Loop节点ID}；同owner可有标量state/constant/derived，读取page值或本项值，page及其他Loop不能读取本项变量。Section.recordVariable显式绑定该项记录，不能同时声明selection；宿主检查来源对象与Section对象相同。首profile支持detail/actions/timeline/tasks及text/button模板；其他组件保留诊断，按其端口能力扩展。节点条件及按钮事件遵循相同作用域。来源在自身模板中、跨根/跨Loop泄漏及可见性读取循环拒绝。
 
 实例身份由Loop节点、对象类型与记录ID组成，不能使用数组索引。共享虚拟列表只挂载可见项及有限overscan，并保留已聚焦的项；卸载清理Widget局部输入。显式item状态在同一查询参数下按身份保留，重排不串值；删除项、查询参数改变、Loop卸载、成员/定义变化时清理。普通数据revision刷新在相同查询/成员/定义作用域下保留已挂载视图与动作输入，并标记刷新；参数/作用域改变及拒绝读取立即清理。原记录读取按可见项进行、合并同一引用的在途请求，字段/revision只留会话缓存；拒绝或晚到响应不能恢复过期内容。动作使用当前项的原记录revision及原授权入口，预览不写入。冻结/激活保留Loop与作用域绑定，不持久化运行缓存。
+
+### 6.5 页面接口、导航与返回（F3e）
+
+`v2.6` 增加interface（正整数version、最多16 inputs/outputs），port声明variable/type，record额外固定原Object引用；input可required。输入变量为page级mode=input，不声明source/expression；标量可有类型匹配默认值，record无默认对象。输出只能引用page级变量。宿主检查记录绑定对象、来源类型与作用域，传值不包含记录字段/revision；接收页按当前成员重新读取记录。
+
+Button click有互斥的state写入、navigate、return三种处理。navigate声明目标Page引用、interfaceVersion、输入表达式（固定标量或可见变量）及返回输出到调用方state的映射；必填/类型/对象/版本不匹配拒绝候选，空/pending/error值不能导航。return使用当前页声明的输出，不代表业务动作成功。原Action仍经确认接口执行；导航与返回本身不写业务数据。预览的子页继续只读。
+
+工作区拥有每实例的临时call/return通道（最多64个），只把不透明ticket放进路由，输入/输出不写URL或localStorage。同页不同输入拥有独立实例；返回激活仍存在的调用者并关闭处理页，调用方保留原会话/筛选/item状态。关闭调用者、身份/定义作用域变化使结果不可应用；刷新后的ticket明确过期，required输入缺失不静默读取默认记录。页面/成员定义变化仍走原会话清理。
+
+导航目标和port对象进入原候选闭包。页面间显式导航边允许成环，结构性依赖环继续拒绝；只允许实际Document.navigate声明的page边形成导航环。候选使用冻结目标接口校验，激活在全部页面声明安装后统一校验目标，避免排序决定互相导航页面是否可安装。直接安装按当前定义校验。接口version标记兼容承诺；结构不匹配即使version相同也拒绝。
 
 ## 7. 本体设计台与平台语义融合（D5）
 
@@ -424,4 +434,6 @@ F3c实现 `v2.4` 的Flow/Toolbar、独立Overlay布局根、Modal/Drawer与Butto
 
 F3d实现 `v2.5` 的有界Loop、类型化item变量及同owner的标量/派生状态。编辑器可声明query窗口、组合模板、设置limit与变量作用域；详情/动作/历史/任务显式保存recordVariable，冻结/激活及内存重放恢复保留此绑定。共享VirtualStack按稳定身份测量和虚拟化，聚焦项保留；运行会话按引用合并读取，并在参数/成员/定义变化或卸载时清理。相同查询的普通数据刷新保留已挂载视图与动作输入，查询/记录拒绝不回填旧内容。工程路线验证36条授权记录按需挂载、局部状态独立及虚拟卸载后恢复、过滤切换清理、原动作拒绝保留输入/成功只改变目标记录、预览只读、候选激活与刷新；共享向量覆盖作用域类型与泄漏，Go检查覆盖外部来源、预算、嵌套拒绝及对象匹配。此profile仅消费已有表格窗口，支持范围与预算见§6.4；不是完整集合执行器或所有Widget的循环端口。
 
-F3仍未完成：独立查询计划/集合运算、跨页面输入输出及application/overlay/widget-local作用域，嵌套Loop和其他Widget的item端口仍待扩展。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+F3e实现 `v2.6` 的页面接口、input变量与Button navigate/return。构建者可编辑端口/版本、绑定输入记录、选择导航目标及输入/返回映射。发送端传递有界标量/记录引用，接收端通过原成员读取，再供原详情/动作组件使用；临时通道由共享Workspace按实例管理，路由仅保存不透明ticket，刷新明确过期。返回保留调用页面/item上下文，关闭或作用域变化后的结果不应用。Go校验接口类型、记录对象、必填/版本、作用域与成员裁剪；导航页纳入冻结候选，显式page导航环允许，结构环拒绝，激活在全部页面安装后校验接口。工程路线覆盖Loop指定记录→处理页原动作→输出返回、只读预览、读取拒绝/重新调用、URL无记录值及刷新过期；内存冻结/恢复保留接口与input声明。这不是持久跨页会话或任意路由脚本，也不增加生产恢复保证。
+
+F3仍未完成：独立查询计划/集合运算及application/overlay/widget-local作用域，嵌套Loop和其他Widget的item端口仍待扩展。F4独立关系/共享属性语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

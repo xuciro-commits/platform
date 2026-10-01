@@ -19,6 +19,7 @@ type PageDocument struct {
 	Variables     map[string]PageVariable   `json:"variables,omitempty"`
 	Overlays      map[string]PageOverlay    `json:"overlays,omitempty"`
 	Events        []PageEventBinding        `json:"events,omitempty"`
+	Interface     *PageInterface            `json:"interface,omitempty"`
 }
 
 type PageLayoutNode struct {
@@ -59,6 +60,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 	}
 	if err := d.CheckVariables(); err != nil {
+		return err
+	}
+	if err := d.checkInterface(); err != nil {
 		return err
 	}
 	if err := d.checkEvents(sections); err != nil {
@@ -293,7 +297,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 			}
 		}
 	}
-	out := &PageDocument{FormatVersion: d.FormatVersion, UIProfile: d.UIProfile, Root: d.Root, Nodes: map[string]PageLayoutNode{}, Variables: variables}
+	out := &PageDocument{FormatVersion: d.FormatVersion, UIProfile: d.UIProfile, Root: d.Root, Nodes: map[string]PageLayoutNode{}, Variables: variables, Interface: d.Interface}
 	var copyVisible func(string) bool
 	copyVisible = func(id string) bool {
 		node, ok := d.Nodes[id]
@@ -350,7 +354,22 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		bound := map[string]bool{}
 		for _, event := range d.Events {
 			if allowed[event.Source] && !missing[event.Target] {
-				if _, ok := variables[event.Target]; ok {
+				valid := true
+				if event.Navigate != nil {
+					for _, arg := range event.Navigate.Inputs {
+						if arg.Variable != "" {
+							if _, ok := variables[arg.Variable]; !ok {
+								valid = false
+							}
+						}
+					}
+					for _, id := range event.Navigate.Results {
+						if _, ok := variables[id]; !ok {
+							valid = false
+						}
+					}
+				}
+				if _, ok := variables[event.Target]; valid && (ok || event.Navigate != nil || event.Return) {
 					out.Events = append(out.Events, event)
 					bound[event.Source] = true
 				}
@@ -375,6 +394,22 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if variable.Scope == pageWidgets.Runtime.Loop.Scope && out.Nodes[variable.Owner].Kind != "loop" {
 			delete(out.Variables, id)
 		}
+	}
+	if d.Interface != nil {
+		iface := *d.Interface
+		iface.Inputs = map[string]PagePort{}
+		iface.Outputs = map[string]PagePort{}
+		for id, port := range d.Interface.Inputs {
+			if _, ok := out.Variables[port.Variable]; ok {
+				iface.Inputs[id] = port
+			}
+		}
+		for id, port := range d.Interface.Outputs {
+			if _, ok := out.Variables[port.Variable]; ok {
+				iface.Outputs[id] = port
+			}
+		}
+		out.Interface = &iface
 	}
 	return out
 }

@@ -440,6 +440,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 		}
 		out = append(out, def)
 	}
+	out = filterPageNavigation(out)
 	// An application is offered to whoever may open one of its pages (ADR-0036).
 	opens := map[platform.AssetRef]bool{}
 	for _, def := range out {

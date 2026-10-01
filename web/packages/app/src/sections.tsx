@@ -13,6 +13,7 @@ import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, typ
 import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
+import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
 import { recordSlot, resourceVariables } from "./runtime/resources";
@@ -413,6 +414,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const slots = new Map([
     [selectionKey(masterType), masterType],
     ...(page.sections ?? []).map((section) => [selectionKey(objectOf(page, section)), objectOf(page, section)] as const),
+    ...Object.values(page.document?.interface?.inputs ?? {}).filter((port) => port.type === "record" && port.object).map((port) => [inputSlot(port.variable), port.object!.name] as const),
     ...(page.selections ?? []).map((variable) => [selectionKey(variable.object.name, variable.name), variable.object.name] as const),
   ]);
   const children = new Map<string, Set<string>>();
@@ -428,7 +430,9 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents });
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
-  const variables = usePageVariables(initialVariables, snapshot.scalars, session, resources);
+  const incoming = usePageInputs(page, session, snapshot);
+  const variables = usePageVariables(initialVariables, snapshot.scalars, session, useMemo(() => ({ ...resources, ...incoming.inputs }), [resources, JSON.stringify(incoming.inputs)]));
+  const navigation = usePageNavigation(page, live, session, variables.values, variables.set);
   useEffect(() => { onVariableValues?.(variables.values); }, [onVariableValues, variables.values]);
   const narrowed = snapshot.filters;
   const onSelect = (key: string, record?: EntityRecord) => session.select(key, record);
@@ -443,11 +447,12 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   };
   const booleanValue = (id: string) => { const result = variables.values[id]; return result?.status === "value" && result.value === true; };
   const renderSection = (section: Section, i: number, nested: boolean, enabled = true, context?: LoopContext) => (
-    <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable && context ? context.record : session.selected(selectionKey(objectOf(page, section), section.selection))}
+    <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable ? context ? context.record : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionKey(objectOf(page, section), section.selection))}
       master={session.selected(selectionKey(parentTypeOf(page, section), section.parentSelection))} onSelect={(record) => onSelect(selectionKey(objectOf(page, section), section.selection), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
       chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
       onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
         const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
+        if (event.navigate || event.return) { navigation.emit(event, context); return; }
         if (typeof event.value === "string" || typeof event.value === "boolean") initialVariables[event.target]?.scope === "loop-item" && context ? context.set(event.target, event.value) : writeState(event.target, event.value);
       } : undefined} />
   );
@@ -500,7 +505,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   return (
     <div ref={pageFocus} tabIndex={-1} className="@container/page grid gap-3 outline-none">
       {notice}
-      {page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)
+      {(incoming.error || navigation.error) && <Panel role="alert">{t(incoming.error ?? navigation.error!)}</Panel>}
+      {incoming.error && !onChoose ? null : page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)
         ? <Panel role="alert">{t("This page needs a newer workspace version. Refresh after updating the workspace.")}</Panel>
         : renderNode(editingRoot ?? page.document.root, new Set()) : <div className="grid gap-3 md:grid-cols-2">
         {(page.sections ?? []).map((section, i) => (

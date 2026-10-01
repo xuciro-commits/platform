@@ -22,7 +22,7 @@ export { EntityCard, PropertyList } from "./components/EntityCard";
 export { PageHeader } from "./components/PageHeader";
 export { NotificationList, type NotificationItem } from "./components/NotificationList";
 export { Sheet } from "./primitives/sheet";
-export { Workspace, useWorkspace, useUnsavedChanges, notify, type Launcher, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
+export { Workspace, useWorkspace, useViewCall, useUnsavedChanges, notify, type Launcher, type View, type NavSection, type Menu, type MenuItem, type ShellCommand, type Session } from "./shell/Workspace";
 export { routeKey, routeToHash, routeFromHash, type Route } from "./shell/route";
 export type { ColumnDef } from "@tanstack/react-table";
 export { Graph, layout, type GraphNode, type GraphEdge } from "./graph/Graph";

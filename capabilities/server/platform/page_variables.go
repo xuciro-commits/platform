@@ -55,6 +55,11 @@ type pageRuntimeContract struct {
 		RecordWidgets       []string `json:"recordWidgets"`
 		PresentationWidgets []string `json:"presentationWidgets"`
 	} `json:"loop"`
+	Interface struct {
+		MaxPorts   int      `json:"maxPorts"`
+		MaxVersion int      `json:"maxVersion"`
+		ValueTypes []string `json:"valueTypes"`
+	} `json:"interface"`
 }
 type pageOperator struct {
 	ID      string `json:"id"`
@@ -114,6 +119,10 @@ func (d *PageDocument) CheckVariables() error {
 			return fail("only a resource variable may declare a source")
 		}
 		switch v.Mode {
+		case "input":
+			if v.Scope != "page" || v.Source != nil || v.Expression != nil || !slices.Contains(contract.Interface.ValueTypes, v.Type) || v.Type == "record" && len(v.Initial) != 0 || len(v.Initial) != 0 && pageLiteralType(v.Initial) != v.Type {
+				return fail("input needs a typed page value without a source")
+			}
 		case "resource":
 			if v.Source == nil || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
