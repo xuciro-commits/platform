@@ -12,6 +12,14 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 	if err := p.CheckCollectionPorts(); err != nil {
 		return err
 	}
+	for _, v := range p.Document.Variables {
+		if v.Mode == "shared" && v.Source != nil && v.Source.Object != nil {
+			info, ok := t.entity(v.Source.Object.Name)
+			if !ok || info.App != v.Source.Object.App {
+				return fmt.Errorf("shared window object is unavailable")
+			}
+		}
+	}
 	for id, q := range p.Document.Queries {
 		object, ok := t.entity(q.Object.Name)
 		if !ok || object.App != q.Object.App {

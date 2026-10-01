@@ -28,6 +28,7 @@ const (
 type Application struct {
 	platform.Record
 	UIProfile   string                           `json:"uiProfile,omitempty" field:"aside" title:"UI profile"`
+	Queries     map[string]platform.PageQuery    `json:"queries,omitempty" field:"aside" type:"json" title:"Application queries"`
 	Variables   map[string]platform.PageVariable `json:"variables,omitempty" field:"aside" type:"json" title:"Application variables"`
 	Name        string                           `json:"name" field:"required,search" help:"Its name in the platform, lower-case letters and digits" example:"frontdesk"`
 	Title       string                           `json:"title" field:"required,search" title:"What people call it" example:"Front desk"`
@@ -98,7 +99,7 @@ func applicationDescriptor(a Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Pages: slices.Clone(g.Pages)})
 	}
-	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables}
+	return platform.Application{Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Resources: slices.Clone(a.Resources), UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries}
 }
 
 // checkApplication refuses an application people could not open: a name that is

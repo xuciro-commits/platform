@@ -87,6 +87,13 @@ export class PageSessionStore {
     const selections=keys.flatMap((key)=>[...(this.plan.querySelections?.get(key)??[])]);
     this.publish({ queries, ...(selections.length?{records:this.clear(selections)}:{}) });
   }
+  reconcileExternalWindow(key:string,signature:string,ids?:string[]) {
+    const changed=this.querySignatures.get(key)!==signature;
+    this.querySignatures.set(key,signature);
+    const slots=[...(this.plan.querySelections?.get(key)??[])];
+    const removed=changed?slots:ids?slots.filter((slot)=>{const value=this.state.records[slot];return value&&"value" in value&&value.value&&!ids.includes(value.value.id);}):[];
+    if(removed.length)this.publish({records:this.clear(removed)});
+  }
   setItemScalar(owner: string, key: string, id: string, value: string | boolean) {
     this.itemOwners.set(key, owner);
     if (this.state.items[key]?.[id] !== value) this.publish({ items: { ...this.state.items, [key]: { ...this.state.items[key], [id]: value } } });

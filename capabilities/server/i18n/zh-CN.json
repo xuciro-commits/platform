@@ -1056,5 +1056,6 @@
  "Install this record query as its next retained version.": "将此记录查询安装为下一个保留版本。",
  "Domain": "筛选条件",
  "Limit": "数量上限",
- "Sort": "排序"
+ "Sort": "排序",
+ "Application queries": "应用查询"
 }

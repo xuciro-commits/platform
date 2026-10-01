@@ -24,11 +24,12 @@ type PageVariable struct {
 // PageResourceSource names a typed widget output, loop item or application
 // presentation port. Widget sources retain their original read boundary.
 type PageResourceSource struct {
-	Query    string `json:"query,omitempty"`
-	Variable string `json:"variable,omitempty"`
-	Kind     string `json:"kind"`
-	Section  string `json:"section,omitempty"`
-	Node     string `json:"node,omitempty"`
+	Object   *AssetRef `json:"object,omitempty"` // object requirement of a shared window
+	Query    string    `json:"query,omitempty"`
+	Variable string    `json:"variable,omitempty"`
+	Kind     string    `json:"kind"`
+	Section  string    `json:"section,omitempty"`
+	Node     string    `json:"node,omitempty"`
 }
 type PageExpression struct {
 	Op   string      `json:"op"`
@@ -143,7 +144,7 @@ func (d *PageDocument) CheckVariables() error {
 		}
 		visiting[id] = true
 		if v.Scope == contract.Application.Scope && !slices.Contains(contract.Application.ValueTypes, v.Type) {
-			return fail("application variable must be scalar")
+			return fail("application variable needs a supported scalar or resource")
 		}
 		if v.Writable && v.Mode != contract.Application.BindingMode {
 			return fail("only shared bindings declare writable")
@@ -151,8 +152,14 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Mode != "resource" && v.Mode != contract.Application.BindingMode && v.Source != nil {
 			return fail("only resource or shared variables may declare a source")
 		}
+		if v.Source != nil && v.Source.Object != nil && !(v.Mode == "shared" && v.Type == "object-set") {
+			return fail("only shared windows declare an object requirement")
+		}
 		switch v.Mode {
 		case "shared":
+			if v.Type == "object-set" && (v.Writable || v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
+				return fail("shared window needs a read-only object requirement")
+			}
 			if v.Scope != "application" || v.Source == nil || v.Source.Kind != "application" || !pageNodeID.MatchString(v.Source.Variable) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("shared binding needs only an application variable source")
 			}
@@ -161,11 +168,11 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("input needs a typed page value without a source")
 			}
 		case "resource":
-			if v.Source == nil || v.Source.Variable != "" || v.Scope == "application" || v.Expression != nil || len(v.Initial) != 0 {
+			if v.Source == nil || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
 			}
 			if v.Source.Kind == "plan" {
-				if (v.Scope != "page" && v.Scope != "overlay") || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
+				if (v.Scope != "page" && v.Scope != "overlay" && v.Scope != "application") || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
 					return fail("plan source needs a scoped query window")
 				}
 				break
@@ -179,7 +186,7 @@ func (d *PageDocument) CheckVariables() error {
 				}
 				break
 			}
-			if !pageNodeID.MatchString(v.Source.Section) || v.Source.Node != "" {
+			if v.Scope == "application" || !pageNodeID.MatchString(v.Source.Section) || v.Source.Node != "" {
 				return fail("resource source needs a section")
 			}
 			found := false

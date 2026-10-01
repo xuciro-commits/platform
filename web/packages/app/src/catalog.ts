@@ -9,7 +9,7 @@ const asset = (id: string, name: string, summary: string, exports: string[], exa
 export const entries: CatalogEntry[] = [
   asset("application-sessions", "Application sessions", "Share declared presentation state across pages of one scoped application instance.", ["ApplicationPage", "ApplicationSessionsProvider"], "ApplicationSessionsExample", {
     source:"web/packages/app/src/runtime/ApplicationRuntime.tsx", tags:["application","scope","instance","state"], dependencies:["app/composed-page","pattern/workspace"], states:["Shared","Isolated","Closed"],
-    constraints:["Application owns scalar declarations. Pages use typed shared bindings; instance values are ephemeral and grant no permissions."],
+    constraints:["Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped."],
   }),
   asset("generated-form", "Generated record form", "Edit fields from the original object declaration; submit through the owning action.", ["GeneratedForm"], "GeneratedFormExample", {
     dependencies: ["ui/record-form"], uses: ["code", "widget"], widgets: ["form"], states: ["dirty", "pending", "validation"],

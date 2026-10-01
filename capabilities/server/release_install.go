@@ -202,6 +202,9 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 	}
 	for _, definition := range draft.definitions {
 		if definition.Application != nil {
+			if err := draft.checkPageQueries(definition.Application.QueryPage()); err != nil {
+				return nil, err
+			}
 			for _, name := range definition.Application.Pages {
 				ref := platform.AssetRef{App: definition.Ref.App, Kind: platform.AssetPage, Name: name}
 				page, ok := pages[ref]

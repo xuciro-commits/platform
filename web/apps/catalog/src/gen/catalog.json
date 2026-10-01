@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:1ddb303e99ec6b22",
+  "revision": "sha256:68a8fc70ceb2098e",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -91,7 +91,7 @@
       ],
       "example": "ApplicationSessionsExample",
       "constraints": [
-        "Application owns scalar declarations. Pages use typed shared bindings; instance values are ephemeral and grant no permissions."
+        "Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped."
       ],
       "dependencies": [
         "app/composed-page",
@@ -1878,7 +1878,7 @@
       "Agent run and execution chain": "智能体运行与执行链",
       "An inbox preview is not an approval or permission engine.": "收件箱预览不承担审批或权限引擎职责。",
       "App Shell / Workspace": "应用外壳 / 工作区",
-      "Application owns scalar declarations. Pages use typed shared bindings; instance values are ephemeral and grant no permissions.": "应用拥有标量声明，页面使用类型化共享绑定；实例值为临时展示状态，不授予权限。",
+      "Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped.": "应用拥有标量声明和有界查询；页面通过类型化端口共享，只读窗口为成员作用域内的临时值。",
       "Application release workbench": "整应用发布工作台",
       "Application resources refer to original owners; membership does not grant access. Release review freezes published dependencies using the existing candidate path.": "应用资源引用原归属方；加入应用不会授予权限。发布审查通过原候选路径冻结已发布依赖。",
       "Application sessions": "应用会话",

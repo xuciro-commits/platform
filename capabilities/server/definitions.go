@@ -514,6 +514,46 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			}
 			return !visibleResources[ref]
 		})
+		application.Queries = maps.Clone(application.Queries)
+		application.Variables = maps.Clone(application.Variables)
+		for id, q := range application.Queries {
+			info, ok := entities[q.Object.Name]
+			var named *platform.Definition
+			if q.Query != nil {
+				for _, d := range out {
+					if d.Ref == q.Query.Ref {
+						named = d.QueryVersion(q.Query.SourceVersion)
+						break
+					}
+				}
+			}
+			if !ok || application.QueryPage().CheckQuerySchema(q, info, named) != nil {
+				delete(application.Queries, id)
+			}
+		}
+		for changed := true; changed; {
+			changed = false
+			for id, v := range application.Variables {
+				missing := false
+				if v.Mode == "resource" && v.Source != nil {
+					_, ok := application.Queries[v.Source.Query]
+					missing = !ok
+				}
+				if v.Expression != nil {
+					for _, arg := range v.Expression.Args {
+						if arg.Variable != "" {
+							if _, ok := application.Variables[arg.Variable]; !ok {
+								missing = true
+							}
+						}
+					}
+				}
+				if missing {
+					delete(application.Variables, id)
+					changed = true
+				}
+			}
+		}
 		def.Requires = application.Dependencies(def.Ref.App)
 		def.Application = &application
 		out = append(out, def)

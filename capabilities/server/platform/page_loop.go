@@ -96,7 +96,7 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		total += loop.Limit
 		collection := d.Variables[loop.Collection]
 		item := d.Variables[loop.ItemVariable]
-		if !accessible(loop.Collection, "", overlays[id]) || (collection.Scope != "page" && collection.Scope != "overlay") || collection.Type != "object-set" || collection.Mode != "resource" || collection.Source == nil || (collection.Source.Kind != "query" && collection.Source.Kind != "plan") || collection.Source.Kind == "query" && sectionOwners[collection.Source.Section] != "" {
+		if !accessible(loop.Collection, "", overlays[id]) || collection.Type != "object-set" || collection.Source == nil || !(collection.Mode == "resource" && (collection.Scope == "page" || collection.Scope == "overlay") && (collection.Source.Kind == "query" || collection.Source.Kind == "plan") || collection.Mode == "shared" && collection.Scope == "application" && collection.Source.Kind == "application" && collection.Source.Object != nil) || collection.Source.Kind == "query" && sectionOwners[collection.Source.Section] != "" {
 			return fmt.Errorf("page loop %s needs an external scoped query window", id)
 		}
 		if item.Scope != contract.Scope || item.Type != "record" || item.Mode != "resource" || item.Owner != id || item.Source == nil || item.Source.Kind != contract.Source || item.Source.Node != id {

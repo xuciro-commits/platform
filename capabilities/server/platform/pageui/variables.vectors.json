@@ -1359,5 +1359,158 @@
         }
       }
     }
+  },
+  {
+    "name": "typed application plan resource",
+    "valid": true,
+    "variables": {
+      "window": {
+        "scope": "application",
+        "mode": "resource",
+        "type": "object-set",
+        "source": {
+          "kind": "plan",
+          "query": "read"
+        }
+      }
+    },
+    "resources": {
+      "window": {
+        "status": "value",
+        "value": {
+          "kind": "object-set",
+          "window": {
+            "object": "sample.note",
+            "query": {
+              "limit": 10
+            },
+            "records": [
+              {
+                "object": "sample.note",
+                "id": "one"
+              }
+            ],
+            "total": 1,
+            "complete": true
+          }
+        }
+      }
+    },
+    "values": {
+      "window": {
+        "kind": "object-set",
+        "window": {
+          "object": "sample.note",
+          "query": {
+            "limit": 10
+          },
+          "records": [
+            {
+              "object": "sample.note",
+              "id": "one"
+            }
+          ],
+          "total": 1,
+          "complete": true
+        }
+      }
+    }
+  },
+  {
+    "name": "typed read-only shared window",
+    "valid": true,
+    "variables": {
+      "shared": {
+        "scope": "application",
+        "mode": "shared",
+        "type": "object-set",
+        "source": {
+          "kind": "application",
+          "variable": "window",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          }
+        }
+      }
+    },
+    "resources": {
+      "shared": {
+        "status": "value",
+        "value": {
+          "kind": "object-set",
+          "window": {
+            "object": "sample.note",
+            "query": {
+              "limit": 10
+            },
+            "records": [
+              {
+                "object": "sample.note",
+                "id": "one"
+              }
+            ],
+            "total": 1,
+            "complete": true
+          }
+        }
+      }
+    },
+    "values": {
+      "shared": {
+        "kind": "object-set",
+        "window": {
+          "object": "sample.note",
+          "query": {
+            "limit": 10
+          },
+          "records": [
+            {
+              "object": "sample.note",
+              "id": "one"
+            }
+          ],
+          "total": 1,
+          "complete": true
+        }
+      }
+    }
+  },
+  {
+    "name": "shared window cannot declare write access",
+    "valid": false,
+    "variables": {
+      "shared": {
+        "scope": "application",
+        "mode": "shared",
+        "type": "object-set",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "window",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "shared window needs an object requirement",
+    "valid": false,
+    "variables": {
+      "shared": {
+        "scope": "application",
+        "mode": "shared",
+        "type": "object-set",
+        "source": {
+          "kind": "application",
+          "variable": "window"
+        }
+      }
+    }
   }
 ]

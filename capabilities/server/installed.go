@@ -531,6 +531,9 @@ func (t *Tenant) InstallApplication(app platform.App, a platform.Application) er
 	if err := a.CheckVariables(); err != nil {
 		return err
 	}
+	if err := t.checkPageQueries(a.QueryPage()); err != nil {
+		return err
+	}
 	if err := a.CheckResources(); err != nil {
 		return fmt.Errorf("application %s: %w", a.Name, err)
 	}

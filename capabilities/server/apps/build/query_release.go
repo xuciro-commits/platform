@@ -3,6 +3,7 @@ package build
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -134,7 +135,8 @@ func (b *Build) prepareQueryReleasePublications(assets []platform.ReleaseAsset) 
 		record := list[i]
 		if version <= record.Version {
 			prior, err := b.QueryReleaseAsset(asset.Ref.Name, asset.SourceVersion)
-			if err != nil || string(prior.Body) != string(asset.Body) {
+			var retained, candidate any
+			if err != nil || json.Unmarshal(prior.Body, &retained) != nil || json.Unmarshal(asset.Body, &candidate) != nil || !reflect.DeepEqual(retained, candidate) {
 				return nil, fmt.Errorf("query retained bytes differ")
 			}
 			continue

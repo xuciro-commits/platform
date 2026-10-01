@@ -139,6 +139,7 @@ var Filterable = []string{"choice", "boolean", "reference"}
 type Application struct {
 	UIProfile   string                  `json:"uiProfile,omitempty"`
 	Variables   map[string]PageVariable `json:"variables,omitempty"`
+	Queries     map[string]PageQuery    `json:"queries,omitempty"`
 	Name        string                  `json:"name"`
 	Title       string                  `json:"title"`
 	Description string                  `json:"description,omitempty"`
@@ -178,7 +179,7 @@ func (a Application) CheckResources() error {
 // Dependencies is the single application closure path for discovery and
 // releases. Page order affects navigation; dependency order is canonical.
 func (a Application) Dependencies(owner string) []AssetRef {
-	refs := slices.Clone(a.Resources)
+	refs := append(slices.Clone(a.Resources), a.QueryPage().QueryReferences()...)
 	for _, name := range a.Pages {
 		refs = append(refs, AssetRef{App: owner, Kind: AssetPage, Name: name})
 	}

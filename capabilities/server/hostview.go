@@ -47,6 +47,16 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 		return err
 	}
 	for _, def := range h.t.definitions {
+		if def.Application != nil {
+			for _, q := range def.Application.Queries {
+				if q.Object.Name == e.Type {
+					if err := draft.checkPageQueries(def.Application.QueryPage()); err != nil {
+						return err
+					}
+					break
+				}
+			}
+		}
 		if def.Query != nil && def.Query.Object == e.Type {
 			view := hostView{t: draft, app: h.t.app(def.Ref.App)}
 			if err := view.ValidateInstallQuery(*def.Query); err != nil {

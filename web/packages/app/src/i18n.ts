@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Shared query window": "共享查询窗口",
+  "Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped.": "应用拥有标量声明和有界查询；页面通过类型化端口共享，只读窗口为成员作用域内的临时值。",
+
+  "Application variable needs a supported scalar or resource": "应用变量需要受支持的标量或资源。",
+  "Only shared windows declare an object requirement": "只有共享窗口声明对象要求。",
+  "Shared window needs a read-only object requirement": "共享窗口需要只读对象要求。",
+
   "Overlay variable needs a supported local value or resource": "浮层变量需要受支持的局部值或资源。",
   "Plan source needs a scoped query window": "计划来源需要对应作用域的查询窗口。",
   "Query window is unavailable.": "查询窗口不可用。",
@@ -235,6 +242,8 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+
+
   "Overlay variable needs a supported local value or resource": "浮层变量需要受支持的局部值或资源。",
   "Plan source needs a scoped query window": "计划来源需要对应作用域的查询窗口。",
   "Generated record form": "记录生成表单",

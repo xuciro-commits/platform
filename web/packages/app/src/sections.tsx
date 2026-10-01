@@ -13,7 +13,7 @@ import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, typ
 import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
-import { useApplicationVariables } from "./runtime/ApplicationRuntime";
+import { useApplicationContext, useApplicationVariables } from "./runtime/ApplicationRuntime";
 import { usePageQueries } from "./runtime/PageQueries";
 import { planKey, variablePlan } from "./runtime/query-plans";
 import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
@@ -401,8 +401,8 @@ type ComposedPageProps = {
   onVariableValues?: (values: Record<string, VariableResult>) => void;
 } & Composing;
 export function ComposedPage(props: ComposedPageProps) {
-  const { me } = useHost();
-  return <PageSession key={JSON.stringify([me, props.definitionKey, props.page])} {...props} />;
+  const { me } = useHost();const application=useApplicationContext();
+  return <PageSession key={JSON.stringify([me, props.definitionKey, props.page, application?.identity])} {...props} />;
 }
 
 function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, onVariableValues, editingRoot }: ComposedPageProps) {
@@ -436,14 +436,18 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     children.get(parent)!.add(child);
     queryParents.set(section.id ?? `section:${page.sections!.indexOf(section)}`, parent);
   }
+  const applicationVariable=(id:string)=>{const v=initialVariables[id];if(v?.mode==="shared"&&v.type==="object-set")return id;if(v?.source?.kind==="query"){const section=page.sections?.find((s)=>s.id===v.source?.section);const bound=initialVariables[section?.collectionVariable??""];if(bound?.mode==="shared"&&bound.type==="object-set")return section?.collectionVariable;}return undefined;};
   const querySelections = new Map<string,Set<string>>();
   for(const section of page.sections??[]){const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
+  for(const section of page.sections??[]){const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
   const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents, querySelections, overlayScopes:overlaySessionScopes(page) });
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot);
   const application = useApplicationVariables(initialVariables);
-  const inputResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources)]);
+  useEffect(()=>{for(const [id,signature] of Object.entries(application.signatures)){const result=application.resources[id],window=result&&(result.status==="value"||result.status==="empty")&&typeof result.value==="object"&&result.value?.kind==="object-set"?result.value.window:undefined;session.reconcileExternalWindow(`application/${id}`,result?.status==="error"?"":signature,window?.records.map((r)=>r.id));}},[session,JSON.stringify(application.signatures),JSON.stringify(application.resources)]);
+  const aliases=Object.fromEntries(Object.entries(initialVariables).flatMap(([id])=>{const source=applicationVariable(id);return source&&source!==id?[[id,application.resources[source]??{status:"empty" as const}]]:[]}));
+  const inputResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources,...aliases }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources),JSON.stringify(aliases)]);
   const inputValues = useMemo(() => evaluateVariables(initialVariables, snapshot.scalars, pageVariableContract, inputResources), [initialVariables,snapshot.scalars,inputResources]);
   const overlayForRoot = (root: string) => Object.entries(page.document?.overlays ?? {}).find(([, overlay]) => overlay.root === root)?.[0];
   const overlayInputs=Object.fromEntries(Object.keys(page.document?.overlays??{}).map((id)=>[id,evaluateVariables(initialVariables,snapshot.scalars,pageVariableContract,inputResources,undefined,id)]));
@@ -486,7 +490,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const producer=page.sections?.find((s)=>s.id===initialVariables[section.recordVariable!]?.source?.section);return producer?session.selected(selectionSlot(page,producer)):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
         master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => onSelect(selectionSlot(page,section), record)} live={live} narrowed={narrowed} onNarrow={onNarrow}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
-        window={section.collectionVariable?queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
+        window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
         value={value?.status === "value" && typeof value.value === "string" ? value.value : undefined} onValue={valueVariable ? (value) => setContextState(valueVariable, value, context, overlay) : undefined}
         onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
           const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
@@ -519,8 +523,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       if (context) return <Panel role="alert">{t("Nested loops are not supported by this UI profile.")}</Panel>;
       if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
       const collection = initialVariables[node.loop.collection]?.source, queryID=variablePlan(page,node.loop.collection);
-      const queryKey = queryID!==undefined?planKey(queryID):collection?.section??"";
-      const body = <LoopRuntime queryKey={queryKey} expectedSignature={queryID!==undefined ? queries.signatures[queryID]??"" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
+      const shared=applicationVariable(node.loop.collection);const queryKey = shared?`application/${shared}`:queryID!==undefined?planKey(queryID):collection?.section??"";
+      const body = <LoopRuntime queryKey={queryKey} expectedSignature={shared?application.signatures[shared]??"":queryID!==undefined ? queries.signatures[queryID]??"" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
         {(item) => <>{node.children?.map((child) => <div key={child} className="min-w-0">{renderNode(child, next, item, overlay)}</div>)}</>}
       </LoopRuntime>;
       return wrapLayout ? wrapLayout(id, node, body) : body;
@@ -551,6 +555,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     <div ref={pageFocus} tabIndex={-1} className="@container/page grid gap-3 outline-none">
       {notice}
       {queryErrors(editingRoot ? overlayForRoot(editingRoot) : undefined)}
+      {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="object-set"&&!application.error).map(([id,result])=><Panel key={id} role="alert" className="flex gap-2">{result.status==="error"?t(result.code):""}<Button onClick={()=>application.retry(id)}>{t("Retry query")}</Button></Panel>)}
       {application.error && <Panel role="alert">{t(application.error)}</Panel>}
       {(incoming.error || navigation.error) && <Panel role="alert">{t(incoming.error ?? navigation.error!)}</Panel>}
       {incoming.error && !onChoose ? null : page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)

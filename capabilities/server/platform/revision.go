@@ -191,6 +191,9 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			if err := application.CheckVariables(); err != nil {
 				return err
 			}
+			if err := checkFrozenQueries(application.QueryPage(), lookup); err != nil {
+				return err
+			}
 			for _, name := range application.Pages {
 				pageRef := AssetRef{App: ref.App, Kind: AssetPage, Name: name}
 				target, ok := lookup[pageRef]
@@ -230,26 +233,8 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 						}
 					}
 				}
-				if page.Document != nil {
-					for id, plan := range page.Document.Queries {
-						objectAsset, ok := lookup[plan.Object]
-						var object EntityInfo
-						if !ok || json.Unmarshal(objectAsset.Body, &object) != nil {
-							return fmt.Errorf("page query %s object is unavailable", id)
-						}
-						var named *Definition
-						if plan.Query != nil {
-							asset, ok := lookup[plan.Query.Ref]
-							var query NamedQuery
-							if !ok || json.Unmarshal(asset.Body, &query) != nil {
-								return fmt.Errorf("page query %s named query is unavailable", id)
-							}
-							named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
-						}
-						if err := page.CheckQuerySchema(plan, object, named); err != nil {
-							return fmt.Errorf("page query %s: %w", id, err)
-						}
-					}
+				if err := checkFrozenQueries(page, lookup); err != nil {
+					return err
 				}
 
 				for _, section := range page.Sections {
@@ -638,4 +623,29 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 	slices.SortFunc(removed, compareRef)
 	slices.SortFunc(changed, compareRef)
 	return added, removed, changed, nil
+}
+
+func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
+	if page.Document != nil {
+		for id, plan := range page.Document.Queries {
+			objectAsset, ok := lookup[plan.Object]
+			var object EntityInfo
+			if !ok || json.Unmarshal(objectAsset.Body, &object) != nil {
+				return fmt.Errorf("page query %s object is unavailable", id)
+			}
+			var named *Definition
+			if plan.Query != nil {
+				asset, ok := lookup[plan.Query.Ref]
+				var query NamedQuery
+				if !ok || json.Unmarshal(asset.Body, &query) != nil {
+					return fmt.Errorf("page query %s named query is unavailable", id)
+				}
+				named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
+			}
+			if err := page.CheckQuerySchema(plan, object, named); err != nil {
+				return fmt.Errorf("page query %s: %w", id, err)
+			}
+		}
+	}
+	return nil
 }

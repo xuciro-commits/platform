@@ -54,6 +54,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
+		if variable.Scope == "application" && variable.Type == "object-set" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.12") {
+			return fmt.Errorf("shared window %s requires v2.12", id)
+		}
 		if variable.Scope == "application" && (!PageUIProfileSupports(d.UIProfile, "platform.page.v2.8") || variable.Mode != "shared") {
 			return fmt.Errorf("page variable %s needs v2.8 and a shared application binding", id)
 		}
@@ -99,7 +102,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		byID[section.ID] = true
 		if section.CollectionVariable != "" {
 			v, ok := d.Variables[section.CollectionVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.10") || section.Widget != "table" || !ok || (v.Scope != "page" && v.Scope != "overlay") || v.Mode != "resource" || v.Type != "object-set" || v.Source == nil || v.Source.Kind != "plan" || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.10") || section.Widget != "table" || !ok || v.Type != "object-set" || v.Source == nil || !(v.Mode == "resource" && (v.Scope == "page" || v.Scope == "overlay") && v.Source.Kind == "plan" || v.Mode == "shared" && v.Scope == "application" && v.Source.Kind == "application" && v.Source.Object != nil) || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
 				return fmt.Errorf("page section %s needs an exclusive plan window binding", section.ID)
 			}
 		}

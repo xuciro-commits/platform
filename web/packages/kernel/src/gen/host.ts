@@ -130,6 +130,7 @@ export type AppSettings = {
 export type Application = {
   uiProfile?: string;
   variables?: Record<string, PageVariable>;
+  queries?: Record<string, PageQuery>;
   name: string;
   title: string;
   description?: string;
@@ -953,6 +954,7 @@ export type PageQueryCondition = {
 };
 
 export type PageResourceSource = {
+  object?: AssetRef;
   query?: string;
   variable?: string;
   kind: string;
@@ -1532,7 +1534,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.11",
+  "uiProfile": "platform.page.v2.12",
   "widgets": [
     {
       "componentID": "table",
@@ -2032,7 +2034,8 @@ export const pageUIManifest = {
     "platform.page.v2.8",
     "platform.page.v2.9",
     "platform.page.v2.10",
-    "platform.page.v2.11"
+    "platform.page.v2.11",
+    "platform.page.v2.12"
   ],
   "runtime": {
     "scope": "page",
@@ -2152,12 +2155,14 @@ export const pageUIManifest = {
       "scope": "application",
       "valueTypes": [
         "string",
-        "boolean"
+        "boolean",
+        "object-set"
       ],
       "modes": [
         "state",
         "constant",
-        "derived"
+        "derived",
+        "resource"
       ],
       "bindingMode": "shared"
     },

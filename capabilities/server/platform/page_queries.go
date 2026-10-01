@@ -50,6 +50,9 @@ func (q PageQuery) Variables() []string {
 	return ids
 }
 func (d *PageDocument) CheckQueries(sections []Section) error {
+	return d.checkQueries(sections, "page")
+}
+func (d *PageDocument) checkQueries(sections []Section, inputScope string) error {
 	c := pageWidgets.Runtime.Query
 	if len(d.Queries) > c.MaxPlans || len(d.Queries) > 0 && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") {
 		return fmt.Errorf("page query plans need v2.9 and a bounded plan count")
@@ -85,6 +88,9 @@ func (d *PageDocument) CheckQueries(sections []Section) error {
 	total := 0
 	for id, q := range d.Queries {
 		if q.Owner != "" {
+			if inputScope == "application" {
+				return fmt.Errorf("application query %s cannot belong to an overlay", id)
+			}
 			if _, ok := d.Overlays[q.Owner]; !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.11") {
 				return fmt.Errorf("page query %s needs a v2.11 overlay owner", id)
 			}
@@ -115,7 +121,7 @@ func (d *PageDocument) CheckQueries(sections []Section) error {
 			}
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
-				if !ok || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "")) || !slices.Contains([]string{"string", "boolean", "record"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
+				if !ok || inputScope == "application" && v.Scope != "application" || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "")) || !slices.Contains([]string{"string", "boolean", "record"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
 					return fmt.Errorf("page query %s parameter escapes its input scope", id)
 				}
 			} else {
@@ -141,7 +147,7 @@ func (d *PageDocument) CheckQueries(sections []Section) error {
 	for id, v := range d.Variables {
 		if v.Source != nil && v.Source.Kind == "plan" {
 			q, ok := d.Queries[v.Source.Query]
-			if !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") || !(q.Owner == "" && v.Scope == "page" || q.Owner != "" && v.Scope == "overlay" && v.Owner == q.Owner) {
+			if !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") || !(q.Owner == "" && v.Scope == inputScope || q.Owner != "" && v.Scope == "overlay" && v.Owner == q.Owner) {
 				return fmt.Errorf("page variable %s needs an existing query plan", id)
 			}
 		}
@@ -158,7 +164,31 @@ func (p Page) QueryReferences() []AssetRef {
 			}
 		}
 	}
+	for _, v := range p.DocumentVariables() {
+		if v.Mode == "shared" && v.Source != nil && v.Source.Object != nil {
+			refs = append(refs, *v.Source.Object)
+		}
+	}
 	return refs
+}
+func (p Page) DocumentVariables() map[string]PageVariable {
+	if p.Document == nil {
+		return nil
+	}
+	return p.Document.Variables
+}
+func (p Page) WindowVariableObject(id string) string {
+	v := p.DocumentVariables()[id]
+	if v.Source == nil {
+		return ""
+	}
+	if v.Mode == "shared" && v.Source.Object != nil {
+		return v.Source.Object.Name
+	}
+	if v.Source.Kind == "plan" && p.Document != nil {
+		return p.Document.Queries[v.Source.Query].Object.Name
+	}
+	return ""
 }
 
 // CheckQuerySchema compares original member-visible descriptors. Compilation
@@ -266,12 +296,11 @@ func (p Page) CheckCollectionPorts() error {
 		if v.Source == nil {
 			return fmt.Errorf("table window source is unavailable")
 		}
-		q, ok := p.Document.Queries[v.Source.Query]
 		object := s.Object.Name
 		if object == "" {
 			object = p.Object.Name
 		}
-		if !ok || object != q.Object.Name {
+		if object != p.WindowVariableObject(s.CollectionVariable) {
 			return fmt.Errorf("table window object does not match its plan")
 		}
 	}

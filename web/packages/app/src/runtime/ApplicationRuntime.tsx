@@ -3,6 +3,7 @@ import { Button, Panel, Select, t, useWorkspace, type Route } from "@platform/ui
 import { pageUIManifest, type Api } from "@platform/kernel";
 import { useHost } from "../index";
 import { ApplicationSessionHub, type ApplicationSession } from "./ApplicationSessions";
+import { useApplicationQueries } from "./ApplicationQueries";
 import { compileVariables, evaluateVariables, type VariableResult } from "./variables";
 
 const Hub = createContext<ApplicationSessionHub | undefined>(undefined);
@@ -16,6 +17,7 @@ const idOf = (d: Api.Definition) => `${d.ref.app}:${d.ref.name}`;
 export function ApplicationSessionsProvider({ children }: { children: ReactNode }) {
   const { source } = useHost();
   const hub = useMemo(() => new ApplicationSessionHub(), [source.scope]);
+  useEffect(()=>()=>hub.clear(),[hub]);
   return <Hub.Provider value={hub}>{children}</Hub.Provider>;
 }
 
@@ -29,7 +31,7 @@ export function ApplicationPage({ pageRef, route, preview = false, children }: {
   const definition = holders.find((d) => idOf(d) === id);
   const instance = route.params?.instance ?? (preview ? localPreview : "main");
   const identity = JSON.stringify([source.scope, definition?.ref, definition?.version, definition?.application, instance, preview]);
-  const session = useMemo(() => definition && hub && /^[A-Za-z0-9._:-]{1,80}$/.test(instance) ? hub.get(identity, definition.application?.variables ?? {}) : undefined, [hub, identity]);
+  const session = useMemo(() => definition && hub && /^[A-Za-z0-9._:-]{1,80}$/.test(instance) ? hub.get(identity, definition.application?.variables ?? {},{source,queries:definition.application?.queries??{}}) : undefined, [hub, identity]);
   const [owner] = useState(() => Symbol());
   const routeKey = JSON.stringify(route);
   useEffect(() => {
@@ -55,7 +57,9 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
   const context = useApplicationContext();
   const state = useSyncExternalStore(context?.session.subscribe ?? emptySubscribe, context?.session.snapshot ?? emptySnapshot, emptySnapshot);
   const declarations = context?.definition.application?.variables ?? {};
-  const values = useMemo(() => evaluateVariables(declarations, state, pageUIManifest.runtime), [declarations, state]);
+  const inputs=useMemo(()=>evaluateVariables(declarations,state,pageUIManifest.runtime),[declarations,state]);
+  const queries=useApplicationQueries(context?.session,inputs);
+  const values = useMemo(() => evaluateVariables(declarations,state,pageUIManifest.runtime,queries.resources),[declarations,state,JSON.stringify(queries.resources)]);
   const invalid = useMemo(() => compileVariables(declarations, pageUIManifest.runtime).issues.length > 0, [declarations]);
   const resources: Record<string, VariableResult> = {};
   let error: string | undefined;
@@ -63,12 +67,14 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
     if (variable.mode !== "shared") continue;
     const source = variable.source?.variable ?? "", declaration = declarations[source];
     if (!context) error = "Choose an application to use its shared variables.";
-    else if (!declaration || declaration.type !== variable.type || variable.writable && declaration.mode !== "state" || invalid) error = "The application does not satisfy this page's shared bindings.";
+    else if (!declaration || declaration.type !== variable.type || variable.writable && declaration.mode !== "state" || variable.type==="object-set"&&(declaration.mode!=="resource"||!declaration.source?.query||["app","kind","name"].some((key)=>variable.source?.object?.[key as keyof Api.AssetRef]!==context.definition.application?.queries?.[declaration.source!.query!]?.object[key as keyof Api.AssetRef])) || invalid) error = "The application does not satisfy this page's shared bindings.";
     resources[id] = error ? { status: "error", code: error } : values[source] ?? { status: "empty" };
   }
   const set = (id: string, value: string | boolean) => {
     const variable = variables[id];
     if (variable?.mode === "shared" && variable.writable && variable.source?.variable) context?.session.set(variable.source.variable, value);
   };
-  return { resources, set, error, identity: context?.identity };
+  const windows=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,queries.windows[v.source?.variable??""]]));
+  const signatures=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,queries.signatures[v.source?.variable??""]??""]));
+  return { resources, windows, signatures, retry:(id:string)=>queries.retry(variables[id]?.source?.variable??""), set, error, identity: context?.identity };
 }
