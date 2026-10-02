@@ -135,6 +135,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkButtonGroup(section); err != nil {
+			return err
+		}
 		if err := d.checkRecordView(section); err != nil {
 			return err
 		}
@@ -575,7 +578,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		}
 		changed := false
 		for _, section := range sections {
-			if section.Widget == "button" && allowed[section.ID] && !bound[section.ID] {
+			if (section.Widget == "button" || section.Widget == "button-group") && allowed[section.ID] && !bound[section.ID] {
 				delete(allowed, section.ID)
 				changed = true
 			}

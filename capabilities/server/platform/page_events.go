@@ -17,6 +17,7 @@ type PageOverlay struct {
 
 // A finite presentation event can only write a typed scalar state literal.
 type PageEventBinding struct {
+	Control  string          `json:"control,omitempty"`
 	Source   string          `json:"source"`
 	Event    string          `json:"event"`
 	Target   string          `json:"target"`
@@ -46,14 +47,25 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 	bound := map[string]bool{}
 	for _, event := range d.Events {
 		found := false
+		group := false
 		for _, section := range sections {
 			if descriptor := widgetEvent(section.Widget, event.Event); section.ID == event.Source && descriptor != nil {
 				found = descriptor.RequiredUIProfile == "" || PageUIProfileSupports(d.UIProfile, descriptor.RequiredUIProfile)
+				group = section.Widget == "button-group"
+				if group {
+					found = found && slices.ContainsFunc(section.Buttons, func(b PageButton) bool { return b.ID == event.Control })
+				} else if event.Control != "" {
+					found = false
+				}
 			}
 		}
+		key := event.Source + "/" + event.Control
 		variable := d.Variables[event.Target]
-		if !found || bound[event.Source] {
+		if !found || bound[key] {
 			return fmt.Errorf("page event %s needs one button click or registered selection binding and a matching state value", event.Source)
+		}
+		if group && (event.Navigate != nil || event.Return) {
+			return fmt.Errorf("button group only writes finite presentation state")
 		}
 		if event.Event == "select" && (event.Navigate != nil || event.Return || variable.Mode != "state" || !slices.Contains([]string{"page", "overlay"}, variable.Scope) || !slices.Contains([]string{"string", "boolean"}, variable.Type) || open[event.Target]) {
 			return fmt.Errorf("selection event needs local scalar state without navigation or overlay control")
@@ -62,7 +74,7 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 			if err := d.checkNavigationEvent(event); err != nil {
 				return err
 			}
-			bound[event.Source] = true
+			bound[key] = true
 			continue
 		}
 		if !variable.IsWritable() || pageLiteralType(event.Value) != variable.Type {
@@ -76,10 +88,17 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 				}
 			}
 		}
-		bound[event.Source] = true
+		bound[key] = true
 	}
 	for _, section := range sections {
-		if event := widgetEvent(section.Widget, "click"); event != nil && event.Required && !bound[section.ID] {
+		if section.Widget == "button-group" {
+			for _, button := range section.Buttons {
+				if !bound[section.ID+"/"+button.ID] {
+					return fmt.Errorf("button group control needs a click binding")
+				}
+			}
+		}
+		if event := widgetEvent(section.Widget, "click"); event != nil && event.Required && section.Widget != "button-group" && !bound[section.ID+"/"] {
 			return fmt.Errorf("page button %s needs a click binding", section.ID)
 		}
 	}

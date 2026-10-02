@@ -1,5 +1,8 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Activate stable scoped presentation controls through caller-owned bindings.": "通过调用方拥有的绑定激活具有稳定身份的作用域呈现控件。",
+ "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",
+ "Button group": "按钮组",
  "Properties": "属性",
  "Links": "关联",
  "Record view": "记录视图",

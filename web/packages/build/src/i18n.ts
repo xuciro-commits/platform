@@ -2,6 +2,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Give every group button a bounded title and its own click binding.": "为每个组内按钮提供限定长度的标题及其独立点击绑定。",
+ "Button group": "按钮组",
+ "Button title": "按钮标题",
+ "Button style": "按钮样式",
+ "Button icon": "按钮图标",
+ "Remove button": "移除按钮",
+ "Add button": "添加按钮",
+ "default": "默认",
+ "primary": "主要",
+ "ghost": "简洁",
+ "No icon": "无图标",
+ "arrow": "箭头",
+ "edit": "编辑",
+ "plus": "加号",
+ "trash": "删除",
  "Choose at least one record tab before saving.": "保存前至少选择一个记录标签页。",
  "Properties": "属性",
  "Links": "关联",

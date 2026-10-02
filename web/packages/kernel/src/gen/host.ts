@@ -899,6 +899,13 @@ export type Page = {
   selections?: SelectionVariable[];
 };
 
+export type PageButton = {
+  id: string;
+  title: string;
+  variant?: string;
+  icon?: string;
+};
+
 export type PageDetailPresentation = {
   columns: number;
   hideNull?: boolean;
@@ -918,6 +925,7 @@ export type PageDocument = {
 };
 
 export type PageEventBinding = {
+  control?: string;
   source: string;
   event: string;
   target: string;
@@ -1354,6 +1362,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  buttons?: PageButton[];
   recordView?: PageRecordView;
   detailPresentation?: PageDetailPresentation;
   tableColumns?: PageTableColumn[];
@@ -1678,7 +1687,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.36",
+  "uiProfile": "platform.page.v2.37",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2745,6 +2754,67 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "button-group",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.37",
+      "title": "Button group",
+      "category": "Interaction",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "interaction"
+      ],
+      "selectionMode": "none",
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": true,
+          "maxBindings": 16,
+          "requiredUIProfile": "platform.page.v2.37"
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.4"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -2783,7 +2853,8 @@ export const pageUIManifest = {
     "platform.page.v2.33",
     "platform.page.v2.34",
     "platform.page.v2.35",
-    "platform.page.v2.36"
+    "platform.page.v2.36",
+    "platform.page.v2.37"
   ],
   "runtime": {
     "scope": "page",
@@ -2913,7 +2984,8 @@ export const pageUIManifest = {
       "presentationWidgets": [
         "text",
         "button",
-        "input"
+        "input",
+        "button-group"
       ],
       "maxDepth": 2
     },
@@ -3082,6 +3154,23 @@ export const pageUIManifest = {
         "properties",
         "links",
         "history"
+      ]
+    },
+    "buttonGroup": {
+      "requiredUIProfile": "platform.page.v2.37",
+      "maxButtons": 16,
+      "maxTitleBytes": 256,
+      "variants": [
+        "default",
+        "primary",
+        "ghost",
+        "danger"
+      ],
+      "icons": [
+        "arrow",
+        "edit",
+        "plus",
+        "trash"
       ]
     }
   },

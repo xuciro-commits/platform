@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  FacetChoices,Button, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  FacetChoices,Button,ButtonGroup, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RecordKanban, RecordTimeline, RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -19,6 +19,10 @@ export function EditorPanels() {
     right={<Panel title={t("Inspector")}><Input aria-label={t("Title")} defaultValue={t("Example")} /></Panel>}>
     <Panel title={t("Canvas")} description={t("Example")} />
   </EditorWorkbench></div>;
+}
+export function ButtonGroups(){
+ const [selected,setSelected]=useState("");
+ return <div className="grid gap-2"><ButtonGroup label={t("Button group")} buttons={[{id:"open",title:t("Open"),variant:"primary",icon:"arrow"},{id:"close",title:t("Close"),variant:"default"}]} isBound={()=>true} onActivate={setSelected}/><output>{selected}</output></div>;
 }
 
 // Runnable owner examples use public APIs and synthetic values only. Nothing in

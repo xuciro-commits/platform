@@ -3,7 +3,7 @@ import type { Api } from "@platform/kernel";
 import { NavigationPanel } from "../NavigationPanel";
 import { ButtonEventProperties } from "../OverlayPanel";
 
-export type ButtonInspectorPorts = { document:Api.PageDocument; section:string; owner?:string; overlay?:string; onChange:(document:Api.PageDocument)=>void };
+export type ButtonInspectorPorts = { buttons?:Api.PageButton[];onGroupChange?:(buttons:Api.PageButton[],document:Api.PageDocument)=>void;document:Api.PageDocument; section:string; owner?:string; overlay?:string; onChange:(document:Api.PageDocument)=>void };
 export function ButtonInspector(props:ButtonInspectorPorts) {
   const contract=widgetContract("button")!;
   const eventName="events" in contract?contract.events[0]!.id:"";

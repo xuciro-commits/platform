@@ -14,13 +14,13 @@ export function OverlayProperties({ overlay, onChange, onRemove }: {
   </Card>;
 }
 
-export function ButtonEventProperties({ document, section, owner, overlay, eventName, onChange }: {
-  document: Api.PageDocument; section: string; eventName:string; owner?: string; overlay?: string; onChange: (document: Api.PageDocument) => void;
+export function ButtonEventProperties({ document, section, owner, overlay, eventName, onChange,control }: {
+  document: Api.PageDocument; section: string; eventName:string; owner?: string; overlay?: string;control?:string; onChange: (document: Api.PageDocument) => void;
 }) {
-  const event = document.events?.find((event) => event.source === section), variable = document.variables?.[event?.target ?? ""];
+  const event = document.events?.find((event) => event.source === section&&(event.control??"")===(control??"")), variable = document.variables?.[event?.target ?? ""];
   const tabs = Object.values(document.nodes).filter((node) => node.kind === "tabs" && node.activeVariable === event?.target).flatMap((node) => node.children ?? []);
   const update = (target: string, value: string | boolean) => onChange({ ...document, uiProfile: pageUIProfile,
-    events: [...(document.events ?? []).filter((event) => event.source !== section), { source: section, event: eventName, target, value }] });
+    events: [...(document.events ?? []).filter((event) => event.source !== section||(event.control??"")!==(control??"")), { source: section,control, event: eventName, target, value }] });
   const selection=eventName==="select",openVariables=new Set(Object.values(document.overlays??{}).map(o=>o.openVariable));
   return <Card className="grid gap-3 p-3"><strong className="text-xs">{t(selection?"On record selection":"On click")}</strong>
     {!selection&&<label className="grid gap-1 text-xs">{t("Overlay action")}<Select value={Object.values(document.overlays ?? {}).some((overlay) => overlay.openVariable === event?.target) ? `${event!.target}:${event!.value === true ? "open" : "close"}` : ""} onChange={(e) => { const at = e.target.value.lastIndexOf(":"); if (at > 0) update(e.target.value.slice(0, at), e.target.value.slice(at + 1) === "open"); }}>

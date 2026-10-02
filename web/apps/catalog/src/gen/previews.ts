@@ -27,6 +27,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "scenario/workshop-import": () => import("@pkg/build/catalog/examples").then((module) => ({ default: module.WorkshopImportExample })),
   "ui/block-canvas": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Blocks })),
   "ui/button": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Buttons })),
+  "ui/button-group": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ButtonGroups })),
   "ui/chart": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Charts })),
   "ui/checkbox": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Checkboxes })),
   "ui/command-menu": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContextCommands })),

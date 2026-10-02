@@ -8,7 +8,7 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
+  Button,ButtonGroup, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
@@ -44,6 +44,7 @@ type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
 type Bound = {
+  onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
   session?: PageSessionStore;
@@ -376,6 +377,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ "button-group":({section,onControl,controlBound,enabled})=><ButtonGroup buttons={section.buttons??[]} label={section.title||t("Button group")} onActivate={id=>onControl?.(id)} isBound={controlBound??(()=>false)} enabled={enabled}/>,
  "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,
@@ -527,9 +529,9 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     if(section.filterVariable&&(!shared||shared.status==="error"||shared.status==="pending"||!("value" in shared)||typeof shared.value!=="object"||shared.value.kind!=="filter"))return <Panel role="alert">{t("Shared filter is unavailable.")}</Panel>;
     const sharedFilter=shared&&"value" in shared&&typeof shared.value==="object"&&shared.value.kind==="filter"?shared.value.fields:undefined;
     const epoch = overlay ? session.overlayEpoch(overlay) : undefined;
-    const binding=(name:string)=>page.document?.events?.find(event=>event.source===section.id&&event.event===name);
-    const emit=(name:string)=>{
-      const event=binding(name);if(!event||overlay&&session.overlayEpoch(overlay)!==epoch)return;
+    const binding=(name:string,control?:string)=>page.document?.events?.find(event=>event.source===section.id&&event.event===name&&(event.control??"")===(control??""));
+    const emit=(name:string,control?:string)=>{
+      const event=binding(name,control);if(!event||overlay&&session.overlayEpoch(overlay)!==epoch)return;
       if(event.navigate||event.return){navigation.emit(event,{values,set:(id,value)=>setContextState(id,value,context,overlay),isActive:()=> (!overlay||session.overlayEpoch(overlay)===epoch)&&(!context||context.session.hasLoopItem(context.owner,context.key)&&context.session.querySignature(context.queryKey)===context.signature)});return;}
       if(typeof event.value==="string"||typeof event.value==="boolean"||isDecimal(event.value)||isStringSet(event.value))setContextState(event.target,event.value,context,overlay);
     };
@@ -542,7 +544,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
         collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"||!!valueVariable&&Object.values(page.document?.queries??{}).some(q=>q.conditions?.some(c=>c.asDecimal&&c.value.variable===valueVariable))} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
-        onClick={binding("click")?()=>emit("click"):undefined} />
+        onControl={id=>emit("click",id)} controlBound={id=>!!binding("click",id)} onClick={binding("click")?()=>emit("click"):undefined} />
     );
   };
   const placed=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const n=page.document?.nodes[id];return !!n&&(n.kind==="widget"?indexed.has(n.section??""):(n.children??[]).some(child=>placed(child,seen)));};

@@ -84,6 +84,7 @@ export const entries: CatalogEntry[] = [
     "fields/entity.tsx", ["FilterBar"], "Filters", { type: "Filter", dependencies: ["ui/field-types", "ui/button"] }),
   asset("ui/entity-card", "Record summary", "Present a record's title, status and labelled properties.", 3,
     "components/EntityCard.tsx", ["EntityCard", "PropertyList"], "RecordSummaries", { tags: ["record", "properties"], dependencies: ["ui/status"] }),
+  asset("ui/button-group","Button group","Activate stable scoped presentation controls through caller-owned bindings.",2,"components/ButtonGroup.tsx",["ButtonGroup"],"ButtonGroups",{tags:["buttons","toolbar"],dependencies:["ui/button","ui/flow-layout"],constraints:["Each control has a stable identity; the caller owns its binding, permissions and execution."]}),
   asset("ui/notifications", "Notifications", "Show unread changes and let the caller mark a notification as read.", 3,
     "components/NotificationList.tsx", ["NotificationList"], "Notifications", { type: "NotificationItem", states: ["Empty", "Read", "Unread"] }),
   asset("ui/record-list", "Record list", "Browse a scoped entity source with search, sort and paging.", 3,

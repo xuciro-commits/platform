@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.36",
+  "uiProfile": "platform.page.v2.37",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -1066,6 +1066,67 @@
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "button-group",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.37",
+      "title": "Button group",
+      "category": "Interaction",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "interaction"
+      ],
+      "selectionMode": "none",
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": true,
+          "maxBindings": 16,
+          "requiredUIProfile": "platform.page.v2.37"
+        }
+      ],
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.4"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -1104,7 +1165,8 @@
     "platform.page.v2.33",
     "platform.page.v2.34",
     "platform.page.v2.35",
-    "platform.page.v2.36"
+    "platform.page.v2.36",
+    "platform.page.v2.37"
   ],
   "runtime": {
     "scope": "page",
@@ -1234,7 +1296,8 @@
       "presentationWidgets": [
         "text",
         "button",
-        "input"
+        "input",
+        "button-group"
       ],
       "maxDepth": 2
     },
@@ -1403,6 +1466,23 @@
         "properties",
         "links",
         "history"
+      ]
+    },
+    "buttonGroup": {
+      "requiredUIProfile": "platform.page.v2.37",
+      "maxButtons": 16,
+      "maxTitleBytes": 256,
+      "variants": [
+        "default",
+        "primary",
+        "ghost",
+        "danger"
+      ],
+      "icons": [
+        "arrow",
+        "edit",
+        "plus",
+        "trash"
       ]
     }
   },

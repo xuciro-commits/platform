@@ -458,6 +458,14 @@ Overview呈现最多四个已声明数字字段、原生命周期及受权关联
 
 源ObjectView首profile支持panel/configured和默认四标签；objectVarId继续解析原Table生产者，显式映射的同对象非创建动作进入原Actions，来源的隐式动作菜单/关联导航差异需审查确认。未知标签、重复/空标签、full/standard及其他配置拒绝，不执行Ontology动作、历史占位或遍历脚本。新widget、Go校验、生成契约、Palette/Renderer/Inspector和92类型清单同一批接通，机器清单的profile计数增加为9，不代表整个ObjectView或92类型已完成。实现边界归§14。
 
+### 6.29 有界按钮组与独立呈现事件
+
+F1e9在v2.37注册button-group/configVersion=1，Section.buttons声明1–16个控件，每个控件有组内唯一稳定ID、非空标题（最多256 UTF-8字节）、default/primary/ghost/danger样式和可选arrow/edit/plus/trash图标。共享ButtonGroup复用Button与FlowLayout工具栏，窄屏自然换行，未绑定或组被禁用时禁止激活；组件不拥有授权、业务动作或状态执行器。原Button声明及单入口行为保持原契约。
+
+PageEventBinding.control定位组内控件，source/control共同确定唯一click绑定。每个控件须有自己的注册事件，沿原类型/可写性/作用域检查写入有限呈现状态或开关Overlay，不允许导航、return或直接业务提交。按钮标题、样式、图标和绑定由专属检查器沿原历史一次更新；删除控件同时删除其绑定，空组、标题越界或未绑定阻止保存。候选、反向Build转换和复制保留声明；副本重写Section及局部变量身份，组内控件ID保留并由新Section隔离。成员投影先完成原可见性闭包，再删除失去绑定的控件及其标题；无剩余控件时移除整组，不泄漏隐藏浮层入口。
+
+源ButtonGroup的buttons逐项分配控件ID，primary/secondary/minimal/danger显式映射上述样式，图标只开放固定集合。每项只转换一个openOverlay/closeOverlay或JSON固定文本/布尔setVariable；空事件、多个处理器、triggerValue、未知图标/配置和表达式源码阻止导入，原配置保留在报告中。运行仍使用原PageSession事件与Overlay世代清理，不复制source.fireEvents。机器清单增加ButtonGroup有限profile，当前共10类，不代表整个源事件系统或92组件已兼容。实现边界归§14。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -641,7 +649,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 兼容转换是规范加载入口中的纯转换，不形成第二套编辑器/渲染器。一次性导入适配在迁移结束后退出常规运行路径。
 
-首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。九类组件为ObjectTable→Table、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter及SingleButton→Button，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，不执行valueExpr、函数或流程脚本。
+首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。十类组件为ObjectTable→Table、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button及ButtonGroup→§6.29的ButtonGroup，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
 
 原文件按输入文本保留在报告中，可原样下载；映射报告包含完整来源、绑定、定位诊断、身份重写及原生草稿。应用是原DraftSession的一次可撤销替换，不提交业务操作、不自动保存；再次打开导入窗口可在同一编辑作用域下载报告。报告不是平台资产，离开编辑器或切换成员前须下载保留。选择页面之外的页面、页头、流程和未引用内容明确保留在报告但不执行，原导航由工作区提供；可识别的原生展示差异需勾选确认。未知配置、未知组件、未支持的选择/编辑配置、不兼容作用域和执行定义阻止应用。源变量虽是Module全局值，本profile不复制跨根局部变量：记录资源按生产者归属，页面选中记录可供浮层读取，浮层选中记录不能逃到页面；浮层独占状态转为关闭重置的原生局部状态并给出确认警告，静态值跨根共享需后续显式映射。Loop、更广动态转换、源应用拆分、接口、更广变量/事件及92类型完整配置转换仍待后续。
 
@@ -814,4 +822,6 @@ Module页面导入（F1e–F1e2）已接通§10.1的八类组件有限profile、
 
 记录工作区（F1e8，v2.36）已接通§6.28的record-view注册、局部标签、原RecordPage共享内容、动作和关联导航入口及ObjectView有限导入。Go拒绝错误Widget/profile/标签与创建动作，冻结后改草稿、成员字段裁剪、CheckReplay及内存快照保留record端口和标签；导入/复制保留标签顺序、原动作和原记录生产者，92类型清单仍完整且9类开放有限profile。共享UI验证四标签共用一次读取、真实关联窗口/历史、字段裁剪及记录/成员切换复位，原详情路径保留。浏览器验证默认源配置→检查器→保存/冻结后新草稿不替换标签、真实记录属性/关联条目/创建历史、原动作确认入口、多选/显示条件/拥有根隐藏重现复位及刷新。普通/窄屏已观察；更广ObjectView形态、来源元数据专有呈现、生产性能、负责人视觉认可和真实PostgreSQL恢复仍未验证/实现。
 
-F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和九类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+按钮组（F1e9，v2.37）已接通§6.29的注册控件、共享工具栏、专属检查器、按控件事件及ButtonGroup有限导入；当前10类源组件开放有限profile。Go验证控件身份/样式/图标/profile、逐项绑定和类型/作用域，候选冻结后改草稿、成员仅删除不可见入口、CheckReplay及内存快照保留原控件。共享UI验证稳定控件激活及键盘跳过禁用入口，导入拒绝脚本/多处理器/未知配置，复制保留组内身份并重写原局部绑定。浏览器验证四个真实入口的标题/样式/图标、检查器标题修改、保存/冻结后新草稿不改入口、分别打开Drawer/Modal、浮层内切换及关闭重开清理输入/选择和刷新；原记录、多选、权限拒绝及迟到响应路线保持执行。普通/窄屏已观察，全量Web路线通过；更多按钮事件、导航/业务动作、负责人视觉认可、生产性能和真实PostgreSQL恢复仍未提供或验证。
+
+F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和十类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

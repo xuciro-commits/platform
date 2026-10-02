@@ -610,6 +610,15 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					}
 				}
 			}
+			if page.Document != nil {
+				for i, s := range page.Sections {
+					if s.Widget == "button-group" {
+						page.Sections[i].Buttons = slices.DeleteFunc(slices.Clone(s.Buttons), func(b platform.PageButton) bool {
+							return !slices.ContainsFunc(page.Document.Events, func(e platform.PageEventBinding) bool { return e.Source == s.ID && e.Control == b.ID })
+						})
+					}
+				}
+			}
 			def.Requires = append([]platform.AssetRef{page.Object}, page.Actions...)
 			def.Page = &page
 		case platform.AssetApp:

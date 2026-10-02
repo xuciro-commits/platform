@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:6765a16e3c8c1524",
+  "revision": "sha256:52b6ec803bfb71e2",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -877,6 +877,35 @@
         "Keyboard focus"
       ],
       "snippet": "import { Button } from \"@platform/ui\";\n<Button variant=\"primary\" onClick={save}>Save</Button>"
+    },
+    {
+      "id": "ui/button-group",
+      "owner": "@platform/ui",
+      "name": "Button group",
+      "summary": "Activate stable scoped presentation controls through caller-owned bindings.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/ButtonGroup.tsx",
+      "exports": [
+        "ButtonGroup"
+      ],
+      "example": "ButtonGroups",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "buttons",
+        "toolbar"
+      ],
+      "dependencies": [
+        "ui/button",
+        "ui/flow-layout"
+      ],
+      "constraints": [
+        "Each control has a stable identity; the caller owns its binding, permissions and execution."
+      ]
     },
     {
       "id": "ui/chart",
@@ -2083,6 +2112,7 @@
       "A runtime call needs the actual host, a published owner revision and the current member’s permissions.": "运行调用需要实际宿主、已发布能力版本及当前成员的权限。",
       "A tenant object must be created, tested and published in the connected Application Studio.": "租户对象须在已连接的应用工坊创建、测试和发布。",
       "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions.": "动作条件将已声明的记录路径或输入与固定值或兼容字段比较；关联读取和审批重试均走原动作及申请人当前权限。",
+      "Activate stable scoped presentation controls through caller-owned bindings.": "通过调用方拥有的绑定激活具有稳定身份的作用域呈现控件。",
       "Agent run and execution chain": "智能体运行与执行链",
       "An inbox preview is not an approval or permission engine.": "收件箱预览不承担审批或权限引擎职责。",
       "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution.": "可选 RecordEditPort 提供授权展示字段及绑定原记录版本的提交回调。失败修改仍保留暂存，调用方管理权限及执行。",
@@ -2109,6 +2139,7 @@
       "Browse, sort and edit typed rows in a shared virtualized table.": "在共享虚拟化表格中浏览、排序和编辑类型化行。",
       "Build filters from the entity's declared fields and operators.": "从实体声明的字段和操作符构建筛选条件。",
       "Button": "按钮",
+      "Button group": "按钮组",
       "Cards and panels": "卡片与面板",
       "Chart": "图表",
       "Checkbox": "复选框",
@@ -2133,6 +2164,7 @@
       "Display a bounded record window as time points or intervals, grouped by an original resource field.": "将有界记录窗口显示为时间点或区间，按原资源字段分组。",
       "Display declared record states and caller-allowed transitions.": "展示已声明的记录状态与调用方允许的跃迁。",
       "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes.": "离开编辑器前请下载原 JSON 和映射报告。报告在当前编辑作用域内保留，关闭或切换成员时清理。",
+      "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
       "Editing": "编辑中",
@@ -2327,6 +2359,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
@@ -2378,6 +2411,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/AggregateSource.tsx",
+      "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
@@ -2655,6 +2689,9 @@
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/platform/src/knowledge.tsx"
+    ],
+    "ui/button-group": [
+      "web/packages/app/src/sections.tsx"
     ],
     "ui/tasks": [
       "web/packages/app/src/sections.tsx",

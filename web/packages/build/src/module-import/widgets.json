@@ -250,9 +250,9 @@
       "sourceType": "ButtonGroup",
       "sourceCategory": "Action",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "button",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "button-group",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Tabs",

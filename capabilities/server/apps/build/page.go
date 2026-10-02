@@ -50,6 +50,7 @@ type InlineEdit struct {
 }
 
 type Section struct {
+	Buttons              []platform.PageButton            `json:"buttons,omitempty"`
 	RecordView           *platform.PageRecordView         `json:"recordView,omitempty"`
 	DetailPresentation   *platform.PageDetailPresentation `json:"detailPresentation,omitempty"`
 	TableColumns         []platform.PageTableColumn       `json:"tableColumns,omitempty"`
@@ -152,7 +153,7 @@ func descriptor(p Page) platform.Page {
 	}
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
-		section := platform.Section{RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
+		section := platform.Section{Buttons: slices.Clone(s.Buttons), RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
 			Group: s.Group, Mark: s.Mark, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
 		if s.InlineEdit != nil {
 			section.InlineEdit = &platform.PageInlineEdit{Action: platform.AssetRef{App: strings.SplitN(s.InlineEdit.Action, ".", 2)[0], Kind: platform.AssetAction, Name: s.InlineEdit.Action}, Fields: slices.Clone(s.InlineEdit.Fields)}
