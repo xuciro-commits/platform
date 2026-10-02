@@ -129,6 +129,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "record-chart", ConfigVersion: 1, CollectionVariable: "metricWindow", RecordChart: &platform.PageRecordChart{Mark: "line", XField: spec.x, YField: spec.y}})
 	}
+	for _, spec := range []struct{ id, group string }{{"pie", "name"}, {"hiddenPie", "secret"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "chart", ConfigVersion: 1, CollectionVariable: "metricWindow", Mark: "arc", Group: spec.group, Measure: "count", ChartVariant: "donut"})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -149,6 +156,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[14].Group = "state"
 	sections[14].Measure = "count"
 	sections[17].RecordChart = &platform.PageRecordChart{Mark: "bar", XField: "id", YField: "amount"}
+	sections[20].ChartVariant = "pie"
 	sections[10].Text = "Later heading"
 	sections[11].Title = "Later collection"
 	sections[8].MetricPresentation = &platform.PageMetricPresentation{Prefix: "Later", Formatter: "short", Variant: "tag", Tone: "danger"}
@@ -165,6 +173,18 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					pie, hiddenPie := false, false
+					for _, s := range d.Page.Sections {
+						if s.ID == "pie" {
+							pie = s.ChartVariant == "donut" && s.Mark == "arc" && s.Group == "name" && s.Measure == "count"
+						}
+						if s.ID == "hiddenPie" {
+							hiddenPie = true
+						}
+					}
+					if !pie || hiddenPie != (member.ID == builder.ID) {
+						t.Fatal("frozen pie presentation or member projection changed")
+					}
 					recordChart, hiddenRecordX, hiddenRecordY := false, false, false
 					for _, s := range d.Page.Sections {
 						switch s.ID {

@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.43",
+  "uiProfile": "platform.page.v2.44",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -287,6 +287,13 @@
               "line",
               "area",
               "arc"
+            ]
+          },
+          "chartVariant": {
+            "type": "string",
+            "enum": [
+              "pie",
+              "donut"
             ]
           }
         }
@@ -1551,7 +1558,8 @@
     "platform.page.v2.40",
     "platform.page.v2.41",
     "platform.page.v2.42",
-    "platform.page.v2.43"
+    "platform.page.v2.43",
+    "platform.page.v2.44"
   ],
   "runtime": {
     "scope": "page",
@@ -1940,6 +1948,13 @@
         "line"
       ],
       "maxPoints": 40
+    },
+    "chartPresentation": {
+      "requiredUIProfile": "platform.page.v2.44",
+      "variants": [
+        "pie",
+        "donut"
+      ]
     }
   },
   "layout": {

@@ -18,6 +18,7 @@ function requirements(module:SourceModule|undefined){
   if(w.type==="FilterList")for(const f of Array.isArray(w.config.facets)?w.config.facets:[])property(external(text(w.config.objectSetVarId)),text(object(f)?.property));
   if(w.type==="ObjectTable")for(const c of Array.isArray(w.config.columns)?w.config.columns:[])property(external(text(w.config.objectSetVarId)),text(object(c)?.key));
   if(w.type==="ChartXY")for(const key of ["xProperty","yProperty"])property(external(text(w.config.objectSetVarId)),text(w.config[key]));
+  if(w.type==="ChartPie")property(external(text(w.config.objectSetVarId)),text(w.config.groupBy));
   if(w.type==="StatusTracker"){const variable=module?.variables.find(v=>v.id===w.config.objectVarId),producer=module?.widgets[text(variable?.widgetId)];property(external(text(producer?.config.objectSetVarId)),text(w.config.activeProp));}
   if(w.type==="PropertyList"){const variable=module?.variables.find(v=>v.id===w.config.objectVarId),producer=module?.widgets[text(variable?.widgetId)],type=external(text(producer?.config.objectSetVarId));for(const p of Array.isArray(w.config.properties)?w.config.properties:[])property(type,text(p));}
   if(w.type==="InlineAction"&&text(w.config.actionId))actions.add(text(w.config.actionId));

@@ -81,22 +81,23 @@ type Section struct {
 	// Relation follows the typed parent selection, or the page's shared record.
 	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
 	// Query is a named query "<app>.<name>" the section lists (ADR-0040 21c).
-	Query       string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like crm.open-opportunities"`
-	Fields      []string                    `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
-	Actions     []string                    `json:"actions,omitempty" help:"For actions: the schemas it offers"`
-	Group       string                      `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
-	Mark        string                      `json:"mark,omitempty"`
-	ColumnGroup string                      `json:"columnGroup,omitempty"`
-	TimeStart   string                      `json:"timeStart,omitempty" title:"Start time field"`
-	TimeEnd     string                      `json:"timeEnd,omitempty" title:"End time field"`
-	TimeLabel   string                      `json:"timeLabel,omitempty" title:"Timeline label field"`
-	TimeGroup   string                      `json:"timeGroup,omitempty" title:"Timeline resource field"`
-	CardLabel   string                      `json:"cardLabel,omitempty" title:"Card title field"`
-	Measure     string                      `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
-	Text        string                      `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
-	Function    *platform.FunctionRef       `json:"function,omitempty" title:"Published AI function"`
-	Operation   *platform.AssetBinding      `json:"operation,omitempty" title:"Published code function" type:"json"`
-	Inputs      map[string]platform.Binding `json:"inputs,omitempty" type:"json"`
+	Query        string                      `json:"query,omitempty" title:"Query" help:"For a table: a named query of its object, like crm.open-opportunities"`
+	Fields       []string                    `json:"fields,omitempty" help:"For a table or a detail: the fields it shows; a filter: the fields it filters by; a form: the fields it asks for"`
+	Actions      []string                    `json:"actions,omitempty" help:"For actions: the schemas it offers"`
+	Group        string                      `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
+	ChartVariant string                      `json:"chartVariant,omitempty"`
+	Mark         string                      `json:"mark,omitempty"`
+	ColumnGroup  string                      `json:"columnGroup,omitempty"`
+	TimeStart    string                      `json:"timeStart,omitempty" title:"Start time field"`
+	TimeEnd      string                      `json:"timeEnd,omitempty" title:"End time field"`
+	TimeLabel    string                      `json:"timeLabel,omitempty" title:"Timeline label field"`
+	TimeGroup    string                      `json:"timeGroup,omitempty" title:"Timeline resource field"`
+	CardLabel    string                      `json:"cardLabel,omitempty" title:"Card title field"`
+	Measure      string                      `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
+	Text         string                      `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
+	Function     *platform.FunctionRef       `json:"function,omitempty" title:"Published AI function"`
+	Operation    *platform.AssetBinding      `json:"operation,omitempty" title:"Published code function" type:"json"`
+	Inputs       map[string]platform.Binding `json:"inputs,omitempty" type:"json"`
 }
 
 func (b *Build) pageEntity() platform.Entity {
@@ -161,7 +162,7 @@ func descriptor(p Page) platform.Page {
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
 		section := platform.Section{RecordChart: s.RecordChart, RecordList: s.RecordList, HeadingLevel: s.HeadingLevel, CountVariable: s.CountVariable, MetricPresentation: s.MetricPresentation, StatusTracker: s.StatusTracker, RecordLinks: slices.Clone(s.RecordLinks), Buttons: slices.Clone(s.Buttons), RecordView: s.RecordView, DetailPresentation: s.DetailPresentation, TableColumns: slices.Clone(s.TableColumns), ShowSearch: s.ShowSearch, Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, SelectionSetVariable: s.SelectionSetVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
-			Group: s.Group, Mark: s.Mark, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
+			Group: s.Group, Mark: s.Mark, ChartVariant: s.ChartVariant, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
 		if s.InlineEdit != nil {
 			section.InlineEdit = &platform.PageInlineEdit{Action: platform.AssetRef{App: strings.SplitN(s.InlineEdit.Action, ".", 2)[0], Kind: platform.AssetAction, Name: s.InlineEdit.Action}, Fields: slices.Clone(s.InlineEdit.Fields)}
 		}

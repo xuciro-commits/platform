@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.ChartVariant != "" {
+				return fmt.Errorf("chart variant requires a document")
+			}
 			if s.Widget == "record-chart" || s.RecordChart != nil {
 				return fmt.Errorf("record chart requires a document")
 			}

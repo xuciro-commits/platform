@@ -147,22 +147,23 @@ type Section struct {
 	Relation string `json:"relation,omitempty"`
 	// Query is a named query (AssetQuery) the section lists instead of all of
 	// Object: its conditions, and the selected record when it takes one (21c).
-	Query       AssetRef           `json:"query,omitempty"`
-	Fields      []string           `json:"fields,omitempty"`  // table, detail, filter, form
-	Actions     []AssetRef         `json:"actions,omitempty"` // actions
-	Group       string             `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
-	Mark        string             `json:"mark,omitempty"`
-	ColumnGroup string             `json:"columnGroup,omitempty"`
-	TimeStart   string             `json:"timeStart,omitempty"`
-	TimeEnd     string             `json:"timeEnd,omitempty"`
-	TimeLabel   string             `json:"timeLabel,omitempty"`
-	TimeGroup   string             `json:"timeGroup,omitempty"`
-	CardLabel   string             `json:"cardLabel,omitempty"`
-	Measure     string             `json:"measure,omitempty"`   // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
-	Text        string             `json:"text,omitempty"`      // text
-	Function    *AssetBinding      `json:"function,omitempty"`  // exact published function
-	Operation   *AssetBinding      `json:"operation,omitempty"` // exact compute owner revision
-	Inputs      map[string]Binding `json:"inputs,omitempty"`    // compute inputs or form fields supplied by constants/parent record paths
+	Query        AssetRef           `json:"query,omitempty"`
+	Fields       []string           `json:"fields,omitempty"`  // table, detail, filter, form
+	Actions      []AssetRef         `json:"actions,omitempty"` // actions
+	Group        string             `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
+	ChartVariant string             `json:"chartVariant,omitempty"`
+	Mark         string             `json:"mark,omitempty"`
+	ColumnGroup  string             `json:"columnGroup,omitempty"`
+	TimeStart    string             `json:"timeStart,omitempty"`
+	TimeEnd      string             `json:"timeEnd,omitempty"`
+	TimeLabel    string             `json:"timeLabel,omitempty"`
+	TimeGroup    string             `json:"timeGroup,omitempty"`
+	CardLabel    string             `json:"cardLabel,omitempty"`
+	Measure      string             `json:"measure,omitempty"`   // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
+	Text         string             `json:"text,omitempty"`      // text
+	Function     *AssetBinding      `json:"function,omitempty"`  // exact published function
+	Operation    *AssetBinding      `json:"operation,omitempty"` // exact compute owner revision
+	Inputs       map[string]Binding `json:"inputs,omitempty"`    // compute inputs or form fields supplied by constants/parent record paths
 }
 
 // Widgets are the widget kinds a composed page may hold (ADR-0035 D2).

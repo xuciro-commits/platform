@@ -1424,6 +1424,7 @@ export type Section = {
   fields?: string[];
   actions?: AssetRef[];
   group?: string;
+  chartVariant?: string;
   mark?: string;
   columnGroup?: string;
   timeStart?: string;
@@ -1723,7 +1724,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.43",
+  "uiProfile": "platform.page.v2.44",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2011,6 +2012,13 @@ export const pageUIManifest = {
               "line",
               "area",
               "arc"
+            ]
+          },
+          "chartVariant": {
+            "type": "string",
+            "enum": [
+              "pie",
+              "donut"
             ]
           }
         }
@@ -3275,7 +3283,8 @@ export const pageUIManifest = {
     "platform.page.v2.40",
     "platform.page.v2.41",
     "platform.page.v2.42",
-    "platform.page.v2.43"
+    "platform.page.v2.43",
+    "platform.page.v2.44"
   ],
   "runtime": {
     "scope": "page",
@@ -3664,6 +3673,13 @@ export const pageUIManifest = {
         "line"
       ],
       "maxPoints": 40
+    },
+    "chartPresentation": {
+      "requiredUIProfile": "platform.page.v2.44",
+      "variants": [
+        "pie",
+        "donut"
+      ]
     }
   },
   "layout": {

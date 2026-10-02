@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Pie presentation": "饼图呈现",
+ "Original pie presentation": "原饼图呈现",
+ "Pie with values and percentages": "显示数值和占比的饼图",
+ "Donut with values and percentages": "显示数值和占比的环形图",
+ "Pie import needs an original query collection and a supported pie or donut presentation without additional measures or scripts.": "饼图导入需要原查询集合及受支持的饼图或环形呈现，不附带其他度量或脚本。",
+ "Map the pie group to an original categorical field; complete counts keep the original member scope.": "将饼图分组映射到原分类字段；完整计数保留原成员范围。",
+ "Pie and donut charts show original complete-collection counts and percentages. Source colors and ordering use native field metadata and themes; a record window does not limit distribution.": "饼图和环形图显示原完整集合计数及占比；颜色和顺序使用原字段元数据及主题，记录窗口不限制分布。",
  "Record chart": "逐记录图表",
  "Record chart query window": "逐记录图表查询窗口",
  "Record chart type": "逐记录图表类型",

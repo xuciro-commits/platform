@@ -4,6 +4,9 @@ import { groupDomain } from "./Pivot";
 import { aggregateQuery, aggregateValues, type AggregateColumn, type ChartSpec } from "./spec";
 
 const theme: Theme = { palette: ["#1", "#2", "#3"], foreground: "#f", muted: "#m", border: "#b" };
+test("pie variants show original values and rounded percentages while a donut retains the same complete groups",()=>{
+ const spec:ChartSpec={data:{entity:"sample.note"},mark:{type:"arc",donut:true,showValues:true},encoding:{color:{field:"bucket",type:"nominal"},theta:{type:"quantitative",aggregate:"count"}}},rows=[{bucket:"A",count:3},{bucket:"B",count:1}],option=toOption(spec,rows,[],theme) as {legend:{formatter:(name:string)=>string};series:{radius:unknown;data:unknown[]}[]};expect(option.legend.formatter("A")).toBe("A · 3 · 75%");expect(option.legend.formatter("B")).toBe("B · 1 · 25%");expect(option.series[0]!.radius).toEqual(["45%","70%"]);expect(option.series[0]!.data).toEqual([{name:"A",value:3},{name:"B",value:1}]);const empty=toOption(spec,[{bucket:"A",count:0}],[],theme) as typeof option;expect(empty.legend.formatter("A")).toBe("A · 0 · 0%");
+});
 
 test("a spec over records asks the host for groups and measures", () => {
   const spec: ChartSpec = {

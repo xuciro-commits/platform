@@ -41,9 +41,10 @@ export function toOption(spec: ChartSpec, rows: Record<string, unknown>[], colum
   if (mark.type === "arc") {
     const theta = spec.encoding.theta ?? spec.encoding.y, color = spec.encoding.color ?? spec.encoding.x;
     const fmt = formatter(theta, columns);
+    const valueColumn=theta?columnOf(theta):"count",groupColumn=color?columnOf(color):"",total=rows.reduce((sum,row)=>sum+Number(row[valueColumn]??0),0);
     return {
       ...base,
-      legend: { type: "scroll", bottom: 0, textStyle: { color: theme.muted } },
+      legend: { type: "scroll", bottom: 0, textStyle: { color: theme.muted },...(mark.showValues?{formatter:(name:string)=>{const row=rows.find(r=>text(r[groupColumn])===name),value=Number(row?.[valueColumn]??0);return `${name} · ${fmt(value,row)} · ${total>0?Math.round(value/total*100):0}%`;}}:{}) },
       series: [{
         type: "pie", radius: mark.donut ? ["45%", "70%"] : "70%", top: 8, bottom: 28,
         label: { color: theme.foreground },

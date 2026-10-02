@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "chart-pie-profile":"Pie import needs an original query collection and a supported pie or donut presentation without additional measures or scripts.",
+ "chart-pie-binding":"Map the pie group to an original categorical field; complete counts keep the original member scope.",
+ "native-pie-count":"Pie and donut charts show original complete-collection counts and percentages. Source colors and ordering use native field metadata and themes; a record window does not limit distribution.",
  "record-chart-profile":"Record XY import needs a bar or line chart without aggregation and a supported original query window. Scatter, area and unimplemented aggregation settings require correction.",
  "record-chart-binding":"Map record labels to an original scalar field or record ID and values to an original integer or decimal field.",
  "native-record-chart-window":"Record charts keep separate original records and plot at most 40 points from the query window. Original ID sorting makes the order explicit; source ordering and drawing styles can differ.",

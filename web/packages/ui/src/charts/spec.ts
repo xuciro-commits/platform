@@ -45,7 +45,7 @@ export type ChartSpec = {
   title?: string;
   description?: string;
   data: ChartData;
-  mark: Mark | { type: Mark; orient?: "vertical" | "horizontal"; stack?: boolean; donut?: boolean };
+  mark: Mark | { type: Mark; orient?: "vertical" | "horizontal"; stack?: boolean; donut?: boolean; showValues?: boolean };
   encoding: Channels;
 };
 

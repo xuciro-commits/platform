@@ -161,6 +161,9 @@ func widgetEvent(id, event string) *pageWidgetEvent {
 	return nil
 }
 func (d *PageDocument) checkWidgetPorts(s Section) error {
+	if s.ChartVariant != "" && (s.Widget != "chart" || s.Mark != "arc" || !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.ChartPresentation.RequiredUIProfile) || !slices.Contains(pageWidgets.Runtime.ChartPresentation.Variants, s.ChartVariant)) {
+		return fmt.Errorf("chart variant needs its pie profile and mark")
+	}
 	if s.Mark != "" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.24") {
 		return fmt.Errorf("chart mark requires UI profile v2.24")
 	}
@@ -211,7 +214,7 @@ func checkPageWidget(section Section) error {
 		}
 		// Only presentation properties are validated here. Asset references,
 		// selections, queries and actions retain their original host owners.
-		values := map[string]string{"headingLevel": section.HeadingLevel, "title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "mark": section.Mark, "columnGroup": section.ColumnGroup, "measure": section.Measure, "timeStart": section.TimeStart, "timeEnd": section.TimeEnd, "timeLabel": section.TimeLabel, "timeGroup": section.TimeGroup, "cardLabel": section.CardLabel}
+		values := map[string]string{"chartVariant": section.ChartVariant, "headingLevel": section.HeadingLevel, "title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "mark": section.Mark, "columnGroup": section.ColumnGroup, "measure": section.Measure, "timeStart": section.TimeStart, "timeEnd": section.TimeEnd, "timeLabel": section.TimeLabel, "timeGroup": section.TimeGroup, "cardLabel": section.CardLabel}
 		props := map[string]string{}
 		for key, value := range values {
 			if value != "" {

@@ -42,6 +42,10 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	ChartPresentation struct {
+		RequiredUIProfile string   `json:"requiredUIProfile"`
+		Variants          []string `json:"variants"`
+	} `json:"chartPresentation"`
 	RecordChart struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`
 		Marks             []string `json:"marks"`

@@ -168,7 +168,7 @@ function ActionsWidget({ page, section, selected, live }: Bound) {
 
 /** An aggregate of the object: grouped and measured, drawn by the kit (ADR-0019). */
 function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]): ChartSpec {
-  return {...compileChartSpec({object:objectOf(page,section),title:section.title,group:section.group,measure:section.measure,mark:section.mark,kpi,domain}),metric:kpi?section.metricPresentation:undefined};
+  return {...compileChartSpec({object:objectOf(page,section),title:section.title,group:section.group,measure:section.measure,mark:section.mark,chartVariant:section.chartVariant,kpi,domain}),metric:kpi?section.metricPresentation:undefined};
 }
 
 function ChartWidget({ page, section, kpi, pivot, narrowed, sharedFilter, master, window, collection, aggregateScope }: Bound & { kpi: boolean; pivot?:boolean }) {
