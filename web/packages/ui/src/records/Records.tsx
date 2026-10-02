@@ -5,6 +5,7 @@
 import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
+import {EditableRecordGrid,type RecordEditPort} from "./EditableRecordGrid";
 import { DataTable } from "../components/DataTable";
 import { PropertyList } from "../components/EntityCard";
 import { Tag } from "../components/StatusTag";
@@ -220,7 +221,8 @@ export type ListState = {
   group?: string; columns?: string; measure?: string; mark?: Mark;
 };
 
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window }: {
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit }: {
+  inlineEdit?:RecordEditPort;
   source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
   /** Presentation subset. The source's permission-filtered entity is still authoritative. */
   fields?: string[];
@@ -257,7 +259,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const fixedKey = JSON.stringify(fixed ?? []);
   useEffect(() => { setOffset(0); }, [fixedKey, type]);
   const domain = useMemo(() => [...JSON.parse(fixedKey), ...(drilled ?? [])], [fixedKey, drilled]);
-  const entity = useMemo(() => (info ? entityFrom(info) : undefined), [info]);
+  const entity = useMemo(() => (info ? entityFrom(info,{},source) : undefined), [info,source]);
   useEffect(() => {
     if (window || !info || view !== "list") return;
     let current = true;
@@ -334,8 +336,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         )}
       </div>
       {view === "list" && (
-        <DataTable data={page?.records ?? []} columns={columnsOf as never} getRowId={(r: EntityRecord) => r.id} height={height} searchable={false}
-          onRowClick={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })} />
+        <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview,domain,search,sort,offset,archived,error])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} port={inlineEdit} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
       )}
       {view === "pivot" && aggregate && rows && (
         <Pivot source={{ aggregate, revision: source.revision }} type={type} query={query} rows={rows} columns={columns || undefined} measure={measure}

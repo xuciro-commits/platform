@@ -1,3 +1,4 @@
+import {tableEditableFields} from "./widgets/table-edit";
 import {Facets} from "./widgets/Facets";
 import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
 // A composed page (ADR-0035): sections laid out in order, each holding one
@@ -74,8 +75,8 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection }: Bound) {
-  const { source, definitions } = useHost();
+function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection,live,aggregateScope }: Bound) {
+  const { source, definitions,catalog,decide } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
   const info = source.entity(type);
@@ -86,6 +87,8 @@ function TableAdapter({ page, section, onSelect, selected, master, narrowed, sha
     ? (query?.by ? info?.fields.find((f) => f.name === query.by) : relatedField(info?.fields, page, section))
     : undefined;
 
+  const editAction=section.inlineEdit?catalog.find(a=>a.schema===section.inlineEdit!.action.name):undefined,editFields=tableEditableFields(info,editAction,section.inlineEdit?.fields??[]);
+  const inlineEdit=editAction&&editFields.length?{schema:editAction.schema,fields:editFields,scope:JSON.stringify([aggregateScope,editAction]),preview:!live,maxRows:pageVariableContract.tableEditing.maxRows,submit:async(record:EntityRecord,patch:Record<string,unknown>)=>{let error:string|undefined;const accepted=await decide(editAction.schema,{type,id:record.id},patch,{expectedRevision:record.revision,quiet:true,onRefused:reason=>error=reason});return {accepted,error};}}:undefined;
   if(section.collectionVariable&&collection?.status==="error")return <Panel role="alert">{t(collection.code)}</Panel>;
   const status = section.collectionVariable ? !window ? "missing-window" : undefined
     : (section.relation || section.parentSelection) && !refField ? "invalid-reference" : refField && !master ? "missing-parent" : undefined;
@@ -93,7 +96,7 @@ function TableAdapter({ page, section, onSelect, selected, master, narrowed, sha
   const domain = [...((query?.domain as unknown[] | undefined) ?? []), ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
   return <TableRenderer key={section.collectionVariable ? type : refField ? `${type}/${refField.name}/${master?.id}` : type}
     source={section.collectionVariable ? source : session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source}
-    object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
+    inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
     selected={selected} onSelect={onSelect} status={status} plural={info?.plural?.toLowerCase()}/>;
 }
 

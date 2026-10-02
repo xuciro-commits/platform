@@ -98,9 +98,15 @@ type PageFacet struct {
 	Kind     string `json:"kind"`
 }
 
+type PageInlineEdit struct {
+	Action AssetRef `json:"action"`
+	Fields []string `json:"fields"`
+}
+
 type Section struct {
-	Facets               []PageFacet `json:"facets,omitempty"`
-	FilterSearchVariable string      `json:"filterSearchVariable,omitempty"`
+	InlineEdit           *PageInlineEdit `json:"inlineEdit,omitempty"`
+	Facets               []PageFacet     `json:"facets,omitempty"`
+	FilterSearchVariable string          `json:"filterSearchVariable,omitempty"`
 	// ID is required when Document references this section; older pages omit it.
 	ID            string `json:"id,omitempty"`
 	ConfigVersion int    `json:"configVersion,omitempty"`

@@ -46,3 +46,5 @@ export {LayoutRegion,LayoutStack,type LayoutSize} from "./layout/LayoutRegion";
 export {CommandMenu,type ContextCommand} from "./components/CommandMenu";
 
 export {FacetChoices} from "./fields/FacetChoices";
+
+export type {RecordEditPort} from "./records/EditableRecordGrid";

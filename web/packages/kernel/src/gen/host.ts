@@ -932,6 +932,11 @@ export type PageFacet = {
   kind: string;
 };
 
+export type PageInlineEdit = {
+  action: AssetRef;
+  fields: string[];
+};
+
 export type PageInterface = {
   version: number;
   inputs?: Record<string, PagePort>;
@@ -1333,6 +1338,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  inlineEdit?: PageInlineEdit;
   facets?: PageFacet[];
   filterSearchVariable?: string;
   id?: string;
@@ -1651,7 +1657,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.30",
+  "uiProfile": "platform.page.v2.31",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2676,7 +2682,8 @@ export const pageUIManifest = {
     "platform.page.v2.27",
     "platform.page.v2.28",
     "platform.page.v2.29",
-    "platform.page.v2.30"
+    "platform.page.v2.30",
+    "platform.page.v2.31"
   ],
   "runtime": {
     "scope": "page",
@@ -2893,6 +2900,21 @@ export const pageUIManifest = {
       "source": "count",
       "maxVariables": 8,
       "maxExpandedReads": 32
+    },
+    "tableEditing": {
+      "maxRows": 64,
+      "maxFields": 16,
+      "fieldTypes": [
+        "text",
+        "longtext",
+        "integer",
+        "decimal",
+        "boolean",
+        "choice",
+        "date",
+        "datetime",
+        "reference"
+      ]
     }
   },
   "layout": {

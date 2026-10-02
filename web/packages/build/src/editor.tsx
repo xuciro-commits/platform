@@ -65,11 +65,13 @@ const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDo
   selections: record.selections,
   document,
   sections: sections.map((s) => ({
+    facets:s.facets,filterSearchVariable:s.filterSearchVariable,
     id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, selectionVariable:s.selectionVariable, filterVariable:s.filterVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, mark:s.mark, columnGroup: s.columnGroup,timeStart:s.timeStart,timeEnd:s.timeEnd,timeLabel:s.timeLabel,timeGroup:s.timeGroup,cardLabel:s.cardLabel, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
     query: s.query ? { app: s.query.split(".")[0] ?? "", kind: "query", name: s.query.split(".").slice(1).join(".") } : undefined,
     function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,
     operation: s.operation, inputs: s.inputs,
+    inlineEdit:s.inlineEdit?{...s.inlineEdit,action:{app:s.inlineEdit.action.split(".")[0]??"",kind:"action",name:s.inlineEdit.action}}:undefined,
     actions: (s.actions ?? []).map((schema) => ({ app: schema.split(".")[0] ?? "", kind: "action", name: schema })),
   })) as Section[],
 });
@@ -148,7 +150,8 @@ export function PageEditor({ id }: { id: string }) {
   const queryProblem = Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));
   const layoutProblems=pageLayoutDiagnostics(document);
   const inlineProblem=sections.some(s=>s.widget==="inline-action"&&s.actions?.length!==1);
-  const invalid = inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
+  const tableEditProblem=sections.some(s=>s.inlineEdit&&(!s.inlineEdit.action||s.inlineEdit.fields.length===0||s.inlineEdit.fields.length>pageVariableContract.tableEditing.maxFields||s.inlineEdit.fields.some(f=>!s.fields?.includes(f))));
+  const invalid = tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
   const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);

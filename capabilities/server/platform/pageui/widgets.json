@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.30",
+  "uiProfile": "platform.page.v2.31",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -1024,7 +1024,8 @@
     "platform.page.v2.27",
     "platform.page.v2.28",
     "platform.page.v2.29",
-    "platform.page.v2.30"
+    "platform.page.v2.30",
+    "platform.page.v2.31"
   ],
   "runtime": {
     "scope": "page",
@@ -1241,6 +1242,21 @@
       "source": "count",
       "maxVariables": 8,
       "maxExpandedReads": 32
+    },
+    "tableEditing": {
+      "maxRows": 64,
+      "maxFields": 16,
+      "fieldTypes": [
+        "text",
+        "longtext",
+        "integer",
+        "decimal",
+        "boolean",
+        "choice",
+        "date",
+        "datetime",
+        "reference"
+      ]
     }
   },
   "layout": {

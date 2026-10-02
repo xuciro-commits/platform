@@ -4,7 +4,7 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, Search } from "lucide-react";
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import type { FieldType } from "../fields/types";
 import { Input } from "../primitives/input";
@@ -59,6 +59,7 @@ export function DataTable<T>({
   data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
   loading = false, loadingText, onCellEdit, resizable = true, onRowContextMenu,
 }: DataTableProps<T>) {
+  const editorPrefix=useId();
   const [editing, setEditing] = useState<Session<T> | null>(null);
   const session = useRef<Session<T> | null>(null);
   const [sizing, setSizing] = useState<Record<string, number>>({});
@@ -261,7 +262,9 @@ export function DataTable<T>({
                               else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(false, true); }
                             }}
                             onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close(true); }}>
+                            <label className="sr-only" htmlFor={`${editorPrefix}-${row.id}-${cell.column.id}`}>{t("Edit {field} for {record}",{field:field.label,record:row.id})}</label>
                             {field.editor({
+                              id:`${editorPrefix}-${row.id}-${cell.column.id}`,
                               value: editing.draft,
                               onChange: (draft) => { const s = session.current; if (!s) return; const next = { ...s, draft }; session.current = next; setEditing(next); },
                               autoFocus: true,

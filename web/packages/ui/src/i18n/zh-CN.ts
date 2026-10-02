@@ -1,5 +1,22 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Edit {field} for {record}": "编辑记录 {record} 的 {field}",
+ "Submitting…": "正在提交…",
+ "Staged edits": "暂存修改",
+ "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution.": "可选 RecordEditPort 提供授权展示字段及绑定原记录版本的提交回调。失败修改仍保留暂存，调用方管理权限及执行。",
+ "Edit cells": "编辑单元格",
+ "Cancel cell edits": "取消单元格修改",
+ "Submit cell edits": "提交单元格修改",
+ "{count} rows staged": "已暂存 {count} 行",
+ "Edits for records no longer in this view were cleared.": "已清理不再属于此视图的记录修改。",
+ "The staged row limit has been reached.": "已达到暂存行数上限。",
+ "Enter a valid value for {field}.": "请为 {field} 输入有效值。",
+ "The edit could not be submitted. Your staged values are still here.": "修改未能提交，暂存值仍保留。",
+ "The host refused this edit.": "宿主拒绝了此修改。",
+ "Submitted {count} rows. Failed edits remain staged.": "已提交 {count} 行，失败修改仍保留在暂存区。",
+ "Double-click or press Enter/F2 to edit. Enter or Tab stages the cell; submit uses the original record action.": "双击或按 Enter/F2 编辑；Enter 或 Tab 暂存单元格，提交使用原记录动作。",
+ "Actions do not run while you compose.": "编辑设计时不会执行动作。",
+
  "Facet choices": "分面多选",
  "Choose several authorized options with complete source counts and an optional histogram.": "从授权选项中多选，显示完整来源计数及可选直方图。",
  "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",

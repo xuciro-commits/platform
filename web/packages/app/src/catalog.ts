@@ -40,7 +40,7 @@ export const entries: CatalogEntry[] = [
     dependencies: ["ui/record-workspace", "app/record-detail"], uses: ["code", "reference"], source: "web/packages/app/src/pages.tsx",
     snippet: 'import { PageWorkspace } from "@platform/app";\n<PageWorkspace definition={installedPage} />',
   }),
-  asset("composed-page", "Controlled page composition", "Render original Page sections with shared selection and filters; composition disables writes.", ["ComposedPage", "SectionView"], "ComposedPageExample", {
+  asset("composed-page", "Controlled page composition", "Render original Page sections with shared selection and filters; composition disables writes.", ["ComposedPage", "tableEditableFields", "SectionView"], "ComposedPageExample", {
     tags: ["page", "selection", "relation", "binding"],
     constraints: ["Named record selections keep same-object lists independent; parent bindings scope related sections.",
       "Form inputs read declared record paths. The original action checks writes; unavailable sources do not become manual inputs."],

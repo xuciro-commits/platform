@@ -488,6 +488,18 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.Widget == "filter" && len(section.Fields) == 0 && len(section.Facets) == 0 && section.FilterSearchVariable == "" {
 						continue
 					}
+					if section.InlineEdit != nil {
+						edit := *section.InlineEdit
+						edit.Fields = slices.DeleteFunc(slices.Clone(edit.Fields), func(name string) bool {
+							f, visible := shown.Field(name)
+							return !visible || f.ReadOnly || !f.Writes(m.Roles[shown.App])
+						})
+						if _, offered := actions[edit.Action.Name]; !offered || len(edit.Fields) == 0 {
+							section.InlineEdit = nil
+						} else {
+							section.InlineEdit = &edit
+						}
+					}
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
 					if section.Widget == "inline-action" && len(section.Actions) != 1 {
 						continue

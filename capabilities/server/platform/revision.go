@@ -80,6 +80,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 			requires = append(requires, section.Query)
 		}
 		requires = append(requires, section.Actions...)
+		if section.InlineEdit != nil {
+			requires = append(requires, section.InlineEdit.Action)
+		}
 	}
 	slices.SortFunc(requires, compareRef)
 	requires = slices.Compact(requires)
@@ -503,6 +506,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 				required = append(required, section.Query)
 			}
 			required = append(required, section.Actions...)
+			if section.InlineEdit != nil {
+				required = append(required, section.InlineEdit.Action)
+			}
 		}
 	case AssetApp:
 		var app Application

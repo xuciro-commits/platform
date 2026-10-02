@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:dc3fbb29d251fd02",
+  "revision": "sha256:631ebefcf45162d3",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -125,6 +125,7 @@
       "source": "web/packages/app/src/sections.tsx",
       "exports": [
         "ComposedPage",
+        "tableEditableFields",
         "SectionView"
       ],
       "example": "ComposedPageExample",
@@ -1737,7 +1738,11 @@
         "Loading",
         "Empty",
         "Error",
-        "Selected"
+        "Selected",
+        "Staged edits"
+      ],
+      "constraints": [
+        "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution."
       ],
       "dependencies": [
         "ui/data-table",
@@ -2078,6 +2083,7 @@
       "Action conditions compare declared record paths or inputs with a fixed value or another compatible field; related reads and approval retries use the original action and current requester permissions.": "动作条件将已声明的记录路径或输入与固定值或兼容字段比较；关联读取和审批重试均走原动作及申请人当前权限。",
       "Agent run and execution chain": "智能体运行与执行链",
       "An inbox preview is not an approval or permission engine.": "收件箱预览不承担审批或权限引擎职责。",
+      "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution.": "可选 RecordEditPort 提供授权展示字段及绑定原记录版本的提交回调。失败修改仍保留暂存，调用方管理权限及执行。",
       "App Shell / Workspace": "应用外壳 / 工作区",
       "Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped.": "应用拥有标量声明和有界查询；页面通过类型化端口共享，只读窗口为成员作用域内的临时值。",
       "Application release workbench": "整应用发布工作台",
@@ -2230,6 +2236,7 @@
       "Shared": "共享",
       "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
       "Sized layout regions": "可配置尺寸的布局区域",
+      "Staged edits": "暂存修改",
       "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.": "工坊要求绑定对象和可见字段，动作来自当前成员的原动作目录。",
       "Submit an ad hoc form on Enter without reloading the page.": "按回车提交临时表单，不刷新页面。",
       "Submitting": "提交中",
@@ -2409,6 +2416,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -2660,7 +2668,9 @@
     ],
     "app/composed-page": [
       "web/packages/build/src/catalog.examples.tsx",
-      "web/packages/build/src/editor.tsx"
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/page-editor/widgets/TableInspector.tsx"
     ],
     "app/application-sessions": [
       "web/packages/build/src/editor.tsx",
@@ -2694,6 +2704,7 @@
     ],
     "ui/toggles": [
       "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx"
@@ -2883,6 +2894,7 @@
         "Option",
         "Options",
         "RecordChange",
+        "RecordEditPort",
         "RecordPageData",
         "RecordQuery",
         "RecordSource",

@@ -44,7 +44,13 @@ type Page struct {
 }
 
 // Section is one widget on a composed page, as someone lays it out.
+type InlineEdit struct {
+	Action string   `json:"action"`
+	Fields []string `json:"fields"`
+}
+
 type Section struct {
+	InlineEdit           *InlineEdit          `json:"inlineEdit,omitempty"`
 	Facets               []platform.PageFacet `json:"facets,omitempty"`
 	FilterSearchVariable string               `json:"filterSearchVariable,omitempty"`
 	ID                   string               `json:"id,omitempty"`
@@ -143,6 +149,9 @@ func descriptor(p Page) platform.Page {
 	for _, s := range p.Sections {
 		section := platform.Section{Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
 			Group: s.Group, Mark: s.Mark, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
+		if s.InlineEdit != nil {
+			section.InlineEdit = &platform.PageInlineEdit{Action: platform.AssetRef{App: strings.SplitN(s.InlineEdit.Action, ".", 2)[0], Kind: platform.AssetAction, Name: s.InlineEdit.Action}, Fields: slices.Clone(s.InlineEdit.Fields)}
+		}
 		if s.Function != nil {
 			section.Function = &platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: s.Function.Name},
 				SourceVersion: definitionVersion + ".function-" + fmt.Sprint(s.Function.Version)}

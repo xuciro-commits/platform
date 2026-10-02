@@ -42,6 +42,11 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	TableEditing struct {
+		MaxRows    int      `json:"maxRows"`
+		MaxFields  int      `json:"maxFields"`
+		FieldTypes []string `json:"fieldTypes"`
+	} `json:"tableEditing"`
 	Scope   string `json:"scope"`
 	Decimal struct {
 		MaxBytes int `json:"maxBytes"`

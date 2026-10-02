@@ -20,6 +20,8 @@
 
 页面设计器的“Page variables / 页面变量”可声明文本/布尔状态、常量和派生变量。将相邻组件组合为Tabs，在检查器填写标签标题；系统生成选中状态变量，可在变量面板设置初始标签。派生变量通过参数下拉选择其他变量或固定值，`Use tab identity / 使用标签页标识`可选择标签，无需手写ID。为组件或容器选择“Visible when / 显示条件”即可绑定布尔变量；状态随页面会话隔离，刷新恢复初始值。将变量模式改为“Resource output / 资源输出”，选择“Record selection / 记录选择”“Filter values / 筛选条件”或“Query window / 查询窗口”，再选择来源组件。派生算子“present / 有值”可用来控制详情或提示内容的显示；当前值区显示读取状态、记录引用及查询窗口范围。父选择更换、筛选和拒绝会清理失效选择，刷新恢复初始状态。查询窗口沿用来源表格的原绑定与权限；独立查询计划见下文，集合组合沿下述查询计划，聚合沿下述组件端口；跨页传值按下述页面接口声明。
 
+表格单元格编辑：在Table检查器打开“Enable cell editing / 启用单元格编辑”，选择“Original table edit action / 原表格编辑动作”，再选择展示字段中的可编辑字段。源ObjectTable开启enableInlineEdit时，导入窗口同样要求显式映射动作及字段。发布后点击“Edit cells / 编辑单元格”，双击或按Enter/F2编辑，Enter/Tab暂存，点击“Submit cell edits / 提交单元格修改”按行使用原编辑动作。失败行显示原因并保留修改和打开时的revision；版本冲突后取消再编辑以采用当前记录。最多64行、16字段，查询/成员/定义/拥有作用域变化清理草稿；预览可暂存但禁止提交。首profile只绑定标准字段patch，审批/自定义动作继续使用原动作表单。边界见[ADR-0046 §8.8](ADR/0046-application-studio-fusion.md#88-表格就地字段编辑-profile)。
+
 类型化分面：原Filter检查器选择“Facet source window / 分面来源窗口”，为checkbox/histogram字段绑定页面或同浮层的“Text selection set / 文本选择集合”状态，文本search字段绑定文本状态；可另设全文搜索状态。来源计划只提供授权选项和完整计数，表格消费自己的条件计划。查询条件“Skip a valid empty input / 跳过有效空输入”显式跳过空文本/集合；“Read text as an exact number / 将文本按精确数值读取”用于可选数字输入，非空无效值停止读取。外包FilterList默认分面与动态where条件沿此转换，原表格多选/内联编辑及未支持格式仍需显式修正。完整语义及预算见[ADR-0046 §6.23](ADR/0046-application-studio-fusion.md#623-动态筛选的原生类型化映射)。
 
 精确数值：变量的“Value type / 值类型”选择“Exact number / 精确数值”，填写普通十进制初值；字段失焦时规范化，不接指数、NaN或Infinity。原Input的“Input state variable / 输入状态变量”可绑定此类型；查询条件参数可选择数值变量，integer/decimal字段沿原成员读取执行精确阈值比较。派生变量可用decimal-add/subtract/less，页面接口和应用共享端口保留精确值。运行输入未完成时保留草稿并显示错误，依赖查询停止旧结果；修正后恢复读取。正式发布冻结声明，刷新回到初值，实例或作用域关闭清理。运行数值不修改业务字段，原存储和金额单位语义不因这一入口改变。

@@ -354,3 +354,5 @@ export {parseDecimal as parsePageDecimal,isDecimal as isPageDecimal,decimalDraft
 export type {DecimalValue as PageDecimalValue} from "./runtime/decimal";
 
 export {pageLayoutDiagnostics} from "./layout";
+
+export {tableEditableFields} from "./widgets/table-edit";

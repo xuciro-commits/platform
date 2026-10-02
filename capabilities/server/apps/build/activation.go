@@ -152,6 +152,9 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			for _, s := range pageDescriptor.Sections {
 				section := Section{Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Object: s.Object.Name, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection,
 					Fields: s.Fields, Group: s.Group, Mark: s.Mark, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Operation: s.Operation, Inputs: s.Inputs}
+				if s.InlineEdit != nil {
+					section.InlineEdit = &InlineEdit{Action: s.InlineEdit.Action.Name, Fields: slices.Clone(s.InlineEdit.Fields)}
+				}
 				if s.Query.Name != "" {
 					section.Query = s.Query.App + "." + s.Query.Name
 				}

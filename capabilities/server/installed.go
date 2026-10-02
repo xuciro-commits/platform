@@ -298,6 +298,19 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 		}
 
+		if s.InlineEdit != nil {
+			if p.Document == nil {
+				return fmt.Errorf("table editing requires a document")
+			}
+			owner := t.owner["action:"+s.InlineEdit.Action.Name]
+			if owner == nil {
+				return fmt.Errorf("table edit action is unavailable")
+			}
+			action, _ := owner.Manifest().Actions.Action(s.InlineEdit.Action.Name)
+			if err := s.CheckTableEdit(info, action); err != nil {
+				return err
+			}
+		}
 		parentType := p.Object.Name
 		if s.ParentSelection != "" {
 			parentType = selections[s.ParentSelection]

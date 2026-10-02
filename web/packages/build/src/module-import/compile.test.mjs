@@ -9,6 +9,12 @@ const {workshopMigrationCatalog}=await import("./catalog.ts");
 const nativeRegistry=JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))),profile=nativeRegistry.uiProfile;
 const bindings={objects:{Asset:"sample.note"},fields:{Asset:{id:"id",name:"note"}},actions:{finishAsset:"sample.note.close"},queries:{}};
 const target={object:"sample.note",profile,entities:[{app:"sample",type:"sample.note",fields:[{name:"note",type:"text"}]}],actions:[{schema:"sample.note.close",target:"sample.note"}]};
+test("table editing requires explicit original edit and displayed payload fields without rewriting source configuration",()=>{
+ const m=sourceModule();m.widgets.table.config.enableInlineEdit=true;const source=JSON.stringify(m),action={schema:"sample.note.edit",target:"sample.note",payload:[{name:"note"}]},mapped={...bindings,edits:{table:{action:action.schema,fields:["note"]}}},editing={...target,actions:[...target.actions,action]};
+ assert.equal(compileWorkshopModule(source,"page",bindings,editing).draft,undefined);const result=compileWorkshopModule(source,"page",mapped,editing);assert.equal(result.source,source);assert.deepEqual(result.draft.sections.find(s=>s.widget==="table").inlineEdit,{action:action.schema,fields:["note"]});
+ for(const edit of [{action:"sample.note.close",fields:["note"]},{action:action.schema,fields:["hidden"]},{action:action.schema,fields:[]}])assert.equal(compileWorkshopModule(source,"page",{...mapped,edits:{table:edit}},editing).draft,undefined);
+ assert.equal(compileWorkshopModule(source,"page",mapped,{...editing,actions:[{...action,needsApproval:true}]}).draft,undefined);
+});
 const sourceModule=()=>JSON.parse(readFileSync(new URL("./sample.workshop.json",import.meta.url),"utf8"));
 test("migration inventory tracks every pinned source type once and cannot confer runtime eligibility",()=>{
  assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,8);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");

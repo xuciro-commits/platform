@@ -87,7 +87,7 @@ export const entries: CatalogEntry[] = [
   asset("ui/notifications", "Notifications", "Show unread changes and let the caller mark a notification as read.", 3,
     "components/NotificationList.tsx", ["NotificationList"], "Notifications", { type: "NotificationItem", states: ["Empty", "Read", "Unread"] }),
   asset("ui/record-list", "Record list", "Browse a scoped entity source with search, sort and paging.", 3,
-    "records/Records.tsx", ["RecordList"], "RecordLists", { type: "RecordSource", states: ["Loading", "Empty", "Error", "Selected"], dependencies: ["ui/data-table", "ui/filter-bar"] }),
+    "records/Records.tsx", ["RecordList"], "RecordLists", { type: "RecordSource", states: ["Loading", "Empty", "Error", "Selected", "Staged edits"], constraints:["An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution."], dependencies: ["ui/data-table", "ui/filter-bar"] }),
   asset("ui/record-kanban", "Authorized lifecycle board", "Select bounded records in their original lifecycle lanes and emit declared move commands.", 3,
     "records/RecordKanban.tsx", ["RecordKanban"], "RecordKanbans", {tags:["kanban","work","records"],states:["Empty","Selected","Invalid"],dependencies:["ui/entity-card","ui/button","ui/input"],constraints:["The caller supplies authorized records, lifecycle states and actions. This component does not write state."]}),
   asset("ui/record-timeline", "Authorized record timeline", "Display a bounded record window as time points or intervals, grouped by an original resource field.", 3,

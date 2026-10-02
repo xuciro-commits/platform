@@ -1,5 +1,6 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "edit-binding":"Choose the original table edit action and its editable displayed fields.",
  "native-number-syntax":"Numeric input uses plain decimal text; exponent and invalid nonempty values stop the query.",
  "native-system-id":"The native table identity column and record heading display the system ID.",
  "native-search-scope":"Search uses the host searchable fields and current member permissions.",

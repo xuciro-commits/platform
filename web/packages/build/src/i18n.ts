@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Choose the original table edit action and its editable displayed fields.": "请选择原表格编辑动作及其可编辑展示字段。",
+ "Enable cell editing": "启用单元格编辑",
+ "Original table edit action": "原表格编辑动作",
+ "Choose the original edit action": "选择原编辑动作",
+ "Editable table fields": "表格可编辑字段",
+ "Cell edits use the original field patch action and opened record revision. Failed rows remain staged.": "单元格修改使用原字段编辑动作及打开记录时的版本，失败行保留暂存值。",
+ "Map table edit action {table}": "映射表格编辑动作 {table}",
+
  "Numeric input uses plain decimal text; exponent and invalid nonempty values stop the query.": "数值输入使用普通十进制文本，指数及非空无效值停止查询。",
  "The native table identity column and record heading display the system ID.": "系统 ID 由原生表格标识列及记录标题展示。",
  "Search uses the host searchable fields and current member permissions.": "搜索使用宿主声明的可搜索字段及当前成员权限。",
