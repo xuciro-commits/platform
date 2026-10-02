@@ -32,9 +32,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	submit(build.ObjectType, "O", "create", map[string]any{"name": "note", "title": "Notes", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
+	submit(build.ObjectType, "O", "create", map[string]any{"name": "note", "title": "Notes", "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
 	submit(build.ObjectType, "O", "publish", map[string]any{})
-	submit(build.ObjectType, "private-object", "create", map[string]any{"name": "private", "title": "Private", "access": []build.Access{{Role: build.User, Read: "none"}}, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "parent", Title: "Parent", Type: "reference", Ref: "build.note", Inverse: "privateitems"}}})
+	submit(build.ObjectType, "private-object", "create", map[string]any{"name": "private", "title": "Private", "states": []build.State{{Name: "open", Title: "Private open"}, {Name: "done", Title: "Private done"}}, "access": []build.Access{{Role: build.User, Read: "none"}}, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "parent", Title: "Parent", Type: "reference", Ref: "build.note", Inverse: "privateitems"}}})
 	submit(build.ObjectType, "private-object", "publish", map[string]any{})
 	submit(build.ObjectType, "child-object", "create", map[string]any{"name": "child", "title": "Children", "fields": []build.Field{{Name: "parent", Title: "Parent", Type: "reference", Ref: "build.note", Inverse: "children"}, {Name: "hidden", Title: "Hidden parent", Type: "reference", Ref: "build.note", Inverse: "hiddenchildren", Read: []string{build.Builder}}}})
 	submit(build.ObjectType, "child-object", "publish", map[string]any{})
@@ -74,6 +74,17 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	root.Children = append(root.Children, "links")
 	doc.Nodes[doc.Root] = root
 	sections = append(sections, build.Section{ID: "links", Widget: "record-links", ConfigVersion: 1, RecordVariable: "active", RecordLinks: []platform.PageRecordLink{{Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.child"}, Field: "parent", Title: "Public children"}, {Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.child"}, Field: "hidden", Title: "Hidden children"}, {Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.private"}, Field: "parent", Title: "Private children"}}})
+	for _, id := range []string{"status", "privateStatus"} {
+		doc.Nodes[id] = platform.PageLayoutNode{Kind: "widget", Section: id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, id)
+		doc.Nodes[doc.Root] = root
+		object := ""
+		if id == "privateStatus" {
+			object = "build.private"
+		}
+		sections = append(sections, build.Section{ID: id, Widget: "status-tracker", ConfigVersion: 1, Object: object, StatusTracker: &platform.PageStatusTracker{Field: "state", Stages: []string{"done", "open"}}})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -89,6 +100,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[2].RecordView = &platform.PageRecordView{Tabs: []string{"properties"}}
 	sections[3].Buttons[0].Title = "Later draft title"
 	sections[5].RecordLinks[0].Title = "Later links"
+	sections[6].StatusTracker = &platform.PageStatusTracker{Field: "state", Stages: []string{"open"}}
 	doc.Events = nil
 	submit(build.PageType, "P", "edit", map[string]any{"sections": sections, "document": doc})
 	if _, err = tn.ActivateRelease(builder, preview.CandidateID, "activate", at); err != nil {
@@ -105,7 +117,26 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					if member.ID == reader.ID {
 						wantGroups = 1
 					}
-					if len(d.Page.Sections[len(d.Page.Sections)-1].RecordLinks) != wantGroups || d.Page.Sections[len(d.Page.Sections)-1].RecordLinks[0].Title != "Public children" {
+					var links platform.Section
+					status, privateStatus := false, false
+					for _, section := range d.Page.Sections {
+						if section.ID == "links" {
+							links = section
+						}
+						if section.ID == "status" {
+							status = true
+							if len(section.StatusTracker.Stages) != 2 || section.StatusTracker.Stages[0] != "done" {
+								t.Fatal("frozen status stages changed")
+							}
+						}
+						if section.ID == "privateStatus" {
+							privateStatus = true
+						}
+					}
+					if !status || privateStatus != (member.ID == builder.ID) {
+						t.Fatal("status tracker member projection changed")
+					}
+					if len(links.RecordLinks) != wantGroups || links.RecordLinks[0].Title != "Public children" {
 						t.Fatal("frozen links changed or hidden groups escaped")
 					}
 					wantControls := 3

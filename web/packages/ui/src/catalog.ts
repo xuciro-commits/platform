@@ -102,7 +102,7 @@ export const entries: CatalogEntry[] = [
     "records/Records.tsx", ["Tasks", "Inbox"], "TaskInbox", { type: "InboxTask", tags: ["approval", "work"], states: ["Empty", "Pending"],
       dependencies: ["ui/button", "ui/status"], constraints: ["An inbox preview is not an approval or permission engine."] }),
   asset("ui/lifecycle", "Lifecycle status bar", "Display declared record states and caller-allowed transitions.", 3,
-    "records/Records.tsx", ["StatusBar"], "Lifecycle", { type: "Lifecycle", dependencies: ["ui/button"],
+    "records/Records.tsx", ["StatusBar", "RecordStatus"], "Lifecycle", { type: "Lifecycle", dependencies: ["ui/button"],
       constraints: ["Only the canonical action owner may authorize and apply a transition."] }),
   asset("ui/chart", "Chart", "Render a visualization spec using inline values or a scoped aggregate source.", 3,
     "charts/Chart.tsx", ["Chart"], "Charts", { type: "ChartSpec", tags: ["chart", "kpi", "aggregate"], states: ["Loading", "Empty", "Error", "Ready"] }),

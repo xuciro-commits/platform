@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Status tracker": "状态跟踪器",
+ "Lifecycle field": "生命周期字段",
+ "Displayed stages": "显示的阶段",
+ "Choose the original lifecycle field": "选择原生命周期字段",
+ "Choose an original lifecycle state": "选择原生命周期状态",
+ "Map lifecycle stages {widget}": "映射生命周期阶段 {widget}",
+ "Map lifecycle state {state}": "映射生命周期状态 {state}",
+ "Choose an original lifecycle field and valid stages before saving.": "保存前请选择原生命周期字段和有效阶段。",
+ "The current state comes from the original record. Stage order does not prove past completion or run a transition.": "当前状态来自原记录。阶段顺序不能证明过去的完成情况，也不执行转换。",
+ "Status trackers need an original lifecycle field and bounded explicit stages.": "状态跟踪器需要原生命周期字段和显式有界阶段。",
+ "Map every displayed stage to a unique original lifecycle state.": "将每个显示阶段映射到唯一的原生命周期状态。",
+ "Stage labels use original lifecycle metadata. Only the current state is highlighted; array order does not prove completed history or grant transitions.": "阶段名称使用原生命周期元数据。仅高亮当前状态；数组顺序不能证明完成历史或授予转换权限。",
+
  "Give every group button a bounded title and its own click binding.": "为每个组内按钮提供限定长度的标题及其独立点击绑定。",
  "Button group": "按钮组",
  "Record links": "关联记录",

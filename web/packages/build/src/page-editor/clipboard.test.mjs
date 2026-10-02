@@ -139,3 +139,7 @@ test("standalone record links retain their group bindings while copies consume t
  const current=fixture();const detail=current.sections.find(s=>s.id==="detail");detail.widget="record-links";detail.recordLinks=[{object:{app:"sample",kind:"object",name:"sample.child"},field:"parent",title:"Children"}];delete detail.fields;
  const clip=copyLayout(current,"group",object.name).value,result=pasteLayout(current,clip,"root",object.name,limits).value;assert.ok(result);const copy=result.draft.sections.slice(current.sections.length).find(s=>s.widget==="record-links");assert.deepEqual(copy.recordLinks,detail.recordLinks);assert.notEqual(copy.recordVariable,detail.recordVariable);assert.notEqual(result.draft.document.variables[copy.recordVariable].source.section,"table");
 });
+
+test("status trackers preserve original field and ordered stages while copied inputs follow their own record producer",()=>{
+ const current=fixture(),detail=current.sections.find(s=>s.id==="detail");detail.widget="status-tracker";detail.statusTracker={field:"state",stages:["done","open"]};delete detail.fields;const clip=copyLayout(current,"group",object.name).value,result=pasteLayout(current,clip,"root",object.name,limits).value;assert.ok(result);const copy=result.draft.sections.slice(current.sections.length).find(s=>s.widget==="status-tracker");assert.deepEqual(copy.statusTracker,detail.statusTracker);assert.notEqual(copy.recordVariable,detail.recordVariable);assert.notEqual(result.draft.document.variables[copy.recordVariable].source.section,"table");
+});

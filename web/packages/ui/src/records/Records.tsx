@@ -180,15 +180,15 @@ const lifecycleField = (common: { label: string }, l: Lifecycle): FieldType<stri
 });
 
 /** The lifecycle's states, the current one marked, and the transitions the caller may take from it. */
-export function StatusBar({ lifecycle, state, can, onTransition }: {
-  lifecycle: Lifecycle; state: string; can?: (schema: string) => boolean; onTransition?: (schema: string, title: string) => void;
+export function StatusBar({ lifecycle, state, can, onTransition, tracker=false }: {
+  tracker?:boolean; lifecycle: Lifecycle; state: string; can?: (schema: string) => boolean; onTransition?: (schema: string, title: string) => void;
 }) {
   const open = lifecycle.transitions.filter((t) => t.from.includes(state) && (!can || can(t.schema)));
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <ol className="flex overflow-hidden rounded-md border border-border text-xs">
+      <ol aria-label={tracker?t("Lifecycle stages"):undefined} className={tracker?"flex min-w-0 flex-wrap items-center gap-2 text-xs":"flex overflow-hidden rounded-md border border-border text-xs"}>
         {lifecycle.states.map((s) => (
-          <li key={s.name} className={s.name === state ? "bg-primary px-2 py-1 font-medium text-primary-foreground" : "px-2 py-1 text-muted"}>{s.title}</li>
+          <li key={s.name} aria-current={s.name===state?"step":undefined} className={tracker?"flex min-w-0 items-center gap-1 rounded-md border border-border px-2 py-1 "+(s.name===state?"bg-primary font-medium text-primary-foreground":"text-muted"):(s.name === state ? "bg-primary px-2 py-1 font-medium text-primary-foreground" : "px-2 py-1 text-muted")}>{tracker&&<span aria-hidden className={"h-3 w-3 shrink-0 rounded-full border "+(s.name===state?"bg-primary-foreground":"border-border")}/>}<span className="break-words">{s.title}</span></li>
         ))}
       </ol>
       {onTransition && open.map((t) => <Button key={t.schema} size="sm" onClick={() => onTransition(t.schema, t.title)}>{t.title}</Button>)}
@@ -383,8 +383,8 @@ export function RecordHistory({ info, history = [], heading = true }: { info: En
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false }: {
-  detailPresentation?:Api.PageDetailPresentation;recordTabs?:readonly string[];recordLinks?:readonly Api.PageRecordLink[];linksOnly?:boolean;
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs,recordLinks,linksOnly=false,statusTracker,statusOnly=false }: {
+  detailPresentation?:Api.PageDetailPresentation;recordTabs?:readonly string[];recordLinks?:readonly Api.PageRecordLink[];linksOnly?:boolean;statusTracker?:Api.PageStatusTracker;statusOnly?:boolean;
   /** App API composes declared record-specific work without another read path. */
   work?: (view: RecordView) => ReactNode;
   /** Answering the open tasks about the record from its page; without it they are listed only. */
@@ -432,6 +432,13 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   }
   if (!info || !entity || !view) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const r = view.record;
+  if(statusOnly){
+   const l=info.lifecycle,value=statusTracker,field=info.fields.find(f=>f.name===value?.field);
+   if(!l||!value||value.field!==l.field||!field||!value.stages.length||value.stages.some(name=>!l.states.some(s=>s.name===name))||typeof r[value.field]!=="string")return <p role="alert" className="text-sm text-muted">{t("Lifecycle status is unavailable.")}</p>;
+   const states=value.stages.map(name=>l.states.find(s=>s.name===name)!);
+   return <div className="grid min-w-0 gap-2"><StatusBar lifecycle={{...l,states}} state={r[value.field] as string} tracker/>{!value.stages.includes(r[value.field] as string)&&<p className="text-xs text-muted">{t("Current state is outside the displayed stages.")}</p>}</div>;
+  }
+
   const header=(<header className="flex flex-wrap items-center gap-2">
         <h1 className="min-w-0 break-words text-lg font-semibold">{displayOf(info, r)}</h1>
         <span className="min-w-0 break-words font-mono text-xs text-muted">{info.title} · {r.id} {t("· rev")} {r.revision}</span>
@@ -499,6 +506,11 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
 /** A standalone projection of the same authorized record view and related windows. */
 export function RecordLinks({source,type,id,groups,onOpen}:{source:RecordSource;type:string;id:string;groups:readonly Api.PageRecordLink[];onOpen?:(type:string,r:EntityRecord)=>void}){
  return <RecordPage source={source} type={type} id={id} recordLinks={groups} onOpen={onOpen} linksOnly/>;
+}
+
+/** The caller declares lifecycle presentation; this component never emits transitions. */
+export function RecordStatus({source,type,id,config}:{source:RecordSource;type:string;id:string;config?:Api.PageStatusTracker}){
+ return <RecordPage source={source} type={type} id={id} statusTracker={config} statusOnly/>;
 }
 
 type Row = Record<string, unknown>;

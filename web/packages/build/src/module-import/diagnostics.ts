@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "status-tracker-profile":"Status trackers need an original lifecycle field and bounded explicit stages.",
+ "status-tracker-binding":"Map every displayed stage to a unique original lifecycle state.",
+ "native-lifecycle-status":"Stage labels use original lifecycle metadata. Only the current state is highlighted; array order does not prove completed history or grant transitions.",
  "record-links-profile":"Related lists need explicit bounded incoming groups without a heterogeneous output variable.",
  "record-links-binding":"Map every related group to a unique declared incoming reference on the selected record object.",
  "native-related-navigation":"Source related groups are explicitly remapped to original authorized reference windows; source linkTypes and linkTypeApiNames differ. Rows open in the workspace record view.",

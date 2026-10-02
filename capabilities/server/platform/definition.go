@@ -104,6 +104,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	StatusTracker        *PageStatusTracker      `json:"statusTracker,omitempty"`
 	RecordLinks          []PageRecordLink        `json:"recordLinks,omitempty"`
 	Buttons              []PageButton            `json:"buttons,omitempty"`
 	RecordView           *PageRecordView         `json:"recordView,omitempty"`

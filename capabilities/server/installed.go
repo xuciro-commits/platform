@@ -446,6 +446,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckTimeline(info); err != nil {
 				return err
 			}
+		case "status-tracker":
+			if err := s.CheckStatusTracker(info); err != nil {
+				return err
+			}
 		case "record-links":
 			if p.Document == nil {
 				return fmt.Errorf("record links require a document")

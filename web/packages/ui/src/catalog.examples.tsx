@@ -5,7 +5,7 @@ import {
   FacetChoices,Button,ButtonGroup, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
-  RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
@@ -193,7 +193,7 @@ export function TaskInbox() {
 }
 export function Lifecycle() {
   const [state, setState] = useState("open");
-  return <StatusBar lifecycle={lifecycle} state={state} can={(schema) => schema === "demo.finish"} onTransition={() => setState("done")} />;
+  return <div className="grid gap-3"><StatusBar lifecycle={lifecycle} state={state} can={(schema) => schema === "demo.finish"} onTransition={() => setState("done")} /><RecordStatus source={demoSource} type={demoInfo.type} id="DEMO-001" config={{field:"state",stages:["open","done"]}}/></div>;
 }
 const chart: ChartSpec = { title: t("Quantity by group"), data: { values: [{ group: "Alpha", quantity: 12 }, { group: "Beta", quantity: 24 }] }, mark: "bar", encoding: { x: { field: "group", type: "nominal" }, y: { field: "quantity", type: "quantitative", aggregate: "sum" } } };
 export function Charts() { return <Chart spec={chart} height={240} />; }

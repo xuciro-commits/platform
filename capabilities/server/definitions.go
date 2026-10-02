@@ -440,6 +440,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.CheckTimeline(shown) != nil {
 						continue
 					}
+					if section.CheckStatusTracker(shown) != nil {
+						continue
+					}
 					if section.CheckKanban(shown) != nil {
 						continue
 					}

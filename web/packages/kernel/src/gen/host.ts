@@ -1059,6 +1059,11 @@ export type PageResourceSource = {
   node?: string;
 };
 
+export type PageStatusTracker = {
+  field: string;
+  stages: string[];
+};
+
 export type PageTableColumn = {
   field: string;
   title?: string;
@@ -1368,6 +1373,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  statusTracker?: PageStatusTracker;
   recordLinks?: PageRecordLink[];
   buttons?: PageButton[];
   recordView?: PageRecordView;
@@ -1694,7 +1700,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.38",
+  "uiProfile": "platform.page.v2.39",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2877,6 +2883,61 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "status-tracker",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.39",
+      "title": "Status tracker",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "selection",
+        "record-variable"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -2917,7 +2978,8 @@ export const pageUIManifest = {
     "platform.page.v2.35",
     "platform.page.v2.36",
     "platform.page.v2.37",
-    "platform.page.v2.38"
+    "platform.page.v2.38",
+    "platform.page.v2.39"
   ],
   "runtime": {
     "scope": "page",
@@ -3043,7 +3105,8 @@ export const pageUIManifest = {
         "tasks",
         "inline-action",
         "record-view",
-        "record-links"
+        "record-links",
+        "status-tracker"
       ],
       "presentationWidgets": [
         "text",
@@ -3241,6 +3304,10 @@ export const pageUIManifest = {
       "requiredUIProfile": "platform.page.v2.38",
       "maxGroups": 16,
       "maxTitleBytes": 256
+    },
+    "statusTracker": {
+      "requiredUIProfile": "platform.page.v2.39",
+      "maxStages": 32
     }
   },
   "layout": {

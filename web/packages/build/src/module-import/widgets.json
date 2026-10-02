@@ -226,9 +226,9 @@
       "sourceType": "StatusTracker",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "status-tracker",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Stepper",
