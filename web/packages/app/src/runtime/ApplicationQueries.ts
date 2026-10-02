@@ -1,3 +1,4 @@
+import {usePageCounts} from "./PageCounts";
 import {useEffect} from "react";
 import {pageUIManifest,type Api} from "@platform/kernel";
 import {useHost,findDefinition} from "../index";
@@ -13,6 +14,7 @@ export function useApplicationQueries(session:ApplicationSession|undefined, valu
  const named=(plan:Api.PageQuery)=>plan.query?findDefinition(definitions,plan.query.ref):undefined;
  const base=compileQueryPlans(plans,variables,()=>values,type=>source.entity(type),named,pageUIManifest.runtime.query,[],()=>true,(id,result)=>snapshot?.views[planKey(id)]?.base===result.signature?snapshot.views[planKey(id)]:undefined);
  const compiled=base.map(([id,result])=>[id,queryView(plans[id]!,result,result.status==="value"&&snapshot?.views[planKey(id)]?.base===result.signature?snapshot.views[planKey(id)]:undefined,source.entity(plans[id]!.object.name),named(plans[id]!),pageUIManifest.runtime.query)] as const);
+ const counts=usePageCounts(variables,compiled,reads,{queries:plans,nodes:{}});
  const key=JSON.stringify(compiled);
  useEffect(()=>{
   if(!reads||session?.retired)return;
@@ -34,5 +36,5 @@ export function useApplicationQueries(session:ApplicationSession|undefined, valu
    onChange:(change:QueryView)=>{const initial=base.find(([key])=>key===queryID)?.[1];if(!reads||initial?.status!=="value")return;const next=queryView(plan,initial,{...(snapshot?.views[planKey(queryID)]?.base===initial.signature?snapshot.views[planKey(queryID)]:{}),...change},source.entity(plan.object.name),named(plan),pageUIManifest.runtime.query);if(next.status==="value")reads.setQueryView(planKey(queryID),initial.signature,change);},
   };
  }
- return {resources,windows,signatures,retry:(id:string)=>{const queryID=variables[id]?.source?.query;const result=base.find(([key])=>key===queryID)?.[1];if(queryID&&result?.status==="value")reads?.setQueryView(planKey(queryID),result.signature,{});}};
+ return {resources:{...resources,...counts},windows,signatures,retry:(id:string)=>{const queryID=variables[id]?.source?.query;const result=base.find(([key])=>key===queryID)?.[1];if(queryID&&result?.status==="value"){reads?.resetQueries([planKey(queryID)]);reads?.setQueryView(planKey(queryID),result.signature,{});}}};
 }

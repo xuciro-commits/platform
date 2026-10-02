@@ -75,7 +75,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			if v.Mode == "property" {
 				return dependsOnPlan(v.Source.Variable, seen)
 			}
-			if v.Source.Kind == "plan" {
+			if v.Source.Kind == "plan" || v.Mode == "aggregate" {
 				return true
 			}
 			if v.Source.Section != "" {
@@ -177,13 +177,32 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 	if total > c.MaxTotalLimit {
 		return fmt.Errorf("page query plan window budget exceeded")
 	}
+	aggregates, expanded := 0, 0
+	seenCounts := map[string]bool{}
 	for id, v := range d.Variables {
-		if v.Source != nil && v.Source.Kind == "plan" {
+		if v.Mode == "aggregate" {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.21") {
+				return fmt.Errorf("count variable requires v2.21")
+			}
+			aggregates++
+			if v.Source != nil && !seenCounts[v.Source.Query] {
+				seenCounts[v.Source.Query] = true
+				factor, err := d.loopFactor(d.Queries[v.Source.Query].ItemOwner)
+				if err != nil {
+					return err
+				}
+				expanded += factor
+			}
+		}
+		if v.Source != nil && (v.Source.Kind == "plan" || v.Mode == "aggregate") {
 			q, ok := d.Queries[v.Source.Query]
 			if !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") || !(q.ItemOwner != "" && v.Scope == "loop-item" && v.Owner == q.ItemOwner || q.ItemOwner == "" && (q.Owner == "" && v.Scope == inputScope || q.Owner != "" && v.Scope == "overlay" && v.Owner == q.Owner)) {
 				return fmt.Errorf("page variable %s needs an existing query plan", id)
 			}
 		}
+	}
+	if aggregates > pageWidgets.Runtime.Aggregate.MaxVariables || expanded > pageWidgets.Runtime.Aggregate.MaxExpandedReads {
+		return fmt.Errorf("count variable read budget exceeded")
 	}
 	return nil
 }

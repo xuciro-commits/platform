@@ -572,6 +572,10 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					_, parent := application.Variables[v.Source.Variable]
 					missing = !ok || !parent || application.QueryPage().CheckPropertySchema(v, info) != nil
 				}
+				if v.Mode == "aggregate" && v.Source != nil {
+					_, ok := application.Queries[v.Source.Query]
+					missing = !ok
+				}
 				if v.Mode == "resource" && v.Source != nil {
 					if (v.Source.Kind == "record" || v.Source.Kind == "filter") && v.Source.Object != nil {
 						_, ok := entities[v.Source.Object.Name]

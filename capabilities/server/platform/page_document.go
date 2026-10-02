@@ -126,7 +126,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 	}
 	for id, variable := range d.Variables {
-		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || variable.Source.Kind == "plan" || variable.Source.Kind == "property") {
+		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || (variable.Source.Kind == "plan" || variable.Mode == "aggregate") || variable.Source.Kind == "property") {
 			continue
 		}
 		found := false
@@ -295,7 +295,7 @@ func (d *PageDocument) Check(sections []Section) error {
 					}
 				}
 			}
-			if variable.Source.Kind == "plan" {
+			if variable.Source.Kind == "plan" || variable.Mode == "aggregate" {
 				dependencies = append(dependencies, d.Queries[variable.Source.Query].Variables()...)
 			}
 		}
@@ -333,7 +333,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 	}
 	variables := map[string]PageVariable{}
 	for id, variable := range d.Variables {
-		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || variable.Source.Kind == "plan" || variable.Source.Kind == "property") || allowed[variable.Source.Section] {
+		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || (variable.Source.Kind == "plan" || variable.Mode == "aggregate") || variable.Source.Kind == "property") || allowed[variable.Source.Section] {
 			variables[id] = variable
 		}
 	}
@@ -361,7 +361,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 					continue
 				}
 			}
-			if variable.Source != nil && variable.Source.Kind == "plan" {
+			if variable.Source != nil && (variable.Source.Kind == "plan" || variable.Mode == "aggregate") {
 				if _, ok := queries[variable.Source.Query]; !ok {
 					delete(variables, id)
 					changed = true

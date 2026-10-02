@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Count read budget exceeded.": "计数读取超出预算。",
+  "Count result is invalid.": "计数结果无效。",
+  "Aggregate needs only a count query source": "聚合只需声明计数查询来源",
+
  "Item query needs its typed parent record.": "条目查询需要类型化父记录。",
  "Choose a parent-owned loop query.": "请选择父循环拥有的查询。",
   "A set plan requires its source graph.": "集合计划需要来源图。",

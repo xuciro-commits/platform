@@ -546,7 +546,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
       const collection = initialVariables[node.loop.collection]?.source, queryID=variablePlan(page,node.loop.collection);
       const shared=applicationVariable(node.loop.collection);const queryKey = shared?`application/${shared}`:queryID!==undefined?planKey(queryID):collection?.section??"";
-      const body = <LoopRuntime queryKey={queryKey} expectedSignature={shared?application.signatures[shared]??"":queryID!==undefined ? queries.signatures[queryID]??"" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
+      const body = <LoopRuntime page={page} queryKey={queryKey} expectedSignature={shared?application.signatures[shared]??"":queryID!==undefined ? queries.signatures[queryID]??"" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
         {(item) => <>{node.children?.map((child) => <div key={child} className="min-w-0">{renderNode(child, next, item, overlay)}</div>)}</>}
       </LoopRuntime>;
       return wrapLayout ? wrapLayout(id, node, body) : body;
@@ -570,14 +570,14 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     return wrapLayout ? wrapLayout(id, node, body) : body;
   };
   const queryErrors=(owner?:string)=>Object.entries(page.document?.queries??{}).filter(([,plan])=>(plan.owner??"")===(owner??"")).map(([id,plan])=>{
-    const result=Object.entries(initialVariables).find(([,v])=>v.source?.kind==="plan"&&v.source.query===id),status=result&&queries.resources[result[0]];
+    const result=Object.entries(initialVariables).find(([,v])=>(v.source?.kind==="plan"||v.mode==="aggregate")&&v.source?.query===id),status=result&&queries.resources[result[0]];
     return status?.status==="error"?<Panel key={id} role="alert" className="flex flex-wrap items-center gap-2">{plan.title||id}: {t(status.code)}<Button onClick={()=>queries.retry(id)}>{t("Retry query")}</Button></Panel>:null;
   });
   return (
     <div ref={pageFocus} tabIndex={-1} className="@container/page grid min-w-0 grid-cols-1 gap-3 outline-none">
       {notice}
       {queryErrors(editingRoot ? overlayForRoot(editingRoot) : undefined)}
-      {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="object-set"&&!application.error).map(([id,result])=><Panel key={id} role="alert" className="flex gap-2">{result.status==="error"?t(result.code):""}<Button onClick={()=>application.retry(id)}>{t("Retry query")}</Button></Panel>)}
+      {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&["object-set","decimal"].includes(initialVariables[id]?.type??"")&&!application.error).map(([id,result])=><Panel key={id} role="alert" className="flex gap-2">{result.status==="error"?t(result.code):""}<Button onClick={()=>application.retry(id)}>{t("Retry query")}</Button></Panel>)}
       {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="record"&&!application.error).map(([id,result])=><Panel key={id} role="alert">{result.status==="error"?t(result.code):""}</Panel>)}
       {application.error && <Panel role="alert">{t(application.error)}</Panel>}
       {(incoming.error || navigation.error) && <Panel role="alert">{t(incoming.error ?? navigation.error!)}</Panel>}

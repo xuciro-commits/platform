@@ -77,6 +77,11 @@ type pageRuntimeContract struct {
 		RecordWidgets       []string `json:"recordWidgets"`
 		PresentationWidgets []string `json:"presentationWidgets"`
 	} `json:"loop"`
+	Aggregate struct {
+		Source           string `json:"source"`
+		MaxVariables     int    `json:"maxVariables"`
+		MaxExpandedReads int    `json:"maxExpandedReads"`
+	} `json:"aggregate"`
 	Query struct {
 		Set struct {
 			Operations     []string `json:"operations"`
@@ -167,7 +172,7 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Writable && v.Mode != contract.Application.BindingMode {
 			return fail("only shared bindings declare writable")
 		}
-		if v.Mode != "resource" && v.Mode != "property" && v.Mode != contract.Application.BindingMode && v.Source != nil {
+		if v.Mode != "resource" && v.Mode != "property" && v.Mode != "aggregate" && v.Mode != contract.Application.BindingMode && v.Source != nil {
 			return fail("only resource or shared variables may declare a source")
 		}
 		if v.Source != nil && v.Source.Object != nil && !((v.Mode == "shared" && (v.Type == "object-set" || v.Type == "record" || v.Type == "filter")) || (v.Mode == "resource" && v.Scope == "application" && (v.Type == "record" || v.Type == "filter")) || v.Mode == "property") {
@@ -180,6 +185,10 @@ func (d *PageDocument) CheckVariables() error {
 			return fail("only a property source declares a field")
 		}
 		switch v.Mode {
+		case "aggregate":
+			if v.Type != "decimal" || v.Source == nil || v.Source.Kind != contract.Aggregate.Source || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) > 0 {
+				return fail("aggregate needs only a count query source")
+			}
 		case "property":
 			if v.Source == nil || v.Source.Kind != "property" || !pageNodeID.MatchString(v.Source.Variable) || !pageNodeID.MatchString(v.Source.Field) || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || len(v.Source.Fields) > 0 || len(v.Initial) > 0 || v.Expression != nil || !slices.Contains([]string{"string", "boolean", "decimal"}, v.Type) {
 				return fail("property needs a typed record and field source")

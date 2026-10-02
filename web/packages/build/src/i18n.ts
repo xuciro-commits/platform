@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Complete-set count": "完整集合计数",
+  "Count query source": "计数查询来源",
+  "Counts the full permitted set; sorting and paging do not limit it.": "统计完整授权集合；排序和分页不会截断计数。",
+
  "Loop item": "循环条目",
  "Aggregate query set": "聚合集合来源",
  "Use the widget's own aggregate": "使用组件自身聚合",

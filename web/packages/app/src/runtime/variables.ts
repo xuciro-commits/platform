@@ -31,11 +31,13 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (variable.scope === contract.overlay.scope && (!(contract.overlay.valueTypes as readonly string[]).includes(variable.type) || !(contract.overlay.modes as readonly string[]).includes(variable.mode))) fail(id, "Overlay variable needs a supported local value or resource");
     if (variable.scope === contract.application.scope && !(contract.application.valueTypes as readonly string[]).includes(variable.type)) fail(id,"Application variable needs a supported scalar or resource");
     if (variable.writable && variable.mode !== "shared") fail(id,"Only shared bindings declare writable");
-    if (variable.mode !== "resource" && variable.mode !== "property" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
+    if (variable.mode !== "resource" && variable.mode !== "property" && variable.mode !== "aggregate" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
     if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter"].includes(variable.type))||variable.mode==="property"))fail(id,"Only shared windows declare an object requirement");
     if(variable.source?.fields?.length&&!(variable.scope==="application"&&variable.mode==="resource"&&variable.type==="filter"))fail(id,"Only an application filter declares fields");
     if(variable.source?.field&&variable.mode!=="property")fail(id,"Only a property source declares a field");
-    if(variable.mode==="property") {
+    if(variable.mode==="aggregate") {
+      const source=variable.source;if(variable.type!=="decimal"||!source||source.kind!==contract.aggregate.source||!validID.test(source.query??"")||source.section||source.node||source.variable||variable.initial!==undefined||variable.expression)fail(id,"Aggregate needs only a count query source");
+    } else if(variable.mode==="property") {
       const source=variable.source,parent=variables[source?.variable??""];if(!source||source.kind!=="property"||!validID.test(source.variable??"")||!validID.test(source.field??"")||!source.object||source.object.kind!=="object"||!source.object.app||!source.object.name||source.section||source.node||source.query||source.fields?.length||variable.expression||variable.initial!==undefined||!["string","boolean","decimal"].includes(variable.type))fail(id,"Property needs a typed record and field source");
       if(parent?.scope==="loop-item"&&(variable.scope!=="loop-item"||parent.owner!==variable.owner)||parent?.scope==="overlay"&&(variable.scope!=="overlay"||parent.owner!==variable.owner))fail(id,"Property source escapes its scope");if(visit(source?.variable??"")!=="record")fail(id,"Property source must be a record");
     } else if (variable.mode === "shared") {
@@ -93,7 +95,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
     if (variable.scope === contract.loop.scope && variable.owner !== owner || variable.scope === contract.overlay.scope && variable.owner !== overlay) { result[id] = { status: "empty" }; continue; }
     if(variable.scope!==contract.loop.scope&&inherited?.[id]) { result[id]=inherited[id]!;continue; }
     if(variable.mode==="property") {const parent=result[variable.source!.variable!];if(!parent||parent.status!=="value"){result[id]=parent?.status==="error"?{status:"error",code:"Property source read failed"}:parent??{status:"empty"};continue;}const value=parent.value;if(typeof value!=="object"||value.kind!=="record"||value.reference.object!==variable.source?.object?.name){result[id]={status:"error",code:"Property record object is unavailable"};continue;}const read=property?.(value.reference,variable.source!.field!,variable.type)??{status:"error" as const,code:"Property value is unavailable."};result[id]=read.status==="value"&&valueType(read.value,contract)!==variable.type?{status:"error",code:"Property value type mismatch"}:read;continue;}
-    if (variable.mode === "input" || variable.mode === "shared") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
+    if (variable.mode === "input" || variable.mode === "shared" || variable.mode === "aggregate") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
     if (variable.mode === "resource") {
       const value = resources[id] ?? { status: "empty" };
       result[id] = (value.status === "value" || value.status === "empty") && value.value !== undefined && (value.value === null || typeof value.value !== "object" || value.value.kind !== variable.type)

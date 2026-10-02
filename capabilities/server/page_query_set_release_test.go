@@ -52,6 +52,8 @@ func TestPageQuerySetsFreezeReplayAndPruneMembers(t *testing.T) {
 		"hasPrivate":    {Scope: "page", Type: "boolean", Mode: "derived", Expression: &platform.PageExpression{Op: "present", Args: []platform.PageValue{{Variable: "privateWindow"}}}},
 	}, Queries: plans}
 
+	document.Variables["count"] = platform.PageVariable{Scope: "page", Type: "decimal", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "count", Query: "read"}}
+	document.Variables["privateCount"] = platform.PageVariable{Scope: "page", Type: "decimal", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "count", Query: "private"}}
 	root := document.Nodes["root"]
 	root.Children = append(root.Children, "metric", "chart", "privateChart")
 	document.Nodes["root"] = root
@@ -61,7 +63,7 @@ func TestPageQuerySetsFreezeReplayAndPruneMembers(t *testing.T) {
 
 	submit(build.PageType, "page", "create", map[string]any{"name": "work", "title": "Work", "object": "build.note", "sections": []build.Section{{ID: "text", Widget: "text", ConfigVersion: 1, Text: "Read window"}, {ID: "private", Widget: "text", ConfigVersion: 1, Text: "Private window"}, {ID: "metric", Widget: "metric", ConfigVersion: 1, Measure: "count", CollectionVariable: "window"}, {ID: "chart", Widget: "chart", ConfigVersion: 1, Measure: "count", Group: "note", CollectionVariable: "window"}, {ID: "privateChart", Widget: "chart", ConfigVersion: 1, Measure: "count", Group: "secret", CollectionVariable: "window"}}, "document": document})
 	submit(build.PageType, "page", "publish", map[string]any{})
-	submit(build.AppType, "app", "create", map[string]any{"name": "desk", "title": "Desk", "pages": []string{"work"}, "uiProfile": platform.PageUIProfile(), "queries": plans, "variables": map[string]platform.PageVariable{"window": {Scope: "application", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "read"}}, "privateWindow": {Scope: "application", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "private"}}}})
+	submit(build.AppType, "app", "create", map[string]any{"name": "desk", "title": "Desk", "pages": []string{"work"}, "uiProfile": platform.PageUIProfile(), "queries": plans, "variables": map[string]platform.PageVariable{"count": {Scope: "application", Type: "decimal", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "count", Query: "read"}}, "privateCount": {Scope: "application", Type: "decimal", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "count", Query: "private"}}, "window": {Scope: "application", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "read"}}, "privateWindow": {Scope: "application", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "private"}}}})
 	preview, err := tn.PreviewRelease(member, platform.AssetApp, "app")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("preview %+v %v", preview, err)
@@ -100,6 +102,9 @@ func TestPageQuerySetsFreezeReplayAndPruneMembers(t *testing.T) {
 			if d.Page != nil && d.Ref.Name == "work" {
 				foundPage = true
 				queries = d.Page.Document.Queries
+				if d.Page.Document.Variables["count"].Source.Query != "read" || d.Page.Document.Variables["privateCount"].Mode != "" {
+					t.Fatal("page count not frozen or private source leaked")
+				}
 				if len(d.Page.Sections) != 3 || d.Page.Document.Variables["privateWindow"].Mode != "" {
 					t.Fatal("private page set survived")
 				}
@@ -107,6 +112,9 @@ func TestPageQuerySetsFreezeReplayAndPruneMembers(t *testing.T) {
 			if d.Application != nil && d.Ref.Name == "desk" {
 				foundApp = true
 				queries = d.Application.Queries
+				if d.Application.Variables["count"].Source.Query != "read" || d.Application.Variables["privateCount"].Mode != "" {
+					t.Fatal("application count not frozen or private source leaked")
+				}
 				if d.Application.Variables["privateWindow"].Mode != "" {
 					t.Fatal("private app set survived")
 				}

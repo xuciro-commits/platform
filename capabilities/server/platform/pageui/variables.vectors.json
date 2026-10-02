@@ -1912,5 +1912,55 @@
       },
       "active": true
     }
+  },
+  {
+    "name": "count variables derive exact boolean conditions",
+    "variables": {
+      "count": {
+        "scope": "page",
+        "type": "decimal",
+        "mode": "aggregate",
+        "source": {
+          "kind": "count",
+          "query": "read"
+        }
+      },
+      "canRun": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "decimal-less",
+          "args": [
+            {
+              "literal": {
+                "kind": "decimal",
+                "value": "0"
+              }
+            },
+            {
+              "variable": "count"
+            }
+          ]
+        }
+      }
+    },
+    "resources": {
+      "count": {
+        "status": "value",
+        "value": {
+          "kind": "decimal",
+          "value": "2"
+        }
+      }
+    },
+    "valid": true,
+    "values": {
+      "count": {
+        "kind": "decimal",
+        "value": "2"
+      },
+      "canRun": true
+    }
   }
 ]

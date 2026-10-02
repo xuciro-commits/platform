@@ -1577,7 +1577,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.20",
+  "uiProfile": "platform.page.v2.21",
   "widgets": [
     {
       "componentID": "table",
@@ -2093,7 +2093,8 @@ export const pageUIManifest = {
     "platform.page.v2.17",
     "platform.page.v2.18",
     "platform.page.v2.19",
-    "platform.page.v2.20"
+    "platform.page.v2.20",
+    "platform.page.v2.21"
   ],
   "runtime": {
     "scope": "page",
@@ -2233,7 +2234,8 @@ export const pageUIManifest = {
         "constant",
         "derived",
         "resource",
-        "property"
+        "property",
+        "aggregate"
       ]
     },
     "application": {
@@ -2251,7 +2253,8 @@ export const pageUIManifest = {
         "constant",
         "derived",
         "resource",
-        "property"
+        "property",
+        "aggregate"
       ],
       "bindingMode": "shared",
       "maxFilterFields": 16
@@ -2288,6 +2291,11 @@ export const pageUIManifest = {
     },
     "decimal": {
       "maxBytes": 128
+    },
+    "aggregate": {
+      "source": "count",
+      "maxVariables": 8,
+      "maxExpandedReads": 32
     }
   }
 } as const;
