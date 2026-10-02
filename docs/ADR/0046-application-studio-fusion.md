@@ -528,6 +528,14 @@ F1e17沿既有chart/configVersion=1及原arc完整集合聚合增加v2.44的char
 
 源ChartPie保留objectSetVarId及groupBy，默认pie或显式pie/donut映射到原mark=arc、measure=count及plan集合。分组显式选择原text/choice/reference/boolean/integer；未知设置、额外度量/脚本或不兼容字段给出定位拒绝，原文和报告保留。统计使用完整查询条件，忽略窗口分页，不计算window.records的分布。隐藏分组/条件沿原成员闭包裁掉组件；参数、身份、定义、拥有浮层退役及拒绝沿原ChartSource清理旧图。原布局复制保留variant并重写拥有输入/计划，应用仍是一次可撤销草稿替换。当前18类源组件开放有限profile，完整92类型及更广分析服务仍由后续批次推进，证据归§14。
 
+### 6.38 PivotTable双轴count的完整集合迁移
+
+F1e18将源PivotTable接入既有pivot/configVersion=1及v2.23以上页面，不新增分析引擎或运行类型。objectSetVarId映射原plan集合，rows/cols逐项选择不同的原text/choice/reference/boolean/integer字段，measure须显式count；未知配置、脚本、错误类型、重复映射与非count来源给出定位拒绝，完整原文保留。来源实现始终累加记录数，不能按其measure标签猜测sum/avg行为；原生Pivot的其他度量继续沿原语义声明。
+
+原宿主按完整授权查询返回双轴分组计数，省略来源窗口的limit/offset/sort；原4096聚合行和矩阵单元格预算继续整体拒绝超额，不用客户端记录窗口补齐交叉表。共享Pivot保持原矩阵、行/列/总合计、标签、读取世代和错误；完整count结果里没有记录的交叉单元格显示0，空count总计为0，其他度量的缺值保持原空白。行标题声明scope=row，原列标题保留。原成员投影裁掉隐藏轴或条件，参数/身份/定义及拥有浮层退役清理旧矩阵；分页不重算全集统计。
+
+Build沿原Pivot检查器、Query plans、草稿历史及冻结发布编写双轴和度量；布局副本保留轴/原count并重写拥有输入/计划。报告要求确认原字段标签/顺序、完整统计/合计与预算差异。当前19类源组件开放有限profile，更广来源分析仍由后续批次推进，证据归§14。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -711,7 +719,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 兼容转换是规范加载入口中的纯转换，不形成第二套编辑器/渲染器。一次性导入适配在迁移结束后退出常规运行路径。
 
-首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。十八类组件为ObjectTable→Table、ObjectList→§6.34的RecordList、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button、ButtonGroup→§6.29的ButtonGroup、Links→§6.30的RecordLinks、StatusTracker→§6.31的StatusTracker、MetricCard→§6.32的Metric、HeaderText/ObjectSetTitle→§6.33的Heading/CollectionTitle、ChartXY→§6.35的原Chart/§6.36的RecordChart及ChartPie→§6.37的原Chart，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
+首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。十九类组件为ObjectTable→Table、ObjectList→§6.34的RecordList、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button、ButtonGroup→§6.29的ButtonGroup、Links→§6.30的RecordLinks、StatusTracker→§6.31的StatusTracker、MetricCard→§6.32的Metric、HeaderText/ObjectSetTitle→§6.33的Heading/CollectionTitle、ChartXY→§6.35的原Chart/§6.36的RecordChart、ChartPie→§6.37的原Chart及PivotTable→§6.38的原Pivot，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
 
 原文件按输入文本保留在报告中，可原样下载；映射报告包含完整来源、绑定、定位诊断、身份重写及原生草稿。应用是原DraftSession的一次可撤销替换，不提交业务操作、不自动保存；再次打开导入窗口可在同一编辑作用域下载报告。报告不是平台资产，离开编辑器或切换成员前须下载保留。选择页面之外的页面、页头、流程和未引用内容明确保留在报告但不执行，原导航由工作区提供；可识别的原生展示差异需勾选确认。未知配置、未知组件、未支持的选择/编辑配置、不兼容作用域和执行定义阻止应用。源变量虽是Module全局值，本profile不复制跨根局部变量：记录资源按生产者归属，页面选中记录可供浮层读取，浮层选中记录不能逃到页面；浮层独占状态转为关闭重置的原生局部状态并给出确认警告，静态值跨根共享需后续显式映射。Loop、更广动态转换、源应用拆分、接口、更广变量/事件及92类型完整配置转换仍待后续。
 
@@ -902,4 +910,6 @@ Module页面导入（F1e–F1e2）已接通§10.1的八类组件有限profile、
 
 饼图/环形分布（F1e17，v2.44）已接通§6.37的chartVariant、原Chart检查器、原完整count/arc及ChartPie有限导入，当前18类源组件开放有限profile。Go检查旧profile、非arc/无文档及未知variant拒绝，冻结后改草稿、隐藏分组裁剪、CheckReplay及内存快照保留donut；生成API与原Build双向转换保持声明。共享绘图/应用编译验证pie/donut同编码、原计数与舍入占比、零值及环形几何，既有非可加/负值/Money拒绝回归保持；导入拒绝错误variant、字段、额外度量/脚本与旧profile，复制保留variant并隔离拥有查询。浏览器验证默认两个源配置→GUI字段/检查器/单条窗口→保存冻结后新草稿不替换donut，六条真实记录的状态/优先级完整计数，分页不重算、隐藏分组/条件裁剪、空结果和403旧图清理、浮层局部分布与关闭重开/刷新；普通/窄屏已观察，全量Web路线通过。源其他Pie配置、更多分析组件、负责人视觉认可、生产性能及真实PostgreSQL恢复仍未提供或验证。
 
-F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和十八类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+双轴交叉表（F1e18，沿既有Pivot profile）已接通§6.38的PivotTable→原pivot、显式双轴/count及原plan聚合，当前19类源组件开放有限profile。Go冻结后修改草稿列轴、隐藏行/列裁剪、CheckReplay及内存快照保持原双轴和count；原完整授权集合/字段/预算测试保持。共享UI验证稀疏count交叉显示0、行列/总合计及其他度量缺值仍空白，原作用域/迟到/拒绝与矩阵预算回归保持；导入拒绝重复轴/错误类型/非count/脚本/旧profile，复制保留轴/度量并重写拥有计划。浏览器验证默认源配置→GUI双轴/度量/单条窗口→冻结后新草稿不替换列轴，六条真实记录的稀疏矩阵、0交叉与行列/总合计，分页不重算、隐藏双轴/条件裁剪、空结果0总计与403旧矩阵清理、浮层局部矩阵及关闭重开/刷新；原生sum/组合来源路线仍通过，普通/窄屏已观察，全量Web路线通过。更多来源度量/分桶、负责人视觉认可、生产性能及真实PostgreSQL恢复仍未提供或验证。
+
+F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和十九类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

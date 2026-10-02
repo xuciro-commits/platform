@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "pivot-profile":"Pivot import requires an original query collection, two categorical axes and an explicit count measure without additional settings or scripts.",
+ "pivot-binding":"Map both pivot axes to distinct original categorical fields visible to the current member.",
+ "native-pivot-count":"The native pivot counts the complete authorized set, shows zero for absent count cells and provides row, column and grand totals. Field labels, ordering and read budgets use the original platform.",
  "chart-pie-profile":"Pie import needs an original query collection and a supported pie or donut presentation without additional measures or scripts.",
  "chart-pie-binding":"Map the pie group to an original categorical field; complete counts keep the original member scope.",
  "native-pie-count":"Pie and donut charts show original complete-collection counts and percentages. Source colors and ordering use native field metadata and themes; a record window does not limit distribution.",

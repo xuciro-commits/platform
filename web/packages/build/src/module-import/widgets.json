@@ -197,9 +197,9 @@
       "sourceType": "PivotTable",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
+      "status": "profile",
       "target": "pivot",
-      "reason": "config-or-capability-profile-required"
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Markdown",

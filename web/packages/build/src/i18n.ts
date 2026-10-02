@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Pivot import requires an original query collection, two categorical axes and an explicit count measure without additional settings or scripts.": "交叉表导入需要原查询集合、两个分类轴及显式 count 度量，不附带其他设置或脚本。",
+ "Map both pivot axes to distinct original categorical fields visible to the current member.": "将交叉表双轴映射到当前成员可见且不同的原分类字段。",
+ "The native pivot counts the complete authorized set, shows zero for absent count cells and provides row, column and grand totals. Field labels, ordering and read budgets use the original platform.": "原交叉表统计完整受权集合，对没有记录的 count 单元格显示零，提供行、列及总合计。字段标签、顺序和读取预算沿用原平台。",
  "Pie presentation": "饼图呈现",
  "Original pie presentation": "原饼图呈现",
  "Pie with values and percentages": "显示数值和占比的饼图",

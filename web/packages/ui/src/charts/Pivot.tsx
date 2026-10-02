@@ -51,7 +51,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
   const cell = (rk: string, ck: string) => data.rows.filter((r) => text(r[rows]) === rk && text(r[columns!]) === ck);
   const total = (list: Record<string, unknown>[]) => list.reduce((n, r) => n + Number(r[measure] ?? 0), 0);
   const show = (list: Record<string, unknown>[]) => {
-    if (!list.length) return "";
+    if (!list.length) return measure==="count"?"0":"";
     if (!additive && list.length > 1) return "…"; // averages and extremes do not add up across groups
     const byCurrency = new Map<string, Record<string, unknown>[]>();
     for (const r of list) {
@@ -78,7 +78,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
         <tbody>
           {rowKeys.map((rk) => (
             <tr key={rk} className="hover:bg-row-hover">
-              <th className="border-b border-border px-2 py-1 text-left font-normal">{rk}</th>
+              <th scope="row" className="border-b border-border px-2 py-1 text-left font-normal">{rk}</th>
               {columns && colKeys.map((ck) => (
                 <td key={ck} className={`${onDrill?"cursor-pointer ":""}border-b border-border px-2 py-1 text-right`} onClick={() => drill(rk, ck)}>{show(cell(rk, ck))}</td>
               ))}
@@ -89,7 +89,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
         {additive && (
           <tfoot className="bg-surface font-medium">
             <tr>
-              <th className="px-2 py-1 text-left">{t("Total")}</th>
+              <th scope="row" className="px-2 py-1 text-left">{t("Total")}</th>
               {columns && colKeys.map((ck) => <td key={ck} className="px-2 py-1 text-right">{show(data.rows.filter((r) => text(r[columns]) === ck))}</td>)}
               <td className="px-2 py-1 text-right">{show(data.rows)}</td>
             </tr>

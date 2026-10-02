@@ -136,6 +136,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "chart", ConfigVersion: 1, CollectionVariable: "metricWindow", Mark: "arc", Group: spec.group, Measure: "count", ChartVariant: "donut"})
 	}
+	for _, spec := range []struct{ id, row, column string }{{"pivot", "name", "state"}, {"hiddenPivotRow", "secret", "state"}, {"hiddenPivotColumn", "name", "secret"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "pivot", ConfigVersion: 1, CollectionVariable: "metricWindow", Group: spec.row, ColumnGroup: spec.column, Measure: "count"})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -157,6 +164,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[14].Measure = "count"
 	sections[17].RecordChart = &platform.PageRecordChart{Mark: "bar", XField: "id", YField: "amount"}
 	sections[20].ChartVariant = "pie"
+	sections[22].ColumnGroup = ""
 	sections[10].Text = "Later heading"
 	sections[11].Title = "Later collection"
 	sections[8].MetricPresentation = &platform.PageMetricPresentation{Prefix: "Later", Formatter: "short", Variant: "tag", Tone: "danger"}
@@ -173,6 +181,20 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					pivot, hiddenRow, hiddenColumn := false, false, false
+					for _, s := range d.Page.Sections {
+						switch s.ID {
+						case "pivot":
+							pivot = s.Group == "name" && s.ColumnGroup == "state" && s.Measure == "count" && s.CollectionVariable == "metricWindow"
+						case "hiddenPivotRow":
+							hiddenRow = true
+						case "hiddenPivotColumn":
+							hiddenColumn = true
+						}
+					}
+					if !pivot || hiddenRow != (member.ID == builder.ID) || hiddenColumn != (member.ID == builder.ID) {
+						t.Fatal("frozen pivot axes or member projection changed")
+					}
 					pie, hiddenPie := false, false
 					for _, s := range d.Page.Sections {
 						if s.ID == "pie" {
