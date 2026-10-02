@@ -1,4 +1,5 @@
 import {RecordListInspector} from "./RecordListInspector";
+import {RecordChartInspector} from "./RecordChartInspector";
 import {HeadingInspector,CollectionTitleInspector} from "./TitleInspectors";
 import {MetricInspector} from "./MetricInspector";
 import {StatusTrackerInspector} from "./StatusTrackerInspector";
@@ -18,6 +19,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "record-chart":{configVersion:1,bindings:RecordChartInspector},
  "record-list":{configVersion:1,bindings:RecordListInspector},
  heading:{configVersion:1,bindings:HeadingInspector},
  "collection-title":{configVersion:1,bindings:CollectionTitleInspector},

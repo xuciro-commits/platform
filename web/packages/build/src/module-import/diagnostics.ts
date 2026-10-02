@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "record-chart-profile":"Record XY import needs a bar or line chart without aggregation and a supported original query window. Scatter, area and unimplemented aggregation settings require correction.",
+ "record-chart-binding":"Map record labels to an original scalar field or record ID and values to an original integer or decimal field.",
+ "native-record-chart-window":"Record charts keep separate original records and plot at most 40 points from the query window. Original ID sorting makes the order explicit; source ordering and drawing styles can differ.",
  "chart-aggregate-profile":"XY import requires an average grouped bar chart over an original query collection. Per-record lines, scatter plots and other aggregations need their own supported mapping.",
  "chart-aggregate-binding":"Map the chart group to an original categorical field and the average to an original integer or decimal field.",
  "native-chart-aggregate":"Charts use original complete-collection aggregates, field metadata, permissions and read budgets. Source drawing styles and record-window truncation are not copied.",

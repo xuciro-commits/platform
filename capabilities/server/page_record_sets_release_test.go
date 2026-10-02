@@ -85,7 +85,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		}
 		sections = append(sections, build.Section{ID: id, Widget: "status-tracker", ConfigVersion: 1, Object: object, StatusTracker: &platform.PageStatusTracker{Field: "state", Stages: []string{"done", "open"}}})
 	}
-	doc.Queries = map[string]platform.PageQuery{"metricq": {Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.note"}, Limit: 1}}
+	doc.Queries = map[string]platform.PageQuery{"metricq": {Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.note"}, Limit: 1, Sort: []string{"id"}}}
 	doc.Variables["metricWindow"] = platform.PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "metricq"}}
 	for _, field := range []string{"amount", "sensitive"} {
 		id := "metric_" + field
@@ -122,6 +122,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "chart", ConfigVersion: 1, CollectionVariable: "metricWindow", Mark: "bar", Group: spec.group, Measure: spec.measure})
 	}
+	for _, spec := range []struct{ id, x, y string }{{"recordChart", "name", "amount"}, {"hiddenRecordX", "secret", "amount"}, {"hiddenRecordY", "name", "sensitive"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "record-chart", ConfigVersion: 1, CollectionVariable: "metricWindow", RecordChart: &platform.PageRecordChart{Mark: "line", XField: spec.x, YField: spec.y}})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -141,6 +148,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[12].CardLabel = "id"
 	sections[14].Group = "state"
 	sections[14].Measure = "count"
+	sections[17].RecordChart = &platform.PageRecordChart{Mark: "bar", XField: "id", YField: "amount"}
 	sections[10].Text = "Later heading"
 	sections[11].Title = "Later collection"
 	sections[8].MetricPresentation = &platform.PageMetricPresentation{Prefix: "Later", Formatter: "short", Variant: "tag", Tone: "danger"}
@@ -157,6 +165,20 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					recordChart, hiddenRecordX, hiddenRecordY := false, false, false
+					for _, s := range d.Page.Sections {
+						switch s.ID {
+						case "recordChart":
+							recordChart = s.RecordChart != nil && s.RecordChart.Mark == "line" && s.RecordChart.XField == "name" && s.RecordChart.YField == "amount" && s.CollectionVariable == "metricWindow"
+						case "hiddenRecordX":
+							hiddenRecordX = true
+						case "hiddenRecordY":
+							hiddenRecordY = true
+						}
+					}
+					if !recordChart || hiddenRecordX != (member.ID == builder.ID) || hiddenRecordY != (member.ID == builder.ID) || d.Page.Document.Queries["metricq"].Sort[0] != "id" {
+						t.Fatal("frozen record chart axes, ordering or member projection changed")
+					}
 					chart, hiddenChartGroup, hiddenChartMeasure := false, false, false
 					for _, s := range d.Page.Sections {
 						switch s.ID {

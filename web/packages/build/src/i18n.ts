@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record chart": "逐记录图表",
+ "Record chart query window": "逐记录图表查询窗口",
+ "Record chart type": "逐记录图表类型",
+ "Record chart label field": "逐记录图表标签字段",
+ "Record chart value field": "逐记录图表数值字段",
+ "Choose an explicitly sorted query plan. The chart keeps each record and plots at most 40 points from its window.": "选择显式排序的查询计划。图表保留每条记录，最多绘制窗口中的 40 个点。",
+ "Bind visible record chart axes and an explicitly sorted query plan before saving.": "保存前请绑定可见的逐记录图表坐标字段及显式排序的查询计划。",
+ "Record XY import needs a bar or line chart without aggregation and a supported original query window. Scatter, area and unimplemented aggregation settings require correction.": "逐记录 XY 导入需要无聚合的柱图或折线及受支持的原查询窗口。散点、面积及未实现的聚合设置需要修正。",
+ "Map record labels to an original scalar field or record ID and values to an original integer or decimal field.": "将记录标签映射到原标量字段或记录 ID，数值映射到原整数或十进制字段。",
+ "Record charts keep separate original records and plot at most 40 points from the query window. Original ID sorting makes the order explicit; source ordering and drawing styles can differ.": "逐记录图表保留独立原记录，最多绘制查询窗口中的 40 个点。按原 ID 排序明确记录顺序，来源顺序和绘图样式可能不同。",
  "XY import requires an average grouped bar chart over an original query collection. Per-record lines, scatter plots and other aggregations need their own supported mapping.": "XY 导入需要原查询集合上的分组平均柱图；逐记录折线、散点及其他聚合需要各自受支持的映射。",
  "Map the chart group to an original categorical field and the average to an original integer or decimal field.": "将图表分组映射到原分类字段，平均值映射到原整数或十进制字段。",
  "Charts use original complete-collection aggregates, field metadata, permissions and read budgets. Source drawing styles and record-window truncation are not copied.": "图表使用原完整集合聚合、字段元数据、权限和读取预算；来源绘图样式及记录窗口截断不直接复制。",

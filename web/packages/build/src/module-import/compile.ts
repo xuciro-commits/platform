@@ -131,7 +131,7 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   if(usedWidgets.has(sourceID)){issue(`/widgets/${pointer(sourceID)}`,"multiple-parents");return id("leaf",sourceID);}usedWidgets.add(sourceID);
   const path=`/widgets/${pointer(sourceID)}`,mapping=workshopMapping(w.type),sectionID=id("widget",sourceID),leaf=id("leaf",sourceID),config=w.config,context=scopeOf(owner);ids.widgets[sourceID]=sectionID;ids.nodes[sourceID]=leaf;
   if(mapping?.status!=="profile"){issue(`${path}/type`,mapping?"widget-profile":"unknown-widget");return leaf;}
-  const section:AuthoringSection={id:sectionID,widget:mapping.target!,configVersion:1,title:w.name};sections.push(section);document.nodes[leaf]={kind:"widget",section:sectionID};
+  const section:AuthoringSection={id:sectionID,widget:Array.isArray(mapping.target)?mapping.target[config.agg==="avg"?0:1]!:mapping.target!,configVersion:1,title:w.name};sections.push(section);document.nodes[leaf]={kind:"widget",section:sectionID};
   safeKeys(w,["id","type","name","config","events","height","flex","style","emptyMessage","readOnly","hidden","mountBehavior","unmountBehavior"],path);
   presentation(w,path,{mountBehavior:"normal",unmountBehavior:"normal",hidden:false,readOnly:false});if(w.style!==undefined)issue(`${path}/style`,"presentation-profile");if(w.emptyMessage!==undefined)issue(`${path}/emptyMessage`,"presentation-profile");
   if(w.height!==undefined)document.nodes[leaf]!.size={height:Number(w.height)};if(w.flex!==undefined)document.nodes[leaf]!.size={...document.nodes[leaf]!.size,weight:Number(w.flex)};
@@ -144,11 +144,22 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   if(w.type==="ObjectSetTitle"){safeKeys(config,["objectSetVarId"],`${path}/config`);const source=text(config.objectSetVarId);section.collectionVariable=variable(source,context,`${path}/config/objectSetVarId`);const input=document.variables![section.collectionVariable],query=input?.source?.query,external=queryObjects.get(source)||"",e=entity(external,`${path}/config/objectSetVarId`);section.object=e?.type===target.object?undefined:e?.type;section.title=text(vars.get(source)?.name)||source;section.countVariable=id("count",source);document.variables![section.countVariable]={title:section.title,scope:context.kind,owner:context.owner,type:"decimal",mode:"aggregate",source:{kind:"count",query}};if(!query)issue(`${path}/config/objectSetVarId`,"title-profile");issue(`${path}/config`,"native-collection-title",false);}
   if(w.type==="ChartXY"){
    safeKeys(config,["objectSetVarId","chartKind","xProperty","yProperty","agg"],`${path}/config`);
-   const input=text(config.objectSetVarId);section.collectionVariable=variable(input,context,`${path}/config/objectSetVarId`);const resource=document.variables![section.collectionVariable],external=queryObjects.get(input)||"",e=entity(external,`${path}/config/objectSetVarId`);
-   section.object=e?.type===target.object?undefined:e?.type;section.mark="bar";section.group=field(external,text(config.xProperty),`${path}/config/xProperty`);const measured=field(external,text(config.yProperty),`${path}/config/yProperty`);section.measure=`avg:${measured}`;
-   if(config.chartKind!=="bar"||config.agg!=="avg"||typeof config.xProperty!=="string"||typeof config.yProperty!=="string"||resource?.type!=="object-set"||resource.source?.kind!=="plan"||Number(target.profile.split(".").at(-1))<24)issue(`${path}/config`,"chart-aggregate-profile");
-   if(!e?.fields.some(f=>f.name===section.group&&["text","choice","reference","boolean","integer"].includes(f.type))||!e?.fields.some(f=>f.name===measured&&["integer","decimal"].includes(f.type)))issue(`${path}/config`,"chart-aggregate-binding");
-   issue(`${path}/config`,"native-chart-aggregate",false);
+   const input=text(config.objectSetVarId);section.collectionVariable=variable(input,context,`${path}/config/objectSetVarId`);const resource=document.variables![section.collectionVariable],external=queryObjects.get(input)||"",e=entity(external,`${path}/config/objectSetVarId`),x=field(external,text(config.xProperty),`${path}/config/xProperty`),y=field(external,text(config.yProperty),`${path}/config/yProperty`);
+   section.object=e?.type===target.object?undefined:e?.type;
+   if(config.agg==="avg"){
+    section.mark="bar";section.group=x;section.measure=`avg:${y}`;
+    if(config.chartKind!=="bar"||resource?.type!=="object-set"||resource.source?.kind!=="plan"||Number(target.profile.split(".").at(-1))<24)issue(`${path}/config`,"chart-aggregate-profile");
+    if(!e?.fields.some(f=>f.name===x&&["text","choice","reference","boolean","integer"].includes(f.type))||!e?.fields.some(f=>f.name===y&&["integer","decimal"].includes(f.type)))issue(`${path}/config`,"chart-aggregate-binding");
+    issue(`${path}/config`,"native-chart-aggregate",false);
+   }else{
+    const q=resource?.source?.query,plan=q?document.queries![q]:undefined;
+    section.recordChart={mark:text(config.chartKind),xField:x,yField:y};
+    if(config.agg!==undefined&&config.agg!=="none"||!["bar","line"].includes(text(config.chartKind))||resource?.type!=="object-set"||resource.source?.kind!=="plan"||!plan||Number(target.profile.split(".").at(-1))<Number(pageUIManifest.runtime.recordChart.requiredUIProfile.split(".").at(-1)))issue(`${path}/config`,"record-chart-profile");
+    if(x!=="id"&&!e?.fields.some(f=>f.name===x&&["text","longtext","choice","reference","integer","decimal","boolean","date","datetime"].includes(f.type))||!e?.fields.some(f=>f.name===y&&["integer","decimal"].includes(f.type)))issue(`${path}/config`,"record-chart-binding");
+    if(plan)plan.sort=["id"];
+    issue(`${path}/config`,"native-record-chart-window",false);
+   }
+   if(typeof config.xProperty!=="string"||typeof config.yProperty!=="string")issue(`${path}/config`,"field-binding");
   }
   if(["HeaderText","ObjectSetTitle"].includes(w.type)&&Number(target.profile.split(".").at(-1))<Number(pageUIManifest.runtime.titles.requiredUIProfile.split(".").at(-1)))issue(`${path}/config`,"title-profile");
   if(w.type==="Markdown"){safeKeys(config,["text"],`${path}/config`);section.text=text(config.text);}

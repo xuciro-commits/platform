@@ -29,6 +29,7 @@ import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
+const RecordChartRenderer=lazy(()=>import("./widgets/RecordChart").then(module=>({default:module.RecordChartRenderer})));
 const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
 const RecordTimelineRenderer=lazy(()=>import("./widgets/RecordTimeline").then(module=>({default:module.RecordTimelineRenderer})));
 const KanbanRenderer=lazy(()=>import("./widgets/Kanban").then(module=>({default:module.KanbanRenderer})));
@@ -110,6 +111,11 @@ function RecordTimelineAdapter({page,section,onSelect,selected,window}:Bound) {
  const label=(name?:string)=>name==="id"||!!info?.fields.some(f=>f.name===name&&["text","longtext","choice","reference"].includes(f.type));
  const valid=start&&["date","datetime"].includes(start.type)&&(!section.timeEnd||end?.type===start.type)&&label(section.timeLabel)&&(!section.timeGroup||label(section.timeGroup));
  return <RecordTimelineRenderer window={window} fields={valid?{start:section.timeStart!,end:section.timeEnd,label:section.timeLabel!,group:section.timeGroup,kind:start.type as "date"|"datetime"}:undefined} selected={selected} onSelect={onSelect} title={section.title||t("Record timeline")}/>;
+}
+function RecordChartAdapter({page,section,window}:Bound) {
+ const {source}=useHost(),info=source.entity(objectOf(page,section));
+ if(!info)return <Panel role="alert">{t("Record chart fields or values are unavailable or incompatible.")}</Panel>;
+ return <RecordChartRenderer window={window} info={info} fields={{mark:section.recordChart?.mark as "bar"|"line"??"line",xField:section.recordChart?.xField??"",yField:section.recordChart?.yField??""}}/>;
 }
 function KanbanAdapter({page,section,onSelect,selected,window,live}:Bound) {
  const {source,catalog}=useHost(),object=objectOf(page,section),info=source.entity(object);
@@ -390,6 +396,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ "record-chart":RecordChartAdapter,
  "record-list":TableAdapter,
  heading:({section})=><PageHeader compact level={Number(section.headingLevel?.slice(1)??2) as 1|2|3} title={section.text||t("Heading")}/>,
  "collection-title":({section,countValue,countError})=><CollectionTitle title={section.title||t("Collection title")} value={countValue} error={countError}/>,

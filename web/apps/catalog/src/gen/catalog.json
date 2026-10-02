@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:0f3fda610589b695",
+  "revision": "sha256:f58ccb4f37985a29",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1737,6 +1737,36 @@
       ]
     },
     {
+      "id": "ui/record-chart",
+      "owner": "@platform/ui",
+      "name": "Ordered record chart",
+      "summary": "Plot original authorized records without merging equal axis labels or reading another collection.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordChart.tsx",
+      "exports": [
+        "RecordChart",
+        "recordChartSpec"
+      ],
+      "example": "RecordChartExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "records",
+        "chart",
+        "window"
+      ],
+      "dependencies": [
+        "ui/chart"
+      ],
+      "constraints": [
+        "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes."
+      ]
+    },
+    {
       "id": "ui/record-form",
       "owner": "@platform/ui",
       "name": "Entity form",
@@ -2283,6 +2313,7 @@
       "Only the canonical action owner may authorize and apply a transition.": "只有规范动作的归属方可以授权并应用状态跃迁。",
       "Open": "打开",
       "Open this full-window preview separately; its shell owns routes and saved layout.": "单独打开全窗口预览；外壳负责路由与保存的布局。",
+      "Ordered record chart": "按序逐记录图表",
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
       "Page header": "页面标题区",
       "Page workspace and preview": "页面工作台与预览",
@@ -2291,6 +2322,7 @@
       "Pick a local file through a shared button; the caller owns upload.": "通过共享按钮选择本地文件，上传由调用方负责。",
       "Picking a file does not upload or publish it.": "选择文件不会上传或发布该文件。",
       "Pivot table": "透视表",
+      "Plot original authorized records without merging equal axis labels or reading another collection.": "绘制原受权记录，不合并相同坐标标签，也不读取另一集合。",
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Pressed": "按下",
@@ -2356,6 +2388,7 @@
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
+      "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
       "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
@@ -2488,6 +2521,7 @@
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
@@ -2788,6 +2822,9 @@
     "ui/pivot": [
       "web/packages/app/src/widgets/Pivot.tsx"
     ],
+    "ui/record-chart": [
+      "web/packages/app/src/widgets/RecordChart.tsx"
+    ],
     "ui/record-timeline": [
       "web/packages/app/src/widgets/RecordTimeline.tsx"
     ],
@@ -3019,6 +3056,7 @@
         "Option",
         "Options",
         "RecordChange",
+        "RecordChartFields",
         "RecordColumnPresentation",
         "RecordEditPort",
         "RecordPageData",

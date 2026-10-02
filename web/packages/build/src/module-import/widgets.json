@@ -139,7 +139,10 @@
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
       "status": "profile",
-      "target": "chart",
+      "target": [
+        "chart",
+        "record-chart"
+      ],
       "reason": "bounded-config-profile"
     },
     {

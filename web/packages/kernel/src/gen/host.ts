@@ -1046,6 +1046,12 @@ export type PageQuerySet = {
   inputs: string[];
 };
 
+export type PageRecordChart = {
+  mark: string;
+  xField: string;
+  yField: string;
+};
+
 export type PageRecordLink = {
   object: AssetRef;
   field: string;
@@ -1385,6 +1391,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
   countVariable?: string;
@@ -1716,7 +1723,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.42",
+  "uiProfile": "platform.page.v2.43",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3107,10 +3114,15 @@ export const pageUIManifest = {
             "properties": {
               "layout": {
                 "type": "string",
-                "enum": ["grid", "list"]
+                "enum": [
+                  "grid",
+                  "list"
+                ]
               }
             },
-            "required": ["layout"]
+            "required": [
+              "layout"
+            ]
           }
         }
       },
@@ -3120,6 +3132,89 @@ export const pageUIManifest = {
           "bindingField": "collectionVariable",
           "type": "object-set",
           "requiredUIProfile": "platform.page.v2.10"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
+    },
+    {
+      "componentID": "record-chart",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.43",
+      "title": "Record chart",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "recordChart": {
+          "mark": "line",
+          "xField": "id",
+          "yField": ""
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordChart": {
+            "type": "object",
+            "properties": {
+              "mark": {
+                "type": "string",
+                "enum": [
+                  "bar",
+                  "line"
+                ]
+              },
+              "xField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "yField": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "mark",
+              "xField",
+              "yField"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.43"
         }
       ],
       "outputPorts": [],
@@ -3179,7 +3274,8 @@ export const pageUIManifest = {
     "platform.page.v2.39",
     "platform.page.v2.40",
     "platform.page.v2.41",
-    "platform.page.v2.42"
+    "platform.page.v2.42",
+    "platform.page.v2.43"
   ],
   "runtime": {
     "scope": "page",
@@ -3560,6 +3656,14 @@ export const pageUIManifest = {
         "list"
       ],
       "maxFields": 4
+    },
+    "recordChart": {
+      "requiredUIProfile": "platform.page.v2.43",
+      "marks": [
+        "bar",
+        "line"
+      ],
+      "maxPoints": 40
     }
   },
   "layout": {

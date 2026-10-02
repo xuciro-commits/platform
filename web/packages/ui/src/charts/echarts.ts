@@ -58,8 +58,10 @@ export function toOption(spec: ChartSpec, rows: Record<string, unknown>[], colum
   const categoryColumn = category ? columnOf(category) : undefined;
   const measureColumn = measure ? columnOf(measure) : "count";
   const split = seriesColumn(spec, columns);
-  const categories = [...new Set(rows.map((r) => text(categoryColumn && r[categoryColumn])))];
-  if (category?.type === "temporal" || category?.type === "ordinal") categories.sort();
+  const ordered = !!spec.rowIdentity && "values" in spec.data && !Object.values(spec.encoding).some(e=>e?.aggregate||e?.timeUnit);
+  const labels = rows.map((r) => text(categoryColumn && r[categoryColumn]));
+  const categories = ordered ? labels : [...new Set(labels)];
+  if (!ordered && (category?.type === "temporal" || category?.type === "ordinal")) categories.sort();
   const groups = split ? [...new Set(rows.map((r) => text(r[split])))] : [""];
   const fmt = formatter(measure, columns);
   const sample = (group: string) => rows.find((r) => !split || text(r[split]) === group);
@@ -70,7 +72,7 @@ export function toOption(spec: ChartSpec, rows: Record<string, unknown>[], colum
     ...(mark.stack ? { stack: "total" } : {}),
     ...(mark.type === "line" || mark.type === "area" ? { smooth: false, showSymbol: categories.length < 40 } : {}),
     tooltip: { valueFormatter: (v: unknown) => fmt(v, sample(group)) },
-    data: categories.map((c) => {
+    data: ordered ? rows.map((row,index)=>!split||text(row[split])===group?{id:String(row[spec.rowIdentity!]),name:labels[index],value:Number(row[measureColumn]??0)}:null) : categories.map((c) => {
       const row = rows.find((r) => text(categoryColumn && r[categoryColumn]) === c && (!split || text(r[split]) === group));
       return row ? Number(row[measureColumn] ?? 0) : null;
     }),

@@ -54,3 +54,4 @@ export type {RecordColumnPresentation} from "./records/ColumnPresentation";
 export {CollectionTitle} from "./components/CollectionTitle";
 
 export {RecordCards} from "./records/RecordCards";
+export {RecordChart,recordChartSpec,type RecordChartFields} from "./records/RecordChart";
