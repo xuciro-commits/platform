@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "A set plan requires its source graph.": "集合计划需要来源图。",
+  "Set query sources are missing, cyclic or incompatible.": "集合查询来源缺失、形成循环或不兼容。",
+  "Set query exceeds its predicate budget.": "集合查询超出条件范围限制。",
+
   "Property value is unavailable.": "记录属性值不可用。",
   "Property value exceeds its budget.": "记录属性值超出范围限制。",
   "Property source read failed": "记录属性来源读取失败",

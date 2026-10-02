@@ -19,9 +19,11 @@ type QuerySet struct {
 }
 
 const (
-	QuerySetMaxNodes = 31
-	QuerySetMaxDepth = 4
-	QuerySetMaxBytes = 64 * 1024
+	QuerySetMaxConditions  = 32
+	QuerySetMaxSearchBytes = 4096
+	QuerySetMaxNodes       = 31
+	QuerySetMaxDepth       = 4
+	QuerySetMaxBytes       = 64 * 1024
 )
 
 // CheckSet bounds the whole tree before execution, including branches that a
@@ -37,12 +39,12 @@ func (q Query) CheckSet() error {
 	var check func(RecordSetPredicate, int) error
 	check = func(p RecordSetPredicate, depth int) error {
 		nodes++
-		if nodes > QuerySetMaxNodes || depth > QuerySetMaxDepth || len(p.Search) > 4096 {
+		if nodes > QuerySetMaxNodes || depth > QuerySetMaxDepth || len(p.Search) > QuerySetMaxSearchBytes {
 			return fmt.Errorf("record set budget exceeded")
 		}
 		if len(p.Domain) > 0 {
 			var tokens []json.RawMessage
-			if json.Unmarshal(p.Domain, &tokens) != nil || len(tokens) > 32 {
+			if json.Unmarshal(p.Domain, &tokens) != nil || len(tokens) > QuerySetMaxConditions {
 				return fmt.Errorf("record set domain budget exceeded")
 			}
 		}

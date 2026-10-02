@@ -550,6 +550,18 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 		}
 		for changed := true; changed; {
 			changed = false
+			for id, q := range application.Queries {
+				missing := q.MissingSetInput(application.Queries)
+				for _, param := range q.Variables() {
+					if _, ok := application.Variables[param]; !ok {
+						missing = true
+					}
+				}
+				if missing {
+					delete(application.Queries, id)
+					changed = true
+				}
+			}
 			for id, v := range application.Variables {
 				missing := false
 				if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {

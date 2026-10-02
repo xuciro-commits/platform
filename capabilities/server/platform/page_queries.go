@@ -10,6 +10,7 @@ import (
 // PageQuery is a presentation-owned read plan over the original record API.
 // A named query keeps its source version and fixed owner conditions.
 type PageQuery struct {
+	Set        *PageQuerySet        `json:"set,omitempty"`
 	Owner      string               `json:"owner,omitempty"` // empty: page; otherwise an Overlay identity
 	Title      string               `json:"title,omitempty"`
 	Object     AssetRef             `json:"object"`
@@ -21,6 +22,11 @@ type PageQuery struct {
 	Limit      int                  `json:"limit"`
 	Offset     int                  `json:"offset,omitempty"`
 }
+type PageQuerySet struct {
+	Op     string   `json:"op"`
+	Inputs []string `json:"inputs"`
+}
+
 type PageQueryCondition struct {
 	Field string    `json:"field"`
 	Op    string    `json:"op"`
@@ -87,6 +93,9 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			}
 		}
 		return false
+	}
+	if err := d.CheckQuerySets(); err != nil {
+		return err
 	}
 	total := 0
 	for id, q := range d.Queries {

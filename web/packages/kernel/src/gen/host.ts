@@ -935,6 +935,7 @@ export type PagePort = {
 };
 
 export type PageQuery = {
+  set?: PageQuerySet;
   owner?: string;
   title?: string;
   object: AssetRef;
@@ -951,6 +952,11 @@ export type PageQueryCondition = {
   field: string;
   op: string;
   value: PageValue;
+};
+
+export type PageQuerySet = {
+  op: string;
+  inputs: string[];
 };
 
 export type PageResourceSource = {
@@ -1561,7 +1567,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.17",
+  "uiProfile": "platform.page.v2.18",
   "widgets": [
     {
       "componentID": "table",
@@ -2072,7 +2078,8 @@ export const pageUIManifest = {
     "platform.page.v2.14",
     "platform.page.v2.15",
     "platform.page.v2.16",
-    "platform.page.v2.17"
+    "platform.page.v2.17",
+    "platform.page.v2.18"
   ],
   "runtime": {
     "scope": "page",
@@ -2250,7 +2257,19 @@ export const pageUIManifest = {
         ">",
         ">=",
         "like"
-      ]
+      ],
+      "set": {
+        "operations": [
+          "union",
+          "intersect",
+          "subtract"
+        ],
+        "maxNodes": 31,
+        "maxDepth": 4,
+        "maxBytes": 65536,
+        "maxConditions": 32,
+        "maxSearchBytes": 4096
+      }
     },
     "decimal": {
       "maxBytes": 128

@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Set operation": "集合操作",
+  "Read one source": "读取单一来源",
+  "Left set source": "左侧集合来源",
+  "Right set source": "右侧集合来源",
+  "union": "并集",
+  "intersect": "交集",
+  "subtract": "差集",
+  "Combine complete matching sets. Source sorting and windows do not limit membership; this result has its own window.": "组合完整匹配集合。来源排序和窗口不限制集合成员；此结果使用自己的窗口。",
+
   "Record property": "记录属性",
   "Source record variable": "来源记录变量",
   "Choose a record variable": "选择记录变量",

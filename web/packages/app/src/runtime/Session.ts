@@ -39,6 +39,10 @@ export class PageSessionStore {
   querySignature(key: string) { return this.querySignatures.get(key); }
   private queryData = new Map<string,RecordPageData>();
   queryPage(key:string,signature:string) { return this.querySignatures.get(key)===signature ? this.queryData.get(key) : undefined; }
+  reconcileQueryBase(key:string,base?:string) {
+    const current=this.state.views[key];
+    if(current&&current.base!==base){const views={...this.state.views};delete views[key];this.publish({views});}
+  }
   private selectionKeys(query:string){return [...(this.plan.querySelections?.get(query)??[])].filter((slot)=>!this.selectionQueries.has(slot)||this.selectionQueries.get(slot)===query);}
   setQueryView(key:string,base:string,change:QueryView) {
     const current=this.state.views[key]?.base===base?this.state.views[key]:{base};

@@ -340,6 +340,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 	for changed := true; changed; {
 		changed = false
 		for id, q := range queries {
+			if q.MissingSetInput(queries) {
+				delete(queries, id)
+				changed = true
+				continue
+			}
 			for _, param := range q.Variables() {
 				if _, ok := variables[param]; !ok {
 					delete(queries, id)

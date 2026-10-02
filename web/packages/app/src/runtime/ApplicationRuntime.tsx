@@ -33,7 +33,9 @@ export function ApplicationPage({ pageRef, route, preview = false, children }: {
   const definition = holders.find((d) => idOf(d) === id);
   const instance = route.params?.instance ?? (preview ? localPreview : "main");
   const identity = JSON.stringify([source.scope, definition?.ref, definition?.version, definition?.application, instance, preview]);
-  const session = useMemo(() => definition && hub && /^[A-Za-z0-9._:-]{1,80}$/.test(instance) ? hub.get(identity, definition.application?.variables ?? {},{source,queries:definition.application?.queries??{}}) : undefined, [hub, identity]);
+  // The hub keeps live identities stable and replaces retired handles, even
+  // when the same route reopens before this provider has unmounted.
+  const session = definition && hub && /^[A-Za-z0-9._:-]{1,80}$/.test(instance) ? hub.get(identity, definition.application?.variables ?? {},{source,queries:definition.application?.queries??{}}) : undefined;
   const [owner] = useState(() => Symbol());
   const routeKey = JSON.stringify(route);
   useEffect(() => {

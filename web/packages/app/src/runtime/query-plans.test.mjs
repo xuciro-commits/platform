@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 const { compileQueryPlan, queryView }=await import("./query-plans.ts");
+const {compileQueryPlans}=await import("./query-plans.ts");
 const contract = JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))).runtime.query;
 const info={type:"sample.note",fields:[{name:"bucket",type:"text"},{name:"active",type:"boolean"},{name:"count",type:"integer"}]};
 const variables={bucket:{scope:"page",type:"string",mode:"state",initial:"A"}};
@@ -15,6 +16,23 @@ test("query compilation preserves empty/pending/error inputs and rejects hidden 
   assert.equal(compileQueryPlan(plan,variables,values,{...info,fields:[]},undefined,contract).status,"error");
   const cycle={...variables,window:{scope:"page",type:"object-set",mode:"resource",source:{kind:"plan",query:"read"}},bucket:{scope:"page",type:"boolean",mode:"derived",expression:{op:"present",args:[{variable:"window"}]}}};
   assert.equal(compileQueryPlan(plan,cycle,values,info,undefined,contract).status,"error");
+});
+
+test("set plans compile complete fixed predicates, ignore operand windows and propagate unavailable inputs",()=>{
+ const binding={ref:{app:"sample",kind:"query",name:"fixed"},sourceVersion:"q1"},named={ref:binding.ref,version:"q2",query:{object:info.type,domain:[["active","=",false]]},queryVersions:{q1:{object:info.type,domain:[["active","=",true]],limit:1,sort:["-bucket"]}}};
+ const plans={left:{...plan,limit:1,offset:99,query:binding},right:{...plan,conditions:[{field:"count",op:">",value:{literal:0}}],limit:1},combined:{object:plan.object,limit:50,set:{op:"subtract",inputs:["left","right"]}}};
+ const compile=(plans,values)=>Object.fromEntries(compileQueryPlans(plans,variables,()=>values,()=>info,()=>named,contract));
+ const value=compile(plans,{bucket:{status:"value",value:"A"}}).combined;
+ assert.equal(value.status,"value");assert.equal(value.query.limit,50);assert.deepEqual(value.query.sort,["id"]);
+ assert.deepEqual(value.query.set.inputs[0].domain,[["active","=",true],["bucket","=","A"]]);
+ assert.equal(value.query.set.inputs[0].limit,undefined);assert.equal(value.query.set.inputs[0].offset,undefined);assert.equal(value.query.set.inputs[0].sort,undefined);
+ for(const status of ["empty","pending","error"])assert.equal(compile(plans,{bucket:{status,code:"Denied"}}).combined.status,status);
+ assert.equal(compile({...plans,combined:{...plans.combined,set:{op:"union",inputs:["combined","right"]}}},{bucket:{status:"value",value:"A"}}).combined.status,"error");
+ assert.equal(compile({...plans,right:{...plans.right,object:{...plan.object,name:"other"}}},{bucket:{status:"value",value:"A"}}).combined.status,"error");
+ assert.equal(compile({...plans,right:{...plans.right,owner:"other"}},{bucket:{status:"value",value:"A"}}).combined.status,"error");
+ assert.notEqual(compile(plans,{bucket:{status:"value",value:"B"}}).combined.signature,value.signature);
+ const withSearch=Object.fromEntries(compileQueryPlans(plans,variables,()=>({bucket:{status:"value",value:"A"}}),()=>info,p=>p.query?named:undefined,contract,[],()=>true,id=>id==="right"?{search:"current search",offset:25}:undefined)).combined;
+ assert.equal(withSearch.query.set.inputs[1].search,"current search");assert.equal(withSearch.query.set.inputs[1].offset,undefined);assert.notEqual(withSearch.signature,value.signature);
 });
 test("original named query conditions, ordering, limit and version constrain an independent plan",()=>{
   const binding={ref:{app:"sample",kind:"query",name:"notes"},sourceVersion:"q1"};

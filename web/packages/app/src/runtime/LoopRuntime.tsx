@@ -26,7 +26,7 @@ export function LoopRuntime({ queryKey, expectedSignature, owner, loop, label, r
   if (result?.status === "pending" && !retaining) return <Panel role="status">{t("Loading loop records…")}</Panel>;
   if (!window || !records.length) return <Panel role="status">{t("No records in this query window.")}</Panel>;
   if (new Set(records.map((record) => loopItemKey(owner, record))).size !== records.length || records.some((record) => record.object !== window.object || !record.id)) return <Panel role="alert">{t("Loop record identities are invalid.")}</Panel>;
-  return <div className="grid min-w-0 gap-2">
+  return <div className="grid min-w-0 grid-cols-1 gap-2">
     {retaining && <p role="status" className="text-xs text-muted">{t("Refreshing loop records…")}</p>}
     <p className="text-xs text-muted">{t("Showing {shown} of {window} records in this window; {total} match overall.", { shown: records.length, window: window.records.length, total: window.total })}</p>
     <VirtualStack items={records} label={label} itemKey={(reference) => loopItemKey(owner, reference)} renderItem={(reference) => <LoopItem key={loopItemKey(owner, reference)} reference={reference} queryKey={queryKey} owner={owner} loop={loop} signature={signature!} session={session} snapshot={snapshot} variables={variables} resources={resources} overlay={overlay}>{children}</LoopItem>} />
@@ -49,5 +49,5 @@ function LoopItem({ reference, queryKey, owner, loop, signature, session, snapsh
     if (variable?.scope !== "loop-item" || variable.owner !== owner || variable.mode !== "state" || !scalarAssignable(variable.type,value,pageUIManifest.runtime.maxStringBytes,pageUIManifest.runtime.decimal.maxBytes)) return;
     session.setItemScalar(owner, key, id, value);
   };
-  return <Panel aria-label={reference.id} className="@container grid min-w-0 gap-3">{children({ owner, key, signature, queryKey, reference, record: read.record, source, values, set })}</Panel>;
+  return <Panel aria-label={reference.id} className="@container grid min-w-0 grid-cols-1 gap-3">{children({ owner, key, signature, queryKey, reference, record: read.record, source, values, set })}</Panel>;
 }

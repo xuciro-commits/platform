@@ -626,7 +626,11 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 }
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
+	namedSources := map[AssetBinding]NamedQuery{}
 	if page.Document != nil {
+		if err := page.Document.CheckQuerySets(); err != nil {
+			return err
+		}
 		for _, v := range page.Document.Variables {
 			if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
 				asset, ok := lookup[*v.Source.Object]
@@ -661,9 +665,12 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 			if err := page.CheckQuerySchema(plan, object, named); err != nil {
 				return fmt.Errorf("page query %s: %w", id, err)
 			}
+			if plan.Query != nil && named != nil && named.Query != nil {
+				namedSources[*plan.Query] = *named.Query
+			}
 		}
 	}
-	return nil
+	return page.CheckQuerySetConditions(namedSources)
 }
 
 // Frozen objects retain their owner's complete definition. Construction fields

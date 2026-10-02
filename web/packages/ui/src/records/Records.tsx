@@ -285,7 +285,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     encoding: mark === "arc" ? { theta: measureEncoding, color: groupEncoding } : { x: groupEncoding, y: measureEncoding },
   };
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 grid-cols-1 gap-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Input aria-label={t("Search")} placeholder={t("Search {things}", { things: info.plural.toLowerCase() })} value={search} disabled={window?.searchLocked} className="w-56"
           onChange={(e) => { if(window)window.onChange({search:e.target.value,offset:0});else {setSearch(e.target.value);setOffset(0);} }} />

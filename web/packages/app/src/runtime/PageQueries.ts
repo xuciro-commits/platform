@@ -3,16 +3,17 @@ import { pageUIManifest, type Api } from "@platform/kernel";
 import { findDefinition, useHost } from "../index";
 import type { PageSessionStore, PageSessionSnapshot, QueryView } from "./Session";
 import type { VariableResult } from "./variables";
-import { boundQueryDefinition, compileQueryPlan, queryView, variablePlan, planKey } from "./query-plans";
+import { boundQueryDefinition, compileQueryPlans, queryView, variablePlan, planKey } from "./query-plans";
 
 export function usePageQueries(page: Api.Page, values: Record<string, VariableResult>, session: PageSessionStore, snapshot: PageSessionSnapshot, overlays:Record<string,Record<string,VariableResult>>={}, editingOverlay?:string) {
   const { source, definitions } = useHost(), plans = page.document?.queries ?? {};
   const active=(owner?:string)=>!owner||owner===editingOverlay||values[page.document?.overlays?.[owner]?.openVariable??""]?.status==="value"&&(values[page.document!.overlays![owner]!.openVariable] as {value:unknown}).value===true;
-  const base = Object.entries(plans).map(([id, plan]) => [id, !active(plan.owner)?{status:"empty" as const}:compileQueryPlan(plan, page.document?.variables ?? {}, plan.owner?overlays[plan.owner]??{}:values, source.entity(plan.object.name), plan.query ? findDefinition(definitions, plan.query.ref) : undefined, pageUIManifest.runtime.query,page.sections??[])] as const);
+  const base = compileQueryPlans(plans,page.document?.variables??{},owner=>owner?overlays[owner]??{}:values,type=>source.entity(type),plan=>plan.query?findDefinition(definitions,plan.query.ref):undefined,pageUIManifest.runtime.query,page.sections??[],active,(id,result)=>snapshot.views[planKey(id)]?.base===result.signature?snapshot.views[planKey(id)]:undefined);
   const compiled = base.map(([id,result]) => [id,queryView(plans[id]!,result,result.status==="value"&&snapshot.views[planKey(id)]?.base===result.signature?snapshot.views[planKey(id)]:undefined,source.entity(plans[id]!.object.name),plans[id]?.query?findDefinition(definitions,plans[id]!.query!.ref):undefined,pageUIManifest.runtime.query)] as const);
   const [round, rerun] = useState(0);
   const requestKey = JSON.stringify(compiled);
   useEffect(() => {
+    for(const [id,result] of base)session.reconcileQueryBase(planKey(id),result.status==="value"?result.signature:undefined);
     for (const [id, plan] of compiled) {
       if (plan.status === "value") void session.querySource(planKey(id)).list(plan.object, plan.query).catch(() => {});
       else session.clearQuery(planKey(id));

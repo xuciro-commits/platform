@@ -37,6 +37,7 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
 /** Build the finite read shape from member-visible descriptors and explicit
  * values. It emits the original RecordQuery, never source text or SQL. */
 export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[]): QueryPlanResult {
+  if(plan.set)return failed("A set plan requires its source graph.");
   if (!info || info.type !== plan.object.name || plan.object.kind !== "object" || plan.limit < 1 || plan.limit > contract.maxLimit || !Number.isInteger(plan.limit) || !Number.isInteger(plan.offset ?? 0) || (plan.offset ?? 0) < 0 || (plan.offset ?? 0) > contract.maxOffset || (plan.conditions?.length ?? 0) > contract.maxConditions || (plan.sort?.length ?? 0) > contract.maxSort) return failed("Query plan is unavailable or exceeds its budget.");
   const field = (name: string) => ["id", "created", "changed"].includes(name) ? { name, type: name === "id" ? "text" : "datetime", ref: undefined } : info.fields.find((field) => field.name === name);
   const usesPlan = (id: string, seen = new Set<string>()): boolean => { if (seen.has(id)) return false; seen.add(id); const variable = variables[id]; return variable?.mode==="property"&&!!variable.source?.variable&&usesPlan(variable.source.variable,seen)||variable?.source?.kind === "plan" || !!variable?.source?.section && !!sections.find((s)=>s.id===variable.source!.section)?.collectionVariable || !!variable?.expression?.args.some((arg) => arg.variable && usesPlan(arg.variable, seen)); };
@@ -90,4 +91,38 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
   if (plan.search) { const value = read(plan.search); if (value.status !== "value") return value; if (typeof value.value !== "string" || new TextEncoder().encode(value.value).length > 4096) return failed("Query search requires text."); search = value.value; }
   const query: RecordQuery = { domain, sort, offset: plan.offset ?? 0, limit, ...(search === undefined ? {} : { search }) };
   return { status: "value", object: info.type, query, signature: JSON.stringify([info.type, query]) };
+}
+
+/** Compile source predicates, never their downloaded windows. Each root owns
+ * one immutable request signature and the original read/session lifecycle. */
+export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:Record<string,Api.PageVariable>,values:(owner?:string)=>Record<string,VariableResult>,entity:(type:string)=>EntityInfo|undefined,named:(plan:Api.PageQuery)=>Api.Definition|undefined,contract:Contract,sections:Api.Section[]=[],active:(owner?:string)=>boolean=()=>true,view?:(id:string,base:Extract<QueryPlanResult,{status:"value"}>)=>QueryView|undefined):ReadonlyArray<readonly [string,QueryPlanResult]> {
+ const compile=(root:string):QueryPlanResult=>{
+  let nodes=0;
+  const target=plans[root];
+  const visit=(id:string,depth:number,path:Set<string>):QueryPlanResult=>{
+   const plan=plans[id];nodes++;
+   if(!plan||path.has(id)||depth>contract.set.maxDepth||nodes>contract.set.maxNodes||plan.object.name!==target?.object.name||plan.object.app!==target?.object.app||plan.owner!==target?.owner)return failed("Set query sources are missing, cyclic or incompatible.");
+   if(!active(plan.owner))return {status:"empty"};
+   const own=compileQueryPlan({...plan,set:undefined},variables,values(plan.owner),entity(plan.object.name),named(plan),contract,sections);
+   const sourceView=(result:QueryPlanResult)=>depth>0&&result.status==="value"?queryView(plan,result,view?.(id,result),entity(plan.object.name),named(plan),contract):result;
+   if(!plan.set||own.status!=="value")return sourceView(own);
+   if(!(contract.set.operations as readonly string[]).includes(plan.set.op)||plan.set.inputs.length!==2)return failed("Set query sources are missing, cyclic or incompatible.");
+   path.add(id);const inputs=plan.set.inputs.map(input=>visit(input,depth+1,path));path.delete(id);
+   const error=inputs.find(input=>input.status==="error"),pending=inputs.find(input=>input.status==="pending"),empty=inputs.find(input=>input.status==="empty");
+   if(error||pending||empty)return (error??pending??empty)!;
+   const predicates=inputs.map(input=>{const q=(input as Extract<QueryPlanResult,{status:"value"}>).query;return {domain:q.domain,search:q.search,set:q.set};});
+   const query={...own.query,set:{op:plan.set.op,inputs:predicates}};
+   return sourceView({...own,query,signature:JSON.stringify([own.object,query])});
+  };
+  const result=visit(root,0,new Set());
+  if(result.status==="value"&&result.query.set){
+   let size=0;const check=(p:Api.RecordSetPredicate):boolean=>{
+    size++;if(size>contract.set.maxNodes||Array.isArray(p.domain)&&p.domain.length>contract.set.maxConditions||new TextEncoder().encode(p.search??"").length>contract.set.maxSearchBytes)return false;
+    return !p.set||p.set.inputs.every(check);
+   };
+   if(!check({domain:result.query.domain,search:result.query.search,set:result.query.set})||new TextEncoder().encode(JSON.stringify(result.query)).length>contract.set.maxBytes)return failed("Set query exceeds its predicate budget.");
+  }
+  return result;
+ };
+ return Object.keys(plans).map(id=>[id,compile(id)] as const);
 }

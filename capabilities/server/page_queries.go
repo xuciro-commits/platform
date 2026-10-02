@@ -29,6 +29,7 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 			}
 		}
 	}
+	namedSources := map[platform.AssetBinding]platform.NamedQuery{}
 	for id, q := range p.Document.Queries {
 		object, ok := t.entity(q.Object.Name)
 		if !ok || object.App != q.Object.App {
@@ -46,6 +47,9 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		if err := p.CheckQuerySchema(q, object, named); err != nil {
 			return fmt.Errorf("page query %s: %w", id, err)
 		}
+		if q.Query != nil && named != nil && named.Query != nil {
+			namedSources[*q.Query] = *named.Query
+		}
 	}
-	return nil
+	return p.CheckQuerySetConditions(namedSources)
 }

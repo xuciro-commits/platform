@@ -564,7 +564,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     return status?.status==="error"?<Panel key={id} role="alert" className="flex flex-wrap items-center gap-2">{plan.title||id}: {t(status.code)}<Button onClick={()=>queries.retry(id)}>{t("Retry query")}</Button></Panel>:null;
   });
   return (
-    <div ref={pageFocus} tabIndex={-1} className="@container/page grid gap-3 outline-none">
+    <div ref={pageFocus} tabIndex={-1} className="@container/page grid min-w-0 grid-cols-1 gap-3 outline-none">
       {notice}
       {queryErrors(editingRoot ? overlayForRoot(editingRoot) : undefined)}
       {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="object-set"&&!application.error).map(([id,result])=><Panel key={id} role="alert" className="flex gap-2">{result.status==="error"?t(result.code):""}<Button onClick={()=>application.retry(id)}>{t("Retry query")}</Button></Panel>)}
@@ -601,7 +601,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
 function OverlayBody({ children, session, sectionIDs, owner }: { children: ReactNode; session: PageSessionStore; sectionIDs: string[]; owner:string }) {
   const key = JSON.stringify(sectionIDs);
   useEffect(() => () => session.endOverlay(owner), [session, key, owner]);
-  return <div className="@container grid min-w-0 gap-3">{children}</div>;
+  return <div className="@container grid min-w-0 grid-cols-1 gap-3">{children}</div>;
 }
 
 /** Whether a page is composed of sections (ADR-0035) rather than the list-detail shorthand. */

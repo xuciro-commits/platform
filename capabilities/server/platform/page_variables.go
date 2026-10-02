@@ -77,6 +77,14 @@ type pageRuntimeContract struct {
 		PresentationWidgets []string `json:"presentationWidgets"`
 	} `json:"loop"`
 	Query struct {
+		Set struct {
+			Operations     []string `json:"operations"`
+			MaxConditions  int      `json:"maxConditions"`
+			MaxSearchBytes int      `json:"maxSearchBytes"`
+			MaxNodes       int      `json:"maxNodes"`
+			MaxDepth       int      `json:"maxDepth"`
+			MaxBytes       int      `json:"maxBytes"`
+		} `json:"set"`
 		Source        string   `json:"source"`
 		MaxPlans      int      `json:"maxPlans"`
 		MaxConditions int      `json:"maxConditions"`
