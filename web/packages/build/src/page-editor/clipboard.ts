@@ -5,15 +5,15 @@ type Draft<S extends Section> = {document:Api.PageDocument;sections:S[];selectio
 export type LayoutClipboard<S extends Section> = {draft:Draft<S>;root:string;object:string};
 export type ClipboardIssue = "unsupported" | "scope" | "invalid" | "dependencies" | "budget" | "tab-binding";
 type Result<T> = {value:T;issue?:never} | {issue:ClipboardIssue;value?:never};
-type Limits = {maxVariables:number;query:{maxPlans:number;maxTotalLimit:number};selectionWriters:readonly string[];selectionWidgets:readonly string[];references:Readonly<Record<string,readonly string[]>>};
+type Limits = {maxVariables:number;query:{maxPlans:number;maxTotalLimit:number};loop:{maxContainers:number;maxItems:number;maxTotalItems:number;maxDepth:number};aggregate:{maxVariables:number;maxExpandedReads:number};selectionWriters:readonly string[];selectionWidgets:readonly string[];references:Readonly<Record<string,readonly string[]>>};
 const nodeFields=["valueVariable","activeVariable","visibleWhen","enabledWhen"] as const;
 const sectionFields=["recordVariable","selectionVariable","collectionVariable","filterVariable"] as const;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
-const layoutKinds=["rows","columns","tabs","flow","toolbar"];
-function inMainPage(document:Api.PageDocument,id:string):boolean {
+const layoutKinds=["rows","columns","tabs","flow","toolbar","loop"];
+function inMainPage(document:Api.PageDocument,id:string,wholeLoop=false):boolean {
  const seen=new Set<string>();let at:string|undefined=id;
  while(at&&!seen.has(at)){
-  if(document.nodes[at]?.kind==="loop")return false;
+  if(document.nodes[at]?.kind==="loop"&&!(wholeLoop&&at===id))return false;
   if(at===document.root)return true;
   seen.add(at);at=document.unusedWidgets?.find(e=>e.node===at)?.parent??Object.entries(document.nodes).find(([,n])=>n.children?.includes(at!))?.[0];
  }
@@ -29,10 +29,10 @@ export function copyLayout<S extends Section>(draft:Draft<S>,root:string,object:
  };
  if(!document.nodes[root]||!layoutKinds.includes(document.nodes[root]!.kind))return {issue:"unsupported"};
  if(!walk(root))return {issue:"unsupported"};
- // First profile is a main-page subtree; Loop and Overlay ownership is not lifted.
- if(!inMainPage(document,root))return {issue:"scope"};
+ // A complete Loop brings its owner. Fragments cannot lift item state to page.
+ if(!inMainPage(document,root,true))return {issue:"scope"};
  const ownedSections=new Set<string>();
- for(const id of seen){const node=document.nodes[id]!,section=node.section;if(node.kind==="widget"){if(!section||ownedSections.has(section)||draft.sections.filter(s=>s.id===section).length!==1)return {issue:"invalid"};ownedSections.add(section);}}
+ for(const id of seen){const node=document.nodes[id]!,section=node.section;if(node.kind==="loop"&&!node.loop)return {issue:"invalid"};if(node.kind==="widget"){if(!section||ownedSections.has(section)||draft.sections.filter(s=>s.id===section).length!==1)return {issue:"invalid"};ownedSections.add(section);}}
  return {value:{draft:structuredClone(draft),root,object}};
 }
 
@@ -44,6 +44,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const original=clip.draft.document,document=structuredClone(current.document);
  const nodes=new Set<string>(),walk=(id:string)=>{nodes.add(id);for(const child of [...(original.nodes[id]?.children??[]),...(original.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)])walk(child);};walk(clip.root);
  const sections=clip.draft.sections.filter(s=>nodes.has(Object.keys(original.nodes).find(id=>original.nodes[id]?.section===s.id)??""));
+ const loops=new Set([...nodes].filter(id=>original.nodes[id]?.kind==="loop"));
  const sectionIDs=new Set(sections.map(s=>s.id!));
  const events=(original.events??[]).filter(e=>sectionIDs.has(e.source));
  const variables=new Set<string>(),queries=new Set<string>(),missing={value:false};
@@ -52,6 +53,10 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const addQuery=(id:string)=>{if(queries.has(id))return;const q=original.queries?.[id];if(!q){missing.value=true;return;}queries.add(id);queryRefs(q).forEach(addVariable);q.set?.inputs.forEach(addQuery);};
  const addVariable=(id:string)=>{if(variables.has(id))return;const v=original.variables?.[id];if(!v){missing.value=true;return;}variables.add(id);v.expression?.args.flatMap(valueRefs).forEach(addVariable);if(v.mode!=="shared"&&v.source?.variable)addVariable(v.source.variable);if(["plan","count"].includes(v.source?.kind??"")&&v.source?.query)addQuery(v.source.query);};
  for(const id of nodes)for(const key of nodeFields){const value=original.nodes[id]?.[key];if(value)addVariable(value);}
+ for(const id of loops){const loop=original.nodes[id]!.loop!;addVariable(loop.collection);addVariable(loop.itemVariable);}
+ // Owned declarations remain owned even if their consumer is dormant.
+ for(const [id,v] of Object.entries(original.variables??{}))if(v.scope==="loop-item"&&loops.has(v.owner??""))addVariable(id);
+ for(const [id,q] of Object.entries(original.queries??{}))if(loops.has(q.itemOwner??""))addQuery(id);
  for(const section of sections)for(const key of sectionFields)if(section[key])addVariable(section[key]!);
  const locallyRead=new Set(variables);
  for(const event of events){if(event.target)addVariable(event.target);Object.values(event.navigate?.inputs??{}).flatMap(valueRefs).forEach(addVariable);Object.values(event.navigate?.results??{}).forEach(addVariable);}
@@ -63,11 +68,13 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const tabSelectors=new Map<string,Set<string>>();
  for(const id of nodes){const node=original.nodes[id]!;if(node.kind!=="tabs")continue;
   const variable=node.activeVariable,v=original.variables?.[variable??""];
-  if(!variable||!v||v.scope!=="page"||v.mode!=="state"||v.type!=="string"||externalPorts.has(variable)||overlayOpen.has(variable))return {issue:"tab-binding"};
+  if(!variable||!v||!(v.scope==="page"||v.scope==="loop-item"&&loops.has(v.owner??""))||v.mode!=="state"||v.type!=="string"||externalPorts.has(variable)||overlayOpen.has(variable))return {issue:"tab-binding"};
   if(!node.children?.includes(String(v.initial)))return {issue:"invalid"};
   const children=tabSelectors.get(variable)??new Set<string>();node.children.forEach(child=>children.add(child));tabSelectors.set(variable,children);
  }
  const clonedVariables=new Set<string>(),clonedQueries=new Set<string>();
+ for(const id of variables){const v=original.variables![id]!;if(v.scope==="loop-item"&&loops.has(v.owner??""))clonedVariables.add(id);}
+ for(const id of queries)if(loops.has(original.queries![id]!.itemOwner??""))clonedQueries.add(id);
  const cloneState=(id:string)=>{const v=original.variables?.[id];if(v?.scope==="page"&&v.mode==="state"&&!externalPorts.has(id)&&!overlayOpen.has(id))clonedVariables.add(id);};
  for(const id of nodes){const v=original.nodes[id]?.valueVariable;if(v)cloneState(v);}
  for(const id of tabSelectors.keys())cloneState(id);
@@ -78,8 +85,8 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
   for(const id of queries){const q=original.queries![id]!;if(!clonedQueries.has(id)&&(queryRefs(q).some(v=>clonedVariables.has(v))||q.set?.inputs.some(q=>clonedQueries.has(q)))){clonedQueries.add(id);changed=true;}}
   for(const id of variables){const v=original.variables![id]!;if(!clonedVariables.has(id)&&(v.expression?.args.some(a=>a.variable&&clonedVariables.has(a.variable))||v.mode!=="shared"&&v.source?.variable&&clonedVariables.has(v.source.variable)||["plan","count"].includes(v.source?.kind??"")&&clonedQueries.has(v.source?.query??""))){clonedVariables.add(id);changed=true;}}
  }
- for(const id of variables)if(original.variables![id]!.scope!=="page"&&original.variables![id]!.scope!=="application")return {issue:"scope"};
- for(const id of queries)if(original.queries![id]!.owner||original.queries![id]!.itemOwner)return {issue:"scope"};
+ for(const id of variables){const v=original.variables![id]!;if(!["page","application"].includes(v.scope)&&!(v.scope==="loop-item"&&loops.has(v.owner??"")))return {issue:"scope"};}
+ for(const id of queries){const q=original.queries![id]!;if(q.owner||q.itemOwner&&!loops.has(q.itemOwner))return {issue:"scope"};}
  const shared:string[]=[];
  for(const id of variables)if(!clonedVariables.has(id)){if(!same(original.variables?.[id],document.variables?.[id]))return {issue:"dependencies"};shared.push(id);}
  for(const id of queries)if(!clonedQueries.has(id)&&!same(original.queries?.[id],document.queries?.[id]))return {issue:"dependencies"};
@@ -102,12 +109,13 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
   return s;
  });
  for(const s of sections)for(const name of [s.selection,s.parentSelection])if(name&&!selectionMap.has(slot(clip.draft.selections.find(v=>v.name===name)?.object.name??"",name))){if(!same(clip.draft.selections.find(v=>v.name===name),current.selections.find(v=>v.name===name)))return {issue:"dependencies"};shared.push(name);}
- for(const [id,mapped] of nodeMap){const n=structuredClone(original.nodes[id]!);if(n.children)n.children=n.children.map(child=>nodeMap.get(child)!);if(n.section)n.section=sectionMap.get(n.section)!;for(const key of nodeFields)if(n[key])n[key]=variableMap.get(n[key]!)??n[key];document.nodes[mapped]=n;}
+ for(const [id,mapped] of nodeMap){const n=structuredClone(original.nodes[id]!);if(n.children)n.children=n.children.map(child=>nodeMap.get(child)!);if(n.section)n.section=sectionMap.get(n.section)!;for(const key of nodeFields)if(n[key])n[key]=variableMap.get(n[key]!)??n[key];if(n.loop){n.loop.collection=variableMap.get(n.loop.collection)??n.loop.collection;n.loop.itemVariable=variableMap.get(n.loop.itemVariable)!;}document.nodes[mapped]=n;}
  document.nodes[target]!.children=[...(document.nodes[target]!.children??[]),nodeMap.get(clip.root)!];
  const dormant=(original.unusedWidgets??[]).filter(e=>nodes.has(e.parent)).map(e=>({node:nodeMap.get(e.node)!,parent:nodeMap.get(e.parent)!}));
  if(dormant.length)document.unusedWidgets=[...(document.unusedWidgets??[]),...dormant];
  for(const [id,mapped] of variableMap){
   const v=structuredClone(original.variables![id]!);
+  if(v.owner)v.owner=nodeMap.get(v.owner)??v.owner;
   if(tabSelectors.has(id))v.initial=tabValue(id,v.initial);
   if(v.expression){
    const selector=v.expression.op==="equal"?v.expression.args.find(a=>a.variable&&tabSelectors.has(a.variable))?.variable:undefined;
@@ -115,14 +123,26 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
   }
   if(v.source){
    if(v.source.section)v.source.section=sectionMap.get(v.source.section)??v.source.section;
+   if(v.source.node)v.source.node=nodeMap.get(v.source.node)??v.source.node;
    if(v.mode!=="shared"&&v.source.variable)v.source.variable=variableMap.get(v.source.variable)??v.source.variable;
    if(v.source.query)v.source.query=queryMap.get(v.source.query)??v.source.query;
   }
   document.variables={...document.variables,[mapped]:v};
  }
- for(const [id,mapped] of queryMap){const q=structuredClone(original.queries![id]!);if(q.search)q.search=remapValue(q.search);if(q.for)q.for=remapValue(q.for);if(q.conditions)q.conditions=q.conditions.map(c=>({...c,value:remapValue(c.value)}));if(q.set)q.set.inputs=q.set.inputs.map(id=>queryMap.get(id)??id);document.queries={...document.queries,[mapped]:q};}
+ for(const [id,mapped] of queryMap){const q=structuredClone(original.queries![id]!);if(q.itemOwner)q.itemOwner=nodeMap.get(q.itemOwner)!;if(q.search)q.search=remapValue(q.search);if(q.for)q.for=remapValue(q.for);if(q.conditions)q.conditions=q.conditions.map(c=>({...c,value:remapValue(c.value)}));if(q.set)q.set.inputs=q.set.inputs.map(id=>queryMap.get(id)??id);document.queries={...document.queries,[mapped]:q};}
  document.events=[...(document.events??[]),...events.map(source=>{const e=structuredClone(source);e.source=sectionMap.get(e.source)!;if(e.value!==undefined)e.value=tabValue(e.target,e.value);e.target=variableMap.get(e.target)??e.target;if(e.navigate){if(e.navigate.inputs)e.navigate.inputs=Object.fromEntries(Object.entries(e.navigate.inputs).map(([key,value])=>[key,remapValue(value)]));if(e.navigate.results)e.navigate.results=Object.fromEntries(Object.entries(e.navigate.results).map(([key,value])=>[key,variableMap.get(value)??value]));}return e;})];
  const next={...current,document,sections:[...current.sections,...rewritten],selections:[...current.selections,...addedSelections]};
- if(Object.keys(document.nodes).length>256||next.sections.length>128||(document.unusedWidgets?.length??0)>128||Object.keys(document.variables??{}).length>limits.maxVariables||Object.keys(document.queries??{}).length>limits.query.maxPlans||Object.values(document.queries??{}).reduce((sum,q)=>sum+q.limit,0)>limits.query.maxTotalLimit)return {issue:"budget"};
+ if(Object.keys(document.nodes).length>256||next.sections.length>128||(document.unusedWidgets?.length??0)>128||Object.keys(document.variables??{}).length>limits.maxVariables||Object.keys(document.queries??{}).length>limits.query.maxPlans||!withinLoopBudgets(document,limits))return {issue:"budget"};
  return {value:{draft:next,root:nodeMap.get(clip.root)!,shared:[...new Set(shared)]}};
+}
+
+function withinLoopBudgets(document:Api.PageDocument,limits:Limits):boolean {
+ const owners=new Map<string,string|undefined>();
+ const visit=(id:string,owner?:string)=>{if(owners.has(id))return;owners.set(id,owner);const n=document.nodes[id];for(const child of [...(n?.children??[]),...(document.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)])visit(child,n?.kind==="loop"?id:owner);};
+ visit(document.root);Object.values(document.overlays??{}).forEach(o=>visit(o.root));
+ const factor=(owner?:string)=>{let result=1,depth=0;while(owner){if(++depth>limits.loop.maxDepth)return Infinity;const loop=document.nodes[owner]?.loop;if(!loop||!Number.isInteger(loop.limit)||loop.limit<1||loop.limit>limits.loop.maxItems)return Infinity;result*=loop.limit;owner=owners.get(owner);}return result;};
+ const loops=Object.entries(document.nodes).filter(([,n])=>n.kind==="loop"),items=loops.reduce((sum,[id,n])=>sum+(n.loop?.limit??Infinity)*factor(owners.get(id)),0);
+ if(loops.length>limits.loop.maxContainers||items>limits.loop.maxTotalItems||loops.some(([id])=>!Number.isFinite(factor(id))))return false;
+ const reads=Object.values(document.queries??{}).reduce((sum,q)=>sum+q.limit*factor(q.itemOwner),0),aggregates=Object.values(document.variables??{}).filter(v=>v.mode==="aggregate"),expanded=[...new Set(aggregates.map(v=>v.source?.query??""))].reduce((sum,id)=>sum+factor(document.queries?.[id]?.itemOwner),0);
+ return reads<=limits.query.maxTotalLimit&&aggregates.length<=limits.aggregate.maxVariables&&expanded<=limits.aggregate.maxExpandedReads;
 }
