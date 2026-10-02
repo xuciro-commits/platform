@@ -184,6 +184,12 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 		if err := checkReleaseBindings(ref, body, asset.Requires); err != nil {
 			return err
 		}
+		if ref.Kind == AssetLinkType {
+			var l LinkType
+			if json.Unmarshal(body, &l) != nil || asset.ContractVersion != l.Contract() {
+				return fmt.Errorf("link asset has an incompatible cardinality contract")
+			}
+		}
 		if ref.Kind == AssetObject {
 			info, err := queryObjectDescriptor(body)
 			if err != nil {

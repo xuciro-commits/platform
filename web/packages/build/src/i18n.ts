@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Relationship cardinality": "关系基数",
+  "One-to-many": "一对多",
+  "One-to-one (at most one child)": "一对一（至多一个子记录）",
+  "A parent reference may belong to at most one child, including archived children. Empty optional references are not reserved. A published unique relationship cannot be relaxed.": "每个父引用至多由一个子记录持有，包括已归档子记录。可选空引用不占位。已发布唯一关系不能放宽。",
+
   "Put back in original layout": "放回原布局",
   "Layout {n}": "布局{n}",
   "Unused widgets": "未使用组件",

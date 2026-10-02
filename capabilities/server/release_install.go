@@ -192,7 +192,7 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 				if json.Unmarshal([]byte(raw), &l) != nil {
 					return nil, fmt.Errorf("invalid link family")
 				}
-				declaration := platform.LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: l.Parent}, Child: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: l.Child}, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required, Storage: "reference", Cardinality: "one-to-many", DeletePolicy: "owner"}
+				declaration := l.Declaration()
 				if err := view.InstallLinkType(platform.Caller{Replaying: true}, declaration, i+1); err != nil {
 					return nil, err
 				}

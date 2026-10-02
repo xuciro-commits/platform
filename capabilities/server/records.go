@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -26,9 +27,10 @@ import (
 // A projection into PostgreSQL (stage 3) will serve the same reads.
 
 type recordStore struct {
-	mu    sync.Mutex
-	types map[string]*entityType
-	byGo  map[reflect.Type]*entityType
+	mu          sync.Mutex
+	uniqueLinks map[string]platform.LinkType
+	types       map[string]*entityType
+	byGo        map[reflect.Type]*entityType
 	// A private 19a decision view has no projection callback. It may replace
 	// its parent only if no direct write reached that parent in the meantime.
 	parent         *recordStore
@@ -189,7 +191,7 @@ func newRecordStore() *recordStore {
 func (s *recordStore) forkRecords() *recordStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	draft := &recordStore{parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+	draft := &recordStore{uniqueLinks: maps.Clone(s.uniqueLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: make(map[string]bool, len(s.dirty)), changed: make(map[string][]string, len(s.changed)),
 		order: slices.Clone(s.order)}
@@ -236,6 +238,10 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 	if draft.sealed || s.generation != draft.baseGeneration {
 		return fmt.Errorf("record draft is stale or already promoted")
 	}
+	if err := draft.validateLinkConstraintsLocked(); err != nil {
+		return err
+	}
+	s.uniqueLinks = draft.uniqueLinks
 	s.types, s.byGo = draft.types, draft.byGo
 	s.dirty, s.changed, s.order = draft.dirty, draft.changed, draft.order
 	s.generation++
@@ -384,6 +390,9 @@ func (s *recordStore) put(c platform.Caller, r *pb.ChangeRecord, entity any) *ke
 	if rec.ID == "" {
 		return &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
+	if err := s.checkLinkWriteLocked(et, v); err != nil {
+		return err
+	}
 	stamp := platform.Stamp{By: r.GetSubmission().GetPrincipalId(), At: r.GetRecordedTime().AsTime(), Change: r.GetChangeId()}
 	prev := et.rows[rec.ID]
 	change := RecordChange{Change: r.GetChangeId(), Schema: r.GetSubmission().GetSchema().GetName(), By: stamp.By, At: stamp.At, Fields: []FieldChange{}}
@@ -520,7 +529,7 @@ func (s *recordStore) check(c platform.Caller, entity any) *kernel.Error {
 			}
 		}
 	}
-	return nil
+	return s.checkLinkWriteLocked(et, v)
 }
 
 // find selects records of a type; visible, when set, is the caller's scope.

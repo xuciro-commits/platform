@@ -292,6 +292,9 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 			return fmt.Errorf("tenant %s: no entity type %s", t.ID, slices.Sorted(maps.Keys(left))[0])
 		}
 	}
+	if err := t.records.validateLinkConstraints(); err != nil {
+		return err
+	}
 	t.auditMu.Lock()
 	t.audit = s.Audit
 	t.auditMu.Unlock()

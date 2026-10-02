@@ -13,7 +13,7 @@ import (
 
 func linkTypeReleaseAsset(f LinkType, sourceVersion string) (platform.ReleaseAsset, error) {
 	body, err := json.Marshal(f.definition())
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, ContractVersion: 1,
+	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: f.Name}, ContractVersion: f.definition().Contract(),
 		SourceVersion: sourceVersion + ".link-" + strconv.Itoa(f.Version), Requires: linkTypeRequires(f.definition()), Body: body}, err
 }
 
@@ -29,7 +29,7 @@ func (b *Build) LinkTypeReleaseAsset(name string, sourceVersion string) (platfor
 		return platform.ReleaseAsset{}, fmt.Errorf("linkType %s version %d is not retained", name, version)
 	}
 	body, err := json.Marshal(f)
-	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: name}, ContractVersion: 1,
+	return platform.ReleaseAsset{Ref: platform.AssetRef{App: ID, Kind: platform.AssetLinkType, Name: name}, ContractVersion: f.Contract(),
 		SourceVersion: b.Manifest().Version + ".link-" + strconv.Itoa(version), Requires: linkTypeRequires(f), Body: body}, err
 }
 
@@ -56,7 +56,7 @@ func (b *Build) InstallLinkTypeAsset(asset platform.ReleaseAsset) error {
 	ordinal, ok := strings.CutPrefix(asset.SourceVersion, prefix)
 	version, err := strconv.Atoi(ordinal)
 	var declaration platform.LinkType
-	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.ContractVersion != 1 || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetLinkType || json.Unmarshal(asset.Body, &declaration) != nil || declaration.Check() != nil || declaration.Name != asset.Ref.Name || declaration.Parent.App != ID || declaration.Child.App != ID || !reflect.DeepEqual(asset.Requires, linkTypeRequires(declaration)) {
+	if !ok || err != nil || version < 1 || version > 64 || strconv.Itoa(version) != ordinal || asset.Ref.App != ID || asset.Ref.Kind != platform.AssetLinkType || json.Unmarshal(asset.Body, &declaration) != nil || asset.ContractVersion != declaration.Contract() || declaration.Check() != nil || declaration.Name != asset.Ref.Name || declaration.Parent.App != ID || declaration.Child.App != ID || !reflect.DeepEqual(asset.Requires, linkTypeRequires(declaration)) {
 		return fmt.Errorf("invalid builder link type asset %s", asset.Ref)
 	}
 	f := linkTypeFromDeclaration(declaration)
@@ -140,7 +140,7 @@ func (b *Build) prepareLinkTypeReleasePublications(assets []platform.ReleaseAsse
 			continue
 		}
 		var q platform.LinkType
-		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Parent.Name != record.Parent || q.Child.Name != record.Child || q.Via != record.Via {
+		if version != record.Version+1 || json.Unmarshal(asset.Body, &q) != nil || q.Check() != nil || q.Name != record.Name || q.Parent.Name != record.Parent || q.Child.Name != record.Child || q.Via != record.Via || record.Declaration().Cardinality == "one-to-one" && q.Cardinality != "one-to-one" {
 			return nil, fmt.Errorf("invalid next link type version")
 		}
 		if err := b.host.ValidateInstallLinkType(q); err != nil {
@@ -166,5 +166,5 @@ func linkTypeRequires(l platform.LinkType) []platform.AssetRef {
 	return []platform.AssetRef{l.Parent, l.Child}
 }
 func linkTypeFromDeclaration(l platform.LinkType) LinkType {
-	return LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: l.Parent.Name, Child: l.Child.Name, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required}
+	return LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: l.Parent.Name, Child: l.Child.Name, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required, Cardinality: l.Cardinality}
 }

@@ -22,7 +22,15 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 	if !ok || child.App != h.app.Manifest().ID {
 		return fmt.Errorf("link type needs its child owner's object")
 	}
-	return l.CheckSchema(parent, child)
+	if err := l.CheckSchema(parent, child); err != nil {
+		return err
+	}
+	if l.Cardinality == "one-to-one" {
+		h.t.records.mu.Lock()
+		defer h.t.records.mu.Unlock()
+		return h.t.records.validateUniqueLinkLocked(l)
+	}
+	return nil
 }
 func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, version int) error {
 	if c.Staging() {
@@ -35,7 +43,7 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 		return err
 	}
 	ref := platform.AssetRef{App: h.app.Manifest().ID, Kind: platform.AssetLinkType, Name: l.Name}
-	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".link-" + strconv.Itoa(version), ContractVersion: 1, Requires: uniqueRefs([]platform.AssetRef{l.Parent, l.Child}), LinkType: &l, LinkVersions: map[string]platform.LinkType{}}
+	def := platform.Definition{Ref: ref, Source: "tenant", Version: h.app.Manifest().Version + ".link-" + strconv.Itoa(version), ContractVersion: l.Contract(), Requires: uniqueRefs([]platform.AssetRef{l.Parent, l.Child}), LinkType: &l, LinkVersions: map[string]platform.LinkType{}}
 	i := slices.IndexFunc(h.t.definitions, func(d platform.Definition) bool { return d.Ref == ref })
 	if i >= 0 {
 		old := h.t.definitions[i]
@@ -52,6 +60,9 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 		if prior, ok := def.LinkVersions[def.Version]; ok && string(platform.Raw(prior)) != string(platform.Raw(l)) {
 			return fmt.Errorf("link version bytes cannot change")
 		}
+	}
+	if err := h.t.records.installLinkConstraint(l); err != nil {
+		return err
 	}
 	def.LinkVersions[def.Version] = l
 	if i >= 0 {

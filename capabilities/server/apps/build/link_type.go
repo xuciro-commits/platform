@@ -18,6 +18,7 @@ const SchemaLinkType = LinkTypeType + ".publish"
 // edits never replace what callers use until the publication result commits.
 type LinkType struct {
 	platform.Record
+	Cardinality string   `json:"cardinality,omitempty" choices:"one-to-many,one-to-one" title:"Relationship cardinality"`
 	Name        string   `json:"name" field:"required,search"`
 	Title       string   `json:"title" field:"required,search"`
 	Description string   `json:"description" field:"required" type:"longtext"`
@@ -34,8 +35,14 @@ type LinkType struct {
 }
 
 func (f LinkType) definition() platform.LinkType {
-	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: "reference", Cardinality: "one-to-many", DeletePolicy: "owner"}
+	cardinality := f.Cardinality
+	if cardinality == "" {
+		cardinality = "one-to-many"
+	}
+	return platform.LinkType{Name: f.Name, Title: f.Title, Description: f.Description, Parent: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Parent}, Child: platform.AssetRef{App: ID, Kind: platform.AssetObject, Name: f.Child}, Via: f.Via, Forward: f.Forward, Reverse: f.Reverse, Required: f.Required, Storage: "reference", Cardinality: cardinality, DeletePolicy: "owner"}
 }
+
+func (f LinkType) Declaration() platform.LinkType { return f.definition() }
 
 func (b *Build) linkTypeEntity() platform.Entity {
 	return platform.Entity{Type: LinkTypeType, Title: "Link type", Plural: "Link types", Model: LinkType{}, Display: "title",
@@ -78,8 +85,8 @@ func (b *Build) checkLinkType(f *LinkType) error {
 			return fmt.Errorf("Link type %s is already declared", f.Name)
 		}
 	}
-	if old, ok := wasPublished[LinkType](f.Published); ok && (old.Name != f.Name || old.Parent != f.Parent || old.Child != f.Child || old.Via != f.Via || old.Required != f.Required) {
-		return fmt.Errorf("A published link keeps its identity, objects and reference shape")
+	if old, ok := wasPublished[LinkType](f.Published); ok && (old.Name != f.Name || old.Parent != f.Parent || old.Child != f.Child || old.Via != f.Via || old.Required != f.Required || old.definition().Cardinality == "one-to-one" && f.definition().Cardinality != "one-to-one") {
+		return fmt.Errorf("A published link keeps its identity, objects, reference shape and retained uniqueness")
 	}
 	return nil
 }
@@ -118,7 +125,7 @@ func linkTypeImage(image []byte) (LinkType, error) {
 	var latest LinkType
 	for i, raw := range record.Versions {
 		f, ok := wasPublished[LinkType](raw)
-		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Parent != latest.Parent || f.Child != latest.Child || f.Via != latest.Via || f.Required != latest.Required) {
+		if !ok || f.State != "published" || f.ID != record.ID || f.Version != i+1 || f.Published != "" || len(f.Versions) != 0 || f.definition().Check() != nil || i > 0 && (f.Name != latest.Name || f.Parent != latest.Parent || f.Child != latest.Child || f.Via != latest.Via || f.Required != latest.Required || latest.definition().Cardinality == "one-to-one" && f.definition().Cardinality != "one-to-one") {
 			return LinkType{}, fmt.Errorf("accepted link type has a malformed version %d", i+1)
 		}
 		latest = f

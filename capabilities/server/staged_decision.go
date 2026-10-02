@@ -169,6 +169,10 @@ func (d *stagedDecision) Publish(c platform.Caller, record *pb.ChangeRecord) {
 		if len(raw) == 0 || err != nil || publisher.ValidateAcceptedPublication(schema, raw) != nil {
 			unsupportedStagedEffect()
 		}
+		if err := d.tenant.installPublicationLinkConstraint(d.records, schema, raw); err != nil {
+			d.failure = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, linkCardinalityFailure)
+			return
+		}
 		if d.publications == nil {
 			d.publications = map[string]*acceptedPublication{}
 		}

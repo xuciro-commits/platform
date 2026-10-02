@@ -91,6 +91,9 @@ func (d *stagedDecision) batchResult(app string, request *pb.Submission, receipt
 	if receipt == nil || len(d.events) == 0 || d.failure != nil {
 		return nil, fmt.Errorf("batch needs accepted decisions and all written records")
 	}
+	if err := d.records.validateLinkConstraints(); err != nil {
+		return nil, err
+	}
 	result := acceptedBatch{Version: 1, Kind: "record-batch", Tenant: d.tenant.ID,
 		App: app, At: at.UTC(), Sequences: maps.Clone(d.allocated), SequenceBases: maps.Clone(d.sequenceBases),
 		Notices: d.savedNotices(), Intents: slices.Clone(d.intents), Observations: slices.Clone(d.observations),
@@ -533,6 +536,16 @@ func (t *Tenant) applyAcceptedBatch(l *platform.Ledger, raw []byte) (bool, error
 		}
 	}
 	draft.mu.Unlock()
+	for _, decision := range result.Decisions {
+		if p := decision.Publication; p != nil {
+			if err := t.installPublicationLinkConstraint(draft, p.Schema, p.Image); err != nil {
+				return false, err
+			}
+		}
+	}
+	if err := draft.validateLinkConstraints(); err != nil {
+		return false, err
+	}
 	t.seqMu.Lock()
 	for key, n := range result.Sequences {
 		if result.SequenceBases[key] != t.sequences[key] || n <= t.sequences[key] {

@@ -1,6 +1,9 @@
 package platform
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 type LinkTraversal struct {
 	Binding   AssetBinding `json:"binding"`
@@ -26,11 +29,18 @@ type LinkType struct {
 }
 
 func (l LinkType) Check() error {
-	if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || !pageNodeID.MatchString(l.Via) || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Storage != "reference" || l.Cardinality != "one-to-many" || l.DeletePolicy != "owner" {
-		return fmt.Errorf("link type needs typed objects, two names and the reference one-to-many profile")
+	if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || !pageNodeID.MatchString(l.Via) || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Storage != "reference" || !slices.Contains([]string{"one-to-many", "one-to-one"}, l.Cardinality) || l.DeletePolicy != "owner" {
+		return fmt.Errorf("link type needs typed objects, two names and a supported reference cardinality profile")
 	}
 	return nil
 }
+func (l LinkType) Contract() int {
+	if l.Cardinality == "one-to-one" {
+		return 2
+	}
+	return 1
+}
+
 func (l LinkType) CheckSchema(parent, child EntityInfo) error {
 	if err := l.Check(); err != nil {
 		return err
@@ -51,6 +61,7 @@ func (d Definition) LinkVersion(version string) *Definition {
 	}
 	d.Version = version
 	d.LinkType = &l
+	d.ContractVersion = l.Contract()
 	d.LinkVersions = nil
 	return &d
 }

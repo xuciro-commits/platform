@@ -186,7 +186,10 @@ func (t *Tenant) registerDefinitions() error {
 			if err := l.CheckSchema(parent, child); err != nil {
 				return err
 			}
-			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetLinkType, Name: l.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: uniqueRefs([]platform.AssetRef{l.Parent, l.Child}), LinkType: &l}); err != nil {
+			if err := t.records.installLinkConstraint(l); err != nil {
+				return err
+			}
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetLinkType, Name: l.Name}, Source: "code", Version: manifest.Version, ContractVersion: l.Contract(), Requires: uniqueRefs([]platform.AssetRef{l.Parent, l.Child}), LinkType: &l}); err != nil {
 				return err
 			}
 		}
