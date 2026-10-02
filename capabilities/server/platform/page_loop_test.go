@@ -68,7 +68,7 @@ func TestPageLoopChecksScopeAndBudgets(t *testing.T) {
 			d.Nodes["loop"] = n
 			d.Nodes["root"] = PageLayoutNode{Kind: "rows", Children: []string{"loop"}}
 		}, "query window"},
-		{"unsupported widget", func(_ *PageDocument, s []Section) { s[2].Widget = "table" }, "does not support"},
+		{"unsupported widget", func(_ *PageDocument, s []Section) { s[2].Widget = "table" }, "recordVariable port"},
 		{"page dependency leaks", func(d *PageDocument, _ []Section) {
 			d.Variables["leak"] = PageVariable{Scope: "page", Type: "boolean", Mode: "derived", Expression: &PageExpression{Op: "not", Args: []PageValue{{Variable: "expanded"}}}}
 		}, "scope"},

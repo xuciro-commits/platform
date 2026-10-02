@@ -149,13 +149,13 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 		if section.FilterVariable != "" {
 			v := d.Variables[section.FilterVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.15") || owner != "" || !slices.Contains([]string{"filter", "table", "chart", "metric"}, section.Widget) || section.CollectionVariable != "" || v.Type != "filter" || v.Mode != "shared" || (section.Widget == "filter" && (!v.Writable || sectionOverlays[section.ID] != "")) {
+			if owner != "" || section.CollectionVariable != "" || v.Type != "filter" || v.Mode != "shared" || (section.Widget == "filter" && (!v.Writable || sectionOverlays[section.ID] != "")) {
 				return fmt.Errorf("page section %s has an invalid shared filter port", section.ID)
 			}
 		}
 		if section.SelectionVariable != "" {
 			v := d.Variables[section.SelectionVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.14") || section.Widget != "table" || owner != "" || sectionOverlays[section.ID] != "" || section.Selection != "" || v.Type != "record" || v.Mode != "shared" || !v.Writable {
+			if owner != "" || sectionOverlays[section.ID] != "" || section.Selection != "" || v.Type != "record" || v.Mode != "shared" || !v.Writable {
 				return fmt.Errorf("page section %s needs a writable shared record output on a root table", section.ID)
 			}
 		}

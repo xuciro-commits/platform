@@ -47,12 +47,12 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 	for _, event := range d.Events {
 		found := false
 		for _, section := range sections {
-			if section.ID == event.Source && section.Widget == "button" {
+			if section.ID == event.Source && widgetEvent(section.Widget, event.Event) != nil {
 				found = true
 			}
 		}
 		variable := d.Variables[event.Target]
-		if !found || event.Event != "click" || bound[event.Source] {
+		if !found || bound[event.Source] {
 			return fmt.Errorf("page event %s needs one button click and a matching state value", event.Source)
 		}
 		if event.Navigate != nil || event.Return {
@@ -76,7 +76,7 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 		bound[event.Source] = true
 	}
 	for _, section := range sections {
-		if section.Widget == "button" && !bound[section.ID] {
+		if event := widgetEvent(section.Widget, "click"); event != nil && event.Required && !bound[section.ID] {
 			return fmt.Errorf("page button %s needs a click binding", section.ID)
 		}
 	}

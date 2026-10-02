@@ -8,7 +8,7 @@ import {isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
 import {
   Button, Card, Chart, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type Encoding, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
-import { Component, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
 import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
@@ -24,6 +24,9 @@ import type { PageSessionStore } from "./runtime/Session";
 import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, selectionSlot, overlaySessionScopes, resourceVariables } from "./runtime/resources";
 import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
+
+const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
+const ButtonRenderer=lazy(()=>import("./widgets/Button").then(module=>({default:module.ButtonRenderer})));
 
 type Page = NonNullable<Definition["page"]>;
 type Section = NonNullable<Page["sections"]>[number];
@@ -64,7 +67,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableWidget({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window }: Bound) {
+function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window }: Bound) {
   const { source, definitions } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -76,31 +79,14 @@ function TableWidget({ page, section, onSelect, selected, master, narrowed, shar
     ? (query?.by ? info?.fields.find((f) => f.name === query.by) : relatedField(info?.fields, page, section))
     : undefined;
 
-  if(section.collectionVariable && !window) return <Panel role="status">{t("Query window is unavailable.")}</Panel>;
-  if(section.collectionVariable) return <RecordList source={source} type={type} fields={section.fields} height={320} window={window} onOpen={(record)=>onSelect(record.id===selected?.id?undefined:record)}/>;
-
-  if ((section.relation || section.parentSelection) && !refField) return <p role="alert" className="text-sm text-danger">
-    {t("This section's parent reference is unavailable.")}</p>;
-
-  if (refField && !master) {
-    return (
-      <div className="flex h-40 items-center justify-center rounded-md border border-dashed border-border p-4 text-center">
-        <p className="text-sm text-muted">
-          {t("Select a record to see related {records}.", { records: info?.plural?.toLowerCase() ?? type })}
-        </p>
-      </div>
-    );
-  }
-
+  const status = section.collectionVariable ? !window ? "missing-window" : undefined
+    : (section.relation || section.parentSelection) && !refField ? "invalid-reference" : refField && !master ? "missing-parent" : undefined;
   const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
-  const queryDomain = (query?.domain as unknown[] | undefined) ?? [];
-  const domain = [...queryDomain, ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
-
-  return (
-    <RecordList key={refField ? `${type}/${refField.name}/${master?.id}` : type}
-      source={session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source} type={type} fields={section.fields} height={320} domain={domain}
-      onOpen={(record) => onSelect(record.id === selected?.id ? undefined : record)} />
-  );
+  const domain = [...((query?.domain as unknown[] | undefined) ?? []), ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
+  return <TableRenderer key={section.collectionVariable ? type : refField ? `${type}/${refField.name}/${master?.id}` : type}
+    source={section.collectionVariable ? source : session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source}
+    object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
+    selected={selected} onSelect={onSelect} status={status} plural={info?.plural?.toLowerCase()}/>;
 }
 
 /** The record the page has selected, with the fields the builder chose. */
@@ -366,8 +352,8 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
   input: ({ section, value, onValue, enabled,numeric,valueError }) => <div className="grid gap-1"><Input inputMode={numeric?"decimal":undefined} maxLength={numeric?pageVariableContract.decimal.maxBytes:undefined} aria-invalid={!!valueError} aria-label={section.title || t("Text input")} value={value ?? ""} disabled={!onValue || enabled === false} onChange={(event) => onValue?.(event.target.value)} />{valueError&&<p role="alert" className="text-xs text-danger">{t(valueError)}</p>}</div>,
-  button: ({ section, onClick, enabled }) => <Button onClick={onClick} disabled={!onClick || enabled === false}>{section.title || t("Button")}</Button>,
-  table: TableWidget, detail: DetailWidget, actions: ActionsWidget,
+  button: ({ section, onClick, enabled }) => <ButtonRenderer title={section.title} onClick={onClick} enabled={enabled}/>,
+  table: TableAdapter, detail: DetailWidget, actions: ActionsWidget,
   chart: (bound) => <ChartWidget {...bound} kpi={false} />,
   metric: (bound) => <ChartWidget {...bound} kpi />,
   text: ({ section }) => <Markdown content={section.text} className="text-sm" />,
@@ -385,10 +371,11 @@ class WidgetBoundary extends Component<{ children: ReactNode }, { failed: boolea
 
 export function SectionView(bound: Bound & Composing) {
   const { section, chosen, onChoose, at, nested } = bound;
-  const Renderer = widgets.resolve(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
-  const body = Renderer ? <Renderer {...bound} /> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
+  const implementation = widgets.resolveDefinition(section.widget, section.configVersion ?? (bound.page.document ? 0 : 1));
+  const Renderer=implementation?.Renderer;
+  const body = Renderer ? <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Renderer {...bound}/></Suspense> : <p role="alert" className="text-sm text-danger">{t("This widget is unavailable.")}</p>;
   const inHand = onChoose !== undefined && chosen === at;
-  if (section.widget === "button") return <div onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined} className={cn("min-w-0", inHand && "outline outline-2 outline-primary rounded")}><WidgetBoundary>{body}</WidgetBoundary></div>;
+  if (implementation?.contract.layoutPreferences.frame === "inline") return <div onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined} className={cn("min-w-0", inHand && "outline outline-2 outline-primary rounded")}><WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary></div>;
   return (
     <Card onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined}
       className={cn("grid min-w-0 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
@@ -412,7 +399,7 @@ type ComposedPageProps = {
 } & Composing;
 export function ComposedPage(props: ComposedPageProps) {
   const { me } = useHost();const application=useApplicationContext();
-  return <PageSession key={JSON.stringify([me, props.definitionKey, props.page, application?.identity])} {...props} />;
+  return <PageSession key={JSON.stringify([me, props.definitionKey, props.page, application?.identity, application?.session.readScope])} {...props} />;
 }
 
 function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, onVariableValues, editingRoot }: ComposedPageProps) {

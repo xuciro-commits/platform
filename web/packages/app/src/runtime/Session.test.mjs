@@ -163,3 +163,19 @@ test("shared plan windows own table selections and fields while views and obsole
  store.select("parent",record("B"));await tick();source.scope="two";store.updateSource(source);
  assert.deepEqual(store.snapshot().views,{});assert.equal(store.selected("parent"),undefined);
 });
+
+test("a synchronous window subscriber joins the installed query before pending is published",async()=>{
+ let reads=0,alias,observed=false;
+ const store=new PageSessionStore({scope:"member:1",entity:()=>({fields:[]}),get:async()=>({record:record("one")}),list:async()=>{reads++;return {records:[record("one")],total:1};}},plan()),source=store.querySource("window"),query={limit:1};
+ store.subscribe(()=>{if(!observed&&store.snapshot().queries.window?.status==="pending"){observed=true;alias=source.list("sample.parent",query);}});
+ const original=source.list("sample.parent",query);await original;await alias;
+ assert.equal(reads,1);assert.equal(original,alias);assert.equal(store.snapshot().queries.window.value.total,1);
+});
+
+test("recreating a scoped source wrapper preserves one read until its revision changes",async()=>{
+ let reads=0;
+ const source={scope:"member-and-definitions:1",revision:0,entity:()=>({fields:[]}),get:async()=>({record:record("one")}),list:async()=>{reads++;return {records:[record("one")],total:1};}};
+ const store=new PageSessionStore(source,plan()),reader=store.querySource("window"),query={limit:1};
+ await reader.list("sample.parent",query);store.updateSource({...source});await reader.list("sample.parent",query);assert.equal(reads,1);
+ store.updateSource({...source,revision:1});await reader.list("sample.parent",query);assert.equal(reads,2);
+});

@@ -1,5 +1,5 @@
 import { expect,test } from "@playwright/test";
-import { decide,fresh,open,pageUIProfile } from "./host";
+import { decide,fresh,open,pageUIProfile,stableReadRevision } from "./host";
 
 test("a table and loop share one bounded plan while view and parameter changes clear old selections",async({page,request},testInfo)=>{
  test.setTimeout(60_000);
@@ -12,9 +12,10 @@ test("a table and loop share one bounded plan while view and parameter changes c
  const tree=page.getByRole("region",{name:"Widgets and layout",exact:true}),inspector=page.getByRole("region",{name:"The widget in hand",exact:true});
  await tree.getByRole("button",{name:"Shared window",exact:true}).click();
  await inspector.getByRole("combobox",{name:"Table query window",exact:true}).selectOption("window");
+ if(process.env.PLATFORM_SCREENSHOTS)await inspector.screenshot({path:testInfo.outputPath("table-inspector.png")});
  await page.getByRole("button",{name:"Save",exact:true}).click();await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();
  await page.getByRole("button",{name:"Review release",exact:true}).click();await page.getByRole("button",{name:"Check draft and dependencies",exact:true}).click();await page.getByRole("button",{name:"Save immutable candidate",exact:true}).click();await page.getByRole("button",{name:"Activate release",exact:true}).click();
- const operation=await page.context().newPage();let reads=0;operation.on("request",request=>{const url=new URL(request.url());if(url.pathname===`/v1/records/${type}`)reads++;});
+ const operation=await page.context().newPage();await stableReadRevision(operation);let reads=0;operation.on("request",request=>{const url=new URL(request.url());if(url.pathname===`/v1/records/${type}`)reads++;});
  await open(operation,"desk",`/page?app=build&kind=page&name=${name}`);
  const table=operation.getByRole("table"),cards=operation.getByRole("list",{name:"Shared cards",exact:true});
  const selected=operation.getByRole("heading",{name:"Selected window record",exact:true}).locator("..");

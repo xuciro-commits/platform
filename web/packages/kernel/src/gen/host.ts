@@ -1641,6 +1641,41 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.10"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.14",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
       }
     },
     {
@@ -1675,6 +1710,18 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1709,6 +1756,18 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1753,6 +1812,24 @@ export const pageUIManifest = {
             "maxLength": 256
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.19"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1797,6 +1874,24 @@ export const pageUIManifest = {
             "maxLength": 256
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.19"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1830,6 +1925,11 @@ export const pageUIManifest = {
             "maxLength": 65536
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1863,6 +1963,19 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1897,6 +2010,11 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1930,6 +2048,18 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1963,6 +2093,18 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -1995,6 +2137,11 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -2028,6 +2175,11 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -2046,7 +2198,9 @@ export const pageUIManifest = {
       "events": [
         {
           "id": "click",
-          "payload": "void"
+          "payload": "void",
+          "required": true,
+          "maxBindings": 1
         }
       ],
       "propsSchema": {
@@ -2065,7 +2219,28 @@ export const pageUIManifest = {
           }
         }
       },
-      "fieldPreset": "none"
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.4"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     },
     {
       "componentID": "input",
@@ -2096,6 +2271,18 @@ export const pageUIManifest = {
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.7"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     }
   ],

@@ -461,6 +461,14 @@ Catalog 继续负责发现、示例、成熟度与owner导航；它不决定授�
 
 外包 `CustomWidget/EmbeddedModule/Iframe` 当前不是完整扩展宿主。真正的子页面嵌入需要固定版本、类型化输入输出、递归/资源限额与会话销毁；外部嵌入需要来源与能力限制。租户算法继续走 ADR-0044；任意第三方React/JS动态执行不属于本次融合。
 
+### 8.1 首个注册实现 profile
+
+F5a沿原Section及PageLayoutNode的字段声明端口，不增加平行port-values存储。inputPorts/outputPorts具有id、bindingField、原变量type、requiredUIProfile及writable要求；原Go文档检查据此拒绝未声明端口、错误类型和旧profile，再由原查询/应用/Loop owner检查对象、来源、作用域和互斥绑定。所有当前组件补齐既有变量端口描述，未声明能力不得凭描述获得执行权限。
+
+Button click声明void payload、required及maxBindings=1，宿主事件检查与专属编辑器消费同一声明；事件目标仍由原有限状态/导航owner校验。layoutPreferences.frame区分card和inline，WidgetHost按声明装配容器。Table/Button lifecyclePolicy为page-session拥有状态、scope-change/binding-change/close清理、隐藏时retain；注册器拒绝不支持的策略，实际清理沿原PageSession及应用实例/Overlay所有权执行。配置版本仍为1，旧profile保持原绑定格式；本批没有配置迁移或第三方脚本装载。
+
+应用API拥有BindingAdapter和注册身份，TableRenderer/ButtonRenderer仅接收明确的授权source/window/selection或click/enabled端口，通过React懒加载并复用共享RecordList/Button。Build拥有按同一configVersion注册的TableInspector/ButtonInspector；通用对象/属性/关系和类型化导航编辑继续复用原owner。未迁组件暂保留原Renderer/检查器，本profile不是92组件迁移完成，也没有通用slots、动态市场或租户JS权限。
+
 ## 9. WorkshopContext的拆分与会话边界
 
 | 归属 | 管理内容 | 禁止混入 |
@@ -556,7 +564,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 编辑器使用共享 `EditorWorkbench` 的可调整三栏，支持树/画布/检查器同步选择、分组/取消分组、移动/拖放、复制、撤销重做、设备宽度和缩放预览。`build/session/DraftSession` 原子记录文档及绑定编辑，UI选中独立；保存串行且携带期望revision，拒绝保留草稿。V1平铺和list-detail页保留原发布渲染，在编辑器转换并显式保存为V2。
 
-`platform/pageui/widgets.json` 是首批12种业务/内容组件及新增Button、Input的身份、配置版本、UI profile、默认属性、字段预设、绑定种类、选择方向和展示Schema来源；Go校验、生成的Web契约、Palette及基础Renderer Registry共同消费。每个组件仍调用原共享UI/应用API。复杂检查器复用原绑定编辑；完整ports/events、按组件拆分检查器、懒加载和92种外包组件迁移尚未完成，基础注册不能称为完整Plugin Architecture。
+`platform/pageui/widgets.json` 是首批12种业务/内容组件及新增Button、Input的身份、配置版本、UI profile、默认属性、字段预设、绑定种类、选择方向和展示Schema来源；Go校验、生成的Web契约、Palette及基础Renderer Registry共同消费。每个组件仍调用原共享UI/应用API。复杂检查器复用原绑定编辑；F5a已补齐既有类型化端口描述、Button有限事件要求及布局声明；Table/Button专属Renderer按需加载，Build专属Inspector按相同版本注册，原页面装配只传入明确端口。Go按描述校验端口/事件，原作用域、授权、查询与动作保证保持；具体profile归§8.1。列表/计数先登记在途身份再通知同步订阅者，重入仍共享一次读取；有明确scope的数据源按作用域和revision判断读取世代，同一世代仅更换包装对象不失效，真实修订变化继续清理；同名应用实例重开时页面按新会话临时身份重建局部选择。Go覆盖非法端口/类型/profile/事件与配置版本，Web覆盖注册缺失/未知实现、同步重入、原Table/Loop及Button导航/浮层、应用跨页选择与实例退役，普通及窄屏已观察。其他组件的专属实现、通用slots、配置迁移和92种外包组件迁移尚未完成，不能称为完整Plugin Architecture。
 
 F2在原“对象”入口提供统一资源目录、原生/租户来源筛选、搜索和有界关系图；图节点支持选择检查、双击及键盘打开详情。对象详情包含概览、属性、引用关系、动作、数据、用途和访问页签。`@platform/app/semantic` 从当前成员的原定义目录投影对象、字段支持的引用及声明用途，不建立第二份本体缓存；隐藏目标不生成占位节点，引用不推断基数、唯一性或删除保证。关系图最多显示当前筛选的80个对象，不能据此声称大模型性能已验证。
 

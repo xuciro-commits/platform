@@ -37,6 +37,41 @@
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.10"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.14",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
       }
     },
     {
@@ -71,6 +106,18 @@
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -105,6 +152,18 @@
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -149,6 +208,24 @@
             "maxLength": 256
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.19"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -193,6 +270,24 @@
             "maxLength": 256
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.19"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -226,6 +321,11 @@
             "maxLength": 65536
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -259,6 +359,19 @@
             ]
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -293,6 +406,11 @@
             ]
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -326,6 +444,18 @@
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -359,6 +489,18 @@
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -391,6 +533,11 @@
             ]
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -424,6 +571,11 @@
             ]
           }
         }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     },
     {
@@ -442,7 +594,9 @@
       "events": [
         {
           "id": "click",
-          "payload": "void"
+          "payload": "void",
+          "required": true,
+          "maxBindings": 1
         }
       ],
       "propsSchema": {
@@ -461,7 +615,28 @@
           }
         }
       },
-      "fieldPreset": "none"
+      "fieldPreset": "none",
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.4"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     },
     {
       "componentID": "input",
@@ -492,6 +667,18 @@
             ]
           }
         }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.7"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
       }
     }
   ],

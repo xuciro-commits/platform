@@ -115,9 +115,12 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkWidgetPorts(section); err != nil {
+			return err
+		}
 		if section.CollectionVariable != "" {
 			v, ok := d.Variables[section.CollectionVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.10") || !(section.Widget == "table" || (section.Widget == "chart" || section.Widget == "metric") && PageUIProfileSupports(d.UIProfile, "platform.page.v2.19")) || section.FilterVariable != "" || !ok || v.Type != "object-set" || v.Source == nil || !(v.Mode == "resource" && (v.Scope == "page" || v.Scope == "overlay") && v.Source.Kind == "plan" || v.Mode == "shared" && v.Scope == "application" && v.Source.Kind == "application" && v.Source.Object != nil) || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
+			if section.FilterVariable != "" || !ok || v.Source == nil || !(v.Mode == "resource" && (v.Scope == "page" || v.Scope == "overlay") && v.Source.Kind == "plan" || v.Mode == "shared" && v.Scope == "application" && v.Source.Kind == "application" && v.Source.Object != nil) || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
 				return fmt.Errorf("page section %s needs an exclusive plan window binding", section.ID)
 			}
 		}
@@ -179,7 +182,10 @@ func (d *PageDocument) Check(sections []Section) error {
 		if node.Align != "" && (node.Kind != "flow" && node.Kind != "toolbar" || !slices.Contains([]string{"start", "center", "end", "between"}, node.Align)) {
 			return fmt.Errorf("page node %s has unsupported alignment", id)
 		}
-		if node.EnabledWhen != "" && (node.Kind != "widget" || d.Variables[node.EnabledWhen].Type != "boolean" || !slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && (s.Widget == "button" || s.Widget == "input") })) {
+		if node.EnabledWhen != "" && (node.Kind != "widget" || !slices.ContainsFunc(sections, func(s Section) bool {
+			p := widgetPort(s.Widget, "enabledWhen")
+			return s.ID == node.Section && p != nil && PageUIProfileSupports(d.UIProfile, p.RequiredUIProfile) && d.Variables[node.EnabledWhen].Type == p.Type
+		})) {
 			return fmt.Errorf("page node %s enable binding needs an interactive widget and boolean variable", id)
 		}
 		input := slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && s.Widget == "input" })

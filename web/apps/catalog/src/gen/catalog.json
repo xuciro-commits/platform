@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:4d65eb9c5690124f",
+  "revision": "sha256:9d97f59285e341f9",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2080,6 +2080,7 @@
       "web/packages/app/src/pages.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/Button.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/asset-controls.tsx",
       "web/packages/build/src/code.tsx",
@@ -2138,6 +2139,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
@@ -2211,6 +2213,7 @@
       "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/Table.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
@@ -2347,6 +2350,7 @@
     "ui/record-list": [
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/Table.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
@@ -2422,6 +2426,7 @@
     ],
     "ui/toggles": [
       "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx"
     ],
     "ui/block-canvas": [
@@ -2682,6 +2687,7 @@
         "SemanticRelation",
         "WidgetContract",
         "WidgetID",
+        "WidgetImplementation",
         "WidgetRegistry"
       ]
     },

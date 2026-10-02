@@ -30,3 +30,12 @@ test("preview count budgets include parent multiplication and reject cyclic ance
  assert.equal(countBudget(variables,plans,{parents:{children:["parents"],loop:{limit:1}}},contract),false);
  assert.equal(countBudget(Object.fromEntries(Array.from({length:9},(_,i)=>[i,variables.count])),plans,{parents:{loop:{limit:1}}},contract),false);
 });
+
+test("a synchronous pending subscriber shares the in-flight count instead of starting another read",async()=>{
+ let reads=0,alias,observed=false;
+ const source={scope:"member:1",entity:()=>({fields:[]}),get:async()=>({record:{id:"one"}}),list:async()=>({records:[],total:0}),aggregate:async()=>{reads++;return data(2);}};
+ const store=new PageSessionStore(source,{objects:new Map(),children:new Map(),queryParents:new Map()}),query={measures:["count"]};
+ store.subscribe(()=>{if(!observed&&store.countResource("plan/read","sample.note",query).status==="pending"){observed=true;alias=store.count("plan/read","sample.note",query);}});
+ const original=store.count("plan/read","sample.note",query);await original;await alias;
+ assert.equal(reads,1);assert.equal(original,alias);assert.equal(store.countResource("plan/read","sample.note",query).value.value,"2");
+});

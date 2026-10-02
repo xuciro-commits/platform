@@ -29,3 +29,9 @@ export async function open(page: Page, token: string, route: string) {
 
 /** A fresh ID, so tests never meet each other's records on the shared host. */
 export const fresh = (prefix: string) => `${prefix}-${Date.now().toString(36).toUpperCase()}${n++}`;
+
+// Keep request-count assertions within one revision; unrelated tenant inputs
+// legitimately invalidate all readers. Explicit local writes still refresh.
+export async function stableReadRevision(page: Page) {
+ await page.route("**/v1/changes",route=>route.fulfill({status:200,contentType:"text/event-stream",body:""}));
+}

@@ -15,11 +15,36 @@ import (
 var pageWidgetJSON []byte
 
 type pageWidgetContract struct {
-	ComponentID       string         `json:"componentID"`
-	ConfigVersion     int            `json:"configVersion"`
-	RequiredUIProfile string         `json:"requiredUIProfile"`
-	PropsSchema       ValueSchema    `json:"propsSchema"`
-	Defaults          map[string]any `json:"defaults"`
+	ComponentID       string            `json:"componentID"`
+	ConfigVersion     int               `json:"configVersion"`
+	RequiredUIProfile string            `json:"requiredUIProfile"`
+	PropsSchema       ValueSchema       `json:"propsSchema"`
+	Defaults          map[string]any    `json:"defaults"`
+	InputPorts        []pageWidgetPort  `json:"inputPorts"`
+	OutputPorts       []pageWidgetPort  `json:"outputPorts"`
+	Events            []pageWidgetEvent `json:"events"`
+	LayoutPreferences struct {
+		Frame string `json:"frame"`
+	} `json:"layoutPreferences"`
+	LifecyclePolicy *struct {
+		StateOwner string   `json:"stateOwner"`
+		ClearOn    []string `json:"clearOn"`
+		Hidden     string   `json:"hidden"`
+	} `json:"lifecyclePolicy"`
+}
+
+type pageWidgetPort struct {
+	ID                string `json:"id"`
+	BindingField      string `json:"bindingField"`
+	Type              string `json:"type"`
+	RequiredUIProfile string `json:"requiredUIProfile"`
+	Writable          bool   `json:"writable"`
+}
+type pageWidgetEvent struct {
+	ID          string `json:"id"`
+	Payload     string `json:"payload"`
+	Required    bool   `json:"required"`
+	MaxBindings int    `json:"maxBindings"`
 }
 
 type pageUIContract struct {
@@ -40,6 +65,24 @@ var pageWidgets = func() pageUIContract {
 			panic("invalid page widget contract identity")
 		}
 		seen[widget.ComponentID] = true
+		fields := map[string]bool{}
+		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
+			if port.ID == "" || fields[port.BindingField] || !slices.Contains([]string{"recordVariable", "collectionVariable", "selectionVariable", "filterVariable", "enabledWhen"}, port.BindingField) || !slices.Contains([]string{"record", "object-set", "filter", "boolean"}, port.Type) || !slices.Contains(manifest.SupportedProfiles, port.RequiredUIProfile) {
+				panic("invalid page widget port")
+			}
+			fields[port.BindingField] = true
+		}
+		for _, event := range widget.Events {
+			if event.ID != "click" || event.Payload != "void" || event.MaxBindings != 1 {
+				panic("unsupported page widget event")
+			}
+		}
+		if widget.LayoutPreferences.Frame != "card" && widget.LayoutPreferences.Frame != "inline" {
+			panic("invalid widget frame")
+		}
+		if policy := widget.LifecyclePolicy; policy != nil && (policy.StateOwner != "page-session" || policy.Hidden != "retain" || !slices.Equal(policy.ClearOn, []string{"scope-change", "binding-change", "close"})) {
+			panic("unsupported widget lifecycle policy")
+		}
 		if err := widget.PropsSchema.Check(); err != nil {
 			panic(err)
 		}
@@ -57,6 +100,54 @@ func PageUIProfile() string  { return pageWidgets.UIProfile }
 
 func SupportsPageUIProfile(profile string) bool {
 	return slices.Contains(pageWidgets.SupportedProfiles, profile)
+}
+
+func pageWidget(id string) *pageWidgetContract {
+	for i := range pageWidgets.Widgets {
+		if pageWidgets.Widgets[i].ComponentID == id {
+			return &pageWidgets.Widgets[i]
+		}
+	}
+	return nil
+}
+func widgetPort(id, field string) *pageWidgetPort {
+	w := pageWidget(id)
+	if w == nil {
+		return nil
+	}
+	for _, ports := range [][]pageWidgetPort{w.InputPorts, w.OutputPorts} {
+		for i := range ports {
+			if ports[i].BindingField == field {
+				return &ports[i]
+			}
+		}
+	}
+	return nil
+}
+func widgetEvent(id, event string) *pageWidgetEvent {
+	w := pageWidget(id)
+	if w == nil {
+		return nil
+	}
+	for i := range w.Events {
+		if w.Events[i].ID == event {
+			return &w.Events[i]
+		}
+	}
+	return nil
+}
+func (d *PageDocument) checkWidgetPorts(s Section) error {
+	for field, id := range map[string]string{"recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable} {
+		if id == "" {
+			continue
+		}
+		port := widgetPort(s.Widget, field)
+		v, ok := d.Variables[id]
+		if port == nil || !ok || !PageUIProfileSupports(d.UIProfile, port.RequiredUIProfile) || v.Type != port.Type || port.Writable && !v.Writable {
+			return fmt.Errorf("widget %s has an invalid %s port", s.Widget, field)
+		}
+	}
+	return nil
 }
 
 func PageUIProfileSupports(profile, required string) bool {

@@ -1,5 +1,5 @@
 import {expect,test} from "@playwright/test";
-import {decide,fresh,open,pageUIProfile} from "./host";
+import {decide,fresh,open,pageUIProfile,stableReadRevision} from "./host";
 
 test("an authored application query shares one read across pages and isolates and retires explicit instances",async({page,request},testInfo)=>{
  test.setTimeout(60_000);
@@ -24,12 +24,12 @@ test("an authored application query shares one read across pages and isolates an
  }
  await open(page,"manager",`/application?id=${app}`);await page.getByRole("button",{name:"Review application release",exact:true}).click();await page.getByRole("button",{name:"Check draft and dependencies",exact:true}).click();await page.getByRole("button",{name:"Save immutable candidate",exact:true}).click();
  const changed=structuredClone(savedApp.queries);Object.values(changed).forEach((q:any)=>q.limit=1);await decide(request,"manager","build","build.app.edit",{type:"build.app",id:app},{queries:changed});await page.getByRole("button",{name:"Activate release",exact:true}).click();
- const operation=await page.context().newPage();let reads=0;operation.on("request",req=>{if(new URL(req.url()).pathname===`/v1/records/${type}`)reads++;});const route=`/page?app=build&kind=page&name=${name}first&application=${application}&instance=main`;
+ const operation=await page.context().newPage();await stableReadRevision(operation);let reads=0;operation.on("request",req=>{if(new URL(req.url()).pathname===`/v1/records/${type}`)reads++;});const route=`/page?app=build&kind=page&name=${name}first&application=${application}&instance=main`;
  await open(operation,"desk",route);const input=operation.getByRole("textbox",{name:"Shared bucket",exact:true}),table=operation.getByRole("table"),selected=operation.getByRole("heading",{name:"Page selected record",exact:true}).locator("..");
  await expect(table.getByText("APP-A1",{exact:true})).toBeVisible();await expect(table.getByText("APP-A2",{exact:true})).toBeVisible();expect(reads).toBe(1);
  await table.getByRole("row").filter({hasText:"APP-A1"}).click();await expect(selected.getByText("APP-A1",{exact:true})).toBeVisible();await operation.getByRole("button",{name:"Next page",exact:true}).click();await expect(table.getByText("APP-A3",{exact:true})).toBeVisible();await expect(selected.getByText("Select a record to see it here.",{exact:true})).toBeVisible();
  await operation.getByRole("button",{name:"Next query page",exact:true}).click();await expect(operation.getByRole("heading",{name:"Query second",exact:true})).toBeVisible();await expect(table.getByText("APP-A3",{exact:true})).toBeVisible();await expect(operation.getByRole("list",{name:"Application cards",exact:true}).getByText("APP-A3",{exact:true})).toBeVisible();expect(reads).toBe(2);
- await input.fill("B");await expect(table.getByText("APP-B",{exact:true})).toBeVisible();await operation.getByRole("button",{name:"Next query page",exact:true}).click();await expect(operation.getByRole("heading",{name:"Query first",exact:true})).toBeVisible();await expect(input).toHaveValue("B");await expect(table.getByText("APP-B",{exact:true})).toBeVisible();expect(reads).toBe(3);
+ await input.fill("B");await expect(table.getByText("APP-B",{exact:true})).toBeVisible();await operation.getByRole("button",{name:"Next query page",exact:true}).click();await expect(operation.getByRole("heading",{name:"Query first",exact:true})).toBeVisible();await expect(input).toHaveValue("B");await expect(table.getByText("APP-B",{exact:true})).toBeVisible();expect(reads).toBe(3);await operation.unroute("**/v1/changes");
  if(process.env.PLATFORM_SCREENSHOTS)await operation.screenshot({path:testInfo.outputPath("application-query-shared.png"),fullPage:true});
  await operation.getByRole("button",{name:"New application instance",exact:true}).click();await expect(input).toHaveValue("A");await expect(table.getByText("APP-A1",{exact:true})).toBeVisible();const otherRoute=new URL(operation.url()).hash.slice(1);
  await operation.evaluate(route=>{location.hash=route},route);await expect(input).toHaveValue("B");await expect(table.getByText("APP-B",{exact:true})).toBeVisible();

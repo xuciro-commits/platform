@@ -14,13 +14,13 @@ export function OverlayProperties({ overlay, onChange, onRemove }: {
   </Card>;
 }
 
-export function ButtonEventProperties({ document, section, owner, overlay, onChange }: {
-  document: Api.PageDocument; section: string; owner?: string; overlay?: string; onChange: (document: Api.PageDocument) => void;
+export function ButtonEventProperties({ document, section, owner, overlay, eventName, onChange }: {
+  document: Api.PageDocument; section: string; eventName:string; owner?: string; overlay?: string; onChange: (document: Api.PageDocument) => void;
 }) {
   const event = document.events?.find((event) => event.source === section), variable = document.variables?.[event?.target ?? ""];
   const tabs = Object.values(document.nodes).filter((node) => node.kind === "tabs" && node.activeVariable === event?.target).flatMap((node) => node.children ?? []);
   const update = (target: string, value: string | boolean) => onChange({ ...document, uiProfile: pageUIProfile,
-    events: [...(document.events ?? []).filter((event) => event.source !== section), { source: section, event: "click", target, value }] });
+    events: [...(document.events ?? []).filter((event) => event.source !== section), { source: section, event: eventName, target, value }] });
   return <Card className="grid gap-3 p-3"><strong className="text-xs">{t("On click")}</strong>
     <label className="grid gap-1 text-xs">{t("Overlay action")}<Select value={Object.values(document.overlays ?? {}).some((overlay) => overlay.openVariable === event?.target) ? `${event!.target}:${event!.value === true ? "open" : "close"}` : ""} onChange={(e) => { const at = e.target.value.lastIndexOf(":"); if (at > 0) update(e.target.value.slice(0, at), e.target.value.slice(at + 1) === "open"); }}>
       <option value="">{t("Choose an overlay action")}</option>{Object.entries(document.overlays ?? {}).flatMap(([id, overlay]) => [true, false].map((open) => <option key={`${id}:${open}`} value={`${overlay.openVariable}:${open ? "open" : "close"}`}>{t(open ? "Open {title}" : "Close {title}", { title: overlay.title })}</option>))}

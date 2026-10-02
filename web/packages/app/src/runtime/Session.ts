@@ -44,9 +44,11 @@ export class PageSessionStore {
    const query=structuredClone(input),signature=this.countSignature(object,query),previous=this.counts.get(key);
    if(previous?.signature===signature)return previous.promise;
    const source=this.source,scope=source.scope,version=this.version;
-   this.publish({counts:{...this.state.counts,[key]:{signature,result:{status:"pending"}}}});
    const request={signature,promise:Promise.resolve().then(()=>{if(!source.aggregate)throw new Error("Aggregate source is unavailable");return source.aggregate(object,query)}).then(data=>{if(!this.disposed&&this.counts.get(key)===request&&source===this.source&&scope===source.scope&&version===this.version)this.publish({counts:{...this.state.counts,[key]:{signature,result:countValue(data)}}});},()=>{if(!this.disposed&&this.counts.get(key)===request&&source===this.source&&scope===source.scope&&version===this.version)this.publish({counts:{...this.state.counts,[key]:{signature,result:{status:"error",code:"Resource read failed"}}}});})};
-   this.counts.set(key,request);return request.promise;
+   this.counts.set(key,request);
+   // Install the in-flight identity before synchronous subscribers can read again.
+   this.publish({counts:{...this.state.counts,[key]:{signature,result:{status:"pending"}}}});
+   return request.promise;
   }
   private source: RecordSource;
   private plan: SelectionPlan;
@@ -255,7 +257,7 @@ export class PageSessionStore {
     }
   }
   updateSource(source: RecordSource) {
-    if (this.disposed || source === this.source && source.revision === this.sourceRevision && source.scope === this.sourceScope) return;
+    if (this.disposed || (source === this.source || source.scope !== undefined) && source.revision === this.sourceRevision && source.scope === this.sourceScope) return;
     const changedScope = source.scope !== this.sourceScope;
     this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.version++;
     for(const child of this.childSessions.values())child.session.updateSource(this.readSource());
@@ -294,12 +296,12 @@ export class PageSessionStore {
     const changed=this.querySignatures.get(key)!==queryShape;
     this.queryObjects.set(key, object);
     this.querySignatures.set(key, queryShape);
-    if(changed){this.queryData.delete(key);const keys=this.selectionKeys(key);if(keys.length)this.publish({records:this.clear(keys),queries:this.invalidate(keys)});}
+    const keys=changed?this.selectionKeys(key):[];
+    if(changed)this.queryData.delete(key);
     const signature = JSON.stringify([this.version, object, query]);
     const previous = this.queries.get(key);
     if (previous?.signature === signature) return previous.promise;
     if (this.disposed) return Promise.reject(new Error("Page session ended"));
-    this.publish({ queries: { ...this.state.queries, [key]: { status: "pending" } } });
     const revision = source.revision;
     const request = { signature, object, promise: Promise.resolve().then(() => source.list(object, query)) };
     this.queries.set(key, request);
@@ -321,6 +323,8 @@ export class PageSessionStore {
       }
       throw error;
     });
+    // Publish only after every consumer can join the same in-flight identity.
+    this.publish({ ...(keys.length?{records:this.clear(keys)}:{}), queries: { ...this.invalidate(keys), [key]: { status: "pending" } } });
     return request.promise;
   }
   dispose() {
