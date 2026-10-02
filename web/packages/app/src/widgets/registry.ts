@@ -22,7 +22,9 @@ export class WidgetRegistry<Context> {
       if (!implementations[contract.componentID]) throw new Error(`Missing widget implementation: ${contract.componentID}`);
       if("lifecyclePolicy" in contract) {
         const policy=contract.lifecyclePolicy;
-        if(policy.stateOwner!=="page-session"||policy.hidden!=="retain"||JSON.stringify(policy.clearOn)!==JSON.stringify(["scope-change","binding-change","close"]))throw new Error(`Unsupported widget lifecycle: ${contract.componentID}`);
+        const session=policy.stateOwner==="page-session"&&policy.hidden==="retain"&&JSON.stringify(policy.clearOn)===JSON.stringify(["scope-change","binding-change","close"]);
+        const instance=policy.stateOwner==="widget-instance"&&policy.hidden==="unmount"&&JSON.stringify(policy.clearOn)===JSON.stringify(["record","member","definition","scope-close"]);
+        if(!session&&!instance)throw new Error(`Unsupported widget lifecycle: ${contract.componentID}`);
       }
     }
     this.implementations = Object.freeze(Object.fromEntries(widgetContracts.map(contract=>[contract.componentID,Object.freeze({contract,Renderer:implementations[contract.componentID]})])) as Record<WidgetID,WidgetImplementation<Context>>);

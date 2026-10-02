@@ -1,7 +1,7 @@
 import "./i18n";
 import { useState } from "react";
 import { Panel, t } from "@platform/ui";
-import { ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
+import { ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, InlineActionForm, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
 import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 
@@ -23,7 +23,7 @@ export const FlowInstanceExample = () => <CatalogFixture reads={{
 export const PageWorkspaceExample = () => <CatalogFixture><PagePreview definition={samplePage} definitions={sampleDefinitions} /></CatalogFixture>;
 export function ActionsExample() {
   const [values, setValues] = useState<Record<string, unknown>>({});
-  return <CatalogFixture><div className="grid gap-3"><RecordActions type={sampleObject.type} record={sampleRecords[0]!} />
+  return <CatalogFixture><div className="grid gap-3"><RecordActions type={sampleObject.type} record={sampleRecords[0]!} /><InlineActionForm type={sampleObject.type} schema={sampleObject.type+".edit"} record={sampleRecords[0]!} live={false}/>
     <PayloadFields fields={sampleActions[0]!.payload} values={values} onChange={setValues} preview /></div></CatalogFixture>;
 }
 export const DashboardExample = () => <CatalogFixture><DashboardView dashboard={{ id: "catalog-fixture", title: t("Sample dashboard"), charts: [

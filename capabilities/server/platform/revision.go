@@ -690,6 +690,25 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	for _, s := range page.Sections {
+		if s.Widget != "inline-action" {
+			continue
+		}
+		ref := s.Object
+		if ref.Name == "" {
+			ref = page.Object
+		}
+		object, ok := lookup[ref]
+		info, err := queryObjectDescriptor(object.Body)
+		if !ok || err != nil || page.Document == nil || len(s.Actions) != 1 {
+			return fmt.Errorf("frozen inline action object is unavailable")
+		}
+		asset, ok := lookup[s.Actions[0]]
+		var action Action
+		if !ok || json.Unmarshal(asset.Body, &action) != nil || s.CheckInlineAction(info, action) != nil {
+			return fmt.Errorf("frozen inline action declaration is unavailable")
+		}
+	}
+	for _, s := range page.Sections {
 		if s.Widget != "record-timeline" && s.Widget != "kanban" {
 			continue
 		}

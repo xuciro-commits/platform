@@ -388,6 +388,18 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			return nil
 		}
 		switch s.Widget {
+		case "inline-action":
+			if p.Document == nil || len(s.Actions) != 1 {
+				return fmt.Errorf("inline action needs a V2 page and one action")
+			}
+			owner := t.owner["action:"+s.Actions[0].Name]
+			if owner == nil {
+				return fmt.Errorf("inline action is unavailable")
+			}
+			action, _ := owner.Manifest().Actions.Action(s.Actions[0].Name)
+			if err := s.CheckInlineAction(info, action); err != nil {
+				return err
+			}
 		case "kanban":
 			if p.Document == nil {
 				return fmt.Errorf("kanban needs a V2 document")

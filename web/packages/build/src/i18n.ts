@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Inline action": "就地动作",
+  "Inline record action": "就地记录动作",
+  "Choose one record action": "选择一个记录动作",
+  "The inline form uses the original action inputs, permissions, approvals and record revision.": "就地表单使用原动作输入、权限、审批与记录修订。",
+
   "Relationship archive policy": "关系归档策略",
   "Protect active references": "保护活动引用",
   "Active children prevent parent archiving. Archived children keep their references. New or restored active children need an unarchived parent. Published protection cannot be relaxed.": "活动子记录会阻止父记录归档。已归档子记录保留引用。新建或恢复的活动子记录需要未归档父记录。已发布保护不能放宽。",

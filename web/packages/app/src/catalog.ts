@@ -32,8 +32,8 @@ export const entries: CatalogEntry[] = [
     tags: ["aggregate", "chart", "metric"], uses: ["code", "widget"], widgets: ["chart", "metric"], source: "web/packages/app/src/index.tsx",
     snippet: 'import { DashboardView } from "@platform/app";\n<DashboardView dashboard={dashboard} />',
   }),
-  asset("record-actions", "Declared action controls", "Render original action payloads and offered transitions without duplicating role rules.", ["NewActions", "RecordActions", "PayloadFields"], "ActionsExample", {
-    uses: ["code", "widget"], widgets: ["actions"], dependencies: ["ui/button", "app/generated-form"], source: "web/packages/app/src/actions.tsx",
+  asset("record-actions", "Declared action controls", "Render original action payloads and offered transitions without duplicating role rules.", ["NewActions", "RecordActions", "PayloadFields", "InlineActionForm"], "ActionsExample", {
+    uses: ["code", "widget"], widgets: ["actions", "inline-action"], dependencies: ["ui/button", "app/generated-form"], source: "web/packages/app/src/actions.tsx",
     states: ["pending", "refused", "conflict"], snippet: 'import { RecordActions } from "@platform/app";\n<RecordActions type="your.object" record={record} steps />',
   }),
   asset("page-workspace", "Page workspace and preview", "The same list-detail descriptor serves a live workspace and a read-only sample preview.", ["PageWorkspace", "PagePreview"], "PageWorkspaceExample", {

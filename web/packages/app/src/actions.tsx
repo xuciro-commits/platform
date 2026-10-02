@@ -4,9 +4,9 @@
 // each record's page, with a form generated from its declared payload. A
 // hand-written view only adds entries; it never needs to repeat these.
 import type { ActionDeclaration } from "@platform/kernel";
-import { Button, Checkbox, Dialog, Input, RecordLookup, Select, Textarea, t, type EntityRecord } from "@platform/ui";
+import { Button, Checkbox, Dialog, Input, RecordLookup, Select, Textarea, Panel, t, type EntityInfo, type EntityRecord } from "@platform/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { GeneratedForm, newId, useHost } from "./index";
 
 type Field = ActionDeclaration["payload"][number];
@@ -59,52 +59,53 @@ function RecordPicker({ id, type, value, onChange }: { id: string; type: string;
 /** A short ID prefix from a type's name, never its translated title: "crm.account" → ACC, "hcm.leave" → LEA. */
 export const prefixOf = (type: string) => (type.split(".").pop() ?? type).slice(0, 3).toUpperCase();
 
-/** One action taken through a dialog: the record's ID for a new one, then its payload. */
+/** The original action submission form, shared by dialogs and inline hosts. */
+function DeclaredActionForm({declared,target,revision,onCancel,onCompleted,preview=false,onBusy}:{declared:ActionDeclaration;target:{type:string;id:string};revision:number;onCancel:()=>void;onCompleted:()=>void;preview?:boolean;onBusy?:(busy:boolean)=>void}) {
+ const {decide}=useHost(),lock=useRef(false);
+ const [values,setValues]=useState<Record<string,unknown>>({}),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState("");
+ const missing=declared.payload.some(f=>f.required&&(values[f.name]===undefined||values[f.name]===""));
+ const submit=async()=>{if(preview||lock.current||missing||!target.id)return;lock.current=true;setSubmitting(true);onBusy?.(true);setRefusal("");try{if(await decide(declared.schema,target,values,{expectedRevision:revision,quiet:true,onRefused:setRefusal}))onCompleted();}catch{setRefusal(t("The action could not be completed. Try again."));}finally{lock.current=false;setSubmitting(false);onBusy?.(false);}};
+ return <div className="grid gap-3">
+ {declared.description&&<p className="text-sm text-muted">{declared.description}</p>}
+ {declared.schema===`${target.type}.archive`&&<p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
+ {refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}
+ {preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}
+ <fieldset disabled={submitting} className="grid gap-3"><PayloadFields fields={declared.payload} values={values} onChange={setValues} preview={preview}/></fieldset>
+ <div className="flex flex-wrap justify-end gap-2"><Button onClick={onCancel} disabled={submitting}>{t("Cancel")}</Button><Button variant="primary" disabled={preview||missing||!target.id||submitting} onClick={submit}>{submitting?t("Executing…"):declared.title}</Button></div>
+ </div>;
+}
+
+/** One action taken through the existing modal entry point. */
 function ActionDialog({ declared, type, record, onClose, onCompleted }: { declared: ActionDeclaration; type: string; record?: Pick<EntityRecord, "id" | "revision">; onClose: () => void; onCompleted?: () => void }) {
-  const { decide, source } = useHost();
-  const info = source.entity(type);
-  const [id, setId] = useState(() => newId(prefixOf(type)));
-  const [values, setValues] = useState<Record<string, unknown>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [refusal, setRefusal] = useState("");
-  const target = { type, id: record?.id ?? id };
-  const options = { expectedRevision: record?.revision ?? 0, quiet: true, onRefused: setRefusal };
-  const done = (ok: boolean) => { if (ok) { onClose(); onCompleted?.(); } };
-  const generated = declared.schema === `${type}.create`; // the entity's own form
-  const missing = declared.payload.some((f) => f.required && (values[f.name] === undefined || values[f.name] === ""));
+ const {decide,source}=useHost(),info=source.entity(type);
+ const [id,setId]=useState(()=>newId(prefixOf(type))),[submitting,setSubmitting]=useState(false),[refusal,setRefusal]=useState("");
+ const target={type,id:record?.id??id},options={expectedRevision:record?.revision??0,quiet:true,onRefused:setRefusal};
+ const done=(ok:boolean)=>{if(ok){onClose();onCompleted?.();}},generated=declared.schema===`${type}.create`;
+ return <Dialog open wide={generated&&info?.fields.some(f=>f.type==="lines")} onOpenChange={open=>!open&&!submitting&&onClose()} title={record?`${declared.title} ${record.id}`:declared.title}>
+ <div className="grid gap-3">
+ {!record&&<label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={e=>setId(e.target.value.trim())} disabled={submitting}/></label>}
+ {generated?<>{declared.description&&<p className="text-sm text-muted">{declared.description}</p>}{refusal&&<p role="alert" className="text-sm text-danger">{refusal}</p>}<GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onSubmit={async values=>done(!!id&&await decide(declared.schema,target,values,options))}/></>:<DeclaredActionForm declared={declared} target={target} revision={record?.revision??0} onCancel={onClose} onCompleted={()=>done(true)} onBusy={setSubmitting}/>}
+ </div></Dialog>;
+}
 
-  const submitAction = async () => {
-    if (submitting) return;
-    setSubmitting(true); setRefusal("");
-    try {
-      done(await decide(declared.schema, target, values, options));
-    } catch { setRefusal(t("The action could not be completed. Try again.")); } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Dialog open wide={generated && info?.fields.some((f) => f.type === "lines")} onOpenChange={(o) => !o && !submitting && onClose()}
-      title={record ? `${declared.title} ${record.id}` : declared.title}>
-      <div className="grid gap-3">
-        {declared.description && <p className="text-sm text-muted">{declared.description}</p>}
-        {declared.schema === `${type}.archive` && <p className="text-sm text-muted">{t("Archive this saved record? It will leave active lists; its history is retained.")}</p>}
-        {refusal && <p role="alert" className="text-sm text-danger">{refusal}</p>}
-        {!record && <label className="grid gap-1 text-xs text-muted">ID *<Input value={id} onChange={(e) => setId(e.target.value.trim())} disabled={submitting} /></label>}
-        {generated
-          ? <GeneratedForm type={type} submitLabel={t("Create")} onCancel={onClose} onSubmit={async (v) => done(!!id && await decide(declared.schema, target, v, options))} />
-          : <>
-              <PayloadFields fields={declared.payload} values={values} onChange={setValues} />
-              <div className="flex justify-end gap-2">
-                <Button onClick={onClose} disabled={submitting}>{t("Cancel")}</Button>
-                <Button variant="primary" disabled={missing || !target.id || submitting} onClick={submitAction}>
-                  {submitting ? t("Executing…") : declared.title}
-                </Button>
-              </div>
-            </>}
-      </div>
-    </Dialog>
-  );
+/** One explicit record action. Ordinary revisions retain the opened form's
+ * baseline; identity, declaration and caller scope replace it completely. */
+export function InlineActionForm({type,schema,record,live=true,scope}:{type:string;schema:string;record?:EntityRecord;live?:boolean;scope?:string}) {
+ const {catalog,source}=useHost(),declared=catalog.find(a=>a.schema===schema&&a.target===type&&!a.new);
+ if(!declared)return <Panel role="alert">{t("The inline action is unavailable.")}</Panel>;
+ if(live&&!record)return <p className="text-sm text-muted">{t("Select a record to act on it.")}</p>;
+ return <InlineActionInstance key={JSON.stringify([source.scope,scope,type,schema,record?.id,declared,live])} type={type} record={record} declared={declared} live={live}/>;
+}
+function InlineActionInstance({type,record,declared,live}:{type:string;record?:EntityRecord;declared:ActionDeclaration;live:boolean}) {
+ const {source}=useHost(),[round,setRound]=useState(0),reset=()=>setRound(r=>r+1);
+ return <InlineActionRound key={round} record={record} declared={declared} type={type} info={source.entity(type)} live={live} reset={reset}/>;
+}
+function InlineActionRound({type,record,declared,info,live,reset}:{type:string;record?:EntityRecord;declared:ActionDeclaration;info?:EntityInfo;live:boolean;reset:()=>void}) {
+ const [baseline]=useState(record),[submitted,setSubmitted]=useState(false);
+ const transition=info?.lifecycle?.transitions.find(step=>step.schema===declared.schema);
+ if(live&&(!baseline||baseline.archived||transition&&!transition.from.includes(String(baseline[info!.lifecycle!.field]))))return <p role="status">{t("This action is unavailable for the selected record.")}</p>;
+ if(submitted)return <div className="grid gap-2"><p role="status">{t("Request submitted. Check the record or My requests for its result.")}</p><Button onClick={reset} disabled={record?.revision===baseline?.revision}>{t("Prepare another action")}</Button></div>;
+ return <DeclaredActionForm declared={declared} target={{type,id:baseline?.id??""}} revision={baseline?.revision??0} preview={!live} onCancel={reset} onCompleted={()=>setSubmitted(true)}/>;
 }
 
 /** The type's actions that make a new record, except those a hand-written view already offers (`covers`). */

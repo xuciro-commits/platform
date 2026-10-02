@@ -1641,8 +1641,64 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.28",
+  "uiProfile": "platform.page.v2.29",
   "widgets": [
+    {
+      "componentID": "inline-action",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.29",
+      "title": "Inline action",
+      "category": "Work",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "actions",
+        "selection",
+        "record-variable"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
     {
       "componentID": "table",
       "configVersion": 1,
@@ -2600,7 +2656,8 @@ export const pageUIManifest = {
     "platform.page.v2.25",
     "platform.page.v2.26",
     "platform.page.v2.27",
-    "platform.page.v2.28"
+    "platform.page.v2.28",
+    "platform.page.v2.29"
   ],
   "runtime": {
     "scope": "page",
@@ -2716,7 +2773,8 @@ export const pageUIManifest = {
         "detail",
         "actions",
         "timeline",
-        "tasks"
+        "tasks",
+        "inline-action"
       ],
       "presentationWidgets": [
         "text",

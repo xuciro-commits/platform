@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Inline action": "就地动作",
+  "The inline action is unavailable.": "就地动作不可用。",
+  "This action is unavailable for the selected record.": "该动作不适用于所选记录。",
+  "Request submitted. Check the record or My requests for its result.": "请求已提交。请在记录或我的请求中查看结果。",
+  "Prepare another action": "准备下一次动作",
+
   "Unused widgets need a newer profile and a bounded inventory.": "未使用组件需要新版页面配置且不能超出数量限制。",
   "Unused widget needs one original leaf and a layout parent.": "未使用组件必须引用唯一原组件节点与布局父节点。",
 

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:02ab00dd2b20ab47",
+  "revision": "sha256:367a409bce9b8330",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -390,14 +390,16 @@
       "exports": [
         "NewActions",
         "RecordActions",
-        "PayloadFields"
+        "PayloadFields",
+        "InlineActionForm"
       ],
       "example": "ActionsExample",
       "constraints": [
         "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
       ],
       "widgets": [
-        "actions"
+        "actions",
+        "inline-action"
       ],
       "dependencies": [
         "ui/button",
@@ -2289,6 +2291,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/AggregateSource.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/InlineActionInspector.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
@@ -2337,26 +2340,8 @@
       "web/packages/platform/src/operations.tsx",
       "web/packages/platform/src/processes.tsx"
     ],
-    "ui/dialog": [
-      "web/packages/app/src/actions.tsx",
-      "web/packages/app/src/index.tsx",
-      "web/packages/app/src/pages.tsx",
-      "web/packages/app/src/sections.tsx",
-      "web/packages/csm/src/index.tsx",
-      "web/packages/erp/src/index.tsx",
-      "web/packages/mes/src/index.tsx",
-      "web/packages/platform/src/ai.tsx",
-      "web/packages/platform/src/knowledge.tsx",
-      "web/packages/platform/src/operations.tsx",
-      "web/packages/platform/src/people.tsx",
-      "web/apps/pms-desk/src/App.tsx",
-      "web/apps/workspace/src/App.tsx"
-    ],
-    "ui/record-lookup": [
-      "web/packages/app/src/actions.tsx",
-      "web/packages/app/src/sections.tsx"
-    ],
     "ui/panels": [
+      "web/packages/app/src/actions.tsx",
       "web/packages/app/src/agents.tsx",
       "web/packages/app/src/capability.tsx",
       "web/packages/app/src/catalog.examples.tsx",
@@ -2403,6 +2388,25 @@
       "web/apps/catalog/src/Sandbox.tsx",
       "web/apps/workspace/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/dialog": [
+      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/index.tsx",
+      "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/sections.tsx",
+      "web/packages/csm/src/index.tsx",
+      "web/packages/erp/src/index.tsx",
+      "web/packages/mes/src/index.tsx",
+      "web/packages/platform/src/ai.tsx",
+      "web/packages/platform/src/knowledge.tsx",
+      "web/packages/platform/src/operations.tsx",
+      "web/packages/platform/src/people.tsx",
+      "web/apps/pms-desk/src/App.tsx",
+      "web/apps/workspace/src/App.tsx"
+    ],
+    "ui/record-lookup": [
+      "web/packages/app/src/actions.tsx",
+      "web/packages/app/src/sections.tsx"
     ],
     "ui/form": [
       "web/packages/app/src/agents.tsx",

@@ -486,6 +486,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						continue
 					}
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
+					if section.Widget == "inline-action" && len(section.Actions) != 1 {
+						continue
+					}
 					if section.Function != nil {
 						owner, ok := t.app(section.Function.Ref.App).(interface {
 							FunctionDefinition(string, int) (platform.AIFunction, int, bool)

@@ -91,8 +91,12 @@ var pageWidgets = func() pageUIContract {
 		if widget.LayoutPreferences.Frame != "card" && widget.LayoutPreferences.Frame != "inline" {
 			panic("invalid widget frame")
 		}
-		if policy := widget.LifecyclePolicy; policy != nil && (policy.StateOwner != "page-session" || policy.Hidden != "retain" || !slices.Equal(policy.ClearOn, []string{"scope-change", "binding-change", "close"})) {
-			panic("unsupported widget lifecycle policy")
+		if policy := widget.LifecyclePolicy; policy != nil {
+			session := policy.StateOwner == "page-session" && policy.Hidden == "retain" && slices.Equal(policy.ClearOn, []string{"scope-change", "binding-change", "close"})
+			instance := policy.StateOwner == "widget-instance" && policy.Hidden == "unmount" && slices.Equal(policy.ClearOn, []string{"record", "member", "definition", "scope-close"})
+			if !session && !instance {
+				panic("unsupported widget lifecycle policy")
+			}
 		}
 		if err := widget.PropsSchema.Check(); err != nil {
 			panic(err)

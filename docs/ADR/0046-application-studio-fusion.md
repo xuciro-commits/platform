@@ -547,6 +547,14 @@ F5f在v2.26新增kanban/configVersion=1。列来自原EntityInfo.lifecycle及可
 
 选取沿原page/application/Overlay record端口进入详情/动作。可配置actions必须是同对象的生命周期转换，且有一个明确To；拖放仅在当前From到目标To存在唯一已配置且当前成员可用动作时启用，歧义不选择默认动作。键盘动作选择复用同一路径。动作执行调用原useTransition/ActionDialog与expectedRevision，输入、审批、拒绝和新状态由原owner决定；不做乐观跨列、直接写status或后台重排。编辑预览不执行动作。字段/状态不可读时整组件裁剪，成员无权动作不提供拖放；窗口/成员/参数/实例变化清理旧选择/旧卡片。Loop内暂不启用，未声明一般choice分组、WIP容量或排序写入。
 
+### 8.7 就地动作表单 profile
+
+F5g在v2.29注册inline-action/configVersion=1。Section.actions必须恰有一个同对象的原AssetAction引用且非创建动作；原recordVariable或具名选择提供已授权记录，Loop沿原item端口，Overlay沿原拥有作用域。Build提供单选动作检查器，候选闭包冻结动作及对象声明；成员发现无该动作时裁掉整个组件，不回退默认动作。没有第二份参数Schema、业务解释器或提交接口。
+
+应用API拥有InlineActionForm，与原ActionDialog共用声明参数表单；字段选择/引用、必填、原decide/outbox、审批和expectedRevision沿原owner执行。表单打开时捕获记录revision，普通记录更新保留输入和此基线，过期提交由原宿主拒绝；拒绝保留草稿，可取消清空并显式采用当前记录。已接受请求显示提交状态，审批尚待处理时不能写成动作已完成；重新准备需记录revision已变化。预览只展示参数且不提交，引用输入不读取生产记录。
+
+参数是widget-instance临时状态；记录身份、动作声明、成员/定义或调用作用域变化以及关闭/卸载清理。Overlay隐藏按原挂载生命周期处理，关闭重开获得新epoch；Loop项身份/查询签名进入调用scope。普通数据revision不作为组件key，避免后台更新静默丢失草稿；初始归档或不满足生命周期From的记录不提供提交。共享Registry明确支持widget-instance、record/member/definition/scope-close清理、hidden=unmount策略；其余page-session策略保持。首次profile仅单记录单动作，不提供批量操作或自动提交。
+
 ## 9. WorkshopContext的拆分与会话边界
 
 | 归属 | 管理内容 | 禁止混入 |
@@ -717,5 +725,7 @@ Logic共享查询（F5d）已接通租户查询保留端口、ProcessStep.queryV
 关系反向唯一性（F4c1）已接通§7.3.1的one-to-one/contractVersion=2、Build编辑与冻结声明、模型检查器及原记录宿主。约束从安装声明派生，复制到暂存视图，Check/Put、批次追加前和接受映像提升检查完整owner记录；成员范围不遮住冲突，错误不包含竞争记录数据。失败追加不提升约束，已有重复数据阻止候选激活；草稿或其他弱声明不撤销已发布唯一性。Go race用例覆盖冻结后改草稿、数据竞争、创建/编辑/重赋值、可选空值、跨成员隐藏竞争者、归档占位、弱别名、并发创建、接受映像绕过拒绝、原遍历、CheckReplay及内存快照恢复；契约用例验证版本标记和不兼容形状。浏览器验证GUI基数选择、冻结激活后原创建/编辑拒绝且原值保持、模型基数投影与刷新。当前存储使用锁内扫描，未验证大规模性能或PostgreSQL约束/恢复；更广删除策略、M:N和通用退役/迁移仍未实施。
 
 组件暂存与命令（F1c，v2.28）已接通§5.2.2的unusedWidgets节点/父属、共享CommandMenu和布局树暂存区。原Section、节点配置和Loop/Overlay归属保留，宿主及前端拒绝重复、双重归属、悬空和旧profile；暂存资源输出为空，没有活动叶的运行容器不挂载，独立查询服务保持其声明语义。成员投影裁掉隐藏的暂存节点，候选仍检查并冻结全部绑定/依赖。右键、Shift+F10和可见触发按钮沿同一编辑命令执行选择、复制、暂存、放回、移动和删除；焦点按本编辑树实例恢复，菜单键盘不穿透编辑快捷键。Input局部state副本拥有新ID，显式共享保留原引用。Go覆盖归属/预算/profile、全暂存页面、JSON往返、成员裁剪及Overlay输入/Loop事件的作用域拒绝；浏览器覆盖菜单三种入口、历史、稳定ID、暂存副本删除、私有输入隔离、全暂存Overlay、冻结后改草稿仍不挂载/读取暂存对象、原动作与刷新。原Session的未缓存记录跨revision不续读问题已修复：同scope保留typed reference并启动新epoch，旧响应仍丢弃；新增用例在修复前失败、修复后通过。共享绑定编写路线沿原显式“更新共享绑定”接受新声明，不自动改写已有要求。普通/窄屏已观察，负责人视觉认可与真实PostgreSQL恢复未验证。
+
+就地动作（F5g，v2.29）已接通inline-action身份、单动作检查器、原记录端口和应用API共享动作表单，规范归§8.7。原ActionDialog与InlineActionForm共用声明参数/提交逻辑，原Go owner继续决定授权、审批与记录版本；没有页面内动作模拟器。Go覆盖非创建/同对象/单动作/profile/版本检查、冻结依赖后修改草稿仍保留原动作、成员无权整组件裁剪、CheckReplay及内存快照。浏览器覆盖GUI添加/绑定、未配置不能保存、预览不提交、冻结激活后不受新草稿影响、原参数条件拒绝及revision冲突保留输入、取消采用当前记录、原请求pending→独立主管审批→记录approved、记录切换、Overlay关闭重开与根草稿隔离、定义/成员变化及刷新清理。普通/窄屏表单已观察；没有验证生产性能、负责人视觉验收或真实PostgreSQL恢复。
 
 F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused；容器完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

@@ -60,6 +60,8 @@
 
 页面区域尺寸：在布局树选择Rows/Columns或组件，在“Region sizing / 区域尺寸”配置权重、固定/最小/最大宽高及滚动；容器另有“Layout gap (px) / 布局间距（像素）”。空值保留自然布局，尺寸为32–4096像素、权重1–24、间距0–64。Columns孩子默认等分；Rows权重需要父区域有明确或继承高度。固定主轴尺寸与权重冲突时显示节点诊断并禁止保存；移动/换容器后需修正不兼容设置，可用“Reset region sizing / 重置区域尺寸”。“Scroll inside region / 在区域内滚动”需要明确高度或最大高度，滚动不改变查询和挂载。窄Columns堆叠并退让横向约束，宽列放不下时换行。尺寸沿原保存、撤销/重做和冻结候选交付；API为node.size与Rows/Columns的gap，需v2.27。
 
+就地动作：组件库添加“Inline action / 就地动作”，在“Inline record action / 就地记录动作”选择一个非创建原动作；默认消费页面选择，也可用“Input record binding / 输入记录绑定”绑定记录端口。选取记录后直接填写原动作参数并提交，审批仍到原收件箱。“Request submitted / 请求已提交”仅表示宿主接受请求，最终结果看记录或“My requests / 我的请求”。冲突/拒绝保留草稿和打开时的版本；“Cancel / 取消”清空并采用当前记录，提交后可在记录更新时“Prepare another action / 准备下一次动作”。记录切换、成员/定义变化、浮层关闭及刷新清理所属草稿；预览不提交。API身份inline-action/configVersion=1，需要v2.29，actions为恰好一个同对象非创建AssetAction引用；正式交付冻结原页面候选。
+
 生命周期看板：组件库添加“Kanban board / 看板”，选择“Kanban query window / 看板查询窗口”，以对象原生命周期分列；选择卡片标题和最多4个摘要字段，可显式勾选“Allowed move actions / 允许的移动动作”。拖到目标列只在当前状态有唯一已配置动作时触发原动作入口；键盘使用“Move with action / 通过动作移动”选择具体动作。需要输入时打开原表单，审批与新状态由原owner决定；冲突/拒绝保留输入，不提前移动卡片。未配置或无权动作只提供原选择工作，预览不执行。计数/分页表示当前窗口，查询/成员/参数变化清理旧卡片和选择。API身份kanban/configVersion=1，需要v2.26、显式collectionVariable与可读生命周期，cardLabel选择标题字段，fields为摘要，actions为单目标原转换引用；正式交付冻结原页面候选。
 
 记录时间轴：组件库添加“Record timeline / 记录时间轴”，选择“Timeline query window / 时间轴查询窗口”，再配置开始时间、可选同类型结束时间、记录标题与资源字段。日期使用民用日；datetime必须带时区并按UTC显示，区间不含结束时刻。点击时间点/区间把原记录传给详情与动作，分页或查询参数变化清理旧选择。显示窗口条数/total，不把部分窗口称作完整排程；无效/缺失/反向时间提示条数。“Timeline”原单记录历史组件仍按日志显示。正式交付沿原页面候选冻结激活，API身份为record-timeline/configVersion=1，需要v2.25及显式collectionVariable，字段是timeStart/timeEnd/timeLabel/timeGroup。

@@ -9,7 +9,7 @@ import {
   Button, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { NewActions, RecordActions, prefixOf } from "./actions";
+import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
 import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
@@ -365,6 +365,7 @@ const widgets = createWidgetRegistry<Bound>({
   "record-timeline":RecordTimelineAdapter,
   input: ({ section, value, onValue, enabled,numeric,valueError }) => <div className="grid gap-1"><Input inputMode={numeric?"decimal":undefined} maxLength={numeric?pageVariableContract.decimal.maxBytes:undefined} aria-invalid={!!valueError} aria-label={section.title || t("Text input")} value={value ?? ""} disabled={!onValue || enabled === false} onChange={(event) => onValue?.(event.target.value)} />{valueError&&<p role="alert" className="text-xs text-danger">{t(valueError)}</p>}</div>,
   button: ({ section, onClick, enabled }) => <ButtonRenderer title={section.title} onClick={onClick} enabled={enabled}/>,
+  "inline-action":({page,section,selected,live,aggregateScope})=><InlineActionForm type={objectOf(page,section)} schema={section.actions?.[0]?.name??""} record={selected} live={live} scope={aggregateScope}/>,
   table: TableAdapter, detail: DetailWidget, actions: ActionsWidget,
   pivot: (bound) => <ChartWidget {...bound} kpi={false} pivot/>,
   chart: (bound) => <ChartWidget {...bound} kpi={false} />,
@@ -513,7 +514,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
-        collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch])}
+        collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
         onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
           const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;

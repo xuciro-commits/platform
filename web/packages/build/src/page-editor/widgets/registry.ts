@@ -1,3 +1,4 @@
+import {InlineActionInspector} from "./InlineActionInspector";
 import { widgetContract } from "@platform/app";
 import { ChartInspector } from "./ChartInspector";
 import { PivotInspector } from "./PivotInspector";
@@ -8,6 +9,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "inline-action":{configVersion:1,bindings:InlineActionInspector},
   kanban:{configVersion:1,bindings:KanbanInspector},
   "record-timeline":{configVersion:1,bindings:RecordTimelineInspector},
   chart: {configVersion:1,bindings:ChartInspector},
