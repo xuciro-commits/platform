@@ -54,6 +54,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
+		if variable.Type == "decimal" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.16") {
+			return fmt.Errorf("decimal variable %s requires v2.16", id)
+		}
 		if variable.Scope == "application" && variable.Type == "filter" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.15") {
 			return fmt.Errorf("shared filter %s requires v2.15", id)
 		}
@@ -179,7 +182,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		input := slices.ContainsFunc(sections, func(s Section) bool { return s.ID == node.Section && s.Widget == "input" })
 		if input || node.ValueVariable != "" {
 			v, ok := d.Variables[node.ValueVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") || node.Kind != "widget" || !input || !ok || v.Type != "string" || !v.IsWritable() {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.7") || node.Kind != "widget" || !input || !ok || (v.Type != "string" && (v.Type != "decimal" || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.16"))) || !v.IsWritable() {
 				return fmt.Errorf("page node %s input needs v2.7 and a text state binding", id)
 			}
 		}

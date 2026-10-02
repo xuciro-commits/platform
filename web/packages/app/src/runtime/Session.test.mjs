@@ -1,6 +1,8 @@
+import {registerHooks} from "node:module";
+registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if(specifier.startsWith("./")&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PageSessionStore } from "./Session.ts";
+const { PageSessionStore }=await import("./Session.ts");
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const record = (id) => ({ id, revision: 1, note: id });
 const plan = () => ({ objects: new Map([["parent", "sample.parent"], ["child", "sample.child"]]), children: new Map([["parent", new Set(["child"])]]), queryParents: new Map([["children", "parent"]]) });

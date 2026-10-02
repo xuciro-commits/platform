@@ -1,3 +1,4 @@
+import type {ScalarValue} from "./decimal";
 import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button, Panel, Select, t, useWorkspace, type Route } from "@platform/ui";
 import { pageUIManifest, type Api } from "@platform/kernel";
@@ -11,7 +12,7 @@ const Hub = createContext<ApplicationSessionHub | undefined>(undefined);
 type Context = { definition: Api.Definition; session: ApplicationSession; instance: string; identity: string; preview: boolean };
 const ApplicationContext = createContext<Context | undefined>(undefined);
 export const useApplicationContext = () => useContext(ApplicationContext);
-const empty = Object.freeze({}) as Record<string, string | boolean>;
+const empty = Object.freeze({}) as Record<string, ScalarValue>;
 const emptySnapshot = () => empty, emptySubscribe = () => () => {};
 const idOf = (d: Api.Definition) => `${d.ref.app}:${d.ref.name}`;
 
@@ -74,7 +75,7 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
     else if (!declaration || declaration.type !== variable.type || variable.writable && declaration.mode !== "state" && !["record","filter"].includes(variable.type) || variable.type==="object-set"&&(declaration.mode!=="resource"||!declaration.source?.query||["app","kind","name"].some((key)=>variable.source?.object?.[key as keyof Api.AssetRef]!==context.definition.application?.queries?.[declaration.source!.query!]?.object[key as keyof Api.AssetRef])) || ["record","filter"].includes(variable.type)&&(declaration.mode!=="resource"||declaration.source?.kind!==variable.type||!variable.source?.object||["app","kind","name"].some((key)=>variable.source?.object?.[key as keyof Api.AssetRef]!==declaration.source?.object?.[key as keyof Api.AssetRef])) || invalid) error = "The application does not satisfy this page's shared bindings.";
     resources[id] = error ? { status: "error", code: error } : values[source] ?? { status: "empty" };
   }
-  const set = (id: string, value: string | boolean) => {
+  const set = (id: string, value: ScalarValue) => {
     const variable = variables[id];
     if (variable?.mode === "shared" && variable.writable && variable.source?.variable) context?.session.set(variable.source.variable, value);
   };

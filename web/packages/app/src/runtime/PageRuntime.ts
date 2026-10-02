@@ -1,3 +1,4 @@
+import {scalarAssignable,type ScalarValue} from "./decimal";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { RecordSource } from "@platform/ui";
 import { PageSessionStore, type SelectionPlan } from "./Session";
@@ -13,14 +14,14 @@ export const pageVariableDiagnostics = (variables: Record<string, Api.PageVariab
  */
 export function usePageVariables(variables: Record<string, Api.PageVariable>, state: Record<string, unknown>, session: PageSessionStore, resources: Record<string, VariableResult>) {
   const values = useMemo(() => evaluateVariables(variables, state, pageVariableContract, resources), [variables, state, resources]);
-  const setMany = (changes: Record<string, string | boolean>) => {
+  const setMany = (changes: Record<string, ScalarValue>) => {
     if (Object.entries(changes).some(([id, value]) => {
       const variable = variables[id];
-      return variable?.scope !== "page" || variable?.mode !== "state" || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > pageVariableContract.maxStringBytes;
+      return variable?.scope !== "page" || variable?.mode !== "state" || !scalarAssignable(variable.type,value,pageVariableContract.maxStringBytes,pageVariableContract.decimal.maxBytes);
     })) return;
     session.setScalars(changes);
   };
-  return { values, set: (id: string, value: string | boolean) => setMany({ [id]: value }), setMany };
+  return { values, set: (id: string, value: ScalarValue) => setMany({ [id]: value }), setMany };
 }
 
 export function usePageSession(source: RecordSource, plan: SelectionPlan) {

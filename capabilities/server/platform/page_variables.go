@@ -41,7 +41,10 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
-	Scope       string `json:"scope"`
+	Scope   string `json:"scope"`
+	Decimal struct {
+		MaxBytes int `json:"maxBytes"`
+	} `json:"decimal"`
 	Application struct {
 		Scope           string   `json:"scope"`
 		ValueTypes      []string `json:"valueTypes"`
@@ -97,6 +100,9 @@ type pageOperator struct {
 }
 
 func pageLiteralType(raw json.RawMessage) string {
+	if _, ok := DecimalLiteral(raw); ok {
+		return "decimal"
+	}
 	var value any
 	if json.Unmarshal(raw, &value) != nil {
 		return ""

@@ -1,3 +1,4 @@
+import {isDecimal,type ScalarValue} from "./decimal";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useViewCall, useWorkspace } from "@platform/ui";
 import { findDefinition, useHost } from "../index";
@@ -7,7 +8,7 @@ import type { VariableResult } from "./variables";
 import { useApplicationContext } from "./ApplicationRuntime";
 import { checkPortValues, navigationValues, portValues, readPageEnvelope } from "./page-values";
 
-type EventContext = { values: Record<string, VariableResult>; set: (id: string, value: string | boolean) => void; isActive: () => boolean };
+type EventContext = { values: Record<string, VariableResult>; set: (id: string, value: ScalarValue) => void; isActive: () => boolean };
 
 export const inputSlot = (variable: string) => `input/${variable}`;
 export function usePageInputs(page: Api.Page, session: PageSessionStore, snapshot: PageSessionSnapshot) {
@@ -34,12 +35,12 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
       recordError ||= state?.status === "error";
       inputs[port.variable] = state?.status === "value" ? { status: "value", value: { kind: "record", reference: state.value } }
         : state?.status === "pending" ? { status: "pending" } : state?.status === "error" ? { status: "error", code: "Resource read failed" } : { status: "empty" };
-    } else if (Object.hasOwn(inputValues, id)) inputs[port.variable] = { status: "value", value: inputValues[id] as string | boolean };
+    } else if (Object.hasOwn(inputValues, id)) inputs[port.variable] = { status: "value", value: inputValues[id] as ScalarValue };
   }
   return { inputs, error: inputError ?? (recordError ? "A page record input is unavailable." : undefined) };
 }
 
-export function usePageNavigation(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: string | boolean) => void) {
+export function usePageNavigation(page: Api.Page, live: boolean, values: Record<string, VariableResult>, set: (id: string, value: ScalarValue) => void) {
   const { definitions, source } = useHost(), workspace = useWorkspace(), call = useViewCall();
   const application = useApplicationContext();
   const [error, setError] = useState<string>();
@@ -71,7 +72,7 @@ export function usePageNavigation(page: Api.Page, live: boolean, values: Record<
         if (!returned || returned.version !== navigation.interfaceVersion || checkPortValues(targetInterface?.outputs ?? {}, returned.values)) { setError("The returned page values do not match the interface."); return; }
         for (const [output, id] of Object.entries(navigation.results ?? {})) {
           const value = returned.values[output];
-          if (typeof value !== "string" && typeof value !== "boolean") continue;
+          if (typeof value !== "string" && typeof value !== "boolean" && !isDecimal(value)) continue;
           context ? context.set(id, value) : set(id, value);
         }
       });

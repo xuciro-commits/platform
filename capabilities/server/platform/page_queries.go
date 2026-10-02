@@ -121,11 +121,17 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			}
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
-				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record") || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "")) || !slices.Contains([]string{"string", "boolean", "record"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
+				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record") || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
 					return fmt.Errorf("page query %s parameter escapes its input scope", id)
 				}
 			} else {
 				var literal any
+				if _, exact := DecimalLiteral(value.Literal); exact {
+					if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.16") {
+						return fmt.Errorf("decimal query literal requires v2.16")
+					}
+					continue
+				}
 				if json.Unmarshal(value.Literal, &literal) != nil {
 					return fmt.Errorf("page query %s has an invalid literal", id)
 				}
@@ -226,7 +232,7 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 		case "boolean":
 			return typ == "boolean"
 		case "integer", "decimal":
-			return typ == "number"
+			return typ == "number" || typ == "decimal"
 		case "reference":
 			return typ == "string" || typ == "record" && p.RecordVariableObject(value.Variable) == field.Ref
 		case "text", "choice", "date", "datetime":

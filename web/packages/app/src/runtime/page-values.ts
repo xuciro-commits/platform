@@ -1,3 +1,4 @@
+import {isDecimal} from "./decimal";
 import type { Api } from "@platform/kernel";
 import type { VariableResult } from "./variables";
 
@@ -9,7 +10,7 @@ export function checkPortValues(ports: Ports, input: unknown, required = true): 
     const value = input[id];
     if (value === undefined) { if (required && port.required) return "A required page input is missing."; continue; }
     if (port.type === "record" ? !object(value) || Object.keys(value).some((key) => key !== "object" && key !== "id") || value.object !== port.object?.name || typeof value.id !== "string" || !value.id || value.id.length > 1024
-      : typeof value !== port.type || typeof value === "string" && new TextEncoder().encode(value).length > 4096) return "Page value type does not match the interface.";
+      : port.type==="decimal"?!isDecimal(value):typeof value !== port.type || typeof value === "string" && new TextEncoder().encode(value).length > 4096) return "Page value type does not match the interface.";
   }
 }
 export function portValues(ports: Ports, values: Record<string, VariableResult>): Record<string, unknown> {
@@ -17,7 +18,7 @@ export function portValues(ports: Ports, values: Record<string, VariableResult>)
     const result = values[port.variable];
     if (!result || result.status !== "value") return [];
     const value = result.value;
-    return [[id, typeof value === "object" ? value.kind === "record" ? value.reference : undefined : value]];
+    return [[id, typeof value === "object" ? value.kind === "decimal"?value:value.kind === "record" ? value.reference : undefined : value]];
   }));
 }
 export function navigationValues(bindings: Record<string, Api.PageValue>, values: Record<string, VariableResult>) {
@@ -26,7 +27,7 @@ export function navigationValues(bindings: Record<string, Api.PageValue>, values
     if (binding.variable) {
       const value = values[binding.variable];
       if (!value || value.status !== "value") throw new Error("A navigation value is unavailable.");
-      result[id] = typeof value.value === "object" ? value.value.kind === "record" ? value.value.reference : undefined : value.value;
+      result[id] = typeof value.value === "object" ? value.value.kind === "decimal"?value.value:value.value.kind === "record" ? value.value.reference : undefined : value.value;
     } else result[id] = binding.literal;
   }
   return result;

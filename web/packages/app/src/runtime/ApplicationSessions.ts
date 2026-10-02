@@ -1,3 +1,4 @@
+import {scalarAssignable,type ScalarValue} from "./decimal";
 import type { Api } from "@platform/kernel";
 import type { RecordSource } from "@platform/ui";
 import { PageSessionStore, type RecordReference } from "./Session";
@@ -6,7 +7,7 @@ export type ApplicationReads = {source:RecordSource;queries:Record<string,Api.Pa
 /** Ephemeral application-instance state, owned by one workspace. Values never
  * appear in routes, persisted layout or the module's global scope. */
 export class ApplicationSession {
-  private state: Record<string, string | boolean> = {};
+  private state: Record<string, ScalarValue> = {};
   private listeners = new Set<() => void>();
   private pages = new Map<symbol, () => void>();
   private alive = true;
@@ -22,9 +23,9 @@ export class ApplicationSession {
   }
   snapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
-  set(id: string, value: string | boolean) {
+  set(id: string, value: ScalarValue) {
     const variable = this.variables[id];
-    if (!this.alive || variable?.mode !== "state" || variable.scope !== "application" || typeof value !== variable.type || typeof value === "string" && new TextEncoder().encode(value).length > 4096 || this.state[id] === value) return;
+    if (!this.alive || variable?.mode !== "state" || variable.scope !== "application" || !scalarAssignable(variable.type,value) || this.state[id] === value) return;
     this.state = { ...this.state, [id]: value }; this.listeners.forEach((listener) => listener());
   }
   select(id:string,reference:RecordReference|undefined,owner:symbol,onlyOwner=false) {

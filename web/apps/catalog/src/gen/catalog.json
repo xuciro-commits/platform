@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:08f9eda9aff30631",
+  "revision": "sha256:7cf6afa51a6e370f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2622,6 +2622,8 @@
         "defineApp",
         "findDefinition",
         "isComposed",
+        "isPageDecimal",
+        "isPageDecimalDraft",
         "isPageDefinition",
         "newId",
         "pageDocumentFromSections",
@@ -2629,6 +2631,7 @@
         "pageVariableContract",
         "pageVariableDiagnostics",
         "pageVariableValues",
+        "parsePageDecimal",
         "propertyKey",
         "relationKey",
         "runStates",
@@ -2659,6 +2662,7 @@
         "Host",
         "Me",
         "Memory",
+        "PageDecimalValue",
         "PageVariableValue",
         "Passage",
         "PropertyRef",

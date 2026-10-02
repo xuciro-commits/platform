@@ -133,7 +133,7 @@ export function PageEditor({ id }: { id: string }) {
   const inputProblem = Object.entries(document.nodes).some(([id, node]) => {
     if (!sections.some((s) => s.id === node.section && s.widget === "input")) return false;
     const variable = document.variables?.[node.valueVariable ?? ""];
-    return !variable || !(variable.mode === "state" || variable.mode === "shared" && variable.writable) || variable.type !== "string" || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
+    return !variable || !(variable.mode === "state" || variable.mode === "shared" && variable.writable) || !["string","decimal"].includes(variable.type) || !variableAccessible(variable, loopOwner(document, id), overlayOwner(document, id));
   });
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
   const queryProblem = Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));

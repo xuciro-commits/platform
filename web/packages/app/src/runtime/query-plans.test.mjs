@@ -1,7 +1,9 @@
+import {registerHooks} from "node:module";
+registerHooks({resolve(specifier,context,next){try{return next(specifier,context)}catch(error){if(specifier.startsWith("./")&&!specifier.endsWith(".ts"))return next(`${specifier}.ts`,context);throw error;}}});
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { compileQueryPlan, queryView } from "./query-plans.ts";
+const { compileQueryPlan, queryView }=await import("./query-plans.ts");
 const contract = JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))).runtime.query;
 const info={type:"sample.note",fields:[{name:"bucket",type:"text"},{name:"active",type:"boolean"},{name:"count",type:"integer"}]};
 const variables={bucket:{scope:"page",type:"string",mode:"state",initial:"A"}};
@@ -52,4 +54,10 @@ test("overlay query parameters accept their own locals and reject foreign roots,
  for(const owner of [undefined,"other"])assert.equal(compileQueryPlan({...scoped,owner},locals,values,info,undefined,contract).status,"error");
  const selected={local:{scope:"overlay",owner:"picker",type:"record",mode:"resource",source:{kind:"record",section:"table"}}};
  assert.equal(compileQueryPlan(scoped,selected,values,info,undefined,contract,[{id:"table",collectionVariable:"window"}]).status,"error");
+});
+
+test("decimal parameters retain exact tagged conditions and errors never fall back to an old threshold",()=>{
+ const variables={threshold:{scope:"page",type:"decimal",mode:"state",initial:{kind:"decimal",value:"0"}}},plan={object:{app:"sample",kind:"object",name:"sample.note"},limit:10,conditions:[{field:"count",op:">",value:{variable:"threshold"}}]},value={kind:"decimal",value:"1.9999999999999999"};
+ const result=compileQueryPlan(plan,variables,{threshold:{status:"value",value}},info,undefined,contract);assert.equal(result.status,"value");assert.deepEqual(result.query.domain,[["count",">",value]]);
+ assert.equal(compileQueryPlan(plan,variables,{threshold:{status:"error",code:"Invalid numeric value."}},info,undefined,contract).status,"error");
 });

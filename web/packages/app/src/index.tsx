@@ -349,3 +349,6 @@ export { pageVariableContract, pageVariableValues, pageVariableDiagnostics } fro
 export type { VariableResult as PageVariableValue } from "./runtime/variables";
 
 export { ApplicationPage, ApplicationSessionsProvider } from "./runtime/ApplicationRuntime";
+
+export {parseDecimal as parsePageDecimal,isDecimal as isPageDecimal,decimalDraft as isPageDecimalDraft} from "./runtime/decimal";
+export type {DecimalValue as PageDecimalValue} from "./runtime/decimal";

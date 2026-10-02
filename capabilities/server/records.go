@@ -770,6 +770,13 @@ func condition(info platform.EntityInfo, raw json.RawMessage) (func(reflect.Valu
 	case !ok:
 		return nil, fmt.Errorf("unknown field %s", name)
 	}
+	if value, ok := platform.DecimalLiteral(term[2]); ok {
+		return exactDecimalCondition(f, op, value, read)
+	}
+	var tagged map[string]json.RawMessage
+	if json.Unmarshal(term[2], &tagged) == nil && tagged != nil {
+		return nil, fmt.Errorf("invalid typed condition value")
+	}
 	var value any
 	if json.Unmarshal(term[2], &value) != nil {
 		return nil, fmt.Errorf("bad value")

@@ -1537,7 +1537,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.15",
+  "uiProfile": "platform.page.v2.16",
   "widgets": [
     {
       "componentID": "table",
@@ -2046,7 +2046,8 @@ export const pageUIManifest = {
     "platform.page.v2.12",
     "platform.page.v2.13",
     "platform.page.v2.14",
-    "platform.page.v2.15"
+    "platform.page.v2.15",
+    "platform.page.v2.16"
   ],
   "runtime": {
     "scope": "page",
@@ -2055,7 +2056,8 @@ export const pageUIManifest = {
       "boolean",
       "record",
       "filter",
-      "object-set"
+      "object-set",
+      "decimal"
     ],
     "maxVariables": 64,
     "maxStringBytes": 4096,
@@ -2101,6 +2103,27 @@ export const pageUIManifest = {
         "output": "boolean",
         "minArgs": 1,
         "maxArgs": 1
+      },
+      {
+        "id": "decimal-add",
+        "input": "decimal",
+        "output": "decimal",
+        "minArgs": 2,
+        "maxArgs": 2
+      },
+      {
+        "id": "decimal-subtract",
+        "input": "decimal",
+        "output": "decimal",
+        "minArgs": 2,
+        "maxArgs": 2
+      },
+      {
+        "id": "decimal-less",
+        "input": "decimal",
+        "output": "boolean",
+        "minArgs": 2,
+        "maxArgs": 2
       }
     ],
     "resources": [
@@ -2144,7 +2167,8 @@ export const pageUIManifest = {
       "valueTypes": [
         "string",
         "boolean",
-        "record"
+        "record",
+        "decimal"
       ]
     },
     "overlay": {
@@ -2154,7 +2178,8 @@ export const pageUIManifest = {
         "boolean",
         "record",
         "object-set",
-        "filter"
+        "filter",
+        "decimal"
       ],
       "modes": [
         "state",
@@ -2170,7 +2195,8 @@ export const pageUIManifest = {
         "boolean",
         "object-set",
         "record",
-        "filter"
+        "filter",
+        "decimal"
       ],
       "modes": [
         "state",
@@ -2198,6 +2224,9 @@ export const pageUIManifest = {
         ">=",
         "like"
       ]
+    },
+    "decimal": {
+      "maxBytes": 128
     }
   }
 } as const;

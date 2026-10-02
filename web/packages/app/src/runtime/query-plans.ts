@@ -1,3 +1,4 @@
+import {isDecimal,type DecimalValue} from "./decimal";
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
@@ -20,7 +21,7 @@ export const planKey = (id: string) => `plan/${id}`;
 type Contract = typeof pageUIManifest.runtime.query;
 export type QueryPlanResult = { status: "value"; object: string; query: RecordQuery; signature: string } | { status: "empty" | "pending" } | { status: "error"; code: string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
-type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|ResourceValue};
+type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|DecimalValue|ResourceValue};
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 
 export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract): QueryPlanResult {
@@ -43,17 +44,18 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
     if (!!binding.variable === (binding.literal !== undefined)) return { status: "error", code: "Query value needs one variable or literal." };
     if (!binding.variable) {
       const value=binding.literal;
-      if (!["string","boolean","number"].includes(typeof value) || typeof value === "number" && !Number.isFinite(value) || typeof value === "string" && new TextEncoder().encode(value).length>4096) return {status:"error",code:"Query value needs a bounded scalar literal."};
-      return {status:"value",value:value as string|boolean|number};
+      if (!isDecimal(value)&&!["string","boolean","number"].includes(typeof value) || typeof value === "number" && !Number.isFinite(value) || typeof value === "string" && new TextEncoder().encode(value).length>4096) return {status:"error",code:"Query value needs a bounded scalar literal."};
+      return {status:"value",value:value as string|boolean|number|DecimalValue};
     }
     const variable = variables[binding.variable];
     if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner) || usesPlan(binding.variable)) return { status: "error", code: "Query parameter escapes its input scope." };
     return values[binding.variable] ?? { status: "empty" };
   };
-  const scalar = (value: QueryValueResult & { status: "value" }) => typeof value.value === "object" ? value.value.kind === "record" ? value.value.reference.id : undefined : value.value;
+  const scalar = (value: QueryValueResult & { status: "value" }) => typeof value.value === "object" ? value.value.kind === "decimal"?value.value:value.value.kind === "record" ? value.value.reference.id : undefined : value.value;
   const compatible = (name: string, value: QueryValueResult & { status: "value" }) => {
     const f = field(name), raw = value.value;
     if (!f || !validID.test(name)) return false;
+    if (isDecimal(raw))return ["integer","decimal"].includes(f.type);
     if (typeof raw === "object") return raw.kind === "record" && f.type === "reference" && raw.reference.object === f.ref;
     return f.type === "boolean" ? typeof raw === "boolean" : ["integer", "decimal"].includes(f.type) ? typeof raw === "number" && Number.isFinite(raw)
       : ["text", "choice", "reference", "date", "datetime"].includes(f.type) && typeof raw === "string" && new TextEncoder().encode(raw).length <= 4096;

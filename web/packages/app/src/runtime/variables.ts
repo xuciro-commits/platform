@@ -1,15 +1,16 @@
+import {isDecimal,parseDecimal,decimalDraft,compareDecimal,decimalArithmetic,type ScalarValue} from "./decimal";
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { QueryWindow, RecordReference } from "./Session";
 
 type Contract = typeof pageUIManifest.runtime;
 type Variables = Record<string, Api.PageVariable>;
-type Scalar = string | boolean;
+type Scalar = ScalarValue;
 export type VariableIssue = { variable: string; code: string };
 export type ResourceValue = { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
-export type VariableResult = { status: "value"; value: Scalar | ResourceValue } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string };
+export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 const bytes = (value: string) => new TextEncoder().encode(value).length;
-const valueType = (value: unknown, contract: Contract) => typeof value === "boolean" ? "boolean"
+const valueType = (value: unknown, contract: Contract) => isDecimal(value,contract.decimal.maxBytes)?"decimal":typeof value === "boolean" ? "boolean"
   : typeof value === "string" && bytes(value) <= contract.maxStringBytes ? "string" : "";
 
 /** Finite presentation graph. The supplied contract is the generated Go
@@ -59,7 +60,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
           if (arg.variable && variables[arg.variable]?.scope === contract.overlay.scope && (variable.scope !== contract.overlay.scope || variable.owner !== variables[arg.variable]?.owner)) return fail(id, "Overlay dependency escapes its owner scope");
           return arg.variable ? visit(arg.variable) : valueType(arg.literal, contract);
         });
-        if (types.some((type) => !type || (op.input === "resource" ? !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean"].includes(type)))) fail(id, "Argument type mismatch");
+        if (types.some((type) => !type || (op.input === "resource" ? !contract.resources.some((resource) => resource.type === type) : type !== (op.input === "same" ? types[0] : op.input) || op.input === "same" && !["string", "boolean","decimal"].includes(type)))) fail(id, "Argument type mismatch");
       }
     } else fail(id, "Unsupported variable mode");
     visiting.delete(id); order.push(id);
@@ -70,10 +71,13 @@ export function compileVariables(variables: Variables, contract: Contract) {
 }
 
 const operators: Record<Contract["operators"][number]["id"], (values: Scalar[]) => Scalar> = {
-  equal: ([a, b]) => a === b, not: ([a]) => !a,
+  equal: ([a, b]) => isDecimal(a)&&isDecimal(b)?compareDecimal(a,b)===0:a === b, not: ([a]) => !a,
   and: (values) => values.every((value) => value === true), or: (values) => values.some((value) => value === true),
   concat: (values) => values.join(""),
   present: () => true,
+  "decimal-add":([a,b])=>decimalArithmetic(a as import("./decimal").DecimalValue,b as import("./decimal").DecimalValue),
+  "decimal-subtract":([a,b])=>decimalArithmetic(a as import("./decimal").DecimalValue,b as import("./decimal").DecimalValue,true),
+  "decimal-less":([a,b])=>compareDecimal(a as import("./decimal").DecimalValue,b as import("./decimal").DecimalValue)<0,
 };
 
 export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string, overlay?: string): Record<string, VariableResult> {
@@ -91,7 +95,8 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
     }
     if (variable.mode !== "derived") {
       const value = variable.mode === "state" && Object.hasOwn(state, id) ? state[id] : variable.initial;
-      result[id] = valueType(value, contract) === variable.type ? { status: "value", value: value as Scalar } : { status: "error", code: "State value type mismatch" };
+      if(variable.type==="decimal"&&decimalDraft(value,contract.decimal.maxBytes)){const parsed=parseDecimal(value.value,contract.decimal.maxBytes);result[id]=parsed?{status:"value",value:parsed,draft:value.value}:{status:"error",code:"Invalid numeric value.",draft:value.value};continue;}
+      result[id] = valueType(value, contract) === variable.type ? { status: "value", value: value as Scalar } : variable.type==="decimal"&&decimalDraft(value,contract.decimal.maxBytes)?{status:"error",code:"Invalid numeric value.",draft:value.value}:{ status: "error", code: "State value type mismatch" };
       continue;
     }
     const expression = variable.expression!;
@@ -100,7 +105,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
     if (inputs.some((input) => input.status === "pending")) { result[id] = { status: "pending" }; continue; }
     if (expression.op === "present" && inputs[0]?.status === "empty") { result[id] = { status: "value", value: false }; continue; }
     if (inputs.some((input) => input.status === "empty")) { result[id] = { status: "empty" }; continue; }
-    const value = operators[expression.op as keyof typeof operators](inputs.map((input) => (input as { value: Scalar }).value));
+    let value:Scalar;try {value = operators[expression.op as keyof typeof operators](inputs.map((input) => (input as { value: Scalar }).value));}catch {result[id]={status:"error",code:"Numeric result exceeds its budget."};continue;}
     result[id] = valueType(value, contract) === variable.type ? { status: "value", value } : { status: "error", code: "Variable result limit exceeded" };
   }
   return result;

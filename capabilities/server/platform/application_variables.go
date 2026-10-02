@@ -21,6 +21,9 @@ func (a Application) CheckVariables() error {
 		return fmt.Errorf("application query resources require v2.12")
 	}
 	for id, v := range a.Variables {
+		if v.Type == "decimal" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.16") {
+			return fmt.Errorf("application decimal %s requires v2.16", id)
+		}
 		if v.Type == "filter" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.15") {
 			return fmt.Errorf("application filter %s requires v2.15", id)
 		}

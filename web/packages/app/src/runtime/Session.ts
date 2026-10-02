@@ -1,3 +1,4 @@
+import type {ScalarValue} from "./decimal";
 import type { EntityRecord, RecordPageData, RecordQuery, RecordSource, RecordView } from "@platform/ui";
 
 export type RecordReference = { object: string; id: string };
@@ -9,8 +10,8 @@ export type QueryWindow = {
 export type QueryView = {search?:string;sort?:string[];offset?:number};
 export type PageSessionSnapshot = {
   views: Record<string,QueryView & {base:string}>;
-  scalars: Record<string, string | boolean>;
-  items: Record<string, Record<string, string | boolean>>;
+  scalars: Record<string, ScalarValue>;
+  items: Record<string, Record<string, ScalarValue>>;
   records: Record<string, ReadState<RecordReference>>;
   filters: Record<string, Record<string, unknown>>;
   queries: Record<string, ReadState<QueryWindow>>;
@@ -62,10 +63,10 @@ export class PageSessionStore {
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((listener) => listener());
   }
-  setScalar(id: string, value: string | boolean) {
+  setScalar(id: string, value: ScalarValue) {
     this.setScalars({ [id]: value });
   }
-  setScalars(values: Record<string, string | boolean>, reset: string[] = []) {
+  setScalars(values: Record<string, ScalarValue>, reset: string[] = []) {
     const scalars = { ...this.state.scalars };
     for (const id of reset) delete scalars[id];
     if (reset.some((id) => Object.hasOwn(this.state.scalars, id)) || Object.entries(values).some(([id, value]) => scalars[id] !== value)) this.publish({ scalars: { ...scalars, ...values } });
@@ -97,7 +98,7 @@ export class PageSessionStore {
     const removed=changed?slots:ids?slots.filter((slot)=>{const value=this.state.records[slot];return value&&"value" in value&&value.value&&!ids.includes(value.value.id);}):[];
     if(removed.length)this.publish({records:this.clear(removed)});
   }
-  setItemScalar(owner: string, key: string, id: string, value: string | boolean) {
+  setItemScalar(owner: string, key: string, id: string, value: ScalarValue) {
     this.itemOwners.set(key, owner);
     if (this.state.items[key]?.[id] !== value) this.publish({ items: { ...this.state.items, [key]: { ...this.state.items[key], [id]: value } } });
   }

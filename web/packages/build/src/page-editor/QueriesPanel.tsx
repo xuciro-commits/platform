@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Api } from "@platform/kernel";
-import { SemanticObjectSelect, SemanticPropertySelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
+import { parsePageDecimal,isPageDecimalDraft,SemanticObjectSelect, SemanticPropertySelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
 import { Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
 import { layoutID } from "../page-layout";
 
@@ -47,9 +47,9 @@ export function QueriesPanel({ document, object, values, onChange, onPreviewOwne
 }
 
 function QueryValue({label,value,document,owner,onChange,application=false}:{application?:boolean;owner?:string;label:string;value:Api.PageValue;document:Api.PageDocument;onChange:(value:Api.PageValue)=>void}) {
-  const type=typeof value.literal;
-  const available=Object.entries(document.variables??{}).filter(([,v])=>(["page","application"].includes(v.scope)||v.scope==="overlay"&&v.owner===owner&&!!owner)&&(application?["string","boolean"]:["string","boolean","record"]).includes(v.type));
+  const type=isPageDecimalDraft(value.literal)?"decimal":typeof value.literal;
+  const available=Object.entries(document.variables??{}).filter(([,v])=>(["page","application"].includes(v.scope)||v.scope==="overlay"&&v.owner===owner&&!!owner)&&(application?["string","boolean","decimal"]:["string","boolean","record","decimal"]).includes(v.type));
   return <div className="grid gap-2"><label className="grid gap-1 text-xs">{t(label)}<Select value={value.variable??""} onChange={(event)=>onChange(event.target.value?{variable:event.target.value}:{literal:""})}><option value="">{t("Literal")}</option>{available.map(([id,v])=><option key={id} value={id}>{v.title||id} · {t(v.type)}</option>)}</Select></label>
-    {!value.variable&&<><Select aria-label={t("Query literal type")} value={type==="boolean"?"boolean":type==="number"?"number":"string"} onChange={(event)=>onChange({literal:event.target.value==="boolean"?false:event.target.value==="number"?0:""})}><option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="number">{t("Number")}</option></Select>{type==="boolean"?<Checkbox checked={value.literal===true} onChange={(value)=>onChange({literal:value})}>{t("Query literal value")}</Checkbox>:<Input aria-label={t("Query literal value")} type={type==="number"?"number":"text"} value={String(value.literal??"")} onChange={(event)=>onChange({literal:type==="number"?Number(event.target.value):event.target.value})}/>}</>}
+    {!value.variable&&<><Select aria-label={t("Query literal type")} value={type==="boolean"?"boolean":type==="number"?"number":type==="decimal"?"decimal":"string"} onChange={(event)=>onChange({literal:event.target.value==="boolean"?false:event.target.value==="number"?0:event.target.value==="decimal"?{kind:"decimal",value:"0"}:""})}><option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="number">{t("Number")}</option><option value="decimal">{t("Exact number")}</option></Select>{type==="decimal"?<Input aria-label={t("Query literal value")} inputMode="decimal" value={(value.literal as {value:string}).value} onChange={(event)=>onChange({literal:{kind:"decimal",value:event.target.value}})} onBlur={(event)=>{const value=parsePageDecimal(event.target.value);if(value)onChange({literal:value})}}/>:type==="boolean"?<Checkbox checked={value.literal===true} onChange={(value)=>onChange({literal:value})}>{t("Query literal value")}</Checkbox>:<Input aria-label={t("Query literal value")} type={type==="number"?"number":"text"} value={String(value.literal??"")} onChange={(event)=>onChange({literal:type==="number"?Number(event.target.value):event.target.value})}/>}</>}
   </div>;
 }

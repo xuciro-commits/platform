@@ -1,11 +1,11 @@
 import type { Api } from "@platform/kernel";
-import { SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
+import { parsePageDecimal,isPageDecimalDraft,SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
 import { Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
 import { useState } from "react";
 import { layoutID, loopOwner, overlayOwner, variableAccessible } from "../page-layout";
 
 type Variables = NonNullable<Api.PageDocument["variables"]>;
-const initial = (type: string) => type === "boolean" ? false : "";
+const initial = (type: string) => type === "decimal"?{kind:"decimal",value:"0"}:type === "boolean" ? false : "";
 const expression = (op: string): Api.PageExpression => {
   const contract = pageVariableContract.operators.find((item) => item.id === op)!;
   return { op, args: Array.from({ length: contract.minArgs }, () => ({ literal: initial(contract.input) })) };
@@ -56,17 +56,18 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
           const resource = pageVariableContract.resources[0];
           patch({ mode, type: resource.type, initial: undefined, expression: undefined, source: { kind: resource.kind, section: sourceSections(variable.scope,variable.owner).find((section) => section.widget === resource.widget)?.id ?? "" } });
         } else {
-          const type = variable.type === "string" ? "string" : "boolean";
-          patch({ mode, scope: variable.mode === "shared" ? "page" : variable.scope, writable:undefined, type, source: undefined, initial: mode === "derived" ? undefined : initial(type), expression: mode === "derived" ? expression(type === "string" ? "concat" : "equal") : undefined });
+          const type = ["string","decimal"].includes(variable.type)?variable.type:"boolean";
+          patch({ mode, scope: variable.mode === "shared" ? "page" : variable.scope, writable:undefined, type, source: undefined, initial: mode === "derived" ? undefined : initial(type), expression: mode === "derived" ? expression(type === "string" ? "concat" : type==="decimal"?"decimal-add":"equal") : undefined });
         }
       }}>{variable.mode === "input" && <option value="input">{t("Page input")}</option>}{!application && (Object.keys(shared).length > 0 || variable.mode === "shared") && <option value="shared">{t("Application binding")}</option>}<option value="state">{t("State")}</option><option value="constant">{t("Constant")}</option><option value="derived">{t("Derived")}</option>{application || variable.scope === "page" || variable.scope === "overlay" || variable.source?.kind === "item" ? <option value="resource">{t("Resource output")}</option> : null}</Select></label>
       <label className="grid gap-1 text-xs">{t("Value type")}<Select value={variable.type} disabled={variable.mode === "derived" || variable.mode === "resource" || variable.mode === "input" || variable.mode === "shared"} onChange={(event) => patch({ type: event.target.value, initial: initial(event.target.value) })}>
-        <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option>{(variable.mode === "resource" || variable.mode === "shared") && !["string","boolean"].includes(variable.type) && <option value={variable.type}>{t(variable.type)}</option>}</Select></label>
+        <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="decimal">{t("Exact number")}</option>{(variable.mode === "resource" || variable.mode === "shared") && !["string","boolean","decimal"].includes(variable.type) && <option value={variable.type}>{t(variable.type)}</option>}</Select></label>
       {(variable.mode === "state" || variable.mode === "constant") && (targets.length ? <label className="grid gap-1 text-xs">{t("Initial tab")}<Select value={String(variable.initial)} onChange={(event) => patch({ initial: event.target.value })}>
         {[...new Set(targets)].map((child, i) => <option key={child} value={child}>{document.nodes[child]?.title || t("Tab {n}", { n: i + 1 })}</option>)}</Select></label>
+        : variable.type==="decimal"?<label className="grid gap-1 text-xs">{t("Initial value")}<Input inputMode="decimal" maxLength={pageVariableContract.decimal.maxBytes} value={typeof variable.initial==="object"&&variable.initial!==null?String((variable.initial as {value?:string}).value??""):""} onChange={(event)=>patch({initial:{kind:"decimal",value:event.target.value}})} onBlur={(event)=>{const value=parsePageDecimal(event.target.value);if(value)patch({initial:value})}}/></label>
         : variable.type === "boolean" ? <Checkbox checked={variable.initial === true} onChange={(value) => patch({ initial: value })}>{t("Initial value")}</Checkbox>
         : <label className="grid gap-1 text-xs">{t("Initial value")}<Input value={String(variable.initial ?? "")} onChange={(event) => patch({ initial: event.target.value })} /></label>)}
-      {variable.mode === "shared" && <label className="grid gap-1 text-xs">{t("Application variable")}<Select value={variable.source?.variable ?? ""} onChange={(event)=>bindShared(event.target.value)}><option value="">{t("Choose an application variable")}</option>{Object.entries(shared).map(([id,v]) => <option key={id} value={id}>{v.title || id} · {t(v.type==="filter"?"Filter values":v.type==="record"?"Record selection":v.type==="object-set"?"Query window":v.type==="boolean"?"Boolean":"Text")}</option>)}</Select></label>}
+      {variable.mode === "shared" && <label className="grid gap-1 text-xs">{t("Application variable")}<Select value={variable.source?.variable ?? ""} onChange={(event)=>bindShared(event.target.value)}><option value="">{t("Choose an application variable")}</option>{Object.entries(shared).map(([id,v]) => <option key={id} value={id}>{v.title || id} · {t(v.type==="filter"?"Filter values":v.type==="record"?"Record selection":v.type==="object-set"?"Query window":v.type==="decimal"?"Exact number":v.type==="boolean"?"Boolean":"Text")}</option>)}</Select></label>}
       {variable.mode==="shared"&&shared[variable.source?.variable??""]&&(shared[variable.source?.variable??""]!.type!==variable.type||JSON.stringify(sharedObjects[variable.source?.variable??""])!==JSON.stringify(variable.source?.object))&&<Button onClick={()=>bindShared(variable.source?.variable??"")}>{t("Update shared binding")}</Button>}
       {variable.mode==="shared"&&["record","filter"].includes(variable.type)&&<Checkbox checked={!!variable.writable} onChange={(writable)=>patch({writable})}>{t(variable.type==="filter"?"Allow filter updates":"Allow selection updates")}</Checkbox>}
       {variable.mode==="resource"&&application&&<label className="grid gap-1 text-xs">{t("Resource output kind")}<Select value={variable.type} onChange={(e)=>patch(["record","filter"].includes(e.target.value)?{type:e.target.value,source:{kind:e.target.value,object:undefined,...(e.target.value==="filter"?{fields:[]}: {})}}:{type:"object-set",source:{kind:"plan",query:Object.keys(document.queries??{})[0]??""}})}><option value="object-set">{t("Query window")}</option><option value="record">{t("Record selection")}</option><option value="filter">{t("Filter values")}</option></Select></label>}
@@ -97,7 +98,7 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
       <div role="region" aria-label={t("Current variable value")} className="grid gap-2 border-t border-border pt-2 text-xs">
         <strong>{t("Current variable value")}</strong><span role="status">{t(result?.status === "pending" ? "Loading value" : result?.status === "value" ? "Value available" : result?.status === "error" ? "Value error" : "No value")}</span>
         {result?.status === "error" && <p role="alert">{t(result.code)}</p>}
-        {current !== undefined && (typeof current === "object" ? current.kind === "record" ? <PropertyList items={[[t("Object"), current.reference.object], [t("Record"), current.reference.id]]} />
+        {current !== undefined && (typeof current === "object" ? current.kind==="decimal"?<p>{current.value}</p>:current.kind === "record" ? <PropertyList items={[[t("Object"), current.reference.object], [t("Record"), current.reference.id]]} />
           : current.kind === "filter" ? <PropertyList items={Object.entries(current.fields).map(([field, value]) => [field, String(value)])} />
           : <PropertyList items={[[t("Object"), current.window.object], [t("Records in window"), String(current.window.records.length)], [t("Total matching records"), String(current.window.total)], [t("Offset"), String(current.window.query.offset ?? 0)], [t("Window coverage"), t(current.window.complete ? "Complete for this read" : "Partial window")]]} />
           : <p className="break-all">{String(current)}</p>)}
@@ -108,15 +109,15 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
 }
 
 function Argument({ value, variables, document, onChange }: { value: Api.PageValue; variables: Variables; document: Api.PageDocument; onChange: (value: Api.PageValue) => void }) {
-  const text = typeof value.literal !== "boolean";
+  const number=isPageDecimalDraft(value.literal),text = typeof value.literal !== "boolean";
   const children = Object.values(document.nodes).filter((node) => node.kind === "tabs").flatMap((node) => node.children ?? []);
   return <>
     <Select aria-label={t("Argument source")} value={value.variable ?? ""} onChange={(event) => onChange(event.target.value ? { variable: event.target.value } : { literal: "" })}>
       <option value="">{t("Literal")}</option>{Object.entries(variables).map(([id, variable]) => <option key={id} value={id}>{variable.title || id} · {t(variable.type)}</option>)}
     </Select>
-    {!value.variable && <><Select aria-label={t("Literal type")} value={text ? "string" : "boolean"} onChange={(event) => onChange({ literal: initial(event.target.value) })}>
-      <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option></Select>
-      {text ? <><Input aria-label={t("Literal value")} value={String(value.literal ?? "")} onChange={(event) => onChange({ literal: event.target.value })} />
+    {!value.variable && <><Select aria-label={t("Literal type")} value={number?"decimal":text ? "string" : "boolean"} onChange={(event) => onChange({ literal: initial(event.target.value) })}>
+      <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="decimal">{t("Exact number")}</option></Select>
+      {number?<Input aria-label={t("Literal value")} inputMode="decimal" value={(value.literal as {value:string}).value} onChange={(event)=>onChange({literal:{kind:"decimal",value:event.target.value}})} onBlur={(event)=>{const value=parsePageDecimal(event.target.value);if(value)onChange({literal:value})}}/>:text ? <><Input aria-label={t("Literal value")} value={String(value.literal ?? "")} onChange={(event) => onChange({ literal: event.target.value })} />
         {!!children.length && <Select aria-label={t("Use tab identity")} value={children.includes(String(value.literal)) ? String(value.literal) : ""} onChange={(event) => { if (event.target.value) onChange({ literal: event.target.value }); }}>
           <option value="">{t("Use tab identity")}</option>{[...new Set(children)].map((id, i) => <option key={id} value={id}>{document.nodes[id]?.title || t("Tab {n}", { n: i + 1 })}</option>)}
         </Select>}</> : <Checkbox checked={value.literal === true} onChange={(literal) => onChange({ literal })}>{t("Literal value")}</Checkbox>}
@@ -132,5 +133,5 @@ export function NodeBindings({ document, id, button, input, onChange }: { docume
     <option value="">{t("Always visible")}</option>{eligible.map(([key, variable]) => <option key={key} value={key}>{variable.title || key}</option>)}
   </Select></label>{(button || input) && <label className="grid gap-1 text-xs">{t("Enabled when")}<Select value={node?.enabledWhen ?? ""} onChange={(event) => onChange({ enabledWhen: event.target.value || undefined })}>
     <option value="">{t("Always enabled")}</option>{eligible.map(([key, variable]) => <option key={key} value={key}>{variable.title || key}</option>)}
-  </Select></label>}{input && <label className="grid gap-1 text-xs">{t("Input state variable")}<Select value={node?.valueVariable ?? ""} onChange={(event) => onChange({ valueVariable: event.target.value || undefined })}><option value="">{t("Choose a text state variable")}</option>{visible.filter(([, variable]) => variable.type === "string" && (variable.mode === "state" || variable.mode === "shared" && variable.writable)).map(([id, variable]) => <option key={id} value={id}>{variable.title || id}</option>)}</Select></label>}</Card>;
+  </Select></label>}{input && <label className="grid gap-1 text-xs">{t("Input state variable")}<Select value={node?.valueVariable ?? ""} onChange={(event) => onChange({ valueVariable: event.target.value || undefined })}><option value="">{t("Choose a text state variable")}</option>{visible.filter(([, variable]) => ["string","decimal"].includes(variable.type) && (variable.mode === "state" || variable.mode === "shared" && variable.writable)).map(([id, variable]) => <option key={id} value={id}>{variable.title || id}</option>)}</Select></label>}</Card>;
 }

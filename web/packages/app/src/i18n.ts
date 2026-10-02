@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Invalid numeric value.": "数值无效。",
+  "Numeric result exceeds its budget.": "数值结果超出范围限制。",
   "Shared filter is unavailable.": "共享筛选不可用。",
   "Resource read failed": "资源读取失败",
   "Shared query window": "共享查询窗口",

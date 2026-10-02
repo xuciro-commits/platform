@@ -1760,5 +1760,106 @@
         }
       }
     }
+  },
+  {
+    "name": "exact decimal arithmetic graph",
+    "valid": true,
+    "variables": {
+      "a": {
+        "scope": "page",
+        "type": "decimal",
+        "mode": "state",
+        "initial": {
+          "kind": "decimal",
+          "value": "0.1"
+        }
+      },
+      "b": {
+        "scope": "page",
+        "type": "decimal",
+        "mode": "constant",
+        "initial": {
+          "kind": "decimal",
+          "value": "0.2"
+        }
+      },
+      "sum": {
+        "scope": "page",
+        "type": "decimal",
+        "mode": "derived",
+        "expression": {
+          "op": "decimal-add",
+          "args": [
+            {
+              "variable": "a"
+            },
+            {
+              "variable": "b"
+            }
+          ]
+        }
+      },
+      "less": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "derived",
+        "expression": {
+          "op": "decimal-less",
+          "args": [
+            {
+              "variable": "sum"
+            },
+            {
+              "literal": {
+                "kind": "decimal",
+                "value": "0.4"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "values": {
+      "a": {
+        "kind": "decimal",
+        "value": "0.1"
+      },
+      "b": {
+        "kind": "decimal",
+        "value": "0.2"
+      },
+      "sum": {
+        "kind": "decimal",
+        "value": "0.3"
+      },
+      "less": true
+    }
+  },
+  {
+    "name": "decimal declaration requires canonical text",
+    "valid": false,
+    "variables": {
+      "a": {
+        "scope": "page",
+        "type": "decimal",
+        "mode": "state",
+        "initial": {
+          "kind": "decimal",
+          "value": "1.0"
+        }
+      }
+    }
+  },
+  {
+    "name": "numeric JSON cannot replace a tagged decimal",
+    "valid": false,
+    "variables": {
+      "a": {
+        "scope": "page",
+        "type": "decimal",
+        "mode": "state",
+        "initial": 0.1
+      }
+    }
   }
 ]

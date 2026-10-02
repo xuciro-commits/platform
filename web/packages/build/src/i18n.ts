@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "decimal-add": "精确数值相加",
+  "decimal-subtract": "精确数值相减",
+  "decimal-less": "精确数值小于比较",
+  "Exact number": "精确数值",
   "Update shared binding": "更新共享绑定",
   "Allow filter updates": "允许更新筛选",
   "Filter object": "筛选对象",

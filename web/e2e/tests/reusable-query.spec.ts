@@ -17,7 +17,7 @@ test("a builder publishes one reusable query and two pages keep its exact versio
  await page.getByRole("textbox",{name:"Query literal value",exact:true}).fill("A");
  await page.getByRole("button",{name:"Save query",exact:true}).click();
  await expect(page.getByRole("button",{name:"Save query",exact:true})).toBeDisabled();
- const queryID=(await(await request.get("/v1/records/build.query?limit=100",{headers:{Authorization:"Bearer manager"}})).json()).records.find((q:any)=>q.name===name).id;
+ let queryID:string|undefined;await expect.poll(async()=>{const result=await(await request.get("/v1/records/build.query?limit=100",{headers:{Authorization:"Bearer manager"}})).json();queryID=result.records.find((q:any)=>q.name===name)?.id;return queryID;}).toBeTruthy();
  await page.getByRole("button",{name:"Review release",exact:true}).click();
  await page.getByRole("button",{name:"Check draft and dependencies",exact:true}).click();
  await page.getByRole("button",{name:"Save immutable candidate",exact:true}).click();
