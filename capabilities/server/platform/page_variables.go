@@ -42,6 +42,10 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	DetailPresentation struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+		MaxColumns        int    `json:"maxColumns"`
+	} `json:"detailPresentation"`
 	TablePresentation struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxColumns        int    `json:"maxColumns"`

@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Hide empty properties": "隐藏空属性",
+ "Property columns": "属性列数",
+ "Empty means missing, null or empty text. Zero and false stay visible.": "空值指缺失、null 或空文本。零和 false 仍显示。",
  "Show table search": "显示表格搜索",
  "Column presentation": "列展示",
  "Column title {field}": "列标题 {field}",

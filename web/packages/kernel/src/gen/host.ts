@@ -899,6 +899,11 @@ export type Page = {
   selections?: SelectionVariable[];
 };
 
+export type PageDetailPresentation = {
+  columns: number;
+  hideNull?: boolean;
+};
+
 export type PageDocument = {
   unusedWidgets?: PageUnusedWidget[];
   formatVersion: number;
@@ -1345,6 +1350,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  detailPresentation?: PageDetailPresentation;
   tableColumns?: PageTableColumn[];
   showSearch?: boolean;
   selectionSetVariable?: string;
@@ -1667,7 +1673,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.34",
+  "uiProfile": "platform.page.v2.35",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2713,7 +2719,8 @@ export const pageUIManifest = {
     "platform.page.v2.31",
     "platform.page.v2.32",
     "platform.page.v2.33",
-    "platform.page.v2.34"
+    "platform.page.v2.34",
+    "platform.page.v2.35"
   ],
   "runtime": {
     "scope": "page",
@@ -2999,6 +3006,10 @@ export const pageUIManifest = {
           ]
         }
       ]
+    },
+    "detailPresentation": {
+      "requiredUIProfile": "platform.page.v2.35",
+      "maxColumns": 4
     }
   },
   "layout": {

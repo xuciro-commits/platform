@@ -41,6 +41,11 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	search := false
 	sections[0].ShowSearch = &search
 	sections[0].TableColumns = []platform.PageTableColumn{{Field: "name", Title: "Frozen name", Width: 170, Formatter: "text"}, {Field: "secret", Title: "Private column", Width: 110}}
+	doc.Nodes["detail"] = platform.PageLayoutNode{Kind: "widget", Section: "detail"}
+	root := doc.Nodes[doc.Root]
+	root.Children = append(root.Children, "detail")
+	doc.Nodes[doc.Root] = root
+	sections = append(sections, build.Section{ID: "detail", Widget: "detail", ConfigVersion: 1, Fields: []string{"name", "secret"}, DetailPresentation: &platform.PageDetailPresentation{Columns: 2, HideNull: true}})
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -52,6 +57,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[0].SelectionSetVariable = ""
 	sections[0].TableColumns = nil
 	sections[0].ShowSearch = nil
+	sections[1].DetailPresentation = nil
 	doc.Events = nil
 	submit(build.PageType, "P", "edit", map[string]any{"sections": sections, "document": doc})
 	if _, err = tn.ActivateRelease(builder, preview.CandidateID, "activate", at); err != nil {
@@ -64,6 +70,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					if d.Page.Sections[1].DetailPresentation == nil || !d.Page.Sections[1].DetailPresentation.HideNull || d.Page.Sections[1].DetailPresentation.Columns != 2 {
+						t.Fatal("frozen detail presentation changed")
+					}
+					if member.ID == reader.ID && len(d.Page.Sections[1].Fields) != 1 {
+						t.Fatal("detail fields were not masked")
+					}
 					if d.Page.Sections[0].ShowSearch == nil || *d.Page.Sections[0].ShowSearch || d.Page.Sections[0].TableColumns[0].Title != "Frozen name" {
 						t.Fatal("frozen table presentation changed")
 					}

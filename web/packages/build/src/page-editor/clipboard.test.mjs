@@ -63,6 +63,9 @@ test("copied table display settings retain literal titles, widths, formats and t
  const current=fixture(),table=current.sections.find(s=>s.id==="table");table.tableColumns=[{field:"id",title:"table",width:90},{field:"title",title:"term",width:170,formatter:"text"}];table.showSearch=false;const original=structuredClone(table.tableColumns);
  const result=pasteLayout(current,copyLayout(current,"group",object.name).value,"root",object.name,limits).value;assert.ok(result);const copy=result.draft.sections.slice(current.sections.length).find(s=>s.widget==="table");assert.deepEqual(copy.tableColumns,original);assert.equal(copy.showSearch,false);
 });
+test("copied detail presentation retains its empty policy and responsive column declaration",()=>{
+ const current=fixture();current.sections.find(s=>s.id==="detail").detailPresentation={columns:2,hideNull:true};const result=pasteLayout(current,copyLayout(current,"group",object.name).value,"root",object.name,limits).value;assert.ok(result);assert.deepEqual(result.draft.sections.slice(current.sections.length).find(s=>s.widget==="detail").detailPresentation,{columns:2,hideNull:true});
+});
 test("editing a copied group preserves explicit application record ports through the original loop synchronizer",()=>{
  const current=fixture();current.document.variables.applicationRecord={scope:"application",mode:"shared",type:"record",source:{kind:"application",variable:"selection",object}};current.sections.find(s=>s.id==="detail").recordVariable="applicationRecord";
  const result=pasteLayout(current,copyLayout(current,"group",object.name).value,"root",object.name,limits).value;const normalized=synchronizeLoopBindings(result.draft.document,result.draft.sections);assert.ok(normalized.sections.filter(s=>s.widget==="detail").every(s=>s.recordVariable==="applicationRecord"));

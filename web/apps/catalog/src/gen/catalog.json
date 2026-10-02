@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:10d4d7c0dc4d934c",
+  "revision": "sha256:6ea2f42a6121202b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2379,6 +2379,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/AggregateSource.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/InlineActionInspector.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
@@ -2420,6 +2421,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",

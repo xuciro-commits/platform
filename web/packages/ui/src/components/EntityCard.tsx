@@ -2,16 +2,17 @@ import type { ReactNode } from "react";
 import { Card } from "../primitives/card";
 
 /** Label/value pairs; values may be any node (tags, links, numbers). */
-export function PropertyList({ items }: { items: [label: string, value: ReactNode][] }) {
+export function PropertyList({ items,columns=1 }: { items: [label: string, value: ReactNode][];columns?:1|2|3|4 }) {
+  const layout={1:"grid-cols-1",2:"grid-cols-1 @sm/properties:grid-cols-2",3:"grid-cols-1 @sm/properties:grid-cols-2 @lg/properties:grid-cols-3",4:"grid-cols-1 @sm/properties:grid-cols-2 @lg/properties:grid-cols-3 @xl/properties:grid-cols-4"}[columns]??"grid-cols-1";
   return (
-    <dl className="@container grid gap-3 text-sm">
+    <div className="@container/properties"><dl className={`@container grid gap-3 text-sm ${layout}`}>
       {items.map(([label, value]) => (
-        <div key={label} className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-1 @sm:grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)]">
+        <div key={label} className={`grid min-w-0 grid-cols-1 gap-x-4 gap-y-1 ${columns===1?"@sm:grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)]":""}`}>
           <dt className="break-words text-muted">{label}</dt>
           <dd className="min-w-0 break-words">{value}</dd>
         </div>
       ))}
-    </dl>
+    </dl></div>
   );
 }
 

@@ -1,4 +1,5 @@
 import {FilterInspector} from "./FilterInspector";
+import {DetailInspector} from "./DetailInspector";
 import {InlineActionInspector} from "./InlineActionInspector";
 import { widgetContract } from "@platform/app";
 import { ChartInspector } from "./ChartInspector";
@@ -10,6 +11,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ detail:{configVersion:1,bindings:DetailInspector},
  filter:{configVersion:1,bindings:FilterInspector},
  "inline-action":{configVersion:1,bindings:InlineActionInspector},
   kanban:{configVersion:1,bindings:KanbanInspector},

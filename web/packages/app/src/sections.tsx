@@ -122,7 +122,7 @@ function DetailWidget({ page, section, selected, readSource }: Bound) {
   const type = objectOf(page, section);
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
   // The fields alone: what people do with it is the actions widget's (ADR-0035 D2).
-  return <RecordPage key={`${type}/${selected.id}`} source={source} type={type} id={selected.id} fields={section.fields} detailOnly />;
+  return <RecordPage key={`${type}/${selected.id}`} source={source} type={type} id={selected.id} fields={section.fields} detailPresentation={section.detailPresentation} detailOnly />;
 }
 
 /** The actions the builder chose, on what is selected (Workshop's button group). */

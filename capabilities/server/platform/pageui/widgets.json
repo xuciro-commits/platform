@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.34",
+  "uiProfile": "platform.page.v2.35",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -1045,7 +1045,8 @@
     "platform.page.v2.31",
     "platform.page.v2.32",
     "platform.page.v2.33",
-    "platform.page.v2.34"
+    "platform.page.v2.34",
+    "platform.page.v2.35"
   ],
   "runtime": {
     "scope": "page",
@@ -1331,6 +1332,10 @@
           ]
         }
       ]
+    },
+    "detailPresentation": {
+      "requiredUIProfile": "platform.page.v2.35",
+      "maxColumns": 4
     }
   },
   "layout": {
