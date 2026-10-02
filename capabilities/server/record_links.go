@@ -10,6 +10,8 @@ import (
 	"platformserver/platform"
 )
 
+const linkArchiveFailure = "Active reference archive protection failed"
+
 const linkCardinalityFailure = "Reference cardinality constraint failed"
 
 func (s *recordStore) validateUniqueLinkLocked(l platform.LinkType) error {
@@ -41,6 +43,11 @@ func (s *recordStore) validateLinkConstraintsLocked() error {
 			return err
 		}
 	}
+	for _, l := range s.archiveLinks {
+		if err := s.validateArchiveLinkLocked(l); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 func (s *recordStore) validateLinkConstraints() error {
@@ -49,21 +56,39 @@ func (s *recordStore) validateLinkConstraints() error {
 	return s.validateLinkConstraintsLocked()
 }
 func (s *recordStore) installLinkConstraint(l platform.LinkType) error {
-	if l.Cardinality != "one-to-one" {
+	if l.Cardinality != "one-to-one" && l.DeletePolicy != "restrict-active" {
 		return nil
-	} // Historical weaker versions never erase a retained constraint.
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.validateUniqueLinkLocked(l); err != nil {
-		return err
+	if l.Cardinality == "one-to-one" {
+		if err := s.validateUniqueLinkLocked(l); err != nil {
+			return err
+		}
 	}
-	if s.uniqueLinks == nil {
-		s.uniqueLinks = map[string]platform.LinkType{}
+	if l.DeletePolicy == "restrict-active" {
+		if err := s.validateArchiveLinkLocked(l); err != nil {
+			return err
+		}
 	}
 	key := l.Child.Name + "/" + l.Via
-	if _, installed := s.uniqueLinks[key]; !installed {
-		s.uniqueLinks[key] = l
-		s.generation++
+	if l.Cardinality == "one-to-one" {
+		if s.uniqueLinks == nil {
+			s.uniqueLinks = map[string]platform.LinkType{}
+		}
+		if _, ok := s.uniqueLinks[key]; !ok {
+			s.uniqueLinks[key] = l
+			s.generation++
+		}
+	}
+	if l.DeletePolicy == "restrict-active" {
+		if s.archiveLinks == nil {
+			s.archiveLinks = map[string]platform.LinkType{}
+		}
+		if _, ok := s.archiveLinks[key]; !ok {
+			s.archiveLinks[key] = l
+			s.generation++
+		}
 	}
 	return nil
 }
@@ -90,7 +115,7 @@ func (s *recordStore) checkLinkWriteLocked(et *entityType, value reflect.Value) 
 			}
 		}
 	}
-	return nil
+	return s.checkArchiveWriteLocked(et, value)
 }
 
 // Publications derive their constraint from the same frozen Build descriptor;

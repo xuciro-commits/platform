@@ -3,8 +3,8 @@ import { useHost, useReadQuery, SemanticObjectSelect, SemanticPropertySelect } f
 import { Button, Input, Select, PageHeader, Panel, RecordList, Textarea, t, useWorkspace, useUnsavedChanges } from "@platform/ui";
 import { AssetControls } from "./asset-controls";
 
-type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;published?:string;version?:number};
-const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:"",child:"",via:"",forward:"children",reverse:"parent",cardinality:"one-to-many"});
+type Draft = {id:string;revision:number;name:string;title:string;description:string;parent:string;child:string;via:string;forward:string;reverse:string;cardinality:string;deletePolicy:string;published?:string;version?:number};
+const empty=():Draft=>({id:"",revision:0,name:"",title:"",description:"",parent:"",child:"",via:"",forward:"children",reverse:"parent",cardinality:"one-to-many",deletePolicy:"owner"});
 const hydrate=(record:Draft):Draft=>({...empty(),...record});
 
 export function LinkTypes() {
@@ -23,8 +23,8 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  const perform=async(action:()=>Promise<unknown>)=>{setBusy(true);setError("");try{await action();}catch{setError(t("The relationship could not be saved or loaded. Your draft is still here."));}finally{setBusy(false);}};
  const reload=async()=>{const r=await query.refetch();if(r.data?.record&&!r.isError){setDraft(hydrate(r.data.record));markSaved();setDirty(false);}else setError(t("Reload the saved relationship before editing again."));};
  const save=async():Promise<number|undefined>=>{
-  const target=draft.id||crypto.randomUUID(),{name,title,description,parent,child,via,forward,reverse,cardinality}=draft;
-  if(!await decide(`build.linktype.${draft.id?"edit":"create"}`,{type:"build.linktype",id:target},{name,title,description,parent,child,via,forward,reverse,cardinality},{expectedRevision:draft.id?draft.revision:undefined,quiet:true,onRefused:setError}))return;
+  const target=draft.id||crypto.randomUUID(),{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy}=draft;
+  if(!await decide(`build.linktype.${draft.id?"edit":"create"}`,{type:"build.linktype",id:target},{name,title,description,parent,child,via,forward,reverse,cardinality,deletePolicy},{expectedRevision:draft.id?draft.revision:undefined,quiet:true,onRefused:setError}))return;
   const revision=draft.id?draft.revision+1:1;
   if(!draft.id){markSaved();setDirty(false);open({view:"link-type",params:{id:target}});close({view:"link-type",params:{id}});}else await reload();
   return revision;
@@ -53,6 +53,8 @@ export function LinkTypeEditor({id,parent,child,via}:{id:string;parent?:string;c
  <label className="grid min-w-0 grid-cols-1 gap-1 text-xs">{t("Child to parent name")}<Input value={draft.reverse} onChange={e=>patch({reverse:e.target.value})}/></label>
  <label className="grid gap-1 text-xs">{t("Relationship cardinality")}<Select aria-label={t("Relationship cardinality")} value={draft.cardinality||"one-to-many"} onChange={e=>patch({cardinality:e.target.value})}><option value="one-to-many">{t("One-to-many")}</option><option value="one-to-one">{t("One-to-one (at most one child)")}</option></Select></label>
  {draft.cardinality==="one-to-one"&&<p className="text-xs text-muted">{t("A parent reference may belong to at most one child, including archived children. Empty optional references are not reserved. A published unique relationship cannot be relaxed.")}</p>}
+ <label className="grid gap-1 text-xs">{t("Relationship archive policy")}<Select aria-label={t("Relationship archive policy")} value={draft.deletePolicy||"owner"} onChange={e=>patch({deletePolicy:e.target.value})}><option value="owner">{t("Object owner")}</option><option value="restrict-active">{t("Protect active references")}</option></Select></label>
+ {draft.deletePolicy==="restrict-active"&&<p className="text-xs text-muted">{t("Active children prevent parent archiving. Archived children keep their references. New or restored active children need an unarchived parent. Published protection cannot be relaxed.")}</p>}
  <p className="text-sm">{t("One child has at most one parent reference. The original field controls required values; the object owner controls archive behavior.")}</p>
  <p className="text-xs text-muted">{t("Instances stay in the original reference field. This profile does not enable cascade deletion.")}</p>
  </Panel></fieldset>

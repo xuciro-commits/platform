@@ -29,12 +29,15 @@ type LinkType struct {
 }
 
 func (l LinkType) Check() error {
-	if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || !pageNodeID.MatchString(l.Via) || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Storage != "reference" || !slices.Contains([]string{"one-to-many", "one-to-one"}, l.Cardinality) || l.DeletePolicy != "owner" {
+	if !pageNodeID.MatchString(l.Name) || l.Title == "" || l.Description == "" || len(l.Title) > 1024 || len(l.Description) > 16384 || !pageNodeID.MatchString(l.Via) || !pageNodeID.MatchString(l.Forward) || !pageNodeID.MatchString(l.Reverse) || l.Parent.Check() != nil || l.Child.Check() != nil || l.Parent.Kind != AssetObject || l.Child.Kind != AssetObject || l.Storage != "reference" || !slices.Contains([]string{"one-to-many", "one-to-one"}, l.Cardinality) || !slices.Contains([]string{"owner", "restrict-active"}, l.DeletePolicy) || l.DeletePolicy == "restrict-active" && l.Parent.App != l.Child.App {
 		return fmt.Errorf("link type needs typed objects, two names and a supported reference cardinality profile")
 	}
 	return nil
 }
 func (l LinkType) Contract() int {
+	if l.DeletePolicy == "restrict-active" {
+		return 3
+	}
 	if l.Cardinality == "one-to-one" {
 		return 2
 	}

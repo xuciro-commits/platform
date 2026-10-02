@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Relationship archive policy": "关系归档策略",
+  "Protect active references": "保护活动引用",
+  "Active children prevent parent archiving. Archived children keep their references. New or restored active children need an unarchived parent. Published protection cannot be relaxed.": "活动子记录会阻止父记录归档。已归档子记录保留引用。新建或恢复的活动子记录需要未归档父记录。已发布保护不能放宽。",
+
   "Relationship cardinality": "关系基数",
   "One-to-many": "一对多",
   "One-to-one (at most one child)": "一对一（至多一个子记录）",

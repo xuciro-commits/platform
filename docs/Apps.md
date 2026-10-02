@@ -52,7 +52,9 @@
 
 应用共享筛选：应用变量选择“Resource output / 资源输出”→“Filter values / 筛选条件”，在“Filter object / 筛选对象”选择对象，再勾选“Allowed filter fields / 允许筛选的字段”。页面变量选择“Application binding / 应用共享绑定”和该filter，生产页勾选“Allow filter updates / 允许更新筛选”；在页面根Filter及原Table/Chart/Metric的“Shared filter binding / 共享筛选绑定”选择此端口。共享与同根局部条件按AND合并，原查询/关系条件保留；绑定查询窗口的Table由原计划控制，不提供此端口。共享声明发生类型/对象变化时，显式使用“Update shared binding / 更新共享绑定”并审查页面。实例关闭、身份或应用声明变化清理，刷新为空；缺少共享来源显示诊断，不自动读取全对象。正式交付冻结原应用候选中的对象、允许字段及端口，运行条件不保存。
 
-关系基数：在关系编辑器选择“Relationship cardinality / 关系基数”的“One-to-many / 一对多”或“One-to-one (at most one child) / 一对一（至多一个子记录）”。一对一沿原引用字段检查反向唯一性，必填仍由字段决定；可选空引用不占位，归档不释放引用，原编辑更换/清空引用才释放。已有重复数据会阻止安装或候选激活，写入冲突只返回通用错误。草稿不改运行约束，候选冻结原声明；唯一性发布后不能放宽，其他弱关系声明或旧版本不撤销它。API为LinkType.cardinality=one-to-one、contractVersion=2；一对多保持contractVersion=1。模型检查器显示真实安装基数，M:N、级联删除与退役仍未提供。
+关系归档保护：在关系编辑器的“Relationship archive policy / 关系归档策略”选择“Protect active references / 保护活动引用”。同一owner内，有活动child引用时原parent归档被拒绝；先归档child、清空可选引用或改指向有效parent后可继续。已归档child保留引用，活动child不能新建、恢复或改指向归档parent；保护不放宽权限，拒绝不输出关联记录数据。原候选冻结策略，已发布保护不能放宽。API为deletePolicy=restrict-active、contractVersion=3，可与两种基数组合；跨owner、硬删除与级联未提供。
+
+关系基数：在关系编辑器选择“Relationship cardinality / 关系基数”的“One-to-many / 一对多”或“One-to-one (at most one child) / 一对一（至多一个子记录）”。一对一沿原引用字段检查反向唯一性，必填仍由字段决定；可选空引用不占位，归档不释放引用，原编辑更换/清空引用才释放。已有重复数据会阻止安装或候选激活，写入冲突只返回通用错误。草稿不改运行约束，候选冻结原声明；唯一性发布后不能放宽，其他弱关系声明或旧版本不撤销它。deletePolicy=owner时，API的one-to-one使用contractVersion=2，一对多保持contractVersion=1；restrict-active组合使用contractVersion=3。模型检查器显示真实安装基数，M:N、级联删除与退役仍未提供。
 
 组件暂存：在布局树的组件行右键、按Shift+F10或点击“Commands for … / …的操作”，选择“Move to unused widgets / 移入未使用组件”。暂存区保留原ID、配置与作用域，不在页面挂载；“Put back in original layout / 放回原布局”恢复原父属，也可选择其他明确容器。尺寸/作用域不兼容时需修正后保存。“Duplicate widget / 复制组件”分配新ID并复制输入的局部state，显式共享绑定保留；暂存副本仍暂存。“Delete widget / 删除组件”删除组件与其事件，外部引用需显式修正。命令沿原撤销/重做与保存；发布仍冻结原候选，暂存组件不会绕过绑定和依赖检查。API为v2.28的document.unusedWidgets=[{node,parent}]，node引用原widget叶，parent保留原容器作用域；一个节点不能同时活动和暂存。
 

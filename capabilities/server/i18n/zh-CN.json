@@ -1095,5 +1095,11 @@
   "A published link keeps its identity, objects, reference shape and retained uniqueness": "已发布关系必须保留标识、对象、引用形状及已承诺的唯一性",
   "Relationship cardinality (one-to-many, one-to-one)": "关系基数（一对多、一对一）",
   "one-to-many": "一对多",
-  "one-to-one": "一对一"
+  "one-to-one": "一对一",
+  "Relationship archive policy": "关系归档策略",
+  "Relationship archive policy (owner, restrict-active)": "关系归档策略（对象所有者、保护活动引用）",
+  "owner": "对象所有者",
+  "restrict-active": "保护活动引用",
+  "Active reference archive protection failed": "活动引用不满足归档保护约束",
+  "A published link keeps its identity, objects, reference shape and retained constraints": "已发布关系必须保留标识、对象、引用形状及已承诺的约束"
 }

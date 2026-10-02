@@ -39,6 +39,19 @@ func TestReferenceLinkProfileAndReleaseDependencies(t *testing.T) {
 	if _, err := Candidate([]AssetRef{asset.Ref}, []ReleaseAsset{asset, parentAsset, childAsset}); err == nil {
 		t.Fatal("unique relation accepted legacy contract marker")
 	}
+	protected := l
+	protected.DeletePolicy = "restrict-active"
+	if protected.CheckSchema(parentInfo, childInfo) != nil || protected.Contract() != 3 {
+		t.Fatal("archive policy lacked its supported contract")
+	}
+	asset.Body, asset.ContractVersion = Raw(protected), 3
+	if _, err := Candidate([]AssetRef{asset.Ref}, []ReleaseAsset{asset, parentAsset, childAsset}); err != nil {
+		t.Fatal(err)
+	}
+	protected.Parent.App = "foreign"
+	if protected.Check() == nil {
+		t.Fatal("archive policy silently governed another owner")
+	}
 	childInfo.Fields[0].Type = "references"
 	if l.CheckSchema(parentInfo, childInfo) == nil {
 		t.Fatal("scalar relationship accepted multivalued storage")

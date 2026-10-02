@@ -25,10 +25,15 @@ func (h hostView) ValidateInstallLinkType(l platform.LinkType) error {
 	if err := l.CheckSchema(parent, child); err != nil {
 		return err
 	}
+	h.t.records.mu.Lock()
+	defer h.t.records.mu.Unlock()
 	if l.Cardinality == "one-to-one" {
-		h.t.records.mu.Lock()
-		defer h.t.records.mu.Unlock()
-		return h.t.records.validateUniqueLinkLocked(l)
+		if err := h.t.records.validateUniqueLinkLocked(l); err != nil {
+			return err
+		}
+	}
+	if l.DeletePolicy == "restrict-active" {
+		return h.t.records.validateArchiveLinkLocked(l)
 	}
 	return nil
 }

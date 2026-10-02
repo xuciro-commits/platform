@@ -27,10 +27,11 @@ import (
 // A projection into PostgreSQL (stage 3) will serve the same reads.
 
 type recordStore struct {
-	mu          sync.Mutex
-	uniqueLinks map[string]platform.LinkType
-	types       map[string]*entityType
-	byGo        map[reflect.Type]*entityType
+	mu           sync.Mutex
+	uniqueLinks  map[string]platform.LinkType
+	archiveLinks map[string]platform.LinkType
+	types        map[string]*entityType
+	byGo         map[reflect.Type]*entityType
 	// A private 19a decision view has no projection callback. It may replace
 	// its parent only if no direct write reached that parent in the meantime.
 	parent         *recordStore
@@ -191,7 +192,7 @@ func newRecordStore() *recordStore {
 func (s *recordStore) forkRecords() *recordStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	draft := &recordStore{uniqueLinks: maps.Clone(s.uniqueLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
+	draft := &recordStore{uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*entityType, len(s.types)),
 		byGo: make(map[reflect.Type]*entityType, len(s.byGo)), writes: map[string]bool{},
 		dirty: make(map[string]bool, len(s.dirty)), changed: make(map[string][]string, len(s.changed)),
 		order: slices.Clone(s.order)}
@@ -242,6 +243,7 @@ func (s *recordStore) promoteRecords(draft *recordStore) error {
 		return err
 	}
 	s.uniqueLinks = draft.uniqueLinks
+	s.archiveLinks = draft.archiveLinks
 	s.types, s.byGo = draft.types, draft.byGo
 	s.dirty, s.changed, s.order = draft.dirty, draft.changed, draft.order
 	s.generation++
