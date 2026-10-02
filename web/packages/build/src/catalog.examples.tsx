@@ -53,3 +53,12 @@ const queryDefinitions = [
 ];
 const queryReads = {"/v1/records/build.query/QUERY-SAMPLE":{record:{...queryDeclaration,id:"QUERY-SAMPLE",revision:1,state:"published",version:1,published:JSON.stringify(queryDeclaration)}}};
 export const QueryStudioExample = () => <CatalogFixture reads={queryReads} roles={builderRole} definitions={queryDefinitions}><QueryEditor id="QUERY-SAMPLE" /></CatalogFixture>;
+
+import sampleModule from "./module-import/sample.workshop.json";
+import {compileWorkshopModule} from "./module-import/compile";
+import {pageUIProfile} from "@platform/app";
+import {Panel} from "@platform/ui";
+export function WorkshopImportExample(){
+ const report=compileWorkshopModule(JSON.stringify(sampleModule),"page",{objects:{Asset:sampleObject.type},fields:{Asset:{name:"title"}},actions:{finishAsset:"catalog.sample.review"},queries:{}},{object:sampleObject.type,profile:pageUIProfile,entities:[sampleObject],actions:[{schema:"catalog.sample.review",target:sampleObject.type}]});
+ return <Panel><p>{t("All {count} source widget types have an owner and migration status.",{count:92})}</p><p>{t("Mapped {count} widgets into the original V2 page format.",{count:report.draft?.sections.length??0})}</p><pre className="overflow-auto text-xs">{JSON.stringify({diagnostics:report.diagnostics,sections:report.draft?.sections},null,2)}</pre></Panel>;
+}

@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node --test src/page-editor/*.test.mjs",
+    "test": "node --test src/page-editor/*.test.mjs src/module-import/*.test.mjs",
     "build": "true"
   },
   "dependencies": {

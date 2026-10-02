@@ -4,6 +4,10 @@ import { pageTemplates } from "./templates";
 const template = pageTemplates[0];
 export const entries: CatalogEntry[] = [
   {
+    id:"scenario/workshop-import",owner:"@pkg/build",name:"Workshop module migration",summary:"Map a bounded source page into the original V2 draft with explicit bindings, source preservation and blocking diagnostics.",layer:5,authority:"example",maturity:"recommended",scope:"platform",uses:["reference"],tags:["import","workshop","migration","studio","registry"],source:"web/packages/build/src/module-import/compile.ts",example:"WorkshopImportExample",dependencies:["app/composed-page","app/record-actions"],widgets:["table","detail","inline-action","text","input","button"],
+    constraints:["The 92-type migration inventory grants no runtime eligibility. Six source widget types have bounded configuration profiles; unsupported settings block application.","The local example compiles synthetic source data without a host. Import applies only an undoable page draft; save, permissions and release validation stay with their original owners.","Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes."],
+  },
+  {
     id: "scenario/query-studio", owner: "@pkg/build", name: "Reusable query workbench", summary: "Author fixed record conditions and retain explicit query versions for shared page plans.",
     layer: 5, authority: "example", maturity: "recommended", scope: "platform", uses: ["reference"], tags: ["query", "version", "resources", "studio"],
     source: "web/packages/build/src/query.tsx", example: "QueryStudioExample", dependencies: ["ui/panels", "app/record-actions"],

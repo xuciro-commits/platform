@@ -1,0 +1,748 @@
+{
+  "formatVersion": 1,
+  "source": {
+    "schema": "Workshop ModuleDef",
+    "typesSha256": "125db29df45165dc88bbcb6191e67e8a4cef00792ddabb687e758538827ab133",
+    "widgetTypeCount": 92
+  },
+  "entries": [
+    {
+      "sourceType": "ObjectTable",
+      "sourceCategory": "Core display",
+      "owner": "@platform/app",
+      "status": "profile",
+      "target": "table",
+      "reason": "bounded-config-profile"
+    },
+    {
+      "sourceType": "ObjectList",
+      "sourceCategory": "Core display",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "table",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ObjectView",
+      "sourceCategory": "Core display",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "detail",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "PropertyList",
+      "sourceCategory": "Core display",
+      "owner": "@platform/app",
+      "status": "profile",
+      "target": "detail",
+      "reason": "bounded-config-profile"
+    },
+    {
+      "sourceType": "Links",
+      "sourceCategory": "Core display",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "HeaderText",
+      "sourceCategory": "Core display",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": "text",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ObjectSetTitle",
+      "sourceCategory": "Core display",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "FilterList",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "filter",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ObjectDropdown",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "StringSelector",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Checkbox",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "DateInput",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "TextInput",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "profile",
+      "target": "input",
+      "reason": "bounded-config-profile"
+    },
+    {
+      "sourceType": "NumericInput",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": "input",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "UserSelect",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "MetricCard",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "metric",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ChartXY",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "chart",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ChartPie",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "chart",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ChartVega",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ChartWaterfall",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Map",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Gantt",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Timeline",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "record-timeline",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "PivotTable",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "pivot",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Markdown",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/ui",
+      "status": "profile",
+      "target": "text",
+      "reason": "bounded-config-profile"
+    },
+    {
+      "sourceType": "PdfViewer",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "MediaPreview",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "StatusTracker",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Stepper",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ActionLogTimeline",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "timeline",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ButtonGroup",
+      "sourceCategory": "Action",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "button",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Tabs",
+      "sourceCategory": "Action",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "tabs",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Comments",
+      "sourceCategory": "Action",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "comments",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "MediaUploader",
+      "sourceCategory": "Action",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "files",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "InlineAction",
+      "sourceCategory": "Action",
+      "owner": "@platform/app",
+      "status": "profile",
+      "target": "inline-action",
+      "reason": "bounded-config-profile"
+    },
+    {
+      "sourceType": "ActionTable",
+      "sourceCategory": "Action",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "AIPAnalyst",
+      "sourceCategory": "AIP",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "assistant",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "AIPChatbot",
+      "sourceCategory": "AIP",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "assistant",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "AIPGenerated",
+      "sourceCategory": "AIP",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "function",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Iframe",
+      "sourceCategory": "Embed",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "EmbeddedModule",
+      "sourceCategory": "Embed",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "CustomWidget",
+      "sourceCategory": "Custom",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "DerivedSeries",
+      "sourceCategory": "Embed",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "QuiverDashboard",
+      "sourceCategory": "Embed",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "VertexGraph",
+      "sourceCategory": "Embed",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "NotepadEmbed",
+      "sourceCategory": "Embed",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "MapTemplate",
+      "sourceCategory": "Embed",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "FreeFormAnalysis",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "TimeSeriesAnalysis",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ImageAnnotation",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ObservabilityChart",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ResourceList",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "LinkedCompass",
+      "sourceCategory": "Visualization",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ExplorationFilter",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ExplorationSearch",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ProminentTerms",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ObjectSelector",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "DateTimePicker",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "MultiSelector",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "KanbanBoard",
+      "sourceCategory": "Ontology & workflow",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "kanban",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ObjectCard",
+      "sourceCategory": "Ontology & workflow",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ObjectComparison",
+      "sourceCategory": "Ontology & workflow",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Histogram",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ScatterPlot",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Heatmap",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Gauge",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "SparklineKpi",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ProgressBar",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Treemap",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Calendar",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "RangeSlider",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ToggleSwitch",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "RadioGroup",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "SegmentedControl",
+      "sourceCategory": "Filtering",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Breadcrumbs",
+      "sourceCategory": "Layout & content",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "AlertBanner",
+      "sourceCategory": "Layout & content",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Callout",
+      "sourceCategory": "Layout & content",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Divider",
+      "sourceCategory": "Layout & content",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Spacer",
+      "sourceCategory": "Layout & content",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ImageWidget",
+      "sourceCategory": "Layout & content",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "SingleButton",
+      "sourceCategory": "Layout & content",
+      "owner": "@platform/ui",
+      "status": "profile",
+      "target": "button",
+      "reason": "bounded-config-profile"
+    },
+    {
+      "sourceType": "NotificationFeed",
+      "sourceCategory": "Ontology & workflow",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "notifications",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ApprovalInbox",
+      "sourceCategory": "Ontology & workflow",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": "inbox",
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "GraphExplorer",
+      "sourceCategory": "Ontology & workflow",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "SummaryStats",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "TagList",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "AvatarStack",
+      "sourceCategory": "Layout & content",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Leaderboard",
+      "sourceCategory": "Analytics",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "ObjectSetBuilder",
+      "sourceCategory": "Ontology & workflow",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "TelemetryTable",
+      "sourceCategory": "Industrial operations",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "TelemetryStats",
+      "sourceCategory": "Industrial operations",
+      "owner": "@platform/app",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    },
+    {
+      "sourceType": "Scene3D",
+      "sourceCategory": "Industrial operations",
+      "owner": "@platform/ui",
+      "status": "planned",
+      "target": null,
+      "reason": "config-or-capability-profile-required"
+    }
+  ],
+  "adapterOwner": "@pkg/build",
+  "bindingOwner": "@platform/app"
+}

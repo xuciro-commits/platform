@@ -22,6 +22,8 @@ import { OverlayProperties } from "./page-editor/OverlayPanel";
 import { LayoutProperties, LayoutSizing, LayoutTree } from "./page-editor/LayoutTree";
 import { useDraftSession } from "./session/DraftSession";
 import {copyLayout,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
+import type {AuthoringSection,PageDraft} from "./page-editor/draft";
+import {ModuleImportDialog,type ImportPackage} from "./module-import/ModuleImportDialog";
 
 type Api = NonNullable<Definition["page"]>;
 type Section = NonNullable<Api["sections"]>[number];
@@ -31,7 +33,7 @@ type PageRecord = {
   list?: string[]; detail?: string[]; actions?: string[];
   selections?: HostApi.SelectionVariable[];
   document?: HostApi.PageDocument;
-  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; recordVariable?: string; selectionVariable?: string; filterVariable?: string; collectionVariable?:string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; mark?:string; columnGroup?: string; timeStart?:string;timeEnd?:string;timeLabel?:string;timeGroup?:string;cardLabel?:string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
+  sections?: AuthoringSection[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
@@ -39,7 +41,7 @@ const pageStates = defineStatuses({ draft: { label: t("Draft"), tone: "warning" 
 
 const widgets = widgetContracts.map((contract) => contract.componentID);
 const widgetTitles: Record<string, () => string> = Object.fromEntries(widgetContracts.map((contract) => [contract.componentID, () => t(contract.title)]));
-type PageDraft = { sections: Draft[]; document: HostApi.PageDocument; selections: HostApi.SelectionVariable[]; title: string; description: string };
+
 type StudioSelection = { kind: "page" | "variables" | "interface" | "queries" } | { kind: "widget" | "container"; id: string };
 const emptyDraft = (): PageDraft => ({ sections: [], document: pageDocumentFromSections<Draft>([]).document, selections: [], title: "", description: "" });
 const loadDraft = (record: PageRecord): PageDraft => {
@@ -94,10 +96,12 @@ export function PageEditor({ id }: { id: string }) {
   const session = useDraftSession<PageDraft,LayoutClipboard<Draft>>(emptyDraft(),JSON.stringify([id,source.scope]));
   const [clipboardNotice,setClipboardNotice]=useState<{scope:string;error?:boolean;text:string}>();
   const clipboardScope=JSON.stringify([id,source.scope]);
-  useEffect(()=>setClipboardNotice(undefined),[clipboardScope]);
+  useEffect(()=>{setClipboardNotice(undefined);setImportPackage(undefined);setImporting(false);},[clipboardScope]);
   const { sections, document, selections, title, description } = session.draft;
   const { dirty } = session;
   const [selection, select] = useState<StudioSelection>({ kind: "page" });
+  const [importing,setImporting]=useState(false);
+  const [importPackage,setImportPackage]=useState<{scope:string;pack:ImportPackage}>();
   const [leftOpen, setLeftOpen] = useState(true), [rightOpen, setRightOpen] = useState(true);
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop"), [zoom, setZoom] = useState(100);
   const [dropTarget, setDropTarget] = useState<string>();
@@ -261,6 +265,7 @@ export function PageEditor({ id }: { id: string }) {
         <Button variant="ghost" disabled={!container&&chosen < 0 || busy} onClick={()=>container?duplicateContainer(container):duplicate()}><Copy />{t(container?"Duplicate layout":"Duplicate widget")}</Button>
         <Button variant="ghost" disabled={!container||busy} onClick={()=>container&&copyContainer(container)}>{t("Copy layout")}</Button>
         <Button variant="ghost" disabled={!container||!session.clipboard||busy} onClick={()=>container&&pasteContainer(container)}>{t("Paste layout")}</Button>
+        <Button variant="ghost" disabled={busy} onClick={()=>setImporting(true)}>{t("Import Workshop module")}</Button>
         <span className="mx-1 h-4 w-px bg-border" />
         <AssetControls type="build.page" record={page} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "compose", params: { id } }} />
         <span className="ml-auto text-xs text-muted" role="status">{dirty ? t("Unsaved") : t("Saved")}</span>
@@ -270,6 +275,7 @@ export function PageEditor({ id }: { id: string }) {
         <Button variant="ghost" aria-label={t("Toggle inspector")} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button>
       </Card>
       {refused && <Panel role="alert" className="text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
+      {importing&&<ModuleImportDialog key={clipboardScope} open retained={importPackage?.scope===clipboardScope?importPackage.pack:undefined} object={page.object} profile={pageUIProfile} onClose={()=>setImporting(false)} onApply={(draft,pack)=>{setImportPackage({scope:clipboardScope,pack});edit(draft);select({kind:"page"});setFormProblems({});setRefused(undefined);}}/>}
       {clipboardNotice?.scope===clipboardScope&&<Panel role={clipboardNotice.error?"alert":"status"}>{clipboardNotice.text}</Panel>}
       {layoutProblems.length>0&&<Panel role="alert">{layoutProblems.map((issue,i)=><p key={i}>{issue.node}: {t(issue.code)}</p>)}</Panel>}
       {variableProblems.length > 0 && <Panel role="alert" className="text-xs text-danger">{variableProblems.map((issue, index) => <p key={index}>{issue.variable}: {t(issue.code)}</p>)}</Panel>}

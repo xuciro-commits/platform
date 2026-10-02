@@ -1,0 +1,160 @@
+{
+  "id": "module",
+  "name": "Imported desk",
+  "description": "Original description",
+  "header": {
+    "variant": "horizontal",
+    "title": "Imported desk",
+    "items": []
+  },
+  "pages": [
+    {
+      "id": "page",
+      "name": "Operations",
+      "rootSectionId": "root"
+    }
+  ],
+  "sections": {
+    "root": {
+      "id": "root",
+      "name": "Work",
+      "layout": "columns",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "table"
+        },
+        {
+          "kind": "section",
+          "id": "side"
+        }
+      ]
+    },
+    "side": {
+      "id": "side",
+      "name": "Selected",
+      "layout": "rows",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "detail"
+        },
+        {
+          "kind": "widget",
+          "id": "action"
+        },
+        {
+          "kind": "widget",
+          "id": "input"
+        },
+        {
+          "kind": "widget",
+          "id": "markdown"
+        }
+      ]
+    }
+  },
+  "widgets": {
+    "table": {
+      "id": "table",
+      "type": "ObjectTable",
+      "name": "Imported notes",
+      "config": {
+        "objectSetVarId": "notes",
+        "activeVarId": "selected",
+        "columns": [
+          {
+            "key": "name",
+            "label": "Name"
+          }
+        ],
+        "enableSelection": true,
+        "selectionMode": "single",
+        "enableInlineEdit": false
+      }
+    },
+    "detail": {
+      "id": "detail",
+      "type": "PropertyList",
+      "name": "Imported selection",
+      "config": {
+        "objectVarId": "selected",
+        "properties": [
+          "name"
+        ],
+        "inlineEdit": false,
+        "hideNull": false
+      }
+    },
+    "action": {
+      "id": "action",
+      "type": "InlineAction",
+      "name": "Imported action",
+      "config": {
+        "actionId": "finishAsset",
+        "objectVarId": "selected",
+        "mode": "form"
+      }
+    },
+    "input": {
+      "id": "input",
+      "type": "TextInput",
+      "name": "Scratch",
+      "config": {
+        "variableId": "scratch",
+        "label": "Scratch"
+      }
+    },
+    "markdown": {
+      "id": "markdown",
+      "type": "Markdown",
+      "name": "Help",
+      "config": {
+        "text": "## Real platform work"
+      }
+    }
+  },
+  "variables": [
+    {
+      "id": "notes",
+      "name": "Notes",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "recompute": "automatic",
+      "sourceObjectType": "Asset",
+      "objectSet": {
+        "objectType": "Asset",
+        "steps": []
+      }
+    },
+    {
+      "id": "selected",
+      "name": "Selection",
+      "type": "object",
+      "definitionKind": "widgetOutput",
+      "recompute": "automatic",
+      "widgetId": "table",
+      "widgetOutputKey": "activeObject"
+    },
+    {
+      "id": "scratch",
+      "name": "Scratch",
+      "type": "string",
+      "definitionKind": "static",
+      "recompute": "automatic",
+      "staticValue": "seed"
+    }
+  ],
+  "overlays": [],
+  "unusedWidgetIds": [],
+  "flows": [],
+  "usedObjectTypes": [
+    "Asset"
+  ],
+  "usedActions": [
+    "finishAsset"
+  ],
+  "usedFunctions": [],
+  "moduleInterface": [],
+  "savedState": "saved"
+}
