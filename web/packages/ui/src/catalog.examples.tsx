@@ -5,7 +5,7 @@ import {
   Button, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
-  RecordTimeline, RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  RecordKanban, RecordTimeline, RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
@@ -290,4 +290,9 @@ export function RecordTimelines() {
  const [selected,setSelected]=useState<string>();
  const records=[{id:"EXAMPLE-A",title:"Incoming review",resource:"Team A",start:"2026-10-01",end:"2026-10-03"},{id:"EXAMPLE-B",title:"Inspection",resource:"Team A",start:"2026-10-04",end:"2026-10-05"}];
  return <RecordTimeline records={records.map(r=>({...r,revision:1,created:stamp,changed:stamp}))} fields={{start:"start",end:"end",label:"title",group:"resource",kind:"date"}} selected={selected} onSelect={r=>setSelected(r?.id)} label={t("Record timeline")}/>;
+}
+
+export function RecordKanbans() {
+ const [selected,setSelected]=useState<string>();
+ return <RecordKanban records={demoRows} lanes={[{name:"open",title:t("Open")},{name:"done",title:t("Done")}]} stateField="state" labelField="name" selected={selected} onSelect={r=>setSelected(r?.id)} label={t("Kanban board")}/>;
 }

@@ -1329,6 +1329,7 @@ export type Section = {
   timeEnd?: string;
   timeLabel?: string;
   timeGroup?: string;
+  cardLabel?: string;
   measure?: string;
   text?: string;
   function?: AssetBinding;
@@ -1621,7 +1622,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.25",
+  "uiProfile": "platform.page.v2.26",
   "widgets": [
     {
       "componentID": "table",
@@ -2480,6 +2481,76 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "kanban",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.26",
+      "title": "Kanban board",
+      "category": "Work",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "cardLabel": "id"
+      },
+      "bindingKinds": [
+        "object",
+        "fields",
+        "actions",
+        "selection",
+        "collection-variable",
+        "selection-variable"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "cardLabel": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.26"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.26",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -2507,7 +2578,8 @@ export const pageUIManifest = {
     "platform.page.v2.22",
     "platform.page.v2.23",
     "platform.page.v2.24",
-    "platform.page.v2.25"
+    "platform.page.v2.25",
+    "platform.page.v2.26"
   ],
   "runtime": {
     "scope": "page",
@@ -2605,6 +2677,11 @@ export const pageUIManifest = {
       {
         "kind": "record",
         "widget": "record-timeline",
+        "type": "record"
+      },
+      {
+        "kind": "record",
+        "widget": "kanban",
         "type": "record"
       }
     ],

@@ -52,6 +52,8 @@
 
 应用共享筛选：应用变量选择“Resource output / 资源输出”→“Filter values / 筛选条件”，在“Filter object / 筛选对象”选择对象，再勾选“Allowed filter fields / 允许筛选的字段”。页面变量选择“Application binding / 应用共享绑定”和该filter，生产页勾选“Allow filter updates / 允许更新筛选”；在页面根Filter及原Table/Chart/Metric的“Shared filter binding / 共享筛选绑定”选择此端口。共享与同根局部条件按AND合并，原查询/关系条件保留；绑定查询窗口的Table由原计划控制，不提供此端口。共享声明发生类型/对象变化时，显式使用“Update shared binding / 更新共享绑定”并审查页面。实例关闭、身份或应用声明变化清理，刷新为空；缺少共享来源显示诊断，不自动读取全对象。正式交付冻结原应用候选中的对象、允许字段及端口，运行条件不保存。
 
+生命周期看板：组件库添加“Kanban board / 看板”，选择“Kanban query window / 看板查询窗口”，以对象原生命周期分列；选择卡片标题和最多4个摘要字段，可显式勾选“Allowed move actions / 允许的移动动作”。拖到目标列只在当前状态有唯一已配置动作时触发原动作入口；键盘使用“Move with action / 通过动作移动”选择具体动作。需要输入时打开原表单，审批与新状态由原owner决定；冲突/拒绝保留输入，不提前移动卡片。未配置或无权动作只提供原选择工作，预览不执行。计数/分页表示当前窗口，查询/成员/参数变化清理旧卡片和选择。API身份kanban/configVersion=1，需要v2.26、显式collectionVariable与可读生命周期，cardLabel选择标题字段，fields为摘要，actions为单目标原转换引用；正式交付冻结原页面候选。
+
 记录时间轴：组件库添加“Record timeline / 记录时间轴”，选择“Timeline query window / 时间轴查询窗口”，再配置开始时间、可选同类型结束时间、记录标题与资源字段。日期使用民用日；datetime必须带时区并按UTC显示，区间不含结束时刻。点击时间点/区间把原记录传给详情与动作，分页或查询参数变化清理旧选择。显示窗口条数/total，不把部分窗口称作完整排程；无效/缺失/反向时间提示条数。“Timeline”原单记录历史组件仍按日志显示。正式交付沿原页面候选冻结激活，API身份为record-timeline/configVersion=1，需要v2.25及显式collectionVariable，字段是timeStart/timeEnd/timeLabel/timeGroup。
 
 共享表格窗口：在Table检查器选择“Table query window / 表格查询窗口”，绑定计划结果变量。表格直接显示与Loop相同的窗口，搜索/排序/分页作用于这份计划，切换后原选择与其关联详情清理；参数改变恢复计划默认视图。计划有search参数时锁定表格搜索，具名查询有排序时锁定排序，列表不能增加窗口limit或覆盖条件。此端口不同时使用原query/relation/parentSelection；选择“Use the table's own query / 使用表格自身查询”恢复原列表路径。已有表格的Query window输出会转发绑定窗口，可保留旧Loop连线。候选保存端口和计划，运行视图只在会话中保存；刷新不会带回搜索、页码或旧选择。

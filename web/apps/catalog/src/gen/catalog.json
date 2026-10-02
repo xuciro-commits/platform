@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:295c552a05aa1421",
+  "revision": "sha256:9bcaae1d7d3d9c31",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1556,6 +1556,42 @@
       ]
     },
     {
+      "id": "ui/record-kanban",
+      "owner": "@platform/ui",
+      "name": "Authorized lifecycle board",
+      "summary": "Select bounded records in their original lifecycle lanes and emit declared move commands.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordKanban.tsx",
+      "exports": [
+        "RecordKanban"
+      ],
+      "example": "RecordKanbans",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "kanban",
+        "work",
+        "records"
+      ],
+      "states": [
+        "Empty",
+        "Selected",
+        "Invalid"
+      ],
+      "dependencies": [
+        "ui/entity-card",
+        "ui/button",
+        "ui/input"
+      ],
+      "constraints": [
+        "The caller supplies authorized records, lifecycle states and actions. This component does not write state."
+      ]
+    },
+    {
       "id": "ui/record-list",
       "owner": "@platform/ui",
       "name": "Record list",
@@ -1929,6 +1965,7 @@
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
       "Author fixed record conditions and retain explicit query versions for shared page plans.": "编写固定记录条件，保留共享页面计划的明确查询版本。",
       "Authorized cross-application search": "受权跨应用搜索",
+      "Authorized lifecycle board": "授权生命周期看板",
       "Authorized record detail": "受权记录详情",
       "Authorized record list": "受权记录列表",
       "Authorized record timeline": "授权记录时间轴",
@@ -2056,6 +2093,7 @@
       "Search records and knowledge through the current member’s original read endpoints.": "通过当前成员的原读取入口搜索记录与知识。",
       "Select a record, inspect its details and use the original object actions.": "选择记录、查看详情，并使用原对象动作。",
       "Select a row from a small hierarchy of labelled records.": "从小型记录层级中选择一行。",
+      "Select bounded records in their original lifecycle lanes and emit declared move commands.": "在原生命周期列中选择有界记录，并发出已声明的移动命令。",
       "Selected": "已选中",
       "Semantic status tags": "语义状态标签",
       "Semantic tokens": "语义令牌",
@@ -2075,6 +2113,7 @@
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
+      "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
       "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
       "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.": "本地示例在原 WorkflowEditor 展示输入到结果的流程，不执行流程。",
       "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
@@ -2126,7 +2165,7 @@
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/Button.tsx",
-      "web/packages/app/src/widgets/RecordTimeline.tsx",
+      "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/asset-controls.tsx",
       "web/packages/build/src/code.tsx",
@@ -2188,6 +2227,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/AggregateSource.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
@@ -2265,7 +2305,9 @@
       "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/Kanban.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
+      "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordTimeline.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/build/src/application.tsx",
@@ -2452,6 +2494,9 @@
       "web/packages/app/src/sections.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
+    "ui/record-kanban": [
+      "web/packages/app/src/widgets/Kanban.tsx"
+    ],
     "ui/pivot": [
       "web/packages/app/src/widgets/Pivot.tsx"
     ],
@@ -2489,6 +2534,7 @@
     ],
     "ui/toggles": [
       "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx"
     ],
@@ -2656,6 +2702,8 @@
         "GraphEdge",
         "GraphNode",
         "InboxTask",
+        "KanbanLane",
+        "KanbanMove",
         "Launcher",
         "Lifecycle",
         "ListState",

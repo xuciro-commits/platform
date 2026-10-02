@@ -1451,4 +1451,13 @@ register("zh-CN", {
   "The timeline reads one authorized query window. Selection opens the original record work.": "时间轴读取一个授权查询窗口。选择后进入原记录工作。",
   "Record timeline": "记录时间轴",
   "Scheduling": "排程",
+  "Kanban board": "看板",
+  "Kanban query window": "看板查询窗口",
+  "Card title field": "卡片标题字段",
+  "Card summary fields": "卡片摘要字段",
+  "Allowed move actions": "允许的移动动作",
+  "Choose an object with an original lifecycle.": "选择具有原生命周期的对象。",
+  "Columns follow the original lifecycle.": "列沿用原生命周期。",
+  "Choose at most four visible summary fields.": "最多选择四个可见摘要字段。",
+  "Moves use original action inputs, approvals and record revisions. No action runs while composing.": "移动使用原动作输入、审批与记录修订。编辑时不执行动作。",
 });

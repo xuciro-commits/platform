@@ -388,6 +388,18 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			return nil
 		}
 		switch s.Widget {
+		case "kanban":
+			if p.Document == nil {
+				return fmt.Errorf("kanban needs a V2 document")
+			}
+			if err := s.CheckKanban(info); err != nil {
+				return err
+			}
+			for _, ref := range s.Actions {
+				if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
+					return err
+				}
+			}
 		case "record-timeline":
 			if p.Document == nil {
 				return fmt.Errorf("record timeline needs a V2 document")

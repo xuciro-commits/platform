@@ -130,6 +130,7 @@ type Section struct {
 	TimeEnd     string             `json:"timeEnd,omitempty"`
 	TimeLabel   string             `json:"timeLabel,omitempty"`
 	TimeGroup   string             `json:"timeGroup,omitempty"`
+	CardLabel   string             `json:"cardLabel,omitempty"`
 	Measure     string             `json:"measure,omitempty"`   // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
 	Text        string             `json:"text,omitempty"`      // text
 	Function    *AssetBinding      `json:"function,omitempty"`  // exact published function

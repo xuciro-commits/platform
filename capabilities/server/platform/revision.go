@@ -684,7 +684,7 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	for _, s := range page.Sections {
-		if s.Widget != "record-timeline" {
+		if s.Widget != "record-timeline" && s.Widget != "kanban" {
 			continue
 		}
 		ref := s.Object
@@ -693,7 +693,7 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 		}
 		asset, ok := lookup[ref]
 		info, err := queryObjectDescriptor(asset.Body)
-		if !ok || err != nil || page.Document == nil || s.CheckTimeline(info) != nil {
+		if !ok || err != nil || page.Document == nil || s.CheckTimeline(info) != nil || s.CheckKanban(info) != nil {
 			return fmt.Errorf("frozen record timeline schema is unavailable")
 		}
 	}
@@ -766,8 +766,16 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 // these representations before the shared query checker reads the schema.
 func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 	var shape struct {
-		Type   string                       `json:"type"`
-		Fields []map[string]json.RawMessage `json:"fields"`
+		Type      string                       `json:"type"`
+		Fields    []map[string]json.RawMessage `json:"fields"`
+		Lifecycle *LifecycleInfo               `json:"lifecycle"`
+		States    []State                      `json:"states"`
+		Actions   []struct {
+			Name  string   `json:"name"`
+			Title string   `json:"title"`
+			From  []string `json:"from"`
+			To    string   `json:"to"`
+		} `json:"actions"`
 	}
 	if err := json.Unmarshal(body, &shape); err != nil {
 		return EntityInfo{}, err
@@ -797,5 +805,21 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		fields = append(fields, field)
 	}
 	owner, _, _ := strings.Cut(shape.Type, ".")
-	return EntityInfo{App: owner, Type: shape.Type, Fields: fields}, nil
+	if shape.Lifecycle == nil && len(shape.States) > 0 {
+		l := LifecycleInfo{Field: "state", Initial: shape.States[0].Name, States: shape.States}
+		choices := []string{}
+		for _, s := range shape.States {
+			choices = append(choices, s.Name)
+		}
+		fields = append(fields, FieldInfo{Name: "state", Title: "State", Type: "choice", ReadOnly: true, Choices: choices})
+		for _, a := range shape.Actions {
+			to := []string{}
+			if a.To != "" {
+				to = append(to, a.To)
+			}
+			l.Transitions = append(l.Transitions, TransitionInfo{Name: a.Name, Schema: shape.Type + "." + a.Name, Title: a.Title, From: a.From, To: to})
+		}
+		shape.Lifecycle = &l
+	}
+	return EntityInfo{App: owner, Type: shape.Type, Fields: fields, Lifecycle: shape.Lifecycle}, nil
 }

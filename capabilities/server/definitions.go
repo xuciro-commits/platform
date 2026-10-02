@@ -437,6 +437,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.CheckTimeline(shown) != nil {
 						continue
 					}
+					if section.CheckKanban(shown) != nil {
+						continue
+					}
 					parentType := page.Object.Name
 					if section.ParentSelection != "" {
 						for _, selection := range page.Selections {

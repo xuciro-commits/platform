@@ -36,6 +36,7 @@ export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, R
 export { RecordWorkspace } from "./records/RecordWorkspace";
 export { RecordLookup } from "./records/RecordLookup";
 export {RecordTimeline,type TimelineFields} from "./records/RecordTimeline";
+export {RecordKanban,type KanbanLane,type KanbanMove} from "./records/RecordKanban";
 export { humanizeKernelError } from "./lib/errors";
 
 export { useViewVisible } from "./shell/ViewVisibility";

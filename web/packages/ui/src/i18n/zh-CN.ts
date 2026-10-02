@@ -415,4 +415,13 @@ export default {
   "Authorized record timeline": "授权记录时间轴",
   "Display a bounded record window as time points or intervals, grouped by an original resource field.": "将有界记录窗口显示为时间点或区间，按原资源字段分组。",
   "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
+  "Kanban board": "看板",
+  "Kanban records or lanes exceed their display bound.": "看板记录或列超出显示上限。",
+  "{count} records have a missing or undeclared state.": "{count} 条记录的状态缺失或未声明。",
+  "Move {record} with action": "通过动作移动 {record}",
+  "Move with action": "通过动作移动",
+  "No cards in this window.": "此窗口没有卡片。",
+  "Authorized lifecycle board": "授权生命周期看板",
+  "Select bounded records in their original lifecycle lanes and emit declared move commands.": "在原生命周期列中选择有界记录，并发出已声明的移动命令。",
+  "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
 } as Record<string, string>;

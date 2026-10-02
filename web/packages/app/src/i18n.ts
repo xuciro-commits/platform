@@ -328,4 +328,7 @@ register("zh-CN", {
   "Showing {shown} of {total} matching records": "显示 {shown} 条，共 {total} 条匹配记录",
   "This timeline shows the current query window.": "此时间轴显示当前查询窗口。",
   "Scheduling": "排程",
+  "Kanban board": "看板",
+  "Kanban fields or lifecycle are unavailable.": "看板字段或生命周期不可用。",
+  "This board shows the current query window.": "此看板显示当前查询窗口。",
 });

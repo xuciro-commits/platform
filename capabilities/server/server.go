@@ -135,6 +135,16 @@ func (h *Host) Handler() http.Handler {
 			f(w, r, m, t)
 		})
 	}
+	// Discovery reads the same mutable installed declarations that publication
+	// replaces under the tenant lock. Keep the lock at the HTTP boundary:
+	// the metadata helpers are also used by already-locked input validation.
+	metadata := func(route Route, f func(http.ResponseWriter, *http.Request, platform.Member, *Tenant)) {
+		handle(route, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			f(w, r, m, t)
+		})
+	}
 	handle(Route{Pattern: "GET /v1/changes", Summary: "Server-sent events: \"changed\" each time the tenant takes inputs, so a client reads again what it shows (F-32)", Answer: ""},
 		func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) { followChanges(w, r, t) })
 	handle(Route{Pattern: "POST /v1/recovery/retry", Summary: "Retry recovery of this quarantined tenant from the durable journal after an operator repairs its cause (ADR-0038)",
@@ -187,12 +197,12 @@ func (h *Host) Handler() http.Handler {
 	handle(Route{Pattern: "GET /v1/files/{id}", Summary: "Download a file attached to a record the caller may read (ADR-0028)"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		t.Download(w, m, r.PathValue("id"), h.Now())
 	})
-	handle(Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/me", Summary: "Who the caller is on this host: tenant, member, the apps they may open, their language", Answer: MeView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		lang := t.Language(m, r)
 		WriteJSON(w, http.StatusOK, t.Translate(MeView{TenantID: m.Tenant, PrincipalID: m.ID, Profile: m, Apps: t.AppsOf(m), Tenants: h.tenantsOf(r),
 			Language: lang, Languages: t.languages(), Preferred: m.Language, Currency: t.setting(t.automation(PlatformApp, false), SettingCurrency)}, lang))
 	})
-	handle(Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/declarations", Summary: "The data classes and their authorities the tenant's apps declare (K5)", Answer: []*pb.AuthorityDeclaration{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, t *Tenant) {
 		out := []json.RawMessage{}
 		for _, d := range t.Declarations() {
 			raw, _ := protojson.Marshal(d)
@@ -208,13 +218,13 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, chain)
 	})
-	handle(Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language (ADR-0008)", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/actions", Summary: "The caller's catalog: the actions their roles permit, in their language (ADR-0008)", Answer: []platform.Action{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Catalog(m), t.Language(m, r)))
 	})
-	handle(Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []AppInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/apps", Summary: "The tenant's apps from their manifests", Answer: []AppInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Apps(), t.Language(m, r)))
 	})
-	handle(Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each (ADR-0011)", Answer: []ProtocolInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/protocols", Summary: "The protocols apps provide and consume, and the provider bound to each (ADR-0011)", Answer: []ProtocolInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Protocols(), t.Language(m, r)))
 	})
 	handle(Route{Pattern: "POST /v1/protocols/{protocol}/{version}/{action}", Summary: "Call a protocol's action at the provider the tenant binds", Body: ProtocolCall{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -290,16 +300,16 @@ func (h *Host) Handler() http.Handler {
 	handle(Route{Pattern: "GET /v1/ai/vendors", Summary: "The vendors a provider may be", Answer: []ai.Vendor{}}, func(w http.ResponseWriter, _ *http.Request, _ platform.Member, _ *Tenant) {
 		WriteJSON(w, http.StatusOK, ai.Vendors)
 	})
-	handle(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/entities", Summary: "The entity types of the apps the caller holds a role in, with their meaning, in their language (ADR-0016, ADR-0023)", Answer: []platform.EntityInfo{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Entities(m), t.Language(m, r)))
 	})
-	handle(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/definitions", Summary: "Installed object, action and page definitions the caller may discover, with qualified references and dependencies (ADR-0032)", Answer: []platform.Definition{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Definitions(m), t.Language(m, r)))
 	})
-	handle(Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities (ADR-0044)", Answer: []platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/capabilities", Summary: "Typed Block projections of the caller's installed owner capabilities (ADR-0044)", Answer: []platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, t.Translate(t.Capabilities(m), t.Language(m, r)))
 	})
-	handle(Route{Pattern: "GET /v1/capabilities/{app}/{kind}/{name}", Summary: "Read a callable owner's exact retained input/output schema", Query: []Param{{"version", "Retained query/compute/AI ordinal; zero selects code declarations or the installed compute/AI version"}}, Answer: platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/capabilities/{app}/{kind}/{name}", Summary: "Read a callable owner's exact retained input/output schema", Query: []Param{{"version", "Retained query/compute/AI ordinal; zero selects code declarations or the installed compute/AI version"}}, Answer: platform.CapabilityDescriptor{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		version := 0
 		if text := r.URL.Query().Get("version"); text != "" {
 			var err error
@@ -791,7 +801,7 @@ func (h *Host) Handler() http.Handler {
 		WriteJSON(w, http.StatusOK, out)
 	})
 	h.routes = append(h.routes, namedReads...) // served by GET /v1/{read}
-	handle(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees (ADR-0023)"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
+	metadata(Route{Pattern: "GET /v1/openapi.json", Summary: "This contract: the host's routes, and the entity types and action payloads the caller sees (ADR-0023)"}, func(w http.ResponseWriter, _ *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, h.OpenAPI(t, &m))
 	})
 	// The process is alive and holds its tenants (ADR-0027 D6); a tenant's own

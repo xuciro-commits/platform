@@ -1088,5 +1088,6 @@
  "Start time field": "开始时间字段",
  "End time field": "结束时间字段",
  "Timeline label field": "时间轴标题字段",
- "Timeline resource field": "时间轴资源字段"
+ "Timeline resource field": "时间轴资源字段",
+ "Card title field": "卡片标题字段"
 }

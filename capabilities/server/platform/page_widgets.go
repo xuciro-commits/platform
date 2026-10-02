@@ -186,7 +186,7 @@ func checkPageWidget(section Section) error {
 		}
 		// Only presentation properties are validated here. Asset references,
 		// selections, queries and actions retain their original host owners.
-		values := map[string]string{"title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "mark": section.Mark, "columnGroup": section.ColumnGroup, "measure": section.Measure, "timeStart": section.TimeStart, "timeEnd": section.TimeEnd, "timeLabel": section.TimeLabel, "timeGroup": section.TimeGroup}
+		values := map[string]string{"title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "mark": section.Mark, "columnGroup": section.ColumnGroup, "measure": section.Measure, "timeStart": section.TimeStart, "timeEnd": section.TimeEnd, "timeLabel": section.TimeLabel, "timeGroup": section.TimeGroup, "cardLabel": section.CardLabel}
 		props := map[string]string{}
 		for key, value := range values {
 			if value != "" {
