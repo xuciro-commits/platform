@@ -14,7 +14,7 @@
 
 工坊“对象”统一展示当前成员可见的原生/租户资源，支持搜索、来源筛选和关系图。选中或双击图节点查看概览、属性、引用、动作、数据、用途与访问；原生资源只读，租户资源的编辑按钮进入原字段/状态/动作/权限编辑器。未发布租户草稿从目录直接进入编辑器。发布不会把自动记录页或所有已发布页面追加到侧栏；对象编辑器的“Open records / 打开业务记录”和页面编辑器的“Open published page / 打开已发布页面”用于查看运行界面，交付应用按 Pages/Groups 设置业务导航。
 
-在对象详情选择属性，点击“Use property in page / 将属性用于页面”，创建绑定该字段的V2页面草稿；在引用关系中选择带inverse的入向单值引用，点击“Use related records in page / 将关联记录用于页面”，生成父表、相关表和相关详情及具名选择。填写页面名称、标题和字段后进入页面设计器，再审查候选并激活。独立关系与多值引用不支持此创建路线。对象编辑可撤销/重做；保存发生版本冲突时保留本地草稿，取消修改载入远端版本。
+在对象详情选择属性，点击“Use property in page / 将属性用于页面”，创建绑定该字段的V2页面草稿；在引用关系中选择带inverse的入向单值引用，点击“Use related records in page / 将关联记录用于页面”，生成父表、相关表和相关详情及具名选择。填写页面名称、标题和字段后进入页面设计器，再审查候选并激活。具名关系可沿下述精确绑定路线创建页面；多值引用不支持此创建路线。对象编辑可撤销/重做；保存发生版本冲突时保留本地草稿，取消修改载入远端版本。
 
 页面设计器的“Page variables / 页面变量”可声明文本/布尔状态、常量和派生变量。将相邻组件组合为Tabs，在检查器填写标签标题；系统生成选中状态变量，可在变量面板设置初始标签。派生变量通过参数下拉选择其他变量或固定值，`Use tab identity / 使用标签页标识`可选择标签，无需手写ID。为组件或容器选择“Visible when / 显示条件”即可绑定布尔变量；状态随页面会话隔离，刷新恢复初始值。将变量模式改为“Resource output / 资源输出”，选择“Record selection / 记录选择”“Filter values / 筛选条件”或“Query window / 查询窗口”，再选择来源组件。派生算子“present / 有值”可用来控制详情或提示内容的显示；当前值区显示读取状态、记录引用及查询窗口范围。父选择更换、筛选和拒绝会清理失效选择，刷新恢复初始状态。查询窗口沿用来源表格的原绑定与权限；独立查询计划见下文，集合组合沿下述查询计划，聚合沿下述组件端口；跨页传值按下述页面接口声明。
 
@@ -193,6 +193,6 @@ go run ./cmd/<id>-server -web ../../../web/apps/workspace/dist
 开发宿主默认为 `127.0.0.1:8499`，开发令牌为 manager/member。交付时组合进对应行业解决方案，配置见部署 README。检查按 [Testing](Testing.md#检查选择与停止) 选择；样式与一般体验用截图/用户走查，核心数据与权限用自动回归。
 
 
-具名关系API（本体编辑器待接入）：构建者使用原动作`build.linktype.create/edit/publish`管理关系草稿，字段为name/title/description、已发布租户parent/child对象、child的单值reference字段via和双向forward/reverse名称。required来自原字段；存储与删除profile固定为reference/owner。正式发布使用原候选接口，kind为`link-type`，冻结并激活后才对成员提供注册声明。`GET /v1/definitions`的linkType/linkVersions仅返回当前成员可发现的对象与回指。
+具名关系：在“Relationships / 关系”新建草稿，选择已发布租户父/子对象、子对象的回指字段和双向名称，保存后使用原“Review release / 审查发布”冻结激活；本体对象的关系检查器提供编辑入口和“Use related records in page / 将关联记录用于页面”。生成页面使用父记录资源和精确关系查询窗口，切换父记录清除子选择。页面查询计划可显式选择关系版本、方向及对应对象的record起点，沿原Table/Loop窗口和count/Metric/Chart完整聚合消费。新关系版本不替换旧页面绑定。API用法：构建者使用原动作`build.linktype.create/edit/publish`管理关系草稿，字段为name/title/description、已发布租户parent/child对象、child的单值reference字段via和双向forward/reverse名称。required来自原字段；存储与删除profile固定为reference/owner。正式发布使用原候选接口，kind为`link-type`，冻结并激活后才对成员提供注册声明。`GET /v1/definitions`的linkType/linkVersions仅返回当前成员可发现的对象与回指。
 
 沿`GET /v1/link-types/{app}/{name}/{version}/{direction}/{id}`读取，direction为forward或reverse，version例如`1.link-1`；GET可用domain/search/sort/offset/limit，POST同一路径接受原Query JSON（包括完整集合谓词）。Web代码使用`EdgeClient.traverseLink(binding,direction,id,query)`。起点和目标继续按原权限读取，无权、缺失或隐藏字段不会退化到全对象列表。发布后保持关系身份、对象与回指形状；描述和双向名称可发布新版本，旧版本仍可读取。该API不新增级联删除或关系实例写入动作。

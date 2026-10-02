@@ -668,11 +668,28 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 			var named *Definition
 			if plan.Query != nil {
 				asset, ok := lookup[plan.Query.Ref]
-				var query NamedQuery
-				if !ok || json.Unmarshal(asset.Body, &query) != nil {
-					return fmt.Errorf("page query %s named query is unavailable", id)
+				if plan.Query.Ref.Kind == AssetLinkType {
+					var l LinkType
+					if json.Unmarshal(asset.Body, &l) != nil {
+						return fmt.Errorf("invalid frozen link type")
+					}
+					parentAsset, pok := lookup[l.Parent]
+					childAsset, cok := lookup[l.Child]
+					parent, pe := queryObjectDescriptor(parentAsset.Body)
+					child, ce := queryObjectDescriptor(childAsset.Body)
+					parent.App = l.Parent.App
+					child.App = l.Child.App
+					if !pok || !cok || pe != nil || ce != nil || l.CheckSchema(parent, child) != nil {
+						return fmt.Errorf("frozen link source schema is unavailable")
+					}
+					named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, LinkType: &l}
+				} else {
+					var query NamedQuery
+					if !ok || json.Unmarshal(asset.Body, &query) != nil {
+						return fmt.Errorf("page query %s named query is unavailable", id)
+					}
+					named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
 				}
-				named = &Definition{Ref: asset.Ref, Version: asset.SourceVersion, Query: &query}
 			}
 			if err := page.CheckQuerySchema(plan, object, named); err != nil {
 				return fmt.Errorf("page query %s: %w", id, err)

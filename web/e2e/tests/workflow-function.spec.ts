@@ -43,8 +43,12 @@ for (const fixture of [
       await properties.getByRole("combobox", { name: "Next path", exact: true }).selectOption("ask");
       await page.getByRole("button", { name: "Save workflow", exact: true }).click();
       await expect(page.getByRole("button", { name: "Save workflow", exact: true })).toBeDisabled();
-      const inventory = await (await request.get("/v1/records/build.process?limit=500", { headers: { Authorization: `Bearer ${fixture.builder}` } })).json();
-      const workflow = inventory.records.find((p: { name: string }) => p.name === name);
+      const savedWorkflow = async () => {
+        const inventory = await (await request.get("/v1/records/build.process?limit=500", { headers: { Authorization: `Bearer ${fixture.builder}` } })).json();
+        return inventory.records.find((p: { name: string }) => p.name === name);
+      };
+      await expect.poll(async () => Boolean(await savedWorkflow())).toBe(true);
+      const workflow = await savedWorkflow();
       expect(workflow.steps[0].kind).toBe("ai");
       expect(workflow.steps[0].function).toEqual({ app: "build", name, version: 1 });
       await page.getByRole("button", { name: "Direct install", exact: true }).click();

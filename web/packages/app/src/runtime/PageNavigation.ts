@@ -26,7 +26,7 @@ export function usePageInputs(page: Api.Page, session: PageSessionStore, snapsho
       const reference = inputValues[id] as { object: string; id: string } | undefined;
       session.selectReference(inputSlot(port.variable), reference);
     }
-  }, [session, inputKey]);
+  }, [session, inputKey,call?.input]);
   const inputs: Record<string, VariableResult> = {};
   let recordError = false;
   for (const [id, port] of Object.entries(iface?.inputs ?? {})) {

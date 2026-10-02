@@ -24,12 +24,13 @@ import (
 //     money field. Money is summed per currency: its currency becomes a group
 //     ("amount.currency"), and amounts stay in minor units.
 type AggregateQuery struct {
-	Set      *platform.QuerySet `json:"set,omitempty"`
-	Domain   json.RawMessage    `json:"domain,omitempty"`
-	Search   string             `json:"search,omitempty"`
-	Archived bool               `json:"archived,omitempty"`
-	Groups   []string           `json:"groups,omitempty"`
-	Measures []string           `json:"measures,omitempty"`
+	Traversal *platform.LinkTraversal `json:"traversal,omitempty"`
+	Set       *platform.QuerySet      `json:"set,omitempty"`
+	Domain    json.RawMessage         `json:"domain,omitempty"`
+	Search    string                  `json:"search,omitempty"`
+	Archived  bool                    `json:"archived,omitempty"`
+	Groups    []string                `json:"groups,omitempty"`
+	Measures  []string                `json:"measures,omitempty"`
 }
 
 const AggregateSetMaxGroups = 4
@@ -282,6 +283,14 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now time.Time) (Aggregate, *kernel.Error) {
 	if err := t.admits(m); err != nil {
 		return Aggregate{}, err
+	}
+	if q.Traversal != nil {
+		domain, err := t.linkTraversalDomain(m, typ, *q.Traversal, q.Domain, now)
+		if err != nil {
+			return Aggregate{}, err
+		}
+		q.Domain = domain
+		q.Traversal = nil
 	}
 	s := t.records
 	s.mu.Lock()

@@ -29,3 +29,9 @@ test("usage includes exact section and selection bindings while excluding hidden
   const usages = semanticModelView([parent, child, page]).usages.filter((usage) => usage.owner.ref.kind === "page");
   assert.deepEqual(usages.map((usage) => usage.resource.name), [parent.ref.name, child.ref.name]);
 });
+
+test("registered LinkTypes replace their raw reference edge while preserving typed source identity",()=>{
+ const parent={ref:{app:"sample",kind:"object",name:"sample.parent"},source:"code",entity:{fields:[]}},child={ref:{app:"sample",kind:"object",name:"sample.child"},source:"code",entity:{fields:[{name:"parent",title:"Parent",type:"reference",ref:"sample.parent",inverse:"children"}]}};
+ const relation={ref:{app:"sample",kind:"link-type",name:"children"},source:"code",version:"1",linkType:{name:"children",parent:parent.ref,child:child.ref,via:"parent",forward:"declaredchildren",reverse:"declaredparent"}};
+ const model=semanticModelView([parent,child,relation]);assert.equal(model.relations.length,1);assert.equal(model.relations[0].ref.kind,"link-type");assert.equal(model.relations[0].ref.binding.sourceVersion,"1");assert.equal(model.relations[0].inverse,"declaredchildren");assert.equal(semanticModelView([child,relation]).relations.length,0);
+});

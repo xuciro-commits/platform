@@ -134,6 +134,18 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 			t.Fatal("hidden start or parent traversed")
 		}
 	}
+	edge := &platform.LinkTraversal{Binding: binding, Direction: "forward", ID: "A"}
+	rows, issue := tn.Records(reader, "build.child", platform.Query{Traversal: edge, Limit: 1}, at)
+	if issue != nil || rows.Total != 2 || len(rows.Records) != 1 {
+		t.Fatal("typed record traversal did not use its original window")
+	}
+	stats, issue := tn.Aggregate(reader, "build.child", AggregateQuery{Traversal: edge, Measures: []string{"count"}}, at)
+	if issue != nil || len(stats.Rows) != 1 || stats.Rows[0]["count"] != 2 {
+		t.Fatal("aggregate traversal lost complete membership")
+	}
+	if _, issue := tn.Aggregate(restricted, "build.child", AggregateQuery{Traversal: edge, Measures: []string{"count"}}, at); issue == nil {
+		t.Fatal("aggregate traversed an unreadable start")
+	}
 	assert(tn)
 	CheckReplay(t, tn, entries, compose)
 	raw, _, err := tn.Snapshot(func() int64 { return int64(len(entries)) })
@@ -171,6 +183,39 @@ func TestLinkTypeVersionsFreezeTraverseAndRecover(t *testing.T) {
 	}
 	if problem := submit(builder, build.LinkTypeType, "link", "archive", map[string]any{}); problem == nil {
 		t.Fatal("published link was archived")
+	}
+	document := &platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"table", "text"}}, "table": {Kind: "widget", Section: "table"}, "text": {Kind: "widget", Section: "text"}}, Variables: map[string]platform.PageVariable{"parent": {Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "table"}}, "children": {Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "related"}}}, Queries: map[string]platform.PageQuery{"related": {Object: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.child"}, Query: &binding, Direction: "forward", For: &platform.PageValue{Variable: "parent"}, Limit: 1}}}
+	must(build.PageType, "linkpage", "create", map[string]any{"name": "linked", "title": "Linked page", "object": "build.parent", "sections": []build.Section{{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"note"}}, {ID: "text", Widget: "text", ConfigVersion: 1, Text: "Linked read"}}, "document": document})
+	must(build.PageType, "linkpage", "publish", map[string]any{})
+	candidate, problem := tn.ReleaseCandidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetPage, Name: "linked"}})
+	if problem != nil {
+		t.Fatal(problem)
+	}
+	foundBinding := false
+	for _, asset := range candidate.Assets {
+		if asset.Ref == ref {
+			foundBinding = true
+			if asset.SourceVersion != "1.link-1" {
+				t.Fatal("page changed its retained relation")
+			}
+		}
+	}
+	if !foundBinding {
+		t.Fatal("page omitted its relationship dependency")
+	}
+	document.Queries["private"] = platform.PageQuery{Object: document.Queries["related"].Object, Query: &denied, Direction: "forward", For: &platform.PageValue{Variable: "parent"}, Limit: 1}
+	document.Variables["private"] = platform.PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "private"}}
+	must(build.PageType, "linkpage", "edit", map[string]any{"document": document})
+	must(build.PageType, "linkpage", "publish", map[string]any{})
+	for _, d := range tn.Definitions(reader) {
+		if d.Page != nil && d.Ref.Name == "linked" {
+			if _, ok := d.Page.Document.Queries["private"]; ok {
+				t.Fatal("page disclosed hidden relation source")
+			}
+			if d.Page.Document.Variables["private"].Mode != "" {
+				t.Fatal("hidden relationship output survived")
+			}
+		}
 	}
 	CheckReplay(t, tn, entries, compose)
 	h := NewHost(Tokens(map[string]string{"reader": "reader"}), tn)

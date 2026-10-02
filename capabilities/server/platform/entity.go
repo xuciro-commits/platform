@@ -472,13 +472,14 @@ func EntityActions(e Entity) []Action {
 // conditions joined by "&" unless "|" or "!" says otherwise; a text search
 // over the type's search fields; sort fields ("-" for descending); a page.
 type Query struct {
-	Set      *QuerySet       `json:"set,omitempty"`
-	Domain   json.RawMessage `json:"domain,omitempty"`
-	Search   string          `json:"search,omitempty"`
-	Sort     []string        `json:"sort,omitempty"`
-	Offset   int             `json:"offset,omitempty"`
-	Limit    int             `json:"limit,omitempty"`    // 0: all
-	Archived bool            `json:"archived,omitempty"` // include archived records
+	Traversal *LinkTraversal  `json:"traversal,omitempty"`
+	Set       *QuerySet       `json:"set,omitempty"`
+	Domain    json.RawMessage `json:"domain,omitempty"`
+	Search    string          `json:"search,omitempty"`
+	Sort      []string        `json:"sort,omitempty"`
+	Offset    int             `json:"offset,omitempty"`
+	Limit     int             `json:"limit,omitempty"`    // 0: all
+	Archived  bool            `json:"archived,omitempty"` // include archived records
 }
 
 // Put stores entity (a struct embedding Record, with its ID set) as the

@@ -26,6 +26,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const host = useHost();
   const { open } = useWorkspace();
   const inventory = useRecordInventory<ObjectDraft>("build.object");
+  const linkInventory=useRecordInventory<{id:string;name:string}>("build.linktype");
   const model = useMemo(() => semanticModelView(host.definitions), [host.definitions]);
   const [search, setSearch] = useState(""), [origin, setOrigin] = useState("all");
   const [current, setCurrent] = useState(initialObject ?? ""), [view, setView] = useState<"catalog" | "graph" | "detail">(initialObject ? "detail" : "catalog");
@@ -58,7 +59,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
     // both the node set and edges; hidden objects never get placeholder nodes.
     const shown = visible.slice(0, 80), ids = new Set(shown.map((item) => item.ref.name));
     const edges: CanvasEdge[] = model.relations.filter((relation) => ids.has(relation.ref.object.name) && ids.has(relation.target.name)).map((relation) => ({
-      id: `${relation.ref.object.name}/${relation.ref.field}`, source: relation.ref.object.name, target: relation.target.name, sourcePort: "out", targetPort: "in", label: relation.title,
+      id: relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`, source: relation.ref.object.name, target: relation.target.name, sourcePort: "out", targetPort: "in", label: relation.title,
     }));
     const positions = layout(shown.map((item) => ({ id: item.ref.name, label: item.title })), edges.map((edge) => ({ from: edge.source, to: edge.target })), "right",
       { width: canvasNodeWidth, height: canvasNodeHeight(objectCatalog[0]!), gapX: 80, gapY: 32 });
@@ -71,7 +72,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const property = selection?.kind === "property" ? resource?.fields.find((field) => field.name === selection.ref.field) : undefined;
   return <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
     <PageHeader title={t("Objects")} description={t("Explore the business model, inspect relationships, and bind real resources to pages.")}
-      actions={<NewActions type="build.object" />} />
+      actions={<div className="flex gap-2"><NewActions type="build.object"/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button></div>} />
     <Card role="toolbar" aria-label={t("Model navigation")} className="flex flex-wrap items-center gap-2 px-3 py-2">
       <Button variant={view === "catalog" ? "primary" : "ghost"} onClick={() => setView("catalog")}><Boxes />{t("Model catalog")}</Button>
       <Button variant={view === "graph" ? "primary" : "ghost"} onClick={() => setView("graph")}><GitBranch />{t("Relationship graph")}</Button>
@@ -100,10 +101,10 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
           </>}
           {selection?.kind === "relation" && <>
             <p className="text-xs">{selection.relation.title} · {selection.relation.ref.field}</p>
-            <p className="text-xs text-muted">{t("This relationship is backed by a reference field. Cardinality and delete rules are not inferred.")}</p>
+            {selection.relation.linkType?<><PropertyList items={[[t("Relationship version"),selection.relation.definition?.version??""],[t("Cardinality"),"one-to-many"],[t("Archive policy"),t("Object owner")]]}/>{selection.relation.definition?.source==="tenant"&&<Button onClick={()=>{const row=linkInventory.data?.records.find(r=>r.name===selection.relation.definition?.ref.name);if(row)open({view:"link-type",params:{id:row.id}});}}>{t("Edit relationship")}</Button>}</>:<><p className="text-xs text-muted">{t("This relationship is backed by a reference field. Cardinality and delete rules are not inferred.")}</p>{selection.relation.owner.source==="tenant"&&selection.relation.targetDefinition.source==="tenant"&&<Button onClick={()=>open({view:"link-type",params:{id:"new",parent:selection.relation.target.name,child:selection.relation.ref.object.name,via:selection.relation.ref.field}})}>{t("Define relationship asset")}</Button>}</>}
             <Button onClick={() => choose(resources.find((item) => item.ref.name === (selection.inbound ? selection.relation.ref.object.name : selection.relation.target.name))!)}>{t("Open related object")}</Button>
-            <Button disabled={!selection.inbound || !selection.relation.inverse || selection.relation.field.type !== "reference"} onClick={() => setSeed({ object: resource.ref, relation: selection.relation })}>{t("Use related records in page")}</Button>
-            {(!selection.inbound || !selection.relation.inverse || selection.relation.field.type !== "reference") && <p className="text-xs text-muted">{t("Related-page binding needs an incoming scalar reference with a declared inverse name.")}</p>}
+            <Button disabled={!selection.inbound || (!selection.relation.inverse&&!selection.relation.linkType) || selection.relation.field.type !== "reference"} onClick={() => setSeed({ object: resource.ref, relation: selection.relation })}>{t("Use related records in page")}</Button>
+            {(!selection.inbound || (!selection.relation.inverse&&!selection.relation.linkType) || selection.relation.field.type !== "reference") && <p className="text-xs text-muted">{t("Related-page binding needs an incoming scalar reference with a declared inverse name.")}</p>}
           </>}
           {selection?.kind === "action" && selection.definition.action && <>
             <h3 className="text-sm font-medium">{selection.definition.action.title}</h3><p className="text-xs text-muted">{selection.definition.action.description}</p>
@@ -133,7 +134,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
             columns={[{ accessorKey: "title", header: t("Property") }, { accessorKey: "name", header: t("Name") }, { accessorKey: "type", header: t("Type"), cell: ({ row }) => t(row.original.type) }, { id: "reference", header: t("Reference object"), accessorFn: (field) => field.ref ?? "—" }]} />}
           {tab === "links" && <div className="grid gap-2">{related.map((relation) => {
             const inbound = relation.target.name === current;
-            return <Button key={`${relation.ref.object.name}/${relation.ref.field}`} variant="row" onClick={() => select({ kind: "relation", relation, inbound })}>
+            return <Button key={relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`} variant="row" onClick={() => select({ kind: "relation", relation, inbound })}>
               <Link2 /><span className="min-w-0 flex-1 text-left"><span className="block text-xs font-medium">{inbound ? relation.inverse ?? relation.title : relation.title}</span><span className="block truncate font-mono text-[10px] text-muted">{relation.ref.object.name}.{relation.ref.field} → {relation.target.name}</span></span><Tag label={t(inbound ? "Incoming reference" : "Outgoing reference")} />
             </Button>;
           })}{!related.length && <p className="text-xs text-muted">{t("No visible reference relationships.")}</p>}</div>}
@@ -167,10 +168,14 @@ function PageFromModel({ seed, onClose }: { seed: PageSeed; onClose: () => void 
     try {
       const sections: Api.Section[] = relation && related ? [
         { widget: "table", title: entity!.plural, fields, selection: "parent" },
-        { widget: "table", title: related.plural, object: relation.ref.object, fields: related.fields.filter((field) => !field.aside && field.type !== "lines").slice(0, 4).map((field) => field.name), relation: relation.inverse, parentSelection: "parent", selection: "related" },
+        { widget: "table", title: related.plural, object: relation.ref.object, fields: related.fields.filter((field) => !field.aside && field.type !== "lines").slice(0, 4).map((field) => field.name), ...(relation.ref.kind==="link-type"?{collectionVariable:"relatedWindow"}:{relation:relation.inverse,parentSelection:"parent"}), selection:"related" },
         { widget: "detail", title: t("Detail"), object: relation.ref.object, fields: related.fields.filter((field) => !field.aside && field.type !== "lines").slice(0, 4).map((field) => field.name), selection: "related" },
       ] : [{ widget: "table", title: entity!.plural, fields }, { widget: "detail", title: t("Detail"), fields }];
       const lifted = pageDocumentFromSections(sections);
+      if(relation?.ref.kind==="link-type") {
+        lifted.document.variables={...lifted.document.variables,parentRecord:{scope:"page",type:"record",mode:"resource",source:{kind:"record",section:lifted.sections[0]!.id}},relatedWindow:{scope:"page",type:"object-set",mode:"resource",source:{kind:"plan",query:"related"}}};
+        lifted.document.queries={related:{title:relation.linkType?.title,object:relation.ref.object,query:relation.ref.binding,direction:"forward",for:{variable:"parentRecord"},sort:["id"],limit:50}};
+      }
       const id = newId("PAGE");
       const payload = { name, title: title.trim(), object: seed.object.name, document: lifted.document,
         sections: lifted.sections.map((section) => ({ ...section, object: section.object?.name })),

@@ -10,6 +10,7 @@ import (
 // PageQuery is a presentation-owned read plan over the original record API.
 // A named query keeps its source version and fixed owner conditions.
 type PageQuery struct {
+	Direction  string               `json:"direction,omitempty"`
 	ItemOwner  string               `json:"itemOwner,omitempty"`
 	Set        *PageQuerySet        `json:"set,omitempty"`
 	Owner      string               `json:"owner,omitempty"` // empty: page; otherwise an Overlay identity
@@ -126,8 +127,16 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			}
 		}
 		total += q.Limit * factor
-		if q.Query != nil && (q.Query.Ref.Check() != nil || q.Query.Ref.Kind != AssetQuery || q.Query.SourceVersion == "") {
+		if q.Query != nil && (q.Query.Ref.Check() != nil || (q.Query.Ref.Kind != AssetQuery && q.Query.Ref.Kind != AssetLinkType) || q.Query.SourceVersion == "") {
 			return fmt.Errorf("page query %s needs an exact named query binding", id)
+		}
+		if q.Direction != "" && (q.Query == nil || q.Query.Ref.Kind != AssetLinkType) {
+			return fmt.Errorf("direction requires a link binding")
+		}
+		if q.Query != nil && q.Query.Ref.Kind == AssetLinkType {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.22") || q.For == nil || q.For.Variable == "" || d.Variables[q.For.Variable].Type != "record" || (q.Direction != "forward" && q.Direction != "reverse") || q.Set != nil {
+				return fmt.Errorf("link plan needs v2.22, a direction and typed start record")
+			}
 		}
 		if q.For != nil && q.Query == nil {
 			return fmt.Errorf("page query %s parent input requires a named query", id)
@@ -148,7 +157,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			}
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
-				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record") || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") && !(v.Scope == "loop-item" && v.Owner == q.ItemOwner && q.ItemOwner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
+				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record" && (q.Query == nil || q.Query.Ref.Kind != AssetLinkType)) || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") && !(v.Scope == "loop-item" && v.Owner == q.ItemOwner && q.ItemOwner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
 					return fmt.Errorf("page query %s parameter escapes its input scope", id)
 				}
 			} else {
@@ -294,6 +303,20 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 	}
 	if q.Search != nil && valueType(*q.Search) != "string" {
 		return fmt.Errorf("query search requires text")
+	}
+	if q.Query != nil && q.Query.Ref.Kind == AssetLinkType {
+		if named == nil || named.Ref != q.Query.Ref || named.Version != q.Query.SourceVersion || named.LinkType == nil || q.For == nil || q.For.Variable == "" {
+			return fmt.Errorf("link plan requires its retained relation and start record")
+		}
+		l := named.LinkType
+		start, target := l.Parent, l.Child
+		if q.Direction == "reverse" {
+			start, target = l.Child, l.Parent
+		}
+		if q.Object != target || p.RecordVariableObject(q.For.Variable) != start.Name {
+			return fmt.Errorf("link plan record or target object is incompatible")
+		}
+		return nil
 	}
 	if q.Query != nil {
 		if named == nil || named.Ref != q.Query.Ref || named.Version != q.Query.SourceVersion || named.Query == nil || named.Query.Object != q.Object.Name {

@@ -2,8 +2,10 @@ import type { Api } from "@platform/kernel";
 
 export type PropertyRef = { object: Api.AssetRef; field: string };
 export type ReferenceRelationRef = { kind: "reference"; object: Api.AssetRef; field: string; direction: "outbound" | "inbound" };
+export type LinkRelationRef = Omit<ReferenceRelationRef,"kind"> & {kind:"link-type";binding:Api.AssetBinding};
 export type SemanticRelation = {
-  ref: ReferenceRelationRef; target: Api.AssetRef; title: string; inverse?: string;
+  definition?:Api.Definition;linkType?:Api.LinkType;
+  ref: ReferenceRelationRef|LinkRelationRef; target: Api.AssetRef; title: string; inverse?: string;
   field: Api.FieldInfo; owner: Api.Definition; targetDefinition: Api.Definition;
 };
 export type SemanticModelView = {
@@ -26,7 +28,9 @@ export function semanticModelView(definitions: Api.Definition[]): SemanticModelV
   for (const owner of objects) for (const field of owner.entity!.fields) {
     const targetDefinition = field.ref ? byType.get(field.ref) : undefined;
     if (!targetDefinition || !["reference", "references"].includes(field.type)) continue;
-    relations.push({ ref: { kind: "reference", object: owner.ref, field: field.name, direction: "outbound" },
+    const declared=definitions.filter(d=>d.linkType&&d.linkType.child.name===owner.ref.name&&d.linkType.parent.name===targetDefinition.ref.name&&d.linkType.via===field.name);
+    if(declared.length)for(const definition of declared){const l=definition.linkType!,binding={ref:definition.ref,sourceVersion:definition.version};relations.push({ref:{kind:"link-type",object:owner.ref,field:field.name,direction:"outbound",binding},target:targetDefinition.ref,title:l.reverse,inverse:l.forward,field,owner,targetDefinition,definition,linkType:l});}
+    else relations.push({ ref: { kind: "reference", object: owner.ref, field: field.name, direction: "outbound" },
       target: targetDefinition.ref, title: field.title, inverse: field.inverse, field, owner, targetDefinition });
   }
   const usages = definitions.flatMap((owner) => {
@@ -47,4 +51,4 @@ export function semanticModelView(definitions: Api.Definition[]): SemanticModelV
 }
 
 export const propertyKey = (ref: PropertyRef) => `${key(ref.object)}#${ref.field}`;
-export const relationKey = (ref: ReferenceRelationRef) => `${propertyKey(ref)}:${ref.direction}`;
+export const relationKey = (ref: ReferenceRelationRef|LinkRelationRef) => ref.kind==="link-type"?`${key(ref.binding.ref)}@${ref.binding.sourceVersion}:${ref.direction}`:`${propertyKey(ref)}:${ref.direction}`;

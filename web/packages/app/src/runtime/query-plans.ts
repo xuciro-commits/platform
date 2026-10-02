@@ -64,7 +64,17 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
   };
   const domain: unknown[] = [];
   let sort = plan.sort ?? ["id"], limit = plan.limit;
-  if (plan.query) {
+  let traversal:Api.LinkTraversal|undefined;
+  if(plan.query?.ref.kind==="link-type") {
+    const definition=named?.ref.app===plan.query.ref.app&&named.ref.name===plan.query.ref.name?named:undefined;
+    const link=definition?.version===plan.query.sourceVersion?definition.linkType:definition?.linkVersions?.[plan.query.sourceVersion];
+    if(!link||!plan.for?.variable||(plan.direction!=="forward"&&plan.direction!=="reverse"))return failed("The relation version or start record is unavailable.");
+    const start=plan.direction==="forward"?link.parent:link.child,target=plan.direction==="forward"?link.child:link.parent;
+    if(target.name!==plan.object.name||target.app!==plan.object.app)return failed("Relation target object is incompatible.");
+    const value=read(plan.for);if(value.status!=="value")return value;
+    const record=value.value;if(typeof record!=="object"||record.kind!=="record"||record.reference.object!==start.name||!record.reference.id)return failed("Relation start record is incompatible.");
+    traversal={binding:plan.query,direction:plan.direction,id:record.reference.id};
+  } else if (plan.query) {
     named=plan.query?boundQueryDefinition(named,plan.query):named;
     if (!named?.query || named.version !== plan.query.sourceVersion || named.ref.app !== plan.query.ref.app || named.ref.name !== plan.query.ref.name || named.ref.kind !== "query" || named.query.object !== plan.object.name) return failed("The named query version is unavailable.");
     const declaration = named.query;
@@ -91,7 +101,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
   if (sort.some((name) => !field(name.replace(/^-/, "")))) return failed("Query sort field is unavailable.");
   let search: string | undefined;
   if (plan.search) { const value = read(plan.search); if (value.status !== "value") return value; if (typeof value.value !== "string" || new TextEncoder().encode(value.value).length > 4096) return failed("Query search requires text."); search = value.value; }
-  const query: RecordQuery = { domain, sort, offset: plan.offset ?? 0, limit, ...(search === undefined ? {} : { search }) };
+  const query: RecordQuery = { ...(traversal?{traversal}:{}),domain, sort, offset: plan.offset ?? 0, limit, ...(search === undefined ? {} : { search }) };
   return { status: "value", object: info.type, query, signature: JSON.stringify([info.type, query]) };
 }
 
@@ -103,6 +113,7 @@ export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:R
   const target=plans[root];
   const visit=(id:string,depth:number,path:Set<string>):QueryPlanResult=>{
    const plan=plans[id];nodes++;
+   if(depth>0&&plan?.query?.ref.kind==="link-type")return failed("A relation cannot be a set predicate source.");
    if(!plan||path.has(id)||depth>contract.set.maxDepth||nodes>contract.set.maxNodes||plan.object.name!==target?.object.name||plan.object.app!==target?.object.app||plan.owner!==target?.owner||plan.itemOwner!==target?.itemOwner)return failed("Set query sources are missing, cyclic or incompatible.");
    if(!active(plan.owner))return {status:"empty"};
    const own=compileQueryPlan({...plan,set:undefined},variables,values(plan.owner),entity(plan.object.name),named(plan),contract,sections,!!plan.set);

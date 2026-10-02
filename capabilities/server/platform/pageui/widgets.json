@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.21",
+  "uiProfile": "platform.page.v2.22",
   "widgets": [
     {
       "componentID": "table",
@@ -516,7 +516,8 @@
     "platform.page.v2.18",
     "platform.page.v2.19",
     "platform.page.v2.20",
-    "platform.page.v2.21"
+    "platform.page.v2.21",
+    "platform.page.v2.22"
   ],
   "runtime": {
     "scope": "page",

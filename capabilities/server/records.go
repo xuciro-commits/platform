@@ -1050,6 +1050,17 @@ func (t *Tenant) Records(m platform.Member, typ string, q platform.Query, now ti
 // Flow queries must see prior accepted-decision writes without acquiring a
 // second live runtime or widening the member's record/field scope.
 func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+	if q.Traversal != nil {
+		if s != t.records {
+			return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Link traversal is unavailable in a staged read")
+		}
+		domain, err := t.linkTraversalDomain(m, typ, *q.Traversal, q.Domain, now)
+		if err != nil {
+			return RecordPage{}, err
+		}
+		q.Domain = domain
+		q.Traversal = nil
+	}
 	if err := t.admits(m); err != nil {
 		return RecordPage{}, err
 	}

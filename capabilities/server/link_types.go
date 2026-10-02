@@ -63,61 +63,74 @@ func (h hostView) InstallLinkType(c platform.Caller, l platform.LinkType, versio
 	return nil
 }
 
-// TraverseLink follows exactly one retained relationship, after authorizing
-// both its schema and its starting record. Original Records owns projection.
-func (t *Tenant) TraverseLink(m platform.Member, binding platform.AssetBinding, direction, id string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
-	notFound := platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Link type or start record is unavailable")
-	if binding.Ref.Kind != platform.AssetLinkType || binding.SourceVersion == "" || id == "" || (direction != "forward" && direction != "reverse") {
-		return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A link traversal needs a version, direction and start record")
-	}
-	var link *platform.LinkType
+// Shared normalization keeps list and aggregate traversal on the original reader.
+func (t *Tenant) visibleLink(m platform.Member, binding platform.AssetBinding) *platform.LinkType {
 	for _, d := range t.Definitions(m) {
 		if d.Ref == binding.Ref {
 			if selected := d.LinkVersion(binding.SourceVersion); selected != nil {
-				link = selected.LinkType
+				return selected.LinkType
 			}
 			break
 		}
 	}
+	return nil
+}
+func (t *Tenant) linkTraversalDomain(m platform.Member, typ string, edge platform.LinkTraversal, raw json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	notFound := platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Link type or start record is unavailable")
+	if edge.Binding.Ref.Kind != platform.AssetLinkType || edge.Binding.SourceVersion == "" || edge.ID == "" || (edge.Direction != "forward" && edge.Direction != "reverse") {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A link traversal needs a version, direction and start record")
+	}
+	link := t.visibleLink(m, edge.Binding)
 	if link == nil {
-		return RecordPage{}, notFound
+		return nil, notFound
+	}
+	target := link.Child.Name
+	if edge.Direction == "reverse" {
+		target = link.Parent.Name
+	}
+	if typ != target {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Link target object does not match its direction")
 	}
 	var domain []any
-	if len(q.Domain) > 0 && json.Unmarshal(q.Domain, &domain) != nil {
-		return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid link query")
+	if len(raw) > 0 && json.Unmarshal(raw, &domain) != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid link query")
 	}
-	typ := link.Child.Name
-	if direction == "forward" {
-		if _, err := t.RecordOf(m, link.Parent.Name, id, now); err != nil {
-			return RecordPage{}, notFound
+	if edge.Direction == "forward" {
+		if _, err := t.RecordOf(m, link.Parent.Name, edge.ID, now); err != nil {
+			return nil, notFound
 		}
-		domain = append(domain, []any{link.Via, "=", id})
+		domain = append(domain, []any{link.Via, "=", edge.ID})
 	} else {
-		view, err := t.RecordOf(m, link.Child.Name, id, now)
+		view, err := t.RecordOf(m, link.Child.Name, edge.ID, now)
 		if err != nil {
-			return RecordPage{}, notFound
+			return nil, notFound
 		}
-		raw := platform.Raw(view.Record)
 		var fields map[string]json.RawMessage
 		var parent string
-		if json.Unmarshal(raw, &fields) != nil {
-			return RecordPage{}, notFound
+		if json.Unmarshal(platform.Raw(view.Record), &fields) != nil {
+			return nil, notFound
 		}
-		if len(fields[link.Via]) == 0 && !link.Required {
-			return RecordPage{Records: []any{}, Total: 0}, nil
+		if len(fields[link.Via]) > 0 && json.Unmarshal(fields[link.Via], &parent) != nil {
+			return nil, notFound
 		}
-		if json.Unmarshal(fields[link.Via], &parent) != nil {
-			return RecordPage{}, notFound
+		if parent != "" {
+			if _, err := t.RecordOf(m, link.Parent.Name, parent, now); err != nil {
+				return nil, notFound
+			}
 		}
-		if parent == "" {
-			return RecordPage{Records: []any{}, Total: 0}, nil
-		}
-		if _, err := t.RecordOf(m, link.Parent.Name, parent, now); err != nil {
-			return RecordPage{}, notFound
-		}
-		typ = link.Parent.Name
 		domain = append(domain, []any{"id", "=", parent})
 	}
-	q.Domain = platform.Raw(domain)
+	return platform.Raw(domain), nil
+}
+func (t *Tenant) TraverseLink(m platform.Member, binding platform.AssetBinding, direction, id string, q platform.Query, now time.Time) (RecordPage, *kernel.Error) {
+	link := t.visibleLink(m, binding)
+	if link == nil {
+		return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Link type or start record is unavailable")
+	}
+	typ := link.Child.Name
+	if direction == "reverse" {
+		typ = link.Parent.Name
+	}
+	q.Traversal = &platform.LinkTraversal{Binding: binding, Direction: direction, ID: id}
 	return t.Records(m, typ, q, now)
 }

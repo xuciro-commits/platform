@@ -147,8 +147,8 @@ function ChartWidget({ page, section, kpi, narrowed, sharedFilter, master, windo
   if(section.collectionVariable){
     if(!window)return <Panel role={collection?.status==="error"?"alert":"status"}>{t(collection?.status==="error"?collection.code:"Query window is unavailable.")}</Panel>;
     if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;
-    const {domain,search,set,archived}=window.query;
-    const spec=chartSpec(page,section,kpi,domain??[]);spec.data={entity:objectOf(page,section),domain,search,set,archived};
+    const {domain,search,set,archived,traversal}=window.query;
+    const spec=chartSpec(page,section,kpi,domain??[]);spec.data={entity:objectOf(page,section),domain,search,set,archived,traversal};
     return <Chart spec={spec} frame={false} height={kpi?120:240} source={aggregate?{aggregate,scope:aggregateScope,revision:source.revision}:undefined}/>;
   }
   const type = objectOf(page, section);
@@ -441,7 +441,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const queryParents = new Map<string, string>();
   for (const section of page.sections ?? []) {
     const type = objectOf(page, section);
-    if (section.widget !== "table" || type === masterType && !section.parentSelection || !(section.relation || section.parentSelection || relatedField(source.entity(type)?.fields, page, section))) continue;
+    if (section.collectionVariable || section.widget !== "table" || type === masterType && !section.parentSelection || !(section.relation || section.parentSelection || relatedField(source.entity(type)?.fields, page, section))) continue;
     const parent = selectionSlot(page,section,true), child = selectionSlot(page,section);
     if (!children.has(parent)) children.set(parent, new Set());
     children.get(parent)!.add(child);
@@ -452,6 +452,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   for(const section of page.sections??[]){if(section.widget!=="table")continue;const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
   for(const section of page.sections??[]){if(section.widget!=="table")continue;const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
   for(const section of page.sections??[]){if(section.filterVariable&&section.widget==="table"){const key=section.id??`section:${page.sections!.indexOf(section)}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
+  for(const [id,q] of Object.entries(page.document?.queries??{})){const v=initialVariables[q.for?.variable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);if(q.query?.ref.kind!=="link-type"||v?.source?.kind!=="record"||!producer)continue;const parent=selectionSlot(page,producer);queryParents.set(planKey(id),parent);for(const child of querySelections.get(planKey(id))??[]){if(!children.has(parent))children.set(parent,new Set());(children.get(parent) as Set<string>).add(child);}}
   const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents, querySelections, ...(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?filterSessionBindings(page):{}), overlayScopes:overlaySessionScopes(page) });
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);

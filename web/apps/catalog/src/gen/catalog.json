@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:d7ad92aad48e37b8",
+  "revision": "sha256:4d65eb9c5690124f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2085,6 +2085,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
@@ -2129,6 +2130,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
@@ -2213,6 +2215,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/LayoutTree.tsx",
@@ -2292,6 +2295,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
@@ -2347,6 +2351,7 @@
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/function.tsx",
+      "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/workflow.tsx",
@@ -2403,6 +2408,7 @@
     ],
     "app/semantic-selection": [
       "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",

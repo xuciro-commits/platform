@@ -94,3 +94,11 @@ test("item queries never broaden an unavailable parent into an object read and s
  const compile=plans=>Object.fromEntries(compileQueryPlans(plans,variables,()=>values,()=>info,()=>named,contract)).combined;
  assert.equal(compile(plans).status,"value");assert.equal(compile({...plans,right:{...plan,query:undefined,for:undefined}}).status,"error");assert.equal(compile({...plans,right:{...plan,itemOwner:"other"}}).status,"error");
 });
+
+test("relation plans keep retained versions and typed starts instead of broadening empty or refused input",()=>{
+ const parent={app:"sample",kind:"object",name:"sample.parent"},child={app:"sample",kind:"object",name:"sample.child"},binding={ref:{app:"sample",kind:"link-type",name:"children"},sourceVersion:"l1"},link={name:"children",parent,child,via:"parent"},definition={ref:binding.ref,version:"l2",linkType:{...link,title:"new"},linkVersions:{l1:link}};
+ const variables={start:{scope:"page",type:"record",mode:"resource",source:{kind:"record",section:"parents"}}},values={start:{status:"value",value:{kind:"record",reference:{object:parent.name,id:"A"}}}},plan={object:child,query:binding,direction:"forward",for:{variable:"start"},limit:1},info={type:child.name,fields:[{name:"parent",type:"reference",ref:parent.name}]};
+ const result=compileQueryPlan(plan,variables,values,info,definition,contract);assert.equal(result.status,"value");assert.deepEqual(result.query.traversal,{binding,direction:"forward",id:"A"});assert.deepEqual(result.query.domain,[]);
+ for(const status of ["empty","pending","error"])assert.equal(compileQueryPlan(plan,variables,{start:{status,code:"Denied"}},info,definition,contract).status,status);
+ assert.equal(compileQueryPlan(plan,variables,values,info,{...definition,linkVersions:{}},contract).status,"error");assert.equal(compileQueryPlan({...plan,object:parent},variables,values,{type:parent.name,fields:[]},definition,contract).status,"error");
+});

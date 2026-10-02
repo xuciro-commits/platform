@@ -35,7 +35,7 @@ export type Channels = {
 
 /** Where the rows come from: an entity type's records, aggregated by the host with the member's scope, or inline values. */
 export type ChartData =
-  | { entity: string; domain?: unknown[]; search?: string; archived?: boolean; set?:Api.QuerySet }
+  | { entity: string; domain?: unknown[]; search?: string; archived?: boolean; set?:Api.QuerySet;traversal?:Api.LinkTraversal }
   | { values: Record<string, unknown>[] };
 
 export type ChartSpec = {
@@ -72,8 +72,8 @@ export function aggregateQuery(spec: ChartSpec): AggregateQuery | undefined {
     const list = e.aggregate ? measures : groups;
     if (column && !list.includes(column)) list.push(column);
   }
-  const { domain, search, archived, set } = spec.data;
-  return { domain, search, archived, ...(set?{set}:{}), groups, measures: measures.length ? measures : ["count"] };
+  const { domain, search, archived, set, traversal } = spec.data;
+  return { domain, search, archived, ...(traversal?{traversal}:{}), ...(set?{set}:{}), groups, measures: measures.length ? measures : ["count"] };
 }
 
 const bucket = (value: unknown, unit: TimeUnit): string => {

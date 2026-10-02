@@ -68,7 +68,8 @@ test("typed page calls transfer a loop record, return output and expire after re
     await operation.screenshot({path:testInfo.outputPath("page-call-returned-narrow.png"),fullPage:true});
     await operation.setViewportSize({width:1280,height:720});
   }
-  await operation.route(`**/v1/records/${type}/${b}`,route=>route.fulfill({status:403,contentType:"application/json",body:JSON.stringify({error:"Denied"})}));
+  // Deny the receiving page input while leaving caller card refreshes readable.
+  await operation.route(`**/v1/records/${type}/${b}`,route=>new URLSearchParams(operation.url().split("?")[1]).get("name")===`${name}detail`?route.fulfill({status:403,contentType:"application/json",body:JSON.stringify({error:"Denied"})}):route.continue());
   await second.getByRole("button",{name:"Open handler",exact:true}).click();
   await expect(operation.getByRole("alert").filter({hasText:"A page record input is unavailable."})).toBeVisible();await expect(operation.getByRole("button",{name:"Complete note",exact:true})).toHaveCount(0);
   await operation.unroute(`**/v1/records/${type}/${b}`);

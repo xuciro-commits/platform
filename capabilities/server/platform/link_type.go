@@ -2,6 +2,12 @@ package platform
 
 import "fmt"
 
+type LinkTraversal struct {
+	Binding   AssetBinding `json:"binding"`
+	Direction string       `json:"direction"`
+	ID        string       `json:"id"`
+}
+
 // LinkType names a reference-backed relationship. Its instances remain in the
 // child object's scalar field; this declaration grants no extra write rights.
 type LinkType struct {
@@ -47,4 +53,11 @@ func (d Definition) LinkVersion(version string) *Definition {
 	d.LinkType = &l
 	d.LinkVersions = nil
 	return &d
+}
+
+func (d Definition) QuerySourceVersion(version string) *Definition {
+	if d.Ref.Kind == AssetLinkType {
+		return d.LinkVersion(version)
+	}
+	return d.QueryVersion(version)
 }

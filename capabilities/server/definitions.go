@@ -495,12 +495,20 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						if q.Query != nil {
 							for i := range t.definitions {
 								if t.definitions[i].Ref == q.Query.Ref {
-									named = t.definitions[i].QueryVersion(q.Query.SourceVersion)
+									named = t.definitions[i].QuerySourceVersion(q.Query.SourceVersion)
 									break
 								}
 							}
 						}
-						if page.CheckQuerySchema(q, info, named) == nil && (named == nil || checkNamedQuery(*named.Query, info) == nil) {
+						if named != nil && named.LinkType != nil {
+							l := named.LinkType
+							parent, pok := entities[l.Parent.Name]
+							child, cok := entities[l.Child.Name]
+							if !pok || !cok || l.CheckSchema(parent, child) != nil {
+								named = nil
+							}
+						}
+						if page.CheckQuerySchema(q, info, named) == nil && (named == nil || named.LinkType != nil || named.Query != nil && checkNamedQuery(*named.Query, info) == nil) {
 							doc.Queries[id] = q
 						}
 					}
@@ -579,9 +587,17 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			if q.Query != nil {
 				for _, d := range out {
 					if d.Ref == q.Query.Ref {
-						named = d.QueryVersion(q.Query.SourceVersion)
+						named = d.QuerySourceVersion(q.Query.SourceVersion)
 						break
 					}
+				}
+			}
+			if named != nil && named.LinkType != nil {
+				l := named.LinkType
+				parent, pok := entities[l.Parent.Name]
+				child, cok := entities[l.Child.Name]
+				if !pok || !cok || l.CheckSchema(parent, child) != nil {
+					named = nil
 				}
 			}
 			if !ok || application.QueryPage().CheckQuerySchema(q, info, named) != nil {

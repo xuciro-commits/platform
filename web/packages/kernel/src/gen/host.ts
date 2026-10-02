@@ -98,6 +98,7 @@ export type Aggregate = {
 };
 
 export type AggregateQuery = {
+  traversal?: LinkTraversal;
   set?: QuerySet;
   domain?: unknown;
   search?: string;
@@ -699,6 +700,12 @@ export type Link = {
   at: string;
 };
 
+export type LinkTraversal = {
+  binding: AssetBinding;
+  direction: string;
+  id: string;
+};
+
 export type LinkType = {
   name: string;
   title: string;
@@ -961,6 +968,7 @@ export type PagePort = {
 };
 
 export type PageQuery = {
+  direction?: string;
   itemOwner?: string;
   set?: PageQuerySet;
   owner?: string;
@@ -1131,6 +1139,7 @@ export type Provider = {
 };
 
 export type Query = {
+  traversal?: LinkTraversal;
   set?: QuerySet;
   domain?: unknown;
   search?: string;
@@ -1594,7 +1603,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.21",
+  "uiProfile": "platform.page.v2.22",
   "widgets": [
     {
       "componentID": "table",
@@ -2111,7 +2120,8 @@ export const pageUIManifest = {
     "platform.page.v2.18",
     "platform.page.v2.19",
     "platform.page.v2.20",
-    "platform.page.v2.21"
+    "platform.page.v2.21",
+    "platform.page.v2.22"
   ],
   "runtime": {
     "scope": "page",

@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "The relation version or start record is unavailable.": "关系版本或起点记录不可用。",
+  "Relation target object is incompatible.": "关系目标对象不兼容。",
+  "Relation start record is incompatible.": "关系起点记录不兼容。",
+  "A relation cannot be a set predicate source.": "关系暂不能作为集合谓词来源。",
+
   "Count read budget exceeded.": "计数读取超出预算。",
   "Count result is invalid.": "计数结果无效。",
   "Aggregate needs only a count query source": "聚合只需声明计数查询来源",

@@ -5,7 +5,7 @@ import { Button, Card, PageHeader, Select, StatusTag, t } from "@platform/ui";
 import { apiErrorMessage, type Api } from "@platform/kernel";
 import { useState } from "react";
 
-export type ReleaseKind = "object" | "page" | "app" | "flow" | "query" | "function" | "compute";
+export type ReleaseKind = "object" | "page" | "app" | "flow" | "link-type" | "query" | "function" | "compute";
 type Record = { id: string; title: string; name: string; state: string };
 type EvaluationPlan = { id: string; title: string; function?: string; evaluation?: unknown[] };
 type EvaluationReport = { id: string; candidate: string; function: string; state: string; quality: number; costUsd: number; costComplete: boolean; peakLatencyMillis: number; attempts: unknown[] };
@@ -14,6 +14,7 @@ const kinds: { kind: ReleaseKind; type: string; label: string }[] = [
   { kind: "page", type: "build.page", label: "Pages" },
   { kind: "app", type: "build.app", label: "Applications" },
   { kind: "flow", type: "build.process", label: "Workflows" },
+  {kind:"link-type",type:"build.linktype",label:"Relationships"},
   { kind: "query", type: "build.query", label: "Queries" },
   { kind: "function", type: "build.function", label: "AI functions" },
   { kind: "compute", type: "build.code", label: "Code functions" },

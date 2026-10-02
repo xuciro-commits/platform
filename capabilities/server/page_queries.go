@@ -51,9 +51,17 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		if q.Query != nil {
 			for i := range t.definitions {
 				if t.definitions[i].Ref == q.Query.Ref {
-					named = t.definitions[i].QueryVersion(q.Query.SourceVersion)
+					named = t.definitions[i].QuerySourceVersion(q.Query.SourceVersion)
 					break
 				}
+			}
+		}
+		if named != nil && named.LinkType != nil {
+			l := named.LinkType
+			parent, pok := t.entity(l.Parent.Name)
+			child, cok := t.entity(l.Child.Name)
+			if !pok || !cok || l.CheckSchema(parent, child) != nil {
+				return fmt.Errorf("link source schema is unavailable")
 			}
 		}
 		if err := p.CheckQuerySchema(q, object, named); err != nil {

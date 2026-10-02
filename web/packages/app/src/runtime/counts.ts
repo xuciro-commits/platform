@@ -3,8 +3,8 @@ import type {VariableResult} from "./variables";
 
 /** Complete predicates only: a source window never limits membership. */
 export function countQuery(query:RecordQuery):AggregateQuery {
- const {domain,search,set,archived}=query;
- return {domain,search,set,archived,measures:["count"]};
+ const {domain,search,set,archived,traversal}=query;
+ return {domain,search,set,archived,traversal,measures:["count"]};
 }
 export function countValue(data:AggregateData):VariableResult {
  if(!data||typeof data!=="object"||data.columns?.length!==1||data.columns[0]?.name!=="count"||data.columns[0]?.kind!=="measure"||data.columns[0]?.type!=="quantitative"||!Array.isArray(data.rows)||data.rows.length>1)return {status:"error",code:"Count result is invalid."};
