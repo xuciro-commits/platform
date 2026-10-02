@@ -39,6 +39,7 @@ export type ChartData =
   | { values: Record<string, unknown>[] };
 
 export type ChartSpec = {
+  metric?:Api.PageMetricPresentation;
   title?: string;
   description?: string;
   data: ChartData;

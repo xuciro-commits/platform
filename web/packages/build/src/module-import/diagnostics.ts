@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "metric-aggregate-profile":"Metric cards need one supported complete-collection count or explicitly mapped aggregate definition.",
+ "metric-aggregate-binding":"Choose an original measure and a supported fixed equality condition; preserve the source collection and its permissions.",
+ "native-metric-aggregate":"Metric cards read original complete-collection aggregates. Source aggregate names are explicitly mapped; styles do not run scripts, compute history or export a new scalar variable.",
+ "metric-presentation-profile":"Metric presentation needs supported styles and bounded units; static trends and unsupported formats require correction.",
  "status-tracker-profile":"Status trackers need an original lifecycle field and bounded explicit stages.",
  "status-tracker-binding":"Map every displayed stage to a unique original lifecycle state.",
  "native-lifecycle-status":"Stage labels use original lifecycle metadata. Only the current state is highlighted; array order does not prove completed history or grant transitions.",

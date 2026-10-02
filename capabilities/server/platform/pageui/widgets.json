@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.39",
+  "uiProfile": "platform.page.v2.40",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -1278,7 +1278,8 @@
     "platform.page.v2.36",
     "platform.page.v2.37",
     "platform.page.v2.38",
-    "platform.page.v2.39"
+    "platform.page.v2.39",
+    "platform.page.v2.40"
   ],
   "runtime": {
     "scope": "page",
@@ -1607,6 +1608,25 @@
     "statusTracker": {
       "requiredUIProfile": "platform.page.v2.39",
       "maxStages": 32
+    },
+    "metricPresentation": {
+      "requiredUIProfile": "platform.page.v2.40",
+      "maxUnitBytes": 64,
+      "formatters": [
+        "number",
+        "short"
+      ],
+      "variants": [
+        "card",
+        "simple",
+        "tag"
+      ],
+      "tones": [
+        "neutral",
+        "warning",
+        "danger",
+        "success"
+      ]
     }
   },
   "layout": {

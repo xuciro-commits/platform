@@ -32,7 +32,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	submit(build.ObjectType, "O", "create", map[string]any{"name": "note", "title": "Notes", "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
+	submit(build.ObjectType, "O", "create", map[string]any{"name": "note", "title": "Notes", "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}, {Name: "amount", Title: "Amount", Type: "decimal"}, {Name: "sensitive", Title: "Sensitive", Type: "decimal", Read: []string{build.Builder}}}})
 	submit(build.ObjectType, "O", "publish", map[string]any{})
 	submit(build.ObjectType, "private-object", "create", map[string]any{"name": "private", "title": "Private", "states": []build.State{{Name: "open", Title: "Private open"}, {Name: "done", Title: "Private done"}}, "access": []build.Access{{Role: build.User, Read: "none"}}, "fields": []build.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "parent", Title: "Parent", Type: "reference", Ref: "build.note", Inverse: "privateitems"}}})
 	submit(build.ObjectType, "private-object", "publish", map[string]any{})
@@ -85,6 +85,16 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		}
 		sections = append(sections, build.Section{ID: id, Widget: "status-tracker", ConfigVersion: 1, Object: object, StatusTracker: &platform.PageStatusTracker{Field: "state", Stages: []string{"done", "open"}}})
 	}
+	doc.Queries = map[string]platform.PageQuery{"metricq": {Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.note"}, Limit: 1}}
+	doc.Variables["metricWindow"] = platform.PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "metricq"}}
+	for _, field := range []string{"amount", "sensitive"} {
+		id := "metric_" + field
+		doc.Nodes[id] = platform.PageLayoutNode{Kind: "widget", Section: id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: id, Widget: "metric", ConfigVersion: 1, CollectionVariable: "metricWindow", Measure: "avg:" + field, MetricPresentation: &platform.PageMetricPresentation{Suffix: "%", Formatter: "number", Variant: "card", Tone: "success"}})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -100,6 +110,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[2].RecordView = &platform.PageRecordView{Tabs: []string{"properties"}}
 	sections[3].Buttons[0].Title = "Later draft title"
 	sections[5].RecordLinks[0].Title = "Later links"
+	sections[8].MetricPresentation = &platform.PageMetricPresentation{Prefix: "Later", Formatter: "short", Variant: "tag", Tone: "danger"}
 	sections[6].StatusTracker = &platform.PageStatusTracker{Field: "state", Stages: []string{"open"}}
 	doc.Events = nil
 	submit(build.PageType, "P", "edit", map[string]any{"sections": sections, "document": doc})
@@ -116,6 +127,21 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					wantGroups := 3
 					if member.ID == reader.ID {
 						wantGroups = 1
+					}
+					metric, hiddenMetric := false, false
+					for _, section := range d.Page.Sections {
+						if section.ID == "metric_amount" {
+							metric = true
+							if section.MetricPresentation.Suffix != "%" || section.MetricPresentation.Prefix != "" || section.Measure != "avg:amount" {
+								t.Fatal("frozen metric changed")
+							}
+						}
+						if section.ID == "metric_sensitive" {
+							hiddenMetric = true
+						}
+					}
+					if !metric || hiddenMetric != (member.ID == builder.ID) {
+						t.Fatal("metric member field projection changed")
 					}
 					var links platform.Section
 					status, privateStatus := false, false

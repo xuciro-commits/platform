@@ -988,6 +988,14 @@ export type PageLoop = {
   limit: number;
 };
 
+export type PageMetricPresentation = {
+  prefix?: string;
+  suffix?: string;
+  formatter: string;
+  variant: string;
+  tone: string;
+};
+
 export type PageNavigation = {
   page: AssetRef;
   interfaceVersion: number;
@@ -1373,6 +1381,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  metricPresentation?: PageMetricPresentation;
   statusTracker?: PageStatusTracker;
   recordLinks?: PageRecordLink[];
   buttons?: PageButton[];
@@ -1700,7 +1709,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.39",
+  "uiProfile": "platform.page.v2.40",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2979,7 +2988,8 @@ export const pageUIManifest = {
     "platform.page.v2.36",
     "platform.page.v2.37",
     "platform.page.v2.38",
-    "platform.page.v2.39"
+    "platform.page.v2.39",
+    "platform.page.v2.40"
   ],
   "runtime": {
     "scope": "page",
@@ -3308,6 +3318,25 @@ export const pageUIManifest = {
     "statusTracker": {
       "requiredUIProfile": "platform.page.v2.39",
       "maxStages": 32
+    },
+    "metricPresentation": {
+      "requiredUIProfile": "platform.page.v2.40",
+      "maxUnitBytes": 64,
+      "formatters": [
+        "number",
+        "short"
+      ],
+      "variants": [
+        "card",
+        "simple",
+        "tag"
+      ],
+      "tones": [
+        "neutral",
+        "warning",
+        "danger",
+        "success"
+      ]
     }
   },
   "layout": {

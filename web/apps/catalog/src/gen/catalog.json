@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:9ce4cbdaa0fd816d",
+  "revision": "sha256:780cb5daf361811b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2420,6 +2420,7 @@
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/InlineActionInspector.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",

@@ -480,7 +480,15 @@ F1e11在v2.39注册status-tracker/configVersion=1，消费原recordVariable或�
 
 共享RecordStatus使用原RecordPage读取、作用域与迟到响应清理，复用StatusBar的阶段呈现模式。只高亮真实记录的当前状态并以aria-current标识；其他阶段不按位置标记成功或已完成。阶段列表是展示顺序，允许分支/回退，不代表执行历史。合法当前状态不在展示子集时明确提示，不能回退为首项；字段或声明不可读时不显示阶段标题。组件不传入转换回调或授予动作权限，原动作仍由原确认/表单owner执行；动作完成后的受权刷新更新状态。窄屏自然换行。检查器选择原字段和显示阶段，配置沿原历史/保存/profile升级；复制保留原字段与阶段顺序，重写自身记录生产者。成员投影在源对象/字段不可见时移除整组件及配置，记录/成员/定义或拥有根退役继续原清理路径。
 
-源StatusTracker的objectVarId绑定原记录资源，activeProp必须显式映射到原生命周期字段，stages逐项映射为唯一原状态。阶段标题使用原生命周期元数据；报告要求确认来源先前项“已完成”推断被替换为仅当前项高亮，原JSON保留。未知配置、未映射/重复状态、任意普通字段及无生命周期对象阻止导入，不执行来源Ontology转换。机器清单当前12类源组件开放有限profile，完整92类型及更广工作进度/真实历史展示仍待后续。实现边界归§14。
+源StatusTracker的objectVarId绑定原记录资源，activeProp必须显式映射到原生命周期字段，stages逐项映射为唯一原状态。阶段标题使用原生命周期元数据；报告要求确认来源先前项“已完成”推断被替换为仅当前项高亮，原JSON保留。未知配置、未映射/重复状态、任意普通字段及无生命周期对象阻止导入，不执行来源Ontology转换。机器清单增加StatusTracker有限profile，完整92类型及更广工作进度/真实历史展示仍待后续。实现边界归§14。
+
+### 6.32 真实聚合指标卡与MetricCard迁移
+
+F1e12在v2.40扩展原metric的metricPresentation={prefix,suffix,formatter,variant,tone}，不新增指标执行器。单位各最多64 UTF-8字节，formatter为number/short，variant为card/simple/tag，tone为neutral/warning/danger/success；short以K/M简写有符号数值。声明只用于metric且须有V2文档和新profile。度量沿原count/sum/avg/min/max及可读数字字段；money保持原按币种/最小单位呈现，不允许short覆盖其货币语义。检查器沿原历史/保存编辑单位、格式及呈现，候选、反向Build转换和复制保留配置；成员不可见的原度量或查询条件沿原聚合/页面闭包裁剪，不恢复隐藏字段。
+
+共享Chart/Kpi通过原规范ChartSpec的metric呈现参数显示单位、固定格式及语义色调；样式变化不发起新读取。原聚合按完整查询/集合执行，去除窗口limit/offset/sort，不用客户端窗口行数求指标；查询变化、成员/定义和拥有根变化沿原Chart/查询会话丢弃旧数据及迟到响应。读取失败显示原错误；新呈现配置下空计数为0，空数值度量显示“—”，不能把不存在的均值说成0。源码中的静态趋势文本没有真实历史依据，不能因此声明计算趋势或授予点击动作。
+
+源MetricCard首profile支持numeric变量的单个cardinality转换，或单个objectSetAggregation/aggregate声明；输入须为已支持的原集合。cardinality明确转换为原count；来源by名称不作为代码解释，构建者显式选择原度量，并可附加一个类型匹配的固定等值条件。附加条件生成自身原生计划，叠加原条件和精确保留查询版本，不改其他消费者的集合。label成为组件标题，单位及card/simple/tag、固定数值/简写格式和语义色调映射上述声明。报告说明原聚合、呈现和变量范围差异；此profile将来源numeric声明编译为原metric集合/度量绑定，不导出新的页面标量变量。未知配置、静态趋势/交互动作、函数、更多转换、错误类型/单位预算或未映射聚合阻止导入，原文保留；更多聚合变量复用与真实趋势另按原owner后续扩展。机器清单当前13类源组件开放有限profile，完整92类型仍未完成。实现边界归§14。
 
 ## 7. 本体设计台与平台语义融合（D5）
 
@@ -665,7 +673,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 兼容转换是规范加载入口中的纯转换，不形成第二套编辑器/渲染器。一次性导入适配在迁移结束后退出常规运行路径。
 
-首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。十二类组件为ObjectTable→Table、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button、ButtonGroup→§6.29的ButtonGroup、Links→§6.30的RecordLinks及StatusTracker→§6.31的StatusTracker，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
+首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。十三类组件为ObjectTable→Table、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button、ButtonGroup→§6.29的ButtonGroup、Links→§6.30的RecordLinks、StatusTracker→§6.31的StatusTracker及MetricCard→§6.32的Metric，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
 
 原文件按输入文本保留在报告中，可原样下载；映射报告包含完整来源、绑定、定位诊断、身份重写及原生草稿。应用是原DraftSession的一次可撤销替换，不提交业务操作、不自动保存；再次打开导入窗口可在同一编辑作用域下载报告。报告不是平台资产，离开编辑器或切换成员前须下载保留。选择页面之外的页面、页头、流程和未引用内容明确保留在报告但不执行，原导航由工作区提供；可识别的原生展示差异需勾选确认。未知配置、未知组件、未支持的选择/编辑配置、不兼容作用域和执行定义阻止应用。源变量虽是Module全局值，本profile不复制跨根局部变量：记录资源按生产者归属，页面选中记录可供浮层读取，浮层选中记录不能逃到页面；浮层独占状态转为关闭重置的原生局部状态并给出确认警告，静态值跨根共享需后续显式映射。Loop、更广动态转换、源应用拆分、接口、更广变量/事件及92类型完整配置转换仍待后续。
 
@@ -842,6 +850,8 @@ Module页面导入（F1e–F1e2）已接通§10.1的八类组件有限profile、
 
 独立关联组件（F1e10，v2.38）已接通§6.30的record-links、显式分组/标题检查器、原记录输入和Links有限导入，源Links开放有限profile。Go验证profile/预算/重复/错误字段和缺文档、关联对象候选依赖及冻结引用模式；冻结后修改草稿、成员隐藏目标/引用字段裁剪、CheckReplay及内存快照保留原分组。共享UI验证原受权窗口/total、显式匹配、隐藏字段/标题裁剪、原记录打开及成员切换清理，原RecordPage/记录工作区继续通过。导入覆盖linkTypes/linkTypeApiNames的显式映射、未知字段/目标/输出与重复映射拒绝；复制保留关联声明并重写本地记录来源。浏览器验证导入映射、专属检查器标题/空组保存拒绝、保存/冻结后新草稿不改标题、真实关联记录及成员字段裁剪、输入记录切换、原Workspace记录导航、Overlay关闭重开复位与刷新；普通/窄屏已观察，全量Web路线通过。更广关系形态和完整源Links、负责人视觉认可、生产性能及真实PostgreSQL恢复仍未提供或验证。
 
-生命周期状态跟踪（F1e11，v2.39）已接通§6.31的status-tracker、原字段/状态检查器与显式StatusTracker导入；当前12类源组件开放有限profile。Go校验profile、缺文档/错误Widget/空或重复阶段、原字段/状态及候选闭包，冻结后修改草稿、成员隐藏对象裁剪、CheckReplay及内存快照保留原阶段顺序；不可读字段与失效原状态拒绝。共享UI验证当前项语义标识、无转换控件、子集外状态提示和不可读字段不展示标题，原记录/关联/标签路线仍执行。导入覆盖字段/逐项状态映射及未映射/重复/错误来源拒绝，复制保留声明并重写本地记录生产者。浏览器验证默认四阶段配置→映射/检查器空列表保存拒绝→保存/冻结后新草稿不改阶段，实际记录切换、点击阶段不写业务状态、原动作完成后高亮更新、Overlay关闭重开及刷新；普通/窄屏已观察。更广工作进度及真实完成历史、负责人视觉认可、生产性能和真实PostgreSQL恢复仍未提供或验证。
+生命周期状态跟踪（F1e11，v2.39）已接通§6.31的status-tracker、原字段/状态检查器与显式StatusTracker导入；StatusTracker开放有限profile。Go校验profile、缺文档/错误Widget/空或重复阶段、原字段/状态及候选闭包，冻结后修改草稿、成员隐藏对象裁剪、CheckReplay及内存快照保留原阶段顺序；不可读字段与失效原状态拒绝。共享UI验证当前项语义标识、无转换控件、子集外状态提示和不可读字段不展示标题，原记录/关联/标签路线仍执行。导入覆盖字段/逐项状态映射及未映射/重复/错误来源拒绝，复制保留声明并重写本地记录生产者。浏览器验证默认四阶段配置→映射/检查器空列表保存拒绝→保存/冻结后新草稿不改阶段，实际记录切换、点击阶段不写业务状态、原动作完成后高亮更新、Overlay关闭重开及刷新；普通/窄屏已观察。更广工作进度及真实完成历史、负责人视觉认可、生产性能和真实PostgreSQL恢复仍未提供或验证。
 
-F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和十二类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+真实指标卡（F1e12，v2.40）已接通§6.32的原metric呈现、专属检查器及MetricCard有限导入，当前13类源组件开放有限profile。Go拒绝旧profile/缺文档/错误Widget/单位预算及失效度量，候选冻结后改草稿、成员隐藏度量裁剪、CheckReplay与内存快照保留配置。共享UI验证单位、有符号简写、样式改变不重新读取及空计数/空均值区别，原查询/成员变化和迟到响应路线保持。导入验证cardinality、显式原数值聚合及附加条件，拒绝未映射、静态趋势和错误配置；复制保留原度量/呈现并重写集合计划。浏览器验证620条真实记录在单条窗口下的全集计数/均值、固定等值计数、GUI映射与静态趋势拒绝、检查器单位修改、原保存/冻结后新草稿不改单位或度量、隐藏字段指标裁剪、分页不重算、空筛选、读取拒绝和刷新。普通/窄屏已观察，全量Web路线通过。更广来源变量/趋势/格式、负责人视觉认可、生产性能及真实PostgreSQL恢复仍未提供或验证。
+
+F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和十三类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

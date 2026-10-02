@@ -76,12 +76,13 @@ export function Chart({ spec, source, height = 260, frame = true }: { spec: Char
 function Kpi({ spec, data }: { spec: ChartSpec; data: AggregateData }) {
   const e = spec.encoding.theta ?? spec.encoding.y ?? spec.encoding.x ?? { type: "quantitative" as const, aggregate: "count" as const };
   const column = columnOf(e);
-  const fmt = formatter(e, data.columns);
+  const fmt = formatter(e, data.columns),display=spec.metric,tone=display?.tone??"neutral",color=({warning:"text-[var(--tone-warning)]",danger:"text-[var(--tone-danger)]",success:"text-[var(--tone-success)]",neutral:""} as Record<string,string>)[tone]??"";
+  const format=(value:unknown,row:Record<string,unknown>)=>{if(display&&value==null)return `${display.prefix??""}\u2014${display.suffix??""}`;const numeric=typeof value==="number"&&Number.isFinite(value),short=display?.formatter==="short"&&!data.columns.find(c=>c.name===column)?.money&&numeric;return `${display?.prefix??""}${short?(Math.abs(value)>=1e6?`${(value/1e6).toFixed(1)}M`:Math.abs(value)>=1e3?`${(value/1e3).toFixed(1)}K`:fmt(value,row)):fmt(value,row)}${display?.suffix??""}`;};
   // One value per currency when the measure is money.
   return (
     <div className="flex flex-wrap gap-4">
       {(data.rows.length ? data.rows : [{}]).map((r, i) => (
-        <span key={i} className="text-2xl font-semibold tabular-nums">{fmt(data.rows.length ? r[column] : 0, r)}</span>
+        <span key={i} className={"font-semibold tabular-nums "+color+" "+(display?.variant==="tag"?"rounded-md border border-border px-2 py-1 text-sm":"text-2xl")}>{format(data.rows.length ? r[column] : display&&e.aggregate!=="count"?undefined:0, r)}</span>
       ))}
     </div>
   );

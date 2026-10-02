@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.MetricPresentation != nil {
+				return fmt.Errorf("metric presentation requires a document")
+			}
 			if s.Widget == "status-tracker" || s.StatusTracker != nil {
 				return fmt.Errorf("status tracker requires a document")
 			}
@@ -144,6 +147,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		byID[section.ID] = true
 		if err := d.checkButtonGroup(section); err != nil {
+			return err
+		}
+		if err := d.checkMetricPresentation(section); err != nil {
 			return err
 		}
 		if err := d.checkStatusTracker(section); err != nil {

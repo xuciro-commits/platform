@@ -130,9 +130,9 @@
       "sourceType": "MetricCard",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
+      "status": "profile",
       "target": "metric",
-      "reason": "config-or-capability-profile-required"
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ChartXY",

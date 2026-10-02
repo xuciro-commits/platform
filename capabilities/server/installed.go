@@ -298,6 +298,9 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 		}
 
+		if err := s.CheckMetricPresentation(info); err != nil {
+			return err
+		}
 		if s.DetailPresentation != nil && p.Document == nil {
 			return fmt.Errorf("detail presentation requires a document")
 		}
