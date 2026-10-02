@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Allow selection updates": "允许更新选择",
+  "Shared record selection": "共享记录选择",
+  "Keep selection in this page": "在本页面保留选择",
   "Query scope": "查询作用域",
   "This widget reads the bound record selection.": "此组件读取绑定的记录选择。",
   "The local example uses synthetic query and object descriptors. Save and publication cannot reach a host.": "本地示例使用合成查询与对象描述，保存和发布无法访问宿主。",

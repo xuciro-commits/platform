@@ -432,6 +432,14 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 				if page.Document != nil {
 					doc := *page.Document
 					doc.Queries = map[string]platform.PageQuery{}
+					doc.Variables = maps.Clone(doc.Variables)
+					for id, v := range doc.Variables {
+						if v.Mode == "shared" && v.Type == "record" && v.Source != nil && v.Source.Object != nil {
+							if _, ok := entities[v.Source.Object.Name]; !ok {
+								delete(doc.Variables, id)
+							}
+						}
+					}
 					for id, q := range page.Document.Queries {
 						info, ok := entities[q.Object.Name]
 						if !ok {
@@ -539,8 +547,13 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			for id, v := range application.Variables {
 				missing := false
 				if v.Mode == "resource" && v.Source != nil {
-					_, ok := application.Queries[v.Source.Query]
-					missing = !ok
+					if v.Source.Kind == "record" && v.Source.Object != nil {
+						_, ok := entities[v.Source.Object.Name]
+						missing = !ok
+					} else {
+						_, ok := application.Queries[v.Source.Query]
+						missing = !ok
+					}
 				}
 				if v.Expression != nil {
 					for _, arg := range v.Expression.Args {

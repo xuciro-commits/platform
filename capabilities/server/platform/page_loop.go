@@ -137,9 +137,15 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		if owner != "" && slices.Contains(contract.RecordWidgets, section.Widget) && section.RecordVariable != d.Nodes[owner].Loop.ItemVariable {
 			return fmt.Errorf("page loop section %s must bind its item record", section.ID)
 		}
+		if section.SelectionVariable != "" {
+			v := d.Variables[section.SelectionVariable]
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.14") || section.Widget != "table" || owner != "" || sectionOverlays[section.ID] != "" || section.Selection != "" || v.Type != "record" || v.Mode != "shared" || !v.Writable {
+				return fmt.Errorf("page section %s needs a writable shared record output on a root table", section.ID)
+			}
+		}
 		if section.RecordVariable != "" {
 			v := d.Variables[section.RecordVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || (owner == "" || v.Scope != "loop-item" || v.Owner != owner) && !(v.Scope == "page" && v.Mode == "input") && !(v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && accessible(section.RecordVariable, "", sectionOverlays[section.ID]) && PageUIProfileSupports(d.UIProfile, "platform.page.v2.11")) || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") || (owner == "" || v.Scope != "loop-item" || v.Owner != owner) && !(v.Scope == "page" && v.Mode == "input") && !(v.Scope == "application" && v.Mode == "shared" && v.Source != nil && v.Source.Object != nil && PageUIProfileSupports(d.UIProfile, "platform.page.v2.14")) && !(v.Mode == "resource" && v.Source != nil && v.Source.Kind == "record" && accessible(section.RecordVariable, "", sectionOverlays[section.ID]) && PageUIProfileSupports(d.UIProfile, "platform.page.v2.11")) || v.Type != "record" || section.Selection != "" || !slices.Contains(contract.RecordWidgets, section.Widget) {
 				return fmt.Errorf("page section %s record binding escapes its loop scope", section.ID)
 			}
 		}

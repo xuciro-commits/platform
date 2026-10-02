@@ -1,5 +1,5 @@
 import type { Api } from "@platform/kernel";
-import { pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
+import { SemanticObjectSelect, pageUIProfile, pageVariableContract, useHost, type PageVariableValue } from "@platform/app";
 import { Button, Card, Checkbox, Input, PropertyList, Select, t } from "@platform/ui";
 import { useState } from "react";
 import { layoutID, loopOwner, overlayOwner, variableAccessible } from "../page-layout";
@@ -14,7 +14,7 @@ const expression = (op: string): Api.PageExpression => {
 export function VariablesPanel({ document, sections, values, onChange, application = false }: { application?: boolean; document: Api.PageDocument; sections: { id?: string; widget: string; title?: string }[]; values: Record<string, PageVariableValue>; onChange: (document: Api.PageDocument) => void }) {
   const { definitions } = useHost();
   const shared = Object.fromEntries(definitions.flatMap((d) => Object.entries(d.application?.variables ?? {})));
-  const sharedObjects=Object.fromEntries(definitions.flatMap((d)=>Object.entries(d.application?.variables??{}).flatMap(([id,v])=>v.source?.kind==="plan"&&d.application?.queries?.[v.source.query??""]?[[id,d.application.queries[v.source.query??""]!.object]]:[])));
+  const sharedObjects=Object.fromEntries(definitions.flatMap((d)=>Object.entries(d.application?.variables??{}).flatMap(([id,v])=>v.source?.kind==="record"&&v.source.object?[[id,v.source.object]]:v.source?.kind==="plan"&&d.application?.queries?.[v.source.query??""]?[[id,d.application.queries[v.source.query??""]!.object]]:[])));
   const sectionOwner=(section?:string)=>{const node=Object.entries(document.nodes).find(([,n])=>n.section===section)?.[0];return node?overlayOwner(document,node):undefined;};
   const sourceSections=(scope:string,owner?:string)=>sections.filter((s)=>sectionOwner(s.id)===(scope==="overlay"?owner:undefined));
   const sourcePlans=(scope:string,owner?:string)=>Object.entries(document.queries??{}).filter(([,q])=>(q.owner??undefined)===(scope==="overlay"?owner:undefined));
@@ -49,7 +49,7 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
         const mode = event.target.value;
         if (mode === "shared") {
           const [key, declaration] = Object.entries(shared)[0] ?? [];
-          patch({ scope:"application", owner:undefined, mode, type:declaration?.type ?? "string", writable:declaration?.mode === "state", source:{kind:"application",variable:key ?? "",...(declaration?.type==="object-set"?{object:sharedObjects[key??""]}: {})}, initial:undefined, expression:undefined });
+          patch({ scope:"application", owner:undefined, mode, type:declaration?.type ?? "string", writable:declaration?.mode === "state" || declaration?.type==="record", source:{kind:"application",variable:key ?? "",...(["object-set","record"].includes(declaration?.type??"")?{object:sharedObjects[key??""]}: {})}, initial:undefined, expression:undefined });
         } else if (mode === "resource") {
           if(application){patch({mode,type:"object-set",initial:undefined,expression:undefined,source:{kind:"plan",query:Object.keys(document.queries??{})[0]??""}});return;}
           const resource = pageVariableContract.resources[0];
@@ -65,8 +65,11 @@ export function VariablesPanel({ document, sections, values, onChange, applicati
         {[...new Set(targets)].map((child, i) => <option key={child} value={child}>{document.nodes[child]?.title || t("Tab {n}", { n: i + 1 })}</option>)}</Select></label>
         : variable.type === "boolean" ? <Checkbox checked={variable.initial === true} onChange={(value) => patch({ initial: value })}>{t("Initial value")}</Checkbox>
         : <label className="grid gap-1 text-xs">{t("Initial value")}<Input value={String(variable.initial ?? "")} onChange={(event) => patch({ initial: event.target.value })} /></label>)}
-      {variable.mode === "shared" && <label className="grid gap-1 text-xs">{t("Application variable")}<Select value={variable.source?.variable ?? ""} onChange={(event) => { const source = shared[event.target.value]; if (source) patch({ type:source.type, writable:source.mode === "state", source:{kind:"application",variable:event.target.value,...(source.type==="object-set"?{object:sharedObjects[event.target.value]}:{})} }); }}><option value="">{t("Choose an application variable")}</option>{Object.entries(shared).map(([id,v]) => <option key={id} value={id}>{v.title || id}</option>)}</Select></label>}
-      {variable.mode==="resource"&&application&&<label className="grid gap-1 text-xs">{t("Query plan")}<Select value={variable.source?.query??""} onChange={(e)=>patch({source:{kind:"plan",query:e.target.value}})}><option value="">{t("Choose query plan")}</option>{Object.entries(document.queries??{}).map(([id,q])=><option key={id} value={id}>{q.title||id}</option>)}</Select></label>}
+      {variable.mode === "shared" && <label className="grid gap-1 text-xs">{t("Application variable")}<Select value={variable.source?.variable ?? ""} onChange={(event) => { const source = shared[event.target.value]; if (source) patch({ type:source.type, writable:source.mode === "state" || source.type==="record", source:{kind:"application",variable:event.target.value,...(["object-set","record"].includes(source.type)?{object:sharedObjects[event.target.value]}:{})} }); }}><option value="">{t("Choose an application variable")}</option>{Object.entries(shared).map(([id,v]) => <option key={id} value={id}>{v.title || id}</option>)}</Select></label>}
+      {variable.mode==="shared"&&variable.type==="record"&&<Checkbox checked={!!variable.writable} onChange={(writable)=>patch({writable})}>{t("Allow selection updates")}</Checkbox>}
+      {variable.mode==="resource"&&application&&<label className="grid gap-1 text-xs">{t("Resource output kind")}<Select value={variable.type} onChange={(e)=>patch(e.target.value==="record"?{type:"record",source:{kind:"record",object:undefined}}:{type:"object-set",source:{kind:"plan",query:Object.keys(document.queries??{})[0]??""}})}><option value="object-set">{t("Query window")}</option><option value="record">{t("Record selection")}</option></Select></label>}
+      {variable.mode==="resource"&&application&&variable.type==="record"&&<label className="grid gap-1 text-xs">{t("Selection object")}<SemanticObjectSelect value={variable.source?.object?.name??""} label={t("Selection object")} onChange={(object)=>patch({source:{kind:"record",object:object??undefined}})}/></label>}
+      {variable.mode==="resource"&&application&&variable.type==="object-set"&&<label className="grid gap-1 text-xs">{t("Query plan")}<Select value={variable.source?.query??""} onChange={(e)=>patch({source:{kind:"plan",query:e.target.value}})}><option value="">{t("Choose query plan")}</option>{Object.entries(document.queries??{}).map(([id,q])=><option key={id} value={id}>{q.title||id}</option>)}</Select></label>}
       {variable.mode === "resource" && (variable.scope === "page" || variable.scope === "overlay") && <>
         <label className="grid gap-1 text-xs">{t("Resource output kind")}<Select value={variable.source?.kind ?? "record"} onChange={(event) => {
           if (event.target.value === "plan") { patch({type:"object-set",source:{kind:"plan",query:sourcePlans(variable.scope,variable.owner)[0]?.[0]??""}});return; }

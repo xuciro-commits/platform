@@ -106,6 +106,7 @@ type Section struct {
 	Selection          string `json:"selection,omitempty"`
 	CollectionVariable string `json:"collectionVariable,omitempty"`
 	RecordVariable     string `json:"recordVariable,omitempty"`
+	SelectionVariable  string `json:"selectionVariable,omitempty"`
 	// ParentSelection supplies a typed parent record to a related section;
 	// empty uses the page object's shared selection.
 	ParentSelection string `json:"parentSelection,omitempty"`

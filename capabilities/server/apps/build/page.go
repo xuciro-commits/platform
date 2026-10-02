@@ -54,6 +54,7 @@ type Section struct {
 	Selection          string `json:"selection,omitempty"`
 	CollectionVariable string `json:"collectionVariable,omitempty"`
 	RecordVariable     string `json:"recordVariable,omitempty"`
+	SelectionVariable  string `json:"selectionVariable,omitempty"`
 	ParentSelection    string `json:"parentSelection,omitempty"`
 	// Relation follows the typed parent selection, or the page's shared record.
 	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
@@ -130,7 +131,7 @@ func descriptor(p Page) platform.Page {
 	}
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
-		section := platform.Section{ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
+		section := platform.Section{ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
 			Group: s.Group, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
 		if s.Function != nil {
 			section.Function = &platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: s.Function.Name},

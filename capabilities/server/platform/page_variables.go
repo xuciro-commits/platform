@@ -152,11 +152,14 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Mode != "resource" && v.Mode != contract.Application.BindingMode && v.Source != nil {
 			return fail("only resource or shared variables may declare a source")
 		}
-		if v.Source != nil && v.Source.Object != nil && !(v.Mode == "shared" && v.Type == "object-set") {
+		if v.Source != nil && v.Source.Object != nil && !((v.Mode == "shared" && (v.Type == "object-set" || v.Type == "record")) || (v.Mode == "resource" && v.Scope == "application" && v.Type == "record")) {
 			return fail("only shared windows declare an object requirement")
 		}
 		switch v.Mode {
 		case "shared":
+			if v.Type == "record" && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
+				return fail("shared record needs an object requirement")
+			}
 			if v.Type == "object-set" && (v.Writable || v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
 				return fail("shared window needs a read-only object requirement")
 			}
@@ -170,6 +173,12 @@ func (d *PageDocument) CheckVariables() error {
 		case "resource":
 			if v.Source == nil || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
+			}
+			if v.Source.Kind == "record" && v.Scope == "application" {
+				if v.Type != "record" || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" {
+					return fail("application record needs only an object source")
+				}
+				break
 			}
 			if v.Source.Kind == "plan" {
 				if (v.Scope != "page" && v.Scope != "overlay" && v.Scope != "application") || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {

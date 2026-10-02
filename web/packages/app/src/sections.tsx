@@ -424,6 +424,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     [selectionKey(masterType), masterType],
     ...(page.sections ?? []).map((section) => [selectionSlot(page,section), objectOf(page, section)] as const),
     ...Object.values(page.document?.interface?.inputs ?? {}).filter((port) => port.type === "record" && port.object).map((port) => [inputSlot(port.variable), port.object!.name] as const),
+    ...Object.entries(initialVariables).filter(([,v])=>v.mode==="shared"&&v.type==="record"&&v.source?.object).map(([id,v])=>[inputSlot(id),v.source!.object!.name] as const),
     ...(page.selections ?? []).map((variable) => [selectionKey(variable.object.name, variable.name), variable.object.name] as const),
   ]);
   const children = new Map<string, Set<string>>();
@@ -445,6 +446,13 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot);
   const application = useApplicationVariables(initialVariables);
+  const [recordProducers]=useState(()=>new Map<string,symbol>());
+  const recordProducer=(section:string)=>{if(!recordProducers.has(section))recordProducers.set(section,Symbol(section));return recordProducers.get(section)!;};
+  const applicationRecords=JSON.stringify(Object.entries(initialVariables).filter(([,v])=>v.mode==="shared"&&v.type==="record").map(([id])=>[id,application.resources[id]]));
+  useEffect(()=>{for(const [id,v] of Object.entries(initialVariables)){if(v.mode!=="shared"||v.type!=="record")continue;const value=application.resources[id],ref=value?.status==="value"&&typeof value.value==="object"&&value.value.kind==="record"?value.value.reference:undefined,current=session.selected(inputSlot(id));if(current?.id!==ref?.id)session.selectReference(inputSlot(id),ref);}},[session,applicationRecords]);
+  const previousSelections=useRef<Record<string,string>>({});
+  useEffect(()=>{for(const section of page.sections??[]){if(!section.selectionVariable)continue;const slot=selectionSlot(page,section),state=snapshot.records[slot],id=state?.status==="value"?state.value.id:undefined;if(previousSelections.current[slot]&&state?.status==="empty"&&!id)application.select(section.selectionVariable,undefined,recordProducer(section.id??""),true);if(id)previousSelections.current[slot]=id;else if(state?.status!=="pending")delete previousSelections.current[slot];}},[snapshot.records]);
+
   useEffect(()=>{for(const [id,signature] of Object.entries(application.signatures)){const result=application.resources[id],window=result&&(result.status==="value"||result.status==="empty")&&typeof result.value==="object"&&result.value?.kind==="object-set"?result.value.window:undefined;session.reconcileExternalWindow(`application/${id}`,result?.status==="error"?"":signature,window?.records.map((r)=>r.id));}},[session,JSON.stringify(application.signatures),JSON.stringify(application.resources)]);
   const aliases=Object.fromEntries(Object.entries(initialVariables).flatMap(([id])=>{const source=applicationVariable(id);return source&&source!==id?[[id,application.resources[source]??{status:"empty" as const}]]:[]}));
   const inputResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources,...aliases }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources),JSON.stringify(aliases)]);
@@ -485,8 +493,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     const values = context?.values ?? (overlay ? overlayValues[overlay] : variables.values) ?? {}, value = values[valueVariable ?? ""];
     const epoch = overlay ? session.overlayEpoch(overlay) : undefined;
     return (
-      <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const producer=page.sections?.find((s)=>s.id===initialVariables[section.recordVariable!]?.source?.section);return producer?session.selected(selectionSlot(page,producer)):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
-        master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => onSelect(selectionSlot(page,section), record)} live={live} narrowed={filtersForOwner(snapshot.filters,filterOwner(page,section))} onNarrow={(object,field,value)=>session.filter(object,field,value,filterOwner(page,section))}
+      <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.selectionVariable?session.selected(inputSlot(section.selectionVariable)):section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const producer=page.sections?.find((s)=>s.id===initialVariables[section.recordVariable!]?.source?.section);return producer?session.selected(selectionSlot(page,producer)):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
+        master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record);if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));}} live={live} narrowed={filtersForOwner(snapshot.filters,filterOwner(page,section))} onNarrow={(object,field,value)=>session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
         value={value?.status === "value" && typeof value.value === "string" ? value.value : undefined} onValue={valueVariable ? (value) => setContextState(valueVariable, value, context, overlay) : undefined}
@@ -554,6 +562,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       {notice}
       {queryErrors(editingRoot ? overlayForRoot(editingRoot) : undefined)}
       {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="object-set"&&!application.error).map(([id,result])=><Panel key={id} role="alert" className="flex gap-2">{result.status==="error"?t(result.code):""}<Button onClick={()=>application.retry(id)}>{t("Retry query")}</Button></Panel>)}
+      {Object.entries(application.resources).filter(([id,result])=>result.status==="error"&&initialVariables[id]?.type==="record"&&!application.error).map(([id,result])=><Panel key={id} role="alert">{result.status==="error"?t(result.code):""}</Panel>)}
       {application.error && <Panel role="alert">{t(application.error)}</Panel>}
       {(incoming.error || navigation.error) && <Panel role="alert">{t(incoming.error ?? navigation.error!)}</Panel>}
       {incoming.error && !onChoose ? null : page.document ? page.document.formatVersion !== 2 || !supportsPageUIProfile(page.document.uiProfile)

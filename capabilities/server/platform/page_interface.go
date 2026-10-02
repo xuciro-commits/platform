@@ -73,6 +73,9 @@ func (p Page) RecordVariableObject(variable string) string {
 		}
 	}
 	v := d.Variables[variable]
+	if v.Mode == "shared" && v.Type == "record" && v.Source != nil && v.Source.Object != nil {
+		return v.Source.Object.Name
+	}
 	section := ""
 	if v.Source != nil {
 		if v.Source.Kind == "record" {

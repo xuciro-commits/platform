@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.13",
+  "uiProfile": "platform.page.v2.14",
   "widgets": [
     {
       "componentID": "table",
@@ -17,7 +17,8 @@
         "query",
         "relation",
         "selection",
-        "collection-variable"
+        "collection-variable",
+        "selection-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -501,7 +502,8 @@
     "platform.page.v2.10",
     "platform.page.v2.11",
     "platform.page.v2.12",
-    "platform.page.v2.13"
+    "platform.page.v2.13",
+    "platform.page.v2.14"
   ],
   "runtime": {
     "scope": "page",
@@ -623,7 +625,8 @@
       "valueTypes": [
         "string",
         "boolean",
-        "object-set"
+        "object-set",
+        "record"
       ],
       "modes": [
         "state",

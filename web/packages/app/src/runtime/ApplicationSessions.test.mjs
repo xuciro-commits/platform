@@ -38,3 +38,18 @@ test("pages share one application read while instances and retired requests rema
  assert.equal(second.reads.snapshot().queries["plan/read"].value.records[0].id,"other");assert.equal(reopened.reads.snapshot().queries["plan/read"].value.records[0].id,"new");
  reopened.set("window","mutable rows");assert.deepEqual(reopened.snapshot(),{});
 });
+
+test("application record references require authorized reads, preserve producer ownership and retire late replies",async()=>{
+ const variables={selected:{scope:"application",type:"record",mode:"resource",source:{kind:"record",object:{app:"sample",kind:"object",name:"sample.note"}}}},pending=[];
+ const source={scope:"member:v1",entity:()=>({fields:[]}),get:(_,id)=>new Promise((resolve,reject)=>pending.push({id,resolve,reject})),list:async()=>({records:[],total:0})};
+ const hub=new ApplicationSessionHub(),options={source,queries:{}},first=hub.get("one",variables,options),second=hub.get("two",variables,options),a=Symbol(),b=Symbol();first.attach(a,()=>{});first.attach(b,()=>{});second.attach(Symbol(),()=>{});
+ first.select("selected",{object:"sample.other",id:"wrong"},a);assert.deepEqual(first.reads.snapshot().records,{});
+ first.select("selected",{object:"sample.note",id:"old"},a);await tick();assert.equal(first.reads.snapshot().records.selected.status,"pending");
+ first.select("selected",{object:"sample.note",id:"new"},b);await tick();pending[0].resolve({record:{id:"old",revision:1}});await tick();assert.equal(first.reads.snapshot().records.selected.status,"pending");pending[1].resolve({record:{id:"new",revision:1,private:"never copied to variable"}});await tick();
+ assert.deepEqual(first.reads.snapshot().records.selected.value,{object:"sample.note",id:"new"});assert.deepEqual(second.reads.snapshot().records,{});
+ first.select("selected",undefined,a,true);assert.equal(first.reads.snapshot().records.selected.value.id,"new");first.detach(a);assert.equal(first.reads.snapshot().records.selected.value.id,"new");
+ first.select("selected",undefined,b,true);assert.equal(first.reads.snapshot().records.selected.status,"empty");
+ first.select("selected",{object:"sample.note",id:"denied"},b);await tick();pending[2].reject(new Error("Denied"));await tick();assert.equal(first.reads.snapshot().records.selected.status,"error");assert.equal(first.reads.selected("selected"),undefined);
+ first.select("selected",{object:"sample.note",id:"late"},b);await tick();first.close();const reopened=hub.get("one",variables,options);reopened.attach(Symbol(),()=>{});pending[3].resolve({record:{id:"late",revision:1}});await tick();assert.deepEqual(reopened.reads.snapshot().records,{});assert.deepEqual(first.reads.snapshot().records,{});
+ first.select("selected",{object:"sample.note",id:"resurrect"},b);assert.deepEqual(first.reads.snapshot().records,{});
+});

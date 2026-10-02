@@ -1550,5 +1550,107 @@
         }
       }
     }
+  },
+  {
+    "name": "typed application record resource",
+    "valid": true,
+    "variables": {
+      "selected": {
+        "scope": "application",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          }
+        }
+      }
+    },
+    "resources": {
+      "selected": {
+        "status": "value",
+        "value": {
+          "kind": "record",
+          "reference": {
+            "object": "sample.note",
+            "id": "one"
+          }
+        }
+      }
+    },
+    "values": {
+      "selected": {
+        "kind": "record",
+        "reference": {
+          "object": "sample.note",
+          "id": "one"
+        }
+      }
+    }
+  },
+  {
+    "name": "shared record selection with object requirement",
+    "valid": true,
+    "variables": {
+      "selected": {
+        "scope": "application",
+        "type": "record",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "selected",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          }
+        }
+      }
+    },
+    "resources": {
+      "selected": {
+        "status": "value",
+        "value": {
+          "kind": "record",
+          "reference": {
+            "object": "sample.note",
+            "id": "one"
+          }
+        }
+      }
+    },
+    "values": {
+      "selected": {
+        "kind": "record",
+        "reference": {
+          "object": "sample.note",
+          "id": "one"
+        }
+      }
+    }
+  },
+  {
+    "name": "application record cannot belong to a page section",
+    "valid": false,
+    "variables": {
+      "selected": {
+        "scope": "application",
+        "type": "record",
+        "mode": "resource",
+        "source": {
+          "kind": "record",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          },
+          "section": "table"
+        }
+      }
+    }
   }
 ]

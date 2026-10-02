@@ -4,6 +4,7 @@ import { pageUIManifest, type Api } from "@platform/kernel";
 import { useHost } from "../index";
 import { ApplicationSessionHub, type ApplicationSession } from "./ApplicationSessions";
 import { useApplicationQueries } from "./ApplicationQueries";
+import type { RecordReference } from "./Session";
 import { compileVariables, evaluateVariables, type VariableResult } from "./variables";
 
 const Hub = createContext<ApplicationSessionHub | undefined>(undefined);
@@ -59,7 +60,9 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
   const declarations = context?.definition.application?.variables ?? {};
   const inputs=useMemo(()=>evaluateVariables(declarations,state,pageUIManifest.runtime),[declarations,state]);
   const queries=useApplicationQueries(context?.session,inputs);
-  const values = useMemo(() => evaluateVariables(declarations,state,pageUIManifest.runtime,queries.resources),[declarations,state,JSON.stringify(queries.resources)]);
+  const recordResources:Record<string,VariableResult>={};
+  for(const [id,v] of Object.entries(declarations)){if(v.type!=="record"||v.mode!=="resource")continue;const read=context?.session.reads?.snapshot().records[id];recordResources[id]=read?.status==="value"?{status:"value",value:{kind:"record",reference:read.value}}:read?.status==="pending"?{status:"pending"}:read?.status==="error"?{status:"error",code:"Resource read failed"}:{status:"empty"};}
+  const values = useMemo(() => evaluateVariables(declarations,state,pageUIManifest.runtime,{...queries.resources,...recordResources}),[declarations,state,JSON.stringify(queries.resources)]);
   const invalid = useMemo(() => compileVariables(declarations, pageUIManifest.runtime).issues.length > 0, [declarations]);
   const resources: Record<string, VariableResult> = {};
   let error: string | undefined;
@@ -67,7 +70,7 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
     if (variable.mode !== "shared") continue;
     const source = variable.source?.variable ?? "", declaration = declarations[source];
     if (!context) error = "Choose an application to use its shared variables.";
-    else if (!declaration || declaration.type !== variable.type || variable.writable && declaration.mode !== "state" || variable.type==="object-set"&&(declaration.mode!=="resource"||!declaration.source?.query||["app","kind","name"].some((key)=>variable.source?.object?.[key as keyof Api.AssetRef]!==context.definition.application?.queries?.[declaration.source!.query!]?.object[key as keyof Api.AssetRef])) || invalid) error = "The application does not satisfy this page's shared bindings.";
+    else if (!declaration || declaration.type !== variable.type || variable.writable && declaration.mode !== "state" && variable.type!=="record" || variable.type==="object-set"&&(declaration.mode!=="resource"||!declaration.source?.query||["app","kind","name"].some((key)=>variable.source?.object?.[key as keyof Api.AssetRef]!==context.definition.application?.queries?.[declaration.source!.query!]?.object[key as keyof Api.AssetRef])) || variable.type==="record"&&(declaration.mode!=="resource"||declaration.source?.kind!=="record"||!variable.source?.object||["app","kind","name"].some((key)=>variable.source?.object?.[key as keyof Api.AssetRef]!==declaration.source?.object?.[key as keyof Api.AssetRef])) || invalid) error = "The application does not satisfy this page's shared bindings.";
     resources[id] = error ? { status: "error", code: error } : values[source] ?? { status: "empty" };
   }
   const set = (id: string, value: string | boolean) => {
@@ -76,5 +79,6 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
   };
   const windows=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,queries.windows[v.source?.variable??""]]));
   const signatures=Object.fromEntries(Object.entries(variables).filter(([,v])=>v.mode==="shared"&&v.type==="object-set").map(([id,v])=>[id,queries.signatures[v.source?.variable??""]??""]));
-  return { resources, windows, signatures, retry:(id:string)=>queries.retry(variables[id]?.source?.variable??""), set, error, identity: context?.identity };
+  const select=(id:string,reference:RecordReference|undefined,owner:symbol,onlyOwner=false)=>{const v=variables[id];if(v?.type==="record"&&v.mode==="shared"&&v.writable&&v.source?.variable&&!error)context?.session.select(v.source.variable,reference,owner,onlyOwner);};
+  return { resources, windows, signatures, select, retry:(id:string)=>queries.retry(variables[id]?.source?.variable??""), set, error, identity: context?.identity };
 }

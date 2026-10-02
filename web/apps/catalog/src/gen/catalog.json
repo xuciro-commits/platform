@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:1b04c5cdc785d896",
+  "revision": "sha256:fa5e4ac07b567de2",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2404,6 +2404,7 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/page-editor/InterfacePanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
+      "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx"
     ],

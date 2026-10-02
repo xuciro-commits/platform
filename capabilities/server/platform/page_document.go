@@ -54,6 +54,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
+		if variable.Scope == "application" && variable.Type == "record" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.14") {
+			return fmt.Errorf("shared record %s requires v2.14", id)
+		}
 		if variable.Scope == "application" && variable.Type == "object-set" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.12") {
 			return fmt.Errorf("shared window %s requires v2.12", id)
 		}
@@ -389,8 +392,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		}
 		if node.Kind == "widget" {
 			for _, s := range sections {
-				if s.ID == node.Section && (s.CollectionVariable != "" || s.RecordVariable != "") {
+				if s.ID == node.Section && (s.CollectionVariable != "" || s.RecordVariable != "" || s.SelectionVariable != "") {
 					if _, ok := variables[s.CollectionVariable]; s.CollectionVariable != "" && !ok {
+						return false
+					}
+					if _, ok := variables[s.SelectionVariable]; s.SelectionVariable != "" && !ok {
 						return false
 					}
 					if _, ok := variables[s.RecordVariable]; s.RecordVariable != "" && !ok {

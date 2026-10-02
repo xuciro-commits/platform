@@ -121,7 +121,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			}
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
-				if !ok || inputScope == "application" && v.Scope != "application" || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "")) || !slices.Contains([]string{"string", "boolean", "record"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
+				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record") || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "")) || !slices.Contains([]string{"string", "boolean", "record"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
 					return fmt.Errorf("page query %s parameter escapes its input scope", id)
 				}
 			} else {
@@ -165,7 +165,7 @@ func (p Page) QueryReferences() []AssetRef {
 		}
 	}
 	for _, v := range p.DocumentVariables() {
-		if v.Mode == "shared" && v.Source != nil && v.Source.Object != nil {
+		if (v.Mode == "shared" || v.Scope == "application" && v.Mode == "resource" && v.Type == "record") && v.Source != nil && v.Source.Object != nil {
 			refs = append(refs, *v.Source.Object)
 		}
 	}
@@ -286,6 +286,18 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 // CheckCollectionPorts keeps table object identity on the same frozen edge.
 func (p Page) CheckCollectionPorts() error {
 	for _, s := range p.Sections {
+		if s.SelectionVariable != "" {
+			if p.Document == nil {
+				return fmt.Errorf("shared selection needs a document")
+			}
+			object := s.Object.Name
+			if object == "" {
+				object = p.Object.Name
+			}
+			if object != p.RecordVariableObject(s.SelectionVariable) {
+				return fmt.Errorf("shared selection object does not match its table")
+			}
+		}
 		if s.CollectionVariable == "" {
 			continue
 		}
