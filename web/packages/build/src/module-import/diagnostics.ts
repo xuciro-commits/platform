@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "title-profile":"Headings need bounded plain text and a supported level; collection titles need an original query collection.",
+ "native-collection-title":"Collection titles show the declared source collection name and its original complete count, with the original permissions, read budget and lifetime.",
  "metric-aggregate-profile":"Metric cards need one supported complete-collection count or explicitly mapped aggregate definition.",
  "metric-aggregate-binding":"Choose an original measure and a supported fixed equality condition; preserve the source collection and its permissions.",
  "native-metric-aggregate":"Metric cards read original complete-collection aggregates. Source aggregate names are explicitly mapped; styles do not run scripts, compute history or export a new scalar variable.",

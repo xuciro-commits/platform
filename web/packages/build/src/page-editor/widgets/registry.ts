@@ -1,3 +1,4 @@
+import {HeadingInspector,CollectionTitleInspector} from "./TitleInspectors";
 import {MetricInspector} from "./MetricInspector";
 import {StatusTrackerInspector} from "./StatusTrackerInspector";
 import {RecordLinksInspector} from "./RecordLinksInspector";
@@ -16,6 +17,8 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ heading:{configVersion:1,bindings:HeadingInspector},
+ "collection-title":{configVersion:1,bindings:CollectionTitleInspector},
  metric:{configVersion:1,bindings:MetricInspector},
  "status-tracker":{configVersion:1,bindings:StatusTrackerInspector},
  "record-links":{configVersion:1,bindings:RecordLinksInspector},

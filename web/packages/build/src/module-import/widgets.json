@@ -50,17 +50,17 @@
       "sourceType": "HeaderText",
       "sourceCategory": "Core display",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": "text",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "heading",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ObjectSetTitle",
       "sourceCategory": "Core display",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "collection-title",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "FilterList",

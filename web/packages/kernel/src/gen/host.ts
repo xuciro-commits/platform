@@ -1381,6 +1381,8 @@ export type SavedView = {
 };
 
 export type Section = {
+  headingLevel?: string;
+  countVariable?: string;
   metricPresentation?: PageMetricPresentation;
   statusTracker?: PageStatusTracker;
   recordLinks?: PageRecordLink[];
@@ -1709,7 +1711,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.40",
+  "uiProfile": "platform.page.v2.41",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2947,6 +2949,114 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "heading",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.41",
+      "title": "Heading",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "headingLevel": "h2"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "headingLevel": {
+            "type": "string",
+            "enum": [
+              "h1",
+              "h2",
+              "h3"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      }
+    },
+    {
+      "componentID": "collection-title",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.41",
+      "title": "Collection title",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "count-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.41"
+        },
+        {
+          "id": "count",
+          "bindingField": "countVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.41"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -2989,7 +3099,8 @@ export const pageUIManifest = {
     "platform.page.v2.37",
     "platform.page.v2.38",
     "platform.page.v2.39",
-    "platform.page.v2.40"
+    "platform.page.v2.40",
+    "platform.page.v2.41"
   ],
   "runtime": {
     "scope": "page",
@@ -3336,6 +3447,15 @@ export const pageUIManifest = {
         "warning",
         "danger",
         "success"
+      ]
+    },
+    "titles": {
+      "requiredUIProfile": "platform.page.v2.41",
+      "maxTextBytes": 4096,
+      "headingLevels": [
+        "h1",
+        "h2",
+        "h3"
       ]
     }
   },

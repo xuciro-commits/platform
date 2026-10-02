@@ -1,5 +1,11 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Resource read failed": "资源读取失败",
+ "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
+ "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
+ "Heading": "标题",
+ "Collection title": "集合标题",
+ "Complete collection count": "集合完整计数",
  "Status tracker": "状态跟踪器",
  "Lifecycle stages": "生命周期阶段",
  "Lifecycle status is unavailable.": "生命周期状态不可用。",

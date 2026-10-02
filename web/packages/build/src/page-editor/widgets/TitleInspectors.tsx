@@ -1,0 +1,13 @@
+import {Select,Textarea,t} from "@platform/ui";
+import {pageVariableContract} from "@platform/app";
+import {variableAccessible} from "../../page-layout";
+import type {Api} from "@platform/kernel";
+import type {AuthoringSection} from "../draft";
+
+export function HeadingInspector({section,onChange}:{section:AuthoringSection;onChange:(patch:Partial<AuthoringSection>)=>void}){
+ return <><label className="grid gap-1 text-xs">{t("Heading text")}<Textarea value={section.text??""} maxLength={pageVariableContract.titles.maxTextBytes} onChange={e=>onChange({text:e.target.value})}/></label><label className="grid gap-1 text-xs">{t("Heading level")}<Select value={section.headingLevel??"h2"} onChange={e=>onChange({headingLevel:e.target.value})}>{pageVariableContract.titles.headingLevels.map(value=><option key={value} value={value}>{value.toUpperCase()}</option>)}</Select></label><p className="text-xs text-muted">{t("Heading text is plain text; markup and scripts are not interpreted.")}</p></>;
+}
+export function CollectionTitleInspector({section,document,object,overlay,onChange}:{section:AuthoringSection;document:Api.PageDocument;object:string;overlay?:string;onChange:(patch:Partial<AuthoringSection>)=>void}){
+ const set=document.variables?.[section.collectionVariable??""],query=set?.source?.query;
+ return <><label className="grid gap-1 text-xs">{t("Collection title query")}<Select value={section.collectionVariable??""} onChange={e=>{const v=document.variables?.[e.target.value],target=v?.source?.query?document.queries?.[v.source.query]?.object:undefined;onChange({collectionVariable:e.target.value||undefined,countVariable:undefined,...(target?{object:target.name===object?undefined:target.name}:{})});}}><option value="">{t("Choose a query collection")}</option>{Object.entries(document.variables??{}).filter(([,v])=>v.type==="object-set"&&v.mode==="resource"&&v.source?.kind==="plan"&&variableAccessible(v,undefined,overlay)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label><label className="grid gap-1 text-xs">{t("Collection count variable")}<Select value={section.countVariable??""} onChange={e=>onChange({countVariable:e.target.value||undefined})}><option value="">{t("Choose the original complete count")}</option>{Object.entries(document.variables??{}).filter(([,v])=>query&&v.mode==="aggregate"&&v.source?.kind==="count"&&v.source.query===query&&v.scope===set?.scope&&v.owner===set?.owner&&variableAccessible(v,undefined,overlay)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label><p className="text-xs text-muted">{t("Create a count variable for the same query in Page variables. The original complete count keeps its permissions and read budget.")}</p></>;
+}

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:780cb5daf361811b",
+  "revision": "sha256:113e8b7872ba66ed",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -959,6 +959,36 @@
         "Checked",
         "Unchecked",
         "Disabled"
+      ]
+    },
+    {
+      "id": "ui/collection-title",
+      "owner": "@platform/ui",
+      "name": "Collection title",
+      "summary": "Show a declared collection name and its caller-owned complete count.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/CollectionTitle.tsx",
+      "exports": [
+        "CollectionTitle"
+      ],
+      "example": "CollectionTitles",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "title",
+        "count"
+      ],
+      "states": [
+        "Loading",
+        "Error",
+        "Ready"
+      ],
+      "constraints": [
+        "The caller owns the authorized complete count and clears obsolete values."
       ]
     },
     {
@@ -2150,6 +2180,7 @@
       "Choose several authorized options with complete source counts and an optional histogram.": "从授权选项中多选，显示完整来源计数及可选直方图。",
       "Closed": "关闭",
       "Collapsed": "收起",
+      "Collection title": "集合标题",
       "Compare aggregate groups with totals and explicit drill-down.": "比较聚合分组，展示合计并提供明确的下钻。",
       "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
       "Compose nodes through typed ports with one shared graph interaction model.": "通过类型化端口装配节点，使用统一的图交互模型。",
@@ -2272,6 +2303,7 @@
       "Semantic tokens": "语义令牌",
       "Share declared presentation state across pages of one scoped application instance.": "在同一受控应用实例的页面间共享声明式展示状态。",
       "Shared": "共享",
+      "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
       "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
       "Sized layout regions": "可配置尺寸的布局区域",
       "Staged edits": "暂存修改",
@@ -2290,6 +2322,7 @@
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
+      "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
       "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
@@ -2426,6 +2459,7 @@
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/TitleInspectors.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
@@ -2594,6 +2628,7 @@
       "web/packages/app/src/agents.tsx",
       "web/packages/app/src/index.tsx",
       "web/packages/app/src/pages.tsx",
+      "web/packages/app/src/sections.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
@@ -2677,6 +2712,9 @@
     ],
     "ui/virtual-stack": [
       "web/packages/app/src/runtime/LoopRuntime.tsx"
+    ],
+    "ui/collection-title": [
+      "web/packages/app/src/sections.tsx"
     ],
     "ui/layout-region": [
       "web/packages/app/src/sections.tsx"

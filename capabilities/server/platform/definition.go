@@ -104,6 +104,8 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	HeadingLevel         string                  `json:"headingLevel,omitempty"`
+	CountVariable        string                  `json:"countVariable,omitempty"`
 	MetricPresentation   *PageMetricPresentation `json:"metricPresentation,omitempty"`
 	StatusTracker        *PageStatusTracker      `json:"statusTracker,omitempty"`
 	RecordLinks          []PageRecordLink        `json:"recordLinks,omitempty"`

@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Heading": "标题",
+ "Collection title": "集合标题",
+ "Heading text": "标题文字",
+ "Heading level": "标题级别",
+ "Heading text is plain text; markup and scripts are not interpreted.": "标题按纯文本显示，不解释标记或脚本。",
+ "Collection title query": "集合标题查询",
+ "Choose a query collection": "选择查询集合",
+ "Collection count variable": "集合计数变量",
+ "Choose the original complete count": "选择原完整计数",
+ "Create a count variable for the same query in Page variables. The original complete count keeps its permissions and read budget.": "在页面变量中为同一查询创建计数变量。原完整计数保留权限和读取预算。",
+ "Enter bounded heading text or bind the collection and its original count before saving.": "保存前请输入有界标题文字，或绑定集合及其原完整计数。",
+ "Headings need bounded plain text and a supported level; collection titles need an original query collection.": "标题需要有界纯文本及受支持的级别，集合标题需要原查询集合。",
+ "Collection titles show the declared source collection name and its original complete count, with the original permissions, read budget and lifetime.": "集合标题显示来源声明名称及其原完整计数，保留原权限、读取预算和生命周期。",
  "Metric presentation": "指标呈现",
  "Metric prefix": "指标前缀",
  "Metric suffix": "指标后缀",

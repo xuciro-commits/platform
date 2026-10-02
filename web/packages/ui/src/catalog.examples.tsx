@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  FacetChoices,Button,ButtonGroup, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -132,7 +132,8 @@ export function MarkdownContent() {
   const [value, setValue] = useState<string | undefined>("## Sample notes\n\nA **shared** editor with a [reference](https://example.com).\n\n- Read\n- Edit");
   return <div className="grid gap-3 sm:grid-cols-2"><Markdown content={value ?? ""} /><MarkdownEditor value={value} onChange={setValue} /></div>;
 }
-export function Headers() { return <PageHeader title={t("Records")} description={t("Browse declared records and their available work.")} actions={<Button variant="primary">{t("Add")}</Button>} />; }
+export function Headers() { return <div className="grid gap-3"><PageHeader title={t("Records")} description={t("Browse declared records and their available work.")} actions={<Button variant="primary">{t("Add")}</Button>}/><PageHeader compact level={2} title="Operational overview"/></div>; }
+export function CollectionTitles(){return <div className="grid gap-3"><CollectionTitle title="Permitted assets" value="620"/><CollectionTitle title="Permitted assets"/><CollectionTitle title="Permitted assets" error={t("Resource read failed")}/></div>;}
 
 const fieldSamples: [string, FieldType, unknown][] = [
   ["text", field.text({ label: "text" }), "Sample"], ["longText", field.longText({ label: "longText" }), "Several lines of text."],

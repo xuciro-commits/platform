@@ -95,6 +95,14 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: id, Widget: "metric", ConfigVersion: 1, CollectionVariable: "metricWindow", Measure: "avg:" + field, MetricPresentation: &platform.PageMetricPresentation{Suffix: "%", Formatter: "number", Variant: "card", Tone: "success"}})
 	}
+	doc.Variables["collectionCount"] = platform.PageVariable{Scope: "page", Type: "decimal", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "count", Query: "metricq"}}
+	for _, id := range []string{"heading", "collectionTitle"} {
+		doc.Nodes[id] = platform.PageLayoutNode{Kind: "widget", Section: id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, id)
+		doc.Nodes[doc.Root] = root
+	}
+	sections = append(sections, build.Section{ID: "heading", Widget: "heading", ConfigVersion: 1, HeadingLevel: "h2", Text: "Frozen literal heading"}, build.Section{ID: "collectionTitle", Widget: "collection-title", ConfigVersion: 1, Title: "Frozen collection", CollectionVariable: "metricWindow", CountVariable: "collectionCount"})
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -110,6 +118,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[2].RecordView = &platform.PageRecordView{Tabs: []string{"properties"}}
 	sections[3].Buttons[0].Title = "Later draft title"
 	sections[5].RecordLinks[0].Title = "Later links"
+	sections[10].Text = "Later heading"
+	sections[11].Title = "Later collection"
 	sections[8].MetricPresentation = &platform.PageMetricPresentation{Prefix: "Later", Formatter: "short", Variant: "tag", Tone: "danger"}
 	sections[6].StatusTracker = &platform.PageStatusTracker{Field: "state", Stages: []string{"open"}}
 	doc.Events = nil
@@ -127,6 +137,18 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					wantGroups := 3
 					if member.ID == reader.ID {
 						wantGroups = 1
+					}
+					head, title := false, false
+					for _, s := range d.Page.Sections {
+						if s.ID == "heading" {
+							head = s.Text == "Frozen literal heading" && s.HeadingLevel == "h2"
+						}
+						if s.ID == "collectionTitle" {
+							title = s.Title == "Frozen collection" && s.CountVariable == "collectionCount"
+						}
+					}
+					if !head || !title {
+						t.Fatal("frozen titles changed")
 					}
 					metric, hiddenMetric := false, false
 					for _, section := range d.Page.Sections {

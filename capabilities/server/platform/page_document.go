@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "heading" || s.Widget == "collection-title" || s.HeadingLevel != "" || s.CountVariable != "" {
+				return fmt.Errorf("titles require a document")
+			}
 			if s.MetricPresentation != nil {
 				return fmt.Errorf("metric presentation requires a document")
 			}
@@ -147,6 +150,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		byID[section.ID] = true
 		if err := d.checkButtonGroup(section); err != nil {
+			return err
+		}
+		if err := d.checkTitles(section); err != nil {
 			return err
 		}
 		if err := d.checkMetricPresentation(section); err != nil {
@@ -502,6 +508,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if node.Kind == "widget" {
 			for _, s := range sections {
 				if s.ID == node.Section {
+					if s.CountVariable != "" {
+						if _, ok := variables[s.CountVariable]; !ok {
+							return false
+						}
+					}
 					if s.SelectionSetVariable != "" {
 						if _, ok := variables[s.SelectionSetVariable]; !ok {
 							return false

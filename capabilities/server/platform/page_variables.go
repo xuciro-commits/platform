@@ -42,6 +42,11 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Titles struct {
+		RequiredUIProfile string   `json:"requiredUIProfile"`
+		MaxTextBytes      int      `json:"maxTextBytes"`
+		HeadingLevels     []string `json:"headingLevels"`
+	} `json:"titles"`
 	MetricPresentation struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`
 		MaxUnitBytes      int      `json:"maxUnitBytes"`
