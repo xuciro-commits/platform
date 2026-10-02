@@ -2,6 +2,13 @@ import { Checkbox, Select, Toggles, t, type EntityInfo } from "@platform/ui";
 import { tableEditableFields,useHost,widgetContract } from "@platform/app";
 import type { Api } from "@platform/kernel";
 import { variableAccessible } from "../../page-layout";
+import {ButtonEventProperties} from "../OverlayPanel";
+import type {ButtonInspectorPorts} from "./ButtonInspector";
+
+export function TableSelectionInspector(props:ButtonInspectorPorts){
+ const contract=widgetContract("table")!,event="events" in contract?contract.events.find(e=>e.id==="select"):undefined;
+ return props.owner||!event?null:<ButtonEventProperties {...props} eventName={event.id}/>;
+}
 
 export type TableDraft = {id?:string;selectionSetVariable?:string; inlineEdit?:{action:string;fields:string[]};collectionVariable?:string; selectionVariable?:string; fields?:string[]; selection?:string; object?:string; filterVariable?:string; query?:string; parentSelection?:string; relation?:string };
 export type TableInspectorPorts = { section:TableDraft; document:Api.PageDocument; object:string; info?:EntityInfo; overlay?:string; itemOwner?:string; onChange:(patch:Partial<TableDraft>)=>void };

@@ -42,10 +42,11 @@ type pageWidgetPort struct {
 	Writable          bool   `json:"writable"`
 }
 type pageWidgetEvent struct {
-	ID          string `json:"id"`
-	Payload     string `json:"payload"`
-	Required    bool   `json:"required"`
-	MaxBindings int    `json:"maxBindings"`
+	RequiredUIProfile string `json:"requiredUIProfile,omitempty"`
+	ID                string `json:"id"`
+	Payload           string `json:"payload"`
+	Required          bool   `json:"required"`
+	MaxBindings       int    `json:"maxBindings"`
 }
 
 type pageUIContract struct {
@@ -84,7 +85,7 @@ var pageWidgets = func() pageUIContract {
 			fields[port.BindingField] = true
 		}
 		for _, event := range widget.Events {
-			if event.ID != "click" || event.Payload != "void" || event.MaxBindings != 1 {
+			if !slices.Contains([]string{"click", "select"}, event.ID) || event.Payload != "void" || event.MaxBindings != 1 || event.RequiredUIProfile != "" && !slices.Contains(manifest.SupportedProfiles, event.RequiredUIProfile) {
 				panic("unsupported page widget event")
 			}
 		}

@@ -432,6 +432,12 @@ F1e4在v2.32增加Table的`selectionSetVariable`输出及`record-set/resource`�
 
 该设计属于已授权融合范围的共享能力扩展；实现与验证事实归§14。
 
+### 6.25 表格选择的有限呈现事件
+
+F1e5在v2.33注册Table的可选`select/void`事件；原Document.events仍绑定稳定Section、target和固定value，一来源最多一个处理器。本profile只写可访问的page/overlay string或boolean state；拒绝共享/资源/只读目标、Loop生产者、导航/返回和Overlay打开变量，保留原Button行为。行点击、修饰键与逐项选择先写多选及活动记录输出，再沿原状态命令发事件；有此绑定时重复选中仍是激活记录，不把再次点击解释成取消。当前窗口全选、清空、查询/成员/版本失效及迟到读取不会伪造用户选择事件；记录字段仍只由原授权读取提供。
+
+源ObjectTable单个onSelect的单个setVariable可将JSON文本中的固定string/boolean转换为原生类型化值，包含默认showDetail=true；不执行valueExpr、triggerValue、变量源码或业务动作，其他触发器/动作/配置明确阻止导入。Page状态按原生命周期保留，关闭Overlay恢复局部初值，刷新/成员/定义更换重建会话；不把事件目标偷换为选择派生变量或自动清空状态。Build沿注册Table检查器编写/移除绑定，布局复制沿原依赖重写生产者与内部显示状态；Go保存、候选、成员投影与恢复理解同一声明。实现边界归§14。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -615,7 +621,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 兼容转换是规范加载入口中的纯转换，不形成第二套编辑器/渲染器。一次性导入适配在迁移结束后退出常规运行路径。
 
-首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。八类组件为ObjectTable→Table、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter及SingleButton→Button，均只开放有限配置。Table支持按生产者隔离的activeObject及§6.24的selectedObjects多选引用集合、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，不执行valueExpr、函数或流程脚本。
+首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。八类组件为ObjectTable→Table、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter及SingleButton→Button，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，不执行valueExpr、函数或流程脚本。
 
 原文件按输入文本保留在报告中，可原样下载；映射报告包含完整来源、绑定、定位诊断、身份重写及原生草稿。应用是原DraftSession的一次可撤销替换，不提交业务操作、不自动保存；再次打开导入窗口可在同一编辑作用域下载报告。报告不是平台资产，离开编辑器或切换成员前须下载保留。选择页面之外的页面、页头、流程和未引用内容明确保留在报告但不执行，原导航由工作区提供；可识别的原生展示差异需勾选确认。未知配置、未知组件、未支持的选择/编辑配置、不兼容作用域和执行定义阻止应用。源变量虽是Module全局值，本profile不复制跨根局部变量：记录资源按生产者归属，页面选中记录可供浮层读取，浮层选中记录不能逃到页面；浮层独占状态转为关闭重置的原生局部状态并给出确认警告，静态值跨根共享需后续显式映射。Loop、更广动态转换、源应用拆分、接口、更广变量/事件及92类型完整配置转换仍待后续。
 
@@ -776,8 +782,10 @@ Logic共享查询（F5d）已接通租户查询保留端口、ProcessStep.queryV
 
 Module页面导入（F1e–F1e2）已接通§10.1的八类组件有限profile、92类型迁移清单、源保留/映射报告和原DraftSession替换。纯转换测试覆盖结构顺序、原动作/对象/字段绑定、精确保留查询、生产者作用域、Overlay身份、未知配置/脚本/预算/环与不完整映射拒绝；浏览器覆盖GUI映射及错误定位、超限文件保留原来源、原文下载一致、重新打开报告、撤销/重做、预览不提交、保存V2、冻结后改草稿仍激活原动作、真实记录选择/详情/内联完成及刷新。普通与窄屏导入窗口和运行页已观察。动态筛选profile（F1e2，v2.30）增加FilterList与NumericInput映射，实际默认源片段保存在测试fixture；多选、直方图、文本与完整来源计数通过原聚合/类型化查询执行，可选空值跳过及数字文本转换显式声明，全文检索授权范围变化需确认。Go与查询回归验证旧profile/格式/预算/字段/作用域拒绝，冻结后改草稿、成员隐藏字段闭包、CheckReplay及内存快照保留facet/optional声明；激活的反向Build转换也保留新字段。浏览器验证源默认不支持配置阻止导入、显式修正后保存/冻结、单条来源窗口仍显示完整计数、多选/清空、Owner文本、数字范围与非空无效值停止读取、选择清理、全文搜索、原动作实际完成及刷新。分面状态及相关可选查询在容器复制时重写，原生查询错误在表格内显示。完整源默认Module、全部92配置、负责人视觉认可、生产性能及真实PostgreSQL恢复仍未验证或实现。
 
-表格就地编辑（F1e3，v2.31）已接通§8.8的显式标准edit/字段绑定、共享RecordList/DataTable暂存、按行原动作提交及原记录版本基线。Go检查原标准动作/无审批/字段预算与类型、候选冻结及反向Build映射；成员投影保留只读表格，缩减或移除编辑端口，日志重放和内存快照保留绑定。共享UI回归覆盖部分成功/失败保留、普通刷新不重设基线、取消采用新revision、查询/作用域清理、迟到响应不再提交后续行、预览禁止提交及不透明记录ID。浏览器覆盖源enableInlineEdit显式选择动作/字段、原预览与保存、冻结后改草稿仍可编辑、两行部分成功与原冲突、取消后重试、字段权限及宿主直接拒绝、只读成员和刷新。设计预览同步映射inlineEdit及既有facet声明，不形成另一路Renderer。多选输出见§6.24；更多formatter/选择事件、Money/集合字段编辑、审批编辑动作、生产性能、负责人视觉认可及真实PostgreSQL恢复仍未提供或验证。
+表格就地编辑（F1e3，v2.31）已接通§8.8的显式标准edit/字段绑定、共享RecordList/DataTable暂存、按行原动作提交及原记录版本基线。Go检查原标准动作/无审批/字段预算与类型、候选冻结及反向Build映射；成员投影保留只读表格，缩减或移除编辑端口，日志重放和内存快照保留绑定。共享UI回归覆盖部分成功/失败保留、普通刷新不重设基线、取消采用新revision、查询/作用域清理、迟到响应不再提交后续行、预览禁止提交及不透明记录ID。浏览器覆盖源enableInlineEdit显式选择动作/字段、原预览与保存、冻结后改草稿仍可编辑、两行部分成功与原冲突、取消后重试、字段权限及宿主直接拒绝、只读成员和刷新。设计预览同步映射inlineEdit及既有facet声明，不形成另一路Renderer。多选输出见§6.24；选择事件归§6.25；更多formatter、Money/集合字段编辑、审批编辑动作、生产性能、负责人视觉认可及真实PostgreSQL恢复仍未提供或验证。
 
 表格记录多选（F1e4，v2.32）已接通§6.24的record-set端口及Table/变量检查器。导入activeVarId分配独立具名记录槽，避免同对象其他表格覆盖其原动作目标。共同回归验证来源窗口/生产者、预算/重复/窗口外ID拒绝、授权确认pending→value、读取失败清理、查询/分页/身份/外部窗口失效及迟到响应，布局复制重写自身records资源；Go检查旧profile、来源/作用域拒绝、候选冻结后改草稿、成员字段裁剪、CheckReplay及内存快照保留端口。浏览器证明导入/保存/冻结、逐项和当前窗口全选、两个表格隔离、活动记录原动作、筛选清理、浮层关闭重开及刷新。首profile无跨窗口累计、应用共享/接口、Loop生产者和批量业务动作；真实PostgreSQL恢复与负责人视觉认可仍未验证。
+
+表格选择事件（F1e5，v2.33）已接通§6.25的Table注册事件、原状态写入、专属检查器及默认onSelect固定值导入。Go验证旧profile、重复/类型/只读/导航拒绝及隐藏生产者裁剪，原冻结/成员投影、CheckReplay和内存快照保留选择事件；导入拒绝表达式源码、triggerValue、未知配置及多处理器，布局副本重写自己的显示状态。浏览器证明源事件映射、保存/冻结后删草稿事件仍运行原候选、选择显示详情、隐藏后再次选同记录、活动记录原动作、浮层局部详情关闭重开复位与刷新；现有授权拒绝、筛选清理及迟到响应路线仍执行。普通/窄屏浮层详情已观察。更多事件/动作、应用共享与Loop选择事件、全部92配置及真实PostgreSQL恢复仍未提供或验证。
 
 F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和八类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

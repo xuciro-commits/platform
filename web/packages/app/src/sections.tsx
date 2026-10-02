@@ -50,6 +50,7 @@ type Bound = {
   window?: NonNullable<Parameters<typeof RecordList>[0]["window"]>;
  collection?:VariableResult; aggregateScope?:string;
   selectionSet?:import("@platform/ui").RecordSelectionPort;
+  keepActive?:boolean;
   facetValues?:Record<string,VariableResult>;onFacet?:(id:string,value:ScalarValue)=>void;
   onClick?: () => void; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
   sharedFilter?:Record<string,unknown>; narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
@@ -76,7 +77,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection,live,aggregateScope,selectionSet }: Bound) {
+function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection,live,aggregateScope,selectionSet,keepActive }: Bound) {
   const { source, definitions,catalog,decide } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -97,7 +98,7 @@ function TableAdapter({ page, section, onSelect, selected, master, narrowed, sha
   const domain = [...((query?.domain as unknown[] | undefined) ?? []), ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
   return <TableRenderer key={section.collectionVariable ? type : refField ? `${type}/${refField.name}/${master?.id}` : type}
     source={section.collectionVariable ? source : session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source}
-    selectionSet={selectionSet} inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
+    keepActive={keepActive} selectionSet={selectionSet} inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
     selected={selected} onSelect={onSelect} status={status} plural={info?.plural?.toLowerCase()}/>;
 }
 
@@ -519,20 +520,22 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     if(section.filterVariable&&(!shared||shared.status==="error"||shared.status==="pending"||!("value" in shared)||typeof shared.value!=="object"||shared.value.kind!=="filter"))return <Panel role="alert">{t("Shared filter is unavailable.")}</Panel>;
     const sharedFilter=shared&&"value" in shared&&typeof shared.value==="object"&&shared.value.kind==="filter"?shared.value.fields:undefined;
     const epoch = overlay ? session.overlayEpoch(overlay) : undefined;
+    const binding=(name:string)=>page.document?.events?.find(event=>event.source===section.id&&event.event===name);
+    const emit=(name:string)=>{
+      const event=binding(name);if(!event||overlay&&session.overlayEpoch(overlay)!==epoch)return;
+      if(event.navigate||event.return){navigation.emit(event,{values,set:(id,value)=>setContextState(id,value,context,overlay),isActive:()=> (!overlay||session.overlayEpoch(overlay)===epoch)&&(!context||context.session.hasLoopItem(context.owner,context.key)&&context.session.querySignature(context.queryKey)===context.signature)});return;}
+      if(typeof event.value==="string"||typeof event.value==="boolean"||isDecimal(event.value)||isStringSet(event.value))setContextState(event.target,event.value,context,overlay);
+    };
     return (
       <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.selectionVariable?session.selected(inputSlot(section.selectionVariable)):section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const producer=page.sections?.find((s)=>s.id===initialVariables[section.recordVariable!]?.source?.section);return producer?session.selected(selectionSlot(page,producer)):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
-        master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
+        keepActive={!!binding("select")} master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));if(record)emit("select");}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
         selectionSet={section.selectionSetVariable?{selectedIDs:session.selectionSetReferences(selectionSetSlot(page,section)).map(r=>r.id),records:session.selectedSet(selectionSetSlot(page,section)),status:snapshot.recordSets[selectionSetSlot(page,section)]?.status??"empty",maxRecords:pageVariableContract.recordSelection.maxRecords,onChange:ids=>session.selectSet(selectionSetSlot(page,section),ids,selectionQuery(section)??section.id??"")}:undefined}
         facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
         collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"||!!valueVariable&&Object.values(page.document?.queries??{}).some(q=>q.conditions?.some(c=>c.asDecimal&&c.value.variable===valueVariable))} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
-        onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
-          const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
-          if (event.navigate || event.return) { navigation.emit(event, { values, set: (id, value) => setContextState(id, value, context, overlay), isActive: () => (!overlay || session.overlayEpoch(overlay) === epoch) && (!context || context.session.hasLoopItem(context.owner, context.key) && context.session.querySignature(context.queryKey) === context.signature) }); return; }
-          if (typeof event.value === "string" || typeof event.value === "boolean" || isDecimal(event.value)||isStringSet(event.value)) setContextState(event.target, event.value, context, overlay);
-        } : undefined} />
+        onClick={binding("click")?()=>emit("click"):undefined} />
     );
   };
   const placed=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const n=page.document?.nodes[id];return !!n&&(n.kind==="widget"?indexed.has(n.section??""):(n.children??[]).some(child=>placed(child,seen)));};

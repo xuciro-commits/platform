@@ -1658,7 +1658,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.32",
+  "uiProfile": "platform.page.v2.33",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -1795,7 +1795,16 @@ export const pageUIManifest = {
           "close"
         ],
         "hidden": "retain"
-      }
+      },
+      "events": [
+        {
+          "id": "select",
+          "payload": "void",
+          "required": false,
+          "maxBindings": 1,
+          "requiredUIProfile": "platform.page.v2.33"
+        }
+      ]
     },
     {
       "componentID": "detail",
@@ -2693,7 +2702,8 @@ export const pageUIManifest = {
     "platform.page.v2.29",
     "platform.page.v2.30",
     "platform.page.v2.31",
-    "platform.page.v2.32"
+    "platform.page.v2.32",
+    "platform.page.v2.33"
   ],
   "runtime": {
     "scope": "page",

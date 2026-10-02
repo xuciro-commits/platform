@@ -35,6 +35,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	submit(build.ObjectType, "O", "create", map[string]any{"name": "note", "title": "Notes", "fields": []build.Field{{Name: "name", Title: "Name", Type: "text"}, {Name: "secret", Title: "Secret", Type: "text", Read: []string{build.Builder}}}})
 	submit(build.ObjectType, "O", "publish", map[string]any{})
 	doc := platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"table"}}, "table": {Kind: "widget", Section: "table"}}, Variables: map[string]platform.PageVariable{"picked": {Scope: "page", Type: "record-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "records", Section: "table"}}}}
+	doc.Variables["shown"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(false)}
+	doc.Events = []platform.PageEventBinding{{Source: "table", Event: "select", Target: "shown", Value: platform.Raw(true)}}
 	sections := []build.Section{{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"name", "secret"}, SelectionSetVariable: "picked"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
@@ -45,7 +47,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	sections[0].SelectionSetVariable = ""
-	submit(build.PageType, "P", "edit", map[string]any{"sections": sections})
+	doc.Events = nil
+	submit(build.PageType, "P", "edit", map[string]any{"sections": sections, "document": doc})
 	if _, err = tn.ActivateRelease(builder, preview.CandidateID, "activate", at); err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +59,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					if len(d.Page.Document.Events) != 1 || d.Page.Document.Events[0].Event != "select" || d.Page.Document.Events[0].Target != "shown" {
+						t.Fatal("frozen selection event changed")
+					}
 					if d.Page.Sections[0].SelectionSetVariable != "picked" || d.Page.Document.Variables["picked"].Source.Kind != "records" {
 						t.Fatal("frozen record-set port changed")
 					}

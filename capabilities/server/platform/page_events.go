@@ -47,13 +47,16 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 	for _, event := range d.Events {
 		found := false
 		for _, section := range sections {
-			if section.ID == event.Source && widgetEvent(section.Widget, event.Event) != nil {
-				found = true
+			if descriptor := widgetEvent(section.Widget, event.Event); section.ID == event.Source && descriptor != nil {
+				found = descriptor.RequiredUIProfile == "" || PageUIProfileSupports(d.UIProfile, descriptor.RequiredUIProfile)
 			}
 		}
 		variable := d.Variables[event.Target]
 		if !found || bound[event.Source] {
-			return fmt.Errorf("page event %s needs one button click and a matching state value", event.Source)
+			return fmt.Errorf("page event %s needs one button click or registered selection binding and a matching state value", event.Source)
+		}
+		if event.Event == "select" && (event.Navigate != nil || event.Return || variable.Mode != "state" || !slices.Contains([]string{"page", "overlay"}, variable.Scope) || !slices.Contains([]string{"string", "boolean"}, variable.Type) || open[event.Target]) {
+			return fmt.Errorf("selection event needs local scalar state without navigation or overlay control")
 		}
 		if event.Navigate != nil || event.Return {
 			if err := d.checkNavigationEvent(event); err != nil {

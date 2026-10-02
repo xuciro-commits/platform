@@ -170,6 +170,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, event := range d.Events {
+		if event.Event == "select" && sectionOwners[event.Source] != "" {
+			return fmt.Errorf("selection event does not support a loop producer")
+		}
 		if !accessible(event.Target, sectionOwners[event.Source], sectionOverlays[event.Source]) {
 			return fmt.Errorf("page event %s target escapes its presentation scope", event.Source)
 		}

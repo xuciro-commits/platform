@@ -21,6 +21,12 @@ test("table editing requires explicit original edit and displayed payload fields
  assert.equal(compileWorkshopModule(source,"page",mapped,{...editing,actions:[{...action,needsApproval:true}]}).draft,undefined);
 });
 const sourceModule=()=>JSON.parse(readFileSync(new URL("./sample.workshop.json",import.meta.url),"utf8"));
+test("default onSelect compiles fixed local state after independent active and multi outputs while expressions remain refused",()=>{
+ const m=sourceModule();m.variables.push({id:"showDetail",name:"Show detail",type:"boolean",definitionKind:"static",staticValue:false});m.sections.side.visibleVariableId="showDetail";m.widgets.table.events=[{id:"ev1",trigger:"onSelect",actions:[{kind:"setVariable",variableId:"showDetail",valueExpr:"true"}]}];
+ const result=compileWorkshopModule(JSON.stringify(m),"page",bindings,target);assert.ok(result.draft,JSON.stringify(result.diagnostics));const event=result.draft.document.events[0];assert.equal(event.event,"select");assert.equal(event.source,result.ids.widgets.table);assert.equal(event.target,result.ids.variables.showDetail);assert.equal(event.value,true);assert.equal(result.draft.document.nodes[result.ids.nodes.side].visibleWhen,event.target);
+ for(const change of [m=>m.widgets.table.events[0].actions[0].valueExpr="triggerValue",m=>m.widgets.table.events[0].actions[0].valueExpr="globalThis.eventExecuted=true",m=>m.widgets.table.events.push(m.widgets.table.events[0]),m=>m.widgets.table.events[0].actions.push(m.widgets.table.events[0].actions[0]),m=>m.widgets.table.events[0].actions[0].kind="runAction",m=>m.widgets.table.events[0].actions[0].valueExpr='"wrong type"',m=>m.widgets.table.events[0].extra=true]){const copy=structuredClone(m);change(copy);assert.equal(compileWorkshopModule(JSON.stringify(copy),"page",bindings,target).draft,undefined);}
+ assert.equal(globalThis.eventExecuted,undefined);assert.equal(compileWorkshopModule(JSON.stringify(m),"page",bindings,{...target,profile:"platform.page.v2.32"}).draft,undefined);
+});
 test("migration inventory tracks every pinned source type once and cannot confer runtime eligibility",()=>{
  assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,8);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");
  // Pinned from the actual WidgetType union, independently of migration entries.

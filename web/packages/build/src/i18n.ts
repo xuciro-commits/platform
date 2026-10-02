@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "On record selection": "选择记录时",
+ "Remove selection event": "移除选择事件",
  "Record selection set output": "记录选择集合输出",
  "Single active record only": "仅活动记录单选",
  "Record selection set": "记录选择集合",

@@ -12,6 +12,8 @@
 
 表格多选：在“Page variables / 页面变量”创建resource，选择“Record selection set / 记录选择集合”和来源Table；在Table检查器的“Record selection set output / 记录选择集合输出”绑定同一变量。运行时逐项勾选或“Select this window / 选择当前窗口”，行点击设活动记录，Ctrl/Cmd切换、Shift选择同窗口范围；最多64条，通过原记录读取确认后显示选中摘要。全选只表示当前窗口，分页/查询变化清空，不表示完整匹配集合。其他表格、活动记录和浮层独立，关闭浮层/刷新/成员或定义变化清理，失败不保留旧摘要。外包selectionMode=multiple与selectedVarId/selectedObjects沿此生成record-set，活动记录获得独立具名选择槽；原详情和动作仍消费活动记录。该集合不进入页面接口、路由、业务数据或自动批量动作，边界见[ADR-0046 §6.24](ADR/0046-application-studio-fusion.md#624-表格的有界记录多选输出)。
 
+表格选择事件：选中Table，在“On record selection / 选择记录时”绑定“Target state variable / 目标状态变量”，用“Event value / 事件值”填写固定布尔或文本值；详情所在布局的“Visible when / 显示条件”可读该布尔状态。事件可移除，清空/失效只清理记录，不自动重写页面状态；浮层局部状态关闭复位。外包默认onSelect的showDetail=true沿此转换，表达式源码、导航及业务动作不执行，边界见[ADR-0046 §6.25](ADR/0046-application-studio-fusion.md#625-表格选择的有限呈现事件)。
+
 导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持八类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
 
 应用设计台默认进入工坊总览：点击能力卡片，或搜索/选择资产查看状态与关联；选中后打开编辑器、测试或发布审查，返回总览保留搜索与选择；工作流内可切换设计、测试、运行历史与发布。代码声明和租户定义共享应用 API、授权、组件及发布校验。客户不执行任意脚本。构建者拥有 `build.builder`；业务用户按对象/动作/字段权限操作，交付应用本身不增加权限。
