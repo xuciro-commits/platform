@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "record-list" || s.RecordList != nil {
+				return fmt.Errorf("record list requires a document")
+			}
 			if s.Widget == "heading" || s.Widget == "collection-title" || s.HeadingLevel != "" || s.CountVariable != "" {
 				return fmt.Errorf("titles require a document")
 			}
@@ -152,6 +155,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		if err := d.checkButtonGroup(section); err != nil {
 			return err
 		}
+		if err := d.checkRecordList(section); err != nil {
+			return err
+		}
 		if err := d.checkTitles(section); err != nil {
 			return err
 		}
@@ -199,7 +205,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		found := false
 		for _, section := range sections {
 			for _, resource := range pageWidgets.Runtime.Resources {
-				if section.ID == variable.Source.Section && section.Widget == resource.Widget && variable.Source.Kind == resource.Kind {
+				if section.ID == variable.Source.Section && (section.Widget == resource.Widget || PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordList.RequiredUIProfile) && slices.Contains(resource.Widgets, section.Widget)) && variable.Source.Kind == resource.Kind {
 					if resource.Kind == "records" && section.SelectionSetVariable != id {
 						return fmt.Errorf("record-set needs its explicit table producer")
 					}

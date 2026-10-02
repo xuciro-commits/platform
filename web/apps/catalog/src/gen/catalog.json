@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:113e8b7872ba66ed",
+  "revision": "sha256:f74fc788509236e2",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1707,6 +1707,36 @@
       ]
     },
     {
+      "id": "ui/record-cards",
+      "owner": "@platform/ui",
+      "name": "Record cards",
+      "summary": "Select original records from a caller-owned grid or list window.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordCards.tsx",
+      "exports": [
+        "RecordCards"
+      ],
+      "example": "RecordCardsExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "records",
+        "cards",
+        "selection"
+      ],
+      "dependencies": [
+        "ui/entity-card",
+        "ui/button"
+      ],
+      "constraints": [
+        "Card fields come from permission-filtered metadata; the caller owns reads, selection and navigation."
+      ]
+    },
+    {
       "id": "ui/record-form",
       "owner": "@platform/ui",
       "name": "Entity form",
@@ -2172,6 +2202,7 @@
       "Build filters from the entity's declared fields and operators.": "从实体声明的字段和操作符构建筛选条件。",
       "Button": "按钮",
       "Button group": "按钮组",
+      "Card fields come from permission-filtered metadata; the caller owns reads, selection and navigation.": "卡片字段来自权限裁剪后的元数据，调用方负责读取、选择及导航。",
       "Cards and panels": "卡片与面板",
       "Chart": "图表",
       "Checkbox": "复选框",
@@ -2272,6 +2303,7 @@
       "Read only": "只读",
       "Read-only graph": "只读关系图",
       "Ready": "就绪",
+      "Record cards": "记录卡片",
       "Record detail and history": "记录详情与历史",
       "Record handling workspace": "记录处理工作台",
       "Record list": "记录列表",
@@ -2298,6 +2330,7 @@
       "Select a record, inspect its details and use the original object actions.": "选择记录、查看详情，并使用原对象动作。",
       "Select a row from a small hierarchy of labelled records.": "从小型记录层级中选择一行。",
       "Select bounded records in their original lifecycle lanes and emit declared move commands.": "在原生命周期列中选择有界记录，并发出已声明的移动命令。",
+      "Select original records from a caller-owned grid or list window.": "在调用方拥有的网格或列表窗口中选择原记录。",
       "Selected": "已选中",
       "Semantic status tags": "语义状态标签",
       "Semantic tokens": "语义令牌",
@@ -2456,6 +2489,7 @@
       "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
@@ -2797,6 +2831,7 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordViewInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",

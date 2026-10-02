@@ -2,6 +2,17 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record cards": "记录卡片",
+ "Record card query window": "记录卡片查询窗口",
+ "Initial record layout": "初始记录布局",
+ "Map record cards {widget}": "映射记录卡片 {widget}",
+ "Choose a card title": "选择卡片标题",
+ "Bind a record card window, title and bounded summary fields before saving.": "保存前请绑定记录卡片窗口、标题及有界摘要字段。",
+ "Cards use the original query window and authorized record selection. Layout changes do not fetch or write records.": "卡片使用原查询窗口及受权记录选择，布局切换不读取或写入记录。",
+ "Record cards need a supported grid or list layout and an original bounded query window.": "记录卡片需要受支持的网格或列表布局及原有界查询窗口。",
+ "Choose an original card title and at most four visible scalar summary fields.": "选择原卡片标题及最多四个可见标量摘要字段。",
+ "Cards show the original query window, explicit fields and lifecycle metadata. Selection is authorized by the original record owner; source asset-specific decoration is not copied.": "卡片显示原查询窗口、显式字段及生命周期元数据。选择由原记录拥有者授权，来源资产专用装饰不直接复制。",
+ "The selected-page gallery becomes the sole producer of this source active variable. Multiple producers require distinct variables.": "选中页面的画廊成为该来源活动变量的唯一生产者；多个生产者需要不同变量。",
  "Heading": "标题",
  "Collection title": "集合标题",
  "Heading text": "标题文字",

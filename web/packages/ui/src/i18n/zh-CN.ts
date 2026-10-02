@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Open record": "打开记录",
+ "Select original records from a caller-owned grid or list window.": "在调用方拥有的网格或列表窗口中选择原记录。",
+ "Card fields come from permission-filtered metadata; the caller owns reads, selection and navigation.": "卡片字段来自权限裁剪后的元数据，调用方负责读取、选择及导航。",
+ "Record cards": "记录卡片",
+ "Record layout": "记录布局",
+ "Grid": "网格",
+ "List": "列表",
  "Resource read failed": "资源读取失败",
  "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
  "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",

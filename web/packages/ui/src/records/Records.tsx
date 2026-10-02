@@ -5,6 +5,7 @@
 import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
+import {RecordCards} from "./RecordCards";
 import {EditableRecordGrid,type RecordEditPort,type RecordSelectionPort} from "./EditableRecordGrid";
 import {presentRecordColumns,type RecordColumnPresentation} from "./ColumnPresentation";
 import { DataTable } from "../components/DataTable";
@@ -224,8 +225,8 @@ export type ListState = {
   group?: string; columns?: string; measure?: string; mark?: Mark;
 };
 
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true }: {
-  columnPresentation?:RecordColumnPresentation[];showSearch?:boolean;
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true,cards,selectedId,onNavigate }: {
+  onNavigate?:(record:EntityRecord)=>void;cards?:{layout:"grid"|"list";labelField:string};selectedId?:string;columnPresentation?:RecordColumnPresentation[];showSearch?:boolean;
   selectionSet?:RecordSelectionPort;
   inlineEdit?:RecordEditPort;
   source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
@@ -239,6 +240,8 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   /** Where the list starts, such as a saved view; `onSave` offers to save where it is. */
   initial?: ListState; onSave?: (state: ListState) => void;
 }) {
+  const cardIdentity=JSON.stringify([source.scope,type,cards]),[cardChoice,setCardChoice]=useState<{identity:string;layout:"grid"|"list"}>();
+  const cardLayout=cardChoice?.identity===cardIdentity?cardChoice.layout:cards?.layout??"grid";
   const info = source.entity(type);
   const [localSearch, setSearch] = useState(initial.search ?? "");
   const [localSort, setSort] = useState(initial.sort ?? "-changed");
@@ -322,6 +325,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
         </>}
         {!window && <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={archived} onChange={(e) => { setArchived(e.target.checked); setOffset(0); }} />archived</label>}
         {drilled && <Button size="sm" variant="ghost" onClick={() => { setDrilled(undefined); setOffset(0); }}>{t("Clear drill-down ×")}</Button>}
+        {cards&&<span role="group" aria-label={t("Record layout")} className="flex gap-1">{(["list","grid"] as const).map(layout=><Button key={layout} size="sm" variant="ghost" aria-pressed={cardLayout===layout} onClick={()=>setCardChoice({identity:cardIdentity,layout})}>{t(layout==="grid"?"Grid":"List")}</Button>)}</span>}
         {toolbar}
         {onSave && <Button size="sm" variant="ghost" onClick={() => onSave({ view, search, sort, archived, drilled, group: rows, columns, measure, mark })}>{t("Save view…")}</Button>}
         {aggregate && (
@@ -340,7 +344,8 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
           </span>
         )}
       </div>
-      {view === "list" && (
+      {view === "list" && cards && (error?<p role="alert" className="text-sm text-danger">{humanizeKernelError(error)}</p>:!page?<p role="status" className="text-sm text-muted">{t("Loading…")}</p>:<RecordCards records={page.records} info={info} fields={fields} labelField={cards.labelField} layout={cardLayout} selected={selectedId} onSelect={onOpen} onNavigate={onNavigate}/>)}
+      {view === "list" && !cards && (
         <EditableRecordGrid key={JSON.stringify([source.scope,type,info,inlineEdit?.schema,inlineEdit?.fields,inlineEdit?.scope,inlineEdit?.preview,domain,search,sort,offset,archived,error])} data={page?.records} columns={columnsOf as never} entity={entity} height={height} port={inlineEdit} selectionSet={selectionSet} onOpen={onOpen} loading={!page && !error} empty={error ? humanizeKernelError(error) : t("No {things}", { things: info.plural.toLowerCase() })}/>
       )}
       {view === "pivot" && aggregate && rows && (

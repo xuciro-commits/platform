@@ -9,6 +9,7 @@ const asset = (id: string, name: string, summary: string, layer: CatalogEntry["l
 });
 
 export const entries: CatalogEntry[] = [
+  asset("ui/record-cards","Record cards","Select original records from a caller-owned grid or list window.",3,"records/RecordCards.tsx",["RecordCards"],"RecordCardsExample",{tags:["records","cards","selection"],dependencies:["ui/entity-card","ui/button"],constraints:["Card fields come from permission-filtered metadata; the caller owns reads, selection and navigation."]}),
   asset("ui/collection-title","Collection title","Show a declared collection name and its caller-owned complete count.",2,"components/CollectionTitle.tsx",["CollectionTitle"],"CollectionTitles",{tags:["title","count"],states:["Loading","Error","Ready"],constraints:["The caller owns the authorized complete count and clears obsolete values."]}),
   asset("ui/facet-choices","Facet choices","Choose several authorized options with complete source counts and an optional histogram.",2,"fields/FacetChoices.tsx",["FacetChoices"],"FacetChoicesExample",{tags:["filter","facets","selection"],constraints:["The caller owns authorized options, counts and typed selected values."]}),
   asset("ui/command-menu", "Context commands", "Use the same commands from a pointer context menu or an explicit keyboard and touch trigger.", 2,

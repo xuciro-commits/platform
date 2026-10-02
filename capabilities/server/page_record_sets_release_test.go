@@ -103,6 +103,18 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 	}
 	sections = append(sections, build.Section{ID: "heading", Widget: "heading", ConfigVersion: 1, HeadingLevel: "h2", Text: "Frozen literal heading"}, build.Section{ID: "collectionTitle", Widget: "collection-title", ConfigVersion: 1, Title: "Frozen collection", CollectionVariable: "metricWindow", CountVariable: "collectionCount"})
+	for _, id := range []string{"cards", "hiddenCards"} {
+		doc.Nodes[id] = platform.PageLayoutNode{Kind: "widget", Section: id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, id)
+		doc.Nodes[doc.Root] = root
+		label := "name"
+		if id == "hiddenCards" {
+			label = "secret"
+		}
+		sections = append(sections, build.Section{ID: id, Widget: "record-list", ConfigVersion: 1, CollectionVariable: "metricWindow", CardLabel: label, Fields: []string{"name", "secret"}, RecordList: &platform.PageRecordList{Layout: "grid"}})
+	}
+	doc.Variables["cardRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "cards"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -118,6 +130,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[2].RecordView = &platform.PageRecordView{Tabs: []string{"properties"}}
 	sections[3].Buttons[0].Title = "Later draft title"
 	sections[5].RecordLinks[0].Title = "Later links"
+	sections[12].RecordList = &platform.PageRecordList{Layout: "list"}
+	sections[12].CardLabel = "id"
 	sections[10].Text = "Later heading"
 	sections[11].Title = "Later collection"
 	sections[8].MetricPresentation = &platform.PageMetricPresentation{Prefix: "Later", Formatter: "short", Variant: "tag", Tone: "danger"}
@@ -137,6 +151,24 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					wantGroups := 3
 					if member.ID == reader.ID {
 						wantGroups = 1
+					}
+					cards, hiddenCards := false, false
+					for _, s := range d.Page.Sections {
+						if s.ID == "cards" {
+							cards = true
+							if s.RecordList.Layout != "grid" || s.CardLabel != "name" || member.ID == reader.ID && len(s.Fields) != 1 {
+								t.Fatal("frozen cards changed or hidden summary escaped")
+							}
+						}
+						if s.ID == "hiddenCards" {
+							hiddenCards = true
+						}
+					}
+					if !cards || hiddenCards != (member.ID == builder.ID) {
+						t.Fatal("card member projection changed")
+					}
+					if d.Page.Document.Variables["cardRecord"].Source.Section != "cards" {
+						t.Fatal("card record producer changed")
 					}
 					head, title := false, false
 					for _, s := range d.Page.Sections {

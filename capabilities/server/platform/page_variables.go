@@ -42,6 +42,11 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	RecordList struct {
+		RequiredUIProfile string   `json:"requiredUIProfile"`
+		Layouts           []string `json:"layouts"`
+		MaxFields         int      `json:"maxFields"`
+	} `json:"recordList"`
 	Titles struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`
 		MaxTextBytes      int      `json:"maxTextBytes"`
@@ -118,9 +123,10 @@ type pageRuntimeContract struct {
 	MaxStringBytes int            `json:"maxStringBytes"`
 	Operators      []pageOperator `json:"operators"`
 	Resources      []struct {
-		Kind   string `json:"kind"`
-		Type   string `json:"type"`
-		Widget string `json:"widget"`
+		Kind    string   `json:"kind"`
+		Type    string   `json:"type"`
+		Widget  string   `json:"widget"`
+		Widgets []string `json:"widgets,omitempty"`
 	} `json:"resources"`
 	Loop struct {
 		MaxDepth            int      `json:"maxDepth"`

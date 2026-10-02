@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "record-list-profile":"Record cards need a supported grid or list layout and an original bounded query window.",
+ "record-list-binding":"Choose an original card title and at most four visible scalar summary fields.",
+ "native-record-cards":"Cards show the original query window, explicit fields and lifecycle metadata. Selection is authorized by the original record owner; source asset-specific decoration is not copied.",
+ "native-list-selection":"The selected-page gallery becomes the sole producer of this source active variable. Multiple producers require distinct variables.",
  "title-profile":"Headings need bounded plain text and a supported level; collection titles need an original query collection.",
  "native-collection-title":"Collection titles show the declared source collection name and its original complete count, with the original permissions, read budget and lifetime.",
  "metric-aggregate-profile":"Metric cards need one supported complete-collection count or explicitly mapped aggregate definition.",

@@ -1,0 +1,8 @@
+import {Select,Toggles,t} from "@platform/ui";
+import {TableInspector,type TableInspectorPorts} from "./TableInspector";
+import type {AuthoringSection} from "../draft";
+
+export function RecordListInspector(props:Omit<TableInspectorPorts,"section"|"onChange">&{section:AuthoringSection;onChange:(patch:Partial<AuthoringSection>)=>void}){
+ const {section,info,onChange}=props;
+ return <><TableInspector {...props} widget="record-list" showFields={false}/><label className="grid gap-1 text-xs">{t("Initial record layout")}<Select value={section.recordList?.layout??"grid"} onChange={e=>onChange({recordList:{layout:e.target.value}})}><option value="grid">{t("Grid")}</option><option value="list">{t("List")}</option></Select></label><label className="grid gap-1 text-xs">{t("Card title field")}<Select value={section.cardLabel??"id"} onChange={e=>onChange({cardLabel:e.target.value})}><option value="id">{t("Record ID")}</option>{info?.fields.filter(f=>["text","longtext","choice","reference"].includes(f.type)).map(f=><option key={f.name} value={f.name}>{f.title}</option>)}</Select></label><fieldset className="grid gap-1 text-xs"><legend>{t("Card summary fields")}</legend><Toggles options={(info?.fields??[]).filter(f=>["text","longtext","choice","reference","integer","decimal","money","date","datetime","boolean"].includes(f.type)).map(f=>({value:f.name,label:f.title}))} value={section.fields??[]} onChange={fields=>onChange({fields})}/></fieldset><p className="text-xs text-muted">{t("Cards use the original query window and authorized record selection. Layout changes do not fetch or write records.")}</p></>;
+}

@@ -52,3 +52,5 @@ export type {RecordEditPort,RecordSelectionPort} from "./records/EditableRecordG
 export type {RecordColumnPresentation} from "./records/ColumnPresentation";
 
 export {CollectionTitle} from "./components/CollectionTitle";
+
+export {RecordCards} from "./records/RecordCards";

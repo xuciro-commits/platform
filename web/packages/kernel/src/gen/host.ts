@@ -1052,6 +1052,10 @@ export type PageRecordLink = {
   title?: string;
 };
 
+export type PageRecordList = {
+  layout: string;
+};
+
 export type PageRecordView = {
   tabs: string[];
 };
@@ -1381,6 +1385,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  recordList?: PageRecordList;
   headingLevel?: string;
   countVariable?: string;
   metricPresentation?: PageMetricPresentation;
@@ -1711,7 +1716,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.41",
+  "uiProfile": "platform.page.v2.42",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3057,6 +3062,79 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "record-list",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.42",
+      "title": "Record cards",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "cardLabel": "id",
+        "recordList": {
+          "layout": "grid"
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "fields",
+        "selection",
+        "collection-variable"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "cardLabel": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "recordList": {
+            "type": "object",
+            "properties": {
+              "layout": {
+                "type": "string",
+                "enum": ["grid", "list"]
+              }
+            },
+            "required": ["layout"]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.10"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3100,7 +3178,8 @@ export const pageUIManifest = {
     "platform.page.v2.38",
     "platform.page.v2.39",
     "platform.page.v2.40",
-    "platform.page.v2.41"
+    "platform.page.v2.41",
+    "platform.page.v2.42"
   ],
   "runtime": {
     "scope": "page",
@@ -3185,7 +3264,11 @@ export const pageUIManifest = {
       {
         "kind": "record",
         "type": "record",
-        "widget": "table"
+        "widget": "table",
+        "widgets": [
+          "table",
+          "record-list"
+        ]
       },
       {
         "kind": "filter",
@@ -3195,17 +3278,29 @@ export const pageUIManifest = {
       {
         "kind": "query",
         "type": "object-set",
-        "widget": "table"
+        "widget": "table",
+        "widgets": [
+          "table",
+          "record-list"
+        ]
       },
       {
         "kind": "record",
         "widget": "record-timeline",
-        "type": "record"
+        "type": "record",
+        "widgets": [
+          "record-timeline",
+          "record-list"
+        ]
       },
       {
         "kind": "record",
         "widget": "kanban",
-        "type": "record"
+        "type": "record",
+        "widgets": [
+          "kanban",
+          "record-list"
+        ]
       },
       {
         "kind": "records",
@@ -3457,6 +3552,14 @@ export const pageUIManifest = {
         "h2",
         "h3"
       ]
+    },
+    "recordList": {
+      "requiredUIProfile": "platform.page.v2.42",
+      "layouts": [
+        "grid",
+        "list"
+      ],
+      "maxFields": 4
     }
   },
   "layout": {

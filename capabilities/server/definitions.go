@@ -437,6 +437,11 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if (section.Widget == "chart" || section.Widget == "metric" || section.Widget == "pivot") && !checkAggregateSection(section, shown) {
 						continue
 					}
+					if section.Widget == "record-list" && section.CardLabel != "id" {
+						if _, ok := shown.Field(section.CardLabel); !ok {
+							continue
+						}
+					}
 					if section.CheckTimeline(shown) != nil {
 						continue
 					}

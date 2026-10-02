@@ -5,7 +5,7 @@ import {
   FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
-  RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
@@ -314,3 +314,5 @@ export function ContextCommands() {
 }
 
 export function FacetChoicesExample(){const [value,set]=useState<string[]>([]);return <FacetChoices title={t("Status")} options={[{value:"Open",count:12},{value:"Done",count:8}]} value={value} onChange={set} histogram/>;}
+
+export function RecordCardsExample(){const [selected,onSelect]=useState<EntityRecord>();return <RecordCards records={demoRows} info={demoInfo} fields={["quantity"]} labelField="name" layout="grid" selected={selected?.id} onSelect={onSelect}/>;}

@@ -79,6 +79,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
 function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection,live,aggregateScope,selectionSet,keepActive }: Bound) {
+  const openRecord=useOpenRecord();
   const { source, definitions,catalog,decide } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -97,9 +98,9 @@ function TableAdapter({ page, section, onSelect, selected, master, narrowed, sha
     : (section.relation || section.parentSelection) && !refField ? "invalid-reference" : refField && !master ? "missing-parent" : undefined;
   const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
   const domain = [...((query?.domain as unknown[] | undefined) ?? []), ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
-  return <TableRenderer key={section.collectionVariable ? type : refField ? `${type}/${refField.name}/${master?.id}` : type}
+  return <TableRenderer onNavigate={section.widget==="record-list"&&live?record=>openRecord({type,id:record.id}):undefined} cards={section.widget==="record-list"?{layout:section.recordList?.layout as "grid"|"list"??"grid",labelField:section.cardLabel??"id"}:undefined} key={section.collectionVariable ? type : refField ? `${type}/${refField.name}/${master?.id}` : type}
     source={section.collectionVariable ? source : session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source}
-    columns={section.tableColumns} showSearch={section.showSearch} keepActive={keepActive} selectionSet={selectionSet} inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
+    columns={section.tableColumns} showSearch={section.showSearch} keepActive={section.widget==="record-list"||keepActive} selectionSet={selectionSet} inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
     selected={selected} onSelect={onSelect} status={status} plural={info?.plural?.toLowerCase()}/>;
 }
 
@@ -389,6 +390,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ "record-list":TableAdapter,
  heading:({section})=><PageHeader compact level={Number(section.headingLevel?.slice(1)??2) as 1|2|3} title={section.text||t("Heading")}/>,
  "collection-title":({section,countValue,countError})=><CollectionTitle title={section.title||t("Collection title")} value={countValue} error={countError}/>,
  "button-group":({section,onControl,controlBound,enabled})=><ButtonGroup buttons={section.buttons??[]} label={section.title||t("Button group")} onActivate={id=>onControl?.(id)} isBound={controlBound??(()=>false)} enabled={enabled}/>,
@@ -485,8 +487,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   }
   const applicationVariable=(id:string)=>{const v=initialVariables[id];if(v?.mode==="shared"&&v.type==="object-set")return id;if(v?.source?.kind==="query"){const section=page.sections?.find((s)=>s.id===v.source?.section);const bound=initialVariables[section?.collectionVariable??""];if(bound?.mode==="shared"&&bound.type==="object-set")return section?.collectionVariable;}return undefined;};
   const querySelections = new Map<string,Set<string>>();
-  for(const section of page.sections??[]){if(!["table","record-timeline","kanban"].includes(section.widget))continue;const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)querySelections.get(key)!.add(selectionSetSlot(page,section));}}
-  for(const section of page.sections??[]){if(!["table","record-timeline","kanban"].includes(section.widget))continue;const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)querySelections.get(key)!.add(selectionSetSlot(page,section));}}
+  for(const section of page.sections??[]){if(!["table","record-timeline","kanban","record-list"].includes(section.widget))continue;const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)querySelections.get(key)!.add(selectionSetSlot(page,section));}}
+  for(const section of page.sections??[]){if(!["table","record-timeline","kanban","record-list"].includes(section.widget))continue;const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)querySelections.get(key)!.add(selectionSetSlot(page,section));}}
   for(const section of page.sections??[]){if(section.filterVariable&&section.widget==="table"){const key=section.id??`section:${page.sections!.indexOf(section)}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)querySelections.get(key)!.add(selectionSetSlot(page,section));}}
   for(const section of page.sections??[]){if(section.widget!=="table"||!section.selectionSetVariable||section.collectionVariable)continue;const key=section.id??"";if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSetSlot(page,section));}
   for(const [id,q] of Object.entries(page.document?.queries??{})){const v=initialVariables[q.for?.variable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);if(q.query?.ref.kind!=="link-type"||v?.source?.kind!=="record"||!producer)continue;const parent=selectionSlot(page,producer);queryParents.set(planKey(id),parent);for(const child of querySelections.get(planKey(id))??[]){if(!children.has(parent))children.set(parent,new Set());(children.get(parent) as Set<string>).add(child);}}

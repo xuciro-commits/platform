@@ -442,6 +442,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
+		case "record-list":
+			if err := s.CheckRecordList(info); err != nil {
+				return err
+			}
 		case "record-timeline":
 			if p.Document == nil {
 				return fmt.Errorf("record timeline needs a V2 document")
