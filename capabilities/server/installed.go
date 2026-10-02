@@ -446,6 +446,13 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckTimeline(info); err != nil {
 				return err
 			}
+		case "record-links":
+			if p.Document == nil {
+				return fmt.Errorf("record links require a document")
+			}
+			if err := s.CheckRecordLinks(info, t.entity); err != nil {
+				return err
+			}
 		case "record-view":
 			if p.Document == nil {
 				return fmt.Errorf("record view requires a document")

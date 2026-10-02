@@ -62,6 +62,11 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 // missing or duplicated sections. Each published section must appear once.
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
+		for _, s := range sections {
+			if s.Widget == "record-links" || len(s.RecordLinks) > 0 {
+				return fmt.Errorf("record links require a document")
+			}
+		}
 		return nil
 	}
 	if d.FormatVersion != 2 {
@@ -136,6 +141,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		byID[section.ID] = true
 		if err := d.checkButtonGroup(section); err != nil {
+			return err
+		}
+		if err := d.checkRecordLinks(section); err != nil {
 			return err
 		}
 		if err := d.checkRecordView(section); err != nil {

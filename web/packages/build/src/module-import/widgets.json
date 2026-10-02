@@ -42,9 +42,9 @@
       "sourceType": "Links",
       "sourceCategory": "Core display",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-links",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "HeaderText",

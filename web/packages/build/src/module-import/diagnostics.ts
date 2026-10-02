@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "record-links-profile":"Related lists need explicit bounded incoming groups without a heterogeneous output variable.",
+ "record-links-binding":"Map every related group to a unique declared incoming reference on the selected record object.",
+ "native-related-navigation":"Source related groups are explicitly remapped to original authorized reference windows; source linkTypes and linkTypeApiNames differ. Rows open in the workspace record view.",
+
  "native-record-work":"The record view uses original platform actions and related-record navigation.",
  "table-presentation-profile":"Table columns need supported field formats and bounded titles and widths.",
  "native-badge-tones":"Badges use the platform field labels and declared state tones; text fields use a neutral badge.",

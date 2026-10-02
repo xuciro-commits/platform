@@ -79,6 +79,9 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		if section.Query.Name != "" {
 			requires = append(requires, section.Query)
 		}
+		for _, group := range section.RecordLinks {
+			requires = append(requires, group.Object)
+		}
 		requires = append(requires, section.Actions...)
 		if section.InlineEdit != nil {
 			requires = append(requires, section.InlineEdit.Action)
@@ -505,6 +508,9 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 			if section.Query.Name != "" {
 				required = append(required, section.Query)
 			}
+			for _, group := range section.RecordLinks {
+				required = append(required, group.Object)
+			}
 			required = append(required, section.Actions...)
 			if section.InlineEdit != nil {
 				required = append(required, section.InlineEdit.Action)
@@ -695,6 +701,29 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 }
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
+	for _, s := range page.Sections {
+		if s.Widget != "record-links" {
+			continue
+		}
+		ref := s.Object
+		if ref.Name == "" {
+			ref = page.Object
+		}
+		asset, ok := lookup[ref]
+		parent, err := queryObjectDescriptor(asset.Body)
+		if !ok || err != nil || s.CheckRecordLinks(parent, func(typ string) (EntityInfo, bool) {
+			for ref, asset := range lookup {
+				if ref.Kind == AssetObject && ref.Name == typ {
+					info, err := queryObjectDescriptor(asset.Body)
+					return info, err == nil
+				}
+			}
+			return EntityInfo{}, false
+		}) != nil {
+			return fmt.Errorf("frozen record link schema is unavailable")
+		}
+	}
+
 	for _, s := range page.Sections {
 		if s.Widget != "inline-action" {
 			continue

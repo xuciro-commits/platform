@@ -8,7 +8,7 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button,ButtonGroup, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
+  Button,ButtonGroup, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
@@ -124,6 +124,12 @@ function DetailWidget({ page, section, selected, readSource }: Bound) {
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
   // The fields alone: what people do with it is the actions widget's (ADR-0035 D2).
   return <RecordPage key={`${type}/${selected.id}`} source={source} type={type} id={selected.id} fields={section.fields} detailPresentation={section.detailPresentation} detailOnly />;
+}
+
+function RecordLinksWidget({page,section,selected,readSource,live}:Bound){
+ const host=useHost(),open=useOpenRecord(),source=readSource??host.source,type=objectOf(page,section);
+ if(!selected)return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
+ return <RecordLinks key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} groups={section.recordLinks??[]} onOpen={live?(type,record)=>open({type,id:record.id}):undefined}/>;
 }
 
 function RecordViewWidget({page,section,selected,readSource,live}:Bound){
@@ -378,6 +384,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
  "button-group":({section,onControl,controlBound,enabled})=><ButtonGroup buttons={section.buttons??[]} label={section.title||t("Button group")} onActivate={id=>onControl?.(id)} isBound={controlBound??(()=>false)} enabled={enabled}/>,
+ "record-links":RecordLinksWidget,
  "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,

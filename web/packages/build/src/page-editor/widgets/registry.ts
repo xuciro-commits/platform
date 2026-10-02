@@ -1,3 +1,4 @@
+import {RecordLinksInspector} from "./RecordLinksInspector";
 import {FilterInspector} from "./FilterInspector";
 import {ButtonGroupInspector} from "./ButtonGroupInspector";
 import {RecordViewInspector} from "./RecordViewInspector";
@@ -13,6 +14,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "record-links":{configVersion:1,bindings:RecordLinksInspector},
  "button-group":{configVersion:1,events:ButtonGroupInspector},
  "record-view":{configVersion:1,bindings:RecordViewInspector},
  detail:{configVersion:1,bindings:DetailInspector},

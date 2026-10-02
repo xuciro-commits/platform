@@ -9,6 +9,14 @@ const {compileWorkshopModule,parseWorkshopModule}=await import("./compile.ts");
 const {workshopMigrationCatalog}=await import("./catalog.ts");
 const bindings={objects:{Asset:"sample.note"},fields:{Asset:{id:"id",name:"note"}},actions:{finishAsset:"sample.note.close"},queries:{}};
 const target={object:"sample.note",profile,entities:[{app:"sample",type:"sample.note",fields:[{name:"note",type:"text"}]}],actions:[{schema:"sample.note.close",target:"sample.note"}]};
+test("Links explicitly remaps both source group shapes to original incoming references and rejects unsupported output or missing grants",()=>{
+ const m=sourceModule();m.widgets.detail.type="Links";m.widgets.detail.config={objectVarId:"selected",linkTypes:[{label:"Sensors",target:"Sensor",linkField:"assetId"}]};const native={object:{app:"sample",kind:"object",name:"sample.sensor"},field:"asset"},mapped={...bindings,links:{detail:[native]}},destination={...target,entities:[...target.entities,{type:"sample.sensor",app:"sample",fields:[{name:"asset",type:"reference",ref:target.object,inverse:"sensors"}]}]};
+ const result=compileWorkshopModule(JSON.stringify(m),"page",mapped,destination);assert.ok(result.draft,JSON.stringify(result.diagnostics));const links=result.draft.sections.find(s=>s.widget==="record-links");assert.deepEqual(links.recordLinks,[{...native,title:"Sensors"}]);assert.equal(result.draft.document.variables[links.recordVariable].source.kind,"record");assert.ok(result.diagnostics.some(d=>d.code==="native-related-navigation"&&!d.blocking));
+ assert.equal(compileWorkshopModule(JSON.stringify(m),"page",bindings,destination).draft,undefined);assert.equal(compileWorkshopModule(JSON.stringify(m),"page",mapped,target).draft,undefined);
+ m.widgets.detail.config={objectVarId:"selected",linkTypeApiNames:["Asset.sensors"]};assert.ok(compileWorkshopModule(JSON.stringify(m),"page",mapped,destination).draft);
+ m.widgets.detail.config.outputVarId="selected";assert.equal(compileWorkshopModule(JSON.stringify(m),"page",mapped,destination).draft,undefined);delete m.widgets.detail.config.outputVarId;
+ m.widgets.detail.config.linkTypeApiNames.push("Asset.other");assert.equal(compileWorkshopModule(JSON.stringify(m),"page",{...mapped,links:{detail:[native,native]}},destination).draft,undefined);
+});
 test("multi-selection imports distinct active and selectedObjects producers as typed local resources",()=>{
  const m=sourceModule();m.widgets.table.config.selectionMode="multiple";m.widgets.table.config.selectedVarId="picked";m.variables.push({id:"picked",name:"Selected notes",type:"array",definitionKind:"widgetOutput",widgetId:"table",widgetOutputKey:"selectedObjects"});
  const result=compileWorkshopModule(JSON.stringify(m),"page",bindings,target);assert.ok(result.draft,JSON.stringify(result.diagnostics));const table=result.draft.sections.find(s=>s.widget==="table"),variable=result.draft.document.variables[table.selectionSetVariable];assert.equal(variable.type,"record-set");assert.equal(variable.source.kind,"records");assert.equal(variable.source.section,table.id);assert.notEqual(table.selectionSetVariable,result.ids.variables.selected);
@@ -48,7 +56,7 @@ test("default onSelect compiles fixed local state after independent active and m
  assert.equal(globalThis.eventExecuted,undefined);assert.equal(compileWorkshopModule(JSON.stringify(m),"page",bindings,{...target,profile:"platform.page.v2.32"}).draft,undefined);
 });
 test("migration inventory tracks every pinned source type once and cannot confer runtime eligibility",()=>{
- assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,10);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");
+ assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,11);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");
  // Pinned from the actual WidgetType union, independently of migration entries.
  assert.equal(createHash("sha256").update(workshopMigrationCatalog.entries.map(e=>e.sourceType).sort().join("\n")).digest("hex"),"fd2ad8319d16fbe084db00d4635ee9bd30c99d718d012f4e8c61f01df9d958e0");
  for(const entry of workshopMigrationCatalog.entries.filter(e=>e.status==="profile"))assert.ok(nativeRegistry.widgets.some(w=>w.componentID===entry.target),entry.sourceType);

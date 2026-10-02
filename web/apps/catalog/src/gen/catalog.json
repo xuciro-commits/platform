@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:52b6ec803bfb71e2",
+  "revision": "sha256:fddd3eac138229fb",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1818,6 +1818,7 @@
       "source": "web/packages/ui/src/records/Records.tsx",
       "exports": [
         "RecordPage",
+        "RecordLinks",
         "RecordHistory"
       ],
       "example": "RecordDetails",
@@ -2361,6 +2362,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
@@ -2418,6 +2420,7 @@
       "web/packages/build/src/page-editor/widgets/InlineActionInspector.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",

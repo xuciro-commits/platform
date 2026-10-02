@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { RecordList, RecordPage, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
+import { RecordList, RecordPage, RecordLinks, type EntityRecord, type RecordPageData, type RecordSource, type RecordView } from "./Records";
 
 afterEach(cleanup);
 Element.prototype.getBoundingClientRect = () => ({ width: 800, height: 280, top: 0, left: 0, right: 800, bottom: 280, x: 0, y: 0, toJSON: () => ({}) });
@@ -8,6 +8,13 @@ for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as cons
 const pending = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; };
 const entity = { app: "sample", type: "sample.item", title: "Item", plural: "Items", display: "id", fields: [], standard: [] };
 const record = (id: string) => ({ id, revision: 1, created: {}, changed: {} } as EntityRecord);
+test("standalone links retain declared order and titles, hide unreadable reference groups and open original records",async()=>{
+ const child={...entity,type:"sample.child",plural:"Children",fields:[{name:"name",title:"Name",type:"text" as const},{name:"parent",title:"Parent",type:"reference" as const,ref:entity.type,inverse:"children"}]},get=vi.fn(async()=>({record:record("A"),history:[],related:[{type:child.type,field:"parent",records:[{...record("child"),name:"Linked child"}],total:42},{type:child.type,field:"hidden",records:[{...record("secret"),name:"Private child"}],total:1}],linked:[]} as unknown as RecordView)),source:RecordSource={scope:"member1",entity:type=>type===child.type?child:entity,list:vi.fn(),get},open=vi.fn(),groups=[{object:{app:"sample",kind:"object" as const,name:child.type},field:"parent",title:"Published links"},{object:{app:"sample",kind:"object" as const,name:child.type},field:"hidden",title:"Hidden heading"}];
+ const {rerender}=render(<RecordLinks source={source} type={entity.type} id="A" groups={groups} onOpen={open}/>);await waitFor(()=>expect(screen.getByRole("cell",{name:"Linked child"})).toBeTruthy());expect(get).toHaveBeenCalledTimes(1);expect(source.list).not.toHaveBeenCalled();expect(screen.getByRole("heading",{name:/Published links/}).textContent).toContain("42");expect(screen.queryByText("Private child")).toBeNull();expect(screen.queryByText("Hidden heading")).toBeNull();expect(screen.queryByRole("tab")).toBeNull();
+ fireEvent.click(screen.getByRole("cell",{name:"Linked child"}));expect(open).toHaveBeenCalledWith(child.type,expect.objectContaining({id:"child"}));
+ rerender(<RecordLinks source={{...source,scope:"member2",entity:type=>type===child.type?{...child,fields:child.fields.filter(f=>f.name!=="parent")}:entity}} type={entity.type} id="A" groups={groups} onOpen={open}/>);expect(screen.queryByRole("cell",{name:"Linked child"})).toBeNull();await waitFor(()=>expect(screen.getByText("No related records.")).toBeTruthy());expect(get).toHaveBeenCalledTimes(2);
+});
+
 test("record tabs share one authorized view and reset after record or member scope changes",async()=>{
  const info={...entity,fields:[{name:"name",title:"Name",type:"text" as const},{name:"qty",title:"Quantity",type:"integer" as const}]},child={...entity,type:"sample.child",plural:"Children",fields:[{name:"name",title:"Name",type:"text" as const}]},get=vi.fn(async(_type:string,id:string)=>({record:{...record(id),name:id,qty:7,hidden:"Private"},tasks:[],approvals:[],processes:[],files:[],comments:[],related:[{type:child.type,field:"parent",records:[{...record("child"),name:"Related child"}],total:3}],history:[{schema:"sample.item.edit",by:"owner",at:"2026-10-02T12:00:00Z",fields:[{field:"name",before:"Before",after:id}]}]} as unknown as RecordView)),source:RecordSource={scope:"member:1",entity:type=>type===child.type?child:info,list:vi.fn(),get};
  const props={source,type:info.type,id:"A",fields:["name","qty"],recordTabs:["overview","properties","links","history"]};const {rerender}=render(<RecordPage {...props}/>);await waitFor(()=>expect(screen.getByRole("tab",{name:"Overview"})).toBeTruthy());expect(get).toHaveBeenCalledTimes(1);

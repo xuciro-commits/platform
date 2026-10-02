@@ -478,6 +478,16 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					}) {
 						continue // no manual-input fallback for a hidden bound source
 					}
+					if section.Widget == "record-links" {
+						section.RecordLinks = slices.DeleteFunc(slices.Clone(section.RecordLinks), func(group platform.PageRecordLink) bool {
+							probe := section
+							probe.RecordLinks = []platform.PageRecordLink{group}
+							return probe.CheckRecordLinks(shown, func(typ string) (platform.EntityInfo, bool) { info, ok := entities[typ]; return info, ok }) != nil
+						})
+						if len(section.RecordLinks) == 0 {
+							continue
+						}
+					}
 					section.Fields = slices.DeleteFunc(slices.Clone(section.Fields), func(name string) bool {
 						field, visible := shown.Field(name)
 						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))

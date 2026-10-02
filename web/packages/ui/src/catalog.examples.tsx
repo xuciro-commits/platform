@@ -5,7 +5,7 @@ import {
   FacetChoices,Button,ButtonGroup, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
-  RecordKanban, RecordTimeline, RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
@@ -178,7 +178,10 @@ export function RecordLists() {
   const source = useMemo(() => mode === "ready" ? demoSource : { ...demoSource, list: async () => { if (mode === "error") throw new Error("Preview read failed"); return { records: [], total: 0 }; } }, [mode]);
   return <div className="grid gap-3"><Select aria-label={t("Preview state")} value={mode} onChange={(event) => setMode(event.target.value)}><option value="ready">{t("Ready")}</option><option value="empty">{t("Empty")}</option><option value="error">{t("Error")}</option></Select><RecordList source={source} type={demoInfo.type} height={260} onOpen={(record) => setSelected(record.id)} />{selected && <span className="text-xs">{t("Selected record")}: {selected}</span>}</div>;
 }
-export function RecordDetails() { return <div className="grid gap-3"><RecordPage source={demoSource} type={demoInfo.type} id="DEMO-001" /><RecordHistory info={demoInfo} history={history} /></div>; }
+export function RecordDetails() {
+ const child={...demoInfo,type:"demo.child",fields:[...demoInfo.fields,{name:"parent",title:t("Record"),type:"reference" as const,ref:demoInfo.type,inverse:"children"}]},source:RecordSource={...demoSource,entity:type=>type===child.type?child:demoSource.entity(type),get:async(type,id)=>({...await demoSource.get(type,id),related:[{type:child.type,field:"parent",title:child.plural,relation:"children",records:demoRows,total:2}]})};
+ return <div className="grid gap-3"><RecordPage source={demoSource} type={demoInfo.type} id="DEMO-001" /><RecordLinks source={source} type={demoInfo.type} id="DEMO-001" groups={[{object:{app:"demo",kind:"object",name:child.type},field:"parent"}]}/><RecordHistory info={demoInfo} history={history} /></div>;
+}
 export function RecordLookups() {
   const [value, setValue] = useState<string>();
   return <div className="max-w-lg"><label className="mb-1 block text-sm" htmlFor="catalog-record-lookup">{t("Record")}</label><RecordLookup id="catalog-record-lookup" source={demoSource} type={demoInfo.type} value={value} onChange={setValue} /></div>;
