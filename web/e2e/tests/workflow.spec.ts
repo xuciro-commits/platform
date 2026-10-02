@@ -63,6 +63,7 @@ for (const fixture of [
       await properties.getByRole("combobox", { name: "After approve", exact: true }).selectOption("close");
       await page.getByRole("button", { name: "Save workflow", exact: true }).click();
       await expect(page.getByRole("button", { name: "Save workflow", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Reload saved workflow", exact: true })).toBeEnabled();
       const records = await (await request.get("/v1/records/build.process?limit=500", { headers: { Authorization: `Bearer ${fixture.builder}` } })).json();
       const workflow = records.records.find((p: { name: string }) => p.name === flowName);
       expect(workflow.steps[0].kind).toBe("ask");

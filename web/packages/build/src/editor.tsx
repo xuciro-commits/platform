@@ -187,7 +187,7 @@ export function PageEditor({ id }: { id: string }) {
     });
     select({ kind: "widget", id: copy.id });
   };
-  const clipboardError=(issue:ClipboardIssue)=>issue==="unsupported"?t("Copy a main-page Rows, Columns, Tabs, Flow, Toolbar or complete Loop layout."):issue==="scope"?t("Copy complete layouts at the main-page level. Loop fragments and overlay scopes need their own mapping."):issue==="dependencies"?t("An external binding changed since this layout was copied. Copy it again before pasting."):issue==="budget"?t("This copy would exceed the page's layout or resource limits."):issue==="tab-binding"?t("Copied tabs need a private state selector in their layout scope. Shared selectors name the original panels."):t("This layout has missing or invalid references. Correct it before copying.");
+  const clipboardError=(issue:ClipboardIssue)=>issue==="unsupported"?t("Copy a main-page Rows, Columns, Tabs, Flow, Toolbar or complete Loop layout."):issue==="scope"?t("Copy a complete main-page layout or an entire overlay root. Scoped fragments need their owner."):issue==="dependencies"?t("An external binding changed since this layout was copied. Copy it again before pasting."):issue==="budget"?t("This copy would exceed the page's layout or resource limits."):issue==="tab-binding"?t("Copied tabs need a private state selector in their layout scope. Shared selectors name the original panels."):issue==="overlay-entry"?t("An overlay copy needs a visible entry button."):t("This layout has missing or invalid references. Correct it before copying.");
   const copyContainer=(root:string)=>{
     if(lock.current)return;
     const result=copyLayout(session.draft,root,page.object);
@@ -196,7 +196,9 @@ export function PageEditor({ id }: { id: string }) {
   };
   const pasteContainer=(target:string,clip=session.clipboard)=>{
     if(lock.current||!clip)return;
-    const result=pasteLayout(session.draft,clip,target,page.object,{...pageVariableContract,selectionWriters:widgetContracts.filter(w=>w.selectionMode==="write").map(w=>w.componentID),selectionWidgets:widgetContracts.filter(w=>w.selectionMode!=="none").map(w=>w.componentID),references:Object.fromEntries(definitions.filter(d=>d.entity).map(d=>[d.entity!.type,d.entity!.fields.filter(f=>f.type==="reference"&&f.ref).map(f=>f.ref!)]))});
+    const overlay=clip.overlay?clip.draft.document.overlays?.[clip.overlay]:undefined,copyTitle=overlay?t("Copy of {title}",{title:overlay.title}):"",button=widgetContract("button");
+    const options=overlay&&button?{title:copyTitle,entry:{...button.defaults,widget:"button",configVersion:button.configVersion,title:t("Open {title}",{title:copyTitle})} as Draft}:undefined;
+    const result=pasteLayout(session.draft,clip,target,page.object,{...pageVariableContract,selectionWriters:widgetContracts.filter(w=>w.selectionMode==="write").map(w=>w.componentID),selectionWidgets:widgetContracts.filter(w=>w.selectionMode!=="none").map(w=>w.componentID),references:Object.fromEntries(definitions.filter(d=>d.entity).map(d=>[d.entity!.type,d.entity!.fields.filter(f=>f.type==="reference"&&f.ref).map(f=>f.ref!)]))},options);
     if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}
     edit({...session.draft,...result.value.draft});select({kind:"container",id:result.value.root});setRightOpen(true);
     setClipboardNotice({scope:clipboardScope,text:result.value.shared.length?t("Layout pasted. External bindings kept: {bindings}",{bindings:result.value.shared.map(id=>document.variables?.[id]?.title||id).join(", ")}):t("Layout pasted with independent inputs and record selections.")});

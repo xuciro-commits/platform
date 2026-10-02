@@ -51,12 +51,13 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
       </CommandMenu></li>;
     }
     const kindTitle=t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows");
+    const layoutTitle=node.title||Object.values(document.overlays??{}).find(o=>o.root===id)?.title;
     return <li key={id} className="min-w-0">
-      <CommandMenu focusKey={`${focusScope}:${id}`} label={t("Commands for {layout}",{layout:node.title||kindTitle})} commands={[{id:"select",label:t("Select layout"),run:()=>onContainer(id)},{id:"copy",label:t("Copy layout"),run:()=>onCopyLayout(id)},{id:"paste",label:t("Paste layout"),disabled:!canPasteLayout,run:()=>onPasteLayout(id)},{id:"duplicate",label:t("Duplicate layout"),run:()=>onDuplicateLayout(id)}]}><div className={cn("flex items-center rounded", hover === id && "outline outline-primary bg-row-selected")}
+      <CommandMenu focusKey={`${focusScope}:${id}`} label={t("Commands for {layout}",{layout:layoutTitle||kindTitle})} commands={[{id:"select",label:t("Select layout"),run:()=>onContainer(id)},{id:"copy",label:t("Copy layout"),run:()=>onCopyLayout(id)},{id:"paste",label:t("Paste layout"),disabled:!canPasteLayout,run:()=>onPasteLayout(id)},{id:"duplicate",label:t("Duplicate layout"),run:()=>onDuplicateLayout(id)}]}><div className={cn("flex items-center rounded", hover === id && "outline outline-primary bg-row-selected")}
         onDragOver={(event) => over(event, id)} onDragLeave={() => setHover(undefined)} onDrop={(event) => drop(event, id)}>
         <Button size="sm" variant="ghost" aria-label={t("Expand or collapse layout group")} aria-expanded={expanded[id] !== false} onClick={() => setExpanded((old) => ({ ...old, [id]: old[id] === false }))}>{expanded[id] === false ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>
         <Button size="sm" variant="ghost" aria-pressed={container === id && chosen === -2} className={cn("min-w-0 w-0 flex-1 justify-start", container === id && chosen === -2 && "bg-row-selected text-primary")} onClick={() => onContainer(id)}>
-          {node.kind === "columns" ? <Columns2 className="size-3 shrink-0" /> : <Rows3 className="size-3 shrink-0" />}<span className="truncate">{kindTitle}{node.title&&` · ${node.title}`}</span><span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
+          {node.kind === "columns" ? <Columns2 className="size-3 shrink-0" /> : <Rows3 className="size-3 shrink-0" />}<span className="truncate">{kindTitle}{layoutTitle&&` · ${layoutTitle}`}</span><span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
         </Button>
       </div></CommandMenu>
       {expanded[id] !== false && <ul className="ml-3 grid min-w-0 gap-0.5 border-l border-border pl-2">{node.children?.map((child) => renderNode(child, next))}</ul>}

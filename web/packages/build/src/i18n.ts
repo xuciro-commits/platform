@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Copy of {title}": "{title}的副本",
+  "An overlay copy needs a visible entry button.": "浮层副本需要可见的打开按钮。",
   "Copy layout": "复制布局",
   "Paste layout": "粘贴布局",
   "Duplicate layout": "创建布局副本",
@@ -10,7 +12,7 @@ register("zh-CN", {
   "Commands for {layout}": "{layout}的操作",
   "Copy a main-page Rows, Columns, Tabs, Flow, Toolbar or complete Loop layout.": "请选择主页面中的行、列、标签页、流式布局、工具栏或完整循环进行复制。",
   "Copied tabs need a private state selector in their layout scope. Shared selectors name the original panels.": "复制标签页需要其布局作用域内的独立状态选择器。共享选择器仍指向原面板。",
-  "Copy complete layouts at the main-page level. Loop fragments and overlay scopes need their own mapping.": "请在主页面层级复制完整布局。循环片段和浮层作用域需要独立映射。",
+  "Copy a complete main-page layout or an entire overlay root. Scoped fragments need their owner.": "请复制完整主页面布局或整个浮层根。作用域片段需要带上其所有者。",
   "An external binding changed since this layout was copied. Copy it again before pasting.": "复制后外部绑定已改变。请重新复制后再粘贴。",
   "This copy would exceed the page's layout or resource limits.": "该副本会超出页面布局或资源上限。",
   "This layout has missing or invalid references. Correct it before copying.": "该布局存在缺失或无效引用。请修正后再复制。",
