@@ -8,6 +8,8 @@ import { z } from "zod";
 import {EditableRecordGrid,type RecordEditPort,type RecordSelectionPort} from "./EditableRecordGrid";
 import {presentRecordColumns,type RecordColumnPresentation} from "./ColumnPresentation";
 import { DataTable } from "../components/DataTable";
+import {ContentTabs} from "../layout/ContentTabs";
+import {pageUIManifest} from "@platform/kernel";
 import { PropertyList } from "../components/EntityCard";
 import { Tag } from "../components/StatusTag";
 import { columnsFor, defineEntity, type Entity } from "../fields/entity";
@@ -381,8 +383,8 @@ export function RecordHistory({ info, history = [], heading = true }: { info: En
 const shown = (v: unknown) => (v === undefined || v === null || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 /** One record: its fields, the records that refer to it, and its history from the journal. */
-export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation }: {
-  detailPresentation?:Api.PageDetailPresentation;
+export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can, onTransition, files, comments, tasks, fields, work, detailOnly = false,detailPresentation,recordTabs }: {
+  detailPresentation?:Api.PageDetailPresentation;recordTabs?:readonly string[];
   /** App API composes declared record-specific work without another read path. */
   work?: (view: RecordView) => ReactNode;
   /** Answering the open tasks about the record from its page; without it they are listed only. */
@@ -400,6 +402,8 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   /** The caller's catalog, and how to take a lifecycle transition (a decision on this record). */
   can?: (schema: string) => boolean; onTransition?: (schema: string, r: EntityRecord) => void;
 }) {
+  const tabIdentity=JSON.stringify([source.scope,type,id,recordTabs]);
+  const [tabState,setTab]=useState<{identity:string;value:string}>();
   const info = source.entity(type);
   const [loaded, setLoaded] = useState<{ type: string; id: string; scope?: string; view: RecordView }>();
   const view = loaded?.type === type && loaded.id === id && loaded.scope === source.scope ? loaded.view : undefined;
@@ -428,32 +432,18 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
   }
   if (!info || !entity || !view) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const r = view.record;
-  return (
-    <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">
-      <header className="flex flex-wrap items-center gap-2">
+  const header=(<header className="flex flex-wrap items-center gap-2">
         <h1 className="min-w-0 break-words text-lg font-semibold">{displayOf(info, r)}</h1>
         <span className="min-w-0 break-words font-mono text-xs text-muted">{info.title} · {r.id} {t("· rev")} {r.revision}</span>
         {r.archived && <Tag label="archived" />}
         {!detailOnly && <span className="ml-auto flex flex-wrap gap-1">{actions?.(r)}</span>}
-      </header>
-      {!detailOnly && info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={can}
-        onTransition={onTransition && ((schema) => onTransition(schema, r))} />}
-      {!detailOnly && (view.tasks.length > 0 || view.approvals.length > 0 || view.processes.length > 0 || work) && <section aria-label={t("Work on this record")} className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-3">
-        <h2 className="text-sm font-semibold">{t("Work on this record")}</h2>
-        {view.tasks.length > 0 && <Tasks list={view.tasks} tasks={tasks} />}
-        {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} onOpen={onOpen} />}
-        {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
-        {work?.(view)}
-      </section>}
-      {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
-      <section className="rounded-md border border-border bg-surface p-3">
+      </header>);
+  const properties=(<section className="rounded-md border border-border bg-surface p-3">
         <PropertyList columns={detailPresentation?.columns as 1|2|3|4|undefined} items={[...[...new Set(fields??info.fields.map(f=>f.name))].flatMap(name=>{const f=info.fields.find(f=>f.name===name);return !f||detailPresentation?.hideNull&&(r[name]===undefined||r[name]===null||r[name]==="")?[]:[[f.title,entity.fields[name]!.display(r[name] as never,r)] as [string,ReactNode]];}),
           ...(!detailOnly ? [[t("Created"), `${r.created.by ?? ""} · ${r.created.at ? new Date(r.created.at).toLocaleString() : ""}`],
             [t("Changed"), `${r.changed.by ?? ""} · ${r.changed.at ? new Date(r.changed.at).toLocaleString() : ""}`]] as [string, ReactNode][] : [])]} />
-      </section>
-      {!detailOnly && (view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
-      {!detailOnly && (view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
-      {!detailOnly && [...view.related, ...(view.linked ?? [])].map((rel) => {
+      </section>);
+  const related=detailOnly&&!recordTabs?[]:[...view.related, ...(view.linked ?? [])].map((rel) => {
         const relInfo = source.entity(rel.type);
         const relEntity = relInfo && entityFrom(relInfo);
         return relEntity && (
@@ -464,7 +454,31 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
               onRowClick={onOpen && ((x: EntityRecord) => onOpen(rel.type, x))} empty={t("None")} />
           </section>
         );
-      })}
+      });
+  if(recordTabs){
+    const tabs=recordTabs.filter(tab=>(pageUIManifest.runtime.recordView.tabs as readonly string[]).includes(tab));
+    const titles:Record<string,string>={overview:t("Overview"),properties:t("Properties"),links:t("Links"),history:t("History")};
+    const overview=<div className="grid gap-3">{info.lifecycle&&<StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field]??"")}/>}<PropertyList columns={2} items={info.fields.filter(f=>fields?.includes(f.name)&&["integer","decimal"].includes(f.type)).slice(0,4).map(f=>[f.title,entity.fields[f.name]!.display(r[f.name],r)])}/><PropertyList items={[...view.related,...(view.linked??[])].flatMap(rel=>{const target=source.entity(rel.type);return target?[[target.plural,String(rel.total)] as [string,ReactNode]]:[];})}/></div>;
+    const panels:Record<string,ReactNode>={overview,properties,links:related.length?related:<p className="text-sm text-muted">{t("No related records.")}</p>,history:<RecordHistory info={info} history={view.history}/>};
+    return <div className="grid min-w-0 gap-3">{header}<ContentTabs key={tabIdentity} label={t("Record view")} value={tabState?.identity===tabIdentity?tabState.value:tabs[0]} onChange={value=>setTab({identity:tabIdentity,value})} items={tabs.map(id=>({id,title:titles[id]!,content:panels[id]}))}/></div>;
+  }
+  return (
+    <div className="grid max-w-5xl grid-cols-[minmax(0,1fr)] gap-4">
+      {header}
+      {!detailOnly && info.lifecycle && <StatusBar lifecycle={info.lifecycle} state={String(r[info.lifecycle.field] ?? "")} can={can}
+        onTransition={onTransition && ((schema) => onTransition(schema, r))} />}
+      {!detailOnly && (view.tasks.length > 0 || view.approvals.length > 0 || view.processes.length > 0 || work) && <section aria-label={t("Work on this record")} className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-3">
+        <h2 className="text-sm font-semibold">{t("Work on this record")}</h2>
+        {view.tasks.length > 0 && <Tasks list={view.tasks} tasks={tasks} />}
+        {view.approvals.length > 0 && <Approvals source={source} approvals={view.approvals} onOpen={onOpen} />}
+        {view.processes.length > 0 && <Processes source={source} processes={view.processes} onOpen={onOpen} />}
+        {work?.(view)}
+      </section>}
+      {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
+      {properties}
+      {!detailOnly && (view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
+      {!detailOnly && (view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
+      {!detailOnly && related}
       {!detailOnly && (view.activity?.length ?? 0) > 0 && (
         <section>
           <h2 className="mb-1 text-sm font-semibold">{t("Activity")}</h2>

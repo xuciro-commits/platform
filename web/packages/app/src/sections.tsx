@@ -12,7 +12,7 @@ import {
 } from "@platform/ui";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
-import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, type Definition } from "./index";
+import { GeneratedForm, findDefinition, newId, useHost,useOpenRecord, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
 import type { Api } from "@platform/kernel";
 import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry";
@@ -123,6 +123,12 @@ function DetailWidget({ page, section, selected, readSource }: Bound) {
   if (!selected) return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
   // The fields alone: what people do with it is the actions widget's (ADR-0035 D2).
   return <RecordPage key={`${type}/${selected.id}`} source={source} type={type} id={selected.id} fields={section.fields} detailPresentation={section.detailPresentation} detailOnly />;
+}
+
+function RecordViewWidget({page,section,selected,readSource,live}:Bound){
+ const host=useHost(),open=useOpenRecord(),source=readSource??host.source,type=objectOf(page,section);
+ if(!selected)return <p className="text-sm text-muted">{t("Select a record to see it here.")}</p>;
+ return <RecordPage key={JSON.stringify([source.scope,type,selected.id])} source={source} type={type} id={selected.id} fields={section.fields??[]} recordTabs={section.recordView?.tabs??pageVariableContract.recordView.tabs} onOpen={live?(type,record)=>open({type,id:record.id}):undefined} actions={record=>live?<RecordActions type={type} record={record} allowed={(section.actions??[]).map(a=>a.name)} steps/>:<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}/>;
 }
 
 /** The actions the builder chose, on what is selected (Workshop's button group). */
@@ -370,6 +376,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,
   input: ({ section, value, onValue, enabled,numeric,valueError }) => <div className="grid gap-1"><Input inputMode={numeric?"decimal":undefined} maxLength={numeric?pageVariableContract.decimal.maxBytes:undefined} aria-invalid={!!valueError} aria-label={section.title || t("Text input")} value={value ?? ""} disabled={!onValue || enabled === false} onChange={(event) => onValue?.(event.target.value)} />{valueError&&<p role="alert" className="text-xs text-danger">{t(valueError)}</p>}</div>,

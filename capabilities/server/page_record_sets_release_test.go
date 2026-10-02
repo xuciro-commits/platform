@@ -46,6 +46,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	root.Children = append(root.Children, "detail")
 	doc.Nodes[doc.Root] = root
 	sections = append(sections, build.Section{ID: "detail", Widget: "detail", ConfigVersion: 1, Fields: []string{"name", "secret"}, DetailPresentation: &platform.PageDetailPresentation{Columns: 2, HideNull: true}})
+	doc.Variables["active"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "table"}}
+	doc.Nodes["view"] = platform.PageLayoutNode{Kind: "widget", Section: "view"}
+	root = doc.Nodes[doc.Root]
+	root.Children = append(root.Children, "view")
+	doc.Nodes[doc.Root] = root
+	sections = append(sections, build.Section{ID: "view", Widget: "record-view", ConfigVersion: 1, RecordVariable: "active", Fields: []string{"name", "secret"}, RecordView: &platform.PageRecordView{Tabs: []string{"overview", "properties", "links", "history"}}})
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -58,6 +64,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[0].TableColumns = nil
 	sections[0].ShowSearch = nil
 	sections[1].DetailPresentation = nil
+	sections[2].RecordView = &platform.PageRecordView{Tabs: []string{"properties"}}
 	doc.Events = nil
 	submit(build.PageType, "P", "edit", map[string]any{"sections": sections, "document": doc})
 	if _, err = tn.ActivateRelease(builder, preview.CandidateID, "activate", at); err != nil {
@@ -70,6 +77,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					if len(d.Page.Sections[2].RecordView.Tabs) != 4 || d.Page.Sections[2].RecordVariable != "active" {
+						t.Fatal("frozen record view changed")
+					}
+					if member.ID == reader.ID && len(d.Page.Sections[2].Fields) != 1 {
+						t.Fatal("record view fields were not masked")
+					}
 					if d.Page.Sections[1].DetailPresentation == nil || !d.Page.Sections[1].DetailPresentation.HideNull || d.Page.Sections[1].DetailPresentation.Columns != 2 {
 						t.Fatal("frozen detail presentation changed")
 					}

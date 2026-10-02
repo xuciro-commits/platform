@@ -443,6 +443,28 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckTimeline(info); err != nil {
 				return err
 			}
+		case "record-view":
+			if p.Document == nil {
+				return fmt.Errorf("record view requires a document")
+			}
+			for _, name := range s.Fields {
+				if err := field(name); err != nil {
+					return err
+				}
+			}
+			for _, ref := range s.Actions {
+				if err := t.checkAction(p.Name, ref.Name, info.Type); err != nil {
+					return err
+				}
+				owner := t.owner["action:"+ref.Name]
+				if owner == nil {
+					return fmt.Errorf("record view action owner is unavailable")
+				}
+				action, _ := owner.Manifest().Actions.Action(ref.Name)
+				if action.New {
+					return fmt.Errorf("record view only offers existing-record actions")
+				}
+			}
 		case "table", "detail":
 			if len(s.Fields) == 0 {
 				return fmt.Errorf("%s: no fields to show", where)

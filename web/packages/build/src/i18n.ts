@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Choose at least one record tab before saving.": "保存前至少选择一个记录标签页。",
+ "Properties": "属性",
+ "Links": "关联",
+ "Record view": "记录视图",
+ "Record tabs": "记录标签页",
+ "The record view uses original platform actions and related-record navigation.": "记录视图使用原平台动作及关联记录导航。",
  "Hide empty properties": "隐藏空属性",
  "Property columns": "属性列数",
  "Empty means missing, null or empty text. Zero and false stay visible.": "空值指缺失、null 或空文本。零和 false 仍显示。",

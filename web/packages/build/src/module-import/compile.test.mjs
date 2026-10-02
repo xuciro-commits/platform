@@ -21,6 +21,11 @@ test("table editing requires explicit original edit and displayed payload fields
  assert.equal(compileWorkshopModule(source,"page",mapped,{...editing,actions:[{...action,needsApproval:true}]}).draft,undefined);
 });
 const sourceModule=()=>JSON.parse(readFileSync(new URL("./sample.workshop.json",import.meta.url),"utf8"));
+test("default ObjectView imports native tabs, authorized fields and explicitly mapped original record actions",()=>{
+ const m=sourceModule();m.widgets.detail.type="ObjectView";m.widgets.detail.config={objectVarId:"selected",formFactor:"panel",viewMode:"configured",tabs:["Overview","Properties","Links","History"]};const result=compileWorkshopModule(JSON.stringify(m),"page",bindings,target);assert.ok(result.draft,JSON.stringify(result.diagnostics));const view=result.draft.sections.find(s=>s.widget==="record-view");assert.deepEqual(view.recordView.tabs,["overview","properties","links","history"]);assert.deepEqual(view.fields,["note"]);assert.deepEqual(view.actions,["sample.note.close"]);assert.equal(result.draft.document.variables[view.recordVariable].source.kind,"record");
+ for(const change of [m=>m.widgets.detail.config.tabs=["Unknown"],m=>m.widgets.detail.config.tabs=["Overview","Overview"],m=>m.widgets.detail.config.formFactor="full",m=>m.widgets.detail.config.viewMode="standard",m=>m.widgets.detail.config.extra="script"]){const copy=structuredClone(m);change(copy);assert.equal(compileWorkshopModule(JSON.stringify(copy),"page",bindings,target).draft,undefined);}
+ assert.equal(compileWorkshopModule(JSON.stringify(m),"page",bindings,{...target,profile:"platform.page.v2.35"}).draft,undefined);
+});
 test("PropertyList imports bounded columns and null hiding without importing its action engine",()=>{
  const m=sourceModule();m.widgets.detail.config.columns=2;m.widgets.detail.config.hideNull=true;const result=compileWorkshopModule(JSON.stringify(m),"page",bindings,target);assert.ok(result.draft,JSON.stringify(result.diagnostics));assert.deepEqual(result.draft.sections.find(s=>s.widget==="detail").detailPresentation,{columns:2,hideNull:true});
  for(const change of [m=>m.widgets.detail.config.columns=0,m=>m.widgets.detail.config.columns=5,m=>m.widgets.detail.config.columns=1.5,m=>m.widgets.detail.config.hideNull="true",m=>m.widgets.detail.config.inlineEdit=true]){const copy=structuredClone(m);change(copy);assert.equal(compileWorkshopModule(JSON.stringify(copy),"page",bindings,target).draft,undefined);}
@@ -39,7 +44,7 @@ test("default onSelect compiles fixed local state after independent active and m
  assert.equal(globalThis.eventExecuted,undefined);assert.equal(compileWorkshopModule(JSON.stringify(m),"page",bindings,{...target,profile:"platform.page.v2.32"}).draft,undefined);
 });
 test("migration inventory tracks every pinned source type once and cannot confer runtime eligibility",()=>{
- assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,8);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");
+ assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,9);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");
  // Pinned from the actual WidgetType union, independently of migration entries.
  assert.equal(createHash("sha256").update(workshopMigrationCatalog.entries.map(e=>e.sourceType).sort().join("\n")).digest("hex"),"fd2ad8319d16fbe084db00d4635ee9bd30c99d718d012f4e8c61f01df9d958e0");
  for(const entry of workshopMigrationCatalog.entries.filter(e=>e.status==="profile"))assert.ok(nativeRegistry.widgets.some(w=>w.componentID===entry.target),entry.sourceType);

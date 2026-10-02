@@ -1030,6 +1030,10 @@ export type PageQuerySet = {
   inputs: string[];
 };
 
+export type PageRecordView = {
+  tabs: string[];
+};
+
 export type PageResourceSource = {
   field?: string;
   fields?: string[];
@@ -1350,6 +1354,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  recordView?: PageRecordView;
   detailPresentation?: PageDetailPresentation;
   tableColumns?: PageTableColumn[];
   showSearch?: boolean;
@@ -1673,7 +1678,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.35",
+  "uiProfile": "platform.page.v2.36",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2683,6 +2688,63 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-view",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.36",
+      "title": "Record view",
+      "category": "Records",
+      "fieldPreset": "list",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "fields",
+        "selection",
+        "record-variable",
+        "actions"
+      ],
+      "selectionMode": "read",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.5"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -2720,7 +2782,8 @@ export const pageUIManifest = {
     "platform.page.v2.32",
     "platform.page.v2.33",
     "platform.page.v2.34",
-    "platform.page.v2.35"
+    "platform.page.v2.35",
+    "platform.page.v2.36"
   ],
   "runtime": {
     "scope": "page",
@@ -2844,7 +2907,8 @@ export const pageUIManifest = {
         "actions",
         "timeline",
         "tasks",
-        "inline-action"
+        "inline-action",
+        "record-view"
       ],
       "presentationWidgets": [
         "text",
@@ -3010,6 +3074,15 @@ export const pageUIManifest = {
     "detailPresentation": {
       "requiredUIProfile": "platform.page.v2.35",
       "maxColumns": 4
+    },
+    "recordView": {
+      "requiredUIProfile": "platform.page.v2.36",
+      "tabs": [
+        "overview",
+        "properties",
+        "links",
+        "history"
+      ]
     }
   },
   "layout": {

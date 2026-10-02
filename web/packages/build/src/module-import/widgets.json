@@ -26,9 +26,9 @@
       "sourceType": "ObjectView",
       "sourceCategory": "Core display",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "detail",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-view",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "PropertyList",

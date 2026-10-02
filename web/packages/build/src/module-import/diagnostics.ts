@@ -1,5 +1,6 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "native-record-work":"The record view uses original platform actions and related-record navigation.",
  "table-presentation-profile":"Table columns need supported field formats and bounded titles and widths.",
  "native-badge-tones":"Badges use the platform field labels and declared state tones; text fields use a neutral badge.",
  "edit-binding":"Choose the original table edit action and its editable displayed fields.",

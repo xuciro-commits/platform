@@ -65,7 +65,7 @@ const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDo
   selections: record.selections,
   document,
   sections: sections.map((s) => ({
-    detailPresentation:s.detailPresentation,tableColumns:s.tableColumns,showSearch:s.showSearch,facets:s.facets,filterSearchVariable:s.filterSearchVariable,selectionSetVariable:s.selectionSetVariable,
+recordView:s.recordView,detailPresentation:s.detailPresentation,tableColumns:s.tableColumns,showSearch:s.showSearch,facets:s.facets,filterSearchVariable:s.filterSearchVariable,selectionSetVariable:s.selectionSetVariable,
     id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, selectionVariable:s.selectionVariable, filterVariable:s.filterVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, mark:s.mark, columnGroup: s.columnGroup,timeStart:s.timeStart,timeEnd:s.timeEnd,timeLabel:s.timeLabel,timeGroup:s.timeGroup,cardLabel:s.cardLabel, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
     query: s.query ? { app: s.query.split(".")[0] ?? "", kind: "query", name: s.query.split(".").slice(1).join(".") } : undefined,
@@ -153,14 +153,15 @@ export function PageEditor({ id }: { id: string }) {
   const tableEditProblem=sections.some(s=>s.inlineEdit&&(!s.inlineEdit.action||s.inlineEdit.fields.length===0||s.inlineEdit.fields.length>pageVariableContract.tableEditing.maxFields||s.inlineEdit.fields.some(f=>!s.fields?.includes(f))));
   const presentationLimits=pageVariableContract.tablePresentation;
   const tablePresentationProblem=sections.some(s=>(s.tableColumns?.length??0)>presentationLimits.maxColumns||s.tableColumns?.some((c,i)=>c.field!=="id"&&!s.fields?.includes(c.field)||s.tableColumns?.some((other,j)=>j!==i&&other.field===c.field)||new TextEncoder().encode(c.title??"").length>presentationLimits.maxTitleBytes||c.width!==undefined&&(!Number.isInteger(c.width)||c.width<presentationLimits.minWidth||c.width>presentationLimits.maxWidth)));
-  const invalid = tablePresentationProblem||tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
+  const recordViewProblem=sections.some(s=>s.widget==="record-view"&&s.recordView?.tabs.length===0);
+  const invalid = recordViewProblem||tablePresentationProblem||tableEditProblem || inlineProblem || layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
   const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
   if (!page) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const info = source.entity(page.object);
-const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s),document:patch.mark||"detailPresentation" in patch||"tableColumns" in patch||"showSearch" in patch?{...old.document,uiProfile:pageUIProfile}:old.document }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
+const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s),document:patch.mark||"recordView" in patch||"detailPresentation" in patch||"tableColumns" in patch||"showSearch" in patch?{...old.document,uiProfile:pageUIProfile}:old.document }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
   const move = (index: number, by: -1 | 1) => { const section = sections[index]; if (section?.id) edit((old) => ({ ...old, document: moveWidget(old.document, section.id!, by) })); };
   const add = (widget: string, destination?: { container: string; after?: string }) => {
     const contract = widgetContract(widget); if (!contract) return;
@@ -286,6 +287,7 @@ const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old
       {variableProblems.length > 0 && <Panel role="alert" className="text-xs text-danger">{variableProblems.map((issue, index) => <p key={index}>{issue.variable}: {t(issue.code)}</p>)}</Panel>}
       {loopProblem && <Panel role="status" className="text-xs text-muted">{t("Choose a query window for each loop before saving.")}</Panel>}
       {overlayProblem && <Panel role="status" className="text-xs text-muted">{t("Add content to each overlay and bind every button before saving.")}</Panel>}
+      {recordViewProblem&&<Panel role="alert" className="text-xs text-danger">{t("Choose at least one record tab before saving.")}</Panel>}
       {tablePresentationProblem&&<Panel role="alert" className="text-xs text-danger">{t("Table columns need supported field formats and bounded titles and widths.")}</Panel>}
       {selectionProblem && <Panel role="alert" className="text-xs text-danger">{selectionProblem}</Panel>}
       {incompatible && <Panel role="alert" className="text-xs text-danger">{t("This draft needs a newer workspace version. Its saved content has been preserved.")}</Panel>}
@@ -496,14 +498,14 @@ function Properties({ section, document, info, catalog, object, selections, rela
           ? t("It shows what happened to the record selected in a table.")
           : t("It shows what waits on the record selected in a table, for whoever opens the page.")}</p>
       )}
-      {section.widget === "detail" && (
+      {["detail","record-view"].includes(section.widget) && (
         <fieldset className="grid gap-1 text-xs">
           <legend className="mb-1">{t("Fields it shows")}</legend>
           <Toggles options={fields.map((f) => ({ value: f.name, label: f.title }))} value={section.fields ?? []}
             onChange={(value) => onChange({ fields: value })} />
         </fieldset>
       )}
-      {section.widget === "actions" && (
+      {["actions","record-view"].includes(section.widget) && (
         <fieldset className="grid gap-1 text-xs">
           <legend className="mb-1">{t("Actions it offers")}</legend>
           <Toggles options={actions.map((a) => ({ value: a.schema, label: a.title }))} value={section.actions ?? []}

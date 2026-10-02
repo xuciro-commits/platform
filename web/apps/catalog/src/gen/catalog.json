@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:6ea2f42a6121202b",
+  "revision": "sha256:6765a16e3c8c1524",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2712,6 +2712,7 @@
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordViewInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx"
     ],

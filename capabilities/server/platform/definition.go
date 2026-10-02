@@ -104,6 +104,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	RecordView           *PageRecordView         `json:"recordView,omitempty"`
 	DetailPresentation   *PageDetailPresentation `json:"detailPresentation,omitempty"`
 	TableColumns         []PageTableColumn       `json:"tableColumns,omitempty"`
 	ShowSearch           *bool                   `json:"showSearch,omitempty"`
