@@ -191,3 +191,8 @@ go run ./cmd/<id>-server -web ../../../web/apps/workspace/dist
 ```
 
 开发宿主默认为 `127.0.0.1:8499`，开发令牌为 manager/member。交付时组合进对应行业解决方案，配置见部署 README。检查按 [Testing](Testing.md#检查选择与停止) 选择；样式与一般体验用截图/用户走查，核心数据与权限用自动回归。
+
+
+具名关系API（本体编辑器待接入）：构建者使用原动作`build.linktype.create/edit/publish`管理关系草稿，字段为name/title/description、已发布租户parent/child对象、child的单值reference字段via和双向forward/reverse名称。required来自原字段；存储与删除profile固定为reference/owner。正式发布使用原候选接口，kind为`link-type`，冻结并激活后才对成员提供注册声明。`GET /v1/definitions`的linkType/linkVersions仅返回当前成员可发现的对象与回指。
+
+沿`GET /v1/link-types/{app}/{name}/{version}/{direction}/{id}`读取，direction为forward或reverse，version例如`1.link-1`；GET可用domain/search/sort/offset/limit，POST同一路径接受原Query JSON（包括完整集合谓词）。Web代码使用`EdgeClient.traverseLink(binding,direction,id,query)`。起点和目标继续按原权限读取，无权、缺失或隐藏字段不会退化到全对象列表。发布后保持关系身份、对象与回指形状；描述和双向名称可发布新版本，旧版本仍可读取。该API不新增级联删除或关系实例写入动作。

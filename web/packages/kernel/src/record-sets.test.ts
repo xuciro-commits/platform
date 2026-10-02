@@ -27,3 +27,10 @@ test("set aggregates post predicates and measures without a record window or ope
  const query={set:{op:"intersect",inputs:[{domain:[["active","=",true]]},{search:"current"}]},groups:["bucket"],measures:["count"]};
  const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(url).toBe("https://test.invalid/v1/aggregates/sample.note/query");expect(options.method).toBe("POST");expect(JSON.parse(String(options.body))).toEqual(query);expect(options.headers).toMatchObject({Authorization:"Bearer test","Platform-Tenant":"t"});return new Response(JSON.stringify({columns:[],rows:[]}));});vi.stubGlobal("fetch",fetcher);await client().aggregate("sample.note",query);expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+test("retained link traversal carries its exact identity and query once, and rejection never broadens the read",async()=>{
+ const binding={ref:{app:"build",kind:"link-type" as const,name:"children"},sourceVersion:"1.link-1"},query={domain:[["state","=","open"]],limit:1,offset:1};
+ const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(url).toBe("https://test.invalid/v1/link-types/build/children/1.link-1/forward/parent%20one");expect(options.method).toBe("POST");expect(JSON.parse(String(options.body))).toEqual(query);return new Response("{}",{status:403});});vi.stubGlobal("fetch",fetcher);
+ await expect(client().traverseLink(binding,"forward","parent one",query)).rejects.toThrow("403");expect(fetcher).toHaveBeenCalledTimes(1);
+ await expect(client().traverseLink({...binding,sourceVersion:""},"forward","parent one",query)).rejects.toThrow("exact version");expect(fetcher).toHaveBeenCalledTimes(1);
+});

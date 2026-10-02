@@ -639,6 +639,35 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, page)
 	})
+	handle(Route{Pattern: "POST /v1/link-types/{app}/{name}/{version}/{direction}/{id}", Summary: "Read a retained relationship using a bounded original query (ADR-0046)", Body: platform.Query{}, Answer: RecordPage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		var q *platform.Query
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&q) != nil || q == nil || decoder.Decode(new(any)) != io.EOF {
+			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A link query must be a bounded JSON object"))
+			return
+		}
+		result, err := t.TraverseLink(m, platform.AssetBinding{Ref: platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetLinkType, Name: r.PathValue("name")}, SourceVersion: r.PathValue("version")}, r.PathValue("direction"), r.PathValue("id"), *q, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, result)
+	})
+	handle(Route{Pattern: "GET /v1/link-types/{app}/{name}/{version}/{direction}/{id}", Summary: "Follow one retained link type within the member's original record scope (ADR-0046)", Answer: RecordPage{}, Query: []Param{{"domain", "Additional record filters"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated"}, {"offset", "Records to skip"}, {"limit", "Records in the page"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search")}
+		if sort := r.URL.Query().Get("sort"); sort != "" {
+			q.Sort = strings.Split(sort, ",")
+		}
+		fmt.Sscan(r.URL.Query().Get("offset"), &q.Offset)
+		fmt.Sscan(r.URL.Query().Get("limit"), &q.Limit)
+		result, err := t.TraverseLink(m, platform.AssetBinding{Ref: platform.AssetRef{App: r.PathValue("app"), Kind: platform.AssetLinkType, Name: r.PathValue("name")}, SourceVersion: r.PathValue("version")}, r.PathValue("direction"), r.PathValue("id"), q, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, result)
+	})
 	handle(Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []Param{{"domain", "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated; -field for descending"}, {"offset", "Records to skip"}, {"limit", "Records in the page"}, {"archived", "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
 		if sort := r.URL.Query().Get("sort"); sort != "" {

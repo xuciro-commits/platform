@@ -47,6 +47,17 @@ func (h hostView) ValidateInstallDependents(e platform.Entity, actions []platfor
 		return err
 	}
 	for _, def := range h.t.definitions {
+		if def.LinkType != nil {
+			view := hostView{t: draft, app: h.t.app(def.Ref.App)}
+			if err := view.ValidateInstallLinkType(*def.LinkType); err != nil {
+				return err
+			}
+			for _, l := range def.LinkVersions {
+				if err := view.ValidateInstallLinkType(l); err != nil {
+					return err
+				}
+			}
+		}
 		if def.Application != nil {
 			for _, q := range def.Application.Queries {
 				if q.Object.Name == e.Type {

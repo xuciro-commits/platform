@@ -72,7 +72,7 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 			}
 		}
 		for _, binding := range bindings {
-			if binding.Ref.Kind != platform.AssetQuery && binding.Ref.Kind != platform.AssetFunction && binding.Ref.Kind != platform.AssetCompute || binding.SourceVersion == "" {
+			if binding.Ref.Kind != platform.AssetLinkType && binding.Ref.Kind != platform.AssetQuery && binding.Ref.Kind != platform.AssetFunction && binding.Ref.Kind != platform.AssetCompute || binding.SourceVersion == "" {
 				return fmt.Errorf("%s has an invalid version binding", ref)
 			}
 			if prior := pins[binding.Ref]; prior != "" && prior != binding.SourceVersion {
@@ -106,7 +106,15 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 		}
 		var asset platform.ReleaseAsset
 		var err error
-		if ref.Kind == platform.AssetQuery {
+		if ref.Kind == platform.AssetLinkType {
+			owner, ok := t.app(ref.App).(interface {
+				LinkTypeReleaseAsset(string, string) (platform.ReleaseAsset, error)
+			})
+			if !ok {
+				return platform.ReleaseCandidate{}, fmt.Errorf("link type has no retained owner")
+			}
+			asset, err = owner.LinkTypeReleaseAsset(ref.Name, version)
+		} else if ref.Kind == platform.AssetQuery {
 			owner, ok := t.app(ref.App).(interface {
 				QueryReleaseAsset(string, string) (platform.ReleaseAsset, error)
 			})

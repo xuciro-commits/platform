@@ -409,6 +409,8 @@ export type ContextView = {
 };
 
 export type Definition = {
+  linkType?: LinkType;
+  linkVersions?: Record<string, LinkType>;
   ref: AssetRef;
   source: string;
   version: string;
@@ -695,6 +697,21 @@ export type Link = {
   to: string;
   by: string;
   at: string;
+};
+
+export type LinkType = {
+  name: string;
+  title: string;
+  description: string;
+  parent: AssetRef;
+  child: AssetRef;
+  via: string;
+  forward: string;
+  reverse: string;
+  storage: string;
+  cardinality: string;
+  required: boolean;
+  deletePolicy: string;
 };
 
 export type LoopFrame = {

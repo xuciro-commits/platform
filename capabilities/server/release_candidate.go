@@ -71,6 +71,15 @@ func (t *Tenant) releaseAssetsLocked(builderAssets []platform.ReleaseAsset, repl
 				}
 				available = append(available, platform.ReleaseAsset{Ref: def.Ref, ContractVersion: def.ContractVersion,
 					SourceVersion: manifest.Version, Requires: def.Requires, Body: body})
+			case platform.AssetLinkType:
+				if def.LinkType == nil {
+					return nil, fmt.Errorf("code link type has no descriptor")
+				}
+				body, err := json.Marshal(def.LinkType)
+				if err != nil {
+					return nil, err
+				}
+				available = append(available, platform.ReleaseAsset{Ref: def.Ref, SourceVersion: manifest.Version, ContractVersion: def.ContractVersion, Requires: def.Requires, Body: body})
 			case platform.AssetQuery:
 				if def.Query == nil {
 					return nil, fmt.Errorf("code query %s has no owner declaration", def.Ref)

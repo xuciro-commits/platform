@@ -83,6 +83,11 @@ func (t *Tenant) simulationEnvironment(candidate platform.ReleaseCandidate, samp
 				manifest.Entities = append(manifest.Entities, entity)
 			}
 		}
+		for _, l := range original.LinkTypes {
+			if selected[platform.AssetRef{App: id, Kind: platform.AssetLinkType, Name: l.Name}] {
+				manifest.LinkTypes = append(manifest.LinkTypes, l)
+			}
+		}
 		for _, query := range original.Queries {
 			if selected[platform.AssetRef{App: id, Kind: platform.AssetQuery, Name: query.Name}] {
 				manifest.Queries = append(manifest.Queries, query)

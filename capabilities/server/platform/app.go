@@ -204,12 +204,13 @@ type Manifest struct {
 	Emits      []EffectKind  // outbound effects it sends to endpoints the tenant binds (ADR-0014)
 	Entities   []Entity      // entity types whose records the host keeps (ADR-0016)
 	Pages      []Page        // bounded code page descriptors over those records/actions (ADR-0032 13b)
-	Queries    []NamedQuery  // named pure queries pages and agents share (ADR-0040 21c)
-	Functions  []AIFunction  // typed, bounded inference through existing model effects (ADR-0043)
-	Operations []Operation   // typed native or controlled Wasm computation (ADR-0044)
-	Flows      []Flow        // long-running processes the host runs for the app (ADR-0020)
-	Agents     []Agent       // AI agents the host runs for the app (ADR-0021)
-	Sequences  []Sequence    // numbers of its documents, without gaps (ADR-0024)
+	LinkTypes  []LinkType
+	Queries    []NamedQuery // named pure queries pages and agents share (ADR-0040 21c)
+	Functions  []AIFunction // typed, bounded inference through existing model effects (ADR-0043)
+	Operations []Operation  // typed native or controlled Wasm computation (ADR-0044)
+	Flows      []Flow       // long-running processes the host runs for the app (ADR-0020)
+	Agents     []Agent      // AI agents the host runs for the app (ADR-0021)
+	Sequences  []Sequence   // numbers of its documents, without gaps (ADR-0024)
 	// Roles are roles that grant no action but open something else, such as
 	// models (ADR-0015); the roles its actions grant need not be listed.
 	Roles []string

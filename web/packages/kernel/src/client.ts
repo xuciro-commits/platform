@@ -1,7 +1,7 @@
 // A browser edge of a server-authoritative domain: a persisted K5 outbox and an
 // HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
-import type { Action, Query, AggregateQuery } from "./gen/host";
+import type { Action, Query, AggregateQuery, AssetBinding } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 
 /** One action a server offers to this caller (ADR-0008): render from it, never re-check roles. Generated from the host (ADR-0023). */
@@ -178,6 +178,14 @@ export class EdgeClient {
     if (q.limit) p.set("limit", String(q.limit));
     if (q.archived) p.set("archived", "true");
     return this.get<T>(`/v1/records/${encodeURIComponent(type)}?${p}`);
+  }
+
+  /** Follow an exact relationship version; the server applies its typed reference and member scope. */
+  async traverseLink<T=unknown>(binding:AssetBinding,direction:"forward"|"reverse",id:string,query:Omit<Query,"domain">&{domain?:unknown[]}={}):Promise<T>{
+    if(binding.ref.kind!=="link-type"||!binding.sourceVersion||!id)throw new Error("Link traversal needs an exact version and start record");
+    const path=`/v1/link-types/${[binding.ref.app,binding.ref.name,binding.sourceVersion,direction,id].map(encodeURIComponent).join("/")}`;
+    const response=await fetch(this.connection.server+path,{method:"POST",headers:this.headers(true),body:JSON.stringify(query)});
+    if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);return response.json() as Promise<T>;
   }
 
   /** Groups and measures of an entity type's records within the caller's scope (ADR-0019): `groups` like "stage" or "checkIn:month", `measures` like "count" or "sum:amount". */

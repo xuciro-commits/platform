@@ -345,6 +345,18 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 	}
 	var required []AssetRef
 	switch ref.Kind {
+	case AssetLinkType:
+		var l LinkType
+		if err := json.Unmarshal(body, &l); err != nil {
+			return err
+		}
+		if err := l.Check(); err != nil {
+			return err
+		}
+		if l.Child.App != ref.App {
+			return fmt.Errorf("link type must be declared by its child owner")
+		}
+		required = append(required, l.Parent, l.Child)
 	case AssetQuery:
 		var q NamedQuery
 		if err := json.Unmarshal(body, &q); err != nil {

@@ -48,7 +48,7 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 		switch schema {
 		case build.SchemaPublish:
 			return 0
-		case build.SchemaQuery:
+		case build.SchemaLinkType, build.SchemaQuery:
 			return 1
 		case build.SchemaRelease:
 			return 2
@@ -164,6 +164,22 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 			if err := view.InstallOperation(platform.Caller{Replaying: true}, *decl.Operation, decl.Version); err != nil {
 				return nil, err
 			}
+		case build.SchemaLinkType:
+			var record build.LinkType
+			if err := json.Unmarshal(installation.Image, &record); err != nil {
+				return nil, err
+			}
+			view := hostView{t: draft, app: owner}
+			for i, raw := range record.Versions {
+				var l build.LinkType
+				if json.Unmarshal([]byte(raw), &l) != nil {
+					return nil, fmt.Errorf("invalid link family")
+				}
+				declaration := platform.LinkType{Name: l.Name, Title: l.Title, Description: l.Description, Parent: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: l.Parent}, Child: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: l.Child}, Via: l.Via, Forward: l.Forward, Reverse: l.Reverse, Required: l.Required, Storage: "reference", Cardinality: "one-to-many", DeletePolicy: "owner"}
+				if err := view.InstallLinkType(platform.Caller{Replaying: true}, declaration, i+1); err != nil {
+					return nil, err
+				}
+			}
 		case build.SchemaQuery:
 			var record build.Query
 			if err := json.Unmarshal(installation.Image, &record); err != nil {
@@ -196,6 +212,17 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 	}
 	pages := map[platform.AssetRef]platform.Page{}
 	for _, definition := range draft.definitions {
+		if definition.LinkType != nil {
+			view := hostView{t: draft, app: draft.app(definition.Ref.App)}
+			if err := view.ValidateInstallLinkType(*definition.LinkType); err != nil {
+				return nil, err
+			}
+			for _, l := range definition.LinkVersions {
+				if err := view.ValidateInstallLinkType(l); err != nil {
+					return nil, err
+				}
+			}
+		}
 		if definition.Page != nil {
 			pages[definition.Ref] = *definition.Page
 		}

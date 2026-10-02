@@ -242,7 +242,7 @@ func (t *Tenant) Restore(raw json.RawMessage) error {
 		return err
 	}
 	needsDefinitions := len(held) > 0
-	for typ, kind := range map[string]platform.AssetKind{build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute} {
+	for typ, kind := range map[string]platform.AssetKind{build.LinkTypeType: platform.AssetLinkType, build.QueryType: platform.AssetQuery, build.ObjectType: platform.AssetObject, build.PageType: platform.AssetPage, build.AppType: platform.AssetApp, build.ProcessType: platform.AssetFlow, build.FunctionType: platform.AssetFunction, build.CodeType: platform.AssetCompute} {
 		for _, row := range s.Records[typ] {
 			var meta struct {
 				Published string `json:"published"`

@@ -162,6 +162,22 @@ func (t *Tenant) registerDefinitions() error {
 	}
 	for _, app := range t.apps {
 		manifest := app.Manifest()
+		for _, l := range manifest.LinkTypes {
+			parent, ok := t.entity(l.Parent.Name)
+			if !ok {
+				return fmt.Errorf("link parent missing")
+			}
+			child, ok := t.entity(l.Child.Name)
+			if !ok || l.Child.App != manifest.ID {
+				return fmt.Errorf("link child owner differs")
+			}
+			if err := l.CheckSchema(parent, child); err != nil {
+				return err
+			}
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetLinkType, Name: l.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Requires: uniqueRefs([]platform.AssetRef{l.Parent, l.Child}), LinkType: &l}); err != nil {
+				return err
+			}
+		}
 		for _, query := range manifest.Queries {
 			q := query
 			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetQuery, Name: q.Name}
@@ -273,6 +289,27 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 				continue
 			}
 			def.Action = &action
+		case platform.AssetLinkType:
+			if def.LinkType == nil {
+				continue
+			}
+			def.LinkVersions = maps.Clone(def.LinkVersions)
+			visible := func(l platform.LinkType) bool {
+				parent, pok := entities[l.Parent.Name]
+				child, cok := entities[l.Child.Name]
+				return pok && cok && l.CheckSchema(parent, child) == nil
+			}
+			for version, l := range def.LinkVersions {
+				if !visible(l) {
+					delete(def.LinkVersions, version)
+				}
+			}
+			if !visible(*def.LinkType) {
+				def.LinkType = nil
+				if len(def.LinkVersions) == 0 {
+					continue
+				}
+			}
 		case platform.AssetQuery:
 			if def.Query == nil {
 				continue
