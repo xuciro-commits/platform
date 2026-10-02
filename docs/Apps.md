@@ -52,6 +52,8 @@
 
 应用共享筛选：应用变量选择“Resource output / 资源输出”→“Filter values / 筛选条件”，在“Filter object / 筛选对象”选择对象，再勾选“Allowed filter fields / 允许筛选的字段”。页面变量选择“Application binding / 应用共享绑定”和该filter，生产页勾选“Allow filter updates / 允许更新筛选”；在页面根Filter及原Table/Chart/Metric的“Shared filter binding / 共享筛选绑定”选择此端口。共享与同根局部条件按AND合并，原查询/关系条件保留；绑定查询窗口的Table由原计划控制，不提供此端口。共享声明发生类型/对象变化时，显式使用“Update shared binding / 更新共享绑定”并审查页面。实例关闭、身份或应用声明变化清理，刷新为空；缺少共享来源显示诊断，不自动读取全对象。正式交付冻结原应用候选中的对象、允许字段及端口，运行条件不保存。
 
+记录时间轴：组件库添加“Record timeline / 记录时间轴”，选择“Timeline query window / 时间轴查询窗口”，再配置开始时间、可选同类型结束时间、记录标题与资源字段。日期使用民用日；datetime必须带时区并按UTC显示，区间不含结束时刻。点击时间点/区间把原记录传给详情与动作，分页或查询参数变化清理旧选择。显示窗口条数/total，不把部分窗口称作完整排程；无效/缺失/反向时间提示条数。“Timeline”原单记录历史组件仍按日志显示。正式交付沿原页面候选冻结激活，API身份为record-timeline/configVersion=1，需要v2.25及显式collectionVariable，字段是timeStart/timeEnd/timeLabel/timeGroup。
+
 共享表格窗口：在Table检查器选择“Table query window / 表格查询窗口”，绑定计划结果变量。表格直接显示与Loop相同的窗口，搜索/排序/分页作用于这份计划，切换后原选择与其关联详情清理；参数改变恢复计划默认视图。计划有search参数时锁定表格搜索，具名查询有排序时锁定排序，列表不能增加窗口limit或覆盖条件。此端口不同时使用原query/relation/parentSelection；选择“Use the table's own query / 使用表格自身查询”恢复原列表路径。已有表格的Query window输出会转发绑定窗口，可保留旧Loop连线。候选保存端口和计划，运行视图只在会话中保存；刷新不会带回搜索、页码或旧选择。
 
 重复呈现记录：可先将页面变量设为“Query window / 查询窗口”，选择循环之外的来源表格，或使用上面的独立计划结果变量。把相邻详情、动作等组件组合为“Loop / 循环”，设置“Loop query window / 循环查询窗口”与“Loop item limit / 循环条目上限”；记录组件自动改为读取当前item，不跟随页面共享选择。可使用详情/动作/历史/任务及文字/按钮/输入模板；最多两层循环，父子绑定见下文；模板内不放独立查询组件。窗口超出limit时明确显示范围，不自动续页。新增文本/布尔变量后，在“Variable scope / 变量作用域”选择目标Loop，可绑定本项按钮与显示条件；记录变量由Loop维护。重排及虚拟卸载保留显式item状态，Widget局部输入随卸载清理，聚焦项保留；筛选/参数变化清空本项状态。同一查询刷新保留已挂载动作输入，读取拒绝清理内容。正式发布仍审查并激活原候选；页面变量刷新回到初始值。

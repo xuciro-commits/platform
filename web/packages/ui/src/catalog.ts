@@ -83,6 +83,8 @@ export const entries: CatalogEntry[] = [
     "components/NotificationList.tsx", ["NotificationList"], "Notifications", { type: "NotificationItem", states: ["Empty", "Read", "Unread"] }),
   asset("ui/record-list", "Record list", "Browse a scoped entity source with search, sort and paging.", 3,
     "records/Records.tsx", ["RecordList"], "RecordLists", { type: "RecordSource", states: ["Loading", "Empty", "Error", "Selected"], dependencies: ["ui/data-table", "ui/filter-bar"] }),
+  asset("ui/record-timeline", "Authorized record timeline", "Display a bounded record window as time points or intervals, grouped by an original resource field.", 3,
+    "records/RecordTimeline.tsx", ["RecordTimeline"], "RecordTimelines", { type:"TimelineFields",tags:["timeline","scheduling","records"],states:["Empty","Selected","Invalid"],dependencies:["ui/button"], constraints:["The caller supplies authorized records and selection. This component does not schedule or write records."] }),
   asset("ui/record-page", "Record detail and history", "Read a record's declared fields, related work and recorded changes.", 3,
     "records/Records.tsx", ["RecordPage", "RecordHistory"], "RecordDetails", { type: "RecordView", states: ["Loading", "Error", "Ready"],
       dependencies: ["ui/entity-card", "ui/lifecycle", "ui/tasks"], constraints: ["Visibility and allowed actions come from the scoped source and caller."] }),

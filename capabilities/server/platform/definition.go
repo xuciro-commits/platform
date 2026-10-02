@@ -126,6 +126,10 @@ type Section struct {
 	Group       string             `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
 	Mark        string             `json:"mark,omitempty"`
 	ColumnGroup string             `json:"columnGroup,omitempty"`
+	TimeStart   string             `json:"timeStart,omitempty"`
+	TimeEnd     string             `json:"timeEnd,omitempty"`
+	TimeLabel   string             `json:"timeLabel,omitempty"`
+	TimeGroup   string             `json:"timeGroup,omitempty"`
 	Measure     string             `json:"measure,omitempty"`   // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
 	Text        string             `json:"text,omitempty"`      // text
 	Function    *AssetBinding      `json:"function,omitempty"`  // exact published function

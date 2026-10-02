@@ -1325,6 +1325,10 @@ export type Section = {
   group?: string;
   mark?: string;
   columnGroup?: string;
+  timeStart?: string;
+  timeEnd?: string;
+  timeLabel?: string;
+  timeGroup?: string;
   measure?: string;
   text?: string;
   function?: AssetBinding;
@@ -1617,7 +1621,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.24",
+  "uiProfile": "platform.page.v2.25",
   "widgets": [
     {
       "componentID": "table",
@@ -2396,6 +2400,86 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-timeline",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.25",
+      "title": "Record timeline",
+      "category": "Scheduling",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "timeLabel": "id"
+      },
+      "bindingKinds": [
+        "object",
+        "selection",
+        "collection-variable",
+        "selection-variable"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "timeStart": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "timeEnd": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "timeLabel": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "timeGroup": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.25"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "selection",
+          "bindingField": "selectionVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.25",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -2422,7 +2506,8 @@ export const pageUIManifest = {
     "platform.page.v2.21",
     "platform.page.v2.22",
     "platform.page.v2.23",
-    "platform.page.v2.24"
+    "platform.page.v2.24",
+    "platform.page.v2.25"
   ],
   "runtime": {
     "scope": "page",
@@ -2516,6 +2601,11 @@ export const pageUIManifest = {
         "kind": "query",
         "type": "object-set",
         "widget": "table"
+      },
+      {
+        "kind": "record",
+        "widget": "record-timeline",
+        "type": "record"
       }
     ],
     "loop": {

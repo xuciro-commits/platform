@@ -239,7 +239,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 		}
 		if s.Widget == "function" {
 			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-				return other.Widget == "table" && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.Selection
+				return platform.WidgetWritesSelection(other.Widget) && (other.Object.Name == "" || other.Object == p.Object) && other.Selection == s.Selection
 			}) {
 				return fmt.Errorf("%s: add a table that selects a source record", where)
 			}
@@ -388,6 +388,13 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			return nil
 		}
 		switch s.Widget {
+		case "record-timeline":
+			if p.Document == nil {
+				return fmt.Errorf("record timeline needs a V2 document")
+			}
+			if err := s.CheckTimeline(info); err != nil {
+				return err
+			}
 		case "table", "detail":
 			if len(s.Fields) == 0 {
 				return fmt.Errorf("%s: no fields to show", where)

@@ -5,7 +5,7 @@ import {
   Button, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
-  RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  RecordTimeline, RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
@@ -284,4 +284,10 @@ export function FlowLayouts() {
 
 export function VirtualItems() {
   return <VirtualStack label={t("Repeated records")} items={Array.from({ length: 100 }, (_, i) => ({ id: `sample-${i}`, title: t("Item {n}", { n: i + 1 }) }))} itemKey={(item) => item.id} renderItem={(item) => <Card className="p-3">{item.title}<Button>{t("Open")}</Button></Card>} />;
+}
+
+export function RecordTimelines() {
+ const [selected,setSelected]=useState<string>();
+ const records=[{id:"EXAMPLE-A",title:"Incoming review",resource:"Team A",start:"2026-10-01",end:"2026-10-03"},{id:"EXAMPLE-B",title:"Inspection",resource:"Team A",start:"2026-10-04",end:"2026-10-05"}];
+ return <RecordTimeline records={records.map(r=>({...r,revision:1,created:stamp,changed:stamp}))} fields={{start:"start",end:"end",label:"title",group:"resource",kind:"date"}} selected={selected} onSelect={r=>setSelected(r?.id)} label={t("Record timeline")}/>;
 }

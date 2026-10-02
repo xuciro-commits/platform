@@ -263,6 +263,7 @@ register("zh-CN", {
   "turns ·": "轮 ·",
   "· passage": "· 段落",
   "· step": "· 步骤",
+  "Previous": "上一页",
 });
 
 // Catalog content belongs to this owner and uses the same source-text keys.
@@ -322,4 +323,9 @@ register("zh-CN", {
   "Page tabs": "页面标签页",
   "Tab {n}": "标签页 {n}",
   "Loading page variable…": "正在读取页面变量…",
+  "Record timeline": "记录时间轴",
+  "Timeline fields are unavailable or incompatible.": "时间轴字段不可用或不兼容。",
+  "Showing {shown} of {total} matching records": "显示 {shown} 条，共 {total} 条匹配记录",
+  "This timeline shows the current query window.": "此时间轴显示当前查询窗口。",
+  "Scheduling": "排程",
 });

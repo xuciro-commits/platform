@@ -18,6 +18,7 @@ type pageWidgetContract struct {
 	ComponentID       string            `json:"componentID"`
 	ConfigVersion     int               `json:"configVersion"`
 	RequiredUIProfile string            `json:"requiredUIProfile"`
+	SelectionMode     string            `json:"selectionMode"`
 	PropsSchema       ValueSchema       `json:"propsSchema"`
 	Defaults          map[string]any    `json:"defaults"`
 	InputPorts        []pageWidgetPort  `json:"inputPorts"`
@@ -97,6 +98,10 @@ var pageWidgets = func() pageUIContract {
 // PageUIManifest returns the exact descriptor used by api-types and Catalog.
 func PageUIManifest() string { return string(pageWidgetJSON) }
 func PageUIProfile() string  { return pageWidgets.UIProfile }
+func WidgetWritesSelection(id string) bool {
+	w := pageWidget(id)
+	return w != nil && w.SelectionMode == "write"
+}
 
 func SupportsPageUIProfile(profile string) bool {
 	return slices.Contains(pageWidgets.SupportedProfiles, profile)
@@ -181,7 +186,7 @@ func checkPageWidget(section Section) error {
 		}
 		// Only presentation properties are validated here. Asset references,
 		// selections, queries and actions retain their original host owners.
-		values := map[string]string{"title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "mark": section.Mark, "columnGroup": section.ColumnGroup, "measure": section.Measure}
+		values := map[string]string{"title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "mark": section.Mark, "columnGroup": section.ColumnGroup, "measure": section.Measure, "timeStart": section.TimeStart, "timeEnd": section.TimeEnd, "timeLabel": section.TimeLabel, "timeGroup": section.TimeGroup}
 		props := map[string]string{}
 		for key, value := range values {
 			if value != "" {

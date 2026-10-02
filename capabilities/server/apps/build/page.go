@@ -66,6 +66,10 @@ type Section struct {
 	Group       string                      `json:"group,omitempty" title:"Grouped by" help:"For a chart: the field, or <field>:month"`
 	Mark        string                      `json:"mark,omitempty"`
 	ColumnGroup string                      `json:"columnGroup,omitempty"`
+	TimeStart   string                      `json:"timeStart,omitempty" title:"Start time field"`
+	TimeEnd     string                      `json:"timeEnd,omitempty" title:"End time field"`
+	TimeLabel   string                      `json:"timeLabel,omitempty" title:"Timeline label field"`
+	TimeGroup   string                      `json:"timeGroup,omitempty" title:"Timeline resource field"`
 	Measure     string                      `json:"measure,omitempty" help:"For a chart or a metric: count, sum:<field>, avg:<field>"`
 	Text        string                      `json:"text,omitempty" type:"longtext" help:"For text: the words to show"`
 	Function    *platform.FunctionRef       `json:"function,omitempty" title:"Published AI function"`
@@ -135,7 +139,7 @@ func descriptor(p Page) platform.Page {
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
 		section := platform.Section{ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
-			Group: s.Group, Mark: s.Mark, ColumnGroup: s.ColumnGroup, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
+			Group: s.Group, Mark: s.Mark, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
 		if s.Function != nil {
 			section.Function = &platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: s.Function.Name},
 				SourceVersion: definitionVersion + ".function-" + fmt.Sprint(s.Function.Version)}

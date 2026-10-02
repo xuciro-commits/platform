@@ -1,11 +1,13 @@
 import { widgetContract } from "@platform/app";
 import { ChartInspector } from "./ChartInspector";
 import { PivotInspector } from "./PivotInspector";
+import {RecordTimelineInspector} from "./RecordTimelineInspector";
 import { TableInspector } from "./TableInspector";
 import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+  "record-timeline":{configVersion:1,bindings:RecordTimelineInspector},
   chart: {configVersion:1,bindings:ChartInspector},
   pivot: {configVersion:1,bindings:PivotInspector},
   table: { configVersion:1, bindings:TableInspector },

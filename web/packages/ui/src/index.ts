@@ -35,6 +35,7 @@ export { aggregateQuery, aggregateValues, columnOf, type ChartSpec, type ChartDa
 export { Inbox, RecordList, groupable, measurable, type ListState, RecordPage, RecordHistory, Tasks, StatusBar, entityFrom, setCurrency, type Options, type InboxTask, type Lifecycle, type State, type EntityInfo, type FieldInfo, type EntityRecord, type RecordQuery, type RecordPageData, type RecordView, type RecordChange, type RecordSource, type Money } from "./records/Records";
 export { RecordWorkspace } from "./records/RecordWorkspace";
 export { RecordLookup } from "./records/RecordLookup";
+export {RecordTimeline,type TimelineFields} from "./records/RecordTimeline";
 export { humanizeKernelError } from "./lib/errors";
 
 export { useViewVisible } from "./shell/ViewVisibility";

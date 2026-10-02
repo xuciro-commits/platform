@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:9178d1bd708d9d0f",
+  "revision": "sha256:295c552a05aa1421",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1649,6 +1649,41 @@
       ]
     },
     {
+      "id": "ui/record-timeline",
+      "owner": "@platform/ui",
+      "name": "Authorized record timeline",
+      "summary": "Display a bounded record window as time points or intervals, grouped by an original resource field.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordTimeline.tsx",
+      "exports": [
+        "RecordTimeline"
+      ],
+      "example": "RecordTimelines",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "timeline",
+        "scheduling",
+        "records"
+      ],
+      "type": "TimelineFields",
+      "states": [
+        "Empty",
+        "Selected",
+        "Invalid"
+      ],
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller supplies authorized records and selection. This component does not schedule or write records."
+      ]
+    },
+    {
       "id": "ui/record-workspace",
       "owner": "@platform/ui",
       "name": "Record list and detail",
@@ -1896,6 +1931,7 @@
       "Authorized cross-application search": "受权跨应用搜索",
       "Authorized record detail": "受权记录详情",
       "Authorized record list": "受权记录列表",
+      "Authorized record timeline": "授权记录时间轴",
       "Authorized workflow run": "受权流程运行",
       "Bind a published Go/Wasm operation to a page using its original owner contract.": "按原能力契约将已发布 Go/Wasm 操作绑定到页面。",
       "Bound dashboard": "绑定仪表盘",
@@ -1923,6 +1959,7 @@
       "Detail sheet": "详情侧栏",
       "Disabled": "禁用",
       "Disclosure": "展开区块",
+      "Display a bounded record window as time points or intervals, grouped by an original resource field.": "将有界记录窗口显示为时间点或区间，按原资源字段分组。",
       "Display declared record states and caller-allowed transitions.": "展示已声明的记录状态与调用方允许的跃迁。",
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
@@ -2037,6 +2074,7 @@
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
+      "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
       "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.": "本地示例在原 WorkflowEditor 展示输入到结果的流程，不执行流程。",
       "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
@@ -2088,6 +2126,7 @@
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/Button.tsx",
+      "web/packages/app/src/widgets/RecordTimeline.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/asset-controls.tsx",
       "web/packages/build/src/code.tsx",
@@ -2150,6 +2189,7 @@
       "web/packages/build/src/page-editor/widgets/AggregateSource.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
@@ -2226,6 +2266,7 @@
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
+      "web/packages/app/src/widgets/RecordTimeline.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
@@ -2413,6 +2454,9 @@
     ],
     "ui/pivot": [
       "web/packages/app/src/widgets/Pivot.tsx"
+    ],
+    "ui/record-timeline": [
+      "web/packages/app/src/widgets/RecordTimeline.tsx"
     ],
     "app/composed-page": [
       "web/packages/build/src/catalog.examples.tsx",
@@ -2640,6 +2684,7 @@
         "State",
         "StatusRegistry",
         "TimeUnit",
+        "TimelineFields",
         "Tone",
         "View"
       ]

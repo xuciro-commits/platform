@@ -683,6 +683,20 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 }
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
+	for _, s := range page.Sections {
+		if s.Widget != "record-timeline" {
+			continue
+		}
+		ref := s.Object
+		if ref.Name == "" {
+			ref = page.Object
+		}
+		asset, ok := lookup[ref]
+		info, err := queryObjectDescriptor(asset.Body)
+		if !ok || err != nil || page.Document == nil || s.CheckTimeline(info) != nil {
+			return fmt.Errorf("frozen record timeline schema is unavailable")
+		}
+	}
 	namedSources := map[AssetBinding]NamedQuery{}
 	if page.Document != nil {
 		if err := page.Document.CheckQuerySets(); err != nil {
