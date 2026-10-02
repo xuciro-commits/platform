@@ -954,6 +954,7 @@ export type PageQueryCondition = {
 };
 
 export type PageResourceSource = {
+  fields?: string[];
   object?: AssetRef;
   query?: string;
   variable?: string;
@@ -1237,6 +1238,7 @@ export type Section = {
   collectionVariable?: string;
   recordVariable?: string;
   selectionVariable?: string;
+  filterVariable?: string;
   parentSelection?: string;
   relation?: string;
   query?: AssetRef;
@@ -1535,7 +1537,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.14",
+  "uiProfile": "platform.page.v2.15",
   "widgets": [
     {
       "componentID": "table",
@@ -1554,7 +1556,8 @@ export const pageUIManifest = {
         "relation",
         "selection",
         "collection-variable",
-        "selection-variable"
+        "selection-variable",
+        "filter-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -1656,7 +1659,8 @@ export const pageUIManifest = {
       "bindingKinds": [
         "object",
         "relation",
-        "aggregate"
+        "aggregate",
+        "filter-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -1698,7 +1702,8 @@ export const pageUIManifest = {
       "bindingKinds": [
         "object",
         "relation",
-        "aggregate"
+        "aggregate",
+        "filter-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -1771,7 +1776,8 @@ export const pageUIManifest = {
       },
       "bindingKinds": [
         "object",
-        "fields"
+        "fields",
+        "filter-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -2039,7 +2045,8 @@ export const pageUIManifest = {
     "platform.page.v2.11",
     "platform.page.v2.12",
     "platform.page.v2.13",
-    "platform.page.v2.14"
+    "platform.page.v2.14",
+    "platform.page.v2.15"
   ],
   "runtime": {
     "scope": "page",
@@ -2162,7 +2169,8 @@ export const pageUIManifest = {
         "string",
         "boolean",
         "object-set",
-        "record"
+        "record",
+        "filter"
       ],
       "modes": [
         "state",
@@ -2170,7 +2178,8 @@ export const pageUIManifest = {
         "derived",
         "resource"
       ],
-      "bindingMode": "shared"
+      "bindingMode": "shared",
+      "maxFilterFields": 16
     },
     "query": {
       "source": "plan",

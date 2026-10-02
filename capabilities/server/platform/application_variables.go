@@ -21,6 +21,9 @@ func (a Application) CheckVariables() error {
 		return fmt.Errorf("application query resources require v2.12")
 	}
 	for id, v := range a.Variables {
+		if v.Type == "filter" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.15") {
+			return fmt.Errorf("application filter %s requires v2.15", id)
+		}
 		if v.Type == "record" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.14") {
 			return fmt.Errorf("application record %s requires v2.14", id)
 		}
@@ -53,11 +56,21 @@ func (a Application) CheckPageVariables(p Page) error {
 		if v.Type == "object-set" {
 			matches = source.Mode == "resource" && source.Source != nil && source.Source.Kind == "plan" && v.Source.Object != nil && a.Queries[source.Source.Query].Object == *v.Source.Object
 		}
-		if v.Type == "record" {
-			matches = source.Mode == "resource" && source.Source != nil && source.Source.Kind == "record" && source.Source.Object != nil && v.Source.Object != nil && *source.Source.Object == *v.Source.Object
+		if v.Type == "record" || v.Type == "filter" {
+			matches = source.Mode == "resource" && source.Source != nil && source.Source.Kind == v.Type && source.Source.Object != nil && v.Source.Object != nil && *source.Source.Object == *v.Source.Object
 		}
-		if !ok || !matches || source.Type != v.Type || v.Writable && source.Mode != "state" && v.Type != "record" {
+		if !ok || !matches || source.Type != v.Type || v.Writable && source.Mode != "state" && v.Type != "record" && v.Type != "filter" {
 			return fmt.Errorf("application %s does not satisfy page %s shared binding %s", a.Name, p.Name, id)
+		}
+		for _, section := range p.Sections {
+			if section.FilterVariable != id || section.Widget != "filter" {
+				continue
+			}
+			for _, field := range section.Fields {
+				if source.Source == nil || !slices.Contains(source.Source.Fields, field) {
+					return fmt.Errorf("page filter field is not allowed by application")
+				}
+			}
 		}
 	}
 	return nil

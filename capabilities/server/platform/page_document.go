@@ -54,6 +54,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
+		if variable.Scope == "application" && variable.Type == "filter" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.15") {
+			return fmt.Errorf("shared filter %s requires v2.15", id)
+		}
 		if variable.Scope == "application" && variable.Type == "record" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.14") {
 			return fmt.Errorf("shared record %s requires v2.14", id)
 		}
@@ -269,6 +272,13 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		if variable.Source != nil {
 			dependencies = append(dependencies, controls[variable.Source.Section]...)
+			if variable.Source.Kind == "filter" {
+				for _, s := range sections {
+					if s.ID == variable.Source.Section && s.FilterVariable != "" {
+						dependencies = append(dependencies, s.FilterVariable)
+					}
+				}
+			}
 			if variable.Source.Kind == "query" || variable.Source.Kind == "record" {
 				for _, s := range sections {
 					if s.ID == variable.Source.Section && s.CollectionVariable != "" {
@@ -392,8 +402,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		}
 		if node.Kind == "widget" {
 			for _, s := range sections {
-				if s.ID == node.Section && (s.CollectionVariable != "" || s.RecordVariable != "" || s.SelectionVariable != "") {
+				if s.ID == node.Section && (s.CollectionVariable != "" || s.RecordVariable != "" || s.SelectionVariable != "" || s.FilterVariable != "") {
 					if _, ok := variables[s.CollectionVariable]; s.CollectionVariable != "" && !ok {
+						return false
+					}
+					if _, ok := variables[s.FilterVariable]; s.FilterVariable != "" && !ok {
 						return false
 					}
 					if _, ok := variables[s.SelectionVariable]; s.SelectionVariable != "" && !ok {

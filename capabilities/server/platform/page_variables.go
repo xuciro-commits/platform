@@ -24,6 +24,7 @@ type PageVariable struct {
 // PageResourceSource names a typed widget output, loop item or application
 // presentation port. Widget sources retain their original read boundary.
 type PageResourceSource struct {
+	Fields   []string  `json:"fields,omitempty"`
 	Object   *AssetRef `json:"object,omitempty"` // object requirement of a shared window
 	Query    string    `json:"query,omitempty"`
 	Variable string    `json:"variable,omitempty"`
@@ -42,10 +43,11 @@ type PageValue struct {
 type pageRuntimeContract struct {
 	Scope       string `json:"scope"`
 	Application struct {
-		Scope       string   `json:"scope"`
-		ValueTypes  []string `json:"valueTypes"`
-		Modes       []string `json:"modes"`
-		BindingMode string   `json:"bindingMode"`
+		Scope           string   `json:"scope"`
+		ValueTypes      []string `json:"valueTypes"`
+		Modes           []string `json:"modes"`
+		BindingMode     string   `json:"bindingMode"`
+		MaxFilterFields int      `json:"maxFilterFields"`
 	} `json:"application"`
 	Overlay struct {
 		Scope      string   `json:"scope"`
@@ -152,12 +154,15 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Mode != "resource" && v.Mode != contract.Application.BindingMode && v.Source != nil {
 			return fail("only resource or shared variables may declare a source")
 		}
-		if v.Source != nil && v.Source.Object != nil && !((v.Mode == "shared" && (v.Type == "object-set" || v.Type == "record")) || (v.Mode == "resource" && v.Scope == "application" && v.Type == "record")) {
+		if v.Source != nil && v.Source.Object != nil && !((v.Mode == "shared" && (v.Type == "object-set" || v.Type == "record" || v.Type == "filter")) || (v.Mode == "resource" && v.Scope == "application" && (v.Type == "record" || v.Type == "filter"))) {
 			return fail("only shared windows declare an object requirement")
+		}
+		if v.Source != nil && len(v.Source.Fields) > 0 && !(v.Scope == "application" && v.Mode == "resource" && v.Type == "filter") {
+			return fail("only an application filter declares fields")
 		}
 		switch v.Mode {
 		case "shared":
-			if v.Type == "record" && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
+			if (v.Type == "record" || v.Type == "filter") && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
 				return fail("shared record needs an object requirement")
 			}
 			if v.Type == "object-set" && (v.Writable || v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
@@ -174,9 +179,21 @@ func (d *PageDocument) CheckVariables() error {
 			if v.Source == nil || v.Source.Variable != "" || v.Expression != nil || len(v.Initial) != 0 {
 				return fail("resource variable needs only a typed source")
 			}
-			if v.Source.Kind == "record" && v.Scope == "application" {
-				if v.Type != "record" || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" {
+			if (v.Source.Kind == "record" || v.Source.Kind == "filter") && v.Scope == "application" {
+				if v.Type != v.Source.Kind || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" {
 					return fail("application record needs only an object source")
+				}
+				if v.Type == "filter" {
+					if len(v.Source.Fields) == 0 || len(v.Source.Fields) > contract.Application.MaxFilterFields {
+						return fail("application filter needs bounded fields")
+					}
+					seen := map[string]bool{}
+					for _, field := range v.Source.Fields {
+						if !pageNodeID.MatchString(field) || seen[field] {
+							return fail("invalid filter field")
+						}
+						seen[field] = true
+					}
 				}
 				break
 			}

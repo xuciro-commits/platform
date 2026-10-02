@@ -53,3 +53,13 @@ test("application record references require authorized reads, preserve producer 
  first.select("selected",{object:"sample.note",id:"late"},b);await tick();first.close();const reopened=hub.get("one",variables,options);reopened.attach(Symbol(),()=>{});pending[3].resolve({record:{id:"late",revision:1}});await tick();assert.deepEqual(reopened.reads.snapshot().records,{});assert.deepEqual(first.reads.snapshot().records,{});
  first.select("selected",{object:"sample.note",id:"resurrect"},b);assert.deepEqual(first.reads.snapshot().records,{});
 });
+
+test("application filters use declared fields and values, isolate resources and preserve record and plan state",async()=>{
+ const object={app:"sample",kind:"object",name:"sample.note"};const variables={filter:{scope:"application",type:"filter",mode:"resource",source:{kind:"filter",object,fields:["active","state"]}},other:{scope:"application",type:"filter",mode:"resource",source:{kind:"filter",object,fields:["active"]}},selected:{scope:"application",type:"record",mode:"resource",source:{kind:"record",object}}};
+ const source={scope:"member:v1",entity:()=>({fields:[{name:"active",type:"boolean"},{name:"state",type:"choice",choices:["open","done"]},{name:"hidden",type:"boolean"}]}),get:async(_,id)=>({record:{id,revision:1}}),list:async()=>({records:[{id:"fixed",revision:1}],total:1})};
+ const hub=new ApplicationSessionHub(),options={source,queries:{}},first=hub.get("one",variables,options),second=hub.get("two",variables,options),a=Symbol(),b=Symbol();first.attach(a,()=>{});first.attach(b,()=>{});second.attach(Symbol(),()=>{});
+ first.select("selected",{object:object.name,id:"record"},a);await tick();await first.reads.querySource("plan/read").list(object.name,{limit:10});
+ first.filter("filter","active",true);first.filter("other","active",false);assert.deepEqual(first.reads.snapshot().filters,{filter:{active:true},other:{active:false}});assert.deepEqual(second.reads.snapshot().filters,{});assert.equal(first.reads.snapshot().records.selected.value.id,"record");assert.equal(first.reads.snapshot().queries["plan/read"].value.records[0].id,"fixed");
+ first.filter("filter","active","true");first.filter("filter","state","invalid");first.filter("filter","hidden",true);assert.deepEqual(first.reads.snapshot().filters.filter,{active:true});
+ first.filter("filter","state","open");first.filter("filter","active",undefined);assert.deepEqual(first.reads.snapshot().filters.filter,{state:"open"});first.detach(a);assert.deepEqual(first.reads.snapshot().filters.filter,{state:"open"});first.close();first.filter("filter","active",true);assert.deepEqual(first.reads.snapshot().filters,{});assert.deepEqual(hub.get("one",variables,options).reads.snapshot().filters,{});
+});

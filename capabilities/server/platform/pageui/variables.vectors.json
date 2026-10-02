@@ -1652,5 +1652,113 @@
         }
       }
     }
+  },
+  {
+    "name": "typed application filter resource",
+    "valid": true,
+    "variables": {
+      "filter": {
+        "scope": "application",
+        "type": "filter",
+        "mode": "resource",
+        "source": {
+          "kind": "filter",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          },
+          "fields": [
+            "active"
+          ]
+        }
+      }
+    },
+    "resources": {
+      "filter": {
+        "status": "value",
+        "value": {
+          "kind": "filter",
+          "object": "sample.note",
+          "fields": {
+            "active": true
+          }
+        }
+      }
+    },
+    "values": {
+      "filter": {
+        "kind": "filter",
+        "object": "sample.note",
+        "fields": {
+          "active": true
+        }
+      }
+    }
+  },
+  {
+    "name": "writable shared filter with object requirement",
+    "valid": true,
+    "variables": {
+      "filter": {
+        "scope": "application",
+        "type": "filter",
+        "mode": "shared",
+        "writable": true,
+        "source": {
+          "kind": "application",
+          "variable": "filter",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          }
+        }
+      }
+    },
+    "resources": {
+      "filter": {
+        "status": "value",
+        "value": {
+          "kind": "filter",
+          "object": "sample.note",
+          "fields": {
+            "active": true
+          }
+        }
+      }
+    },
+    "values": {
+      "filter": {
+        "kind": "filter",
+        "object": "sample.note",
+        "fields": {
+          "active": true
+        }
+      }
+    }
+  },
+  {
+    "name": "application filter rejects duplicate fields",
+    "valid": false,
+    "variables": {
+      "filter": {
+        "scope": "application",
+        "type": "filter",
+        "mode": "resource",
+        "source": {
+          "kind": "filter",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          },
+          "fields": [
+            "active",
+            "active"
+          ]
+        }
+      }
+    }
   }
 ]

@@ -37,7 +37,7 @@ type Bound = {
   session?: PageSessionStore;
   window?: NonNullable<Parameters<typeof RecordList>[0]["window"]>;
   onClick?: () => void; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
-  narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
+  sharedFilter?:Record<string,unknown>; narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
 
 /** Composing: the section in hand, and choosing another by clicking it. */
@@ -61,7 +61,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableWidget({ page, section, onSelect, selected, master, narrowed, session, window }: Bound) {
+function TableWidget({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window }: Bound) {
   const { source, definitions } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -91,7 +91,7 @@ function TableWidget({ page, section, onSelect, selected, master, narrowed, sess
 
   const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
   const queryDomain = (query?.domain as unknown[] | undefined) ?? [];
-  const domain = [...queryDomain, ...domainOf(narrowed, type), ...relationDomain];
+  const domain = [...queryDomain, ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
 
   return (
     <RecordList key={refField ? `${type}/${refField.name}/${master?.id}` : type}
@@ -138,7 +138,7 @@ function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]
   };
 }
 
-function ChartWidget({ page, section, kpi, narrowed, master }: Bound & { kpi: boolean }) {
+function ChartWidget({ page, section, kpi, narrowed, sharedFilter, master }: Bound & { kpi: boolean }) {
   const { source } = useHost();
   const aggregate = source.aggregate;
   const type = objectOf(page, section);
@@ -151,7 +151,7 @@ function ChartWidget({ page, section, kpi, narrowed, master }: Bound & { kpi: bo
     {t("Select a record to see related {records}.", { records: info?.plural?.toLowerCase() ?? type })}
   </p>;
   const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
-  const domain = [...domainOf(narrowed, type), ...relationDomain];
+  const domain = [...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
 
   return <Chart spec={chartSpec(page, section, kpi, domain)} frame={false} height={kpi ? 120 : 240}
     source={aggregate ? { aggregate, revision: source.revision } : undefined} />;
@@ -441,6 +441,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const querySelections = new Map<string,Set<string>>();
   for(const section of page.sections??[]){const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
   for(const section of page.sections??[]){const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
+  for(const section of page.sections??[]){if(section.filterVariable&&section.widget==="table"){const key=section.id??`section:${page.sections!.indexOf(section)}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
   const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents, querySelections, ...(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?filterSessionBindings(page):{}), overlayScopes:overlaySessionScopes(page) });
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
@@ -454,7 +455,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   useEffect(()=>{for(const section of page.sections??[]){if(!section.selectionVariable)continue;const slot=selectionSlot(page,section),state=snapshot.records[slot],id=state?.status==="value"?state.value.id:undefined;if(previousSelections.current[slot]&&state?.status==="empty"&&!id)application.select(section.selectionVariable,undefined,recordProducer(section.id??""),true);if(id)previousSelections.current[slot]=id;else if(state?.status!=="pending")delete previousSelections.current[slot];}},[snapshot.records]);
 
   useEffect(()=>{for(const [id,signature] of Object.entries(application.signatures)){const result=application.resources[id],window=result&&(result.status==="value"||result.status==="empty")&&typeof result.value==="object"&&result.value?.kind==="object-set"?result.value.window:undefined;session.reconcileExternalWindow(`application/${id}`,result?.status==="error"?"":signature,window?.records.map((r)=>r.id));}},[session,JSON.stringify(application.signatures),JSON.stringify(application.resources)]);
-  const aliases=Object.fromEntries(Object.entries(initialVariables).flatMap(([id])=>{const source=applicationVariable(id);return source&&source!==id?[[id,application.resources[source]??{status:"empty" as const}]]:[]}));
+  const aliases=Object.fromEntries(Object.entries(initialVariables).flatMap(([id,v])=>{const sharedFilter=v.source?.kind==="filter"?page.sections?.find((s)=>s.id===v.source?.section)?.filterVariable:undefined;const source=sharedFilter??applicationVariable(id);return source&&source!==id?[[id,application.resources[source]??{status:"empty" as const}]]:[]}));
   const inputResources = useMemo(() => ({ ...resources, ...incoming.inputs, ...application.resources,...aliases }), [resources, JSON.stringify(incoming.inputs), JSON.stringify(application.resources),JSON.stringify(aliases)]);
   const inputValues = useMemo(() => evaluateVariables(initialVariables, snapshot.scalars, pageVariableContract, inputResources), [initialVariables,snapshot.scalars,inputResources]);
   const overlayForRoot = (root: string) => Object.entries(page.document?.overlays ?? {}).find(([, overlay]) => overlay.root === root)?.[0];
@@ -466,7 +467,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
 
   const navigation = usePageNavigation(page, live, variables.values, variables.set);
   useEffect(() => { onVariableValues?.({...variables.values,...Object.fromEntries(Object.entries(initialVariables).filter(([,v])=>v.scope==="overlay").map(([id,v])=>[id,overlayValues[v.owner??""]?.[id]??{status:"empty" as const}]))}); }, [onVariableValues, variables.values, overlayValues]);
-  const onSelect = (key: string, record?: EntityRecord) => session.select(key, record);
+  const selectionQuery=(section:Section)=>{if(!(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=15))return undefined;const v=initialVariables[section.collectionVariable??""];return v?.source?.kind==="plan"?planKey(v.source.query??""):v?.mode==="shared"?`application/${section.collectionVariable}`:section.id;};
+  const onSelect = (key: string, record?: EntityRecord, query?:string) => session.select(key, record,query);
   const indexed = new Map((page.sections ?? []).map((section, i) => [section.id, { section, i }]));
   const writeState = (id: string, value: string | boolean, owner?: string) => {
     const variable = initialVariables[id];
@@ -491,10 +493,13 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const booleanValue = (id: string) => { const result = variables.values[id]; return result?.status === "value" && result.value === true; };
   const renderSection = (section: Section, i: number, nested: boolean, enabled = true, context?: LoopContext, overlay?: string, valueVariable?: string) => {
     const values = context?.values ?? (overlay ? overlayValues[overlay] : variables.values) ?? {}, value = values[valueVariable ?? ""];
+    const shared=section.filterVariable?application.resources[section.filterVariable]:undefined;
+    if(section.filterVariable&&(!shared||shared.status==="error"||shared.status==="pending"||!("value" in shared)||typeof shared.value!=="object"||shared.value.kind!=="filter"))return <Panel role="alert">{t("Shared filter is unavailable.")}</Panel>;
+    const sharedFilter=shared&&"value" in shared&&typeof shared.value==="object"&&shared.value.kind==="filter"?shared.value.fields:undefined;
     const epoch = overlay ? session.overlayEpoch(overlay) : undefined;
     return (
       <SectionView key={section.id || i} page={page} section={section} session={session} readSource={context?.source} selected={section.selectionVariable?session.selected(inputSlot(section.selectionVariable)):section.recordVariable ? context ? context.record : initialVariables[section.recordVariable]?.mode==="resource"&&initialVariables[section.recordVariable]?.source?.kind==="record" ? (()=>{const producer=page.sections?.find((s)=>s.id===initialVariables[section.recordVariable!]?.source?.section);return producer?session.selected(selectionSlot(page,producer)):undefined})() : snapshot.records[inputSlot(section.recordVariable)]?.status === "value" ? session.selected(inputSlot(section.recordVariable)) : undefined : session.selected(selectionSlot(page,section))}
-        master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record);if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));}} live={live} narrowed={filtersForOwner(snapshot.filters,filterOwner(page,section))} onNarrow={(object,field,value)=>session.filter(object,field,value,filterOwner(page,section))}
+        master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
         value={value?.status === "value" && typeof value.value === "string" ? value.value : undefined} onValue={valueVariable ? (value) => setContextState(valueVariable, value, context, overlay) : undefined}

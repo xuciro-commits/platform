@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Update shared binding": "更新共享绑定",
+  "Allow filter updates": "允许更新筛选",
+  "Filter object": "筛选对象",
+  "Allowed filter fields": "允许筛选的字段",
+  "Shared filter binding": "共享筛选绑定",
+  "Keep filters in this page": "在本页面保留筛选",
   "Allow selection updates": "允许更新选择",
   "Shared record selection": "共享记录选择",
   "Keep selection in this page": "在本页面保留选择",

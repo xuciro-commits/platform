@@ -49,3 +49,11 @@ test("local filter resources use their owning root and retiring the root preserv
  assert.equal(filterOwner({...doc,document:{...doc.document,uiProfile:"platform.page.v2.12"}},doc.sections[1]),undefined);
  store.dispose();
 });
+
+test("a shared-filter consumer's selection survives unrelated windows and is cleared by its own changed query",async()=>{
+ const slot="object/sample.note",source={entity:()=>({fields:[]}),get:async(_,id)=>({record:{id,revision:1}}),list:async(_,q)=>({records:[{id:q.search,revision:1}],total:1})};
+ const store=new PageSessionStore(source,{objects:new Map([[slot,"sample.note"]]),children:new Map(),queryParents:new Map(),querySelections:new Map([["shared",new Set([slot])],["fixed",new Set([slot])]])});
+ await store.querySource("shared").list("sample.note",{search:"selected",limit:10});store.select(slot,{id:"selected",revision:1},"shared");await tick();
+ await store.querySource("fixed").list("sample.note",{search:"other",limit:10});assert.equal(store.selected(slot).id,"selected");store.setQueryView("fixed","base",{offset:10});assert.equal(store.selected(slot).id,"selected");store.resetQueries(["fixed"]);assert.equal(store.selected(slot).id,"selected");
+ await store.querySource("shared").list("sample.note",{search:"changed",limit:10});assert.equal(store.selected(slot),undefined);store.dispose();
+});

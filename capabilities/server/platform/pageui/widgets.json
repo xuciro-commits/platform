@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.14",
+  "uiProfile": "platform.page.v2.15",
   "widgets": [
     {
       "componentID": "table",
@@ -18,7 +18,8 @@
         "relation",
         "selection",
         "collection-variable",
-        "selection-variable"
+        "selection-variable",
+        "filter-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -120,7 +121,8 @@
       "bindingKinds": [
         "object",
         "relation",
-        "aggregate"
+        "aggregate",
+        "filter-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -162,7 +164,8 @@
       "bindingKinds": [
         "object",
         "relation",
-        "aggregate"
+        "aggregate",
+        "filter-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -235,7 +238,8 @@
       },
       "bindingKinds": [
         "object",
-        "fields"
+        "fields",
+        "filter-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -503,7 +507,8 @@
     "platform.page.v2.11",
     "platform.page.v2.12",
     "platform.page.v2.13",
-    "platform.page.v2.14"
+    "platform.page.v2.14",
+    "platform.page.v2.15"
   ],
   "runtime": {
     "scope": "page",
@@ -626,7 +631,8 @@
         "string",
         "boolean",
         "object-set",
-        "record"
+        "record",
+        "filter"
       ],
       "modes": [
         "state",
@@ -634,7 +640,8 @@
         "derived",
         "resource"
       ],
-      "bindingMode": "shared"
+      "bindingMode": "shared",
+      "maxFilterFields": 16
     },
     "query": {
       "source": "plan",

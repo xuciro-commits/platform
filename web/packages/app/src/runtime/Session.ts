@@ -15,7 +15,7 @@ export type PageSessionSnapshot = {
   filters: Record<string, Record<string, unknown>>;
   queries: Record<string, ReadState<QueryWindow>>;
 };
-export type SelectionPlan = { objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;filters?:ReadonlySet<string>;loops?:ReadonlySet<string>}>; filterSelections?:ReadonlyMap<string,ReadonlySet<string>>;filterQueries?:ReadonlyMap<string,ReadonlySet<string>>;querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
+export type SelectionPlan = { filterObjects?:ReadonlyMap<string,string>;filterFields?:ReadonlyMap<string,ReadonlySet<string>>; objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;filters?:ReadonlySet<string>;loops?:ReadonlySet<string>}>; filterSelections?:ReadonlyMap<string,ReadonlySet<string>>;filterQueries?:ReadonlyMap<string,ReadonlySet<string>>;querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
 
 /** One member/definition-scoped presentation session. References and query
  * windows are values; record fields/revisions are a separate ephemeral cache.
@@ -28,16 +28,18 @@ export class PageSessionStore {
   private listeners = new Set<() => void>();
   private recordCache = new Map<string, EntityRecord>();
   private recordEpoch = new Map<string, number>();
+  private selectionQueries=new Map<string,string>();
   private queries = new Map<string, { signature: string; object: string; promise: Promise<RecordPageData> }>();
   private sources = new Map<string, RecordSource>();
   private querySignatures = new Map<string, string>();
   querySignature(key: string) { return this.querySignatures.get(key); }
   private queryData = new Map<string,RecordPageData>();
   queryPage(key:string,signature:string) { return this.querySignatures.get(key)===signature ? this.queryData.get(key) : undefined; }
+  private selectionKeys(query:string){return [...(this.plan.querySelections?.get(query)??[])].filter((slot)=>!this.selectionQueries.has(slot)||this.selectionQueries.get(slot)===query);}
   setQueryView(key:string,base:string,change:QueryView) {
     const current=this.state.views[key]?.base===base?this.state.views[key]:{base};
     this.queries.delete(key);this.querySignatures.delete(key);this.queryData.delete(key);
-    const keys=[...(this.plan.querySelections?.get(key)??[])];
+    const keys=this.selectionKeys(key);
     this.publish({views:{...this.state.views,[key]:{...current,...change}},records:this.clear(keys),queries:this.invalidate(keys)});
   }
   private queryObjects = new Map<string, string>();
@@ -85,13 +87,13 @@ export class PageSessionStore {
   resetQueries(keys: string[]) {
     const queries = { ...this.state.queries };
     for (const key of keys) { this.queries.delete(key); this.querySignatures.delete(key);this.queryData.delete(key); delete queries[key]; }
-    const selections=keys.flatMap((key)=>[...(this.plan.querySelections?.get(key)??[])]);
+    const selections=keys.flatMap((key)=>this.selectionKeys(key));
     this.publish({ queries, ...(selections.length?{records:this.clear(selections)}:{}) });
   }
   reconcileExternalWindow(key:string,signature:string,ids?:string[]) {
     const changed=this.querySignatures.get(key)!==signature;
     this.querySignatures.set(key,signature);
-    const slots=[...(this.plan.querySelections?.get(key)??[])];
+    const slots=this.selectionKeys(key);
     const removed=changed?slots:ids?slots.filter((slot)=>{const value=this.state.records[slot];return value&&"value" in value&&value.value&&!ids.includes(value.value.id);}):[];
     if(removed.length)this.publish({records:this.clear(removed)});
   }
@@ -153,20 +155,21 @@ export class PageSessionStore {
     const records = { ...this.state.records }, visited = new Set<string>();
     const remove = (key: string) => {
       if (visited.has(key)) return;
-      visited.add(key); records[key] = { status: "empty" }; this.recordCache.delete(key);
+      visited.add(key); records[key] = { status: "empty" }; this.recordCache.delete(key);this.selectionQueries.delete(key);
       this.recordEpoch.set(key, (this.recordEpoch.get(key) ?? 0) + 1);
       for (const child of this.plan.children.get(key) ?? []) remove(child);
     };
     keys.forEach(remove);
     return records;
   }
-  select(key: string, record?: EntityRecord) {
+  select(key: string, record?: EntityRecord, query?:string) {
     const object = this.plan.objects.get(key);
     if (this.disposed || !object) return;
     if (record && (typeof record.id !== "string" || !record.id)) return;
     const records = this.clear([key]);
     const queries = this.invalidate([key]);
     if (!record) { this.publish({ records, queries }); return; }
+    if(query)this.selectionQueries.set(key,query);
     this.recordCache.set(key, record);
     records[key] = { status: "value", value: { object, id: record.id } };
     this.publish({ records, queries });
@@ -180,6 +183,12 @@ export class PageSessionStore {
   filter(object: string, field: string, value: unknown, owner?:string) {
     const filterKey=owner?`overlay:${owner}/${object}`:object;
     if(owner&&!this.plan.overlayScopes?.get(owner)?.filters?.has(filterKey))return;
+    this.writeFilter(filterKey,object,field,value);
+  }
+  filterResource(key:string,field:string,value:unknown) {
+    const object=this.plan.filterObjects?.get(key);if(!object||!this.plan.filterFields?.get(key)?.has(field)||this.disposed)return;this.writeFilter(key,object,field,value);
+  }
+  private writeFilter(filterKey:string,object:string,field:string,value:unknown) {
     const descriptor = this.source.entity(object)?.fields.find((item) => item.name === field);
     if (!descriptor || !["choice", "boolean", "reference"].includes(descriptor.type)) return;
     if (value !== undefined && value !== "" && (descriptor.type === "boolean" ? typeof value !== "boolean"
@@ -247,7 +256,7 @@ export class PageSessionStore {
     const changed=this.querySignatures.get(key)!==queryShape;
     this.queryObjects.set(key, object);
     this.querySignatures.set(key, queryShape);
-    if(changed){this.queryData.delete(key);const keys=[...(this.plan.querySelections?.get(key)??[])];if(keys.length)this.publish({records:this.clear(keys),queries:this.invalidate(keys)});}
+    if(changed){this.queryData.delete(key);const keys=this.selectionKeys(key);if(keys.length)this.publish({records:this.clear(keys),queries:this.invalidate(keys)});}
     const signature = JSON.stringify([this.version, object, query]);
     const previous = this.queries.get(key);
     if (previous?.signature === signature) return previous.promise;
@@ -259,7 +268,7 @@ export class PageSessionStore {
     request.promise = request.promise.then((page) => {
       if (!this.disposed && this.queries.get(key) === request && source === this.source && source.scope === scope) {
         this.queryData.set(key,page);
-        const vanished=[...(this.plan.querySelections?.get(key)??[])].filter((slot)=>{const state=this.state.records[slot];return state&&"value" in state&&state.value&&!page.records.some((record)=>record.id===state.value!.id);});
+        const vanished=this.selectionKeys(key).filter((slot)=>{const state=this.state.records[slot];return state&&"value" in state&&state.value&&!page.records.some((record)=>record.id===state.value!.id);});
         if(vanished.length)this.publish({records:this.clear(vanished),queries:this.invalidate(vanished)});
         const value: QueryWindow = { object, query, revision, records: page.records.map((record) => ({ object, id: record.id })), total: page.total,
           complete: (query.offset ?? 0) === 0 && page.records.length === page.total };
@@ -268,7 +277,7 @@ export class PageSessionStore {
       return page;
     }, (error) => {
       if (!this.disposed && this.queries.get(key) === request && source === this.source && source.scope === scope) {
-        this.queries.delete(key);this.queryData.delete(key);const keys=[...(this.plan.querySelections?.get(key)??[])];
+        this.queries.delete(key);this.queryData.delete(key);const keys=this.selectionKeys(key);
         if(keys.length)this.publish({records:this.clear(keys)});
         this.publish({ queries: { ...this.state.queries, [key]: { status: "error", error: String(error) } } });
       }
@@ -277,7 +286,7 @@ export class PageSessionStore {
     return request.promise;
   }
   dispose() {
-    this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
+    this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
     this.state = { views:{}, scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
     this.listeners.clear();

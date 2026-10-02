@@ -132,7 +132,7 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 				frozen.Actions = append(frozen.Actions, action.Name)
 			}
 			for _, s := range pageDescriptor.Sections {
-				section := Section{ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Object: s.Object.Name, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection,
+				section := Section{ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Object: s.Object.Name, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection,
 					Fields: s.Fields, Group: s.Group, Measure: s.Measure, Text: s.Text, Operation: s.Operation, Inputs: s.Inputs}
 				if s.Query.Name != "" {
 					section.Query = s.Query.App + "." + s.Query.Name

@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Shared filter is unavailable.": "共享筛选不可用。",
   "Resource read failed": "资源读取失败",
   "Shared query window": "共享查询窗口",
   "Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped.": "应用拥有标量声明和有界查询；页面通过类型化端口共享，只读窗口为成员作用域内的临时值。",

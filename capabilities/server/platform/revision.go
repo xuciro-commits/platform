@@ -627,6 +627,15 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	if page.Document != nil {
+		for _, v := range page.Document.Variables {
+			if v.Scope == "application" && v.Mode == "resource" && v.Type == "filter" && v.Source != nil && v.Source.Object != nil {
+				asset, ok := lookup[*v.Source.Object]
+				object, err := queryObjectDescriptor(asset.Body)
+				if !ok || err != nil || CheckFilterSchema(*v.Source, object) != nil {
+					return fmt.Errorf("frozen application filter object or fields are unavailable")
+				}
+			}
+		}
 		for id, plan := range page.Document.Queries {
 			objectAsset, ok := lookup[plan.Object]
 			object, err := queryObjectDescriptor(objectAsset.Body)
@@ -685,5 +694,6 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		}
 		fields = append(fields, field)
 	}
-	return EntityInfo{Type: shape.Type, Fields: fields}, nil
+	owner, _, _ := strings.Cut(shape.Type, ".")
+	return EntityInfo{App: owner, Type: shape.Type, Fields: fields}, nil
 }

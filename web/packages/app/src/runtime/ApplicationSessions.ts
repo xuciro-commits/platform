@@ -17,7 +17,8 @@ export class ApplicationSession {
   readonly queries:Record<string,Api.PageQuery>;
   constructor(variables: Record<string, Api.PageVariable>, reads?:ApplicationReads) {
     this.variables = variables;this.queries=reads?.queries??{};
-    if(reads){this.reads=new PageSessionStore(reads.source,{objects:new Map(Object.entries(variables).filter(([,v])=>v.mode==="resource"&&v.type==="record"&&v.source?.object).map(([id,v])=>[id,v.source!.object!.name])),children:new Map(),queryParents:new Map()});this.reads.subscribe(()=>{if(this.alive){this.state={...this.state};this.listeners.forEach((listener)=>listener());}});}
+    const filters=Object.entries(variables).filter(([,v])=>v.mode==="resource"&&v.type==="filter"&&v.source?.object);
+    if(reads){this.reads=new PageSessionStore(reads.source,{objects:new Map(Object.entries(variables).filter(([,v])=>v.mode==="resource"&&v.type==="record"&&v.source?.object).map(([id,v])=>[id,v.source!.object!.name])),filterObjects:new Map(filters.map(([id,v])=>[id,v.source!.object!.name])),filterFields:new Map(filters.map(([id,v])=>[id,new Set(v.source!.fields??[])])),filterSelections:new Map(),filterQueries:new Map(),children:new Map(),queryParents:new Map()});this.reads.subscribe(()=>{if(this.alive){this.state={...this.state};this.listeners.forEach((listener)=>listener());}});}
   }
   snapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -31,6 +32,9 @@ export class ApplicationSession {
     if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="record"||variable.source?.kind!=="record"||!this.reads||onlyOwner&&this.recordOwners.get(id)!==owner||reference&&(reference.object!==variable.source.object?.name||!reference.id))return;
     if(reference)this.recordOwners.set(id,owner);else this.recordOwners.delete(id);
     this.reads.selectReference(id,reference);
+  }
+  filter(id:string,field:string,value:unknown) {
+    const variable=this.variables[id];if(!this.alive||this.retired||variable?.mode!=="resource"||variable.type!=="filter"||variable.source?.kind!=="filter")return;this.reads?.filterResource(id,field,value);
   }
   attach(owner: symbol, close: () => void) { this.alive = true; this.retired = false; this.pages.set(owner, close); this.reads?.activate(); }
   detach(owner: symbol) { this.pages.delete(owner); if (!this.pages.size) this.clear(); }
