@@ -22,6 +22,8 @@
 
 记录字段派生：先声明记录选择、页面输入记录或Loop item，再创建变量，将“Variable mode / 变量模式”选为“Record property / 记录属性”，选择“Source record variable / 来源记录变量”和“Record property field / 记录属性字段”。输出类型随原字段固定，文本、布尔和精确数值均只读；布尔字段可绑定显示/启用条件，数值可参与原派生表达式或查询参数。应用也可从自身记录资源派生字段，页面通过只读共享端口消费。切换记录、读取拒绝或作用域关闭停止旧字段，隐藏字段及依赖分支由成员定义投影裁掉。正式发布冻结来源对象、字段与类型；字段值只在授权读取的临时会话中使用，不修改业务数据。
 
+代码读取的集合组合：共享`RecordSource.list(type, query)`可在query中传入`set: {op: "union" | "intersect" | "subtract", inputs: [left, right]}`。每个来源为`{domain?, search?, set?}`，只描述同一对象的完整匹配条件；排序、offset、limit和archived在外层query设置。EdgeClient自动将组合通过类型化`POST /v1/records/{type}/query`发送，返回原RecordPage的records/total；普通读取继续使用原GET。分页前组合全部授权匹配记录，隐藏字段、非法或超预算分支拒绝整个读取，不自动重试为无条件列表。预算见[ADR-0046 §6.18](ADR/0046-application-studio-fusion.md#618-宿主集合查询与完整性)。当前设计器尚无集合来源与操作选择，不能将此代码API当成可粘贴的租户页面定义。
+
 浮层局部状态：添加Modal/Drawer后，在“Page variables / 页面变量”创建标量变量，将“Variable scope / 变量作用域”设为对应Overlay。添加“Text input / 文本输入”会生成该根的文本状态；“Input state variable / 输入状态变量”可重新绑定当前作用域的string state，显示/启用条件与按钮目标也按该根过滤。关闭或切换浮层恢复其局部初值，页面状态继续保留。跨页处理暂时暂停原浮层的全局层并保留输入，正常返回可写回本次打开的局部状态；关闭再打开后不接收旧返回。此入口不修改业务字段，业务编辑仍用原表单和动作。
 
 浮层查询与选择：在“Query plans / 查询计划”添加计划，将“Query scope / 查询作用域”选为目标Overlay；条件参数可选同浮层输入变量，页面/应用参数仍可读取。表格的“Table query window / 表格查询窗口”选择该结果变量，Loop可消费相同窗口。在变量面板先选对应Overlay作用域，再选“Resource output / 资源输出”→“Record selection / 记录选择”及同根表格；详情/动作的“Input record binding / 输入记录绑定”可选择此记录资源。普通表格选择也在同浮层内共享，保持页面选择独立；关闭/切换后清理局部窗口、页码、选择与item状态，重开从初值读取，延迟旧结果不会填回。查询面板预览所属浮层根；正式页面关闭浮层时不发它的查询。旧profile保留原共享选择，编辑为v2.11时须调整跨根的资源别名。Overlay支持record/object-set/filter，应用窗口见下文。

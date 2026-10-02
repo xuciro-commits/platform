@@ -535,7 +535,7 @@ func (s *recordStore) find(et *entityType, q platform.Query, visible func(reflec
 		}
 		sorts = append(sorts, sortKey{field: f, stamp: map[bool]string{true: bare, false: ""}[!ok], desc: desc})
 	}
-	out, err := s.matching(et, q.Domain, q.Search, q.Archived, visible)
+	out, err := s.matchingQuery(et, q, visible)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -578,31 +578,68 @@ func (s *recordStore) find(et *entityType, q platform.Query, visible func(reflec
 // matching are the records of a type in the caller's scope that match a
 // domain and a search, archived ones only when asked; the caller holds s.mu.
 func (s *recordStore) matching(et *entityType, domain json.RawMessage, search string, archived bool, visible func(reflect.Value) bool) ([]reflect.Value, *kernel.Error) {
-	match, err := compileDomain(et.info, domain)
-	if err != nil {
+	return s.matchingQuery(et, platform.Query{Domain: domain, Search: search, Archived: archived}, visible)
+}
+
+func (s *recordStore) matchingQuery(et *entityType, q platform.Query, visible func(reflect.Value) bool) ([]reflect.Value, *kernel.Error) {
+	if err := q.CheckSet(); err != nil {
 		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	search = strings.ToLower(strings.TrimSpace(search))
-	var searched []platform.FieldInfo
-	for _, f := range et.info.Fields {
-		if f.Search {
-			searched = append(searched, f)
-		}
+	match, err := compileRecordSet(et.info, platform.RecordSetPredicate{Domain: q.Domain, Search: q.Search, Set: q.Set})
+	if err != nil {
+		return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	var out []reflect.Value
 	for _, r := range et.rows {
 		v := r.value
-		if !archived && recordOf(v).Archived || visible != nil && !visible(v) || !match(v) {
-			continue
-		}
-		if search != "" && !strings.Contains(strings.ToLower(recordOf(v).ID), search) && !slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
-			return strings.Contains(strings.ToLower(searchable(f, v.FieldByIndex(f.Index).Interface())), search)
-		}) {
+		if !q.Archived && recordOf(v).Archived || visible != nil && !visible(v) || !match(v) {
 			continue
 		}
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+// One predicate evaluates all source sets against one authorized row. Every
+// branch is compiled using the member's field projection before any row runs.
+func compileRecordSet(info platform.EntityInfo, p platform.RecordSetPredicate) (func(reflect.Value) bool, error) {
+	domain, err := compileDomain(info, p.Domain)
+	if err != nil {
+		return nil, err
+	}
+	search := strings.ToLower(strings.TrimSpace(p.Search))
+	var searched []platform.FieldInfo
+	for _, f := range info.Fields {
+		if f.Search {
+			searched = append(searched, f)
+		}
+	}
+	base := func(v reflect.Value) bool {
+		return domain(v) && (search == "" || strings.Contains(strings.ToLower(recordOf(v).ID), search) || slices.ContainsFunc(searched, func(f platform.FieldInfo) bool {
+			return strings.Contains(strings.ToLower(searchable(f, v.FieldByIndex(f.Index).Interface())), search)
+		}))
+	}
+	if p.Set == nil {
+		return base, nil
+	}
+	// CheckSet bounds the shape before this compiler is called.
+	left, err := compileRecordSet(info, *p.Set.Inputs[0])
+	if err != nil {
+		return nil, err
+	}
+	right, err := compileRecordSet(info, *p.Set.Inputs[1])
+	if err != nil {
+		return nil, err
+	}
+	switch p.Set.Op {
+	case "union":
+		return func(v reflect.Value) bool { return base(v) && (left(v) || right(v)) }, nil
+	case "intersect":
+		return func(v reflect.Value) bool { return base(v) && left(v) && right(v) }, nil
+	case "subtract":
+		return func(v reflect.Value) bool { return base(v) && left(v) && !right(v) }, nil
+	}
+	return nil, fmt.Errorf("unsupported record set operation")
 }
 
 type sortKey struct {

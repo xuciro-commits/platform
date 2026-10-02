@@ -29,7 +29,7 @@ export type Lifecycle = Api.LifecycleInfo;
 export type EntityInfo = Api.EntityInfo;
 export type Stamp = Api.Stamp;
 export type EntityRecord = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean } & Record<string, unknown>;
-export type RecordQuery = { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean };
+export type RecordQuery = Omit<Api.Query,"domain"> & {domain?:unknown[]};
 export type RecordPageData = Omit<Api.RecordPage, "records"> & { records: EntityRecord[] };
 export type RecordChange = Api.RecordChange;
 /** A file attached to a record (ADR-0028). */

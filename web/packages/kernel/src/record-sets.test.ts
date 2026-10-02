@@ -1,0 +1,24 @@
+import {afterEach,expect,test,vi} from "vitest";
+import {EdgeClient} from "./client";
+
+afterEach(()=>vi.unstubAllGlobals());
+const client=()=>new EdgeClient({server:"https://test.invalid",token:"test",tenant:"t",principal:"m"});
+
+test("set reads carry one complete typed expression and caller, with no operand downloads",async()=>{
+ const query={set:{op:"subtract",inputs:[{search:"part"},{domain:[["qty","<",{kind:"decimal",value:"0.1"}]]}]},sort:["id"],offset:501,limit:2};
+ const fetcher=vi.fn(async(url:string,options:RequestInit)=>{
+  expect(url).toBe("https://test.invalid/v1/records/sample.note/query");expect(options.method).toBe("POST");expect(options.headers).toMatchObject({Authorization:"Bearer test","Platform-Tenant":"t","Content-Type":"application/json"});expect(JSON.parse(String(options.body))).toEqual(query);
+  return new Response(JSON.stringify({records:[{id:"late"}],total:620}));
+ });vi.stubGlobal("fetch",fetcher);
+ expect(await client().records("sample.note",query)).toEqual({records:[{id:"late"}],total:620});expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+test("a refused set read does not retry as an ordinary or unconstrained query",async()=>{
+ const fetcher=vi.fn().mockResolvedValue(new Response("Denied",{status:403}));vi.stubGlobal("fetch",fetcher);
+ await expect(client().records("sample.note",{set:{op:"union",inputs:[{},{}]}})).rejects.toThrow("HTTP 403");expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+test("ordinary reads keep their original GET transport",async()=>{
+ const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(options.method).toBeUndefined();const parsed=new URL(url);expect(parsed.pathname).toBe("/v1/records/sample.note");expect(parsed.searchParams.get("search")).toBe("part");expect(parsed.searchParams.get("limit")).toBe("1");return new Response(JSON.stringify({records:[],total:0}));});vi.stubGlobal("fetch",fetcher);
+ await client().records("sample.note",{search:"part",limit:1});expect(fetcher).toHaveBeenCalledTimes(1);
+});

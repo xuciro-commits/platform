@@ -1097,6 +1097,21 @@ export type Provider = {
   wire: string;
 };
 
+export type Query = {
+  set?: QuerySet;
+  domain?: unknown;
+  search?: string;
+  sort?: string[];
+  offset?: number;
+  limit?: number;
+  archived?: boolean;
+};
+
+export type QuerySet = {
+  op: string;
+  inputs: RecordSetPredicate[];
+};
+
 export type QueueHealth = {
   app: string;
   depth: number;
@@ -1114,6 +1129,12 @@ export type RecordChange = {
 export type RecordPage = {
   records: unknown[];
   total: number;
+};
+
+export type RecordSetPredicate = {
+  domain?: unknown;
+  search?: string;
+  set?: QuerySet;
 };
 
 export type RecordView = {

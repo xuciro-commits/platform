@@ -1,7 +1,7 @@
 // A browser edge of a server-authoritative domain: a persisted K5 outbox and an
 // HTTP transport to the tenant's authority.
 import type { SubmissionJson } from "./gen/platform/kernel/v1alpha1/change_pb";
-import type { Action } from "./gen/host";
+import type { Action, Query } from "./gen/host";
 import { Authorities, type Entry } from "./outbox";
 
 /** One action a server offers to this caller (ADR-0008): render from it, never re-check roles. Generated from the host (ADR-0023). */
@@ -163,7 +163,13 @@ export class EdgeClient {
   }
 
   /** Records of an entity type (ADR-0016): a domain, a search, sort fields and a page. */
-  records<T = unknown>(type: string, q: { domain?: unknown[]; search?: string; sort?: string[]; offset?: number; limit?: number; archived?: boolean } = {}): Promise<T> {
+  async records<T = unknown>(type: string, q: Omit<Query,"domain"> & {domain?:unknown[]} = {}): Promise<T> {
+    if(q.set){
+      const path=`/v1/records/${encodeURIComponent(type)}/query`;
+      const response=await fetch(this.connection.server+path,{method:"POST",headers:this.headers(true),body:JSON.stringify(q)});
+      if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);
+      return response.json() as Promise<T>;
+    }
     const p = new URLSearchParams();
     if (q.domain?.length) p.set("domain", JSON.stringify(q.domain));
     if (q.search) p.set("search", q.search);

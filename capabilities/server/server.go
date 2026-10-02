@@ -619,6 +619,26 @@ func (h *Host) Handler() http.Handler {
 		w.Header().Set("Content-Disposition", "attachment; filename="+r.PathValue("type")+".csv")
 		w.Write(out)
 	})
+	handle(Route{Pattern: "POST /v1/records/{type}/query", Summary: "Read a bounded complete record-set expression in the caller's scope before paging (ADR-0046)", Body: platform.Query{}, Answer: RecordPage{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
+		decoder.DisallowUnknownFields()
+		var q *platform.Query
+		if decoder.Decode(&q) != nil || q == nil || q.Limit < 0 || q.Offset < 0 {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		var extra any
+		if decoder.Decode(&extra) != io.EOF {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		page, err := t.Records(m, r.PathValue("type"), *q, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, page)
+	})
 	handle(Route{Pattern: "GET /v1/records/{type}", Summary: "A page of an entity type's records within the caller's scope", Answer: RecordPage{}, Query: []Param{{"domain", "Filters in the prefix form, JSON: [[\"stage\",\"=\",\"open\"]]"}, {"search", "Words to find"}, {"sort", "Fields, comma-separated; -field for descending"}, {"offset", "Records to skip"}, {"limit", "Records in the page"}, {"archived", "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		q := platform.Query{Domain: json.RawMessage(r.URL.Query().Get("domain")), Search: r.URL.Query().Get("search"), Archived: r.URL.Query().Get("archived") == "true"}
 		if sort := r.URL.Query().Get("sort"); sort != "" {
