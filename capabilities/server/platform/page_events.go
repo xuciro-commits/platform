@@ -65,10 +65,10 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 		if !variable.IsWritable() || pageLiteralType(event.Value) != variable.Type {
 			return fmt.Errorf("page event %s needs a matching state value", event.Source)
 		}
-		for _, node := range d.Nodes {
+		for id, node := range d.Nodes {
 			if node.Kind == "tabs" && node.ActiveVariable == event.Target {
 				var child string
-				if json.Unmarshal(event.Value, &child) != nil || !slices.Contains(node.Children, child) {
+				if json.Unmarshal(event.Value, &child) != nil || !slices.Contains(d.ownedChildren(id), child) {
 					return fmt.Errorf("page event %s tab value must name a child", event.Source)
 				}
 			}

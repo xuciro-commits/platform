@@ -13,7 +13,7 @@ import { Copy, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRig
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Api as HostApi } from "@platform/kernel";
 import { BindingEditor, WorkflowFormProblems } from "./workflow-binding";
-import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
+import { variableAccessible, overlayOwner, loopOwner, synchronizeLoopBindings, addOverlay, removeOverlay, appendWidget, groupWidget, layoutID, moveWidget, relocateWidget, stashWidget, restoreWidget, removeWidget, setLayoutKind, ungroup } from "./page-layout";
 import { QueriesPanel } from "./page-editor/QueriesPanel";
 import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
 import { InterfacePanel } from "./page-editor/InterfacePanel";
@@ -129,7 +129,7 @@ export function PageEditor({ id }: { id: string }) {
       s.parentSelection && !selections.some((v) => v.name === s.parentSelection))
       ? t("A widget references a missing selection or the wrong object type.") : "";
   const incompatible = document.formatVersion !== 2 || !supportsPageUIProfile(document.uiProfile) || sections.some((s) => !widgetContract(s.widget) || s.configVersion !== widgetContract(s.widget)?.configVersion);
-  const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => !document.nodes[overlay.root]?.children?.length || !overlay.title.trim()) || sections.some(section=>{const contract=widgetContract(section.widget);return contract&&"events" in contract&&contract.events.some(event=>event.required&&!document.events?.some(binding=>binding.source===section.id&&binding.event===event.id));});
+  const overlayProblem = Object.values(document.overlays ?? {}).some((overlay) => !document.nodes[overlay.root]?.children?.length && !document.unusedWidgets?.some(entry=>entry.parent===overlay.root) || !overlay.title.trim()) || sections.some(section=>{const contract=widgetContract(section.widget);return contract&&"events" in contract&&contract.events.some(event=>event.required&&!document.events?.some(binding=>binding.source===section.id&&binding.event===event.id));});
   const loopProblem = Object.values(document.nodes).some((node) => node.kind === "loop" && (!node.loop || !document.variables?.[node.loop.collection]));
   const inputProblem = Object.entries(document.nodes).some(([id, node]) => {
     if (!sections.some((s) => s.id === node.section && s.widget === "input")) return false;
@@ -166,14 +166,17 @@ export function PageEditor({ id }: { id: string }) {
     });
     select({ kind: "widget", id: section.id! }); setRightOpen(true);
   };
-  const duplicate = () => {
-    const source = sections[chosen]; if (!source?.id) return;
+  const duplicate = (index=chosen) => {
+    const source = sections[index]; if (!source?.id) return;
     const copy = { ...structuredClone(source), id: layoutID("section") };
     edit((old) => {
       const document = appendWidget(old.document, copy.id, old.document.root, source.id);
       const original = Object.values(document.nodes).find((node) => node.section === source.id);
       const leaf = Object.keys(document.nodes).find((id) => document.nodes[id]?.section === copy.id);
       if (original && leaf) document.nodes[leaf] = { ...structuredClone(original), section: copy.id };
+      const unused=old.document.unusedWidgets?.find(entry=>old.document.nodes[entry.node]?.section===source.id);
+      if(unused&&leaf){document.nodes[document.root]!.children=document.nodes[document.root]!.children?.filter(id=>id!==leaf);document.unusedWidgets=[...(document.unusedWidgets??[]),{node:leaf,parent:unused.parent}];}
+      if(original?.valueVariable&&leaf){const value=document.variables?.[original.valueVariable];if(value?.mode==="state"&&value.scope!=="application"){const variable=layoutID("value");document.variables={...document.variables,[variable]:structuredClone(value)};document.nodes[leaf]!.valueVariable=variable;}}
       document.events = [...(old.document.events ?? []), ...(old.document.events ?? []).filter((event) => event.source === source.id).map((event) => ({ ...event, source: copy.id }))];
       return { ...old, sections: [...old.sections, copy], document };
     });
@@ -225,7 +228,7 @@ export function PageEditor({ id }: { id: string }) {
         <Button variant="ghost" aria-label={t("Toggle widget library")} onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>
         <Button variant="ghost" aria-label={t("Undo")} title={t("Undo")} disabled={!session.canUndo || busy} onClick={() => history("undo")}><Undo2 /></Button>
         <Button variant="ghost" aria-label={t("Redo")} title={t("Redo")} disabled={!session.canRedo || busy} onClick={() => history("redo")}><Redo2 /></Button>
-        <Button variant="ghost" disabled={chosen < 0 || busy} onClick={duplicate}><Copy />{t("Duplicate widget")}</Button>
+        <Button variant="ghost" disabled={chosen < 0 || busy} onClick={()=>duplicate()}><Copy />{t("Duplicate widget")}</Button>
         <span className="mx-1 h-4 w-px bg-border" />
         <AssetControls type="build.page" record={page} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "compose", params: { id } }} />
         <span className="ml-auto text-xs text-muted" role="status">{dirty ? t("Unsaved") : t("Saved")}</span>
@@ -249,6 +252,8 @@ export function PageEditor({ id }: { id: string }) {
             onRelocate={(section, target, after) => edit((old) => ({ ...old, document: relocateWidget(old.document, section, target, after) }))}
             onGroup={(kind) => { const section = sections[chosen]; if (!section?.id) return; const result = groupWidget(document, section.id, kind); edit({ document: result.document }); if (result.id) select({ kind: "container", id: result.id }); }}
             onAddOverlay={() => { const result = addOverlay(document, t("Overlay {n}", { n: Object.keys(document.overlays ?? {}).length + 1 })); edit({ document: result.document }); select({ kind: "container", id: result.root }); setRightOpen(true); }}
+            onDuplicate={duplicate} onStash={index=>{const section=sections[index];if(section?.id)edit({document:stashWidget(document,section.id)});}}
+            onRestore={(index,target)=>{const section=sections[index];if(section?.id)edit({document:restoreWidget(document,section.id,target)});}}
             onRemove={(index) => { const section = sections[index]; if (!section?.id) return; edit((old) => ({ ...old, document: removeWidget(old.document, section.id!), sections: old.sections.filter((s) => s.id !== section.id) })); select({ kind: "page" }); }} /></>}
           right={rightOpen && (selection.kind === "queries" ? <QueriesPanel onPreviewOwner={setQueryPreviewOwner} document={document} object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} values={variableValues} onChange={(document)=>edit({document})}/> : selection.kind === "interface" ? <InterfacePanel document={document} object={{ app: page.object.split(".")[0]!, kind: "object", name: page.object }} onChange={(document) => edit({ document })} /> : selection.kind === "variables" ? <VariablesPanel object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
             onChange={(patch) => edit({ document: { ...document, overlays: { ...document.overlays, [id]: { ...overlay, ...patch } } } })}
@@ -274,9 +279,9 @@ export function PageEditor({ id }: { id: string }) {
             <div className="mx-auto" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, zoom: zoom / 100 }}>
               <ApplicationPage pageRef={{app:"build",kind:"page",name:page.name}} route={{view:"compose",params:{id}}} preview><ComposedPage editingRoot={(() => {
                 if(selection.kind==="queries")return queryPreviewOwner?document.overlays?.[queryPreviewOwner]?.root:undefined;
-                const node = container ?? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection?.id)?.[0];
+                const node = container ?? (canvasSelection?.id ? Object.entries(document.nodes).find(([, node]) => node.section === canvasSelection.id)?.[0] : undefined);
                 return Object.values(document.overlays ?? {}).find((overlay) => {
-                  const includes = (id: string): boolean => id === node || (document.nodes[id]?.children ?? []).some(includes);
+                  const includes = (id: string): boolean => id === node || [...(document.nodes[id]?.children ?? []),...(document.unusedWidgets??[]).filter(entry=>entry.parent===id).map(entry=>entry.node)].some(includes);
                   return includes(overlay.root);
                 })?.root;
               })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={false} chosen={chosen} onChoose={choose}

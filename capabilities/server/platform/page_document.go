@@ -11,7 +11,13 @@ import (
 // the page's authoritative, server-checked business bindings; leaves name
 // those sections by stable ID. The UI profile versions layout and finite
 // presentation-state semantics; business bindings keep their original owners.
+type PageUnusedWidget struct {
+	Node   string `json:"node"`
+	Parent string `json:"parent"`
+}
+
 type PageDocument struct {
+	UnusedWidgets []PageUnusedWidget        `json:"unusedWidgets,omitempty"`
 	FormatVersion int                       `json:"formatVersion"`
 	UIProfile     string                    `json:"uiProfile"`
 	Root          string                    `json:"root"`
@@ -163,6 +169,10 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document has invalid node ID %q", id)
 		}
 	}
+	unused, err := d.checkUnusedWidgets()
+	if err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	used := map[string]bool{}
 	var walk func(string, int, string, bool) error
@@ -178,7 +188,7 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document node %q is shared or cyclic", id)
 		}
 		seen[id] = true
-		bounded, err := d.checkLayoutSize(id, node, parentKind, parentHeight)
+		bounded, err := d.checkLayoutSize(id, node, parentKind, parentHeight, unused[id])
 		if err != nil {
 			return err
 		}
@@ -220,17 +230,17 @@ func (d *PageDocument) Check(sections []Section) error {
 			}
 			used[node.Section] = true
 		case "rows", "columns", "tabs", "flow", "toolbar", "loop":
-			if node.Section != "" || len(node.Children) == 0 || len(node.Children) > 128 {
+			if node.Section != "" || len(d.ownedChildren(id)) == 0 || len(d.ownedChildren(id)) > 128 {
 				return fmt.Errorf("page document container %q needs children and no section", id)
 			}
 			if node.Kind == "tabs" {
 				variable, ok := d.Variables[node.ActiveVariable]
 				var initial string
-				if !ok || variable.Type != "string" || variable.Mode != "state" || json.Unmarshal(variable.Initial, &initial) != nil || !slices.Contains(node.Children, initial) {
+				if !ok || variable.Type != "string" || variable.Mode != "state" || json.Unmarshal(variable.Initial, &initial) != nil || !slices.Contains(d.ownedChildren(id), initial) {
 					return fmt.Errorf("page tabs %s need a text state initialized to a child", id)
 				}
 			}
-			for _, child := range node.Children {
+			for _, child := range d.ownedChildren(id) {
 				if err := walk(child, depth+1, node.Kind, bounded); err != nil {
 					return err
 				}
@@ -273,7 +283,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		if node.Kind == "widget" {
 			controls[node.Section] = conditions
 		}
-		for _, child := range node.Children {
+		for _, child := range d.ownedChildren(id) {
 			collect(child, conditions)
 		}
 	}
@@ -474,7 +484,14 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 				children = append(children, child)
 			}
 		}
-		if len(children) == 0 && id != d.Root {
+		dormant := false
+		for _, entry := range d.UnusedWidgets {
+			if entry.Parent == id && copyVisible(entry.Node) {
+				out.UnusedWidgets = append(out.UnusedWidgets, entry)
+				dormant = true
+			}
+		}
+		if len(children) == 0 && !dormant && id != d.Root {
 			return false
 		}
 		node.Children = children
@@ -482,6 +499,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		return true
 	}
 	for {
+		out.UnusedWidgets = nil
 		out.Nodes = map[string]PageLayoutNode{}
 		out.Overlays = map[string]PageOverlay{}
 		missing := map[string]bool{}

@@ -8,7 +8,7 @@ import { pageUIProfile, pageVariableContract } from "@platform/app";
 export const layoutID = (prefix: string) => `${prefix}${crypto.randomUUID()}`;
 
 function parentOf(document: Document, child: string): string | undefined {
-  return Object.entries(document.nodes).find(([, node]) => node.children?.includes(child))?.[0];
+  return document.unusedWidgets?.find(entry=>entry.node===child)?.parent ?? Object.entries(document.nodes).find(([, node]) => node.children?.includes(child))?.[0];
 }
 
 function leafOf(document: Document, section: string): string | undefined {
@@ -22,7 +22,7 @@ export function appendWidget(document: Document, section: string, container = do
   const id = layoutID("node");
   next.nodes[id] = { kind: "widget", section };
   const after = afterSection ? leafOf(next, afterSection) : undefined;
-  const parent = after && parentOf(next, after);
+  const parent = after && Object.entries(next.nodes).find(([,node])=>node.children?.includes(after))?.[0];
   if (after && parent) next.nodes[parent]!.children!.splice(next.nodes[parent]!.children!.indexOf(after) + 1, 0, id);
   else target.children = [...(target.children ?? []), id];
   return repairTabs(next);
@@ -31,7 +31,7 @@ export function appendWidget(document: Document, section: string, container = do
 /** Wrap the chosen widget and its next sibling; a lone widget can also start a group. */
 export function groupWidget(document: Document, section: string, kind: Kind): { document: Document; id?: string } {
   const leaf = leafOf(document, section);
-  const parent = leaf && parentOf(document, leaf);
+  const parent = leaf && Object.entries(document.nodes).find(([,node])=>node.children?.includes(leaf))?.[0];
   if (!leaf || !parent) return { document };
   const next = structuredClone(document);
   const siblings = next.nodes[parent]!.children!;
@@ -60,7 +60,8 @@ export function removeWidget(document: Document, section: string): Document {
   const parent = leaf && parentOf(document, leaf);
   if (!leaf || !parent) return document;
   const next = structuredClone(document);
-  next.nodes[parent]!.children = next.nodes[parent]!.children!.filter((id) => id !== leaf);
+  next.unusedWidgets=next.unusedWidgets?.filter(entry=>entry.node!==leaf);
+  next.nodes[parent]!.children = (next.nodes[parent]!.children??[]).filter((id) => id !== leaf);
   delete next.nodes[leaf];
   next.events = next.events?.filter((event) => event.source !== section);
   pruneEmpty(next, parent);
@@ -70,7 +71,7 @@ export function removeWidget(document: Document, section: string): Document {
 function pruneEmpty(next: Document, parent: string) {
   // Empty non-root containers are removed so a saved document remains valid.
   let current = parent;
-  while (current !== next.root && next.nodes[current]?.children?.length === 0) {
+  while (current !== next.root && next.nodes[current]?.children?.length === 0 && !next.unusedWidgets?.some(entry=>entry.parent===current)) {
     const above = parentOf(next, current);
     if (!above) break;
     next.nodes[above]!.children = next.nodes[above]!.children!.filter((id) => id !== current);
@@ -82,6 +83,7 @@ function pruneEmpty(next: Document, parent: string) {
 /** Reparent a leaf without changing its widget identity or business bindings. */
 export function relocateWidget(document: Document, section: string, container: string, afterSection?: string): Document {
   const leaf = leafOf(document, section), after = afterSection ? leafOf(document, afterSection) : undefined;
+  if(leaf&&document.unusedWidgets?.some(entry=>entry.node===leaf))return restoreWidget(document,section,container,afterSection);
   if (!leaf || leaf === after) return document;
   const from = parentOf(document, leaf), to = after ? parentOf(document, after) : container;
   if (!from || !to || document.nodes[to]?.kind === "widget" || !document.nodes[to]) return document;
@@ -101,6 +103,7 @@ export function ungroup(document: Document, group: string): Document {
   const siblings = next.nodes[parent]!.children!;
   const at = siblings.indexOf(group);
   siblings.splice(at, 1, ...(next.nodes[group]!.children ?? []));
+  next.unusedWidgets=next.unusedWidgets?.map(entry=>entry.parent===group?{...entry,parent}:entry);
   delete next.nodes[group];
   return repairTabs(next);
 }
@@ -155,9 +158,9 @@ export function removeOverlay(document: Document, id: string): { document: Docum
   const remove = (id: string) => {
     const node = next.nodes[id]; if (!node) return;
     if (node.section) sections.add(node.section);
-    node.children?.forEach(remove); delete next.nodes[id];
+    [...(node.children??[]),...(next.unusedWidgets??[]).filter(entry=>entry.parent===id).map(entry=>entry.node)].forEach(remove); delete next.nodes[id];
   };
-  remove(overlay.root); delete next.overlays![id];
+  remove(overlay.root); next.unusedWidgets=next.unusedWidgets?.filter(entry=>!!next.nodes[entry.node]&&!!next.nodes[entry.parent]); delete next.overlays![id];
   next.queries=Object.fromEntries(Object.entries(next.queries??{}).filter(([,q])=>q.owner!==id)); delete next.variables?.[overlay.openVariable];
   for (const [key, variable] of Object.entries(next.variables ?? {})) if (variable.scope === "overlay" && variable.owner === id) delete next.variables![key];
   for (const event of next.events ?? []) if (event.target === overlay.openVariable) sections.add(event.source);
@@ -197,4 +200,21 @@ export function synchronizeLoopBindings<T extends { id?: string; widget: string;
     const item = owner && (pageVariableContract.loop.recordWidgets as readonly string[]).includes(section.widget) ? document.nodes[owner]?.loop?.itemVariable : undefined;
     return item ? { ...section, selection: undefined, recordVariable: item } : section.recordVariable && document.variables?.[section.recordVariable]?.mode !== "input" && document.variables?.[section.recordVariable]?.source?.kind !== "record" ? { ...section, recordVariable: undefined } : section;
   }) };
+}
+
+/** Dormant edges retain original scopes; actual children remain render-only. */
+export function stashWidget(document:Document,section:string):Document {
+ const leaf=leafOf(document,section),parent=leaf&&parentOf(document,leaf);
+ if(!leaf||!parent||document.unusedWidgets?.some(entry=>entry.node===leaf))return document;
+ const next=structuredClone(document);next.uiProfile=pageUIProfile;
+ next.nodes[parent]!.children=next.nodes[parent]!.children?.filter(id=>id!==leaf);
+ next.unusedWidgets=[...(next.unusedWidgets??[]),{node:leaf,parent}];return repairTabs(next);
+}
+export function restoreWidget(document:Document,section:string,container:string,afterSection?:string):Document {
+ const leaf=leafOf(document,section),entry=document.unusedWidgets?.find(entry=>entry.node===leaf);
+ const after=afterSection?leafOf(document,afterSection):undefined,target=after?Object.entries(document.nodes).find(([,node])=>node.children?.includes(after))?.[0]:container;
+ if(!entry||!target||document.nodes[target]?.kind==="widget"||!document.nodes[target])return document;
+ const next=structuredClone(document);next.uiProfile=pageUIProfile;next.unusedWidgets=next.unusedWidgets?.filter(e=>e.node!==leaf);
+ const children=next.nodes[target]!.children??[];children.splice(after?children.indexOf(after)+1:children.length,0,entry.node);next.nodes[target]!.children=children;
+ if(entry.parent!==target)pruneEmpty(next,entry.parent);return repairTabs(next);
 }

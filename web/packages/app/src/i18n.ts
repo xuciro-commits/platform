@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Unused widgets need a newer profile and a bounded inventory.": "未使用组件需要新版页面配置且不能超出数量限制。",
+  "Unused widget needs one original leaf and a layout parent.": "未使用组件必须引用唯一原组件节点与布局父节点。",
+
   "Layout sizing needs a newer page profile.": "布局尺寸需要新版页面配置。",
   "Layout gap is outside its container budget.": "布局间距超出容器预算。",
   "Layout dimension is outside its size budget.": "布局尺寸超出允许范围。",

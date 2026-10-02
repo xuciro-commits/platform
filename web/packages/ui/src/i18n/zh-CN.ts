@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "Select": "选择",
+  "Context commands": "上下文命令",
+  "Use the same commands from a pointer context menu or an explicit keyboard and touch trigger.": "右键菜单、键盘与触控入口使用同一组命令。",
+  "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
+  "Region commands": "区域操作",
+  "Unavailable": "不可用",
+
   "Sized layout regions": "可配置尺寸的布局区域",
   "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
   "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",

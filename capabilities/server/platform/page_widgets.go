@@ -51,6 +51,8 @@ type pageWidgetEvent struct {
 type pageUIContract struct {
 	Layout struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
+		UnusedProfile     string `json:"unusedProfile"`
+		MaxUnused         int    `json:"maxUnused"`
 		MinSize           int    `json:"minSize"`
 		MaxSize           int    `json:"maxSize"`
 		MaxWeight         int    `json:"maxWeight"`

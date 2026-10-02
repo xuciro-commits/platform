@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ccaeb8f451cf51fc",
+  "revision": "sha256:c73c3ab316f20527",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -888,6 +888,35 @@
         "Checked",
         "Unchecked",
         "Disabled"
+      ]
+    },
+    {
+      "id": "ui/command-menu",
+      "owner": "@platform/ui",
+      "name": "Context commands",
+      "summary": "Use the same commands from a pointer context menu or an explicit keyboard and touch trigger.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/CommandMenu.tsx",
+      "exports": [
+        "CommandMenu"
+      ],
+      "example": "ContextCommands",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "menu",
+        "commands",
+        "keyboard"
+      ],
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller owns commands and disabled states; the menu does not perform business operations itself."
       ]
     },
     {
@@ -2018,6 +2047,7 @@
       "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
       "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions.": "通过工作区 Host 接入。目录预览使用本地示例，不授予权限。",
       "Content tabs": "内容标签页",
+      "Context commands": "上下文命令",
       "Controlled page composition": "受控页面装配",
       "Data table": "数据表格",
       "Declared action controls": "声明式动作控件",
@@ -2139,6 +2169,7 @@
       "Tasks and inbox": "任务与收件箱",
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
+      "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
@@ -2165,6 +2196,7 @@
       "Use exact registry keys; unknown states fall back to a neutral label.": "使用登记表的精确键；未知状态回退为中性色标签。",
       "Use semantic tokens instead of assigning domain meaning to raw colors.": "使用语义令牌表达含义，不给原始色值赋予领域语义。",
       "Use shared surface, text, focus and status tokens across themes.": "跨主题使用共享的表面、文字、焦点和状态令牌。",
+      "Use the same commands from a pointer context menu or an explicit keyboard and touch trigger.": "右键菜单、键盘与触控入口使用同一组命令。",
       "Virtual item list": "虚拟条目列表",
       "Visibility and allowed actions come from the scoped source and caller.": "可见范围与允许的动作来自限定范围的数据源和调用方。",
       "Wrap presentation items and navigate toolbar buttons with arrow keys.": "让呈现项自动换行，并使用方向键在工具栏按钮间移动。",
@@ -2593,6 +2625,9 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
     ],
+    "ui/command-menu": [
+      "web/packages/build/src/page-editor/LayoutTree.tsx"
+    ],
     "ui/lifecycle": [
       "web/packages/build/src/process.tsx"
     ],
@@ -2716,6 +2751,7 @@
         "ChartSource",
         "ChartSpec",
         "ColumnDef",
+        "ContextCommand",
         "DataTableProps",
         "Dictionary",
         "EditorProps",

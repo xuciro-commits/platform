@@ -1,20 +1,21 @@
 import { loopOwner, overlayOwner, variableAccessible, type LayoutKind } from "../page-layout";
 import {pageUIManifest,type Api} from "@platform/kernel";
-import { Button, Card, Input, Select, cn, t } from "@platform/ui";
-import { useState, type DragEvent, type ReactNode } from "react";
+import { Button, Card, CommandMenu, Input, Select, cn, t } from "@platform/ui";
+import { useId, useState, type DragEvent, type ReactNode } from "react";
 import { widgetContract } from "@platform/app";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Columns2, Layers, Plus, Rows3, Settings2, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Columns2, Layers, Plus, Rows3, Settings2 } from "lucide-react";
 
 type Label = { id?: string; widget: string; title?: string };
 
-export function LayoutTree({ document, sections, chosen, container, title, widgetTitles, widgets, onChoose, onContainer, onAdd, onMove, onRemove, onGroup, onRelocate, onInsert, onAddOverlay }: {
+export function LayoutTree({ document, sections, chosen, container, title, widgetTitles, widgets, onChoose, onContainer, onAdd, onMove, onRemove, onGroup, onRelocate, onInsert, onAddOverlay, onStash, onRestore, onDuplicate }: {
   document: Api.PageDocument; sections: Label[]; chosen: number; container?: string; title: string;
   widgetTitles: Record<string, () => string>; widgets: readonly string[];
   onChoose: (i: number) => void; onContainer: (id: string) => void; onAdd: (widget: string) => void;
   onMove: (i: number, by: -1 | 1) => void;
   onRelocate: (section: string, container: string, afterSection?: string) => void;
-  onInsert: (widget: string, container: string, afterSection?: string) => void; onRemove: (i: number) => void; onGroup: (kind: LayoutKind) => void; onAddOverlay: () => void;
+  onInsert: (widget: string, container: string, afterSection?: string) => void; onRemove: (i: number) => void; onStash:(index:number)=>void;onRestore:(index:number,target:string)=>void;onDuplicate:(index:number)=>void; onGroup: (kind: LayoutKind) => void; onAddOverlay: () => void;
 }) {
+  const focusScope=useId();
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hover, setHover] = useState<string>();
@@ -38,16 +39,15 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
       const item = indexed.get(node.section);
       if (!item) return null;
       const { section, i } = item;
-      return <li key={id} className="min-w-0" onDragOver={(event) => over(event, id)} onDragLeave={() => setHover(undefined)} onDrop={(event) => drop(event, document.root, section.id)}>
+      const unused=document.unusedWidgets?.find(entry=>entry.node===id);
+      const commands=[{id:"select",label:t("Select widget"),run:()=>onChoose(i)},{id:"copy",label:t("Duplicate widget"),run:()=>onDuplicate(i)},...(unused?[{id:"restore-original",label:t("Put back in original layout"),run:()=>onRestore(i,unused.parent)},...Object.entries(document.nodes).filter(([target,n])=>n.kind!=="widget"&&target!==unused.parent).map(([target,n],at)=>({id:`restore:${target}`,label:t("Place in {layout}",{layout:n.title||Object.values(document.overlays??{}).find(o=>o.root===target)?.title||(target===document.root?t("Main page"):t("Layout {n}",{n:at+1}))}),run:()=>onRestore(i,target)}))]:[{id:"stash",label:t("Move to unused widgets"),run:()=>onStash(i)},{id:"up",label:t("Move up"),run:()=>onMove(i,-1)},{id:"down",label:t("Move down"),run:()=>onMove(i,1)}]),{id:"delete",label:t("Delete widget"),run:()=>onRemove(i)}];
+      return <li key={id} className="min-w-0" onDragOver={(event) => over(event, id)} onDragLeave={() => setHover(undefined)} onDrop={(event) => drop(event, document.root, section.id)}><CommandMenu focusKey={`${focusScope}:${section.id}`} label={t("Commands for {widget}",{widget:section.title||widgetTitles[section.widget]?.()||section.widget})} commands={commands}>
         <div className={cn("flex items-center gap-0.5 rounded border px-1 py-0.5", i === chosen || hover === id ? "border-primary bg-row-selected" : "border-transparent")}>
-          <Button variant="ghost" size="sm" className="min-w-0 w-0 flex-1 justify-start" aria-pressed={i === chosen} onClick={() => onChoose(i)} draggable onDragStart={(event) => { event.dataTransfer.setData("application/platform-page-section", section.id!); event.dataTransfer.effectAllowed = "move"; }}>
+          <Button variant="ghost" size="sm" className="min-w-0 w-0 flex-1 justify-start" title={section.title||widgetTitles[section.widget]?.()||section.widget} aria-pressed={i === chosen} onClick={() => onChoose(i)} draggable onDragStart={(event) => { event.dataTransfer.setData("application/platform-page-section", section.id!); event.dataTransfer.effectAllowed = "move"; }}>
             <Layers className="size-3 shrink-0" /><span className="min-w-0 truncate">{section.title || widgetTitles[section.widget]?.() || section.widget}</span>
           </Button>
-          <Button size="sm" variant="ghost" aria-label={t("Move up")} onClick={() => onMove(i, -1)}><ArrowUp className="size-3" /></Button>
-          <Button size="sm" variant="ghost" aria-label={t("Move down")} onClick={() => onMove(i, 1)}><ArrowDown className="size-3" /></Button>
-          <Button size="sm" variant="ghost" aria-label={t("Remove section")} onClick={() => onRemove(i)}><Trash2 className="size-3" /></Button>
         </div>
-      </li>;
+      </CommandMenu></li>;
     }
     return <li key={id} className="min-w-0">
       <div className={cn("flex items-center rounded", hover === id && "outline outline-primary bg-row-selected")}
@@ -73,6 +73,7 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
     <div className="grid min-w-0 gap-2 border-t border-border pt-3">
       <div className="text-xs font-semibold text-muted">{t("Layout")}</div>
       <ul className="grid min-w-0 gap-1">{renderNode(document.root)}</ul>
+      <Card role="region" aria-label={t("Unused widgets")} className="grid gap-2 p-2"><strong className="text-xs text-muted">{t("Unused widgets")}</strong><p className="text-xs text-muted">{t("Stored widgets keep their settings and do not run until placed.")}</p><ul className="grid gap-1">{document.unusedWidgets?.map(entry=>renderNode(entry.node,new Set()))}</ul></Card>
       <div className="grid gap-2">
         <strong className="text-xs text-muted">{t("Overlays")}</strong>
         {Object.entries(document.overlays ?? {}).map(([id, overlay]) => <div key={id} className="grid gap-1"><span className="truncate text-xs">{overlay.title} · {t(overlay.kind === "drawer" ? "Drawer" : "Modal")}</span><ul>{renderNode(overlay.root)}</ul></div>)}

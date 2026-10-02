@@ -8,7 +8,7 @@ export const recordSlot = (object: string, name?: string, overlay?:string) => `$
 /** Presentation ownership comes from the one layout document. */
 export function sectionOverlay(page:Api.Page,section:string):string|undefined {
  const document=page.document;if(!document)return undefined;
- const find=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const node=document.nodes[id];return node?.section===section||!!node?.children?.some((child)=>find(child,seen));};
+ const find=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const node=document.nodes[id];return node?.section===section||[...(node?.children??[]),...(document.unusedWidgets??[]).filter(entry=>entry.parent===id).map(entry=>entry.node)].some(child=>find(child,seen));};
  return Object.entries(document.overlays??{}).find(([,overlay])=>find(overlay.root))?.[0];
 }
 export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):string {
@@ -59,6 +59,7 @@ export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot)
     if (variable.mode !== "resource" || !source || !["page","overlay"].includes(variable.scope) || variablePlan(page,id)!==undefined) return [];
     const section = page.sections?.find((section) => section.id === source.section);
     if (!section) return [[id, { status: "error", code: "Resource source is unavailable" } as VariableResult]];
+    if(page.document?.unusedWidgets?.some(entry=>page.document?.nodes[entry.node]?.section===section.id))return [[id,{status:"empty"} as VariableResult]];
     const object = section.object?.name || page.object.name;
     let value: VariableResult;
     if (source.kind === "record") {

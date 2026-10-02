@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  Button, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  Button, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RecordKanban, RecordTimeline, RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -299,4 +299,8 @@ export function RecordKanbans() {
 
 export function SizedLayouts() {
  return <LayoutRegion size={{height:240}}><LayoutStack direction="columns"><LayoutRegion parent="columns" size={{weight:2,scroll:"auto"}}><Panel>{t("Primary region")}</Panel></LayoutRegion><LayoutRegion parent="columns" size={{weight:1}}><Panel>{t("Secondary region")}</Panel></LayoutRegion></LayoutStack></LayoutRegion>;
+}
+
+export function ContextCommands() {
+ const [value,setValue]=useState("");return <div><CommandMenu label={t("Region commands")} commands={[{id:"select",label:t("Select"),run:()=>setValue(t("Selected"))},{id:"disabled",label:t("Unavailable"),disabled:true,run:()=>{}}]}><Button>{t("Primary region")}</Button></CommandMenu><p role="status">{value}</p></div>;
 }

@@ -522,10 +522,12 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         } : undefined} />
     );
   };
+  const placed=(id:string,seen=new Set<string>()):boolean=>{if(seen.has(id))return false;seen.add(id);const n=page.document?.nodes[id];return !!n&&(n.kind==="widget"?indexed.has(n.section??""):(n.children??[]).some(child=>placed(child,seen)));};
   const renderNode = (id: string, ancestors: Set<string>, context?: LoopContext, overlay?: string, parentKind?:string, parentHeight=false): ReactNode => {
     if (!page.document || ancestors.has(id)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
     const node = page.document.nodes[id];
     if (!node) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
+    if(!wrapLayout&&!placed(id))return null;
     const values = context?.values ?? (overlay ? overlayValues[overlay] : variables.values) ?? {};
     if (node.visibleWhen) {
       const visible = values[node.visibleWhen];

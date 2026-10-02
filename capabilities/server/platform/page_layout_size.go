@@ -2,7 +2,7 @@ package platform
 
 import "fmt"
 
-func (d *PageDocument) checkLayoutSize(id string, node PageLayoutNode, parent string, parentHeight bool) (bool, error) {
+func (d *PageDocument) checkLayoutSize(id string, node PageLayoutNode, parent string, parentHeight bool, dormant bool) (bool, error) {
 	fail := func(reason string) (bool, error) { return false, fmt.Errorf("page node %s layout: %s", id, reason) }
 	limits := pageWidgets.Layout
 	if (node.Size != nil || node.Gap != nil) && !PageUIProfileSupports(d.UIProfile, limits.RequiredUIProfile) {
@@ -29,14 +29,14 @@ func (d *PageDocument) checkLayoutSize(id string, node PageLayoutNode, parent st
 	}
 	bounded = s.Height != nil || bounded
 	if s.Weight != nil {
-		if *s.Weight < 1 || *s.Weight > limits.MaxWeight || parent != "rows" && parent != "columns" {
+		if *s.Weight < 1 || *s.Weight > limits.MaxWeight || !dormant && parent != "rows" && parent != "columns" {
 			return fail("weight needs a Rows or Columns parent and a bounded positive value")
 		}
-		if parent == "columns" && s.Width != nil || parent == "rows" && s.Height != nil {
+		if !dormant && (parent == "columns" && s.Width != nil || parent == "rows" && s.Height != nil) {
 			return fail("weight conflicts with a fixed main-axis dimension")
 		}
 		if parent == "rows" {
-			if !parentHeight {
+			if !parentHeight && !dormant {
 				return fail("row weight needs a parent with a definite height")
 			}
 			bounded = true
@@ -45,7 +45,7 @@ func (d *PageDocument) checkLayoutSize(id string, node PageLayoutNode, parent st
 	if s.Scroll != "" && s.Scroll != "visible" && s.Scroll != "auto" {
 		return fail("scroll must be visible or auto")
 	}
-	if s.Scroll == "auto" && !bounded && s.MaxHeight == nil {
+	if s.Scroll == "auto" && !dormant && !bounded && s.MaxHeight == nil {
 		return fail("scroll needs a definite or maximum height")
 	}
 	return bounded, nil

@@ -23,7 +23,7 @@ func (d *PageDocument) loopOwners() map[string]string {
 		if node.Kind == "loop" {
 			owner = id
 		}
-		for _, child := range node.Children {
+		for _, child := range d.ownedChildren(id) {
 			visit(child, owner)
 		}
 	}
@@ -43,7 +43,7 @@ func (d *PageDocument) overlayOwners() map[string]string {
 			return
 		}
 		owners[id] = owner
-		for _, child := range d.Nodes[id].Children {
+		for _, child := range d.ownedChildren(id) {
 			visit(child, owner)
 		}
 	}

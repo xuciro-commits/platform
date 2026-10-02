@@ -5,6 +5,11 @@ export function pageLayoutDiagnostics(document:Api.PageDocument):{node:string;co
  const limits=pageUIManifest.layout,issues:{node:string;code:string}[]=[];
  const parents=new Map<string,string>();
  for(const [id,n]of Object.entries(document.nodes))for(const child of n.children??[])parents.set(child,id);
+ const entries=document.unusedWidgets??[];
+ if(entries.length>limits.maxUnused||entries.length&&Number(document.uiProfile.split(".").at(-1))<Number(limits.unusedProfile.split(".").at(-1)))issues.push({node:document.root,code:"Unused widgets need a newer profile and a bounded inventory."});
+ const registered=new Set<string>();for(const entry of entries){if(registered.has(entry.node)||parents.has(entry.node)||document.nodes[entry.node]?.kind!=="widget"||!document.nodes[entry.parent]||document.nodes[entry.parent]?.kind==="widget")issues.push({node:entry.node,code:"Unused widget needs one original leaf and a layout parent."});registered.add(entry.node);}
+ const unused=new Set((document.unusedWidgets??[]).map(entry=>entry.node));
+ for(const entry of document.unusedWidgets??[])parents.set(entry.node,entry.parent);
  const bounded=(id:string,seen=new Set<string>()):boolean=>{
   if(seen.has(id))return false;seen.add(id);
   const n=document.nodes[id],p=parents.get(id),parent=p&&document.nodes[p];
@@ -19,12 +24,12 @@ export function pageLayoutDiagnostics(document:Api.PageDocument):{node:string;co
   for(const key of ["width","height","minWidth","maxWidth","minHeight","maxHeight"]as const){const v=s[key];if(v!==undefined&&(!Number.isInteger(v)||v<limits.minSize||v>limits.maxSize))fail("Layout dimension is outside its size budget.");}
   for(const [fixed,min,max]of [[s.width,s.minWidth,s.maxWidth],[s.height,s.minHeight,s.maxHeight]])if(min!==undefined&&max!==undefined&&min>max||fixed!==undefined&&(min!==undefined&&fixed<min||max!==undefined&&fixed>max))fail("Fixed, minimum and maximum dimensions disagree.");
   if(s.weight!==undefined){
-   if(!parent||!["rows","columns"].includes(parent.kind)||!Number.isInteger(s.weight)||s.weight<1||s.weight>limits.maxWeight)fail("Layout weight needs a Rows or Columns parent.");
-   if(parent?.kind==="columns"&&s.width!==undefined||parent?.kind==="rows"&&s.height!==undefined)fail("Layout weight conflicts with a fixed main-axis size.");
-   if(parent?.kind==="rows"&&(!p||!bounded(p)))fail("Row weight needs a parent with a definite height.");
+   if(!unused.has(id)&&(!parent||!["rows","columns"].includes(parent.kind))||!Number.isInteger(s.weight)||s.weight<1||s.weight>limits.maxWeight)fail("Layout weight needs a Rows or Columns parent.");
+   if(!unused.has(id)&&(parent?.kind==="columns"&&s.width!==undefined||parent?.kind==="rows"&&s.height!==undefined))fail("Layout weight conflicts with a fixed main-axis size.");
+   if(!unused.has(id)&&parent?.kind==="rows"&&(!p||!bounded(p)))fail("Row weight needs a parent with a definite height.");
   }
   if(s.scroll&&!["visible","auto"].includes(s.scroll))fail("Layout scroll must be visible or auto.");
-  if(s.scroll==="auto"&&!bounded(id)&&s.maxHeight===undefined)fail("Layout scroll needs a definite or maximum height.");
+  if(s.scroll==="auto"&&!unused.has(id)&&!bounded(id)&&s.maxHeight===undefined)fail("Layout scroll needs a definite or maximum height.");
  }
  return issues;
 }

@@ -8,6 +8,16 @@ const record = (id) => ({ id, revision: 1, note: id });
 const plan = () => ({ objects: new Map([["parent", "sample.parent"], ["child", "sample.child"]]), children: new Map([["parent", new Set(["child"])]]), queryParents: new Map([["children", "parent"]]) });
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
+test("a revision during an uncached reference read retries that reference and rejects the older response",async()=>{
+ const old=deferred(),current=deferred();let calls=0;
+ const source={scope:"member-a",revision:1,entity:()=>({fields:[{name:"active",type:"boolean"}]}),get:()=>{calls++;return old.promise;},list:async()=>({records:[],total:0})};
+ const store=new PageSessionStore(source,plan());
+ store.selectReference("parent",{object:"sample.parent",id:"A"});assert.equal(store.snapshot().records.parent.status,"pending");
+ store.updateSource({...source,revision:2,get:()=>{calls++;return current.promise;}});assert.equal(calls,2);
+ old.resolve({record:record("A"),values:{active:false}});await tick();assert.equal(store.snapshot().records.parent.status,"pending");
+ current.resolve({record:{...record("A"),revision:2},values:{active:true}});await tick();assert.equal(store.snapshot().records.parent.status,"value");assert.equal(store.property({object:"sample.parent",id:"A"},"active","boolean").value,true);
+});
+
 test("changing a parent invalidates descendant references, cached fields and late reads", async () => {
   const reads = new Map();
   const store = new PageSessionStore({ entity: () => ({ fields: [{name:"active",type:"boolean"}] }), list: async () => ({ records: [], total: 0 }), get: (object, id) => {

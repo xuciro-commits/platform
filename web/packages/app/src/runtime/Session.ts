@@ -269,10 +269,10 @@ export class PageSessionStore {
       this.publish({ counts:{}, views:{}, scalars: {}, items: {}, filters: {}, records: this.clear([...this.plan.objects.keys()]) });
       return;
     }
-    for (const [key, record] of this.recordCache) {
-      const object = this.plan.objects.get(key);
-      if (object) void this.read(key, { object, id: record.id });
-    }
+    // References selected through application/page ports may still be pending
+    // and have no cached record yet. A revision retires their old request too.
+    const references=Object.entries(this.state.records).flatMap(([key,state])=>(state.status==="value"||state.status==="pending")&&state.value?[[key,state.value] as const]:[]);
+    for(const [key,reference] of references)void this.read(key,reference);
   }
   querySource(key: string): RecordSource {
     let source = this.sources.get(key);

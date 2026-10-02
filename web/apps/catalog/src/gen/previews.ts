@@ -28,6 +28,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/button": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Buttons })),
   "ui/chart": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Charts })),
   "ui/checkbox": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Checkboxes })),
+  "ui/command-menu": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContextCommands })),
   "ui/content-tabs": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContentTabsExample })),
   "ui/data-table": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Tables })),
   "ui/dialog": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Dialogs })),

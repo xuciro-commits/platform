@@ -900,6 +900,7 @@ export type Page = {
 };
 
 export type PageDocument = {
+  unusedWidgets?: PageUnusedWidget[];
   formatVersion: number;
   uiProfile: string;
   root: string;
@@ -1020,6 +1021,11 @@ export type PageResourceSource = {
   kind: string;
   section?: string;
   node?: string;
+};
+
+export type PageUnusedWidget = {
+  node: string;
+  parent: string;
 };
 
 export type PageValue = {
@@ -1635,7 +1641,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.27",
+  "uiProfile": "platform.page.v2.28",
   "widgets": [
     {
       "componentID": "table",
@@ -2593,7 +2599,8 @@ export const pageUIManifest = {
     "platform.page.v2.24",
     "platform.page.v2.25",
     "platform.page.v2.26",
-    "platform.page.v2.27"
+    "platform.page.v2.27",
+    "platform.page.v2.28"
   ],
   "runtime": {
     "scope": "page",
@@ -2813,6 +2820,8 @@ export const pageUIManifest = {
     "maxSize": 4096,
     "maxWeight": 24,
     "maxGap": 64,
-    "stackBelow": 448
+    "stackBelow": 448,
+    "unusedProfile": "platform.page.v2.28",
+    "maxUnused": 128
   }
 } as const;

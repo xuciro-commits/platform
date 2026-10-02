@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Put back in original layout": "放回原布局",
+  "Layout {n}": "布局{n}",
+  "Unused widgets": "未使用组件",
+  "Stored widgets keep their settings and do not run until placed.": "暂存组件保留配置，放回布局后才运行。",
+  "Move to unused widgets": "移入未使用组件",
+  "Select widget": "选择组件",
+  "Delete widget": "删除组件",
+  "Place in {layout}": "放入{layout}",
+  "Commands for {widget}": "{widget}的操作",
+
   "Region sizing": "区域尺寸",
   "Layout weight": "布局权重",
   "Width (px)": "宽度（像素）",
