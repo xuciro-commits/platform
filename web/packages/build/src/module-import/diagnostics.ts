@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "chart-aggregate-profile":"XY import requires an average grouped bar chart over an original query collection. Per-record lines, scatter plots and other aggregations need their own supported mapping.",
+ "chart-aggregate-binding":"Map the chart group to an original categorical field and the average to an original integer or decimal field.",
+ "native-chart-aggregate":"Charts use original complete-collection aggregates, field metadata, permissions and read budgets. Source drawing styles and record-window truncation are not copied.",
  "record-list-profile":"Record cards need a supported grid or list layout and an original bounded query window.",
  "record-list-binding":"Choose an original card title and at most four visible scalar summary fields.",
  "native-record-cards":"Cards show the original query window, explicit fields and lifecycle metadata. Selection is authorized by the original record owner; source asset-specific decoration is not copied.",

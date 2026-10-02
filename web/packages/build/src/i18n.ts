@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "XY import requires an average grouped bar chart over an original query collection. Per-record lines, scatter plots and other aggregations need their own supported mapping.": "XY 导入需要原查询集合上的分组平均柱图；逐记录折线、散点及其他聚合需要各自受支持的映射。",
+ "Map the chart group to an original categorical field and the average to an original integer or decimal field.": "将图表分组映射到原分类字段，平均值映射到原整数或十进制字段。",
+ "Charts use original complete-collection aggregates, field metadata, permissions and read budgets. Source drawing styles and record-window truncation are not copied.": "图表使用原完整集合聚合、字段元数据、权限和读取预算；来源绘图样式及记录窗口截断不直接复制。",
  "Record cards": "记录卡片",
  "Record card query window": "记录卡片查询窗口",
  "Initial record layout": "初始记录布局",

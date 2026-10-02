@@ -115,6 +115,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		sections = append(sections, build.Section{ID: id, Widget: "record-list", ConfigVersion: 1, CollectionVariable: "metricWindow", CardLabel: label, Fields: []string{"name", "secret"}, RecordList: &platform.PageRecordList{Layout: "grid"}})
 	}
 	doc.Variables["cardRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "cards"}}
+	for _, spec := range []struct{ id, group, measure string }{{"chart", "name", "avg:amount"}, {"hiddenChartGroup", "secret", "avg:amount"}, {"hiddenChartMeasure", "name", "avg:sensitive"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "chart", ConfigVersion: 1, CollectionVariable: "metricWindow", Mark: "bar", Group: spec.group, Measure: spec.measure})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -132,6 +139,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[5].RecordLinks[0].Title = "Later links"
 	sections[12].RecordList = &platform.PageRecordList{Layout: "list"}
 	sections[12].CardLabel = "id"
+	sections[14].Group = "state"
+	sections[14].Measure = "count"
 	sections[10].Text = "Later heading"
 	sections[11].Title = "Later collection"
 	sections[8].MetricPresentation = &platform.PageMetricPresentation{Prefix: "Later", Formatter: "short", Variant: "tag", Tone: "danger"}
@@ -148,6 +157,20 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					chart, hiddenChartGroup, hiddenChartMeasure := false, false, false
+					for _, s := range d.Page.Sections {
+						switch s.ID {
+						case "chart":
+							chart = s.Mark == "bar" && s.Group == "name" && s.Measure == "avg:amount" && s.CollectionVariable == "metricWindow"
+						case "hiddenChartGroup":
+							hiddenChartGroup = true
+						case "hiddenChartMeasure":
+							hiddenChartMeasure = true
+						}
+					}
+					if !chart || hiddenChartGroup != (member.ID == builder.ID) || hiddenChartMeasure != (member.ID == builder.ID) {
+						t.Fatal("frozen chart group, measure or member projection changed")
+					}
 					wantGroups := 3
 					if member.ID == reader.ID {
 						wantGroups = 1

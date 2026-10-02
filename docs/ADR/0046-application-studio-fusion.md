@@ -506,6 +506,12 @@ F1e14在v2.42注册record-list/configVersion=1，声明recordList.layout=grid/li
 
 源ObjectList保留objectSetVarId、layout及activeVarId，必须显式映射原标题与摘要；报告说明原窗口、权限、导航与装饰差异。来源全局记录变量可能把另一页的ObjectTable登记为生产者：所选页面及其浮层只有一个已放置记录生产者且该生产者是ObjectList时，按实际生产者重写并给出确认警告；同时存在两个写者时阻止导入，不猜测共享记录归属。原详情、ObjectView、Links、StatusTracker及InlineAction都指向重写后的实际生产者。源卡片中的行业装饰、演示记录及客户端Ontology不进入运行路径。机器清单当前16类源组件开放有限profile，完整92类型仍未完成；实现证据归§14。
 
+### 6.35 ChartXY分组平均值的原聚合迁移
+
+F1e15将源ChartXY的有限profile接入既有chart/configVersion=1及v2.24以上页面；没有新建分析组件、查询引擎或运行类型。源objectSetVarId映射原plan集合，chartKind=bar、agg=avg保持分组平均值含义，xProperty/yProperty逐项选择原字段。分组限原text/choice/reference/boolean/integer，度量限integer/decimal；原生mark=bar、group及avg:<field>由原Go聚合编译器、字段授权、候选依赖与发布校验。来源未声明avg时实际是逐记录前40项，不能自动改成全集统计；line/scatter、其他聚合、日期分桶、Money或未知配置在本profile给出定位拒绝并保留原文。
+
+图表消费原集合的完整条件，不从window.records计算平均值，不携带窗口limit/offset/sort；原4096结果行预算、成员读取范围及数值聚合语义保留，不据此承诺精确数值聚合或生产性能。共享Chart/ChartSource负责绘图、读取世代和失败；分页不会重算完整统计，筛选、成员/定义及拥有Overlay退役清理旧图与晚到响应，不能在来源失效时回退为全部集合。隐藏分组、度量或查询条件沿原定义闭包裁掉图表。Build沿原Chart检查器与Query plans编辑绑定和窗口；拥有局部输入的布局副本重写其查询，外部共享声明继续按原复制规则共享。导入报告要求确认完整统计、原字段元数据、权限/预算及呈现差异；应用仍是一次可撤销草稿替换，保存/冻结/激活沿原路径。当前17类源组件开放有限profile；逐记录XY与完整92配置仍由后续批次推进，证据归§14。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -689,7 +695,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 兼容转换是规范加载入口中的纯转换，不形成第二套编辑器/渲染器。一次性导入适配在迁移结束后退出常规运行路径。
 
-首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。十六类组件为ObjectTable→Table、ObjectList→§6.34的RecordList、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button、ButtonGroup→§6.29的ButtonGroup、Links→§6.30的RecordLinks、StatusTracker→§6.31的StatusTracker、MetricCard→§6.32的Metric及HeaderText/ObjectSetTitle→§6.33的Heading/CollectionTitle，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
+首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。十七类组件为ObjectTable→Table、ObjectList→§6.34的RecordList、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button、ButtonGroup→§6.29的ButtonGroup、Links→§6.30的RecordLinks、StatusTracker→§6.31的StatusTracker、MetricCard→§6.32的Metric、HeaderText/ObjectSetTitle→§6.33的Heading/CollectionTitle及ChartXY→§6.35的原Chart，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
 
 原文件按输入文本保留在报告中，可原样下载；映射报告包含完整来源、绑定、定位诊断、身份重写及原生草稿。应用是原DraftSession的一次可撤销替换，不提交业务操作、不自动保存；再次打开导入窗口可在同一编辑作用域下载报告。报告不是平台资产，离开编辑器或切换成员前须下载保留。选择页面之外的页面、页头、流程和未引用内容明确保留在报告但不执行，原导航由工作区提供；可识别的原生展示差异需勾选确认。未知配置、未知组件、未支持的选择/编辑配置、不兼容作用域和执行定义阻止应用。源变量虽是Module全局值，本profile不复制跨根局部变量：记录资源按生产者归属，页面选中记录可供浮层读取，浮层选中记录不能逃到页面；浮层独占状态转为关闭重置的原生局部状态并给出确认警告，静态值跨根共享需后续显式映射。Loop、更广动态转换、源应用拆分、接口、更广变量/事件及92类型完整配置转换仍待后续。
 
@@ -874,4 +880,6 @@ Module页面导入（F1e–F1e2）已接通§10.1的八类组件有限profile、
 
 记录画廊（F1e14，v2.42）已接通§6.34的record-list、共享卡片/列表、原窗口与独立授权选择、检查器及ObjectList有限导入，当前16类源组件开放有限profile。Go验证旧profile/布局/缺文档、原标题/重复摘要及生产者；候选冻结后修改草稿、成员标题/摘要裁剪、CheckReplay及内存快照保留原声明。共享UI验证实际记录身份、授权字段及布局切换不读写、成员变化复位和错误替换旧窗口；导入覆盖显式字段、单一实际生产者重写与多写者拒绝，复制保留布局并重写详情来源。浏览器验证默认源配置→字段映射/检查器→保存冻结后新草稿不改布局/标题，真实记录选择、另一画廊隔离、原详情与原动作目标、筛选清理、记录读取403拒绝、Overlay关闭重开/刷新及原记录窗口导航；普通/窄屏已观察，全量Web路线通过。更广卡片装饰、选择事件、多选/编辑、负责人视觉认可、生产性能与真实PostgreSQL恢复仍未提供或验证。
 
-F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和十六类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+分组平均柱图（F1e15，沿既有Chart profile）已接通§6.35的ChartXY→原chart、显式x/y字段映射及原plan聚合，当前17类源组件开放有限profile。Go覆盖原候选冻结后修改分组/度量草稿、隐藏分组/度量组件裁剪、CheckReplay及内存快照保持；沿既有聚合测试验证完整授权成员、条件/字段拒绝及预算。导入验证默认平均柱图与原集合/字段，逐记录、未知配置、错误类型与旧profile拒绝；布局复制验证拥有输入的查询与平均度量保持并隔离。浏览器验证GUI定位拒绝/字段映射、原Chart检查器、单条查询窗口配置及保存/冻结后新草稿不替换原avg，六条真实记录的完整分组平均值、分页不重算、隐藏分组/度量/条件裁剪、筛选及403清理，Overlay局部平均值、关闭重开输入复位和刷新；普通/窄屏已观察，全量Web路线通过。逐记录折线/scatter、其他来源聚合/日期映射、负责人视觉认可、生产性能及真实PostgreSQL恢复仍未提供或验证。
+
+F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和十七类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

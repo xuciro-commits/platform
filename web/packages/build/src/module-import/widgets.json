@@ -138,9 +138,9 @@
       "sourceType": "ChartXY",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
+      "status": "profile",
       "target": "chart",
-      "reason": "config-or-capability-profile-required"
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ChartPie",
