@@ -40,3 +40,5 @@ export {RecordKanban,type KanbanLane,type KanbanMove} from "./records/RecordKanb
 export { humanizeKernelError } from "./lib/errors";
 
 export { useViewVisible } from "./shell/ViewVisibility";
+
+export {LayoutRegion,LayoutStack,type LayoutSize} from "./layout/LayoutRegion";

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:9bcaae1d7d3d9c31",
+  "revision": "sha256:ccaeb8f451cf51fc",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1335,6 +1335,33 @@
       ]
     },
     {
+      "id": "ui/layout-region",
+      "owner": "@platform/ui",
+      "name": "Sized layout regions",
+      "summary": "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.",
+      "layer": 2,
+      "source": "web/packages/ui/src/layout/LayoutRegion.tsx",
+      "exports": [
+        "LayoutRegion",
+        "LayoutStack"
+      ],
+      "example": "SizedLayouts",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "layout",
+        "sizing",
+        "scroll"
+      ],
+      "constraints": [
+        "The caller supplies validated dimensions and parent axes; layout grants no business access."
+      ]
+    },
+    {
       "id": "ui/lifecycle",
       "owner": "@platform/ui",
       "name": "Lifecycle status bar",
@@ -1962,6 +1989,7 @@
       "Application sessions": "应用会话",
       "Applications reuse Workspace; app navigation and views come from their AppUI declaration.": "应用复用 Workspace；应用导航与视图由各自的 AppUI 声明提供。",
       "Arrange a library, canvas and inspector with keyboard and pointer pane resizing.": "组合组件库、画布与检查器，支持键盘和指针调整面板宽度。",
+      "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
       "Author fixed record conditions and retain explicit query versions for shared page plans.": "编写固定记录条件，保留共享页面计划的明确查询版本。",
       "Authorized cross-application search": "受权跨应用搜索",
@@ -2100,6 +2128,7 @@
       "Share declared presentation state across pages of one scoped application instance.": "在同一受控应用实例的页面间共享声明式展示状态。",
       "Shared": "共享",
       "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
+      "Sized layout regions": "可配置尺寸的布局区域",
       "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.": "工坊要求绑定对象和可见字段，动作来自当前成员的原动作目录。",
       "Submit an ad hoc form on Enter without reloading the page.": "按回车提交临时表单，不刷新页面。",
       "Submitting": "提交中",
@@ -2114,6 +2143,7 @@
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
+      "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
       "The canvas owns interaction; its caller owns graph semantics, validation and persistence.": "画布负责交互；调用方负责图语义、校验和持久化。",
       "The local example demonstrates a payload and result flow in the original WorkflowEditor; it does not execute a process.": "本地示例在原 WorkflowEditor 展示输入到结果的流程，不执行流程。",
       "The local example uses synthetic application membership. Save, release and navigation actions cannot reach a host.": "本地示例使用合成应用资源；保存、发布与导航操作均不会连接宿主。",
@@ -2475,6 +2505,9 @@
     "ui/virtual-stack": [
       "web/packages/app/src/runtime/LoopRuntime.tsx"
     ],
+    "ui/layout-region": [
+      "web/packages/app/src/sections.tsx"
+    ],
     "ui/flow-layout": [
       "web/packages/app/src/sections.tsx"
     ],
@@ -2705,6 +2738,7 @@
         "KanbanLane",
         "KanbanMove",
         "Launcher",
+        "LayoutSize",
         "Lifecycle",
         "ListState",
         "Mark",
@@ -2752,6 +2786,7 @@
         "isPageDefinition",
         "newId",
         "pageDocumentFromSections",
+        "pageLayoutDiagnostics",
         "pageUIProfile",
         "pageVariableContract",
         "pageVariableDiagnostics",

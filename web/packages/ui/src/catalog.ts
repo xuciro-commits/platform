@@ -9,6 +9,8 @@ const asset = (id: string, name: string, summary: string, layer: CatalogEntry["l
 });
 
 export const entries: CatalogEntry[] = [
+  asset("ui/layout-region", "Sized layout regions", "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.", 2,
+    "layout/LayoutRegion.tsx", ["LayoutRegion", "LayoutStack"], "SizedLayouts", {tags:["layout","sizing","scroll"], constraints:["The caller supplies validated dimensions and parent axes; layout grants no business access."]}),
   asset("foundation/semantic-tokens", "Semantic tokens", "Use shared surface, text, focus and status tokens across themes.", 0,
     "styles.css", [], "Tokens", { authority: "specification", uses: ["reference"], tags: ["color", "theme", "density"],
       constraints: ["Use semantic tokens instead of assigning domain meaning to raw colors."] }),

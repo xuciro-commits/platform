@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Layout sizing needs a newer page profile.": "布局尺寸需要新版页面配置。",
+  "Layout gap is outside its container budget.": "布局间距超出容器预算。",
+  "Layout dimension is outside its size budget.": "布局尺寸超出允许范围。",
+  "Fixed, minimum and maximum dimensions disagree.": "固定尺寸与最小、最大尺寸冲突。",
+  "Layout weight needs a Rows or Columns parent.": "布局权重需要行或列父容器。",
+  "Layout weight conflicts with a fixed main-axis size.": "布局权重与固定主轴尺寸冲突。",
+  "Row weight needs a parent with a definite height.": "行权重需要高度确定的父容器。",
+  "Layout scroll must be visible or auto.": "布局滚动必须为自然流动或自动。",
+  "Layout scroll needs a definite or maximum height.": "区域滚动需要确定高度或最大高度。",
+
   "Pie values must be finite nonnegative quantities without mixed currencies.": "饼图值必须是有限非负数，且不能混合货币。",
   "The relation version or start record is unavailable.": "关系版本或起点记录不可用。",
   "Relation target object is incompatible.": "关系目标对象不兼容。",

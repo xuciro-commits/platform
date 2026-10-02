@@ -1,3 +1,4 @@
+import {pageLayoutDiagnostics} from "@platform/app";
 import { recordPaths } from "./record-paths";
 import { AssetControls } from "./asset-controls";
 // Application Studio page design (ADR-0046). Document history, UI selection
@@ -18,7 +19,7 @@ import { VariablesPanel, NodeBindings } from "./page-editor/VariablesPanel";
 import { InterfacePanel } from "./page-editor/InterfacePanel";
 import { widgetInspector } from "./page-editor/widgets/registry";
 import { OverlayProperties } from "./page-editor/OverlayPanel";
-import { LayoutProperties, LayoutTree } from "./page-editor/LayoutTree";
+import { LayoutProperties, LayoutSizing, LayoutTree } from "./page-editor/LayoutTree";
 import { useDraftSession } from "./session/DraftSession";
 
 type Api = NonNullable<Definition["page"]>;
@@ -137,7 +138,8 @@ export function PageEditor({ id }: { id: string }) {
   });
   const variableProblems = pageVariableDiagnostics(document.variables ?? {});
   const queryProblem = Object.values(document.queries??{}).some((q)=>q.limit<1||q.limit>pageVariableContract.query.maxLimit||(q.conditions??[]).some((c)=>!c.field));
-  const invalid = queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
+  const layoutProblems=pageLayoutDiagnostics(document);
+  const invalid = layoutProblems.length>0 || queryProblem || inputProblem || loopProblem || overlayProblem || variableProblems.length > 0 || Object.values(formProblems).some(Boolean) || !!selectionProblem || incompatible;
   const relatedObjects = useMemo(() => definitions.filter((d) => d.ref.kind === "object" && d.entity && d.ref.name !== page?.object)
     .filter((d) => d.entity!.fields.some((f) => f.type === "reference" && [page?.object, ...selections.map((selection) => selection.object.name)].includes(f.ref))).map((d) => d.ref.name), [definitions, page?.object, selections]);
   const [queryPreviewOwner,setQueryPreviewOwner]=useState<string|undefined>(undefined);
@@ -233,6 +235,7 @@ export function PageEditor({ id }: { id: string }) {
         <Button variant="ghost" aria-label={t("Toggle inspector")} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button>
       </Card>
       {refused && <Panel role="alert" className="text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
+      {layoutProblems.length>0&&<Panel role="alert">{layoutProblems.map((issue,i)=><p key={i}>{issue.node}: {t(issue.code)}</p>)}</Panel>}
       {variableProblems.length > 0 && <Panel role="alert" className="text-xs text-danger">{variableProblems.map((issue, index) => <p key={index}>{issue.variable}: {t(issue.code)}</p>)}</Panel>}
       {loopProblem && <Panel role="status" className="text-xs text-muted">{t("Choose a query window for each loop before saving.")}</Panel>}
       {overlayProblem && <Panel role="status" className="text-xs text-muted">{t("Add content to each overlay and bind every button before saving.")}</Panel>}
@@ -260,6 +263,7 @@ export function PageEditor({ id }: { id: string }) {
             document={document} object={page.object} selections={selections} relatedObjects={relatedObjects} onChange={(patch) => change(chosen, patch)} />}
             {chosen >= 0 && sections[chosen]?.id && Object.keys(document.overlays ?? {}).length > 0 && <Card className="grid gap-2 p-3"><label className="grid gap-1 text-xs">{t("Move widget to")}<Select value="" onChange={(event) => { if (event.target.value) edit({ document: relocateWidget(document, sections[chosen]!.id!, event.target.value) }); }}><option value="">{t("Choose a layout root")}</option><option value={document.root}>{t("Main page")}</option>{Object.entries(document.overlays ?? {}).map(([id, overlay]) => <option key={id} value={overlay.root}>{overlay.title}</option>)}</Select></label></Card>}
             {(() => { const Inspector=canvasSelection&&widgetInspector(canvasSelection.widget,canvasSelection.configVersion??0)?.events;return Inspector&&canvasSelection?<Inspector document={document} section={canvasSelection.id!} owner={nodeID?loopOwner(document,nodeID):undefined} overlay={nodeID?overlayOwner(document,nodeID):undefined} onChange={document=>edit({document})}/>:null; })()}
+            {nodeID&&<LayoutSizing document={document} id={nodeID} onPatch={patchNode}/>}
             {nodeID && <NodeBindings document={document} id={nodeID} button={!!canvasSelection&&!!widgetContract(canvasSelection.widget)?.inputPorts.some(port=>port.bindingField==="enabledWhen")&&canvasSelection.widget!=="input"} input={canvasSelection?.widget === "input"} onChange={(patch) => patchNode(nodeID, patch)} />}</div>)}>
           <div className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-1.5">
             <span className="mr-auto truncate text-xs font-medium">{title || page.title}</span>
@@ -277,7 +281,7 @@ export function PageEditor({ id }: { id: string }) {
                 })?.root;
               })()} onVariableValues={setVariableValues} page={asPage({ ...page, title, description, selections }, sections, document)} live={false} chosen={chosen} onChoose={choose}
                 notice={nothing && <Panel role="status" className="text-xs text-muted">{t("Add at least one widget before installing or reviewing a release.")}</Panel>}
-                wrapLayout={(id, node, body) => <div key={id} data-layout-node={id} className={`relative min-w-0 rounded ${dropTarget === id || container === id ? "outline outline-2 outline-primary" : ""}`}
+                wrapLayout={(id, node, body) => <div key={id} data-layout-node={id} className={`relative flex min-h-0 min-w-0 flex-1 flex-col rounded ${dropTarget === id || container === id ? "outline outline-2 outline-primary" : ""}`}
                   onDragOver={(event) => { if (!event.dataTransfer.types.some((type) => type === "application/platform-page-widget" || type === "application/platform-page-section")) return; event.preventDefault(); event.stopPropagation(); setDropTarget(id); }}
                   onDragLeave={() => setDropTarget(undefined)} onDrop={(event) => {
                     const widget = event.dataTransfer.getData("application/platform-page-widget"), section = event.dataTransfer.getData("application/platform-page-section");

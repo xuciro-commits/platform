@@ -23,17 +23,31 @@ type PageDocument struct {
 	Interface     *PageInterface            `json:"interface,omitempty"`
 }
 
+// PageLayoutSize contains controlled presentation dimensions in CSS pixels.
+type PageLayoutSize struct {
+	Weight    *int   `json:"weight,omitempty"`
+	Width     *int   `json:"width,omitempty"`
+	Height    *int   `json:"height,omitempty"`
+	MinWidth  *int   `json:"minWidth,omitempty"`
+	MaxWidth  *int   `json:"maxWidth,omitempty"`
+	MinHeight *int   `json:"minHeight,omitempty"`
+	MaxHeight *int   `json:"maxHeight,omitempty"`
+	Scroll    string `json:"scroll,omitempty"`
+}
+
 type PageLayoutNode struct {
-	Kind           string    `json:"kind"` // rows, columns, tabs, flow, toolbar, or widget
-	Children       []string  `json:"children,omitempty"`
-	Section        string    `json:"section,omitempty"`
-	Title          string    `json:"title,omitempty"`
-	ValueVariable  string    `json:"valueVariable,omitempty"`
-	ActiveVariable string    `json:"activeVariable,omitempty"`
-	VisibleWhen    string    `json:"visibleWhen,omitempty"`
-	EnabledWhen    string    `json:"enabledWhen,omitempty"`
-	Align          string    `json:"align,omitempty"`
-	Loop           *PageLoop `json:"loop,omitempty"`
+	Size           *PageLayoutSize `json:"size,omitempty"`
+	Gap            *int            `json:"gap,omitempty"`
+	Kind           string          `json:"kind"` // rows, columns, tabs, flow, toolbar, or widget
+	Children       []string        `json:"children,omitempty"`
+	Section        string          `json:"section,omitempty"`
+	Title          string          `json:"title,omitempty"`
+	ValueVariable  string          `json:"valueVariable,omitempty"`
+	ActiveVariable string          `json:"activeVariable,omitempty"`
+	VisibleWhen    string          `json:"visibleWhen,omitempty"`
+	EnabledWhen    string          `json:"enabledWhen,omitempty"`
+	Align          string          `json:"align,omitempty"`
+	Loop           *PageLoop       `json:"loop,omitempty"`
 }
 
 var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
@@ -151,8 +165,8 @@ func (d *PageDocument) Check(sections []Section) error {
 	}
 	seen := map[string]bool{}
 	used := map[string]bool{}
-	var walk func(string, int) error
-	walk = func(id string, depth int) error {
+	var walk func(string, int, string, bool) error
+	walk = func(id string, depth int, parentKind string, parentHeight bool) error {
 		if depth > 24 {
 			return fmt.Errorf("page document layout is too deep at %q", id)
 		}
@@ -164,6 +178,10 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document node %q is shared or cyclic", id)
 		}
 		seen[id] = true
+		bounded, err := d.checkLayoutSize(id, node, parentKind, parentHeight)
+		if err != nil {
+			return err
+		}
 		if len(node.Title) > 1024 {
 			return fmt.Errorf("page node %s title is too long", id)
 		}
@@ -213,7 +231,7 @@ func (d *PageDocument) Check(sections []Section) error {
 				}
 			}
 			for _, child := range node.Children {
-				if err := walk(child, depth+1); err != nil {
+				if err := walk(child, depth+1, node.Kind, bounded); err != nil {
 					return err
 				}
 			}
@@ -222,14 +240,14 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 		return nil
 	}
-	if err := walk(d.Root, 0); err != nil {
+	if err := walk(d.Root, 0, "", false); err != nil {
 		return err
 	}
 	for id, overlay := range d.Overlays {
 		if d.Nodes[overlay.Root].Kind == "widget" {
 			return fmt.Errorf("page overlay %s root must be a container", id)
 		}
-		if err := walk(overlay.Root, 0); err != nil {
+		if err := walk(overlay.Root, 0, "", false); err != nil {
 			return err
 		}
 	}

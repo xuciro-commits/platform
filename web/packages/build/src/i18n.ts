@@ -2,6 +2,22 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Region sizing": "区域尺寸",
+  "Layout weight": "布局权重",
+  "Width (px)": "宽度（像素）",
+  "Height (px)": "高度（像素）",
+  "Minimum width (px)": "最小宽度（像素）",
+  "Maximum width (px)": "最大宽度（像素）",
+  "Minimum height (px)": "最小高度（像素）",
+  "Maximum height (px)": "最大高度（像素）",
+  "Layout gap (px)": "布局间距（像素）",
+  "Region scroll": "区域滚动",
+  "Natural flow": "自然流动",
+  "Scroll inside region": "在区域内滚动",
+  "Weights share the parent axis; row weights need a definite parent height. Narrow columns stack.": "权重按父布局主轴分配；行权重需要确定的父区域高度。窄列布局会堆叠。",
+  "Reset region sizing": "重置区域尺寸",
+  "Automatic": "自动",
+
   "Chart type": "图表类型",
   "Bar chart": "柱状图",
   "Line chart": "折线图",

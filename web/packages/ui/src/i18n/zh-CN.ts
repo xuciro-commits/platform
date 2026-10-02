@@ -1,5 +1,11 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "Sized layout regions": "可配置尺寸的布局区域",
+  "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
+  "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
+  "Primary region": "主要区域",
+  "Secondary region": "次要区域",
+
   "Pivot matrix exceeds its cell limit.": "透视矩阵超出单元格上限。",
   "Choose a row grouping before saving.": "保存前请选择行分组。",
   "Virtual item list": "虚拟条目列表",

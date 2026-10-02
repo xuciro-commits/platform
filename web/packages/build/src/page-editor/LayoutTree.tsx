@@ -1,5 +1,5 @@
 import { loopOwner, overlayOwner, variableAccessible, type LayoutKind } from "../page-layout";
-import type { Api } from "@platform/kernel";
+import {pageUIManifest,type Api} from "@platform/kernel";
 import { Button, Card, Input, Select, cn, t } from "@platform/ui";
 import { useState, type DragEvent, type ReactNode } from "react";
 import { widgetContract } from "@platform/app";
@@ -122,4 +122,20 @@ export function LayoutProperties({ document, id, onChange, onPatch, onUngroup }:
     <p className="text-xs text-muted">{t("Add widgets to this container, or nest another group inside it.")}</p>
     <Button disabled={id === document.root || Object.values(document.overlays ?? {}).some((overlay) => overlay.root === id)} onClick={onUngroup}>{t("Ungroup")}</Button>
   </Card>;
+}
+
+/** Dimensions belong to the stable layout node, including widget leaves. */
+export function LayoutSizing({document,id,onPatch}:{document:Api.PageDocument;id:string;onPatch:(id:string,patch:Partial<Api.PageLayoutNode>)=>void}) {
+ const node=document.nodes[id];if(!node)return null;
+ const limits=pageUIManifest.layout,update=(key:keyof Api.PageLayoutSize,value:number|string|undefined)=>{
+  const size={...node.size,[key]:value};for(const key of Object.keys(size)as(keyof Api.PageLayoutSize)[])if(size[key]===undefined)delete size[key];
+  onPatch(id,{size:Object.keys(size).length?size:undefined});
+ };
+ const fields=[['weight','Layout weight',1,limits.maxWeight],['width','Width (px)',limits.minSize,limits.maxSize],['height','Height (px)',limits.minSize,limits.maxSize],['minWidth','Minimum width (px)',limits.minSize,limits.maxSize],['maxWidth','Maximum width (px)',limits.minSize,limits.maxSize],['minHeight','Minimum height (px)',limits.minSize,limits.maxSize],['maxHeight','Maximum height (px)',limits.minSize,limits.maxSize]]as const;
+ return <Card className="grid gap-2 p-3"><div className="text-xs font-semibold">{t("Region sizing")}</div>
+ {fields.map(([key,label,min,max])=><label key={key} className="grid gap-1 text-xs">{t(label)}<Input type="number" min={min} max={max} step={1} value={node.size?.[key]??""} placeholder={t("Automatic")} onChange={e=>update(key,e.target.value===""?undefined:Number(e.target.value))}/></label>)}
+ {["rows","columns"].includes(node.kind)&&<label className="grid gap-1 text-xs">{t("Layout gap (px)")}<Input type="number" min={0} max={limits.maxGap} step={1} value={node.gap??""} placeholder="12" onChange={e=>onPatch(id,{gap:e.target.value===""?undefined:Number(e.target.value)})}/></label>}
+ <label className="grid gap-1 text-xs">{t("Region scroll")}<Select value={node.size?.scroll??"visible"} onChange={e=>update("scroll",e.target.value==="visible"?undefined:e.target.value)}><option value="visible">{t("Natural flow")}</option><option value="auto">{t("Scroll inside region")}</option></Select></label>
+ <p className="text-xs text-muted">{t("Weights share the parent axis; row weights need a definite parent height. Narrow columns stack.")}</p>
+ <Button variant="ghost" onClick={()=>onPatch(id,{size:undefined,gap:undefined})}>{t("Reset region sizing")}</Button></Card>;
 }

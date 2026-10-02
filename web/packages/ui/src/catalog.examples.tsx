@@ -6,7 +6,7 @@ import {
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RecordKanban, RecordTimeline, RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
-  Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, ContentTabs, FlowLayout, VirtualStack, notify, t,
+  Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
@@ -295,4 +295,8 @@ export function RecordTimelines() {
 export function RecordKanbans() {
  const [selected,setSelected]=useState<string>();
  return <RecordKanban records={demoRows} lanes={[{name:"open",title:t("Open")},{name:"done",title:t("Done")}]} stateField="state" labelField="name" selected={selected} onSelect={r=>setSelected(r?.id)} label={t("Kanban board")}/>;
+}
+
+export function SizedLayouts() {
+ return <LayoutRegion size={{height:240}}><LayoutStack direction="columns"><LayoutRegion parent="columns" size={{weight:2,scroll:"auto"}}><Panel>{t("Primary region")}</Panel></LayoutRegion><LayoutRegion parent="columns" size={{weight:1}}><Panel>{t("Secondary region")}</Panel></LayoutRegion></LayoutStack></LayoutRegion>;
 }

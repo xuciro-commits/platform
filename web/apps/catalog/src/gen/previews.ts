@@ -43,6 +43,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/form": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Forms })),
   "ui/graph": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Graphs })),
   "ui/input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Inputs })),
+  "ui/layout-region": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SizedLayouts })),
   "ui/lifecycle": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Lifecycle })),
   "ui/markdown": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.MarkdownContent })),
   "ui/metal-button": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.MetalButtons })),

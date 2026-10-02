@@ -932,6 +932,8 @@ export type PageInterface = {
 };
 
 export type PageLayoutNode = {
+  size?: PageLayoutSize;
+  gap?: number;
   kind: string;
   children?: string[];
   section?: string;
@@ -942,6 +944,17 @@ export type PageLayoutNode = {
   enabledWhen?: string;
   align?: string;
   loop?: PageLoop;
+};
+
+export type PageLayoutSize = {
+  weight?: number;
+  width?: number;
+  height?: number;
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  scroll?: string;
 };
 
 export type PageLoop = {
@@ -1622,7 +1635,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.26",
+  "uiProfile": "platform.page.v2.27",
   "widgets": [
     {
       "componentID": "table",
@@ -2579,7 +2592,8 @@ export const pageUIManifest = {
     "platform.page.v2.23",
     "platform.page.v2.24",
     "platform.page.v2.25",
-    "platform.page.v2.26"
+    "platform.page.v2.26",
+    "platform.page.v2.27"
   ],
   "runtime": {
     "scope": "page",
@@ -2792,5 +2806,13 @@ export const pageUIManifest = {
       "maxVariables": 8,
       "maxExpandedReads": 32
     }
+  },
+  "layout": {
+    "requiredUIProfile": "platform.page.v2.27",
+    "minSize": 32,
+    "maxSize": 4096,
+    "maxWeight": 24,
+    "maxGap": 64,
+    "stackBelow": 448
   }
 } as const;

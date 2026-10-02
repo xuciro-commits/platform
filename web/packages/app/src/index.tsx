@@ -352,3 +352,5 @@ export { ApplicationPage, ApplicationSessionsProvider } from "./runtime/Applicat
 
 export {parseDecimal as parsePageDecimal,isDecimal as isPageDecimal,decimalDraft as isPageDecimalDraft} from "./runtime/decimal";
 export type {DecimalValue as PageDecimalValue} from "./runtime/decimal";
+
+export {pageLayoutDiagnostics} from "./layout";

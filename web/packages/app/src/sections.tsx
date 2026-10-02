@@ -6,9 +6,9 @@ import {isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
+  Button, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
-import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
 import { GeneratedForm, findDefinition, newId, useHost, useInvokeCapability, type Definition } from "./index";
 import { ComputeCall } from "./capability";
@@ -522,7 +522,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         } : undefined} />
     );
   };
-  const renderNode = (id: string, ancestors: Set<string>, context?: LoopContext, overlay?: string): ReactNode => {
+  const renderNode = (id: string, ancestors: Set<string>, context?: LoopContext, overlay?: string, parentKind?:string, parentHeight=false): ReactNode => {
     if (!page.document || ancestors.has(id)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
     const node = page.document.nodes[id];
     if (!node) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
@@ -533,24 +533,26 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       if (visible.status === "pending") return <Panel role="status">{t("Loading page variable…")}</Panel>;
       if (visible.value !== true) return wrapLayout ? wrapLayout(id, node, <Panel>{t("Hidden by page variable")}: {node.visibleWhen}</Panel>) : null;
     }
+    const bounded=node.size?.height!==undefined||parentHeight&&(parentKind==="columns"||parentKind==="rows"&&node.size?.weight!==undefined);
+    const frame=(body:ReactNode)=><LayoutRegion key={id} size={node.size} parent={parentKind} fillHeight={parentKind==="columns"&&parentHeight}>{wrapLayout?wrapLayout(id,node,body):body}</LayoutRegion>;
     if (node.kind === "widget") {
       const item = indexed.get(node.section);
       if (!item) return null; // server filtered this widget for the reader
       if (context && !([...pageVariableContract.loop.recordWidgets, ...pageVariableContract.loop.presentationWidgets] as readonly string[]).includes(item.section.widget)) return <Panel role="alert">{t("This widget is not supported in a loop.")}</Panel>;
       const body = renderSection(item.section, item.i, true, !node.enabledWhen || (() => { const result = values[node.enabledWhen]; return result?.status === "value" && result.value === true; })(), context, overlay, node.valueVariable);
-      return wrapLayout ? wrapLayout(id, node, body) : body;
+      return frame(body);
     }
     if (!["rows", "columns", "tabs", "flow", "toolbar", "loop"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
     const next = new Set(ancestors); next.add(id);
     if (node.kind === "loop") {
-      if(context)return <NestedLoopRuntime page={page} node={node} owner={id} parent={context} overlay={overlay}>{item=><>{node.children?.map(child=><div key={child} className="min-w-0">{renderNode(child,next,item,overlay)}</div>)}</>}</NestedLoopRuntime>;
+      if(context)return frame(<NestedLoopRuntime page={page} node={node} owner={id} parent={context} overlay={overlay}>{item=><>{node.children?.map(child=><div key={child} className="min-w-0">{renderNode(child,next,item,overlay)}</div>)}</>}</NestedLoopRuntime>);
       if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
       const collection = initialVariables[node.loop.collection]?.source, queryID=variablePlan(page,node.loop.collection);
       const shared=applicationVariable(node.loop.collection);const queryKey = shared?`application/${shared}`:queryID!==undefined?planKey(queryID):collection?.section??"";
       const body = <LoopRuntime page={page} queryKey={queryKey} expectedSignature={shared?application.signatures[shared]??"":queryID!==undefined ? queries.signatures[queryID]??"" : undefined} owner={id} loop={node.loop} label={node.title || t("Repeated records")} result={values[node.loop.collection]} session={session} snapshot={snapshot} variables={initialVariables} resources={allResources} overlay={overlay}>
         {(item) => <>{node.children?.map((child) => <div key={child} className="min-w-0">{renderNode(child, next, item, overlay)}</div>)}</>}
       </LoopRuntime>;
-      return wrapLayout ? wrapLayout(id, node, body) : body;
+      return frame(body);
     }
     if (node.kind === "tabs") {
       const active = values[node.activeVariable ?? ""];
@@ -558,17 +560,16 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       const body = <ContentTabs label={node.title || t("Page tabs")} value={active.value} onChange={(value) => setContextState(node.activeVariable!, value, context, overlay)}
         items={(node.children ?? []).map((child, index) => ({ id: child,
           title: page.document!.nodes[child]?.title || indexed.get(page.document!.nodes[child]?.section)?.section.title || t("Tab {n}", { n: index + 1 }), content: renderNode(child, next, context, overlay) }))} />;
-      return wrapLayout ? wrapLayout(id, node, body) : body;
+      return frame(body);
     }
     if (node.kind === "flow" || node.kind === "toolbar") {
       const body = <FlowLayout toolbar={node.kind === "toolbar"} label={node.title || t("Toolbar")} align={node.align}>{node.children?.map((child) => <div key={child} className="min-w-0 max-w-full">{renderNode(child, next, context, overlay)}</div>)}</FlowLayout>;
-      return wrapLayout ? wrapLayout(id, node, body) : body;
+      return frame(body);
     }
-    const body = <div key={id} className={node.kind === "columns" ? "grid min-w-0 grid-cols-1 gap-3 @md:grid-cols-[repeat(var(--page-columns),minmax(0,1fr))]" : "flex min-w-0 flex-col gap-3"}
-      style={node.kind === "columns" ? { "--page-columns": Math.max(1, node.children?.length ?? 0) } as CSSProperties : undefined}>
-      {node.children?.map((child) => <div key={child} className="@container min-w-0">{renderNode(child, next, context, overlay)}</div>)}
-    </div>;
-    return wrapLayout ? wrapLayout(id, node, body) : body;
+    const body = <LayoutStack direction={node.kind as "rows"|"columns"} gap={node.gap}>
+      {node.children?.map(child=>renderNode(child,next,context,overlay,node.kind,bounded))}
+    </LayoutStack>;
+    return frame(body);
   };
   const queryErrors=(owner?:string)=>Object.entries(page.document?.queries??{}).filter(([,plan])=>(plan.owner??"")===(owner??"")).map(([id,plan])=>{
     const result=Object.entries(initialVariables).find(([,v])=>(v.source?.kind==="plan"||v.mode==="aggregate")&&v.source?.query===id),status=result&&queries.resources[result[0]];
