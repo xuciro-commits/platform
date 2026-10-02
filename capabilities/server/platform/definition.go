@@ -12,10 +12,11 @@ import (
 type AssetKind string
 
 const (
-	AssetObject   AssetKind = "object"
-	AssetLinkType AssetKind = "link-type"
-	AssetAction   AssetKind = "action"
-	AssetPage     AssetKind = "page"
+	AssetObject       AssetKind = "object"
+	AssetLinkType     AssetKind = "link-type"
+	AssetPropertyType AssetKind = "property-type"
+	AssetAction       AssetKind = "action"
+	AssetPage         AssetKind = "page"
 	// AssetApp is an application a tenant hands to its people: a name, an icon
 	// and the pages it holds (ADR-0036).
 	AssetApp AssetKind = "app"
@@ -54,7 +55,7 @@ type AssetRef struct {
 func (r AssetRef) String() string { return r.App + "/" + string(r.Kind) + "/" + r.Name }
 
 func (r AssetRef) Check() error {
-	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetLinkType && r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery && r.Kind != AssetFlow && r.Kind != AssetFunction && r.Kind != AssetCompute {
+	if r.App == "" || r.Name == "" || strings.Contains(r.App, "/") || strings.Contains(r.Name, "/") || r.Kind != AssetPropertyType && r.Kind != AssetLinkType && r.Kind != AssetObject && r.Kind != AssetAction && r.Kind != AssetPage && r.Kind != AssetApp && r.Kind != AssetQuery && r.Kind != AssetFlow && r.Kind != AssetFunction && r.Kind != AssetCompute {
 		return fmt.Errorf("asset reference %q needs an app, supported kind and name", r.String())
 	}
 	return nil
@@ -229,19 +230,21 @@ var Icons = []string{"boxes", "clipboard", "people", "calendar", "wrench", "map"
 // Entity and Action reuse the same descriptions as the existing record/action
 // APIs; this registry is an index over those owners, not another executor.
 type Definition struct {
-	LinkType        *LinkType             `json:"linkType,omitempty"`
-	LinkVersions    map[string]LinkType   `json:"linkVersions,omitempty"`
-	Ref             AssetRef              `json:"ref"`
-	Source          string                `json:"source"`  // code, until published definitions exist
-	Version         string                `json:"version"` // installed app manifest version, not a published revision
-	ContractVersion int                   `json:"contractVersion"`
-	Requires        []AssetRef            `json:"requires"`
-	Entity          *EntityInfo           `json:"entity,omitempty"`
-	Action          *Action               `json:"action,omitempty"`
-	Page            *Page                 `json:"page,omitempty"`
-	Application     *Application          `json:"application,omitempty"`
-	Query           *NamedQuery           `json:"query,omitempty"`
-	QueryVersions   map[string]NamedQuery `json:"queryVersions,omitempty"`
-	Function        *AIFunction           `json:"function,omitempty"`
-	Operation       *Operation            `json:"operation,omitempty"`
+	PropertyType     *PropertyType           `json:"propertyType,omitempty"`
+	PropertyVersions map[string]PropertyType `json:"propertyVersions,omitempty"`
+	LinkType         *LinkType               `json:"linkType,omitempty"`
+	LinkVersions     map[string]LinkType     `json:"linkVersions,omitempty"`
+	Ref              AssetRef                `json:"ref"`
+	Source           string                  `json:"source"`  // code, until published definitions exist
+	Version          string                  `json:"version"` // installed app manifest version, not a published revision
+	ContractVersion  int                     `json:"contractVersion"`
+	Requires         []AssetRef              `json:"requires"`
+	Entity           *EntityInfo             `json:"entity,omitempty"`
+	Action           *Action                 `json:"action,omitempty"`
+	Page             *Page                   `json:"page,omitempty"`
+	Application      *Application            `json:"application,omitempty"`
+	Query            *NamedQuery             `json:"query,omitempty"`
+	QueryVersions    map[string]NamedQuery   `json:"queryVersions,omitempty"`
+	Function         *AIFunction             `json:"function,omitempty"`
+	Operation        *Operation              `json:"operation,omitempty"`
 }

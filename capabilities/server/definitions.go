@@ -47,6 +47,9 @@ func (t *Tenant) registerDefinitions() error {
 		info := et.info
 		var requires []platform.AssetRef
 		for _, field := range info.Fields {
+			if field.Property != nil {
+				requires = append(requires, field.Property.Ref)
+			}
 			if field.Ref == "" {
 				continue
 			}
@@ -162,6 +165,15 @@ func (t *Tenant) registerDefinitions() error {
 	}
 	for _, app := range t.apps {
 		manifest := app.Manifest()
+		for _, p := range manifest.PropertyTypes {
+			if err := p.Check(); err != nil {
+				return err
+			}
+			p := p
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetPropertyType, Name: p.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, PropertyType: &p}); err != nil {
+				return err
+			}
+		}
 		for _, l := range manifest.LinkTypes {
 			parent, ok := t.entity(l.Parent.Name)
 			if !ok {
@@ -246,6 +258,11 @@ func (t *Tenant) registerDefinitions() error {
 			}
 		}
 	}
+	for _, et := range t.records.sortedTypes() {
+		if err := t.checkObjectProperties(et.info); err != nil {
+			return err
+		}
+	}
 	slices.SortFunc(t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return nil
 }
@@ -289,6 +306,35 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 				continue
 			}
 			def.Action = &action
+		case platform.AssetPropertyType:
+			if def.PropertyType == nil {
+				continue
+			}
+			def.PropertyVersions = maps.Clone(def.PropertyVersions)
+			visible := func(version string) bool {
+				if m.Roles[def.Ref.App] == "builder" {
+					return true
+				}
+				for _, e := range entities {
+					for _, f := range e.Fields {
+						if f.Property != nil && f.Property.Ref == def.Ref && f.Property.SourceVersion == version {
+							return true
+						}
+					}
+				}
+				return false
+			}
+			for version := range def.PropertyVersions {
+				if !visible(version) {
+					delete(def.PropertyVersions, version)
+				}
+			}
+			if !visible(def.Version) {
+				def.PropertyType = nil
+				if len(def.PropertyVersions) == 0 {
+					continue
+				}
+			}
 		case platform.AssetLinkType:
 			if def.LinkType == nil {
 				continue

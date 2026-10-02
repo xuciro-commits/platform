@@ -71,6 +71,9 @@ type Host interface {
 	ValidateInstallApplication(a platform.Application) error
 	// Function installation updates only the definition registry. The owner
 	// retains its publication family; inference still uses the model effect.
+	ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool)
+	ValidateInstallPropertyType(p platform.PropertyType) error
+	InstallPropertyType(c platform.Caller, p platform.PropertyType, version int) error
 	ValidateInstallLinkType(l platform.LinkType) error
 	InstallLinkType(c platform.Caller, l platform.LinkType, version int) error
 	ValidateInstallQuery(q platform.NamedQuery) error

@@ -30,6 +30,9 @@ func (t *Tenant) Install(app platform.App, e platform.Entity, actions []platform
 	if err != nil {
 		return err
 	}
+	if err := t.checkObjectProperties(info); err != nil {
+		return err
+	}
 	if err := t.records.install(info); err != nil {
 		return err
 	}
@@ -88,7 +91,13 @@ func (t *Tenant) installDefinitions(app string, info platform.EntityInfo, action
 	}
 	object := platform.AssetRef{App: app, Kind: platform.AssetObject, Name: info.Type}
 	entity := info
-	put(platform.Definition{Ref: object, Source: "tenant", Version: "1", ContractVersion: 1, Entity: &entity})
+	var requires []platform.AssetRef
+	for _, f := range info.Fields {
+		if f.Property != nil {
+			requires = append(requires, f.Property.Ref)
+		}
+	}
+	put(platform.Definition{Ref: object, Source: "tenant", Version: "1", ContractVersion: 1, Requires: uniqueRefs(requires), Entity: &entity})
 	for _, action := range actions {
 		a := action
 		put(platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetAction, Name: a.Schema}, Source: "tenant", Version: "1",

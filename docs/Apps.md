@@ -197,6 +197,8 @@ go run ./cmd/<id>-server -web ../../../web/apps/workspace/dist
 开发宿主默认为 `127.0.0.1:8499`，开发令牌为 manager/member。交付时组合进对应行业解决方案，配置见部署 README。检查按 [Testing](Testing.md#检查选择与停止) 选择；样式与一般体验用截图/用户走查，核心数据与权限用自动回归。
 
 
+共享属性API：构建者沿原动作build.propertytype.create/edit/publish保存name/title/description/type并发布；候选接口kind为property-type，继续沿原冻结和激活。对象fields[].property使用精确AssetBinding，例如ref={app:build,kind:property-type,name:quantity}、sourceVersion=1.property-1，同时提供与来源相同的type/title，本地name、required、search和read/write保持由对象决定。新属性版本不替换旧对象绑定，缺失/不兼容来源拒绝；首profile不提供自动数据迁移。GET /v1/definitions返回propertyType/propertyVersions及可见字段的property来源，普通成员只能发现其可见字段消费的版本。代码声明使用Manifest.PropertyTypes与Entity.PropertyBindings；当前首个租户绑定只使用Build同owner的保留资产。界面入口尚待F4b2，具体语义见[ADR-0046 §7.4](ADR/0046-application-studio-fusion.md#74-版本化共享属性-profile)。
+
 具名关系：在“Relationships / 关系”新建草稿，选择已发布租户父/子对象、子对象的回指字段和双向名称，保存后使用原“Review release / 审查发布”冻结激活；本体对象的关系检查器提供编辑入口和“Use related records in page / 将关联记录用于页面”。生成页面使用父记录资源和精确关系查询窗口，切换父记录清除子选择。页面查询计划可显式选择关系版本、方向及对应对象的record起点，沿原Table/Loop窗口和count/Metric/Chart完整聚合消费。新关系版本不替换旧页面绑定。API用法：构建者使用原动作`build.linktype.create/edit/publish`管理关系草稿，字段为name/title/description、已发布租户parent/child对象、child的单值reference字段via和双向forward/reverse名称。required来自原字段；存储与删除profile固定为reference/owner。正式发布使用原候选接口，kind为`link-type`，冻结并激活后才对成员提供注册声明。`GET /v1/definitions`的linkType/linkVersions仅返回当前成员可发现的对象与回指。
 
 沿`GET /v1/link-types/{app}/{name}/{version}/{direction}/{id}`读取，direction为forward或reverse，version例如`1.link-1`；GET可用domain/search/sort/offset/limit，POST同一路径接受原Query JSON（包括完整集合谓词）。Web代码使用`EdgeClient.traverseLink(binding,direction,id,query)`。起点和目标继续按原权限读取，无权、缺失或隐藏字段不会退化到全对象列表。发布后保持关系身份、对象与回指形状；描述和双向名称可发布新版本，旧版本仍可读取。该API不新增级联删除或关系实例写入动作。

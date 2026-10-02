@@ -55,11 +55,12 @@ type Object struct {
 
 // Field is one field of a defined object, as a person describes it.
 type Field struct {
-	Name    string `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
-	Title   string `json:"title" field:"required" title:"Label" example:"Visited on"`
-	Type    string `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
-	Choices string `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
-	Ref     string `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
+	Property *platform.AssetBinding `json:"property,omitempty" type:"json" field:"aside"`
+	Name     string                 `json:"name" field:"required" help:"Lower-case letters and digits" example:"visited"`
+	Title    string                 `json:"title" field:"required" title:"Label" example:"Visited on"`
+	Type     string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference" example:"date"`
+	Choices  string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated" example:"open,done"`
+	Ref      string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"crm.account"`
 	// Inverse names the relation seen from the referenced record (ADR-0040 21b).
 	Inverse  string `json:"inverse,omitempty" title:"Seen from there as" help:"For a reference: what the referenced record calls these records" example:"visits"`
 	Required bool   `json:"required,omitempty"`
@@ -75,11 +76,12 @@ type Build struct {
 	ledger *platform.Ledger
 	// installed are the objects published in this tenant, by entity type: their
 	// declarations, so generated actions of a defined object reach the record store.
-	installed map[string]platform.Entity
-	linkTypes map[string]LinkType
-	queries   map[string]Query
-	functions map[string]Function
-	codes     map[string]Code
+	installed     map[string]platform.Entity
+	linkTypes     map[string]LinkType
+	propertyTypes map[string]PropertyType
+	queries       map[string]Query
+	functions     map[string]Function
+	codes         map[string]Code
 }
 
 // Attach is called by the host when a tenant is composed.
@@ -87,19 +89,20 @@ func (b *Build) Attach(h host.Host) { b.host = h }
 
 // New is a tenant's builder app.
 func New(tenant string) *Build {
-	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, queries: map[string]Query{}, functions: map[string]Function{}, codes: map[string]Code{}}
+	b := &Build{installed: map[string]platform.Entity{}, linkTypes: map[string]LinkType{}, propertyTypes: map[string]PropertyType{}, queries: map[string]Query{}, functions: map[string]Function{}, codes: map[string]Code{}}
 	actions := append(platform.EntityActions(b.objectEntity()), platform.EntityActions(b.pageEntity())...)
 	actions = append(actions, platform.EntityActions(b.applicationEntity())...)
 	actions = append(actions, platform.EntityActions(b.testPlanEntity())...)
 	actions = append(actions, platform.EntityActions(b.processEntity())...)
 	actions = append(actions, platform.EntityActions(b.functionEntity())...)
 	actions = append(actions, platform.EntityActions(b.linkTypeEntity())...)
+	actions = append(actions, platform.EntityActions(b.propertyTypeEntity())...)
 	actions = append(actions, platform.EntityActions(b.queryEntity())...)
 	actions = append(actions, functionCallActions([]string{Builder, User})...)
 	actions = append(actions, evaluationActions()...)
 	actions = append(actions, platform.EntityActions(b.codeEntity())...)
 	actions = append(actions, codeActions()...)
-	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType)
+	b.ledger = platform.NewLedger(tenant, ID, platform.NewCatalog(actions...), ObjectType, PageType, AppType, TestPlanType, ProcessType, FunctionType, PropertyTypeType, LinkTypeType, QueryType, FunctionCallType, EvaluationType, CodeType)
 	return b
 }
 
@@ -135,7 +138,7 @@ func (b *Build) objectEntity() platform.Entity {
 }
 
 func (b *Build) Manifest() platform.Manifest {
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -185,7 +188,7 @@ func sortedTypes(installed map[string]platform.Entity) []string {
 func (b *Build) Declarations() []*pb.AuthorityDeclaration { return b.ledger.Declarations() }
 func (b *Build) AcceptedLedger() *platform.Ledger         { return b.ledger }
 func (*Build) AcceptedPublicationSchemas() []string {
-	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish}
+	return []string{SchemaPublish, SchemaRelease, SchemaHandOver, SchemaProcess, SchemaPropertyType, SchemaLinkType, SchemaQuery, SchemaFunction, SchemaCodePublish}
 }
 
 // publicationImage reads and verifies the already committed record image
@@ -233,6 +236,13 @@ func (b *Build) publicationImage(schema string, image []byte) (platform.Entity, 
 }
 
 func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaPropertyType {
+		l, err := propertyTypeImage(image)
+		if err != nil {
+			return err
+		}
+		return b.host.ValidateInstallPropertyType(l.definition())
+	}
 	if schema == SchemaLinkType {
 		l, err := linkTypeImage(image)
 		if err != nil {
@@ -297,6 +307,23 @@ func (b *Build) ValidateAcceptedPublication(schema string, image []byte) error {
 // Installation reconstructs the runtime registry from the saved published
 // image, not by running the publish transition or making another journal entry.
 func (b *Build) ApplyAcceptedPublication(schema string, image []byte) error {
+	if schema == SchemaPropertyType {
+		l, err := propertyTypeImage(image)
+		if err != nil {
+			return err
+		}
+		var record PropertyType
+		if err := json.Unmarshal(image, &record); err != nil {
+			return err
+		}
+		for _, raw := range record.Versions {
+			version, _ := wasPublished[PropertyType](raw)
+			if err := b.installPropertyType(platform.Caller{Replaying: true}, version); err != nil {
+				return err
+			}
+		}
+		return b.installPropertyType(platform.Caller{Replaying: true}, l)
+	}
 	if schema == SchemaLinkType {
 		l, err := linkTypeImage(image)
 		if err != nil {
@@ -419,6 +446,9 @@ func (b *Build) checkDefinitionArchive(c platform.Caller, typ, id string) *kerne
 	case ProcessType:
 		record, _ := platform.Get[Process](c, id)
 		published = record.Published != ""
+	case PropertyTypeType:
+		record, _ := platform.Get[PropertyType](c, id)
+		published = record.Published != ""
 	case LinkTypeType:
 		record, _ := platform.Get[LinkType](c, id)
 		published = record.Published != ""
@@ -459,7 +489,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	if name := s.GetSchema().GetName(); name == SchemaEvaluationStart || name == SchemaEvaluationAnswer {
 		return b.submitEvaluation(c, s, now)
 	}
-	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, LinkTypeType, QueryType, FunctionType, CodeType}, typ) {
+	if typ, archive := strings.CutSuffix(s.GetSchema().GetName(), ".archive"); archive && !c.Replaying && slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType}, typ) {
 		if err := b.checkDefinitionArchive(c, typ, s.GetTarget().GetId()); err != nil {
 			return nil, err
 		}
@@ -482,7 +512,10 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 				err = b.checkName(*p.Name, s.GetTarget().GetId())
 			}
 			if err == nil && p.Fields != nil {
-				err = checkFields(*p.Fields, b.host)
+				err = b.checkPropertyFields(*p.Fields)
+				if err == nil {
+					err = checkFields(*p.Fields, b.host)
+				}
 			}
 			if err != nil {
 				return nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
@@ -497,7 +530,7 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 			}
 		}
 	}
-	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity()}
+	entities := []platform.Entity{b.objectEntity(), b.pageEntity(), b.applicationEntity(), b.testPlanEntity(), b.processEntity(), b.propertyTypeEntity(), b.linkTypeEntity(), b.queryEntity(), b.functionEntity(), b.functionCallEntity(), b.evaluationEntity(), b.codeEntity()}
 	for _, typ := range sortedTypes(b.installed) {
 		entities = append(entities, b.installed[typ])
 	}
@@ -522,6 +555,9 @@ func (b *Build) conditionLookup(typ string) (platform.EntityInfo, bool) {
 
 func (b *Build) check(o Object, id string) error {
 	if err := b.checkName(o.Name, id); err != nil {
+		return err
+	}
+	if err := b.checkPropertyFields(o.Fields); err != nil {
 		return err
 	}
 	if err := checkFields(o.Fields, b.host); err != nil {
@@ -669,6 +705,10 @@ func published[T any](definition T) string {
 	case Application:
 		value.Published = ""
 		definition = any(value).(T)
+	case PropertyType:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
 	case LinkType:
 		value.Published = ""
 		value.Versions = nil
@@ -708,6 +748,19 @@ func wasPublished[T any](raw string) (T, bool) {
 // of the types they define (ADR-0034 D4). It installs what was published, so a
 // draft written since stays a draft.
 func (b *Build) Reinstall() error {
+	props, problem := b.propertyTypeInventory()
+	if problem != nil {
+		return problem
+	}
+	for _, record := range props {
+		if record.Published != "" {
+			raw, _ := json.Marshal(record)
+			if err := b.ApplyAcceptedPublication(SchemaPropertyType, raw); err != nil {
+				return err
+			}
+		}
+	}
+
 	objects, pages, applications, err := b.releaseInventory()
 	if err != nil {
 		return err
@@ -872,7 +925,7 @@ func entityWith(o Object, creates creator, lookup func(string) (platform.EntityI
 	}
 	std, scope, roles := access(o)
 	return platform.Entity{Type: TypeOf(o.Name), Title: o.Title, Plural: o.Plural, Description: o.Description, Model: model, Display: display,
-		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup)}
+		Standard: std, Scope: scope, Lifecycle: lifecycle(o, roles, creates, lookup), PropertyBindings: propertyBindings(o.Fields)}
 }
 
 // page is the list and detail page a defined object comes with: the same

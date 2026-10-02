@@ -183,6 +183,22 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 		if err := checkReleaseBindings(ref, body, asset.Requires); err != nil {
 			return err
 		}
+		if ref.Kind == AssetObject {
+			info, err := queryObjectDescriptor(body)
+			if err != nil {
+				return err
+			}
+			for _, f := range info.Fields {
+				if f.Property == nil {
+					continue
+				}
+				source, ok := lookup[f.Property.Ref]
+				var p PropertyType
+				if !ok || source.SourceVersion != f.Property.SourceVersion || json.Unmarshal(source.Body, &p) != nil || p.CheckField(f) != nil {
+					return fmt.Errorf("frozen object field has an unavailable or incompatible property")
+				}
+			}
+		}
 		if ref.Kind == AssetApp {
 			var application Application
 			if err := json.Unmarshal(body, &application); err != nil {
@@ -345,6 +361,27 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 	}
 	var required []AssetRef
 	switch ref.Kind {
+	case AssetPropertyType:
+		var p PropertyType
+		if err := json.Unmarshal(body, &p); err != nil {
+			return err
+		}
+		if err := p.Check(); err != nil {
+			return err
+		}
+	case AssetObject:
+		info, err := queryObjectDescriptor(body)
+		if err != nil {
+			return err
+		}
+		for _, f := range info.Fields {
+			if f.Property != nil {
+				if f.Property.Ref.Kind != AssetPropertyType || f.Property.SourceVersion == "" {
+					return fmt.Errorf("invalid property binding")
+				}
+				required = append(required, f.Property.Ref)
+			}
+		}
 	case AssetLinkType:
 		var l LinkType
 		if err := json.Unmarshal(body, &l); err != nil {

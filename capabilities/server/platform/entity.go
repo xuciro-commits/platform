@@ -52,6 +52,8 @@ type Money struct {
 
 // Entity declares an entity type of the app.
 type Entity struct {
+	PropertyBindings map[string]AssetBinding
+
 	Type   string // a data class the app is authority for, e.g. "crm.opportunity"
 	Title  string // "Opportunity"
 	Plural string // "Opportunities"; default: Title with the English plural rule
@@ -228,12 +230,13 @@ func (s Scope) Level(role string) string {
 
 // FieldInfo describes one field, for the host's reads and the UI kit's pages.
 type FieldInfo struct {
-	Name     string `json:"name"`
-	Title    string `json:"title"`
-	Type     string `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines"`
-	Required bool   `json:"required,omitempty"`
-	Search   bool   `json:"search,omitempty"`
-	ReadOnly bool   `json:"readOnly,omitempty"`
+	Property *AssetBinding `json:"property,omitempty"`
+	Name     string        `json:"name"`
+	Title    string        `json:"title"`
+	Type     string        `json:"type" enum:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,references,tags,lines"`
+	Required bool          `json:"required,omitempty"`
+	Search   bool          `json:"search,omitempty"`
+	ReadOnly bool          `json:"readOnly,omitempty"`
 	// Aside marks a field a purpose-built surface writes — a page's sections in
 	// the composer (ADR-0035) — so generated forms do not ask for it. Its
 	// actions still take it, and it is read and shown like any other field.
@@ -333,6 +336,14 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		return EntityInfo{}, err
 	}
 	info.Fields = fields
+	for name, binding := range e.PropertyBindings {
+		i := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Name == name })
+		if i < 0 || binding.Ref.Kind != AssetPropertyType || binding.Ref.Check() != nil || binding.SourceVersion == "" {
+			return EntityInfo{}, fmt.Errorf("invalid property field binding")
+		}
+		selected := binding
+		info.Fields[i].Property = &selected
+	}
 	if info.Display == "" {
 		info.Display = "id"
 		if i := slices.IndexFunc(info.Fields, func(f FieldInfo) bool { return f.Search }); i >= 0 {

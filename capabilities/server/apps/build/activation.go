@@ -19,19 +19,28 @@ type ReleasePublication struct {
 }
 
 type ReleaseDeclaration struct {
-	Entity      platform.Entity
-	Actions     []platform.Action
-	Pages       []platform.Page
-	Application *platform.Application
-	Operation   *platform.Operation
-	Flow        *platform.Flow
-	LinkType    *platform.LinkType
-	Query       *platform.NamedQuery
-	Function    *platform.AIFunction
-	Version     int
+	Entity       platform.Entity
+	Actions      []platform.Action
+	Pages        []platform.Page
+	Application  *platform.Application
+	Operation    *platform.Operation
+	Flow         *platform.Flow
+	PropertyType *platform.PropertyType
+	LinkType     *platform.LinkType
+	Query        *platform.NamedQuery
+	Function     *platform.AIFunction
+	Version      int
 }
 
 func (b *Build) ReleaseDeclaration(p ReleasePublication) (ReleaseDeclaration, error) {
+	if p.Schema == SchemaPropertyType {
+		saved, err := propertyTypeImage(p.Image)
+		if err != nil {
+			return ReleaseDeclaration{}, err
+		}
+		l := saved.definition()
+		return ReleaseDeclaration{PropertyType: &l, Version: saved.Version}, nil
+	}
 	if p.Schema == SchemaLinkType {
 		saved, err := linkTypeImage(p.Image)
 		if err != nil {
@@ -234,6 +243,22 @@ func (b *Build) PrepareReleasePublications(assets []platform.ReleaseAsset) ([]Re
 			available = append(available, asset)
 		}
 	}
+	props, err := b.propertyTypeAssets()
+	if err != nil {
+		return nil, nil, err
+	}
+	available = append(available, props...)
+	propertyPublications, err := b.preparePropertyTypeReleasePublications(assets)
+	if err != nil {
+		return nil, nil, err
+	}
+	publications = append(publications, propertyPublications...)
+	for _, asset := range assets {
+		if asset.Ref.App == ID && asset.Ref.Kind == platform.AssetPropertyType {
+			available = slices.DeleteFunc(available, func(old platform.ReleaseAsset) bool { return old.Ref == asset.Ref })
+			available = append(available, asset)
+		}
+	}
 	links, err := b.linkTypeAssets()
 	if err != nil {
 		return nil, nil, err
@@ -286,7 +311,7 @@ func pageFunctionBindings(p platform.Page) map[string]string {
 func PublicationRecord(p ReleasePublication) (string, string, error) {
 	typ, _, ok := strings.Cut(p.Schema, ".publish")
 	var record platform.Record
-	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, LinkTypeType, QueryType, FunctionType, CodeType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
+	if !ok || !slices.Contains([]string{ObjectType, PageType, AppType, ProcessType, PropertyTypeType, LinkTypeType, QueryType, FunctionType, CodeType}, typ) || json.Unmarshal(p.Image, &record) != nil || record.ID == "" {
 		return "", "", fmt.Errorf("invalid release publication row")
 	}
 	return typ, record.ID, nil

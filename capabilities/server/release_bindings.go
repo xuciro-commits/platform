@@ -34,7 +34,21 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 		}
 		asset := assets[i]
 		var bindings []platform.AssetBinding
-		if ref.Kind == platform.AssetFlow {
+		if ref.Kind == platform.AssetObject {
+			var object struct {
+				Fields []struct {
+					Property *platform.AssetBinding `json:"property,omitempty"`
+				} `json:"fields"`
+			}
+			if json.Unmarshal(asset.Body, &object) != nil {
+				return fmt.Errorf("invalid property consumer")
+			}
+			for _, f := range object.Fields {
+				if f.Property != nil {
+					bindings = append(bindings, *f.Property)
+				}
+			}
+		} else if ref.Kind == platform.AssetFlow {
 			var flow platform.FlowReleaseDescriptor
 			if err := json.Unmarshal(asset.Body, &flow); err != nil {
 				return err
@@ -72,7 +86,7 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 			}
 		}
 		for _, binding := range bindings {
-			if binding.Ref.Kind != platform.AssetLinkType && binding.Ref.Kind != platform.AssetQuery && binding.Ref.Kind != platform.AssetFunction && binding.Ref.Kind != platform.AssetCompute || binding.SourceVersion == "" {
+			if binding.Ref.Kind != platform.AssetPropertyType && binding.Ref.Kind != platform.AssetLinkType && binding.Ref.Kind != platform.AssetQuery && binding.Ref.Kind != platform.AssetFunction && binding.Ref.Kind != platform.AssetCompute || binding.SourceVersion == "" {
 				return fmt.Errorf("%s has an invalid version binding", ref)
 			}
 			if prior := pins[binding.Ref]; prior != "" && prior != binding.SourceVersion {
@@ -106,7 +120,15 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 		}
 		var asset platform.ReleaseAsset
 		var err error
-		if ref.Kind == platform.AssetLinkType {
+		if ref.Kind == platform.AssetPropertyType {
+			owner, ok := t.app(ref.App).(interface {
+				PropertyTypeReleaseAsset(string, string) (platform.ReleaseAsset, error)
+			})
+			if !ok {
+				return platform.ReleaseCandidate{}, fmt.Errorf("property has no retained owner")
+			}
+			asset, err = owner.PropertyTypeReleaseAsset(ref.Name, version)
+		} else if ref.Kind == platform.AssetLinkType {
 			owner, ok := t.app(ref.App).(interface {
 				LinkTypeReleaseAsset(string, string) (platform.ReleaseAsset, error)
 			})

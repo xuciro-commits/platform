@@ -93,8 +93,10 @@ test("tenant properties open the original object editor at the selected field", 
   await expect(field.getByLabel("Name", { exact: true })).toHaveValue("note");
   await field.getByLabel("What people call it", { exact: true }).fill("Updated note");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  const record = (await (await request.get(`/v1/records/build.object/${id}`, { headers: { Authorization: "Bearer manager" } })).json()).record;
-  expect(record.fields[0]).toMatchObject({ name: "note", title: "Updated note" });
+  await expect.poll(async () => {
+    const record = (await (await request.get(`/v1/records/build.object/${id}`, { headers: { Authorization: "Bearer manager" } })).json()).record;
+    return record.fields[0];
+  }).toMatchObject({ name: "note", title: "Updated note" });
   // Saving acknowledges the draft without removing the editing history.
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   const outline = page.getByRole("region", { name: "States and actions", exact: true });

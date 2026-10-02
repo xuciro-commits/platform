@@ -411,6 +411,8 @@ export type ContextView = {
 };
 
 export type Definition = {
+  propertyType?: PropertyType;
+  propertyVersions?: Record<string, PropertyType>;
   linkType?: LinkType;
   linkVersions?: Record<string, LinkType>;
   ref: AssetRef;
@@ -543,6 +545,7 @@ export type FieldChange = {
 };
 
 export type FieldInfo = {
+  property?: AssetBinding;
   name: string;
   title: string;
   type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "references" | "tags" | "lines";
@@ -1107,6 +1110,13 @@ export type ProcessStep = {
   untilSeconds?: number;
   flow?: string;
   flowVersion?: number;
+};
+
+export type PropertyType = {
+  name: string;
+  title: string;
+  description: string;
+  type: string;
 };
 
 export type ProtocolCall = {

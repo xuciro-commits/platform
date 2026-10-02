@@ -1,5 +1,5 @@
 import {expect,test} from "@playwright/test";
-import {decide,fresh,open,pageUIProfile} from "./host";
+import {decide,fresh,open,pageUIProfile,stableReadRevision} from "./host";
 
 test("an authored overlay query shares its local table and loop, isolates selections and drops closed-scope responses",async({page,request},testInfo)=>{
  test.setTimeout(60_000);
@@ -22,7 +22,7 @@ test("an authored overlay query shares its local table and loop, isolates select
  await expect(canvas.getByRole("list",{name:"Picker cards",exact:true}).getByText("PICK-A1",{exact:true})).toBeVisible();
  await page.getByRole("button",{name:"Save",exact:true}).click();await expect(page.getByRole("button",{name:"Save",exact:true})).toBeDisabled();
  await page.getByRole("button",{name:"Review release",exact:true}).click();await page.getByRole("button",{name:"Check draft and dependencies",exact:true}).click();await page.getByRole("button",{name:"Save immutable candidate",exact:true}).click();await page.getByRole("button",{name:"Activate release",exact:true}).click();
- const operation=await page.context().newPage();let ownedReads=0;operation.on("request",req=>{const u=new URL(req.url());if(u.pathname===`/v1/records/${type}`&&u.searchParams.has("domain"))ownedReads++;});
+ const operation=await page.context().newPage();await stableReadRevision(operation);let ownedReads=0;operation.on("request",req=>{const u=new URL(req.url());if(u.pathname===`/v1/records/${type}`&&u.searchParams.has("domain"))ownedReads++;});
  await open(operation,"desk",`/page?app=build&kind=page&name=${name}`);
  const main=operation.getByRole("table");await main.getByRole("row").filter({hasText:"PICK-B"}).click();const pageSelection=operation.getByRole("heading",{name:"Page selection",exact:true,includeHidden:true}).locator("..");await expect(pageSelection.getByText("PICK-B",{exact:true})).toBeVisible();expect(ownedReads).toBe(0);
  await operation.getByRole("button",{name:"Open picker",exact:true}).click();const dialog=operation.getByRole("dialog",{name:"Find a note",exact:true}),table=dialog.getByRole("table"),cards=dialog.getByRole("list",{name:"Picker cards",exact:true}),localSelection=dialog.getByRole("heading",{name:"Local selection",exact:true}).locator("..");

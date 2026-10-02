@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { decide, fresh, open } from "./host";
+import { decide, fresh, open, stableReadRevision } from "./host";
 
 test("typed page calls transfer a loop record, return output and expire after reload through a frozen release", async ({page,request},testInfo)=>{
   const name=fresh("calls").replace(/[^a-z0-9]/gi,"").toLowerCase(), type=`build.${name}`, object=fresh("OBJ"), source=fresh("PAGE"), target=fresh("PAGE"), a=fresh("NOTE"), b=fresh("NOTE");
@@ -50,7 +50,7 @@ test("typed page calls transfer a loop record, return output and expire after re
   await expect(page.getByRole("button",{name:"Complete note",exact:true})).toHaveCount(0);
   await page.getByRole("button",{name:"Return to notes",exact:true}).click();
   await page.getByRole("button",{name:"Review release",exact:true}).click();await page.getByRole("button",{name:"Check draft and dependencies",exact:true}).click();await page.getByRole("button",{name:"Save immutable candidate",exact:true}).click();await page.getByRole("button",{name:"Activate release",exact:true}).click();
-  const operation=await page.context().newPage();await open(operation,"desk",`/page?app=build&kind=page&name=${name}`);
+  const operation=await page.context().newPage();await stableReadRevision(operation);await open(operation,"desk",`/page?app=build&kind=page&name=${name}`);
   const list=operation.getByRole("list",{name:"Callable notes",exact:true}), first=list.getByRole("region",{name:a,exact:true}), second=list.getByRole("region",{name:b,exact:true});
   await first.getByRole("button",{name:"Open handler",exact:true}).click();
   await expect(operation.getByRole("heading",{name:"Note handler",exact:true})).toBeVisible();

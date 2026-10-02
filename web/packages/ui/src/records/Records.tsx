@@ -121,7 +121,7 @@ function fieldsOf(info: EntityInfo, infos: FieldInfo[], options: Options, source
         // words a person types (labels, field names).
         case "tags": return options[f.name]?.length ? multiSelect({ ...common, options: options[f.name]! }) : tags(common);
         case "lines": return f.fields?.length
-          ? lines(common, fieldsOf(info, f.fields, Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source))
+          ? lines(common, fieldsOf(info, f.fields.filter(field=>!field.aside), Object.fromEntries(Object.entries(options).flatMap(([k, v]) => k.startsWith(f.name + ".") ? [[k.slice(f.name.length + 1), v]] : [])), source))
           : { ...text(common), readOnly: true, display: (v: unknown) => <span className="text-muted">{Array.isArray(v) ? `${v.length} lines` : "—"}</span> } as FieldType<any>;
         default: return text(common);
       }

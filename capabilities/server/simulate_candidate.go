@@ -422,13 +422,20 @@ func candidateTestTenantWithEnvironment(candidate platform.ReleaseCandidate, mem
 			return nil, err
 		}
 	}
+	for _, asset := range candidate.Assets {
+		if asset.Ref.App == build.ID && asset.Ref.Kind == platform.AssetPropertyType {
+			if err := b.InstallPropertyTypeAsset(asset); err != nil {
+				return nil, err
+			}
+		}
+	}
 	definitions := map[string][]recordState{build.ObjectType: {}}
 	processes := map[string][]recordState{}
 	for _, asset := range candidate.Assets {
 		if asset.Ref.App != build.ID {
 			continue
 		}
-		if asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute {
+		if asset.Ref.Kind == platform.AssetPropertyType || asset.Ref.Kind == platform.AssetLinkType || asset.Ref.Kind == platform.AssetQuery || asset.Ref.Kind == platform.AssetFunction || asset.Ref.Kind == platform.AssetCompute {
 			continue // compiled after its source objects below
 		}
 		if asset.Ref.App != build.ID || asset.SourceVersion != b.Manifest().Version {

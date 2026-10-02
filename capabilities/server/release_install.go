@@ -46,6 +46,8 @@ func (t *Tenant) prepareReleaseActivationLocked(id string, raw []byte) ([]releas
 	}
 	priority := func(schema string) int {
 		switch schema {
+		case build.SchemaPropertyType:
+			return -1
 		case build.SchemaPublish:
 			return 0
 		case build.SchemaLinkType, build.SchemaQuery:
@@ -163,6 +165,21 @@ func (t *Tenant) stageReleaseInstallationLocked(installations []releaseInstallat
 			view := hostView{t: draft, app: owner}
 			if err := view.InstallOperation(platform.Caller{Replaying: true}, *decl.Operation, decl.Version); err != nil {
 				return nil, err
+			}
+		case build.SchemaPropertyType:
+			var record build.PropertyType
+			if json.Unmarshal(installation.Image, &record) != nil {
+				return nil, fmt.Errorf("invalid property family")
+			}
+			view := hostView{t: draft, app: owner}
+			for i, raw := range record.Versions {
+				var p build.PropertyType
+				if json.Unmarshal([]byte(raw), &p) != nil {
+					return nil, fmt.Errorf("invalid retained property")
+				}
+				if err := view.InstallPropertyType(platform.Caller{Replaying: true}, platform.PropertyType{Name: p.Name, Title: p.Title, Description: p.Description, Type: p.Type}, i+1); err != nil {
+					return nil, err
+				}
 			}
 		case build.SchemaLinkType:
 			var record build.LinkType

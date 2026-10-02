@@ -431,6 +431,16 @@ F3k1先交付原查询owner/API和Web边缘传输；F3k2接入页面/应用计�
 
 页面精确关系绑定使用`v2.22`的原PageQuery：query固定`link-type` AssetBinding，direction明确forward/reverse，For必须是对应起点对象的record变量，object为目标对象；不能同时叠加具名Query或旧Section.Relation。运行Query/AggregateQuery携带同一类型化traversal，宿主先按当前成员确认关系及起点，再把方向约束加入原domain；本profile在操作读取执行，staged读取拒绝。Table/Loop和原完整聚合消费同一描述。集合来源图暂不接关系遍历分支，避免丢失起点授权；需要时沿原谓词owner扩展。页面/应用候选冻结关系精确版本及对象依赖，成员裁剪同步移除失效来源与消费者。
 
+### 7.4 版本化共享属性 profile
+
+F4b1沿应用API新增property-type资产与PropertyType：限定身份、标题、语义说明及标量type；首profile为text/longtext/integer/decimal/date/datetime/boolean。它复用原字段类型与记录存储，不增加求值器。名称/类型首次发布后固定，标题与说明可发布新版本；Money单位、choice枚举、reference、派生/接口属性不在首profile。
+
+原FieldInfo.property固定AssetBinding；代码Entity.PropertyBindings声明已有字段的来源，租户build.Field.property固定同一Build owner的保留版本，字段type/title须与来源相同。对象拥有本地字段名、required、search、read/write、状态/动作及数据；不得用共享属性赋予新的记录权限或偷偷覆写类型/标题。首profile要求先发布属性再引用，不支持在一个草稿图中自动补发缺失来源，也不迁移历史字段。
+
+Build原动作build.propertytype.create/edit/publish拥有草稿及最多64个保留版本。直接发布、候选冻结/激活、accepted-result/release-result、CheckReplay与快照均沿原路径；对象候选冻结精确属性依赖，一个候选仍只能包含同一AssetRef的一个版本，冲突拒绝。新属性发布不替换旧对象绑定；冻结后修改属性/对象草稿不改变候选字节，追加失败不安装。
+
+成员发现只提供其可见对象字段实际消费的属性版本，Build构建者可发现自己的已安装属性族；未消费的新版或私有字段来源不提供给普通成员。创建、读取、必填与字段权限继续由对象执行。属性资产不包含实例值，字段引用不等于查询/动作授权。本体目录/属性编辑器、选取与复用旅程归F4b2；真实PostgreSQL恢复未验证。
+
 ## 8. Widget注册与可扩展结构（D6）
 
 从三个 switch 拆出组件定义。注册机制在现有 `@platform/ui`、`@platform/app` 和 Catalog 下实现，首期采用受控构建时注册和懒加载。无需先建动态插件市场。
@@ -642,4 +652,6 @@ Pivot（F5b，v2.23）已沿原注册、专属检查器、共享Pivot及Aggregat
 
 Chart（F5c，v2.24）已接通专属检查器/按需加载的Renderer、原趋势与饼图编译、固定发布及完整来源，profile归§8.3。Go覆盖类型/日期分桶、非加性与Money份额拒绝、旧profile/未知mark、原候选激活及重放/内存快照保留；Web编译用例区分xy与theta/color并拒绝负值/非有限/非数值份额。浏览器路线验证GUI趋势/饼图配置、冻结后修改草稿、原候选激活、完整月度统计、分页复用、迟到/负值/权限拒绝及恢复/刷新。共享图表与Widget容器支持收缩，普通与窄屏已观察；这只证明ChartXY/ChartPie可映射的聚合呈现，不代表时序/预测服务、负责人视觉验收或生产性能。
 
-F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束/共享属性与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+共享属性资产（F4b1）已接通应用API契约、原字段来源描述、Build草稿/版本族、对象精确引用与候选依赖，边界归§7.4。Go路线验证属性自身冻结后修改草稿、对象冻结后发布新版属性、激活仍使用旧来源、原记录动作/读取、非法局部类型/标题、缺失来源、普通成员创建/发现拒绝、发布追加失败、CheckReplay及内存快照恢复。API路线可用不代表本体编辑器已接入或负责人已走查；界面与实际复用任务仍待F4b2。
+
+F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束/共享属性编辑与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1尚无任意权重/尺寸、上下文菜单、unused组件和外包格式完整导入；已提供按钮与拖放实现本批操作。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
