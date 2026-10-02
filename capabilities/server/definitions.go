@@ -482,7 +482,10 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						field, visible := shown.Field(name)
 						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))
 					})
-					if section.Widget == "filter" && len(section.Fields) == 0 {
+					if len(section.Facets) > 0 && slices.ContainsFunc(section.Facets, func(f platform.PageFacet) bool { _, ok := shown.Field(f.Field); return !ok }) {
+						continue
+					}
+					if section.Widget == "filter" && len(section.Fields) == 0 && len(section.Facets) == 0 && section.FilterSearchVariable == "" {
 						continue
 					}
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })

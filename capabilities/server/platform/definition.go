@@ -92,7 +92,15 @@ type SelectionVariable struct {
 // Section is one place on a composed page: a widget, what it is bound to, and
 // how wide it sits (ADR-0035). A table outputs the record someone selects; a
 // detail and the actions read it.
+type PageFacet struct {
+	Field    string `json:"field"`
+	Variable string `json:"variable"`
+	Kind     string `json:"kind"`
+}
+
 type Section struct {
+	Facets               []PageFacet `json:"facets,omitempty"`
+	FilterSearchVariable string      `json:"filterSearchVariable,omitempty"`
 	// ID is required when Document references this section; older pages omit it.
 	ID            string `json:"id,omitempty"`
 	ConfigVersion int    `json:"configVersion,omitempty"`

@@ -464,7 +464,7 @@ function Properties({ section, document, info, catalog, object, selections, rela
         })()}
         <p className="text-xs text-muted">{t("Record inputs are read by the host with the operator's permissions and retain their sources.")}</p>
       </>}
-      {section.widget === "filter" && (
+      {section.widget === "filter" && !section.collectionVariable && (
         <fieldset className="grid gap-1 text-xs">
           <legend className="mb-1">{t("Fields it filters by")}</legend>
           <Toggles options={fields.filter((f) => filterable.includes(f.type)).map((f) => ({ value: f.name, label: f.title }))} value={section.fields ?? []}

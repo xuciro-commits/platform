@@ -476,6 +476,12 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("%s: no words to show", where)
 			}
 		case "filter":
+			if len(s.Facets) > 0 || s.FilterSearchVariable != "" {
+				if err := s.CheckFacetSchema(info); err != nil {
+					return err
+				}
+				break
+			}
 			if len(s.Fields) == 0 {
 				return fmt.Errorf("%s: no fields to filter by", where)
 			}

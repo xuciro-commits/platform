@@ -9,6 +9,17 @@ const contract = JSON.parse(readFileSync(new URL("../../../../../capabilities/se
 const info={type:"sample.note",fields:[{name:"bucket",type:"text"},{name:"active",type:"boolean"},{name:"count",type:"integer"}]};
 const variables={bucket:{scope:"page",type:"string",mode:"state",initial:"A"}};
 const plan={object:{app:"sample",kind:"object",name:info.type},limit:20,conditions:[{field:"bucket",op:"=",value:{variable:"bucket"}}]};
+test("optional typed facets retain fixed conditions and reject malformed or failed input instead of broadening reads",()=>{
+ const variables={picked:{scope:"page",type:"string-set",mode:"state",initial:{kind:"string-set",values:[]}},minimum:{scope:"page",type:"string",mode:"state",initial:""}},q={...plan,conditions:[{field:"active",op:"=",value:{literal:true}},{field:"bucket",op:"in",value:{variable:"picked"},optional:true},{field:"count",op:">=",value:{variable:"minimum"},optional:true,asDecimal:true}]};
+ const compile=(picked,minimum)=>compileQueryPlan(q,variables,{picked,minimum},info,undefined,contract),value=v=>({status:"value",value:v});
+ assert.deepEqual(compile(value({kind:"string-set",values:[]}),value("")).query.domain,[["active","=",true]]);
+ assert.deepEqual(compile(value({kind:"string-set",values:["A","B"]}),value("1.20")).query.domain,[["active","=",true],["bucket","in",["A","B"]],["count",">=",{kind:"decimal",value:"1.2"}]]);
+ for(const status of ["empty","pending","error"])assert.equal(compile({status,code:"Denied"},value("")).status,status);
+ for(const raw of [{kind:"string-set",values:["A","A"]},{kind:"string-set",values:[1]},[]])assert.equal(compile(value(raw),value("")).status,"error");
+ assert.equal(compile(value({kind:"string-set",values:[]}),value("1e3")).status,"error");
+ assert.equal(compile(value({kind:"string-set",values:Array.from({length:65},(_,i)=>String(i))}),value("")).status,"error");
+ for(const field of ["hidden","active"])assert.equal(compileQueryPlan({...q,conditions:[{field,op:"in",optional:true,value:{variable:"picked"}}]},variables,{picked:value({kind:"string-set",values:[]})},info,undefined,contract).status,"error");
+});
 test("query compilation preserves empty/pending/error inputs and rejects hidden fields and result dependencies",()=>{
   for(const status of ["empty","pending","error"]){const result=compileQueryPlan(plan,variables,{bucket:status==="error"?{status,code:"Denied"}:{status}},info,undefined,contract);assert.equal(result.status,status);}
   const values={bucket:{status:"value",value:"A"}};

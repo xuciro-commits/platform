@@ -926,6 +926,12 @@ export type PageExpression = {
   args: PageValue[];
 };
 
+export type PageFacet = {
+  field: string;
+  variable: string;
+  kind: string;
+};
+
 export type PageInterface = {
   version: number;
   inputs?: Record<string, PagePort>;
@@ -1002,6 +1008,8 @@ export type PageQuery = {
 };
 
 export type PageQueryCondition = {
+  optional?: boolean;
+  asDecimal?: boolean;
   field: string;
   op: string;
   value: PageValue;
@@ -1325,6 +1333,8 @@ export type SavedView = {
 };
 
 export type Section = {
+  facets?: PageFacet[];
+  filterSearchVariable?: string;
   id?: string;
   configVersion?: number;
   widget: string;
@@ -1641,7 +1651,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.29",
+  "uiProfile": "platform.page.v2.30",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2057,7 +2067,8 @@ export const pageUIManifest = {
       "bindingKinds": [
         "object",
         "fields",
-        "filter-variable"
+        "filter-variable",
+        "collection-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -2076,7 +2087,14 @@ export const pageUIManifest = {
           }
         }
       },
-      "inputPorts": [],
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.30"
+        }
+      ],
       "outputPorts": [
         {
           "id": "filter",
@@ -2657,7 +2675,8 @@ export const pageUIManifest = {
     "platform.page.v2.26",
     "platform.page.v2.27",
     "platform.page.v2.28",
-    "platform.page.v2.29"
+    "platform.page.v2.29",
+    "platform.page.v2.30"
   ],
   "runtime": {
     "scope": "page",
@@ -2667,7 +2686,8 @@ export const pageUIManifest = {
       "record",
       "filter",
       "object-set",
-      "decimal"
+      "decimal",
+      "string-set"
     ],
     "maxVariables": 64,
     "maxStringBytes": 4096,
@@ -2801,7 +2821,8 @@ export const pageUIManifest = {
         "record",
         "object-set",
         "filter",
-        "decimal"
+        "decimal",
+        "string-set"
       ],
       "modes": [
         "state",
@@ -2848,7 +2869,9 @@ export const pageUIManifest = {
         "<=",
         ">",
         ">=",
-        "like"
+        "like",
+        "in",
+        "not in"
       ],
       "set": {
         "operations": [

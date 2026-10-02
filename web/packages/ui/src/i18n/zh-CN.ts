@@ -1,5 +1,8 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Facet choices": "分面多选",
+ "Choose several authorized options with complete source counts and an optional histogram.": "从授权选项中多选，显示完整来源计数及可选直方图。",
+ "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
   "Select": "选择",
   "Context commands": "上下文命令",
   "Use the same commands from a pointer context menu or an explicit keyboard and touch trigger.": "右键菜单、键盘与触控入口使用同一组命令。",

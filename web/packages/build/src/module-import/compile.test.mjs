@@ -11,7 +11,7 @@ const bindings={objects:{Asset:"sample.note"},fields:{Asset:{id:"id",name:"note"
 const target={object:"sample.note",profile,entities:[{app:"sample",type:"sample.note",fields:[{name:"note",type:"text"}]}],actions:[{schema:"sample.note.close",target:"sample.note"}]};
 const sourceModule=()=>JSON.parse(readFileSync(new URL("./sample.workshop.json",import.meta.url),"utf8"));
 test("migration inventory tracks every pinned source type once and cannot confer runtime eligibility",()=>{
- assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,6);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");
+ assert.equal(workshopMigrationCatalog.entries.length,92);assert.equal(new Set(workshopMigrationCatalog.entries.map(e=>e.sourceType)).size,92);assert.equal(workshopMigrationCatalog.entries.filter(e=>e.status==="profile").length,8);assert.equal(workshopMigrationCatalog.entries.find(e=>e.sourceType==="Scene3D").status,"planned");
  // Pinned from the actual WidgetType union, independently of migration entries.
  assert.equal(createHash("sha256").update(workshopMigrationCatalog.entries.map(e=>e.sourceType).sort().join("\n")).digest("hex"),"fd2ad8319d16fbe084db00d4635ee9bd30c99d718d012f4e8c61f01df9d958e0");
  for(const entry of workshopMigrationCatalog.entries.filter(e=>e.status==="profile"))assert.ok(nativeRegistry.widgets.some(w=>w.componentID===entry.target),entry.sourceType);
@@ -21,7 +21,7 @@ test("the original ModuleDef compiles explicit object fields, selection resource
  const reordered=sourceModule();reordered.sections.root.children.reverse();assert.ok(compileWorkshopModule(JSON.stringify(reordered),"page",bindings,target).draft);
 });
 test("unsupported source keys, unknown widgets, multi-selection and executable definitions keep source bytes and block application",()=>{
- for(const mutate of [m=>m.widgets.table.config.selectedVarId="many",m=>m.widgets.markdown.type="Unregistered",m=>m.variables[0].definitionKind="sqlQuery",m=>m.widgets.table.config.enableInlineEdit=true,m=>m.widgets.action.config.extra={doNotLose:42}]){const module=sourceModule();mutate(module);const source=JSON.stringify(module),result=compileWorkshopModule(source,"page",bindings,target);assert.equal(result.source,source);assert.equal(result.draft,undefined);assert.ok(result.diagnostics.some(d=>d.blocking));}
+ for(const mutate of [m=>m.widgets.table.config.selectedVarId="many",m=>m.widgets.markdown.type="Unregistered",m=>m.variables[0].definitionKind="sqlQuery",m=>m.widgets.table.config.enableInlineEdit=true,m=>{m.variables[2].type="boolean";m.variables[2].staticValue=true;},m=>m.widgets.action.config.extra={doNotLose:42}]){const module=sourceModule();mutate(module);const source=JSON.stringify(module),result=compileWorkshopModule(source,"page",bindings,target);assert.equal(result.source,source);assert.equal(result.draft,undefined);assert.ok(result.diagnostics.some(d=>d.blocking));}
  const script=sourceModule();script.widgets.markdown={id:"markdown",type:"SingleButton",name:"Bad expression",config:{label:"Bad",eventActions:[{kind:"setVariable",variableId:"scratch",valueExpr:"globalThis.importExecuted=true"}]}};assert.equal(compileWorkshopModule(JSON.stringify(script),"page",bindings,target).draft,undefined);assert.equal(globalThis.importExecuted,undefined);
 });
 test("whole overlays rewrite opened identities and local resources while every source configuration stays in the report",()=>{
@@ -45,4 +45,12 @@ test("diagnostics use JSON pointers with array indices and escaped source keys",
  const m=sourceModule();m.variables[0].definitionKind="sqlQuery";m.widgets.markdown.config["raw/key~"]={retained:true};
  const report=compileWorkshopModule(JSON.stringify(m),"page",bindings,target);assert.equal(report.draft,undefined);assert.ok(report.diagnostics.some(d=>d.path==="/variables/0"&&d.blocking));assert.ok(report.diagnostics.some(d=>d.path==="/widgets/markdown/config/raw~1key~0"&&d.blocking));
  for(const diagnostic of report.diagnostics.filter(d=>d.blocking)){let value=m;for(const key of diagnostic.path.slice(1).split("/"))value=value[key.replaceAll("~1","/").replaceAll("~0","~")];assert.notEqual(value,undefined,diagnostic.path);}
+});
+
+test("actual default FilterList and ObjectSet clauses import only after explicit unsupported table/detail repairs",()=>{
+ const m=JSON.parse(readFileSync(new URL("./filters.workshop.json",import.meta.url),"utf8"));
+ const fields=["id","name","status","priority","owner","pressure"],mapped={objects:{Asset:"sample.note"},fields:{Asset:Object.fromEntries(fields.map(f=>[f,f]))},actions:{updateAssetStatus:"sample.note.close"},queries:{}},target={object:"sample.note",profile,entities:[{app:"sample",type:"sample.note",fields:fields.filter(f=>f!=="id").map(name=>({name,type:name==="pressure"?"decimal":"text"}))}],actions:[{schema:"sample.note.close",target:"sample.note"}]};
+ assert.equal(compileWorkshopModule(JSON.stringify(m),"filters",mapped,target).draft,undefined);
+ m.widgets.wObjectTable1.config={objectSetVarId:"filteredAssets",activeVarId:"selectedAsset",columns:fields.map(key=>({key})),enableInlineEdit:false,selectionMode:"single"};m.widgets.wObjectTable1.events=[];m.widgets.wPropList1.config={objectVarId:"selectedAsset",properties:fields,hideNull:false};
+ const report=compileWorkshopModule(JSON.stringify(m),"filters",mapped,target);assert.ok(report.draft,JSON.stringify(report.diagnostics));const filter=report.draft.sections.find(s=>s.widget==="filter"),doc=report.draft.document;assert.equal(filter.facets.length,3);assert.equal(doc.variables[filter.facets[0].variable].type,"string-set");const filtered=Object.values(doc.queries).find(q=>q.conditions.length);assert.equal(filtered.conditions.length,5);assert.ok(filtered.conditions.every(c=>c.optional));assert.equal(filtered.conditions.filter(c=>c.asDecimal).length,2);assert.ok(filtered.search.variable);assert.ok(report.diagnostics.some(d=>d.code==="native-search-scope"&&!d.blocking));
 });

@@ -23,7 +23,7 @@ export function parseWorkshopModule(source:string):{module?:SourceModule;diagnos
  try {
   const m:unknown=JSON.parse(source);
   if(!obj(m)||!text(m.id)||!text(m.name)||m.description!==undefined&&typeof m.description!=="string"||!Array.isArray(m.pages)||!obj(m.sections)||!obj(m.widgets)||!Array.isArray(m.variables)||!Array.isArray(m.overlays)||!Array.isArray(m.unusedWidgetIds))throw Error();
-  if(m.pages.length>32||Object.keys(m.sections).length>256||Object.keys(m.widgets).length>128||m.variables.length>64||m.overlays.length>16) return {diagnostics:[{path:"/",code:"source-budget",blocking:true}]};
+  if(m.pages.length>32||Object.keys(m.sections).length>256||Object.keys(m.widgets).length>128||m.variables.length>256||m.overlays.length>16) return {diagnostics:[{path:"/",code:"source-budget",blocking:true}]};
   const validID=(v:unknown)=>typeof v==="string"&&!!v&&v.length<=128&&!Object.hasOwn(Object.prototype,v)&&v!=="__proto__"&&v!=="prototype";
   const ids=new Set<string>();
   for(const p of m.pages){if(!obj(p)||!validID(p.id)||!text(p.name)||!validID(p.rootSectionId)||ids.has(p.id as string))throw Error();ids.add(p.id as string);}
@@ -75,18 +75,27 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   // Reserve the identity before traversing dependencies; cycles remain diagnostics.
   document.variables![mapped]={scope:context.kind,owner:context.owner,type:"string",mode:"constant",initial:""};
   if(v.definitionKind==="static"&&["string","boolean"].includes(v.type)&&typeof v.staticValue===(v.type==="string"?"string":"boolean"))document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:v.type,mode:"state",initial:v.staticValue};
+  else if(v.definitionKind==="static"&&v.type==="array"&&Array.isArray(v.staticValue)&&v.staticValue.length<=64&&v.staticValue.every(item=>typeof item==="string")&&new Set(v.staticValue).size===v.staticValue.length)document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:"string-set",mode:"state",initial:{kind:"string-set",values:v.staticValue}};
+  else if(v.definitionKind==="static"&&v.type==="numeric"&&(v.staticValue===""||typeof v.staticValue==="number"&&Number.isFinite(v.staticValue)))document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:"string",mode:"state",initial:String(v.staticValue)};
   else if(v.definitionKind==="widgetOutput"&&v.type==="object"&&v.widgetOutputKey==="activeObject"){
    const producer=text(v.widgetId);
    document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:"record",mode:"resource",source:{kind:"record",section:id("widget",producer)}};
   }else if(v.definitionKind==="objectSetDefinition"&&v.type==="objectSet"){
-   const set=obj(v.objectSet)?v.objectSet:undefined,external=text(set?.objectType||v.sourceObjectType),e=entity(external,`${variablePath(sourceID)}/objectSet/objectType`),query=id("query",sourceID),conditions:Api.PageQueryCondition[]=[];
+   const set=obj(v.objectSet)?v.objectSet:undefined,external=text(set?.objectType||v.sourceObjectType),e=entity(external,`${variablePath(sourceID)}/objectSet/objectType`),query=id("query",sourceID),conditions:Api.PageQueryCondition[]= [];let search:Api.PageValue|undefined;
    if(set){safeKeys(set,["objectType","steps"],`${variablePath(sourceID)}/objectSet`);for(const [index,step] of arr(set.steps).entries()){
     const base=`${variablePath(sourceID)}/objectSet/steps/${index}`;
     if(!obj(step)||step.op!=="where"||!Array.isArray(step.clauses)){issue(base,"query-profile");continue;}safeKeys(step,["op","clauses"],base);
     for(const [n,clause] of step.clauses.entries()){
      const p=`${base}/clauses/${n}`;if(!obj(clause)){issue(p,"query-profile");continue;}safeKeys(clause,["id","property","op","value","varId"],p);
      const operators:Record<string,string>={is:"=",isNot:"!=",isGreaterThan:">",isLessThan:"<",isGreaterThanOrEqualTo:">=",isLessThanOrEqualTo:"<="};
-     if(clause.varId){issue(p,"empty-filter-semantics");continue;}
+     if(clause.varId){
+      const input=variable(text(clause.varId),context,`${p}/varId`),type=document.variables![input]?.type,property=text(clause.property),op=text(clause.op);
+      if(op==="fullTextSearch"&&property==="*"&&type==="string"){if(search)issue(p,"query-profile");search={variable:input};issue(p,"native-search-scope",false);continue;}
+      const mapped=field(external,property,`${p}/property`),descriptor=e?.fields.find(f=>f.name===mapped),nativeOp=({isOneOf:"in",isNotOneOf:"not in",contains:"like",...operators} as Record<string,string>)[op];
+      const decimal=["integer","decimal"].includes(descriptor?.type??"");
+      if(!nativeOp||(["in","not in"].includes(nativeOp)?type!=="string-set"||!["text","choice"].includes(descriptor?.type??""):decimal?type!=="string":type!=="string"&&type!=="boolean")){issue(p,"query-profile");continue;}
+      conditions.push({field:mapped,op:nativeOp,value:{variable:input},optional:true,...(decimal?{asDecimal:true}:{})});continue;
+     }
      if(!operators[text(clause.op)]||!["string","number","boolean"].includes(typeof clause.value)||clause.value===""){issue(p,"query-profile");continue;}
      conditions.push({field:field(external,text(clause.property),`${p}/property`),op:operators[text(clause.op)]!,value:{literal:clause.value}});
     }
@@ -95,7 +104,7 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
     const definition=target.definitions?.find(d=>d.ref.kind==="query"&&binding.ref.kind==="query"&&d.ref.app===binding.ref.app&&d.ref.name===binding.ref.name),query=definition?.queryVersions?.[binding.sourceVersion]??(definition?.version===binding.sourceVersion?definition.query:undefined);
     if(!query||query.object!==e?.type||query.by)issue(variablePath(sourceID),"query-binding");else issue(variablePath(sourceID),"explicit-query-binding",false);
    }
-   document.queries![query]={owner:context.owner,object:{app:e?.app??"",kind:"object",name:e?.type??""},query:binding,conditions,limit:100};
+   document.queries![query]={owner:context.owner,object:{app:e?.app??"",kind:"object",name:e?.type??""},query:binding,conditions,search,limit:100};
    document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:"object-set",mode:"resource",source:{kind:"plan",query}};
   }else issue(variablePath(sourceID),"variable-profile");
   return mapped;
@@ -112,18 +121,25 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   if(w.height!==undefined)document.nodes[leaf]!.size={height:Number(w.height)};if(w.flex!==undefined)document.nodes[leaf]!.size={...document.nodes[leaf]!.size,weight:Number(w.flex)};
   if(arr(w.events).length)issue(`${path}/events`,"event-profile");
   if(w.type==="Markdown"){safeKeys(config,["text"],`${path}/config`);section.text=text(config.text);}
-  if(w.type==="TextInput"){safeKeys(config,["variableId","label","placeholder"],`${path}/config`);document.nodes[leaf]!.valueVariable=variable(text(config.variableId),context,`${path}/config/variableId`);if(config.label!==undefined)section.title=text(config.label);if(config.placeholder!==undefined)issue(`${path}/config/placeholder`,"native-presentation",false);}
+  if(w.type==="TextInput"||w.type==="NumericInput"){if(w.type==="NumericInput")issue(`${path}/config`,"native-number-syntax",false);safeKeys(config,["variableId","label","placeholder"],`${path}/config`);document.nodes[leaf]!.valueVariable=variable(text(config.variableId),context,`${path}/config/variableId`);if(document.variables![document.nodes[leaf]!.valueVariable!]?.type!=="string")issue(`${path}/config/variableId`,"input-profile");if(config.label!==undefined)section.title=text(config.label);if(config.placeholder!==undefined)issue(`${path}/config/placeholder`,"native-presentation",false);}
+  if(w.type==="FilterList"){
+   safeKeys(config,["objectSetVarId","outputFilterVarId","facets","searchVarId"],`${path}/config`);
+   const source=text(config.objectSetVarId);section.collectionVariable=variable(source,context,`${path}/config/objectSetVarId`);const external=queryObjects.get(source)??"",e=entity(external,`${path}/config/objectSetVarId`);section.object=e?.type===target.object?undefined:e?.type;
+   section.facets=arr(config.facets).flatMap((value,index)=>{const p=`${path}/config/facets/${index}`;if(!obj(value)){issue(p,"facet-profile");return [];}safeKeys(value,["property","label","type","varId"],p);const fieldID=field(external,text(value.property),`${p}/property`),input=variable(text(value.varId),context,`${p}/varId`),type=document.variables![input]?.type,kind=text(value.type);if(!["checkbox","histogram","search"].includes(kind)||type!==(kind==="search"?"string":"string-set")||!["text","choice"].includes(e?.fields.find(f=>f.name===fieldID)?.type??""))issue(p,"facet-profile");if(value.label!==undefined)issue(`${p}/label`,"native-presentation",false);return [{field:fieldID,variable:input,kind}];});
+   if(config.searchVarId)section.filterSearchVariable=variable(text(config.searchVarId),context,`${path}/config/searchVarId`);
+   if(config.outputFilterVarId){const output=text(config.outputFilterVarId),definition=vars.get(output);if(definition?.definitionKind!=="objectSetDefinition")issue(`${path}/config/outputFilterVarId`,"query-profile");else variable(output,context,`${path}/config/outputFilterVarId`);}
+  }
   if(w.type==="ObjectTable"){
    safeKeys(config,["objectSetVarId","activeVarId","columns","density","enableSelection","selectionMode","showToolbar","enableInlineEdit","titleTemplate"],`${path}/config`);
    const source=text(config.objectSetVarId);section.collectionVariable=variable(source,context,`${path}/config/objectSetVarId`);const external=queryObjects.get(source)||"",e=entity(external,`${path}/config/objectSetVarId`);section.object=e?.type===target.object?undefined:e?.type;
-   section.fields=arr(config.columns).map((c,n)=>{if(!obj(c)){issue(`${path}/config/columns/${n}`,"field-binding");return "";}safeKeys(c,["key","label","width","formatter"],`${path}/config/columns/${n}`);if(c.width!==undefined||c.label!==undefined)issue(`${path}/config/columns/${n}`,"native-presentation",false);if(c.formatter!==undefined&&c.formatter!=="none")issue(`${path}/config/columns/${n}/formatter`,"presentation-profile");return field(external,text(c.key),`${path}/config/columns/${n}/key`);});
+   section.fields=arr(config.columns).map((c,n)=>{if(!obj(c)){issue(`${path}/config/columns/${n}`,"field-binding");return "";}safeKeys(c,["key","label","width","formatter"],`${path}/config/columns/${n}`);if(c.width!==undefined||c.label!==undefined)issue(`${path}/config/columns/${n}`,"native-presentation",false);if(c.formatter!==undefined&&c.formatter!=="none")issue(`${path}/config/columns/${n}/formatter`,"presentation-profile");return field(external,text(c.key),`${path}/config/columns/${n}/key`);}).filter(name=>{if(name==="id")issue(`${path}/config/columns`,"native-system-id",false);return name!=="id";});
    if(config.selectionMode!==undefined&&config.selectionMode!=="single"||config.enableSelection===false||config.enableInlineEdit===true)issue(`${path}/config`,"table-interaction-profile");
    for(const key of ["density","showToolbar","titleTemplate"])if(config[key]!==undefined)issue(`${path}/config/${key}`,"native-presentation",false);
    if(config.activeVarId){const active=vars.get(text(config.activeVarId));if(active?.type!=="object"||active.definitionKind!=="widgetOutput"||active.widgetId!==sourceID||active.widgetOutputKey!=="activeObject")issue(`${path}/config/activeVarId`,"selection-producer");recordObjects.set(text(config.activeVarId),external);}
   }
   if(w.type==="PropertyList"||w.type==="InlineAction"){
    const source=text(config.objectVarId);section.recordVariable=variable(source,context,`${path}/config/objectVarId`);const v=vars.get(source),producer=m.widgets[text(v?.widgetId)],setID=text(producer?.config.objectSetVarId),producerOwner=widgetOwners.get(text(v?.widgetId));if(producer&&producer.type==="ObjectTable")variable(setID,scopeOf(producerOwner),`${path}/config/objectVarId`);const external=recordObjects.get(source)||queryObjects.get(setID)||"",e=entity(external,`${path}/config/objectVarId`);section.object=e?.type===target.object?undefined:e?.type;
-   if(w.type==="PropertyList"){safeKeys(config,["objectVarId","properties","columns","hideNull","inlineEdit","style"],`${path}/config`);section.fields=arr(config.properties).map((p,n)=>field(external,text(p),`${path}/config/properties/${n}`));if(config.inlineEdit===true||config.hideNull===true)issue(`${path}/config`,"detail-interaction-profile");for(const key of ["columns","style"])if(config[key]!==undefined)issue(`${path}/config/${key}`,"native-presentation",false);}
+   if(w.type==="PropertyList"){safeKeys(config,["objectVarId","properties","columns","hideNull","inlineEdit","style"],`${path}/config`);section.fields=arr(config.properties).map((p,n)=>field(external,text(p),`${path}/config/properties/${n}`)).filter(name=>{if(name==="id")issue(`${path}/config/properties`,"native-system-id",false);return name!=="id";});if(config.inlineEdit===true||config.hideNull===true)issue(`${path}/config`,"detail-interaction-profile");for(const key of ["columns","style"])if(config[key]!==undefined)issue(`${path}/config/${key}`,"native-presentation",false);}
    else{safeKeys(config,["actionId","objectVarId","mode"],`${path}/config`);const schema=text(own(bindings.actions,text(config.actionId))),action=target.actions.find(a=>a.schema===schema&&a.target===e?.type&&!a.new);if(!action)issue(`${path}/config/actionId`,"action-binding");section.actions=action?[action.schema]:[];if(config.mode!==undefined&&config.mode!=="form")issue(`${path}/config/mode`,"action-profile");}
   }
   if(w.type==="SingleButton"){safeKeys(config,["label","variant","eventActions"],`${path}/config`);section.title=text(config.label)||w.name;if(config.variant!==undefined)issue(`${path}/config/variant`,"native-presentation",false);const actions=arr(config.eventActions);if(actions.length!==1||!obj(actions[0]))issue(`${path}/config/eventActions`,"event-profile");else{
@@ -131,6 +147,7 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
    else if(event.kind==="setVariable"){safeKeys(event,["kind","variableId","valueExpr"],`${path}/config/eventActions/0`);let literal:unknown;try{literal=JSON.parse(text(event.valueExpr));}catch{issue(`${path}/config/eventActions/0/valueExpr`,"expression-profile");}if(!["string","boolean"].includes(typeof literal))issue(`${path}/config/eventActions/0/valueExpr`,"expression-profile");document.events!.push({source:sectionID,event:"click",target:variable(text(event.variableId),context,`${path}/config/eventActions/0/variableId`),value:literal});}
    else issue(`${path}/config/eventActions/0`,"event-profile");
   }}
+  if(["table","detail"].includes(section.widget)&&!section.fields?.length)issue(`${path}/config`,"field-binding");
   return leaf;
  };
  const visit=(sourceID:string,owner?:string,ancestors=new Set<string>()):string=>{

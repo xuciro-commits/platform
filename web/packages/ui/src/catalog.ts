@@ -9,6 +9,7 @@ const asset = (id: string, name: string, summary: string, layer: CatalogEntry["l
 });
 
 export const entries: CatalogEntry[] = [
+  asset("ui/facet-choices","Facet choices","Choose several authorized options with complete source counts and an optional histogram.",2,"fields/FacetChoices.tsx",["FacetChoices"],"FacetChoicesExample",{tags:["filter","facets","selection"],constraints:["The caller owns authorized options, counts and typed selected values."]}),
   asset("ui/command-menu", "Context commands", "Use the same commands from a pointer context menu or an explicit keyboard and touch trigger.", 2,
     "components/CommandMenu.tsx", ["CommandMenu"], "ContextCommands", {tags:["menu","commands","keyboard"],dependencies:["ui/button"],constraints:["The caller owns commands and disabled states; the menu does not perform business operations itself."]}),
   asset("ui/layout-region", "Sized layout regions", "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.", 2,

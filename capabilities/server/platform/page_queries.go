@@ -30,9 +30,11 @@ type PageQuerySet struct {
 }
 
 type PageQueryCondition struct {
-	Field string    `json:"field"`
-	Op    string    `json:"op"`
-	Value PageValue `json:"value"`
+	Optional  bool      `json:"optional,omitempty"`
+	AsDecimal bool      `json:"asDecimal,omitempty"`
+	Field     string    `json:"field"`
+	Op        string    `json:"op"`
+	Value     PageValue `json:"value"`
 }
 
 func (q PageQuery) Values() []PageValue {
@@ -142,6 +144,12 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			return fmt.Errorf("page query %s parent input requires a named query", id)
 		}
 		for _, term := range q.Conditions {
+			if (term.Optional || term.AsDecimal || term.Op == "in" || term.Op == "not in") && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.30") {
+				return fmt.Errorf("optional/set query conditions require v2.30")
+			}
+			if term.AsDecimal && (term.Value.Variable == "" || d.Variables[term.Value.Variable].Type != "string") {
+				return fmt.Errorf("decimal text condition needs a string variable")
+			}
 			if !pageNodeID.MatchString(term.Field) || !slices.Contains(c.Operators, term.Op) {
 				return fmt.Errorf("page query %s has an invalid condition", id)
 			}
@@ -157,7 +165,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			}
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
-				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record" && (q.Query == nil || q.Query.Ref.Kind != AssetLinkType)) || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") && !(v.Scope == "loop-item" && v.Owner == q.ItemOwner && q.ItemOwner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
+				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record" && (q.Query == nil || q.Query.Ref.Kind != AssetLinkType)) || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") && !(v.Scope == "loop-item" && v.Owner == q.ItemOwner && q.ItemOwner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal", "string-set"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
 					return fmt.Errorf("page query %s parameter escapes its input scope", id)
 				}
 			} else {
@@ -297,7 +305,14 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 	}
 	for _, term := range q.Conditions {
 		field, ok := fieldType(term.Field)
-		if !ok || !checkValue(field, term.Value) || term.Op == "like" && !slices.Contains([]string{"text", "choice"}, field.Type) || slices.Contains([]string{"boolean", "reference"}, field.Type) && term.Op != "=" && term.Op != "!=" {
+		compatible := checkValue(field, term.Value)
+		if term.AsDecimal {
+			compatible = valueType(term.Value) == "string" && slices.Contains([]string{"integer", "decimal"}, field.Type)
+		}
+		if term.Op == "in" || term.Op == "not in" {
+			compatible = valueType(term.Value) == "string-set" && slices.Contains([]string{"text", "choice"}, field.Type)
+		}
+		if !ok || !compatible || term.Op == "like" && !slices.Contains([]string{"text", "choice"}, field.Type) || slices.Contains([]string{"boolean", "reference"}, field.Type) && term.Op != "=" && term.Op != "!=" {
 			return fmt.Errorf("query condition field or value type is unavailable")
 		}
 	}

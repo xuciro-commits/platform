@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.29",
+  "uiProfile": "platform.page.v2.30",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -415,7 +415,8 @@
       "bindingKinds": [
         "object",
         "fields",
-        "filter-variable"
+        "filter-variable",
+        "collection-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -434,7 +435,14 @@
           }
         }
       },
-      "inputPorts": [],
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.30"
+        }
+      ],
       "outputPorts": [
         {
           "id": "filter",
@@ -1015,7 +1023,8 @@
     "platform.page.v2.26",
     "platform.page.v2.27",
     "platform.page.v2.28",
-    "platform.page.v2.29"
+    "platform.page.v2.29",
+    "platform.page.v2.30"
   ],
   "runtime": {
     "scope": "page",
@@ -1025,7 +1034,8 @@
       "record",
       "filter",
       "object-set",
-      "decimal"
+      "decimal",
+      "string-set"
     ],
     "maxVariables": 64,
     "maxStringBytes": 4096,
@@ -1159,7 +1169,8 @@
         "record",
         "object-set",
         "filter",
-        "decimal"
+        "decimal",
+        "string-set"
       ],
       "modes": [
         "state",
@@ -1206,7 +1217,9 @@
         "<=",
         ">",
         ">=",
-        "like"
+        "like",
+        "in",
+        "not in"
       ],
       "set": {
         "operations": [

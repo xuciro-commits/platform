@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  Button, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  FacetChoices,Button, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RecordKanban, RecordTimeline, RecordList, RecordPage, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -304,3 +304,5 @@ export function SizedLayouts() {
 export function ContextCommands() {
  const [value,setValue]=useState("");return <div><CommandMenu label={t("Region commands")} commands={[{id:"select",label:t("Select"),run:()=>setValue(t("Selected"))},{id:"disabled",label:t("Unavailable"),disabled:true,run:()=>{}}]}><Button>{t("Primary region")}</Button></CommandMenu><p role="status">{value}</p></div>;
 }
+
+export function FacetChoicesExample(){const [value,set]=useState<string[]>([]);return <FacetChoices title={t("Status")} options={[{value:"Open",count:12},{value:"Done",count:8}]} value={value} onChange={set} histogram/>;}

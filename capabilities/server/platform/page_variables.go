@@ -122,6 +122,19 @@ func pageLiteralType(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &value) != nil {
 		return ""
 	}
+	if m, ok := value.(map[string]any); ok && len(m) == 2 && m["kind"] == "string-set" {
+		if values, ok := m["values"].([]any); ok && len(values) <= 64 {
+			seen := map[string]bool{}
+			for _, item := range values {
+				v, ok := item.(string)
+				if !ok || len(v) > 4096 || seen[v] {
+					return ""
+				}
+				seen[v] = true
+			}
+			return "string-set"
+		}
+	}
 	switch v := value.(type) {
 	case bool:
 		return "boolean"
@@ -268,6 +281,9 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("resource source type mismatch")
 			}
 		case "constant", "state":
+			if v.Type == "string-set" && (!PageUIProfileSupports(d.UIProfile, "platform.page.v2.30") || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+				return fail("string-set state requires v2.30 page or overlay scope")
+			}
 			if v.Expression != nil || pageLiteralType(v.Initial) != v.Type {
 				return fail("initial value type mismatch")
 			}

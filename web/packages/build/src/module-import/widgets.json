@@ -66,9 +66,9 @@
       "sourceType": "FilterList",
       "sourceCategory": "Filtering",
       "owner": "@platform/app",
-      "status": "planned",
+      "status": "profile",
       "target": "filter",
-      "reason": "config-or-capability-profile-required"
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ObjectDropdown",
@@ -114,9 +114,9 @@
       "sourceType": "NumericInput",
       "sourceCategory": "Filtering",
       "owner": "@platform/ui",
-      "status": "planned",
+      "status": "profile",
       "target": "input",
-      "reason": "config-or-capability-profile-required"
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "UserSelect",

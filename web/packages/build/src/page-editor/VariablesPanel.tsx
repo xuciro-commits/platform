@@ -5,7 +5,7 @@ import { useState } from "react";
 import { layoutID, loopOwner, overlayOwner, variableAccessible } from "../page-layout";
 
 type Variables = NonNullable<Api.PageDocument["variables"]>;
-const initial = (type: string) => type === "decimal"?{kind:"decimal",value:"0"}:type === "boolean" ? false : "";
+const initial = (type: string) => type === "string-set"?{kind:"string-set",values:[]}:type === "decimal"?{kind:"decimal",value:"0"}:type === "boolean" ? false : "";
 const expression = (op: string): Api.PageExpression => {
   const contract = pageVariableContract.operators.find((item) => item.id === op)!;
   return { op, args: Array.from({ length: contract.minArgs }, () => ({ literal: initial(contract.input) })) };
@@ -67,9 +67,10 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
         }
       }}>{variable.mode === "input" && <option value="input">{t("Page input")}</option>}{!application && (Object.keys(shared).length > 0 || variable.mode === "shared") && <option value="shared">{t("Application binding")}</option>}<option value="state">{t("State")}</option><option value="constant">{t("Constant")}</option><option value="derived">{t("Derived")}</option><option value="property">{t("Record property")}</option><option value="aggregate">{t("Complete-set count")}</option>{application || variable.scope === "page" || variable.scope === "overlay" || variable.source?.kind === "item" ? <option value="resource">{t("Resource output")}</option> : null}</Select></label>
       <label className="grid gap-1 text-xs">{t("Value type")}<Select value={variable.type} disabled={variable.mode === "derived" || variable.mode === "resource" || variable.mode === "input" || variable.mode === "shared" || variable.mode === "property" || variable.mode === "aggregate"} onChange={(event) => patch({ type: event.target.value, initial: initial(event.target.value) })}>
-        <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="decimal">{t("Exact number")}</option>{(variable.mode === "resource" || variable.mode === "shared") && !["string","boolean","decimal"].includes(variable.type) && <option value={variable.type}>{t(variable.type)}</option>}</Select></label>
+        <option value="string">{t("Text")}</option><option value="boolean">{t("Boolean")}</option><option value="decimal">{t("Exact number")}</option>{!application&&["page","overlay"].includes(variable.scope)&&<option value="string-set">{t("Text selection set")}</option>}{(variable.mode === "resource" || variable.mode === "shared") && !["string","boolean","decimal"].includes(variable.type) && <option value={variable.type}>{t(variable.type)}</option>}</Select></label>
       {(variable.mode === "state" || variable.mode === "constant") && (targets.length ? <label className="grid gap-1 text-xs">{t("Initial tab")}<Select value={String(variable.initial)} onChange={(event) => patch({ initial: event.target.value })}>
         {[...new Set(targets)].map((child, i) => <option key={child} value={child}>{document.nodes[child]?.title || t("Tab {n}", { n: i + 1 })}</option>)}</Select></label>
+        : variable.type==="string-set"?<label className="grid gap-1 text-xs">{t("Initial selected values")}<Input value={(variable.initial as {values?:string[]})?.values?.join(",")??""} onChange={e=>patch({initial:{kind:"string-set",values:e.target.value?e.target.value.split(","):[]}})}/></label>
         : variable.type==="decimal"?<label className="grid gap-1 text-xs">{t("Initial value")}<Input inputMode="decimal" maxLength={pageVariableContract.decimal.maxBytes} value={typeof variable.initial==="object"&&variable.initial!==null?String((variable.initial as {value?:string}).value??""):""} onChange={(event)=>patch({initial:{kind:"decimal",value:event.target.value}})} onBlur={(event)=>{const value=parsePageDecimal(event.target.value);if(value)patch({initial:value})}}/></label>
         : variable.type === "boolean" ? <Checkbox checked={variable.initial === true} onChange={(value) => patch({ initial: value })}>{t("Initial value")}</Checkbox>
         : <label className="grid gap-1 text-xs">{t("Initial value")}<Input value={String(variable.initial ?? "")} onChange={(event) => patch({ initial: event.target.value })} /></label>)}
@@ -108,7 +109,7 @@ export function VariablesPanel({ document, sections, values, onChange, object, a
         <strong>{t("Current variable value")}</strong><span role="status">{t(result?.status === "pending" ? "Loading value" : result?.status === "value" ? "Value available" : result?.status === "error" ? "Value error" : "No value")}</span>
         {result?.status === "error" && <p role="alert">{t(result.code)}</p>}
         {current !== undefined && (typeof current === "object" ? current.kind==="decimal"?<p>{current.value}</p>:current.kind === "record" ? <PropertyList items={[[t("Object"), current.reference.object], [t("Record"), current.reference.id]]} />
-          : current.kind === "filter" ? <PropertyList items={Object.entries(current.fields).map(([field, value]) => [field, String(value)])} />
+          : current.kind === "string-set" ? <p>{current.values.join(", ")}</p> : current.kind === "filter" ? <PropertyList items={Object.entries(current.fields).map(([field, value]) => [field, String(value)])} />
           : <PropertyList items={[[t("Object"), current.window.object], [t("Records in window"), String(current.window.records.length)], [t("Total matching records"), String(current.window.total)], [t("Offset"), String(current.window.query.offset ?? 0)], [t("Window coverage"), t(current.window.complete ? "Complete for this read" : "Partial window")]]} />
           : <p className="break-all">{String(current)}</p>)}
       </div>

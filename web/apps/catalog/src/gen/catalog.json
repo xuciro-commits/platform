@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:9b53d8bd46c9d9fb",
+  "revision": "sha256:dc3fbb29d251fd02",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -810,7 +810,7 @@
         "button"
       ],
       "constraints": [
-        "The 92-type migration inventory grants no runtime eligibility. Six source widget types have bounded configuration profiles; unsupported settings block application.",
+        "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.",
         "The local example compiles synthetic source data without a host. Import applies only an undoable page draft; save, permissions and release validation stay with their original owners.",
         "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes."
       ]
@@ -1151,6 +1151,32 @@
       "dependencies": [
         "ui/field-types",
         "ui/button"
+      ]
+    },
+    {
+      "id": "ui/facet-choices",
+      "owner": "@platform/ui",
+      "name": "Facet choices",
+      "summary": "Choose several authorized options with complete source counts and an optional histogram.",
+      "layer": 2,
+      "source": "web/packages/ui/src/fields/FacetChoices.tsx",
+      "exports": [
+        "FacetChoices"
+      ],
+      "example": "FacetChoicesExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "filter",
+        "facets",
+        "selection"
+      ],
+      "constraints": [
+        "The caller owns authorized options, counts and typed selected values."
       ]
     },
     {
@@ -2080,6 +2106,7 @@
       "Checkbox": "复选框",
       "Checked": "已选中",
       "Choose an authorized object or property from the existing registry without writing internal identifiers.": "从现有注册表选择受权对象或属性，无需填写内部标识。",
+      "Choose several authorized options with complete source counts and an optional histogram.": "从授权选项中多选，显示完整来源计数及可选直方图。",
       "Closed": "关闭",
       "Collapsed": "收起",
       "Compare aggregate groups with totals and explicit drill-down.": "比较聚合分组，展示合计并提供明确的下钻。",
@@ -2107,6 +2134,7 @@
       "Entity form": "实体表单",
       "Error": "错误",
       "Expanded": "展开",
+      "Facet choices": "分面多选",
       "File picker": "文件选择器",
       "Flow layout and toolbar": "流式布局与工具栏",
       "Flow observation": "流程观测",
@@ -2212,7 +2240,8 @@
       "Tasks and inbox": "任务与收件箱",
       "Template identity and revision are recorded in the editable page description as informative provenance.": "模板身份与版本记入可编辑页面说明，仅作为来源提示。",
       "Text, select and multiline controls for explicit labelled values.": "用带明确标签的文字、选择和多行控件输入值。",
-      "The 92-type migration inventory grants no runtime eligibility. Six source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。六种源组件已有有限配置方案，未支持配置阻止应用。",
+      "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
+      "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
@@ -2287,6 +2316,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
@@ -2322,6 +2352,7 @@
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/semantic/Selector.tsx",
+      "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
       "web/packages/build/src/editor.tsx",
@@ -2337,6 +2368,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/AggregateSource.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/InlineActionInspector.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
@@ -2399,6 +2431,7 @@
       "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
@@ -2612,6 +2645,9 @@
     "ui/tasks": [
       "web/packages/app/src/sections.tsx",
       "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/facet-choices": [
+      "web/packages/app/src/widgets/Facets.tsx"
     ],
     "ui/record-kanban": [
       "web/packages/app/src/widgets/Kanban.tsx"

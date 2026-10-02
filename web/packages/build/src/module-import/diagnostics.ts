@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "native-number-syntax":"Numeric input uses plain decimal text; exponent and invalid nonempty values stop the query.",
+ "native-system-id":"The native table identity column and record heading display the system ID.",
+ "native-search-scope":"Search uses the host searchable fields and current member permissions.",
  "unreferenced-content-retained":"Unreferenced widgets and variables stay in the source report and are not applied.",
  "source-size":"The source exceeds the 1 MiB limit.",
  "module-shape":"The JSON is not a supported Workshop ModuleDef.",

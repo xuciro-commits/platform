@@ -1,4 +1,4 @@
-import {isDecimal,parseDecimal,decimalDraft,compareDecimal,decimalArithmetic,type ScalarValue} from "./decimal";
+import {isStringSet,isDecimal,parseDecimal,decimalDraft,compareDecimal,decimalArithmetic,type ScalarValue} from "./decimal";
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { QueryWindow, RecordReference } from "./Session";
 
@@ -11,7 +11,7 @@ export type ResourceValue = { kind: "record"; reference: RecordReference } | { k
 export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 const bytes = (value: string) => new TextEncoder().encode(value).length;
-const valueType = (value: unknown, contract: Contract) => isDecimal(value,contract.decimal.maxBytes)?"decimal":typeof value === "boolean" ? "boolean"
+const valueType = (value: unknown, contract: Contract) => isStringSet(value)?"string-set":isDecimal(value,contract.decimal.maxBytes)?"decimal":typeof value === "boolean" ? "boolean"
   : typeof value === "string" && bytes(value) <= contract.maxStringBytes ? "string" : "";
 
 /** Finite presentation graph. The supplied contract is the generated Go
@@ -31,6 +31,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (variable.scope === contract.overlay.scope && (!(contract.overlay.valueTypes as readonly string[]).includes(variable.type) || !(contract.overlay.modes as readonly string[]).includes(variable.mode))) fail(id, "Overlay variable needs a supported local value or resource");
     if (variable.scope === contract.application.scope && !(contract.application.valueTypes as readonly string[]).includes(variable.type)) fail(id,"Application variable needs a supported scalar or resource");
     if (variable.writable && variable.mode !== "shared") fail(id,"Only shared bindings declare writable");
+    if(variable.type==="string-set"&&(!["page","overlay"].includes(variable.scope)||!["state","constant"].includes(variable.mode)))fail(id,"Unsupported variable type or scope");
     if (variable.mode !== "resource" && variable.mode !== "property" && variable.mode !== "aggregate" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
     if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter"].includes(variable.type))||variable.mode==="property"))fail(id,"Only shared windows declare an object requirement");
     if(variable.source?.fields?.length&&!(variable.scope==="application"&&variable.mode==="resource"&&variable.type==="filter"))fail(id,"Only an application filter declares fields");

@@ -1,4 +1,5 @@
-import {isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
+import {Facets} from "./widgets/Facets";
+import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
 // A composed page (ADR-0035): sections laid out in order, each holding one
 // widget bound to what this tenant has. A table says which record is selected;
 // a detail and the actions read it. Every widget renders through the owner that
@@ -47,6 +48,7 @@ type Bound = {
   session?: PageSessionStore;
   window?: NonNullable<Parameters<typeof RecordList>[0]["window"]>;
  collection?:VariableResult; aggregateScope?:string;
+  facetValues?:Record<string,VariableResult>;onFacet?:(id:string,value:ScalarValue)=>void;
   onClick?: () => void; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
   sharedFilter?:Record<string,unknown>; narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
@@ -72,7 +74,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window }: Bound) {
+function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection }: Bound) {
   const { source, definitions } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -84,6 +86,7 @@ function TableAdapter({ page, section, onSelect, selected, master, narrowed, sha
     ? (query?.by ? info?.fields.find((f) => f.name === query.by) : relatedField(info?.fields, page, section))
     : undefined;
 
+  if(section.collectionVariable&&collection?.status==="error")return <Panel role="alert">{t(collection.code)}</Panel>;
   const status = section.collectionVariable ? !window ? "missing-window" : undefined
     : (section.relation || section.parentSelection) && !refField ? "invalid-reference" : refField && !master ? "missing-parent" : undefined;
   const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
@@ -165,12 +168,13 @@ function ChartWidget({ page, section, kpi, pivot, narrowed, sharedFilter, master
 
 /** The filter (16b): a value to narrow the object's records by, for each field
  *  the builder chose. What it sets is the page's second variable. */
-function FilterWidget({ page, section, narrowed, onNarrow }: Bound) {
+function FilterWidget({ page, section, narrowed, onNarrow,facetValues,onFacet,window,aggregateScope }: Bound) {
   const { source } = useHost();
   const prefix = useId();
   const type = objectOf(page, section);
   const info = source.entity(type);
   const set = narrowed[type] ?? {};
+  if(section.facets?.length||section.filterSearchVariable)return <Facets section={section} source={source} object={type} window={window} values={facetValues??{}} onChange={onFacet??(()=>{})} scope={aggregateScope??""}/>;
   return (
     <div role="search" aria-label={section.title || t("Filter")} className="flex flex-wrap items-end gap-3">
       {(section.fields ?? []).map((name) => {
@@ -514,12 +518,13 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
+        facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
         collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
-        numeric={initialVariables[valueVariable??""]?.type==="decimal"} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
+        numeric={initialVariables[valueVariable??""]?.type==="decimal"||!!valueVariable&&Object.values(page.document?.queries??{}).some(q=>q.conditions?.some(c=>c.asDecimal&&c.value.variable===valueVariable))} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
         onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
           const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
           if (event.navigate || event.return) { navigation.emit(event, { values, set: (id, value) => setContextState(id, value, context, overlay), isActive: () => (!overlay || session.overlayEpoch(overlay) === epoch) && (!context || context.session.hasLoopItem(context.owner, context.key) && context.session.querySignature(context.queryKey) === context.signature) }); return; }
-          if (typeof event.value === "string" || typeof event.value === "boolean" || isDecimal(event.value)) setContextState(event.target, event.value, context, overlay);
+          if (typeof event.value === "string" || typeof event.value === "boolean" || isDecimal(event.value)||isStringSet(event.value)) setContextState(event.target, event.value, context, overlay);
         } : undefined} />
     );
   };

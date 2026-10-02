@@ -1,13 +1,13 @@
 import type {Api} from "@platform/kernel";
 
-type Section = {id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
+type Section = {facets?:Api.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
 type Draft<S extends Section> = {document:Api.PageDocument;sections:S[];selections:Api.SelectionVariable[]};
 export type LayoutClipboard<S extends Section> = {draft:Draft<S>;root:string;object:string;overlay?:string};
 export type ClipboardIssue = "unsupported" | "scope" | "invalid" | "dependencies" | "budget" | "tab-binding" | "overlay-entry";
 type Result<T> = {value:T;issue?:never} | {issue:ClipboardIssue;value?:never};
 type Limits = {maxVariables:number;query:{maxPlans:number;maxTotalLimit:number};loop:{maxContainers:number;maxItems:number;maxTotalItems:number;maxDepth:number};aggregate:{maxVariables:number;maxExpandedReads:number};selectionWriters:readonly string[];selectionWidgets:readonly string[];references:Readonly<Record<string,readonly string[]>>};
 const nodeFields=["valueVariable","activeVariable","visibleWhen","enabledWhen"] as const;
-const sectionFields=["recordVariable","selectionVariable","collectionVariable","filterVariable"] as const;
+const sectionFields=["recordVariable","selectionVariable","collectionVariable","filterVariable","filterSearchVariable"] as const;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const layoutKinds=["rows","columns","tabs","flow","toolbar","loop"];
 function inMainPage(document:Api.PageDocument,id:string,wholeLoop=false):boolean {
@@ -63,6 +63,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  for(const [id,v] of Object.entries(original.variables??{}))if(ownedScope(v))addVariable(id);
  for(const [id,q] of Object.entries(original.queries??{}))if(loops.has(q.itemOwner??"")||overlay&&q.owner===clip.overlay)addQuery(id);
  if(overlay)addVariable(overlay.openVariable);
+ for(const section of sections)for(const facet of section.facets??[])addVariable(facet.variable);
  for(const section of sections)for(const key of sectionFields)if(section[key])addVariable(section[key]!);
  const locallyRead=new Set(variables);
  for(const event of events){if(event.target)addVariable(event.target);Object.values(event.navigate?.inputs??{}).flatMap(valueRefs).forEach(addVariable);Object.values(event.navigate?.results??{}).forEach(addVariable);}
@@ -84,6 +85,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  if(overlay){const open=original.variables?.[overlay.openVariable];if(!open||open.scope!=="page"||open.type!=="boolean"||open.mode!=="state"||open.initial!==false)return {issue:"invalid"};clonedVariables.add(overlay.openVariable);}
  const cloneState=(id:string)=>{const v=original.variables?.[id];if(!overlay&&v?.scope==="page"&&v.mode==="state"&&!externalPorts.has(id)&&!overlayOpen.has(id))clonedVariables.add(id);};
  for(const id of nodes){const v=original.nodes[id]?.valueVariable;if(v)cloneState(v);}
+ for(const section of sections){for(const facet of section.facets??[])cloneState(facet.variable);if(section.filterSearchVariable)cloneState(section.filterSearchVariable);}
  for(const id of tabSelectors.keys())cloneState(id);
  for(const event of events)for(const id of [event.target,...Object.values(event.navigate?.results??{})])if(locallyRead.has(id))cloneState(id);
  for(const id of variables){const v=original.variables![id]!;if(v.source?.section&&sectionIDs.has(v.source.section))clonedVariables.add(id);}
@@ -111,6 +113,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  for(const s of sections)if(limits.selectionWriters.includes(s.widget)&&!s.selectionVariable){const type=s.object||object,key=slot(type,s.selection);if(!selectionMap.has(key)){const name=newID("selection");selectionMap.set(key,name);addedSelections.push({name,object:{app:type.split(".")[0]!,kind:"object",name:type}});}}
  const rewritten=sections.map(source=>{const s=structuredClone(source);s.id=sectionMap.get(s.id!)!;
   for(const key of sectionFields)if(s[key])s[key]=variableMap.get(s[key]!)??s[key];
+  if(s.facets)s.facets=s.facets.map(f=>({...f,variable:variableMap.get(f.variable)??f.variable}));
   const own=selectionMap.get(slot(s.object||object,s.selection));if(own&&limits.selectionWidgets.includes(s.widget)&&!s.recordVariable&&!s.selectionVariable)s.selection=own;
   const parentType=s.parentSelection?clip.draft.selections.find(v=>v.name===s.parentSelection)?.object.name:object;
   const parent=parentType&&selectionMap.get(slot(parentType,s.parentSelection));if(parent&&(s.relation||s.parentSelection||s.widget==="table"&&(s.object||object)!==object&&(limits.references[s.object||object]??[]).includes(parentType)||Object.values(s.inputs??{}).some(b=>b.source==="subject")))s.parentSelection=parent;

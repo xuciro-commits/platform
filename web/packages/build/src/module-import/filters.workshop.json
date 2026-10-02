@@ -1,0 +1,394 @@
+{
+  "id": "source-filter-desk",
+  "name": "Source filter desk",
+  "description": "FilterList and ObjectSet definitions copied from the actual default Module; table and action adaptations must be explicit.",
+  "header": {
+    "variant": "horizontal",
+    "title": "Operations Command Center",
+    "items": [
+      {
+        "kind": "logo"
+      },
+      {
+        "kind": "title"
+      },
+      {
+        "kind": "tabs",
+        "pageIds": [
+          "pOperations",
+          "pOverview",
+          "pAnalytics",
+          "pMap",
+          "pWorkflow",
+          "pMaintenance",
+          "pTelemetry"
+        ]
+      },
+      {
+        "kind": "spacer"
+      },
+      {
+        "kind": "button",
+        "label": "Refresh",
+        "eventActions": [
+          {
+            "kind": "refreshData"
+          }
+        ]
+      },
+      {
+        "kind": "button",
+        "label": "Theme",
+        "eventActions": [
+          {
+            "kind": "toggleTheme"
+          }
+        ]
+      }
+    ]
+  },
+  "pages": [
+    {
+      "id": "filters",
+      "name": "Imported filter work",
+      "rootSectionId": "root"
+    }
+  ],
+  "sections": {
+    "root": {
+      "id": "root",
+      "name": "Filter work",
+      "layout": "rows",
+      "children": [
+        {
+          "kind": "widget",
+          "id": "wFilterList"
+        },
+        {
+          "kind": "widget",
+          "id": "wObjectTable1"
+        },
+        {
+          "kind": "widget",
+          "id": "wPropList1"
+        },
+        {
+          "kind": "widget",
+          "id": "wInlineAction"
+        }
+      ]
+    }
+  },
+  "widgets": {
+    "wFilterList": {
+      "id": "wFilterList",
+      "type": "FilterList",
+      "name": "Asset Filters",
+      "config": {
+        "objectSetVarId": "allAssets",
+        "outputFilterVarId": "filteredAssets",
+        "facets": [
+          {
+            "property": "status",
+            "label": "Status",
+            "type": "checkbox",
+            "varId": "statusFilter"
+          },
+          {
+            "property": "priority",
+            "label": "Priority",
+            "type": "histogram",
+            "varId": "priorityFilter"
+          },
+          {
+            "property": "owner",
+            "label": "Owner",
+            "type": "search",
+            "varId": "ownerFilter"
+          }
+        ],
+        "searchVarId": "searchText"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wObjectTable1": {
+      "id": "wObjectTable1",
+      "type": "ObjectTable",
+      "name": "Assets",
+      "config": {
+        "objectSetVarId": "filteredAssets",
+        "activeVarId": "selectedAsset",
+        "selectedVarId": "selectedAssets",
+        "columns": [
+          {
+            "key": "id",
+            "label": "ID",
+            "width": 90
+          },
+          {
+            "key": "name",
+            "label": "Name",
+            "width": 170
+          },
+          {
+            "key": "status",
+            "label": "Status",
+            "width": 100,
+            "formatter": "status"
+          },
+          {
+            "key": "priority",
+            "label": "Priority",
+            "width": 90,
+            "formatter": "priority"
+          },
+          {
+            "key": "owner",
+            "label": "Owner",
+            "width": 130
+          },
+          {
+            "key": "pressure",
+            "label": "Pressure (bar)",
+            "width": 110,
+            "formatter": "numeric"
+          },
+          {
+            "key": "temperature",
+            "label": "Temp (\u00b0C)",
+            "width": 90,
+            "formatter": "numeric"
+          },
+          {
+            "key": "availability",
+            "label": "Avail (%)",
+            "width": 90,
+            "formatter": "numeric"
+          },
+          {
+            "key": "openAlerts",
+            "label": "Alerts",
+            "width": 70,
+            "formatter": "numeric"
+          },
+          {
+            "key": "lastInspection",
+            "label": "Last inspection",
+            "width": 130,
+            "formatter": "date"
+          }
+        ],
+        "density": "compact",
+        "enableSelection": true,
+        "selectionMode": "multiple",
+        "enableInlineEdit": true,
+        "showToolbar": true,
+        "showSearch": true,
+        "titleTemplate": "Assets ({count})"
+      },
+      "events": [
+        {
+          "id": "ev1",
+          "trigger": "onSelect",
+          "actions": [
+            {
+              "kind": "setVariable",
+              "variableId": "showDetail",
+              "valueExpr": "true"
+            }
+          ]
+        }
+      ],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wPropList1": {
+      "id": "wPropList1",
+      "type": "PropertyList",
+      "name": "Properties",
+      "config": {
+        "objectVarId": "selectedAsset",
+        "columns": 2,
+        "hideNull": true,
+        "properties": [
+          "id",
+          "name",
+          "status",
+          "priority",
+          "owner",
+          "pressure",
+          "temperature",
+          "availability",
+          "model",
+          "installedAt",
+          "lastInspection",
+          "nextMaintenance"
+        ]
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    },
+    "wInlineAction": {
+      "id": "wInlineAction",
+      "type": "InlineAction",
+      "name": "Edit Asset",
+      "config": {
+        "actionId": "updateAssetStatus",
+        "objectVarId": "selectedAsset"
+      },
+      "events": [],
+      "mountBehavior": "normal",
+      "unmountBehavior": "normal"
+    }
+  },
+  "variables": [
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "allAssets",
+      "name": "allAssets",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "sourceObjectType": "Asset",
+      "description": "All assets from Ontology"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "statusFilter",
+      "name": "statusFilter",
+      "type": "array",
+      "definitionKind": "static",
+      "staticValue": [],
+      "description": "Selected asset statuses"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "priorityFilter",
+      "name": "priorityFilter",
+      "type": "array",
+      "definitionKind": "static",
+      "staticValue": []
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "ownerFilter",
+      "name": "ownerFilter",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "searchText",
+      "name": "searchText",
+      "type": "string",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "pressureMin",
+      "name": "pressureMin",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "pressureMax",
+      "name": "pressureMax",
+      "type": "numeric",
+      "definitionKind": "static",
+      "staticValue": ""
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "filteredAssets",
+      "name": "filteredAssets",
+      "type": "objectSet",
+      "definitionKind": "objectSetDefinition",
+      "description": "Objects(Asset).where(status, priority, owner, search, pressure range) \u2014 OSDK-style object set",
+      "objectSet": {
+        "objectType": "Asset",
+        "steps": [
+          {
+            "op": "where",
+            "clauses": [
+              {
+                "id": "f1",
+                "property": "status",
+                "op": "isOneOf",
+                "varId": "statusFilter"
+              },
+              {
+                "id": "f2",
+                "property": "priority",
+                "op": "isOneOf",
+                "varId": "priorityFilter"
+              },
+              {
+                "id": "f3",
+                "property": "owner",
+                "op": "contains",
+                "varId": "ownerFilter"
+              },
+              {
+                "id": "f4",
+                "property": "*",
+                "op": "fullTextSearch",
+                "varId": "searchText"
+              },
+              {
+                "id": "f5",
+                "property": "pressure",
+                "op": "isGreaterThanOrEqualTo",
+                "varId": "pressureMin"
+              },
+              {
+                "id": "f6",
+                "property": "pressure",
+                "op": "isLessThanOrEqualTo",
+                "varId": "pressureMax"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedAsset",
+      "name": "selectedAsset",
+      "type": "object",
+      "definitionKind": "widgetOutput",
+      "widgetId": "wObjectTable1",
+      "widgetOutputKey": "activeObject",
+      "description": "Currently inspected asset"
+    },
+    {
+      "recompute": "automatic",
+      "dependsOn": [],
+      "id": "selectedAssets",
+      "name": "selectedAssets",
+      "type": "array",
+      "definitionKind": "widgetOutput",
+      "widgetId": "wObjectTable1",
+      "widgetOutputKey": "selectedObjects"
+    }
+  ],
+  "overlays": [],
+  "unusedWidgetIds": [],
+  "flows": [],
+  "moduleInterface": []
+}

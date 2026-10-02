@@ -1,4 +1,4 @@
-import {isDecimal,type DecimalValue} from "./decimal";
+import {isStringSet,parseDecimal,isDecimal,type DecimalValue} from "./decimal";
 import type { Api, pageUIManifest } from "@platform/kernel";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
@@ -21,7 +21,7 @@ export const planKey = (id: string) => `plan/${id}`;
 type Contract = typeof pageUIManifest.runtime.query;
 export type QueryPlanResult = { status: "value"; object: string; query: RecordQuery; signature: string } | { status: "empty" | "pending" } | { status: "error"; code: string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
-type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|DecimalValue|ResourceValue};
+type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|DecimalValue|import("./decimal").StringSetValue|ResourceValue};
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 
 export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract): QueryPlanResult {
@@ -46,17 +46,18 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
     if (!!binding.variable === (binding.literal !== undefined)) return { status: "error", code: "Query value needs one variable or literal." };
     if (!binding.variable) {
       const value=binding.literal;
-      if (!isDecimal(value)&&!["string","boolean","number"].includes(typeof value) || typeof value === "number" && !Number.isFinite(value) || typeof value === "string" && new TextEncoder().encode(value).length>4096) return {status:"error",code:"Query value needs a bounded scalar literal."};
-      return {status:"value",value:value as string|boolean|number|DecimalValue};
+      if (!isStringSet(value)&&!isDecimal(value)&&!["string","boolean","number"].includes(typeof value) || typeof value === "number" && !Number.isFinite(value) || typeof value === "string" && new TextEncoder().encode(value).length>4096) return {status:"error",code:"Query value needs a bounded scalar literal."};
+      return {status:"value",value:value as string|boolean|number|DecimalValue|import("./decimal").StringSetValue};
     }
     const variable = variables[binding.variable];
     if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner||variable.scope==="loop-item"&&variable.owner===plan.itemOwner&&!!plan.itemOwner) || usesPlan(binding.variable)) return { status: "error", code: "Query parameter escapes its input scope." };
     return values[binding.variable] ?? { status: "empty" };
   };
-  const scalar = (value: QueryValueResult & { status: "value" }) => typeof value.value === "object" ? value.value.kind === "decimal"?value.value:value.value.kind === "record" ? value.value.reference.id : undefined : value.value;
+  const scalar = (value: QueryValueResult & { status: "value" }) => typeof value.value === "object" ? value.value.kind === "string-set"?value.value.values:value.value.kind === "decimal"?value.value:value.value.kind === "record" ? value.value.reference.id : undefined : value.value;
   const compatible = (name: string, value: QueryValueResult & { status: "value" }) => {
     const f = field(name), raw = value.value;
     if (!f || !validID.test(name)) return false;
+    if (isStringSet(raw))return ["text","choice"].includes(f.type);
     if (isDecimal(raw))return ["integer","decimal"].includes(f.type);
     if (typeof raw === "object") return raw.kind === "record" && f.type === "reference" && raw.reference.object === f.ref;
     return f.type === "boolean" ? typeof raw === "boolean" : ["integer", "decimal"].includes(f.type) ? typeof raw === "number" && Number.isFinite(raw)
@@ -93,9 +94,12 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
     limit = Math.min(limit, declaration.limit && declaration.limit > 0 ? declaration.limit : 200);
   } else if (plan.for) return failed("Query parent input requires a named query.");
   for (const condition of plan.conditions ?? []) {
-    const value = read(condition.value); if (value.status !== "value") return value;
+    let value = read(condition.value); if (value.status !== "value") return value;
     const f = field(condition.field);
-    if (!compatible(condition.field, value) || !(contract.operators as readonly string[]).includes(condition.op) || condition.op === "like" && !["text", "choice"].includes(f!.type) || ["boolean", "reference"].includes(f!.type) && !["=", "!="].includes(condition.op)) return failed("Query parameter type does not match its field.");
+    if(!f||!(contract.operators as readonly string[]).includes(condition.op)||["in","not in"].includes(condition.op)!==isStringSet(value.value)||condition.asDecimal&&(!condition.value.variable||variables[condition.value.variable]?.type!=="string"||typeof value.value!=="string"||!["integer","decimal"].includes(f.type))||!condition.asDecimal&&!compatible(condition.field,value)||condition.op==="like"&&!["text","choice"].includes(f.type)||["boolean","reference"].includes(f.type)&&!["=","!="].includes(condition.op))return failed("Query parameter type does not match its field.");
+    if(condition.optional&&(value.value===""||isStringSet(value.value)&&value.value.values.length===0))continue;
+    if(condition.asDecimal){if(typeof value.value!=="string")return failed("Query parameter type does not match its field.");const exact=parseDecimal(value.value);if(!exact)return failed("Invalid numeric value.");value={status:"value",value:exact};}
+    if ((["in","not in"].includes(condition.op)!==isStringSet(value.value)) || !compatible(condition.field, value) || !(contract.operators as readonly string[]).includes(condition.op) || condition.op === "like" && !["text", "choice"].includes(f!.type) || ["boolean", "reference"].includes(f!.type) && !["=", "!="].includes(condition.op)) return failed("Query parameter type does not match its field.");
     domain.push([condition.field, condition.op, scalar(value)]);
   }
   if (sort.some((name) => !field(name.replace(/^-/, "")))) return failed("Query sort field is unavailable.");

@@ -135,6 +135,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkFacets(section); err != nil {
+			return err
+		}
 		if err := d.checkWidgetPorts(section); err != nil {
 			return err
 		}
@@ -156,6 +159,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		for _, section := range sections {
 			for _, resource := range pageWidgets.Runtime.Resources {
 				if section.ID == variable.Source.Section && section.Widget == resource.Widget && variable.Source.Kind == resource.Kind {
+					if resource.Kind == "filter" && (len(section.Facets) > 0 || section.FilterSearchVariable != "") {
+						return fmt.Errorf("facet filter exposes explicit state rather than a legacy filter resource")
+					}
 					found = true
 				}
 			}
@@ -457,6 +463,18 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		}
 		if node.Kind == "widget" {
 			for _, s := range sections {
+				if s.ID == node.Section {
+					for _, facet := range s.Facets {
+						if _, ok := variables[facet.Variable]; !ok {
+							return false
+						}
+					}
+					if s.FilterSearchVariable != "" {
+						if _, ok := variables[s.FilterSearchVariable]; !ok {
+							return false
+						}
+					}
+				}
 				if s.ID == node.Section && (s.CollectionVariable != "" || s.RecordVariable != "" || s.SelectionVariable != "" || s.FilterVariable != "") {
 					if _, ok := variables[s.CollectionVariable]; s.CollectionVariable != "" && !ok {
 						return false

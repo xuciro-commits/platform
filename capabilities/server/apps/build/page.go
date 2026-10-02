@@ -45,18 +45,20 @@ type Page struct {
 
 // Section is one widget on a composed page, as someone lays it out.
 type Section struct {
-	ID                 string `json:"id,omitempty"`
-	ConfigVersion      int    `json:"configVersion,omitempty"`
-	Widget             string `json:"widget" field:"required" help:"What it shows; the shared page widget registry defines supported kinds"`
-	Title              string `json:"title,omitempty"`
-	Width              string `json:"width,omitempty" choices:"full,half"`
-	Object             string `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
-	Selection          string `json:"selection,omitempty"`
-	CollectionVariable string `json:"collectionVariable,omitempty"`
-	RecordVariable     string `json:"recordVariable,omitempty"`
-	SelectionVariable  string `json:"selectionVariable,omitempty"`
-	FilterVariable     string `json:"filterVariable,omitempty"`
-	ParentSelection    string `json:"parentSelection,omitempty"`
+	Facets               []platform.PageFacet `json:"facets,omitempty"`
+	FilterSearchVariable string               `json:"filterSearchVariable,omitempty"`
+	ID                   string               `json:"id,omitempty"`
+	ConfigVersion        int                  `json:"configVersion,omitempty"`
+	Widget               string               `json:"widget" field:"required" help:"What it shows; the shared page widget registry defines supported kinds"`
+	Title                string               `json:"title,omitempty"`
+	Width                string               `json:"width,omitempty" choices:"full,half"`
+	Object               string               `json:"object,omitempty" title:"Object" help:"Another object it shows; empty: the page's own"`
+	Selection            string               `json:"selection,omitempty"`
+	CollectionVariable   string               `json:"collectionVariable,omitempty"`
+	RecordVariable       string               `json:"recordVariable,omitempty"`
+	SelectionVariable    string               `json:"selectionVariable,omitempty"`
+	FilterVariable       string               `json:"filterVariable,omitempty"`
+	ParentSelection      string               `json:"parentSelection,omitempty"`
 	// Relation follows the typed parent selection, or the page's shared record.
 	Relation string `json:"relation,omitempty" title:"Through" help:"For another object's table, chart, metric or form: the relation to the selected parent record"`
 	// Query is a named query "<app>.<name>" the section lists (ADR-0040 21c).
@@ -139,7 +141,7 @@ func descriptor(p Page) platform.Page {
 	}
 	out.Layout, out.ListFields, out.DetailFields, out.Sections = "composed", nil, nil, []platform.Section{}
 	for _, s := range p.Sections {
-		section := platform.Section{ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
+		section := platform.Section{Facets: slices.Clone(s.Facets), FilterSearchVariable: s.FilterSearchVariable, ID: s.ID, ConfigVersion: s.ConfigVersion, Widget: s.Widget, Title: s.Title, Width: s.Width, Relation: s.Relation, Selection: s.Selection, RecordVariable: s.RecordVariable, SelectionVariable: s.SelectionVariable, FilterVariable: s.FilterVariable, CollectionVariable: s.CollectionVariable, ParentSelection: s.ParentSelection, Fields: slices.Clone(s.Fields),
 			Group: s.Group, Mark: s.Mark, ColumnGroup: s.ColumnGroup, TimeStart: s.TimeStart, TimeEnd: s.TimeEnd, TimeLabel: s.TimeLabel, TimeGroup: s.TimeGroup, CardLabel: s.CardLabel, Measure: s.Measure, Text: s.Text, Actions: []platform.AssetRef{}, Operation: s.Operation, Inputs: s.Inputs}
 		if s.Function != nil {
 			section.Function = &platform.AssetBinding{Ref: platform.AssetRef{App: ID, Kind: platform.AssetFunction, Name: s.Function.Name},
