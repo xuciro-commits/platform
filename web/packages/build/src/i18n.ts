@@ -2,6 +2,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Show table search": "显示表格搜索",
+ "Column presentation": "列展示",
+ "Column title {field}": "列标题 {field}",
+ "Column width {field}": "列宽 {field}",
+ "Column format {field}": "列格式 {field}",
+ "Use field title": "使用字段标题",
+ "Automatic width": "自动宽度",
+ "Use field format": "使用字段格式",
+ "numeric": "数值",
+ "badge": "标签",
+ "Table columns need supported field formats and bounded titles and widths.": "表格列需要支持的字段格式，以及限定范围的标题和宽度。",
+ "Badges use the platform field labels and declared state tones; text fields use a neutral badge.": "标签使用平台字段名称与声明的状态色调；文本字段使用中性色调。",
  "On record selection": "选择记录时",
  "Remove selection event": "移除选择事件",
  "Record selection set output": "记录选择集合输出",

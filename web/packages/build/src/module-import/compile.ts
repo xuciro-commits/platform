@@ -1,4 +1,4 @@
-import type {Api} from "@platform/kernel";
+import {pageUIManifest,type Api} from "@platform/kernel";
 import type {PageDraft,AuthoringSection} from "../page-editor/draft";
 import {workshopMapping,workshopMigrationCatalog} from "./catalog";
 
@@ -135,9 +135,18 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
    if(config.outputFilterVarId){const output=text(config.outputFilterVarId),definition=vars.get(output);if(definition?.definitionKind!=="objectSetDefinition")issue(`${path}/config/outputFilterVarId`,"query-profile");else variable(output,context,`${path}/config/outputFilterVarId`);}
   }
   if(w.type==="ObjectTable"){
-   safeKeys(config,["objectSetVarId","activeVarId","selectedVarId","columns","density","enableSelection","selectionMode","showToolbar","enableInlineEdit","titleTemplate"],`${path}/config`);
+   safeKeys(config,["objectSetVarId","activeVarId","selectedVarId","columns","density","enableSelection","selectionMode","showToolbar","showSearch","enableInlineEdit","titleTemplate"],`${path}/config`);
    const source=text(config.objectSetVarId);section.collectionVariable=variable(source,context,`${path}/config/objectSetVarId`);const external=queryObjects.get(source)||"",e=entity(external,`${path}/config/objectSetVarId`);section.object=e?.type===target.object?undefined:e?.type;
-   section.fields=arr(config.columns).map((c,n)=>{if(!obj(c)){issue(`${path}/config/columns/${n}`,"field-binding");return "";}safeKeys(c,["key","label","width","formatter"],`${path}/config/columns/${n}`);if(c.width!==undefined||c.label!==undefined)issue(`${path}/config/columns/${n}`,"native-presentation",false);if(c.formatter!==undefined&&c.formatter!=="none")issue(`${path}/config/columns/${n}/formatter`,"presentation-profile");return field(external,text(c.key),`${path}/config/columns/${n}/key`);}).filter(name=>{if(name==="id")issue(`${path}/config/columns`,"native-system-id",false);return name!=="id";});
+   const limits=pageUIManifest.runtime.tablePresentation,seenColumns=new Set<string>();
+   if(!Array.isArray(config.columns)||arr(config.columns).length>limits.maxColumns)issue(`${path}/config/columns`,"table-presentation-profile");
+   section.tableColumns=arr(config.columns).flatMap((c,n)=>{const p=`${path}/config/columns/${n}`;if(!obj(c)){issue(p,"field-binding");return [];}safeKeys(c,["key","label","width","formatter"],p);const name=field(external,text(c.key),`${p}/key`),type=e?.fields.find(f=>f.name===name)?.type,format=c.formatter===undefined?undefined:({none:"text",numeric:"numeric",date:"date",status:"badge",priority:"badge"} as Record<string,string>)[text(c.formatter)],definition=limits.formatters.find(f=>f.id===format);
+    if(seenColumns.has(name))issue(p,"table-presentation-profile");seenColumns.add(name);
+    if(c.label!==undefined&&(typeof c.label!=="string"||new TextEncoder().encode(c.label).length>limits.maxTitleBytes)||c.width!==undefined&&(typeof c.width!=="number"||!Number.isInteger(c.width)||c.width<limits.minWidth||c.width>limits.maxWidth)||c.formatter!==undefined&&(!format||name==="id"&&format!=="text"||name!=="id"&&!(definition?.fieldTypes as readonly string[]|undefined)?.includes(type??"")))issue(p,"table-presentation-profile");
+    if(format==="badge")issue(`${p}/formatter`,"native-badge-tones",false);
+    return [{field:name,title:typeof c.label==="string"?c.label:undefined,width:typeof c.width==="number"?c.width:undefined,formatter:format}];});
+   section.fields=section.tableColumns.map(c=>c.field).filter(name=>{if(name==="id")issue(`${path}/config/columns`,"native-system-id",false);return name!=="id";});
+   if(config.showSearch!==undefined){if(typeof config.showSearch!=="boolean")issue(`${path}/config/showSearch`,"table-presentation-profile");else section.showSearch=config.showSearch;}
+   if(Number(target.profile.split(".").at(-1))<Number(limits.requiredUIProfile.split(".").at(-1)))issue(`${path}/config/columns`,"table-presentation-profile");
    if(config.selectionMode!==undefined&&!["single","multiple"].includes(text(config.selectionMode))||config.enableSelection===false)issue(`${path}/config`,"table-interaction-profile");
    if(config.selectionMode==="multiple"&&config.selectedVarId){const source=text(config.selectedVarId),definition=vars.get(source);section.selectionSetVariable=variable(source,context,`${path}/config/selectedVarId`);if(definition?.type!=="array"||definition.definitionKind!=="widgetOutput"||definition.widgetId!==sourceID||definition.widgetOutputKey!=="selectedObjects")issue(`${path}/config/selectedVarId`,"selection-producer");}else if(config.selectionMode==="multiple"||config.selectedVarId)issue(`${path}/config/selectedVarId`,"selection-profile");
    if(config.enableInlineEdit===true){const edit=bindings.edits?.[sourceID],action=target.actions.find(a=>a.schema===edit?.action&&a.schema===`${e?.type}.edit`&&a.target===e?.type&&!a.new&&!a.needsApproval&&!a.payload?.some(f=>f.required));if(!edit||!action||!edit.fields.length||edit.fields.length>16||new Set(edit.fields).size!==edit.fields.length||edit.fields.some(name=>!section.fields?.includes(name)||!action.payload?.some(f=>f.name===name)))issue(`${path}/config/enableInlineEdit`,"edit-binding");else section.inlineEdit={action:action.schema,fields:[...edit.fields]};}

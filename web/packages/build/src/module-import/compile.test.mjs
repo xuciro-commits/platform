@@ -1,12 +1,12 @@
 import {registerHooks} from "node:module";
-registerHooks({resolve(s,c,next){try{return next(s,c)}catch(e){if(s.startsWith("./")||s.startsWith("../"))return next(`${s}.ts`,c);throw e;}}});
 import assert from "node:assert/strict";
 import test from "node:test";
 import {readFileSync} from "node:fs";
 import {createHash} from "node:crypto";
+const nativeRegistry=JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))),profile=nativeRegistry.uiProfile;
+registerHooks({resolve(s,c,next){if(s==="@platform/kernel")return {url:"data:text/javascript,"+encodeURIComponent(`export const pageUIManifest=${JSON.stringify(nativeRegistry)};`),shortCircuit:true};try{return next(s,c)}catch(e){if(s.startsWith("./")||s.startsWith("../"))return next(`${s}.ts`,c);throw e;}}});
 const {compileWorkshopModule,parseWorkshopModule}=await import("./compile.ts");
 const {workshopMigrationCatalog}=await import("./catalog.ts");
-const nativeRegistry=JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))),profile=nativeRegistry.uiProfile;
 const bindings={objects:{Asset:"sample.note"},fields:{Asset:{id:"id",name:"note"}},actions:{finishAsset:"sample.note.close"},queries:{}};
 const target={object:"sample.note",profile,entities:[{app:"sample",type:"sample.note",fields:[{name:"note",type:"text"}]}],actions:[{schema:"sample.note.close",target:"sample.note"}]};
 test("multi-selection imports distinct active and selectedObjects producers as typed local resources",()=>{
@@ -21,6 +21,12 @@ test("table editing requires explicit original edit and displayed payload fields
  assert.equal(compileWorkshopModule(source,"page",mapped,{...editing,actions:[{...action,needsApproval:true}]}).draft,undefined);
 });
 const sourceModule=()=>JSON.parse(readFileSync(new URL("./sample.workshop.json",import.meta.url),"utf8"));
+test("table display declarations preserve source titles, identity width, typed formats and search while invalid formats block import",()=>{
+ const m=sourceModule();m.widgets.table.config.showSearch=false;m.widgets.table.config.columns=[{key:"id",label:"Asset ID",width:90},{key:"name",label:"Asset name",width:170,formatter:"none"},{key:"qty",label:"Quantity",width:110,formatter:"numeric"},{key:"status",formatter:"status"},{key:"date",formatter:"date"}];const mapped={...bindings,fields:{Asset:{id:"id",name:"note",qty:"qty",status:"status",date:"date"}}},typed={...target,entities:[{...target.entities[0],fields:[...target.entities[0].fields,{name:"qty",type:"decimal"},{name:"status",type:"choice"},{name:"date",type:"date"}]}]};
+ const result=compileWorkshopModule(JSON.stringify(m),"page",mapped,typed);assert.ok(result.draft,JSON.stringify(result.diagnostics));const table=result.draft.sections.find(s=>s.widget==="table");assert.deepEqual(table.fields,["note","qty","status","date"]);assert.deepEqual(table.tableColumns[0],{field:"id",title:"Asset ID",width:90,formatter:undefined});assert.equal(table.tableColumns[2].formatter,"numeric");assert.equal(table.tableColumns[3].formatter,"badge");assert.equal(table.showSearch,false);
+ for(const mutate of [m=>m.widgets.table.config.showSearch="false",m=>m.widgets.table.config.columns[0].width=0,m=>m.widgets.table.config.columns[0].width=1201,m=>m.widgets.table.config.columns[0].label="x".repeat(257),m=>m.widgets.table.config.columns[1].formatter="numeric",m=>m.widgets.table.config.columns[1].formatter="script",m=>m.widgets.table.config.columns.push(m.widgets.table.config.columns[1])]){const copy=structuredClone(m);mutate(copy);assert.equal(compileWorkshopModule(JSON.stringify(copy),"page",mapped,typed).draft,undefined);}
+ assert.equal(compileWorkshopModule(JSON.stringify(m),"page",mapped,{...typed,profile:"platform.page.v2.33"}).draft,undefined);
+});
 test("default onSelect compiles fixed local state after independent active and multi outputs while expressions remain refused",()=>{
  const m=sourceModule();m.variables.push({id:"showDetail",name:"Show detail",type:"boolean",definitionKind:"static",staticValue:false});m.sections.side.visibleVariableId="showDetail";m.widgets.table.events=[{id:"ev1",trigger:"onSelect",actions:[{kind:"setVariable",variableId:"showDetail",valueExpr:"true"}]}];
  const result=compileWorkshopModule(JSON.stringify(m),"page",bindings,target);assert.ok(result.draft,JSON.stringify(result.diagnostics));const event=result.draft.document.events[0];assert.equal(event.event,"select");assert.equal(event.source,result.ids.widgets.table);assert.equal(event.target,result.ids.variables.showDetail);assert.equal(event.value,true);assert.equal(result.draft.document.nodes[result.ids.nodes.side].visibleWhen,event.target);

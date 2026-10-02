@@ -298,6 +298,14 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 		}
 
+		if len(s.TableColumns) > 0 || s.ShowSearch != nil {
+			if p.Document == nil {
+				return fmt.Errorf("table presentation requires a document")
+			}
+			if err := s.CheckTablePresentation(info); err != nil {
+				return err
+			}
+		}
 		if s.InlineEdit != nil {
 			if p.Document == nil {
 				return fmt.Errorf("table editing requires a document")

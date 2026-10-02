@@ -1036,6 +1036,13 @@ export type PageResourceSource = {
   node?: string;
 };
 
+export type PageTableColumn = {
+  field: string;
+  title?: string;
+  width?: number;
+  formatter?: string;
+};
+
 export type PageUnusedWidget = {
   node: string;
   parent: string;
@@ -1338,6 +1345,8 @@ export type SavedView = {
 };
 
 export type Section = {
+  tableColumns?: PageTableColumn[];
+  showSearch?: boolean;
   selectionSetVariable?: string;
   inlineEdit?: PageInlineEdit;
   facets?: PageFacet[];
@@ -1658,7 +1667,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.33",
+  "uiProfile": "platform.page.v2.34",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2703,7 +2712,8 @@ export const pageUIManifest = {
     "platform.page.v2.30",
     "platform.page.v2.31",
     "platform.page.v2.32",
-    "platform.page.v2.33"
+    "platform.page.v2.33",
+    "platform.page.v2.34"
   ],
   "runtime": {
     "scope": "page",
@@ -2945,6 +2955,50 @@ export const pageUIManifest = {
     },
     "recordSelection": {
       "maxRecords": 64
+    },
+    "tablePresentation": {
+      "requiredUIProfile": "platform.page.v2.34",
+      "maxColumns": 64,
+      "maxTitleBytes": 256,
+      "minWidth": 40,
+      "maxWidth": 1200,
+      "formatters": [
+        {
+          "id": "text",
+          "fieldTypes": [
+            "text",
+            "longtext",
+            "integer",
+            "decimal",
+            "boolean",
+            "date",
+            "datetime",
+            "choice",
+            "reference"
+          ]
+        },
+        {
+          "id": "numeric",
+          "fieldTypes": [
+            "integer",
+            "decimal"
+          ]
+        },
+        {
+          "id": "date",
+          "fieldTypes": [
+            "date",
+            "datetime"
+          ]
+        },
+        {
+          "id": "badge",
+          "fieldTypes": [
+            "text",
+            "choice"
+          ]
+        }
+      ]
     }
   },
   "layout": {

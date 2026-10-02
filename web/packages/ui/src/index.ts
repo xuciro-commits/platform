@@ -48,3 +48,4 @@ export {CommandMenu,type ContextCommand} from "./components/CommandMenu";
 export {FacetChoices} from "./fields/FacetChoices";
 
 export type {RecordEditPort,RecordSelectionPort} from "./records/EditableRecordGrid";
+export type {RecordColumnPresentation} from "./records/ColumnPresentation";

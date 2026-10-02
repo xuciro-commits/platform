@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:b235f1a823f4020b",
+  "revision": "sha256:10d4d7c0dc4d934c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1743,6 +1743,7 @@
       ],
       "constraints": [
         "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution.",
+        "RecordColumnPresentation configures visible column titles, widths and typed formats without replacing field metadata or permissions. Hiding search retains the caller query.",
         "RecordSelectionPort controls bounded selection in the current window; the caller confirms record permissions and owns pending, failure and cleanup. Window selection is not a complete matching set."
       ],
       "dependencies": [
@@ -2212,6 +2213,7 @@
       "Record list and detail": "记录列表与详情",
       "Record lookup": "记录选择器",
       "Record summary": "记录摘要",
+      "RecordColumnPresentation configures visible column titles, widths and typed formats without replacing field metadata or permissions. Hiding search retains the caller query.": "RecordColumnPresentation 配置可见列的标题、宽度及类型化格式，不替换字段元数据或权限。隐藏搜索保留调用方查询。",
       "RecordSelectionPort controls bounded selection in the current window; the caller confirms record permissions and owns pending, failure and cleanup. Window selection is not a complete matching set.": "RecordSelectionPort 控制当前窗口的有界选择，由调用方确认记录权限并管理在途、失败及清理。窗口选择不代表完整匹配集合。",
       "Reference links need a Workspace; attachment upload needs an explicit caller implementation.": "引用链接需要 Workspace；附件上传需要调用方明确实现。",
       "Render a visualization spec using inline values or a scoped aggregate source.": "使用内联值或限定范围的聚合数据源呈现可视化规格。",
@@ -2896,6 +2898,7 @@
         "Option",
         "Options",
         "RecordChange",
+        "RecordColumnPresentation",
         "RecordEditPort",
         "RecordPageData",
         "RecordQuery",

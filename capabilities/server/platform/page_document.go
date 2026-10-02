@@ -135,6 +135,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkTablePresentation(section); err != nil {
+			return err
+		}
 		if err := d.checkTableEdit(section); err != nil {
 			return err
 		}

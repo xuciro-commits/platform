@@ -4,7 +4,7 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, Search } from "lucide-react";
-import { useCallback, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback,useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import type { FieldType } from "../fields/types";
 import { Input } from "../primitives/input";
@@ -97,6 +97,8 @@ export function DataTable<T>({
   });
   const rows = table.getRowModel().rows;
   const leaf = table.getVisibleLeafColumns();
+  const authoredWidths=JSON.stringify(leaf.map(c=>[c.id,c.columnDef.meta?.width,c.columnDef.meta?.field?.width]));
+  useEffect(()=>setSizing({}),[authoredWidths]);
   const virtualizer = useVirtualizer({
     count: rows.length, estimateSize: () => rh, overscan: 12,
     getScrollElement: () => scroller.current, getItemKey: (i) => rows[i]?.id ?? i,

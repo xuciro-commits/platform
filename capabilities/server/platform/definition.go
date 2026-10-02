@@ -104,10 +104,12 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
-	SelectionSetVariable string          `json:"selectionSetVariable,omitempty"`
-	InlineEdit           *PageInlineEdit `json:"inlineEdit,omitempty"`
-	Facets               []PageFacet     `json:"facets,omitempty"`
-	FilterSearchVariable string          `json:"filterSearchVariable,omitempty"`
+	TableColumns         []PageTableColumn `json:"tableColumns,omitempty"`
+	ShowSearch           *bool             `json:"showSearch,omitempty"`
+	SelectionSetVariable string            `json:"selectionSetVariable,omitempty"`
+	InlineEdit           *PageInlineEdit   `json:"inlineEdit,omitempty"`
+	Facets               []PageFacet       `json:"facets,omitempty"`
+	FilterSearchVariable string            `json:"filterSearchVariable,omitempty"`
 	// ID is required when Document references this section; older pages omit it.
 	ID            string `json:"id,omitempty"`
 	ConfigVersion int    `json:"configVersion,omitempty"`

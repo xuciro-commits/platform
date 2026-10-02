@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import {EditableRecordGrid,type RecordEditPort,type RecordSelectionPort} from "./EditableRecordGrid";
+import {presentRecordColumns,type RecordColumnPresentation} from "./ColumnPresentation";
 import { DataTable } from "../components/DataTable";
 import { PropertyList } from "../components/EntityCard";
 import { Tag } from "../components/StatusTag";
@@ -221,7 +222,8 @@ export type ListState = {
   group?: string; columns?: string; measure?: string; mark?: Mark;
 };
 
-export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet }: {
+export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dvh - 230px)", pageSize = 100, domain: fixed, initial = {}, onSave, fields, window,inlineEdit,selectionSet,columnPresentation,showSearch=true }: {
+  columnPresentation?:RecordColumnPresentation[];showSearch?:boolean;
   selectionSet?:RecordSelectionPort;
   inlineEdit?:RecordEditPort;
   source: RecordSource; type: string; onOpen?: (r: EntityRecord) => void; toolbar?: ReactNode; height?: number | string; pageSize?: number;
@@ -275,8 +277,8 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
     return () => { current = false; clearTimeout(handle); };
   }, [source, source.scope, source.revision, type, info, search, sort, offset, archived, pageSize, domain, view, windowKey]);
   if (!info || !entity) return <p className="text-sm text-muted">{t("Unknown entity type")} {type}.</p>;
-  const columnsOf = [{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
-    ...columnsFor(entity, listed(entity).filter((name) => !fields || fields.includes(name))).map((c) => ({ ...c, enableSorting: false }))];
+  const columnsOf = presentRecordColumns([{ id: "id", header: "ID", accessorKey: "id", meta: { width: 130 }, cell: (c: any) => <span className="font-mono text-xs">{c.getValue()}</span> },
+    ...columnsFor(entity,[...new Set(fields??listed(entity))].filter(name=>listed(entity).includes(name))).map((c) => ({ ...c, enableSorting: false }))],entity,info,columnPresentation);
   const total = page?.total ?? 0;
   const aggregate = window ? undefined : source.aggregate;
   const query = { domain, search, archived };
@@ -290,8 +292,8 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   return (
     <div className="grid min-w-0 grid-cols-1 gap-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Input aria-label={t("Search")} placeholder={t("Search {things}", { things: info.plural.toLowerCase() })} value={search} disabled={window?.searchLocked} className="w-56"
-          onChange={(e) => { if(window)window.onChange({search:e.target.value,offset:0});else {setSearch(e.target.value);setOffset(0);} }} />
+        {showSearch&&<Input aria-label={t("Search")} placeholder={t("Search {things}", { things: info.plural.toLowerCase() })} value={search} disabled={window?.searchLocked} className="w-56"
+          onChange={(e) => { if(window)window.onChange({search:e.target.value,offset:0});else {setSearch(e.target.value);setOffset(0);} }} />}
         {view === "list" ? (
           <Select aria-label={t("Sort")} value={sort} disabled={window?.sortLocked} className="w-48" onChange={(e) => { if(window)window.onChange({sort:[e.target.value],offset:0});else {setSort(e.target.value);setOffset(0);} }}>
             {[["-changed", t("Recently changed")], ["id", t("ID")], ...info.fields.filter((f) => f.type !== "references" && f.type !== "tags").flatMap((f) =>

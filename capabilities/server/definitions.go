@@ -482,6 +482,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						field, visible := shown.Field(name)
 						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))
 					})
+					section.TableColumns = slices.DeleteFunc(slices.Clone(section.TableColumns), func(c platform.PageTableColumn) bool {
+						return c.Field != "id" && !slices.Contains(section.Fields, c.Field)
+					})
 					if len(section.Facets) > 0 && slices.ContainsFunc(section.Facets, func(f platform.PageFacet) bool { _, ok := shown.Field(f.Field); return !ok }) {
 						continue
 					}

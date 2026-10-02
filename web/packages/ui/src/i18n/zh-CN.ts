@@ -1,5 +1,6 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "RecordColumnPresentation configures visible column titles, widths and typed formats without replacing field metadata or permissions. Hiding search retains the caller query.": "RecordColumnPresentation 配置可见列的标题、宽度及类型化格式，不替换字段元数据或权限。隐藏搜索保留调用方查询。",
  "RecordSelectionPort controls bounded selection in the current window; the caller confirms record permissions and owns pending, failure and cleanup. Window selection is not a complete matching set.": "RecordSelectionPort 控制当前窗口的有界选择，由调用方确认记录权限并管理在途、失败及清理。窗口选择不代表完整匹配集合。",
  "Select this window": "选择当前窗口",
  "Select {record}": "选择记录 {record}",

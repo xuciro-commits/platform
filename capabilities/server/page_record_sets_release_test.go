@@ -38,6 +38,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	doc.Variables["shown"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "state", Initial: platform.Raw(false)}
 	doc.Events = []platform.PageEventBinding{{Source: "table", Event: "select", Target: "shown", Value: platform.Raw(true)}}
 	sections := []build.Section{{ID: "table", Widget: "table", ConfigVersion: 1, Fields: []string{"name", "secret"}, SelectionSetVariable: "picked"}}
+	search := false
+	sections[0].ShowSearch = &search
+	sections[0].TableColumns = []platform.PageTableColumn{{Field: "name", Title: "Frozen name", Width: 170, Formatter: "text"}, {Field: "secret", Title: "Private column", Width: 110}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -47,6 +50,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	sections[0].SelectionSetVariable = ""
+	sections[0].TableColumns = nil
+	sections[0].ShowSearch = nil
 	doc.Events = nil
 	submit(build.PageType, "P", "edit", map[string]any{"sections": sections, "document": doc})
 	if _, err = tn.ActivateRelease(builder, preview.CandidateID, "activate", at); err != nil {
@@ -59,6 +64,12 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					if d.Page.Sections[0].ShowSearch == nil || *d.Page.Sections[0].ShowSearch || d.Page.Sections[0].TableColumns[0].Title != "Frozen name" {
+						t.Fatal("frozen table presentation changed")
+					}
+					if member.ID == reader.ID && len(d.Page.Sections[0].TableColumns) != 1 {
+						t.Fatal("hidden column presentation escaped member projection")
+					}
 					if len(d.Page.Document.Events) != 1 || d.Page.Document.Events[0].Event != "select" || d.Page.Document.Events[0].Target != "shown" {
 						t.Fatal("frozen selection event changed")
 					}

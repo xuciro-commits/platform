@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "table-presentation-profile":"Table columns need supported field formats and bounded titles and widths.",
+ "native-badge-tones":"Badges use the platform field labels and declared state tones; text fields use a neutral badge.",
  "edit-binding":"Choose the original table edit action and its editable displayed fields.",
  "native-number-syntax":"Numeric input uses plain decimal text; exponent and invalid nonempty values stop the query.",
  "native-system-id":"The native table identity column and record heading display the system ID.",
