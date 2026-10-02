@@ -10,7 +10,7 @@ const vectors = JSON.parse(readFileSync(new URL("variables.vectors.json", root))
 for (const vector of vectors) test(vector.name, () => {
   assert.equal(compileVariables(vector.variables, contract).issues.length === 0, vector.valid);
   if (!vector.valid) return;
-  const values = (state) => Object.fromEntries(Object.entries(evaluateVariables(vector.variables, state, contract, vector.resources, vector.owner, vector.overlay)).map(([id, result]) => {
+  const values = (state) => Object.fromEntries(Object.entries(evaluateVariables(vector.variables, state, contract, vector.resources, vector.owner, vector.overlay,(_reference,field)=>({status:"value",value:vector.properties?.[field]}))).map(([id, result]) => {
     assert.equal(result.status, "value"); return [id, result.value];
   }));
   assert.deepEqual(values({}), vector.values);
@@ -46,3 +46,5 @@ test("unfinished numeric drafts retain text and stop dependent evaluation while 
  const invalid=evaluateVariables(vars,{a:{kind:"decimal",value:"-0."}},contract);assert.equal(invalid.a.status,"error");assert.equal(invalid.a.draft,"-0.");assert.equal(invalid.sum.status,"error");
  const valid=evaluateVariables(vars,{a:{kind:"decimal",value:"0.100"}},contract);assert.equal(valid.a.draft,"0.100");assert.deepEqual(valid.sum.value,{kind:"decimal",value:"0.3"});
 });
+
+test("property evaluation follows source state and never reads a value from an obsolete reference",()=>{const v=vectors.find(v=>v.name==="typed record property graph");let reads=0;const lookup=()=>{reads++;return {status:"value",value:true}};for(const status of ["empty","pending","error"]){const result=evaluateVariables(v.variables,{},contract,{record:{status,code:"Denied"}},undefined,undefined,lookup);assert.equal(result.active.status,status);}assert.equal(reads,0);});

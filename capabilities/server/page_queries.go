@@ -13,6 +13,12 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		return nil
 	}
 	for _, v := range p.Document.Variables {
+		if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
+			object, ok := t.entity(v.Source.Object.Name)
+			if !ok || p.CheckPropertySchema(v, object) != nil {
+				return fmt.Errorf("property source schema is unavailable")
+			}
+		}
 		if (v.Mode == "shared" || v.Scope == "application" && (v.Type == "record" || v.Type == "filter") && v.Mode == "resource") && v.Source != nil && v.Source.Object != nil {
 			info, ok := t.entity(v.Source.Object.Name)
 			if v.Type == "filter" && v.Mode == "resource" && platform.CheckFilterSchema(*v.Source, info) != nil {

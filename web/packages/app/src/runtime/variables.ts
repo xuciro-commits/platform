@@ -6,6 +6,7 @@ type Contract = typeof pageUIManifest.runtime;
 type Variables = Record<string, Api.PageVariable>;
 type Scalar = ScalarValue;
 export type VariableIssue = { variable: string; code: string };
+export type PropertyReader=(reference:RecordReference,field:string,type:string)=>VariableResult;
 export type ResourceValue = { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
 export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
@@ -30,10 +31,14 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (variable.scope === contract.overlay.scope && (!(contract.overlay.valueTypes as readonly string[]).includes(variable.type) || !(contract.overlay.modes as readonly string[]).includes(variable.mode))) fail(id, "Overlay variable needs a supported local value or resource");
     if (variable.scope === contract.application.scope && !(contract.application.valueTypes as readonly string[]).includes(variable.type)) fail(id,"Application variable needs a supported scalar or resource");
     if (variable.writable && variable.mode !== "shared") fail(id,"Only shared bindings declare writable");
-    if (variable.mode !== "resource" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
-    if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter"].includes(variable.type))))fail(id,"Only shared windows declare an object requirement");
+    if (variable.mode !== "resource" && variable.mode !== "property" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
+    if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter"].includes(variable.type))||variable.mode==="property"))fail(id,"Only shared windows declare an object requirement");
     if(variable.source?.fields?.length&&!(variable.scope==="application"&&variable.mode==="resource"&&variable.type==="filter"))fail(id,"Only an application filter declares fields");
-    if (variable.mode === "shared") {
+    if(variable.source?.field&&variable.mode!=="property")fail(id,"Only a property source declares a field");
+    if(variable.mode==="property") {
+      const source=variable.source,parent=variables[source?.variable??""];if(!source||source.kind!=="property"||!validID.test(source.variable??"")||!validID.test(source.field??"")||!source.object||source.object.kind!=="object"||!source.object.app||!source.object.name||source.section||source.node||source.query||source.fields?.length||variable.expression||variable.initial!==undefined||!["string","boolean","decimal"].includes(variable.type))fail(id,"Property needs a typed record and field source");
+      if(parent?.scope==="loop-item"&&(variable.scope!=="loop-item"||parent.owner!==variable.owner)||parent?.scope==="overlay"&&(variable.scope!=="overlay"||parent.owner!==variable.owner))fail(id,"Property source escapes its scope");if(visit(source?.variable??"")!=="record")fail(id,"Property source must be a record");
+    } else if (variable.mode === "shared") {
       if(["record","filter"].includes(variable.type)&&(!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name))fail(id,"Shared record needs an object requirement");
       if(variable.type==="object-set"&&(variable.writable||!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name))fail(id,"Shared window needs a read-only object requirement");
       if (variable.scope !== "application" || !variable.source || variable.source.kind !== "application" || !validID.test(variable.source.variable ?? "") || variable.source.section || variable.source.node || variable.source.query || variable.initial !== undefined || variable.expression) fail(id,"Shared binding needs only an application variable source");
@@ -80,12 +85,13 @@ const operators: Record<Contract["operators"][number]["id"], (values: Scalar[]) 
   "decimal-less":([a,b])=>compareDecimal(a as import("./decimal").DecimalValue,b as import("./decimal").DecimalValue)<0,
 };
 
-export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string, overlay?: string): Record<string, VariableResult> {
+export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string, overlay?: string,property?:PropertyReader): Record<string, VariableResult> {
   const compiled = compileVariables(variables, contract), result: Record<string, VariableResult> = {};
   if (compiled.issues.length) return Object.fromEntries(Object.keys(variables).map((id) => [id, { status: "error", code: "Invalid variable graph" }]));
   for (const id of compiled.order) {
     const variable = variables[id]!;
     if (variable.scope === contract.loop.scope && variable.owner !== owner || variable.scope === contract.overlay.scope && variable.owner !== overlay) { result[id] = { status: "empty" }; continue; }
+    if(variable.mode==="property") {const parent=result[variable.source!.variable!];if(!parent||parent.status!=="value"){result[id]=parent?.status==="error"?{status:"error",code:"Property source read failed"}:parent??{status:"empty"};continue;}const value=parent.value;if(typeof value!=="object"||value.kind!=="record"||value.reference.object!==variable.source?.object?.name){result[id]={status:"error",code:"Property record object is unavailable"};continue;}const read=property?.(value.reference,variable.source!.field!,variable.type)??{status:"error" as const,code:"Property value is unavailable."};result[id]=read.status==="value"&&valueType(read.value,contract)!==variable.type?{status:"error",code:"Property value type mismatch"}:read;continue;}
     if (variable.mode === "input" || variable.mode === "shared") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
     if (variable.mode === "resource") {
       const value = resources[id] ?? { status: "empty" };

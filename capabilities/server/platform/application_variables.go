@@ -21,6 +21,9 @@ func (a Application) CheckVariables() error {
 		return fmt.Errorf("application query resources require v2.12")
 	}
 	for id, v := range a.Variables {
+		if v.Mode == "property" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.17") {
+			return fmt.Errorf("application property %s requires v2.17", id)
+		}
 		if v.Type == "decimal" && !PageUIProfileSupports(a.UIProfile, "platform.page.v2.16") {
 			return fmt.Errorf("application decimal %s requires v2.16", id)
 		}

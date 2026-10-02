@@ -65,6 +65,9 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 		seen[id] = true
 		v := d.Variables[id]
 		if v.Source != nil {
+			if v.Mode == "property" {
+				return dependsOnPlan(v.Source.Variable, seen)
+			}
 			if v.Source.Kind == "plan" {
 				return true
 			}
@@ -171,7 +174,7 @@ func (p Page) QueryReferences() []AssetRef {
 		}
 	}
 	for _, v := range p.DocumentVariables() {
-		if (v.Mode == "shared" || v.Scope == "application" && v.Mode == "resource" && (v.Type == "record" || v.Type == "filter")) && v.Source != nil && v.Source.Object != nil {
+		if (v.Mode == "shared" || v.Mode == "property" || v.Scope == "application" && v.Mode == "resource" && (v.Type == "record" || v.Type == "filter")) && v.Source != nil && v.Source.Object != nil {
 			refs = append(refs, *v.Source.Object)
 		}
 	}

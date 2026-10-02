@@ -54,6 +54,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		return fmt.Errorf("page variables require UI profile v2.2")
 	}
 	for id, variable := range d.Variables {
+		if variable.Mode == "property" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.17") {
+			return fmt.Errorf("property variable %s requires v2.17", id)
+		}
 		if variable.Type == "decimal" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.16") {
 			return fmt.Errorf("decimal variable %s requires v2.16", id)
 		}
@@ -123,7 +126,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		}
 	}
 	for id, variable := range d.Variables {
-		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || variable.Source.Kind == "plan") {
+		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || variable.Source.Kind == "plan" || variable.Source.Kind == "property") {
 			continue
 		}
 		found := false
@@ -274,6 +277,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			}
 		}
 		if variable.Source != nil {
+			if variable.Mode == "property" {
+				dependencies = append(dependencies, variable.Source.Variable)
+			}
 			dependencies = append(dependencies, controls[variable.Source.Section]...)
 			if variable.Source.Kind == "filter" {
 				for _, s := range sections {
@@ -327,7 +333,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 	}
 	variables := map[string]PageVariable{}
 	for id, variable := range d.Variables {
-		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || variable.Source.Kind == "plan") || allowed[variable.Source.Section] {
+		if variable.Source == nil || (variable.Source.Kind == pageWidgets.Runtime.Loop.Source || variable.Source.Kind == "application" || variable.Source.Kind == "plan" || variable.Source.Kind == "property") || allowed[variable.Source.Section] {
 			variables[id] = variable
 		}
 	}
@@ -343,6 +349,13 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 			}
 		}
 		for id, variable := range variables {
+			if variable.Mode == "property" && variable.Source != nil {
+				if _, ok := variables[variable.Source.Variable]; !ok {
+					delete(variables, id)
+					changed = true
+					continue
+				}
+			}
 			if variable.Source != nil && variable.Source.Kind == "plan" {
 				if _, ok := queries[variable.Source.Query]; !ok {
 					delete(variables, id)

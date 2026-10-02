@@ -1,3 +1,5 @@
+import {isDecimal} from "./decimal";
+import type {PropertyReader} from "./variables";
 import type {ScalarValue} from "./decimal";
 import type { EntityRecord, RecordPageData, RecordQuery, RecordSource, RecordView } from "@platform/ui";
 
@@ -27,6 +29,7 @@ export class PageSessionStore {
   private plan: SelectionPlan;
   private state: PageSessionSnapshot = { views:{}, scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
   private listeners = new Set<() => void>();
+  private viewCache=new Map<string,RecordView>();
   private recordCache = new Map<string, EntityRecord>();
   private recordEpoch = new Map<string, number>();
   private selectionQueries=new Map<string,string>();
@@ -131,12 +134,14 @@ export class PageSessionStore {
     const promise = Promise.resolve().then(() => source.get(type, id)).then((view) => {
       if (this.disposed || source !== this.source || source.scope !== scope || version !== this.version) throw new Error("Obsolete record read");
       if (view.record.id !== id) throw new Error("Record identity mismatch");
-      return view;
+      this.cacheView(key,view);return view;
     });
     this.reads.set(key, promise);
     void promise.catch(() => { if (this.reads.get(key) === promise) this.reads.delete(key); });
     return promise;
   }
+  private cacheView(key:string,view:RecordView){if(!this.viewCache.has(key)&&this.viewCache.size>=256)this.viewCache.delete(this.viewCache.keys().next().value!);this.viewCache.set(key,view);}
+  property:PropertyReader=(reference,field,type)=>{const descriptor=this.source.entity(reference.object)?.fields.find((f)=>f.name===field),view=this.viewCache.get(JSON.stringify([reference.object,reference.id]));if(!descriptor||!view)return {status:"error",code:"Property value is unavailable."};if(view.valueErrors?.[field])return {status:"error",code:view.valueErrors[field]!};if(!view.values||!Object.hasOwn(view.values,field))return {status:"empty"};const value=view.values[field];if(type==="decimal"?!isDecimal(value):typeof value!==type)return {status:"error",code:"Property value type mismatch"};return {status:"value",value:value as import("./decimal").ScalarValue};};
   selected(key: string): EntityRecord | undefined { return this.recordCache.get(key); }
   private descendants(keys: string[]) {
     const seen = new Set<string>();
@@ -211,7 +216,7 @@ export class PageSessionStore {
       const view = await source.get(reference.object, reference.id);
       if (this.disposed || source !== this.source || source.scope !== scope || this.recordEpoch.get(key) !== epoch) return;
       if (view.record.id !== reference.id) throw new Error("Record identity mismatch");
-      this.recordCache.set(key, view.record);
+      this.recordCache.set(key, view.record);this.cacheView(JSON.stringify([reference.object,reference.id]),view);
       this.publish({ records: { ...this.state.records, [key]: { status: "value", value: reference } } });
     } catch (error) {
       if (this.disposed || source !== this.source || source.scope !== scope || this.recordEpoch.get(key) !== epoch) return;
@@ -223,7 +228,7 @@ export class PageSessionStore {
     if (this.disposed || source === this.source && source.revision === this.sourceRevision && source.scope === this.sourceScope) return;
     const changedScope = source.scope !== this.sourceScope;
     this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.version++;
-    this.queries.clear();this.queryData.clear(); this.reads.clear();
+    this.queries.clear();this.queryData.clear(); this.reads.clear();this.viewCache.clear();
     this.publish({ queries: Object.fromEntries(Object.keys(this.state.queries).map((key) => [key, { status: "empty" }])) });
     if (changedScope) {
       this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear(); this.querySignatures.clear();
@@ -287,7 +292,7 @@ export class PageSessionStore {
     return request.promise;
   }
   dispose() {
-    this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
+    this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear();this.viewCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
     this.state = { views:{}, scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
     this.listeners.clear();

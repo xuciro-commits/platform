@@ -434,6 +434,12 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					doc.Queries = map[string]platform.PageQuery{}
 					doc.Variables = maps.Clone(doc.Variables)
 					for id, v := range doc.Variables {
+						if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
+							info, ok := entities[v.Source.Object.Name]
+							if !ok || page.CheckPropertySchema(v, info) != nil {
+								delete(doc.Variables, id)
+							}
+						}
 						if v.Mode == "shared" && (v.Type == "record" || v.Type == "filter") && v.Source != nil && v.Source.Object != nil {
 							if _, ok := entities[v.Source.Object.Name]; !ok {
 								delete(doc.Variables, id)
@@ -546,6 +552,11 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			changed = false
 			for id, v := range application.Variables {
 				missing := false
+				if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
+					info, ok := entities[v.Source.Object.Name]
+					_, parent := application.Variables[v.Source.Variable]
+					missing = !ok || !parent || application.QueryPage().CheckPropertySchema(v, info) != nil
+				}
 				if v.Mode == "resource" && v.Source != nil {
 					if (v.Source.Kind == "record" || v.Source.Kind == "filter") && v.Source.Object != nil {
 						_, ok := entities[v.Source.Object.Name]

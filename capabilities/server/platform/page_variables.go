@@ -24,6 +24,7 @@ type PageVariable struct {
 // PageResourceSource names a typed widget output, loop item or application
 // presentation port. Widget sources retain their original read boundary.
 type PageResourceSource struct {
+	Field    string    `json:"field,omitempty"`
 	Fields   []string  `json:"fields,omitempty"`
 	Object   *AssetRef `json:"object,omitempty"` // object requirement of a shared window
 	Query    string    `json:"query,omitempty"`
@@ -157,16 +158,34 @@ func (d *PageDocument) CheckVariables() error {
 		if v.Writable && v.Mode != contract.Application.BindingMode {
 			return fail("only shared bindings declare writable")
 		}
-		if v.Mode != "resource" && v.Mode != contract.Application.BindingMode && v.Source != nil {
+		if v.Mode != "resource" && v.Mode != "property" && v.Mode != contract.Application.BindingMode && v.Source != nil {
 			return fail("only resource or shared variables may declare a source")
 		}
-		if v.Source != nil && v.Source.Object != nil && !((v.Mode == "shared" && (v.Type == "object-set" || v.Type == "record" || v.Type == "filter")) || (v.Mode == "resource" && v.Scope == "application" && (v.Type == "record" || v.Type == "filter"))) {
+		if v.Source != nil && v.Source.Object != nil && !((v.Mode == "shared" && (v.Type == "object-set" || v.Type == "record" || v.Type == "filter")) || (v.Mode == "resource" && v.Scope == "application" && (v.Type == "record" || v.Type == "filter")) || v.Mode == "property") {
 			return fail("only shared windows declare an object requirement")
 		}
 		if v.Source != nil && len(v.Source.Fields) > 0 && !(v.Scope == "application" && v.Mode == "resource" && v.Type == "filter") {
 			return fail("only an application filter declares fields")
 		}
+		if v.Source != nil && v.Source.Field != "" && v.Mode != "property" {
+			return fail("only a property source declares a field")
+		}
 		switch v.Mode {
+		case "property":
+			if v.Source == nil || v.Source.Kind != "property" || !pageNodeID.MatchString(v.Source.Variable) || !pageNodeID.MatchString(v.Source.Field) || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject || v.Source.Section != "" || v.Source.Node != "" || v.Source.Query != "" || len(v.Source.Fields) > 0 || len(v.Initial) > 0 || v.Expression != nil || !slices.Contains([]string{"string", "boolean", "decimal"}, v.Type) {
+				return fail("property needs a typed record and field source")
+			}
+			parent := d.Variables[v.Source.Variable]
+			if parent.Scope == "loop-item" && (v.Scope != "loop-item" || parent.Owner != v.Owner) || parent.Scope == "overlay" && (v.Scope != "overlay" || parent.Owner != v.Owner) {
+				return fail("property source escapes its scope")
+			}
+			typ, err := visit(v.Source.Variable)
+			if err != nil {
+				return "", err
+			}
+			if typ != "record" {
+				return fail("property source must be a record")
+			}
 		case "shared":
 			if (v.Type == "record" || v.Type == "filter") && (v.Source == nil || v.Source.Object == nil || v.Source.Object.Check() != nil || v.Source.Object.Kind != AssetObject) {
 				return fail("shared record needs an object requirement")

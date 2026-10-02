@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Property value is unavailable.": "记录属性值不可用。",
+  "Property value exceeds its budget.": "记录属性值超出范围限制。",
+  "Property source read failed": "记录属性来源读取失败",
+  "Property value type mismatch": "记录属性值类型不匹配",
+  "Property record object is unavailable": "记录属性对象不可用",
   "Invalid numeric value.": "数值无效。",
   "Numeric result exceeds its budget.": "数值结果超出范围限制。",
   "Shared filter is unavailable.": "共享筛选不可用。",

@@ -1861,5 +1861,56 @@
         "initial": 0.1
       }
     }
+  },
+  {
+    "name": "typed record property graph",
+    "valid": true,
+    "variables": {
+      "record": {
+        "scope": "page",
+        "type": "record",
+        "mode": "input"
+      },
+      "active": {
+        "scope": "page",
+        "type": "boolean",
+        "mode": "property",
+        "source": {
+          "kind": "property",
+          "variable": "record",
+          "object": {
+            "app": "sample",
+            "kind": "object",
+            "name": "sample.note"
+          },
+          "field": "active"
+        }
+      }
+    },
+    "resources": {
+      "record": {
+        "status": "value",
+        "value": {
+          "kind": "record",
+          "reference": {
+            "object": "sample.note",
+            "id": "one"
+          }
+        }
+      }
+    },
+    "properties": {
+      "active": true
+    },
+    "values": {
+      "record": {
+        "kind": "record",
+        "reference": {
+          "object": "sample.note",
+          "id": "one"
+        }
+      },
+      "active": true
+    }
   }
 ]

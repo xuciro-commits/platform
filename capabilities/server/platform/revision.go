@@ -628,6 +628,13 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	if page.Document != nil {
 		for _, v := range page.Document.Variables {
+			if v.Mode == "property" && v.Source != nil && v.Source.Object != nil {
+				asset, ok := lookup[*v.Source.Object]
+				object, err := queryObjectDescriptor(asset.Body)
+				if !ok || err != nil || page.CheckPropertySchema(v, object) != nil {
+					return fmt.Errorf("frozen property schema is unavailable")
+				}
+			}
 			if v.Scope == "application" && v.Mode == "resource" && v.Type == "filter" && v.Source != nil && v.Source.Object != nil {
 				asset, ok := lookup[*v.Source.Object]
 				object, err := queryObjectDescriptor(asset.Body)

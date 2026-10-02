@@ -1055,17 +1055,19 @@ func (t *Tenant) recordsFrom(s *recordStore, m platform.Member, typ string, q pl
 // the app's other types that refer to it, and the processes about it the
 // member may read (ADR-0026 D4).
 type RecordView struct {
-	Record    any            `json:"record"`
-	History   []RecordChange `json:"history"`
-	Related   []Related      `json:"related"`
-	Processes []any          `json:"processes"`
-	Approvals []any          `json:"approvals"` // requests to move it, newest first (F-38)
-	Tasks     []any          `json:"tasks"`     // open tasks about it the member may take, to answer from its page
-	Files     []any          `json:"files"`     // attached to it (ADR-0028)
-	Comments  []any          `json:"comments"`  // on it, oldest first (ADR-0028 D6)
-	Following bool           `json:"following"` // the member follows it
-	Linked    []Related      `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
-	Activity  []any          `json:"activity"`  // what apps told about it through protocols (relations.Note), oldest first
+	Values      map[string]any    `json:"values,omitempty"`
+	ValueErrors map[string]string `json:"valueErrors,omitempty"`
+	Record      any               `json:"record"`
+	History     []RecordChange    `json:"history"`
+	Related     []Related         `json:"related"`
+	Processes   []any             `json:"processes"`
+	Approvals   []any             `json:"approvals"` // requests to move it, newest first (F-38)
+	Tasks       []any             `json:"tasks"`     // open tasks about it the member may take, to answer from its page
+	Files       []any             `json:"files"`     // attached to it (ADR-0028)
+	Comments    []any             `json:"comments"`  // on it, oldest first (ADR-0028 D6)
+	Following   bool              `json:"following"` // the member follows it
+	Linked      []Related         `json:"linked"`    // records of any app linked to it (the relations app), by type, that the member may read
+	Activity    []any             `json:"activity"`  // what apps told about it through protocols (relations.Note), oldest first
 }
 
 type Related struct {
@@ -1107,7 +1109,8 @@ func (t *Tenant) RecordOf(m platform.Member, typ, id string, now time.Time) (Rec
 		narrowed, _ := t.narrower(m, now, false).derive(et, reflect.ValueOf(record))
 		record = narrowed.Interface()
 	}
-	view := RecordView{Record: record, History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
+	values, valueErrors := propertyValues(seen.info, record)
+	view := RecordView{Values: values, ValueErrors: valueErrors, Record: record, History: []RecordChange{}, Related: []Related{}, Processes: []any{}, Approvals: []any{}, Tasks: []any{}, Files: []any{}, Comments: []any{}, Linked: []Related{}, Activity: []any{}}
 	if c := t.app(relations.ID); c != nil && typ != relations.CommentType && typ != relations.FollowType {
 		about, _ := json.Marshal([]any{[]any{"target", "=", typ + "/" + id}})
 		if page, err := t.Records(m, relations.CommentType, platform.Query{Domain: about, Sort: []string{"created"}, Limit: 200}, now); err == nil {

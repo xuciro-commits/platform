@@ -57,3 +57,8 @@ test("a shared-filter consumer's selection survives unrelated windows and is cle
  await store.querySource("fixed").list("sample.note",{search:"other",limit:10});assert.equal(store.selected(slot).id,"selected");store.setQueryView("fixed","base",{offset:10});assert.equal(store.selected(slot).id,"selected");store.resetQueries(["fixed"]);assert.equal(store.selected(slot).id,"selected");
  await store.querySource("shared").list("sample.note",{search:"changed",limit:10});assert.equal(store.selected(slot),undefined);store.dispose();
 });
+
+test("property cache exposes only the last successful member read and clears with its source scope",async()=>{
+ const ref={object:"sample.note",id:"one"};const source={scope:"member:v1",entity:()=>({fields:[{name:"active",type:"boolean"},{name:"count",type:"integer"}]}),get:async()=>({record:{id:"one",revision:1},values:{active:true,count:{kind:"decimal",value:"9007199254740993"}}}),list:async()=>({records:[],total:0})};
+ const store=new PageSessionStore(source,{objects:new Map([["selected","sample.note"]]),children:new Map(),queryParents:new Map()});store.selectReference("selected",ref);await tick();assert.equal(store.property(ref,"active","boolean").value,true);assert.equal(store.property(ref,"count","decimal").value.value,"9007199254740993");assert.equal(store.property(ref,"hidden","boolean").status,"error");store.updateSource({...source,scope:"member:v2"});assert.equal(store.property(ref,"active","boolean").status,"error");store.dispose();
+});

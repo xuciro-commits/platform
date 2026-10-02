@@ -2,6 +2,10 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Record property": "记录属性",
+  "Source record variable": "来源记录变量",
+  "Choose a record variable": "选择记录变量",
+  "Record property field": "记录属性字段",
   "decimal-add": "精确数值相加",
   "decimal-subtract": "精确数值相减",
   "decimal-less": "精确数值小于比较",

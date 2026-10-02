@@ -59,12 +59,12 @@ export function useApplicationVariables(variables: Record<string, Api.PageVariab
   const context = useApplicationContext();
   const state = useSyncExternalStore(context?.session.subscribe ?? emptySubscribe, context?.session.snapshot ?? emptySnapshot, emptySnapshot);
   const declarations = context?.definition.application?.variables ?? {};
-  const inputs=useMemo(()=>evaluateVariables(declarations,state,pageUIManifest.runtime),[declarations,state]);
-  const queries=useApplicationQueries(context?.session,inputs);
   const recordResources:Record<string,VariableResult>={};
   for(const [id,v] of Object.entries(declarations)){if(v.type!=="record"||v.mode!=="resource")continue;const read=context?.session.reads?.snapshot().records[id];recordResources[id]=read?.status==="value"?{status:"value",value:{kind:"record",reference:read.value}}:read?.status==="pending"?{status:"pending"}:read?.status==="error"?{status:"error",code:"Resource read failed"}:{status:"empty"};}
   for(const [id,v] of Object.entries(declarations)){if(v.type!=="filter"||v.mode!=="resource")continue;const fields=context?.session.reads?.snapshot().filters[id]??{};recordResources[id]={status:Object.keys(fields).length?"value":"empty",value:{kind:"filter",object:v.source?.object?.name??"",fields}};}
-  const values = useMemo(() => evaluateVariables(declarations,state,pageUIManifest.runtime,{...queries.resources,...recordResources}),[declarations,state,JSON.stringify(queries.resources)]);
+  const inputs=useMemo(()=>evaluateVariables(declarations,state,pageUIManifest.runtime,recordResources,undefined,undefined,context?.session.reads?.property),[declarations,state]);
+  const queries=useApplicationQueries(context?.session,inputs);
+  const values = useMemo(() => evaluateVariables(declarations,state,pageUIManifest.runtime,{...queries.resources,...recordResources},undefined,undefined,context?.session.reads?.property),[declarations,state,JSON.stringify(queries.resources)]);
   const invalid = useMemo(() => compileVariables(declarations, pageUIManifest.runtime).issues.length > 0, [declarations]);
   const resources: Record<string, VariableResult> = {};
   let error: string | undefined;

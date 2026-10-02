@@ -43,7 +43,7 @@ function LoopItem({ reference, queryKey, owner, loop, signature, session, snapsh
   if (!read.record) return <Panel role="status" className="min-h-48">{t("Loading loop record…")}</Panel>;
   const key = loopItemKey(owner, reference);
   const values = evaluateVariables(variables, { ...snapshot.scalars, ...session.itemValues(owner, signature, key) }, pageUIManifest.runtime,
-    { ...resources, [loop.itemVariable]: { status: "value", value: { kind: "record", reference } } }, owner, overlay);
+    { ...resources, [loop.itemVariable]: { status: "value", value: { kind: "record", reference } } }, owner, overlay,session.property);
   const set = (id: string, value: ScalarValue) => {
     const variable = variables[id];
     if (variable?.scope !== "loop-item" || variable.owner !== owner || variable.mode !== "state" || !scalarAssignable(variable.type,value,pageUIManifest.runtime.maxStringBytes,pageUIManifest.runtime.decimal.maxBytes)) return;

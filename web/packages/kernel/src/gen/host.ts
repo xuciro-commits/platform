@@ -954,6 +954,7 @@ export type PageQueryCondition = {
 };
 
 export type PageResourceSource = {
+  field?: string;
   fields?: string[];
   object?: AssetRef;
   query?: string;
@@ -1116,6 +1117,8 @@ export type RecordPage = {
 };
 
 export type RecordView = {
+  values?: Record<string, unknown>;
+  valueErrors?: Record<string, string>;
   record: unknown;
   history: RecordChange[];
   related: Related[];
@@ -1537,7 +1540,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.16",
+  "uiProfile": "platform.page.v2.17",
   "widgets": [
     {
       "componentID": "table",
@@ -2047,7 +2050,8 @@ export const pageUIManifest = {
     "platform.page.v2.13",
     "platform.page.v2.14",
     "platform.page.v2.15",
-    "platform.page.v2.16"
+    "platform.page.v2.16",
+    "platform.page.v2.17"
   ],
   "runtime": {
     "scope": "page",
@@ -2185,7 +2189,8 @@ export const pageUIManifest = {
         "state",
         "constant",
         "derived",
-        "resource"
+        "resource",
+        "property"
       ]
     },
     "application": {
@@ -2202,7 +2207,8 @@ export const pageUIManifest = {
         "state",
         "constant",
         "derived",
-        "resource"
+        "resource",
+        "property"
       ],
       "bindingMode": "shared",
       "maxFilterFields": 16

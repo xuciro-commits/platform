@@ -13,7 +13,7 @@ export const pageVariableDiagnostics = (variables: Record<string, Api.PageVariab
  * definition, so identity, publication and document edits dispose this state.
  */
 export function usePageVariables(variables: Record<string, Api.PageVariable>, state: Record<string, unknown>, session: PageSessionStore, resources: Record<string, VariableResult>) {
-  const values = useMemo(() => evaluateVariables(variables, state, pageVariableContract, resources), [variables, state, resources]);
+  const values = useMemo(() => evaluateVariables(variables, state, pageVariableContract, resources,undefined,undefined,session.property), [variables, state, resources]);
   const setMany = (changes: Record<string, ScalarValue>) => {
     if (Object.entries(changes).some(([id, value]) => {
       const variable = variables[id];
