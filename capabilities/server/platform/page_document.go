@@ -162,6 +162,9 @@ func (d *PageDocument) Check(sections []Section) error {
 		for _, section := range sections {
 			for _, resource := range pageWidgets.Runtime.Resources {
 				if section.ID == variable.Source.Section && section.Widget == resource.Widget && variable.Source.Kind == resource.Kind {
+					if resource.Kind == "records" && section.SelectionSetVariable != id {
+						return fmt.Errorf("record-set needs its explicit table producer")
+					}
 					if resource.Kind == "filter" && (len(section.Facets) > 0 || section.FilterSearchVariable != "") {
 						return fmt.Errorf("facet filter exposes explicit state rather than a legacy filter resource")
 					}
@@ -331,7 +334,7 @@ func (d *PageDocument) Check(sections []Section) error {
 					}
 				}
 			}
-			if variable.Source.Kind == "query" || variable.Source.Kind == "record" {
+			if variable.Source.Kind == "query" || variable.Source.Kind == "record" || variable.Source.Kind == "records" {
 				for _, s := range sections {
 					if s.ID == variable.Source.Section && s.CollectionVariable != "" {
 						dependencies = append(dependencies, s.CollectionVariable)
@@ -467,6 +470,11 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if node.Kind == "widget" {
 			for _, s := range sections {
 				if s.ID == node.Section {
+					if s.SelectionSetVariable != "" {
+						if _, ok := variables[s.SelectionSetVariable]; !ok {
+							return false
+						}
+					}
 					for _, facet := range s.Facets {
 						if _, ok := variables[facet.Variable]; !ok {
 							return false

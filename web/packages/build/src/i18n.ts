@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record selection set output": "记录选择集合输出",
+ "Single active record only": "仅活动记录单选",
+ "Record selection set": "记录选择集合",
+ "record-set": "记录引用集合",
+
  "Choose the original table edit action and its editable displayed fields.": "请选择原表格编辑动作及其可编辑展示字段。",
  "Enable cell editing": "启用单元格编辑",
  "Original table edit action": "原表格编辑动作",

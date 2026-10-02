@@ -8,6 +8,10 @@ for (const [key, value] of [["offsetWidth", 800], ["offsetHeight", 280]] as cons
 const pending = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; };
 const entity = { app: "sample", type: "sample.item", title: "Item", plural: "Items", display: "id", fields: [], standard: [] };
 const record = (id: string) => ({ id, revision: 1, created: {}, changed: {} } as EntityRecord);
+test("multi-selection chooses only the caller window and keeps modifier selection separate from the active record",()=>{
+ const changed=vi.fn(),opened=vi.fn(),info={...entity,fields:[{name:"title",title:"Title",type:"text" as const}]},source:RecordSource={entity:()=>info,list:vi.fn(),get:vi.fn()},data=[{...record("A"),title:"A title"},{...record("B"),title:"B title"},{...record("C"),title:"C title"}];let ids:string[]=[];
+ const props=()=>({source,type:info.type,onOpen:opened,window:{query:{limit:3},page:{records:data,total:100},maxOffset:100,onChange:vi.fn()},selectionSet:{selectedIDs:ids,records:[],status:"empty" as const,maxRecords:3,onChange:changed}});const {rerender}=render(<RecordList {...props()}/>);fireEvent.click(screen.getByRole("checkbox",{name:"Select A"}));expect(changed).toHaveBeenLastCalledWith(["A"]);expect(opened).toHaveBeenLastCalledWith(data[0]);ids=["A"];rerender(<RecordList {...props()}/>);fireEvent.click(screen.getByRole("checkbox",{name:"Select B"}));expect(changed).toHaveBeenLastCalledWith(["A","B"]);ids=["A","B"];rerender(<RecordList {...props()}/>);fireEvent.click(screen.getByRole("checkbox",{name:"Select this window"}));expect(changed).toHaveBeenLastCalledWith(["A","B","C"]);expect(changed.mock.calls.at(-1)![0].length).toBe(3);
+});
 
 test("cell staging submits changed fields per row and preserves failed baselines through ordinary refresh",async()=>{
  const info={...entity,fields:[{name:"title",title:"Title",type:"text" as const},{name:"locked",title:"Locked",type:"text" as const,readOnly:true}]},source:RecordSource={scope:"actor",entity:()=>info,list:vi.fn(),get:vi.fn()};

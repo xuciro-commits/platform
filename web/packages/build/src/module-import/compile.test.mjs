@@ -9,6 +9,11 @@ const {workshopMigrationCatalog}=await import("./catalog.ts");
 const nativeRegistry=JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url))),profile=nativeRegistry.uiProfile;
 const bindings={objects:{Asset:"sample.note"},fields:{Asset:{id:"id",name:"note"}},actions:{finishAsset:"sample.note.close"},queries:{}};
 const target={object:"sample.note",profile,entities:[{app:"sample",type:"sample.note",fields:[{name:"note",type:"text"}]}],actions:[{schema:"sample.note.close",target:"sample.note"}]};
+test("multi-selection imports distinct active and selectedObjects producers as typed local resources",()=>{
+ const m=sourceModule();m.widgets.table.config.selectionMode="multiple";m.widgets.table.config.selectedVarId="picked";m.variables.push({id:"picked",name:"Selected notes",type:"array",definitionKind:"widgetOutput",widgetId:"table",widgetOutputKey:"selectedObjects"});
+ const result=compileWorkshopModule(JSON.stringify(m),"page",bindings,target);assert.ok(result.draft,JSON.stringify(result.diagnostics));const table=result.draft.sections.find(s=>s.widget==="table"),variable=result.draft.document.variables[table.selectionSetVariable];assert.equal(variable.type,"record-set");assert.equal(variable.source.kind,"records");assert.equal(variable.source.section,table.id);assert.notEqual(table.selectionSetVariable,result.ids.variables.selected);
+ m.variables.find(v=>v.id==="picked").widgetId="other";assert.equal(compileWorkshopModule(JSON.stringify(m),"page",bindings,target).draft,undefined);
+});
 test("table editing requires explicit original edit and displayed payload fields without rewriting source configuration",()=>{
  const m=sourceModule();m.widgets.table.config.enableInlineEdit=true;const source=JSON.stringify(m),action={schema:"sample.note.edit",target:"sample.note",payload:[{name:"note"}]},mapped={...bindings,edits:{table:{action:action.schema,fields:["note"]}}},editing={...target,actions:[...target.actions,action]};
  assert.equal(compileWorkshopModule(source,"page",bindings,editing).draft,undefined);const result=compileWorkshopModule(source,"page",mapped,editing);assert.equal(result.source,source);assert.deepEqual(result.draft.sections.find(s=>s.widget==="table").inlineEdit,{action:action.schema,fields:["note"]});

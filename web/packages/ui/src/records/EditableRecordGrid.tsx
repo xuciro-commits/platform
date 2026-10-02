@@ -1,16 +1,18 @@
 import {useEffect,useRef,useState} from "react";
 import type {ColumnDef} from "@tanstack/react-table";
 import {DataTable} from "../components/DataTable";
+import {Checkbox} from "../primitives/controls";
 import {Button} from "../primitives/button";
 import type {Entity} from "../fields/entity";
 import {t} from "../i18n";
 import type {EntityRecord} from "./Records";
 
 /** The caller supplies authorized fields and the original submission route. */
+export type RecordSelectionPort={selectedIDs:string[];records:EntityRecord[];status:"empty"|"pending"|"value"|"error";maxRecords:number;onChange:(ids:string[])=>void};
 export type RecordEditPort={schema:string;fields:string[];scope:string;maxRows:number;preview?:boolean;submit:(baseline:EntityRecord,patch:Record<string,unknown>)=>Promise<{accepted:boolean;error?:string}>};
 const emptyRows=()=>Object.create(null) as Record<string,PendingRow>;
 type PendingRow={baseline:EntityRecord;patch:Record<string,unknown>;error?:string};
-export function EditableRecordGrid({data,columns,entity,height,onOpen,loading,empty,port}:{data?:EntityRecord[];columns:ColumnDef<EntityRecord,unknown>[];entity:Entity<EntityRecord>;height:number|string;onOpen?:(record:EntityRecord)=>void;loading:boolean;empty:React.ReactNode;port?:RecordEditPort}){
+export function EditableRecordGrid({data,columns,entity,height,onOpen,loading,empty,port,selectionSet}:{selectionSet?:RecordSelectionPort;data?:EntityRecord[];columns:ColumnDef<EntityRecord,unknown>[];entity:Entity<EntityRecord>;height:number|string;onOpen?:(record:EntityRecord)=>void;loading:boolean;empty:React.ReactNode;port?:RecordEditPort}){
  const [editing,setEditing]=useState(false),[rows,setRows]=useState<Record<string,PendingRow>>(emptyRows),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
  const alive=useRef(true),lock=useRef(false),currentPort=useRef(port);currentPort.current=port;
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
@@ -33,10 +35,22 @@ export function EditableRecordGrid({data,columns,entity,height,onOpen,loading,em
   }if(alive.current&&accepted)setNotice(t("Submitted {count} rows. Failed edits remain staged.",{count:accepted}));}
   finally{lock.current=false;if(alive.current)setBusy(false);}
  };
+ const anchor=useRef<string|undefined>(undefined);
+ const choose=(record:EntityRecord,modifiers?:{shift:boolean;toggle:boolean})=>{
+  if(selectionSet){let ids:string[];const current=selectionSet.selectedIDs;
+   if(modifiers?.shift&&anchor.current&&data?.some(r=>r.id===anchor.current)){const a=data.findIndex(r=>r.id===anchor.current),b=data.findIndex(r=>r.id===record.id);ids=data.slice(Math.min(a,b),Math.max(a,b)+1).filter(r=>!r.archived).map(r=>r.id);}
+   else if(modifiers?.toggle)ids=current.includes(record.id)?current.filter(id=>id!==record.id):[...current,record.id];else ids=[record.id];
+   if(ids.length>selectionSet.maxRecords){setNotice(t("The selection limit has been reached."));return;}anchor.current=record.id;selectionSet.onChange(ids);
+  }onOpen?.(record);
+ };
  const shown=(data??[]).map(record=>({...record,...rows[record.id]?.patch})),editableColumns=columns.map(column=>column.meta?.field?{...column,meta:{...column.meta,field:{...column.meta.field,readOnly:column.meta.field.readOnly||!port?.fields.includes(column.id??"")||busy}}}:column);
+ const selectionLabel=entity.primary!=="id"?entity.primary:columns.find(c=>c.id&&entity.fields[c.id])?.id??"id";
+ const visibleIDs=(data??[]).filter(r=>!r.archived).map(r=>r.id),all=visibleIDs.length>0&&visibleIDs.every(id=>selectionSet?.selectedIDs.includes(id));
+ const tableColumns=selectionSet?[{id:"selection",header:()=> <Checkbox checked={all} disabled={!all&&visibleIDs.length>selectionSet.maxRecords||editing} onChange={checked=>selectionSet.onChange(checked?visibleIDs:[])}>{t("Select this window")}</Checkbox>,cell:({row}:{row:{original:EntityRecord}})=><span onClick={e=>e.stopPropagation()}><Checkbox checked={selectionSet.selectedIDs.includes(row.original.id)} disabled={row.original.archived||editing||!selectionSet.selectedIDs.includes(row.original.id)&&selectionSet.selectedIDs.length>=selectionSet.maxRecords} onChange={()=>choose(row.original,{shift:false,toggle:true})}><span className="sr-only">{t("Select {record}",{record:row.original.id})}</span></Checkbox></span>,meta:{width:160}},...editableColumns]:editableColumns;
  return <div className="grid min-w-0 gap-2">
  {port&&<div className="flex flex-wrap items-center gap-2">{editing?<><Button size="sm" disabled={busy} onClick={()=>{setEditing(false);setRows(emptyRows());setNotice("");}}>{t("Cancel cell edits")}</Button><Button size="sm" variant="primary" disabled={busy||port.preview||Object.keys(rows).length===0} onClick={submit}>{busy?t("Submitting…"):t("Submit cell edits")}</Button><span className="text-xs text-muted">{t("{count} rows staged",{count:Object.keys(rows).length})}</span></>:<Button size="sm" onClick={()=>setEditing(true)}>{t("Edit cells")}</Button>}{editing&&<p className="text-xs text-muted">{t("Double-click or press Enter/F2 to edit. Enter or Tab stages the cell; submit uses the original record action.")}</p>}{port.preview&&<p className="text-xs text-muted">{t("Actions do not run while you compose.")}</p>}</div>}
  {notice&&<p role="status" className="text-xs text-muted">{notice}</p>}{Object.entries(rows).filter(([,row])=>row.error).map(([id,row])=><p key={id} role="alert" className="text-xs text-danger">{id}: {row.error}</p>)}
- <DataTable key={JSON.stringify([editing,busy])} data={shown} columns={editableColumns as never} getRowId={r=>r.id} height={height} searchable={false} onRowClick={editing?undefined:onOpen} onCellEdit={editing&&!busy?stage:undefined} loading={loading} empty={empty}/>
+ <DataTable key={JSON.stringify([editing,busy])} data={shown} columns={tableColumns as never} selectedIds={selectionSet?.selectedIDs} getRowId={r=>r.id} height={height} searchable={false} onRowClick={editing?undefined:selectionSet||onOpen?choose:undefined} onCellEdit={editing&&!busy?stage:undefined} loading={loading} empty={empty}/>
+ {selectionSet&&<div className="grid gap-1 text-xs"><p role="status">{t("{count} records selected in this window",{count:selectionSet.selectedIDs.length})}</p>{selectionSet.status==="pending"&&<p role="status">{t("Checking selected records…")}</p>}{selectionSet.status==="error"&&<p role="alert">{t("Selection read failed")}</p>}{selectionSet.status==="value"&&<ul aria-label={t("Selected records")} className="flex flex-wrap gap-2">{selectionSet.records.map(record=><li key={record.id}><Button size="sm" variant="ghost" onClick={()=>onOpen?.(record)}>{selectionLabel==="id"?record.id:entity.fields[selectionLabel]?.text(record[selectionLabel])??record.id} · {record.id}</Button></li>)}</ul>}</div>}
  </div>;
 }

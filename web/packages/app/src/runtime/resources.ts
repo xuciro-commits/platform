@@ -18,6 +18,7 @@ export function selectionSlot(page:Api.Page,section:Api.Section,parent=false):st
  const local=scoped&&owner&&(page.sections??[]).some((s)=>["table","record-timeline","kanban"].includes(s.widget)&&(s.object?.name||page.object.name)===object&&(s.selection??"")===(name??"")&&sectionOverlay(page,s.id??"")===owner);
  return recordSlot(object,name,local?owner:undefined);
 }
+export const selectionSetSlot=(page:Api.Page,section:Api.Section)=>`${sectionOverlay(page,section.id??"")?`overlay:${sectionOverlay(page,section.id??"")}/`:""}record-set/${section.id??""}`;
 export const filterSlot=(object:string,owner?:string)=>`${owner?`overlay:${owner}/`:""}${object}`;
 export function filterOwner(page:Api.Page,section:Api.Section):string|undefined {
  return Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?sectionOverlay(page,section.id??""):undefined;
@@ -31,7 +32,7 @@ export function filterSessionBindings(page:Api.Page) {
  for(const section of page.sections??[]){
   if(section.widget!=="table"||section.collectionVariable)continue;
   const key=filterSlot(section.object?.name||page.object.name,filterOwner(page,section));
-  if(!selections.has(key))selections.set(key,new Set());selections.get(key)!.add(selectionSlot(page,section));
+  if(!selections.has(key))selections.set(key,new Set());selections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)selections.get(key)!.add(selectionSetSlot(page,section));
   if(!queries.has(key))queries.set(key,new Set());queries.get(key)!.add(section.id??`section:${page.sections!.indexOf(section)}`);
  }
  return {filterSelections:selections,filterQueries:queries};
@@ -43,7 +44,7 @@ export function overlaySessionScopes(page:Api.Page) {
   const sections=(page.sections??[]).filter((s)=>[...nodes].some((id)=>document?.nodes[id]?.section===s.id));
   return [owner,{
    queries:new Set([...sections.map((s)=>s.id??""),...Object.entries(document?.queries??{}).filter(([,q])=>q.owner===owner).map(([id])=>`plan/${id}`)]),
-   selections:new Set(sections.map((s)=>selectionSlot(page,s)).filter((key)=>key.startsWith(`overlay:${owner}/`))),
+   selections:new Set(sections.flatMap(s=>[selectionSlot(page,s),...(s.selectionSetVariable?[selectionSetSlot(page,s)]:[])]).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    filters:new Set(sections.filter((s)=>s.widget==="filter").map((s)=>filterSlot(s.object?.name||page.object.name,filterOwner(page,s))).filter((key)=>key.startsWith(`overlay:${owner}/`))),
    loops:new Set([...nodes].filter((id)=>document?.nodes[id]?.kind==="loop")),
   }];
@@ -66,6 +67,7 @@ export function resourceVariables(page: Api.Page, snapshot: PageSessionSnapshot)
       const state = snapshot.records[selectionSlot(page,section)];
       value = state?.status === "value" ? { status: "value", value: { kind: "record", reference: state.value } }
         : state?.status === "pending" ? { status: "pending" } : state?.status === "error" ? { status: "error", code: "Resource read failed" } : { status: "empty" };
+    } else if(source.kind==="records"){const state=snapshot.recordSets[selectionSetSlot(page,section)],payload={kind:"record-set" as const,object,records:state&&"value" in state?state.value??[]:[]};value=state?.status==="value"?{status:"value",value:payload}:state?.status==="pending"?{status:"pending"}:state?.status==="error"?{status:"error",code:"Selection read failed"}:{status:"empty",value:payload};
     } else if (source.kind === "filter") {
       const fields = snapshot.filters[filterSlot(object,filterOwner(page,section))] ?? {}, payload = { kind: "filter" as const, object, fields };
       value = Object.keys(fields).length ? { status: "value", value: payload } : { status: "empty", value: payload };

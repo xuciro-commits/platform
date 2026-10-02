@@ -7,7 +7,7 @@ type Variables = Record<string, Api.PageVariable>;
 type Scalar = ScalarValue;
 export type VariableIssue = { variable: string; code: string };
 export type PropertyReader=(reference:RecordReference,field:string,type:string)=>VariableResult;
-export type ResourceValue = { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
+export type ResourceValue = {kind:"record-set";object:string;records:RecordReference[]} | { kind: "record"; reference: RecordReference } | { kind: "filter"; object: string; fields: Record<string, unknown> } | { kind: "object-set"; window: QueryWindow };
 export type VariableResult = { status: "value"; value: Scalar | ResourceValue; draft?:string } | { status: "empty"; value?: ResourceValue } | { status: "pending" } | { status: "error"; code: string; draft?:string };
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 const bytes = (value: string) => new TextEncoder().encode(value).length;
@@ -31,6 +31,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
     if (variable.scope === contract.overlay.scope && (!(contract.overlay.valueTypes as readonly string[]).includes(variable.type) || !(contract.overlay.modes as readonly string[]).includes(variable.mode))) fail(id, "Overlay variable needs a supported local value or resource");
     if (variable.scope === contract.application.scope && !(contract.application.valueTypes as readonly string[]).includes(variable.type)) fail(id,"Application variable needs a supported scalar or resource");
     if (variable.writable && variable.mode !== "shared") fail(id,"Only shared bindings declare writable");
+    if(variable.type==="record-set"&&(!["page","overlay"].includes(variable.scope)||variable.mode!=="resource"||variable.source?.kind!=="records"))fail(id,"Resource source type mismatch");
     if(variable.type==="string-set"&&(!["page","overlay"].includes(variable.scope)||!["state","constant"].includes(variable.mode)))fail(id,"Unsupported variable type or scope");
     if (variable.mode !== "resource" && variable.mode !== "property" && variable.mode !== "aggregate" && variable.mode !== "shared" && variable.source) fail(id, "Only resource or shared variables may declare a source");
     if(variable.source?.object&&!((variable.mode==="shared"&&["object-set","record","filter"].includes(variable.type))||(variable.mode==="resource"&&variable.scope==="application"&&["record","filter"].includes(variable.type))||variable.mode==="property"))fail(id,"Only shared windows declare an object requirement");

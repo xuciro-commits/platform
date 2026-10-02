@@ -140,6 +140,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		if !accessible(section.CollectionVariable, "", sectionOverlays[section.ID]) {
 			return fmt.Errorf("page section %s window escapes its overlay scope", section.ID)
 		}
+		if section.SelectionSetVariable != "" && (!accessible(section.SelectionSetVariable, "", sectionOverlays[section.ID]) || sectionOwners[section.ID] != "") {
+			return fmt.Errorf("record selection set escapes its local table scope")
+		}
 		owner := sectionOwners[section.ID]
 		if owner != "" && !slices.Contains(contract.RecordWidgets, section.Widget) && !slices.Contains(contract.PresentationWidgets, section.Widget) {
 			return fmt.Errorf("page loop %s does not support widget %s", owner, section.Widget)

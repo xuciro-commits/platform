@@ -30,7 +30,8 @@ export type DataTableProps<T> = {
   /** Viewport height; rows outside it are not rendered, so 100k rows stay fast. */
   height?: number | string;
   rowHeight?: number;
-  onRowClick?: (row: T) => void;
+  onRowClick?: (row:T,modifiers?:{shift:boolean;toggle:boolean})=>void;
+  selectedIds?:readonly string[];
   selectedId?: string;
   searchable?: boolean;
   toolbar?: ReactNode;
@@ -57,7 +58,7 @@ const focusSel = (root: HTMLElement | null, sel: string, n = 3) => {
 /** Dense, virtualized, sortable, filterable table for any entity list. */
 export function DataTable<T>({
   data, columns, getRowId, height = 480, rowHeight = 28, onRowClick, selectedId, searchable = true, toolbar, empty = t("No rows"),
-  loading = false, loadingText, onCellEdit, resizable = true, onRowContextMenu,
+  selectedIds,loading = false, loadingText, onCellEdit, resizable = true, onRowContextMenu,
 }: DataTableProps<T>) {
   const editorPrefix=useId();
   const [editing, setEditing] = useState<Session<T> | null>(null);
@@ -195,14 +196,14 @@ export function DataTable<T>({
           <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize(), minWidth }}>
             {virtualizer.getVirtualItems().map((item) => {
               const row = rows[item.index]!;
-              const selected = selectedId != null && row.id === selectedId;
+              const selected = selectedIds?.includes(row.id)??(selectedId != null && row.id === selectedId);
               return (
                 <div role="row" key={row.id} data-row={item.index} aria-rowindex={item.index + 1} aria-selected={selected} tabIndex={browse ? 0 : undefined}
-                  onClick={browse ? () => { if (!window.getSelection()?.toString()) onRowClick?.(row.original); } : undefined}
+                  onClick={browse ? (e) => { if (!window.getSelection()?.toString()) onRowClick?.(row.original,{shift:e.shiftKey,toggle:e.ctrlKey||e.metaKey}); } : undefined}
                   onContextMenu={onRowContextMenu ? (e) => { e.preventDefault(); onRowContextMenu(row.original); } : undefined}
                   onKeyDown={browse ? (e) => {
                     if (e.target !== e.currentTarget || e.nativeEvent.isComposing) return;
-                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowClick?.(row.original); }
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowClick?.(row.original,{shift:e.shiftKey,toggle:e.ctrlKey||e.metaKey||e.key===" "}); }
                     else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                       e.preventDefault();
                       const r = Math.max(0, Math.min(rows.length - 1, item.index + (e.key === "ArrowDown" ? 1 : -1)));

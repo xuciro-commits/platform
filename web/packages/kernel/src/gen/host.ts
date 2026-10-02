@@ -1338,6 +1338,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  selectionSetVariable?: string;
   inlineEdit?: PageInlineEdit;
   facets?: PageFacet[];
   filterSearchVariable?: string;
@@ -1657,7 +1658,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.31",
+  "uiProfile": "platform.page.v2.32",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -1733,7 +1734,8 @@ export const pageUIManifest = {
         "selection",
         "collection-variable",
         "selection-variable",
-        "filter-variable"
+        "filter-variable",
+        "selection-set-variable"
       ],
       "selectionMode": "write",
       "propsSchema": {
@@ -1772,6 +1774,13 @@ export const pageUIManifest = {
           "bindingField": "selectionVariable",
           "type": "record",
           "requiredUIProfile": "platform.page.v2.14",
+          "writable": true
+        },
+        {
+          "id": "selected-records",
+          "bindingField": "selectionSetVariable",
+          "type": "record-set",
+          "requiredUIProfile": "platform.page.v2.32",
           "writable": true
         }
       ],
@@ -2683,7 +2692,8 @@ export const pageUIManifest = {
     "platform.page.v2.28",
     "platform.page.v2.29",
     "platform.page.v2.30",
-    "platform.page.v2.31"
+    "platform.page.v2.31",
+    "platform.page.v2.32"
   ],
   "runtime": {
     "scope": "page",
@@ -2694,7 +2704,8 @@ export const pageUIManifest = {
       "filter",
       "object-set",
       "decimal",
-      "string-set"
+      "string-set",
+      "record-set"
     ],
     "maxVariables": 64,
     "maxStringBytes": 4096,
@@ -2788,6 +2799,11 @@ export const pageUIManifest = {
         "kind": "record",
         "widget": "kanban",
         "type": "record"
+      },
+      {
+        "kind": "records",
+        "type": "record-set",
+        "widget": "table"
       }
     ],
     "loop": {
@@ -2829,7 +2845,8 @@ export const pageUIManifest = {
         "object-set",
         "filter",
         "decimal",
-        "string-set"
+        "string-set",
+        "record-set"
       ],
       "modes": [
         "state",
@@ -2915,6 +2932,9 @@ export const pageUIManifest = {
         "datetime",
         "reference"
       ]
+    },
+    "recordSelection": {
+      "maxRecords": 64
     }
   },
   "layout": {

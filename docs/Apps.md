@@ -10,6 +10,8 @@
 
 ## 构建者路径与当前边界
 
+表格多选：在“Page variables / 页面变量”创建resource，选择“Record selection set / 记录选择集合”和来源Table；在Table检查器的“Record selection set output / 记录选择集合输出”绑定同一变量。运行时逐项勾选或“Select this window / 选择当前窗口”，行点击设活动记录，Ctrl/Cmd切换、Shift选择同窗口范围；最多64条，通过原记录读取确认后显示选中摘要。全选只表示当前窗口，分页/查询变化清空，不表示完整匹配集合。其他表格、活动记录和浮层独立，关闭浮层/刷新/成员或定义变化清理，失败不保留旧摘要。外包selectionMode=multiple与selectedVarId/selectedObjects沿此生成record-set，活动记录获得独立具名选择槽；原详情和动作仍消费活动记录。该集合不进入页面接口、路由、业务数据或自动批量动作，边界见[ADR-0046 §6.24](ADR/0046-application-studio-fusion.md#624-表格的有界记录多选输出)。
+
 导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持八类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
 
 应用设计台默认进入工坊总览：点击能力卡片，或搜索/选择资产查看状态与关联；选中后打开编辑器、测试或发布审查，返回总览保留搜索与选择；工作流内可切换设计、测试、运行历史与发布。代码声明和租户定义共享应用 API、授权、组件及发布校验。客户不执行任意脚本。构建者拥有 `build.builder`；业务用户按对象/动作/字段权限操作，交付应用本身不增加权限。
@@ -22,7 +24,7 @@
 
 表格单元格编辑：在Table检查器打开“Enable cell editing / 启用单元格编辑”，选择“Original table edit action / 原表格编辑动作”，再选择展示字段中的可编辑字段。源ObjectTable开启enableInlineEdit时，导入窗口同样要求显式映射动作及字段。发布后点击“Edit cells / 编辑单元格”，双击或按Enter/F2编辑，Enter/Tab暂存，点击“Submit cell edits / 提交单元格修改”按行使用原编辑动作。失败行显示原因并保留修改和打开时的revision；版本冲突后取消再编辑以采用当前记录。最多64行、16字段，查询/成员/定义/拥有作用域变化清理草稿；预览可暂存但禁止提交。首profile只绑定标准字段patch，审批/自定义动作继续使用原动作表单。边界见[ADR-0046 §8.8](ADR/0046-application-studio-fusion.md#88-表格就地字段编辑-profile)。
 
-类型化分面：原Filter检查器选择“Facet source window / 分面来源窗口”，为checkbox/histogram字段绑定页面或同浮层的“Text selection set / 文本选择集合”状态，文本search字段绑定文本状态；可另设全文搜索状态。来源计划只提供授权选项和完整计数，表格消费自己的条件计划。查询条件“Skip a valid empty input / 跳过有效空输入”显式跳过空文本/集合；“Read text as an exact number / 将文本按精确数值读取”用于可选数字输入，非空无效值停止读取。外包FilterList默认分面与动态where条件沿此转换，原表格多选/内联编辑及未支持格式仍需显式修正。完整语义及预算见[ADR-0046 §6.23](ADR/0046-application-studio-fusion.md#623-动态筛选的原生类型化映射)。
+类型化分面：原Filter检查器选择“Facet source window / 分面来源窗口”，为checkbox/histogram字段绑定页面或同浮层的“Text selection set / 文本选择集合”状态，文本search字段绑定文本状态；可另设全文搜索状态。来源计划只提供授权选项和完整计数，表格消费自己的条件计划。查询条件“Skip a valid empty input / 跳过有效空输入”显式跳过空文本/集合；“Read text as an exact number / 将文本按精确数值读取”用于可选数字输入，非空无效值停止读取。外包FilterList默认分面与动态where条件沿此转换，表格多选与内联编辑沿其原生端口显式转换，未支持事件/格式仍需修正。完整语义及预算见[ADR-0046 §6.23](ADR/0046-application-studio-fusion.md#623-动态筛选的原生类型化映射)。
 
 精确数值：变量的“Value type / 值类型”选择“Exact number / 精确数值”，填写普通十进制初值；字段失焦时规范化，不接指数、NaN或Infinity。原Input的“Input state variable / 输入状态变量”可绑定此类型；查询条件参数可选择数值变量，integer/decimal字段沿原成员读取执行精确阈值比较。派生变量可用decimal-add/subtract/less，页面接口和应用共享端口保留精确值。运行输入未完成时保留草稿并显示错误，依赖查询停止旧结果；修正后恢复读取。正式发布冻结声明，刷新回到初值，实例或作用域关闭清理。运行数值不修改业务字段，原存储和金额单位语义不因这一入口改变。
 

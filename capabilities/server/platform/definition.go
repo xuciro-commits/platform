@@ -104,6 +104,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	SelectionSetVariable string          `json:"selectionSetVariable,omitempty"`
 	InlineEdit           *PageInlineEdit `json:"inlineEdit,omitempty"`
 	Facets               []PageFacet     `json:"facets,omitempty"`
 	FilterSearchVariable string          `json:"filterSearchVariable,omitempty"`

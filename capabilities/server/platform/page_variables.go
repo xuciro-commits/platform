@@ -42,6 +42,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	RecordSelection struct {
+		MaxRecords int `json:"maxRecords"`
+	} `json:"recordSelection"`
 	TableEditing struct {
 		MaxRows    int      `json:"maxRows"`
 		MaxFields  int      `json:"maxFields"`
@@ -179,6 +182,9 @@ func (d *PageDocument) CheckVariables() error {
 		}
 		if !pageNodeID.MatchString(id) || (v.Scope != contract.Scope && v.Scope != contract.Loop.Scope && v.Scope != contract.Overlay.Scope && v.Scope != contract.Application.Scope) || ((v.Scope == contract.Scope || v.Scope == contract.Application.Scope) && v.Owner != "") || ((v.Scope == contract.Loop.Scope || v.Scope == contract.Overlay.Scope) && !pageNodeID.MatchString(v.Owner)) || !slices.Contains(contract.ValueTypes, v.Type) || len(v.Title) > 1024 {
 			return fail("unsupported identity, scope or type")
+		}
+		if v.Type == "record-set" && (!PageUIProfileSupports(d.UIProfile, "platform.page.v2.32") || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "records" || !slices.Contains([]string{"page", "overlay"}, v.Scope)) {
+			return fail("record-set needs a v2.32 local table resource")
 		}
 		if v.Scope == contract.Overlay.Scope && (!slices.Contains(contract.Overlay.ValueTypes, v.Type) || !slices.Contains(contract.Overlay.Modes, v.Mode)) {
 			return fail("overlay variable needs a supported local value or resource")

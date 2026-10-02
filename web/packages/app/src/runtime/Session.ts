@@ -18,11 +18,12 @@ export type PageSessionSnapshot = {
   views: Record<string,QueryView & {base:string}>;
   scalars: Record<string, ScalarValue>;
   items: Record<string, Record<string, ScalarValue>>;
+  recordSets:Record<string,ReadState<RecordReference[]>>;
   records: Record<string, ReadState<RecordReference>>;
   filters: Record<string, Record<string, unknown>>;
   queries: Record<string, ReadState<QueryWindow>>;
 };
-export type SelectionPlan = { filterObjects?:ReadonlyMap<string,string>;filterFields?:ReadonlyMap<string,ReadonlySet<string>>; objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;filters?:ReadonlySet<string>;loops?:ReadonlySet<string>}>; filterSelections?:ReadonlyMap<string,ReadonlySet<string>>;filterQueries?:ReadonlyMap<string,ReadonlySet<string>>;querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
+export type SelectionPlan = {maxSelectionSetRecords?:number; filterObjects?:ReadonlyMap<string,string>;filterFields?:ReadonlyMap<string,ReadonlySet<string>>; objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;filters?:ReadonlySet<string>;loops?:ReadonlySet<string>}>; filterSelections?:ReadonlyMap<string,ReadonlySet<string>>;filterQueries?:ReadonlyMap<string,ReadonlySet<string>>;querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
 
 /** One member/definition-scoped presentation session. References and query
  * windows are values; record fields/revisions are a separate ephemeral cache.
@@ -52,11 +53,14 @@ export class PageSessionStore {
   }
   private source: RecordSource;
   private plan: SelectionPlan;
-  private state: PageSessionSnapshot = { counts:{}, views:{}, scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
+  private state: PageSessionSnapshot = { counts:{}, views:{}, scalars: {}, items: {}, records: {},recordSets:{}, filters: {}, queries: {} };
   private listeners = new Set<() => void>();
   private viewCache=new Map<string,RecordView>();
   private recordCache = new Map<string, EntityRecord>();
   private recordEpoch = new Map<string, number>();
+  private selectionSetCache=new Map<string,EntityRecord[]>();
+  private selectionSetEpoch=new Map<string,number>();
+  private externalMembers=new Map<string,ReadonlySet<string>>();
   private selectionQueries=new Map<string,string>();
   private queries = new Map<string, { signature: string; object: string; promise: Promise<RecordPageData> }>();
   private sources = new Map<string, RecordSource>();
@@ -125,10 +129,11 @@ export class PageSessionStore {
     this.publish({ queries, ...(selections.length?{records:this.clear(selections)}:{}) });
   }
   reconcileExternalWindow(key:string,signature:string,ids?:string[]) {
+    if(ids)this.externalMembers.set(key,new Set(ids));else this.externalMembers.delete(key);
     const changed=this.querySignatures.get(key)!==signature;
     this.querySignatures.set(key,signature);
     const slots=this.selectionKeys(key);
-    const removed=changed?slots:ids?slots.filter((slot)=>{const value=this.state.records[slot];return value&&"value" in value&&value.value&&!ids.includes(value.value.id);}):[];
+    const removed=changed?slots:ids?slots.filter((slot)=>{const value=this.state.records[slot];return value&&"value" in value&&value.value&&!ids.includes(value.value.id)||this.selectionSetReferences(slot).some(r=>!ids.includes(r.id));}):slots.filter(slot=>!!this.state.recordSets[slot]);
     if(removed.length)this.publish({records:this.clear(removed)});
   }
   setItemScalar(owner: string, key: string, id: string, value: ScalarValue) {
@@ -193,7 +198,7 @@ export class PageSessionStore {
     const records = { ...this.state.records }, visited = new Set<string>();
     const remove = (key: string) => {
       if (visited.has(key)) return;
-      visited.add(key); records[key] = { status: "empty" }; this.recordCache.delete(key);this.selectionQueries.delete(key);
+      visited.add(key);this.selectionSetEpoch.set(key,(this.selectionSetEpoch.get(key)??0)+1);this.selectionSetCache.delete(key);if(this.state.recordSets[key])this.state={...this.state,recordSets:{...this.state.recordSets,[key]:{status:"empty"}}}; records[key] = { status: "empty" }; this.recordCache.delete(key);this.selectionQueries.delete(key);
       this.recordEpoch.set(key, (this.recordEpoch.get(key) ?? 0) + 1);
       for (const child of this.plan.children.get(key) ?? []) remove(child);
     };
@@ -212,6 +217,19 @@ export class PageSessionStore {
     records[key] = { status: "value", value: { object, id: record.id } };
     this.publish({ records, queries });
     void this.read(key, { object, id: record.id });
+  }
+  selectionSetReferences(key:string){const state=this.state.recordSets[key];return state&&"value" in state?state.value??[]:[];}
+  selectedSet(key:string){return this.selectionSetCache.get(key)??[];}
+  selectSet(key:string,ids:string[],query:string){
+   const object=this.plan.objects.get(key),members=this.queryData.get(query)?.records.map(r=>r.id),allowed=members?new Set(members):this.externalMembers.get(query);
+   if(this.disposed||!object||!this.plan.querySelections?.get(query)?.has(key)||this.queryObjects.has(query)&&this.queryObjects.get(query)!==object||ids.length>(this.plan.maxSelectionSetRecords??64)||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=="string"||!id||id.length>1024||!allowed?.has(id)))return;
+   this.clear([key]);this.selectionQueries.set(key,query);const references=ids.map(id=>({object,id}));void this.readSet(key,references);
+  }
+  private async readSet(key:string,references:RecordReference[]){
+   const epoch=(this.selectionSetEpoch.get(key)??0)+1;this.selectionSetEpoch.set(key,epoch);this.selectionSetCache.delete(key);
+   this.publish({recordSets:{...this.state.recordSets,[key]:references.length?{status:"pending",value:references}:{status:"empty",value:[]}}});if(!references.length)return;
+   try {const records=await Promise.all(references.map(async ref=>{const view=await this.readReference(ref.object,ref.id);if(view.record.archived)throw Error("Archived selection");return view.record;}));if(this.disposed||this.selectionSetEpoch.get(key)!==epoch)return;this.selectionSetCache.set(key,records);this.publish({recordSets:{...this.state.recordSets,[key]:{status:"value",value:references}}});}
+   catch(error){if(this.disposed||this.selectionSetEpoch.get(key)!==epoch)return;this.selectionSetCache.delete(key);this.publish({recordSets:{...this.state.recordSets,[key]:{status:"error",error:String(error)}}});}
   }
   selectReference(key: string, reference?: RecordReference) {
     if (this.disposed || !this.plan.objects.has(key) || reference && (reference.object !== this.plan.objects.get(key) || !reference.id)) return;
@@ -265,7 +283,7 @@ export class PageSessionStore {
     this.queries.clear();this.queryData.clear(); this.reads.clear();this.viewCache.clear();
     this.publish({ counts:{}, queries: Object.fromEntries(Object.keys(this.state.queries).map((key) => [key, { status: "empty" }])) });
     if (changedScope) {
-      this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear(); this.querySignatures.clear();
+      this.externalMembers.clear();this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear(); this.querySignatures.clear();
       this.publish({ counts:{}, views:{}, scalars: {}, items: {}, filters: {}, records: this.clear([...this.plan.objects.keys()]) });
       return;
     }
@@ -273,6 +291,7 @@ export class PageSessionStore {
     // and have no cached record yet. A revision retires their old request too.
     const references=Object.entries(this.state.records).flatMap(([key,state])=>(state.status==="value"||state.status==="pending")&&state.value?[[key,state.value] as const]:[]);
     for(const [key,reference] of references)void this.read(key,reference);
+    for(const [key,state] of Object.entries(this.state.recordSets))if((state.status==="value"||state.status==="pending")&&state.value)void this.readSet(key,state.value);
   }
   querySource(key: string): RecordSource {
     let source = this.sources.get(key);
@@ -308,7 +327,7 @@ export class PageSessionStore {
     request.promise = request.promise.then((page) => {
       if (!this.disposed && this.queries.get(key) === request && source === this.source && source.scope === scope) {
         this.queryData.set(key,page);
-        const vanished=this.selectionKeys(key).filter((slot)=>{const state=this.state.records[slot];return state&&"value" in state&&state.value&&!page.records.some((record)=>record.id===state.value!.id);});
+        const vanished=this.selectionKeys(key).filter((slot)=>{const state=this.state.records[slot];return state&&"value" in state&&state.value&&!page.records.some((record)=>record.id===state.value!.id)||this.selectionSetReferences(slot).some(r=>!page.records.some(record=>record.id===r.id));});
         if(vanished.length)this.publish({records:this.clear(vanished),queries:this.invalidate(vanished)});
         const value: QueryWindow = { object, query, revision, records: page.records.map((record) => ({ object, id: record.id })), total: page.total,
           complete: (query.offset ?? 0) === 0 && page.records.length === page.total };
@@ -330,9 +349,9 @@ export class PageSessionStore {
   dispose() {
     for(const child of this.childSessions.values())child.session.dispose();this.childSessions.clear();
     this.counts.clear();
-    this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear();this.viewCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
+    this.disposed = true;this.selectionSetCache.clear();for(const [key,epoch] of this.selectionSetEpoch)this.selectionSetEpoch.set(key,epoch+1);this.externalMembers.clear(); this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear();this.viewCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
-    this.state = { counts:{}, views:{}, scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
+    this.state = { counts:{}, views:{}, scalars: {}, items: {}, records: {},recordSets:{}, filters: {}, queries: {} };
     this.listeners.clear();
   }
 }

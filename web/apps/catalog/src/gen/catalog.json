@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:631ebefcf45162d3",
+  "revision": "sha256:63905f166513ba92",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1742,7 +1742,8 @@
         "Staged edits"
       ],
       "constraints": [
-        "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution."
+        "An optional RecordEditPort supplies authorized displayed fields and the original revision-bound submit callback. Failed edits remain staged; the caller owns permissions and execution.",
+        "RecordSelectionPort controls bounded selection in the current window; the caller confirms record permissions and owns pending, failure and cleanup. Window selection is not a complete matching set."
       ],
       "dependencies": [
         "ui/data-table",
@@ -2211,6 +2212,7 @@
       "Record list and detail": "记录列表与详情",
       "Record lookup": "记录选择器",
       "Record summary": "记录摘要",
+      "RecordSelectionPort controls bounded selection in the current window; the caller confirms record permissions and owns pending, failure and cleanup. Window selection is not a complete matching set.": "RecordSelectionPort 控制当前窗口的有界选择，由调用方确认记录权限并管理在途、失败及清理。窗口选择不代表完整匹配集合。",
       "Reference links need a Workspace; attachment upload needs an explicit caller implementation.": "引用链接需要 Workspace；附件上传需要调用方明确实现。",
       "Render a visualization spec using inline values or a scoped aggregate source.": "使用内联值或限定范围的聚合数据源呈现可视化规格。",
       "Render labelled editors and validate an ad hoc schema before submission.": "呈现带标签的编辑器，并在提交前校验临时模式。",
@@ -2897,6 +2899,7 @@
         "RecordEditPort",
         "RecordPageData",
         "RecordQuery",
+        "RecordSelectionPort",
         "RecordSource",
         "RecordView",
         "RetroButtonProps",

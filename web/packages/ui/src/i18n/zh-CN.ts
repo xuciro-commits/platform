@@ -1,5 +1,14 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "RecordSelectionPort controls bounded selection in the current window; the caller confirms record permissions and owns pending, failure and cleanup. Window selection is not a complete matching set.": "RecordSelectionPort 控制当前窗口的有界选择，由调用方确认记录权限并管理在途、失败及清理。窗口选择不代表完整匹配集合。",
+ "Select this window": "选择当前窗口",
+ "Select {record}": "选择记录 {record}",
+ "The selection limit has been reached.": "已达到选择数量上限。",
+ "{count} records selected in this window": "已选择当前窗口中的 {count} 条记录",
+ "Checking selected records…": "正在验证选中记录…",
+ "Selection read failed": "选中记录读取失败",
+ "Selected records": "选中记录",
+
  "Edit {field} for {record}": "编辑记录 {record} 的 {field}",
  "Submitting…": "正在提交…",
  "Staged edits": "暂存修改",

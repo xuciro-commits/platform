@@ -24,7 +24,7 @@ import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavig
 import { NestedLoopRuntime } from "./runtime/NestedLoopRuntime";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
-import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, selectionSlot, overlaySessionScopes, resourceVariables } from "./runtime/resources";
+import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, selectionSetSlot,selectionSlot, overlaySessionScopes, resourceVariables } from "./runtime/resources";
 import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
@@ -49,6 +49,7 @@ type Bound = {
   session?: PageSessionStore;
   window?: NonNullable<Parameters<typeof RecordList>[0]["window"]>;
  collection?:VariableResult; aggregateScope?:string;
+  selectionSet?:import("@platform/ui").RecordSelectionPort;
   facetValues?:Record<string,VariableResult>;onFacet?:(id:string,value:ScalarValue)=>void;
   onClick?: () => void; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
   sharedFilter?:Record<string,unknown>; narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
@@ -75,7 +76,7 @@ const relatedField = (fields: { name: string; title: string; type: string; ref?:
   fields?.find((f) => f.type === "reference" && f.ref === parentTypeOf(page, section) && (!section.relation || f.inverse === section.relation));
 
 /** The records of an object, as a list; selecting one fills the rest of the page. */
-function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection,live,aggregateScope }: Bound) {
+function TableAdapter({ page, section, onSelect, selected, master, narrowed, sharedFilter, session, window,collection,live,aggregateScope,selectionSet }: Bound) {
   const { source, definitions,catalog,decide } = useHost();
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -96,7 +97,7 @@ function TableAdapter({ page, section, onSelect, selected, master, narrowed, sha
   const domain = [...((query?.domain as unknown[] | undefined) ?? []), ...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
   return <TableRenderer key={section.collectionVariable ? type : refField ? `${type}/${refField.name}/${master?.id}` : type}
     source={section.collectionVariable ? source : session?.querySource(section.id ?? `section:${page.sections?.indexOf(section)}`) ?? source}
-    inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
+    selectionSet={selectionSet} inlineEdit={inlineEdit} object={type} fields={section.fields} domain={section.collectionVariable ? undefined : domain} window={window}
     selected={selected} onSelect={onSelect} status={status} plural={info?.plural?.toLowerCase()}/>;
 }
 
@@ -441,6 +442,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   const slots = new Map([
     [selectionKey(masterType), masterType],
     ...(page.sections ?? []).map((section) => [selectionSlot(page,section), objectOf(page, section)] as const),
+    ...(page.sections??[]).filter(s=>s.selectionSetVariable).map(s=>[selectionSetSlot(page,s),objectOf(page,s)] as const),
     ...Object.values(page.document?.interface?.inputs ?? {}).filter((port) => port.type === "record" && port.object).map((port) => [inputSlot(port.variable), port.object!.name] as const),
     ...Object.entries(initialVariables).filter(([,v])=>v.mode==="shared"&&v.type==="record"&&v.source?.object).map(([id,v])=>[inputSlot(id),v.source!.object!.name] as const),
     ...(page.selections ?? []).map((variable) => [selectionKey(variable.object.name, variable.name), variable.object.name] as const),
@@ -457,11 +459,12 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   }
   const applicationVariable=(id:string)=>{const v=initialVariables[id];if(v?.mode==="shared"&&v.type==="object-set")return id;if(v?.source?.kind==="query"){const section=page.sections?.find((s)=>s.id===v.source?.section);const bound=initialVariables[section?.collectionVariable??""];if(bound?.mode==="shared"&&bound.type==="object-set")return section?.collectionVariable;}return undefined;};
   const querySelections = new Map<string,Set<string>>();
-  for(const section of page.sections??[]){if(!["table","record-timeline","kanban"].includes(section.widget))continue;const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
-  for(const section of page.sections??[]){if(!["table","record-timeline","kanban"].includes(section.widget))continue;const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
-  for(const section of page.sections??[]){if(section.filterVariable&&section.widget==="table"){const key=section.id??`section:${page.sections!.indexOf(section)}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
+  for(const section of page.sections??[]){if(!["table","record-timeline","kanban"].includes(section.widget))continue;const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)querySelections.get(key)!.add(selectionSetSlot(page,section));}}
+  for(const section of page.sections??[]){if(!["table","record-timeline","kanban"].includes(section.widget))continue;const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)querySelections.get(key)!.add(selectionSetSlot(page,section));}}
+  for(const section of page.sections??[]){if(section.filterVariable&&section.widget==="table"){const key=section.id??`section:${page.sections!.indexOf(section)}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));if(section.selectionSetVariable)querySelections.get(key)!.add(selectionSetSlot(page,section));}}
+  for(const section of page.sections??[]){if(section.widget!=="table"||!section.selectionSetVariable||section.collectionVariable)continue;const key=section.id??"";if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSetSlot(page,section));}
   for(const [id,q] of Object.entries(page.document?.queries??{})){const v=initialVariables[q.for?.variable??""],producer=page.sections?.find(s=>s.id===v?.source?.section);if(q.query?.ref.kind!=="link-type"||v?.source?.kind!=="record"||!producer)continue;const parent=selectionSlot(page,producer);queryParents.set(planKey(id),parent);for(const child of querySelections.get(planKey(id))??[]){if(!children.has(parent))children.set(parent,new Set());(children.get(parent) as Set<string>).add(child);}}
-  const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents, querySelections, ...(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?filterSessionBindings(page):{}), overlayScopes:overlaySessionScopes(page) });
+  const { session, snapshot } = usePageSession(source, { maxSelectionSetRecords:pageVariableContract.recordSelection.maxRecords,objects: slots, children, queryParents, querySelections, ...(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?filterSessionBindings(page):{}), overlayScopes:overlaySessionScopes(page) });
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
   const resources = useMemo(() => resourceVariables(page, snapshot), [resourceKey, snapshot]);
   const incoming = usePageInputs(page, session, snapshot);
@@ -521,6 +524,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
+        selectionSet={section.selectionSetVariable?{selectedIDs:session.selectionSetReferences(selectionSetSlot(page,section)).map(r=>r.id),records:session.selectedSet(selectionSetSlot(page,section)),status:snapshot.recordSets[selectionSetSlot(page,section)]?.status??"empty",maxRecords:pageVariableContract.recordSelection.maxRecords,onChange:ids=>session.selectSet(selectionSetSlot(page,section),ids,selectionQuery(section)??section.id??"")}:undefined}
         facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
         collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"||!!valueVariable&&Object.values(page.document?.queries??{}).some(q=>q.conditions?.some(c=>c.asDecimal&&c.value.variable===valueVariable))} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
