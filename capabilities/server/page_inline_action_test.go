@@ -36,9 +36,9 @@ func TestInlineActionFrozenBindingAndMemberRetirement(t *testing.T) {
 	}
 	submit(build.ObjectType, "O", build.ObjectType+".create", map[string]any{"name": "task", "title": "Task", "fields": []build.Field{{Name: "title", Title: "Title", Type: "text"}}, "states": []build.State{{Name: "open", Title: "Open"}, {Name: "done", Title: "Done"}}, "actions": []build.Action{{Name: "close", Title: "Close", From: []string{"open"}, To: "done", Roles: []string{build.Builder}}}})
 	submit(build.ObjectType, "O", build.SchemaPublish, struct{}{})
-	doc := platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"inline"}}, "inline": {Kind: "widget", Section: "inline"}}}
-	sections := []build.Section{{ID: "inline", Widget: "inline-action", ConfigVersion: 1, Title: "Close task", Actions: []string{"build.task.close"}}}
-	submit(build.PageType, "P", build.PageType+".create", map[string]any{"name": "tasks", "title": "Tasks", "object": "build.task", "sections": sections, "document": doc})
+	doc := platform.PageDocument{FormatVersion: 2, UIProfile: platform.PageUIProfile(), Root: "root", Nodes: map[string]platform.PageLayoutNode{"root": {Kind: "rows", Children: []string{"inline", "table"}}, "inline": {Kind: "widget", Section: "inline"}, "table": {Kind: "widget", Section: "table"}}}
+	sections := []build.Section{{ID: "inline", Widget: "inline-action", ConfigVersion: 1, Title: "Close task", Selection: "selected", Actions: []string{"build.task.close"}}, {ID: "table", Widget: "table", ConfigVersion: 1, Selection: "selected", Fields: []string{"title"}}}
+	submit(build.PageType, "P", build.PageType+".create", map[string]any{"name": "tasks", "title": "Tasks", "object": "build.task", "sections": sections, "document": doc, "selections": []platform.SelectionVariable{{Name: "selected", Object: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.task"}}}})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
 		t.Fatalf("preview %+v %v", preview, err)
@@ -80,7 +80,7 @@ func TestInlineActionFrozenBindingAndMemberRetirement(t *testing.T) {
 		for _, d := range tn.Definitions(builder) {
 			if d.Page != nil && d.Ref.Name == "tasks" {
 				seen = true
-				if len(d.Page.Sections) != 1 || len(d.Page.Sections[0].Actions) != 1 || d.Page.Sections[0].Actions[0].Name != "build.task.close" {
+				if len(d.Page.Sections) != 2 || len(d.Page.Sections[0].Actions) != 1 || d.Page.Sections[0].Actions[0].Name != "build.task.close" || d.Page.Sections[0].Selection != "selected" {
 					t.Fatal("draft replaced frozen action")
 				}
 			}
@@ -89,8 +89,12 @@ func TestInlineActionFrozenBindingAndMemberRetirement(t *testing.T) {
 			t.Fatal("builder inline action disappeared")
 		}
 		for _, d := range tn.Definitions(reader) {
-			if d.Page != nil && d.Ref.Name == "tasks" && len(d.Page.Sections) != 0 {
-				t.Fatal("member without original action retained its form")
+			if d.Page != nil && d.Ref.Name == "tasks" {
+				for _, s := range d.Page.Sections {
+					if s.Widget == "inline-action" {
+						t.Fatal("member without original action retained its form")
+					}
+				}
 			}
 		}
 	}

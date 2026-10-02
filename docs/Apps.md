@@ -56,6 +56,8 @@
 
 关系基数：在关系编辑器选择“Relationship cardinality / 关系基数”的“One-to-many / 一对多”或“One-to-one (at most one child) / 一对一（至多一个子记录）”。一对一沿原引用字段检查反向唯一性，必填仍由字段决定；可选空引用不占位，归档不释放引用，原编辑更换/清空引用才释放。已有重复数据会阻止安装或候选激活，写入冲突只返回通用错误。草稿不改运行约束，候选冻结原声明；唯一性发布后不能放宽，其他弱关系声明或旧版本不撤销它。deletePolicy=owner时，API的one-to-one使用contractVersion=2，一对多保持contractVersion=1；restrict-active组合使用contractVersion=3。模型检查器显示真实安装基数，M:N、级联删除与退役仍未提供。
 
+布局复制：选择主页面中的Rows/Columns容器，用树的右键/Shift+F10/“Commands for … / …的操作”或画布已选容器的“Layout commands / 布局操作”执行“Copy layout / 复制布局”；选择目标Rows/Columns后“Paste layout / 粘贴布局”。工具栏与非输入焦点下的Cmd/Ctrl+C、V、D使用同一命令；“Duplicate layout / 创建布局副本”直接加入同父容器。复制不改变保存状态；粘贴沿原撤销/重做，布局标题在树中可辨识。副本的节点、组件、内部输入、选择、依赖查询及事件重新绑定，暂存内容保留；原动作、对象和明确外部共享端口仍相同，结果提示保留的共享绑定。外部声明改变或超额时整体拒绝；当前只支持主页面Rows/Columns子树，其他容器/Loop/Overlay显示诊断。剪贴板仅在本编辑会话内，隐藏视图保留，刷新/关闭或成员/定义变化清空；最终页面仍走原保存与冻结激活，不保存剪贴板。
+
 组件暂存：在布局树的组件行右键、按Shift+F10或点击“Commands for … / …的操作”，选择“Move to unused widgets / 移入未使用组件”。暂存区保留原ID、配置与作用域，不在页面挂载；“Put back in original layout / 放回原布局”恢复原父属，也可选择其他明确容器。尺寸/作用域不兼容时需修正后保存。“Duplicate widget / 复制组件”分配新ID并复制输入的局部state，显式共享绑定保留；暂存副本仍暂存。“Delete widget / 删除组件”删除组件与其事件，外部引用需显式修正。命令沿原撤销/重做与保存；发布仍冻结原候选，暂存组件不会绕过绑定和依赖检查。API为v2.28的document.unusedWidgets=[{node,parent}]，node引用原widget叶，parent保留原容器作用域；一个节点不能同时活动和暂存。
 
 页面区域尺寸：在布局树选择Rows/Columns或组件，在“Region sizing / 区域尺寸”配置权重、固定/最小/最大宽高及滚动；容器另有“Layout gap (px) / 布局间距（像素）”。空值保留自然布局，尺寸为32–4096像素、权重1–24、间距0–64。Columns孩子默认等分；Rows权重需要父区域有明确或继承高度。固定主轴尺寸与权重冲突时显示节点诊断并禁止保存；移动/换容器后需修正不兼容设置，可用“Reset region sizing / 重置区域尺寸”。“Scroll inside region / 在区域内滚动”需要明确高度或最大高度，滚动不改变查询和挂载。窄Columns堆叠并退让横向约束，宽列放不下时换行。尺寸沿原保存、撤销/重做和冻结候选交付；API为node.size与Rows/Columns的gap，需v2.27。

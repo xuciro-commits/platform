@@ -116,6 +116,10 @@ func WidgetWritesSelection(id string) bool {
 	w := pageWidget(id)
 	return w != nil && w.SelectionMode == "write"
 }
+func WidgetReadsSelection(id string) bool {
+	w := pageWidget(id)
+	return w != nil && (w.SelectionMode == "read" || w.SelectionMode == "write")
+}
 
 func SupportsPageUIProfile(profile string) bool {
 	return slices.Contains(pageWidgets.SupportedProfiles, profile)

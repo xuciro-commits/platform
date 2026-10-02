@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:367a409bce9b8330",
+  "revision": "sha256:12c34e32cdfc8944",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2596,6 +2596,10 @@
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx"
     ],
+    "ui/command-menu": [
+      "web/packages/build/src/editor.tsx",
+      "web/packages/build/src/page-editor/LayoutTree.tsx"
+    ],
     "ui/editor-workbench": [
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
@@ -2628,9 +2632,6 @@
       "web/packages/pms/src/index.tsx",
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/chrome.tsx"
-    ],
-    "ui/command-menu": [
-      "web/packages/build/src/page-editor/LayoutTree.tsx"
     ],
     "ui/lifecycle": [
       "web/packages/build/src/process.tsx"

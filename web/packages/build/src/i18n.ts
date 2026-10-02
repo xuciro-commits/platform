@@ -2,6 +2,20 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Copy layout": "复制布局",
+  "Paste layout": "粘贴布局",
+  "Duplicate layout": "创建布局副本",
+  "Select layout": "选择布局",
+  "Layout commands": "布局操作",
+  "Commands for {layout}": "{layout}的操作",
+  "Copy a Rows or Columns layout containing only Rows, Columns and widgets.": "请选择仅含行、列和组件的行或列布局进行复制。",
+  "Copy and paste layouts within the main page. Loop and overlay scopes need their own mapping.": "请在主页面内复制粘贴布局。循环和浮层作用域需要独立映射。",
+  "An external binding changed since this layout was copied. Copy it again before pasting.": "复制后外部绑定已改变。请重新复制后再粘贴。",
+  "This copy would exceed the page's layout or resource limits.": "该副本会超出页面布局或资源上限。",
+  "This layout has missing or invalid references. Correct it before copying.": "该布局存在缺失或无效引用。请修正后再复制。",
+  "Layout copied. Choose a page layout and paste. External shared bindings stay shared.": "布局已复制。请选择页面布局并粘贴。外部共享绑定保持共享。",
+  "Layout pasted. External bindings kept: {bindings}": "布局已粘贴。保留外部绑定：{bindings}",
+  "Layout pasted with independent inputs and record selections.": "布局已粘贴，输入和记录选择相互独立。",
   "Inline action": "就地动作",
   "Inline record action": "就地记录动作",
   "Choose one record action": "选择一个记录动作",

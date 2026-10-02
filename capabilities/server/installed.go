@@ -309,11 +309,11 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if selections[s.Selection] != info.Type {
 				return fmt.Errorf("%s: selection %q does not hold %s records", where, s.Selection, info.Type)
 			}
-			if !slices.Contains([]string{"table", "detail", "actions", "timeline", "tasks", "function", "compute"}, s.Widget) {
+			if !platform.WidgetReadsSelection(s.Widget) {
 				return fmt.Errorf("%s: this widget does not use a record selection", where)
 			}
 			if !slices.ContainsFunc(p.Sections, func(other platform.Section) bool {
-				return other.Widget == "table" && other.Selection == s.Selection
+				return platform.WidgetWritesSelection(other.Widget) && other.Selection == s.Selection
 			}) {
 				return fmt.Errorf("%s: add a table that supplies selection %q", where, s.Selection)
 			}

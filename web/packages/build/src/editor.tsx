@@ -6,7 +6,7 @@ import { AssetControls } from "./asset-controls";
 // the same registered widgets; save and activation use the original Go path.
 import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, pageDocumentFromSections, pageUIProfile, pageVariableContract, supportsPageUIProfile, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
-  Button, Card, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
+  Button, Card, CommandMenu, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
   type EntityInfo,
 } from "@platform/ui";
 import { Copy, Monitor, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2 } from "lucide-react";
@@ -21,6 +21,7 @@ import { widgetInspector } from "./page-editor/widgets/registry";
 import { OverlayProperties } from "./page-editor/OverlayPanel";
 import { LayoutProperties, LayoutSizing, LayoutTree } from "./page-editor/LayoutTree";
 import { useDraftSession } from "./session/DraftSession";
+import {copyLayout,pasteLayout,type LayoutClipboard,type ClipboardIssue} from "./page-editor/clipboard";
 
 type Api = NonNullable<Definition["page"]>;
 type Section = NonNullable<Api["sections"]>[number];
@@ -90,7 +91,10 @@ export function PageEditor({ id }: { id: string }) {
   const { open } = useWorkspace();
   const query = useReadQuery<{ record?: PageRecord }>(`/v1/records/build.page/${encodeURIComponent(id)}`);
   const page = query.data?.record;
-  const session = useDraftSession<PageDraft>(emptyDraft());
+  const session = useDraftSession<PageDraft,LayoutClipboard<Draft>>(emptyDraft(),JSON.stringify([id,source.scope]));
+  const [clipboardNotice,setClipboardNotice]=useState<{scope:string;error?:boolean;text:string}>();
+  const clipboardScope=JSON.stringify([id,source.scope]);
+  useEffect(()=>setClipboardNotice(undefined),[clipboardScope]);
   const { sections, document, selections, title, description } = session.draft;
   const { dirty } = session;
   const [selection, select] = useState<StudioSelection>({ kind: "page" });
@@ -183,6 +187,27 @@ export function PageEditor({ id }: { id: string }) {
     });
     select({ kind: "widget", id: copy.id });
   };
+  const clipboardError=(issue:ClipboardIssue)=>issue==="unsupported"?t("Copy a Rows or Columns layout containing only Rows, Columns and widgets."):issue==="scope"?t("Copy and paste layouts within the main page. Loop and overlay scopes need their own mapping."):issue==="dependencies"?t("An external binding changed since this layout was copied. Copy it again before pasting."):issue==="budget"?t("This copy would exceed the page's layout or resource limits."):t("This layout has missing or invalid references. Correct it before copying.");
+  const copyContainer=(root:string)=>{
+    if(lock.current)return;
+    const result=copyLayout(session.draft,root,page.object);
+    if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}
+    session.copy(result.value);setClipboardNotice({scope:clipboardScope,text:t("Layout copied. Choose a page layout and paste. External shared bindings stay shared.")});
+  };
+  const pasteContainer=(target:string,clip=session.clipboard)=>{
+    if(lock.current||!clip)return;
+    const result=pasteLayout(session.draft,clip,target,page.object,{...pageVariableContract,selectionWriters:widgetContracts.filter(w=>w.selectionMode==="write").map(w=>w.componentID),selectionWidgets:widgetContracts.filter(w=>w.selectionMode!=="none").map(w=>w.componentID),references:Object.fromEntries(definitions.filter(d=>d.entity).map(d=>[d.entity!.type,d.entity!.fields.filter(f=>f.type==="reference"&&f.ref).map(f=>f.ref!)]))});
+    if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}
+    edit({...session.draft,...result.value.draft});select({kind:"container",id:result.value.root});setRightOpen(true);
+    setClipboardNotice({scope:clipboardScope,text:result.value.shared.length?t("Layout pasted. External bindings kept: {bindings}",{bindings:result.value.shared.map(id=>document.variables?.[id]?.title||id).join(", ")}):t("Layout pasted with independent inputs and record selections.")});
+  };
+  const duplicateContainer=(root:string)=>{
+    const result=copyLayout(session.draft,root,page.object);
+    if(result.issue){setClipboardNotice({scope:clipboardScope,error:true,text:clipboardError(result.issue)});return;}
+    const parent=Object.entries(document.nodes).find(([,node])=>node.children?.includes(root))?.[0]??document.root;
+    pasteContainer(parent,result.value);
+  };
+  const layoutCommands=(root:string)=>[{id:"copy",label:t("Copy layout"),run:()=>copyContainer(root)},{id:"paste",label:t("Paste layout"),disabled:!session.clipboard,run:()=>pasteContainer(root)},{id:"duplicate",label:t("Duplicate layout"),run:()=>duplicateContainer(root)}];
   const save = async () => {
     if (invalid || lock.current) return false;
     lock.current = true; setRefused(undefined); setSaving(true);
@@ -221,7 +246,9 @@ export function PageEditor({ id }: { id: string }) {
       if (!command || typing || busy) return;
       if (event.key.toLowerCase() === "z") { event.preventDefault(); history(event.shiftKey ? "redo" : "undo"); }
       if (event.key.toLowerCase() === "y") { event.preventDefault(); history("redo"); }
-      if (event.key.toLowerCase() === "d") { event.preventDefault(); duplicate(); }
+      if (event.key.toLowerCase() === "d") { event.preventDefault(); if(container)duplicateContainer(container);else duplicate(); }
+      if (event.key.toLowerCase() === "c"&&container&&!window.getSelection()?.toString()) { event.preventDefault(); copyContainer(container); }
+      if (event.key.toLowerCase() === "v"&&container&&session.clipboard) { event.preventDefault(); pasteContainer(container); }
     }}>
       <PageHeader title={title || page.title} description={t("Compose what people see, save your draft, then review its release candidate.")}
         actions={<><StatusTag status={page.state} registry={pageStates} />{page.state === "published" && <Button onClick={() => open({ view: "page", params: { app: "build", kind: "page", name: page.name } })}>{t("Open published page")}</Button>}</>} />
@@ -229,7 +256,9 @@ export function PageEditor({ id }: { id: string }) {
         <Button variant="ghost" aria-label={t("Toggle widget library")} onClick={() => setLeftOpen(!leftOpen)}>{leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />}</Button>
         <Button variant="ghost" aria-label={t("Undo")} title={t("Undo")} disabled={!session.canUndo || busy} onClick={() => history("undo")}><Undo2 /></Button>
         <Button variant="ghost" aria-label={t("Redo")} title={t("Redo")} disabled={!session.canRedo || busy} onClick={() => history("redo")}><Redo2 /></Button>
-        <Button variant="ghost" disabled={chosen < 0 || busy} onClick={()=>duplicate()}><Copy />{t("Duplicate widget")}</Button>
+        <Button variant="ghost" disabled={!container&&chosen < 0 || busy} onClick={()=>container?duplicateContainer(container):duplicate()}><Copy />{t(container?"Duplicate layout":"Duplicate widget")}</Button>
+        <Button variant="ghost" disabled={!container||busy} onClick={()=>container&&copyContainer(container)}>{t("Copy layout")}</Button>
+        <Button variant="ghost" disabled={!container||!session.clipboard||busy} onClick={()=>container&&pasteContainer(container)}>{t("Paste layout")}</Button>
         <span className="mx-1 h-4 w-px bg-border" />
         <AssetControls type="build.page" record={page} dirty={dirty} busy={busy} onCancel={discardChanges} route={{ view: "compose", params: { id } }} />
         <span className="ml-auto text-xs text-muted" role="status">{dirty ? t("Unsaved") : t("Saved")}</span>
@@ -239,6 +268,7 @@ export function PageEditor({ id }: { id: string }) {
         <Button variant="ghost" aria-label={t("Toggle inspector")} onClick={() => setRightOpen(!rightOpen)}>{rightOpen ? <PanelRightClose /> : <PanelRightOpen />}</Button>
       </Card>
       {refused && <Panel role="alert" className="text-sm text-danger">{t("The host refused it:")} {humanizeKernelError(refused)}</Panel>}
+      {clipboardNotice?.scope===clipboardScope&&<Panel role={clipboardNotice.error?"alert":"status"}>{clipboardNotice.text}</Panel>}
       {layoutProblems.length>0&&<Panel role="alert">{layoutProblems.map((issue,i)=><p key={i}>{issue.node}: {t(issue.code)}</p>)}</Panel>}
       {variableProblems.length > 0 && <Panel role="alert" className="text-xs text-danger">{variableProblems.map((issue, index) => <p key={index}>{issue.variable}: {t(issue.code)}</p>)}</Panel>}
       {loopProblem && <Panel role="status" className="text-xs text-muted">{t("Choose a query window for each loop before saving.")}</Panel>}
@@ -254,6 +284,7 @@ export function PageEditor({ id }: { id: string }) {
             onGroup={(kind) => { const section = sections[chosen]; if (!section?.id) return; const result = groupWidget(document, section.id, kind); edit({ document: result.document }); if (result.id) select({ kind: "container", id: result.id }); }}
             onAddOverlay={() => { const result = addOverlay(document, t("Overlay {n}", { n: Object.keys(document.overlays ?? {}).length + 1 })); edit({ document: result.document }); select({ kind: "container", id: result.root }); setRightOpen(true); }}
             onDuplicate={duplicate} onStash={index=>{const section=sections[index];if(section?.id)edit({document:stashWidget(document,section.id)});}}
+            onCopyLayout={copyContainer} onPasteLayout={pasteContainer} onDuplicateLayout={duplicateContainer} canPasteLayout={!!session.clipboard}
             onRestore={(index,target)=>{const section=sections[index];if(section?.id)edit({document:restoreWidget(document,section.id,target)});}}
             onRemove={(index) => { const section = sections[index]; if (!section?.id) return; edit((old) => ({ ...old, document: removeWidget(old.document, section.id!), sections: old.sections.filter((s) => s.id !== section.id) })); select({ kind: "page" }); }} /></>}
           right={rightOpen && (selection.kind === "queries" ? <QueriesPanel onPreviewOwner={setQueryPreviewOwner} document={document} object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} values={variableValues} onChange={(document)=>edit({document})}/> : selection.kind === "interface" ? <InterfacePanel document={document} object={{ app: page.object.split(".")[0]!, kind: "object", name: page.object }} onChange={(document) => edit({ document })} /> : selection.kind === "variables" ? <VariablesPanel object={{app:page.object.split(".")[0]!,kind:"object",name:page.object}} document={document} sections={sections} values={variableValues} onChange={(document) => edit({ document })} /> : <div className="grid content-start gap-2">{container && Object.entries(document.overlays ?? {}).filter(([, overlay]) => overlay.root === container).map(([id, overlay]) => <OverlayProperties key={id} overlay={overlay}
@@ -295,7 +326,7 @@ export function PageEditor({ id }: { id: string }) {
                     const destination = { container: node.kind === "widget" ? document.root : id, after: node.kind === "widget" ? node.section : undefined };
                     if (widget) add(widget, destination); else edit((old) => ({ ...old, document: relocateWidget(old.document, section, destination.container, destination.after) }));
                   }}>
-                  {container === id && <Button size="sm" variant="primary" className="absolute -top-3 left-2 z-10" onClick={() => select({ kind: "container", id })}>{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows")}</Button>}
+                  {container === id && <div className="absolute -top-3 left-2 z-10"><CommandMenu label={t("Layout commands")} commands={layoutCommands(id)}><Button size="sm" variant="primary" onClick={() => select({ kind: "container", id })}>{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows")}</Button></CommandMenu></div>}
                   {body}
                 </div>} /></ApplicationPage>
             </div>

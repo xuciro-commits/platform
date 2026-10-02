@@ -198,7 +198,7 @@ export function synchronizeLoopBindings<T extends { id?: string; widget: string;
   return { document: next, sections: sections.map((section) => {
     const leaf = leafOf(document, section.id ?? ""), owner = leaf ? loopOwner(document, leaf) : undefined;
     const item = owner && (pageVariableContract.loop.recordWidgets as readonly string[]).includes(section.widget) ? document.nodes[owner]?.loop?.itemVariable : undefined;
-    return item ? { ...section, selection: undefined, recordVariable: item } : section.recordVariable && document.variables?.[section.recordVariable]?.mode !== "input" && document.variables?.[section.recordVariable]?.source?.kind !== "record" ? { ...section, recordVariable: undefined } : section;
+    return item ? { ...section, selection: undefined, recordVariable: item } : section.recordVariable && document.variables?.[section.recordVariable]?.mode !== "input" && document.variables?.[section.recordVariable]?.mode !== "shared" && document.variables?.[section.recordVariable]?.source?.kind !== "record" ? { ...section, recordVariable: undefined } : section;
   }) };
 }
 

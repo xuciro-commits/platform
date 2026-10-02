@@ -7,13 +7,14 @@ import { ChevronDown, ChevronRight, Columns2, Layers, Plus, Rows3, Settings2 } f
 
 type Label = { id?: string; widget: string; title?: string };
 
-export function LayoutTree({ document, sections, chosen, container, title, widgetTitles, widgets, onChoose, onContainer, onAdd, onMove, onRemove, onGroup, onRelocate, onInsert, onAddOverlay, onStash, onRestore, onDuplicate }: {
+export function LayoutTree({ document, sections, chosen, container, title, widgetTitles, widgets, onChoose, onContainer, onAdd, onMove, onRemove, onGroup, onRelocate, onInsert, onAddOverlay, onStash, onRestore, onDuplicate, onCopyLayout, onPasteLayout, onDuplicateLayout, canPasteLayout }: {
   document: Api.PageDocument; sections: Label[]; chosen: number; container?: string; title: string;
   widgetTitles: Record<string, () => string>; widgets: readonly string[];
   onChoose: (i: number) => void; onContainer: (id: string) => void; onAdd: (widget: string) => void;
   onMove: (i: number, by: -1 | 1) => void;
   onRelocate: (section: string, container: string, afterSection?: string) => void;
   onInsert: (widget: string, container: string, afterSection?: string) => void; onRemove: (i: number) => void; onStash:(index:number)=>void;onRestore:(index:number,target:string)=>void;onDuplicate:(index:number)=>void; onGroup: (kind: LayoutKind) => void; onAddOverlay: () => void;
+  onCopyLayout:(id:string)=>void;onPasteLayout:(id:string)=>void;onDuplicateLayout:(id:string)=>void;canPasteLayout:boolean;
 }) {
   const focusScope=useId();
   const [search, setSearch] = useState("");
@@ -49,14 +50,15 @@ export function LayoutTree({ document, sections, chosen, container, title, widge
         </div>
       </CommandMenu></li>;
     }
+    const kindTitle=t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows");
     return <li key={id} className="min-w-0">
-      <div className={cn("flex items-center rounded", hover === id && "outline outline-primary bg-row-selected")}
+      <CommandMenu focusKey={`${focusScope}:${id}`} label={t("Commands for {layout}",{layout:node.title||kindTitle})} commands={[{id:"select",label:t("Select layout"),run:()=>onContainer(id)},{id:"copy",label:t("Copy layout"),run:()=>onCopyLayout(id)},{id:"paste",label:t("Paste layout"),disabled:!canPasteLayout,run:()=>onPasteLayout(id)},{id:"duplicate",label:t("Duplicate layout"),run:()=>onDuplicateLayout(id)}]}><div className={cn("flex items-center rounded", hover === id && "outline outline-primary bg-row-selected")}
         onDragOver={(event) => over(event, id)} onDragLeave={() => setHover(undefined)} onDrop={(event) => drop(event, id)}>
         <Button size="sm" variant="ghost" aria-label={t("Expand or collapse layout group")} aria-expanded={expanded[id] !== false} onClick={() => setExpanded((old) => ({ ...old, [id]: old[id] === false }))}>{expanded[id] === false ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>
         <Button size="sm" variant="ghost" aria-pressed={container === id && chosen === -2} className={cn("min-w-0 w-0 flex-1 justify-start", container === id && chosen === -2 && "bg-row-selected text-primary")} onClick={() => onContainer(id)}>
-          {node.kind === "columns" ? <Columns2 className="size-3" /> : <Rows3 className="size-3" />}{t(node.kind === "tabs" ? "Tabs" : node.kind === "columns" ? "Columns" : node.kind === "flow" ? "Flow layout" : node.kind === "toolbar" ? "Toolbar" : node.kind === "loop" ? "Loop" : "Rows")}<span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
+          {node.kind === "columns" ? <Columns2 className="size-3 shrink-0" /> : <Rows3 className="size-3 shrink-0" />}<span className="truncate">{kindTitle}{node.title&&` · ${node.title}`}</span><span className="ml-auto text-[10px] text-muted">{node.children?.length ?? 0}</span>
         </Button>
-      </div>
+      </div></CommandMenu>
       {expanded[id] !== false && <ul className="ml-3 grid min-w-0 gap-0.5 border-l border-border pl-2">{node.children?.map((child) => renderNode(child, next))}</ul>}
     </li>;
   };
