@@ -4,6 +4,7 @@ import { ArrowDownToLine, Braces, Plus, X } from "lucide-react";
 import { useContext, useEffect, useId, useState, type ReactNode } from "react";
 import { BindingEditor, JSONEditor, PredicateEditor, SchemaEditor, WorkflowFormProblems } from "./workflow-binding";
 import { parameterSchema, sourceCapability, type Binding, type Capability, type ValueSchema, type WorkflowDraft, type WorkflowStep } from "./workflow-model";
+import {useHost} from "@platform/app";
 
 const textSchema: ValueSchema = { type: "string" };
 const emptyPredicate = () => ({ op: "eq" as const, left: { source: "input" as const }, right: { source: "literal" as const, value: true } });
@@ -60,6 +61,9 @@ export function WorkflowInspector({ step, steps, capabilities, onChange, onRenam
 }) {
   const [tab, setTab] = useState<"settings" | "input" | "output">("input");
   const capability = sourceCapability(step, capabilities);
+  const {definitions}=useHost();
+  const queryDefinition=definitions.find(d=>d.ref.kind==="query"&&d.ref.app===step.app&&d.ref.name===step.query);
+  const queryVersions=Object.keys(queryDefinition?.queryVersions??{}).map(version=>({source:version,ordinal:Number(version.match(/\.query-(\d+)$/)?.[1]??0)})).filter(v=>v.ordinal>0);
   const others = steps.filter((item) => item.name !== step.name);
   const field = (label: string, element: ReactNode) => <label className={fieldClass}>{t(label)}{element}</label>;
   const binding = (label: string, name: "value" | "target" | "collection", schema?: ValueSchema, optional = false) => <BindingEditor label={t(label)} value={step[name]} schema={schema} optional={optional} steps={others} onChange={(value) => onChange({ [name]: value })} />;
@@ -88,6 +92,7 @@ export function WorkflowInspector({ step, steps, capabilities, onChange, onRenam
         <Disclosure summary={<span className="text-xs font-medium">{t("Control paths")}</span>}><div className="mt-2">{paths}</div></Disclosure>
       </>}
       {tab === "input" && <>
+        {step.kind==="query"&&step.app==="build"&&<>{field("Retained query version",<Select aria-label={t("Retained query version")} value={step.queryVersion??0} onChange={event=>onChange({queryVersion:Number(event.target.value)})}><option value={0}>{t("Choose a retained query version")}</option>{step.queryVersion&&!queryVersions.some(v=>v.ordinal===step.queryVersion)&&<option value={step.queryVersion}>{t("Unavailable query version")}: {step.queryVersion}</option>}{queryVersions.map(v=><option key={v.source} value={v.ordinal}>{v.source}</option>)}</Select>)}<p className="text-xs text-muted">{t("Query versions keep their fixed conditions. Reads use the initiating member's current permissions.")}</p>{!capability&&<p role="alert" className="text-xs text-danger">{t("The retained query source could not be loaded.")}</p>}</>}
         {(step.kind === "query" || step.kind === "action" || step.kind === "compute") && <>
           {step.kind === "compute" && capability?.input?.type === "object" && !capability.input.nullable && <Checkbox checked={!!step.value} onChange={(whole) => onChange({ value: whole ? { source: "input" } : undefined, inputs: undefined })}>{t("Bind the whole input value")}</Checkbox>}
           {step.kind === "compute" && (step.value || capability?.input?.type !== "object" || capability?.input?.nullable)

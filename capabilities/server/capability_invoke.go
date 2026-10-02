@@ -46,11 +46,11 @@ func (t *Tenant) InvokeCapability(m platform.Member, q platform.CapabilityInvoca
 	}
 	switch selected.Kind {
 	case "query":
-		if q.Version != 0 || q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
+		if selected.Source == "tenant" && q.Version == 0 || q.Target != "" || q.ExpectedRevision != nil || len(q.Sources) != 0 || q.Record != "" || len(q.Bindings) != 0 {
 			return bad("Query takes only its declared inputs")
 		}
 		caller := platform.NewCaller(runtime{t}, m, q.Ref.App, false, false)
-		result, err := caller.ReadQuery(q.Ref.App, q.Ref.Name, q.Inputs, now)
+		result, err := caller.ReadQueryVersion(q.Ref.App, q.Ref.Name, q.Version, q.Inputs, now)
 		answer.State, answer.Result = "completed", result
 		return answer, err
 	case "action":

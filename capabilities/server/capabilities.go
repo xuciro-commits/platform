@@ -42,19 +42,11 @@ func (t *Tenant) Capabilities(m platform.Member) []platform.CapabilityDescriptor
 		case d.Query != nil:
 			q := d.Query
 			c.Kind, c.Title, c.Description, c.Group, c.Icon, c.Tone, c.Target = "query", q.Title, q.Description, "Data", "database", "info", q.Object
-			input := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{}}
-			if q.By != "" {
-				input.Properties["for"] = platform.ValueSchema{Type: "string", Description: "The record this query is run for"}
-				input.Required = []string{"for"}
-			}
-			c.Input = &input
-			if info, ok := entities[q.Object]; ok {
-				record, known := entityValueSchema(info)
-				rows := platform.ValueSchema{Type: "array", Items: &record, MaxItems: 200}
-				text := platform.ValueSchema{Type: "string"}
-				result := platform.ValueSchema{Type: "object", Properties: map[string]platform.ValueSchema{"records": rows, "total": {Type: "integer"}, "sources": {Type: "array", Items: &text}}, Required: []string{"records", "total", "sources"}}
-				if known && result.Check() == nil {
-					c.Output = &result
+			c.Input, c.Output = queryCapabilitySchemas(*q, entities[q.Object])
+			if d.Source == "tenant" {
+				_, text, found := strings.Cut(d.Version, ".query-")
+				if found {
+					c.Revision, _ = strconv.Atoi(text)
 				}
 			}
 		case d.Function != nil:

@@ -7,6 +7,7 @@ import { Button, Disclosure, Input, NodeCanvas, PageHeader, Panel, RecordList, T
   type BlockStatus, type CanvasAddContext, type CanvasEdge, type CanvasNode, type NodeCatalog, type NodeKind, type NodePort } from "@platform/ui";
 import { Blocks, Braces, Brain, ChevronDown, ChevronUp, Database, GitBranch, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Plus, Search, Settings2, Workflow, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import {useQueries} from "@tanstack/react-query";
 import { DataField, JSONEditor, WorkflowFormProblems, schemaIssue } from "./workflow-binding";
 import { WorkflowInspector, WorkflowSettings } from "./workflow-inspector";
 import { capabilityKey, commonSchemaProperties, controlEdges, dataEdges, dataPort, initialStep, nextStepName, parameterSchema, portPath, replaceReferences, sourceCapability, withPath, workflowDiagnostics, workflowKindTitle,
@@ -139,7 +140,9 @@ export function WorkflowEditor({ id }: { id: string }) {
   useEffect(() => { setRunInput(draft.input ?? {}); }, [draft.id, draft.input]);
   useEffect(() => { if (dockOpen) setMountedDocks((previous) => previous[dock] ? previous : { ...previous, [dock]: true }); }, [dock, dockOpen]);
   const change = useCallback((edit: Edit) => { dispatch({ type: "edit", edit }); setError(""); setValidation(undefined); }, []);
-  const capabilities = catalogQuery.data ?? [];
+  const retainedQueries=useMemo(()=>[...new Set(draft.steps.filter(s=>s.kind==="query"&&s.queryVersion).map(s=>`/v1/capabilities/${encodeURIComponent(s.app??"")}/query/${encodeURIComponent(s.query??"")}?version=${s.queryVersion}`))],[draft.steps]);
+  const retained=useQueries({queries:retainedQueries.map(path=>({queryKey:[client.connection.token,client.connection.tenant,path],queryFn:()=>client.get<Capability>(path),retry:false}))});
+  const capabilities = [...(catalogQuery.data ?? []),...retained.flatMap(q=>q.data&&!q.isError?[q.data]:[])];
   const publishedObjects = entities.filter((entity) => entity.lifecycle).map((entity) => ({ type: entity.type, title: entity.title, states: entity.lifecycle!.states }));
   const diagnostics = useMemo(() => {
     const result = workflowDiagnostics(draft);
@@ -147,7 +150,7 @@ export function WorkflowEditor({ id }: { id: string }) {
     return result;
   }, [draft, validation]);
   const kinds = useMemo(() => draft.steps.map((step) => nodeKind(step, draft, capabilities)), [draft, capabilities]);
-  const catalog: NodeCatalog = [...capabilities.map(definitionKind), ...kinds];
+  const catalog: NodeCatalog = [...(catalogQuery.data??[]).map(definitionKind), ...kinds];
   const edges = [...controlEdges(draft), ...dataEdges(draft)];
   const positioned = layout(draft.steps.map((step) => ({ id: step.name })), controlEdges(draft).map((edge) => ({ from: edge.source, to: edge.target })), "right",
     { width: canvasNodeWidth, height: Math.max(120, ...kinds.map((kind) => canvasNodeHeight(kind))), gapX: 80, gapY: 40 });
@@ -157,7 +160,7 @@ export function WorkflowEditor({ id }: { id: string }) {
     const visited = run?.trace?.some((trace) => trace.step === step.name);
     const status: BlockStatus | undefined = run && !dirty && run.version === draft.version ? tokens.some((token) => token.error || token.waits === "stuck") ? "error" : tokens.length ? "waiting" : accepted || visited ? "success" : "idle" : undefined;
     return { id: step.name, kind: `node:${step.name}`, label: step.title || step.name, detail: step.name === draft.steps[0]?.name ? t("Entry block") : sourceCapability(step, capabilities)?.ref.app ?? t("Platform control"),
-      version: step.operation ? step.operation.version > 0 ? `v${step.operation.version}` : sourceCapability(step, capabilities)?.version : step.function ? step.function.version > 0 ? `v${step.function.version}` : sourceCapability(step, capabilities)?.version : undefined,
+      version: step.operation ? step.operation.version > 0 ? `v${step.operation.version}` : sourceCapability(step, capabilities)?.version : step.function ? step.function.version > 0 ? `v${step.function.version}` : sourceCapability(step, capabilities)?.version : step.queryVersion ? `v${step.queryVersion}` : undefined,
       position: draft.layout?.[step.name] ?? positioned.get(step.name) ?? { x: 0, y: 0 }, status, diagnostics: diagnostics[step.name], current: tokens.length > 0 };
   });
   const node = draft.steps.find((step) => step.name === chosen);
@@ -284,7 +287,7 @@ export function WorkflowEditor({ id }: { id: string }) {
       layout: Object.fromEntries(Object.entries(current.layout ?? {}).map(([id, point]) => [id === old ? name : id, point])) }));
     setChosen(name);
   };
-  const filtered = capabilities.filter((capability) => !(capability.kind === "query" && capability.source === "tenant") && (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
+  const filtered = (catalogQuery.data??[]).filter((capability) => (filter === "all" || filter === "control" ? filter === "all" || capability.ref.kind === "control" : filter === "code" ? capability.kind === "compute" : capability.ref.kind !== "control" && capability.kind !== "compute")
     && [capability.title, t(capability.title), capability.description, capability.ref.app, capability.ref.name].some((value) => value.toLocaleLowerCase().includes(search.toLocaleLowerCase())));
   const groups = [...new Set(filtered.map((capability) => capability.group))];
   if (role("build") !== "builder") return <PageHeader title={t("Logic Studio")} description={t("Only a builder can edit workflows.")} />;

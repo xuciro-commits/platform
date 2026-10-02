@@ -72,6 +72,7 @@ type ProcessStep struct {
 	Protocol       string                      `json:"protocol,omitempty"`
 	App            string                      `json:"app,omitempty"`
 	Query          string                      `json:"query,omitempty"`
+	QueryVersion   int                         `json:"queryVersion,omitempty" title:"Retained query version"`
 	Function       *platform.FunctionRef       `json:"function,omitempty" type:"json"`
 	Operation      *OperationRef               `json:"operation,omitempty" type:"json"`
 	Body           string                      `json:"body,omitempty"`
@@ -239,7 +240,7 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 		if len(step.Inputs) > 64 {
 			return problem("a block accepts at most 64 input bindings")
 		}
-		if step.Ask != "" && step.Kind != "ask" || step.Act != "" && step.Kind != "action" || step.Function != nil && step.Kind != "ai" || step.Operation != nil && step.Kind != "compute" || step.Query != "" && step.Kind != "query" || len(step.Answers) > 0 && step.Kind != "ask" || len(step.Cases) > 0 && step.Kind != "ask" && step.Kind != "branch" && step.Kind != "switch" || len(step.Branches) > 0 && step.Kind != "fork" || step.Body != "" && step.Kind != "foreach" && step.Kind != "while" {
+		if step.Ask != "" && step.Kind != "ask" || step.Act != "" && step.Kind != "action" || step.Function != nil && step.Kind != "ai" || step.Operation != nil && step.Kind != "compute" || (step.Query != "" || step.QueryVersion != 0) && step.Kind != "query" || len(step.Answers) > 0 && step.Kind != "ask" || len(step.Cases) > 0 && step.Kind != "ask" && step.Kind != "branch" && step.Kind != "switch" || len(step.Branches) > 0 && step.Kind != "fork" || step.Body != "" && step.Kind != "foreach" && step.Kind != "while" {
 			return problem("configuration must match this block kind")
 		}
 		if step.TimeoutSeconds < 0 || step.TimeoutSeconds > 30*86400 || step.UntilSeconds < 0 || step.UntilSeconds > 30*86400 {
@@ -381,9 +382,31 @@ func (b *Build) checkFlowOn(p Process, entity platform.Entity) *kernel.Error {
 				return problem("choose an owner query")
 			}
 			if step.App == ID {
-				if _, tenantQuery := b.queries[step.Query]; tenantQuery {
-					return problem("tenant queries require an exact page-plan binding; retained workflow query bindings are not supported yet")
+				q, ordinal, ok := b.QueryDefinition(step.Query, step.QueryVersion)
+				if !ok || step.QueryVersion < 1 || step.QueryVersion > 64 || ordinal != step.QueryVersion {
+					return problem("choose an exact retained tenant query version")
 				}
+				if err := b.host.ValidateInstallQuery(q); err != nil {
+					return problem(err.Error())
+				}
+				for name, binding := range step.Inputs {
+					if name != "for" || q.By == "" {
+						return problem("unknown query input " + name)
+					}
+					if binding.Source == "literal" {
+						var value string
+						if json.Unmarshal(binding.Value, &value) != nil || value == "" {
+							return problem("query for input needs a record ID")
+						}
+					}
+				}
+				if q.By != "" {
+					if _, ok := step.Inputs["for"]; !ok {
+						return problem("query requires its for input")
+					}
+				}
+			} else if step.QueryVersion != 0 {
+				return problem("code queries use their owner version")
 			}
 		case "branch":
 			if step.Condition == nil || step.Cases["true"] == "" || step.Cases["false"] == "" {
@@ -620,7 +643,7 @@ func (b *Build) flowOf(p Process) platform.Flow {
 				if !ok {
 					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The initiating member is no longer available")
 				}
-				answer, err := b.host.Caller(c, member, s.App).ReadQuery(s.App, s.Query, raw, r.Now)
+				answer, err := b.host.Caller(c, member, s.App).ReadQueryVersion(s.App, s.Query, s.QueryVersion, raw, r.Now)
 				if err == nil {
 					var provenance struct {
 						Sources []string `json:"sources"`

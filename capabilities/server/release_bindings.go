@@ -54,6 +54,7 @@ func (t *Tenant) candidateWithBindings(roots []platform.AssetRef, available []pl
 				return err
 			}
 			bindings = append(slices.Clone(flow.Functions), flow.Operations...)
+			bindings = append(bindings, flow.Queries...)
 		} else if ref.Kind == platform.AssetApp {
 			var app platform.Application
 			if err := json.Unmarshal(asset.Body, &app); err != nil {

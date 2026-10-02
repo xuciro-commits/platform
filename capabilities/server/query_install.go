@@ -78,6 +78,7 @@ func (h hostView) InstallQuery(c platform.Caller, q platform.NamedQuery, version
 		def.QueryVersions = map[string]platform.NamedQuery{def.Version: q}
 		h.t.definitions = append(h.t.definitions, def)
 	}
+	slices.SortFunc(h.t.definitions, func(a, b platform.Definition) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	return nil
 }
 

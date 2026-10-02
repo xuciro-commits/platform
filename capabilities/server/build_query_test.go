@@ -230,7 +230,7 @@ func reusableQueryVersions(t *testing.T, journal *Journal) {
 	}
 	// A retained workflow cannot silently pick a mutable latest tenant query.
 	flow := build.Process{Name: "reuse", Title: "Reuse", Manual: true, Steps: []build.ProcessStep{{Name: "read", Kind: "query", App: build.ID, Query: "shared", Next: "done"}, {Name: "done", Kind: "end"}}}
-	if problem := owner.CheckProcess(flow); problem == nil || !strings.Contains(problem.Message, "exact page-plan binding") {
+	if problem := owner.CheckProcess(flow); problem == nil || !strings.Contains(problem.Message, "exact retained tenant query version") {
 		t.Fatal("tenant query was offered without a frozen flow binding", problem)
 	}
 

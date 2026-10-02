@@ -1083,5 +1083,6 @@
  "Domain": "筛选条件",
  "Limit": "数量上限",
  "Sort": "排序",
- "Application queries": "应用查询"
+ "Application queries": "应用查询",
+ "Retained query version": "保留查询版本"
 }

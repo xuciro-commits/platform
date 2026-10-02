@@ -44,7 +44,7 @@ export function sourceCapability(step: WorkflowStep, capabilities: Capability[])
   return capabilities.find((capability) => {
     switch (step.kind) {
       case "action": return capability.kind === "action" && capability.ref.name === step.act;
-      case "query": return capability.kind === "query" && capability.ref.app === step.app && capability.ref.name === step.query;
+      case "query": return capability.kind === "query" && capability.ref.app === step.app && capability.ref.name === step.query && (capability.source !== "tenant" ? !step.queryVersion : !!step.queryVersion && capability.revision === step.queryVersion);
       case "compute": return capability.kind === "compute" && capability.ref.app === (step.operation?.app ?? "build") && capability.ref.name === step.operation?.name;
       case "ai": return capability.kind === "ai" && capability.ref.name === step.function?.name && capability.ref.app === (step.function?.app ?? "build");
       default: return capability.ref.kind === "control" && capability.kind === step.kind;
@@ -99,7 +99,7 @@ export function nextStepName(steps: WorkflowStep[], base: string): string {
 }
 export function initialStep(capability: Capability, steps: WorkflowStep[]): WorkflowStep {
   const step: WorkflowStep = { name: nextStepName(steps, capability.ref.kind === "control" ? capability.kind : capability.ref.name.split(".").at(-1) ?? capability.kind), title: t(capability.title), kind: capability.kind };
-  if (step.kind === "query") Object.assign(step, { app: capability.ref.app, query: capability.ref.name });
+  if (step.kind === "query") Object.assign(step, { app: capability.ref.app, query: capability.ref.name, queryVersion: capability.source === "tenant" ? capability.revision : undefined });
   if (step.kind === "action") Object.assign(step, { app: capability.ref.app, act: capability.ref.name, target: { source: "literal", value: "" } });
   if (step.kind === "ai") Object.assign(step, { function: { app: capability.ref.app, name: capability.ref.name, version: capability.revision ?? 0 }, target: { source: "literal", value: "" } });
   if (step.kind === "compute") Object.assign(step, { operation: { app: capability.ref.app, name: capability.ref.name, version: capability.revision ?? 0 },

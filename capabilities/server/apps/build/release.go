@@ -521,6 +521,7 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 	var actions []platform.AssetRef
 	var functions []platform.AssetBinding
 	var operations []platform.AssetBinding
+	var queries []platform.AssetBinding
 	var dependencies []platform.AssetRef
 	for _, step := range saved.Steps {
 		if step.Act != "" {
@@ -562,7 +563,12 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 			}
 		}
 		if step.Query != "" {
-			dependencies = append(dependencies, platform.AssetRef{App: step.App, Kind: platform.AssetQuery, Name: step.Query})
+			ref := platform.AssetRef{App: step.App, Kind: platform.AssetQuery, Name: step.Query}
+			if step.App == ID && step.QueryVersion > 0 {
+				queries = append(queries, platform.AssetBinding{Ref: ref, SourceVersion: sourceVersion + ".query-" + strconv.Itoa(step.QueryVersion)})
+			} else {
+				dependencies = append(dependencies, ref)
+			}
 		}
 		if step.Flow != "" {
 			name := step.Flow
@@ -574,6 +580,10 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 	}
 	slices.SortFunc(operations, func(a, b platform.AssetBinding) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
 	operations = slices.Compact(operations)
+	slices.SortFunc(queries, func(a, b platform.AssetBinding) int {
+		return strings.Compare(a.Ref.String()+"@"+a.SourceVersion, b.Ref.String()+"@"+b.SourceVersion)
+	})
+	queries = slices.Compact(queries)
 	slices.SortFunc(dependencies, func(a, b platform.AssetRef) int { return strings.Compare(a.String(), b.String()) })
 	dependencies = slices.Compact(dependencies)
 	slices.SortFunc(functions, func(a, b platform.AssetBinding) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
@@ -594,7 +604,7 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition, Functions: functions, Operations: operations, Dependencies: dependencies})
+	body, err := json.Marshal(platform.FlowReleaseDescriptor{Name: ref.Name, Subject: subject, Actions: actions, Definition: definition, Functions: functions, Operations: operations, Queries: queries, Dependencies: dependencies})
 	requires := append(slices.Clone(dependencies), actions...)
 	if subject.Name != "" {
 		requires = append(requires, subject)
@@ -603,6 +613,9 @@ func processReleaseAsset(saved Process, sourceVersion string) (platform.ReleaseA
 		requires = append(requires, binding.Ref)
 	}
 	for _, binding := range operations {
+		requires = append(requires, binding.Ref)
+	}
+	for _, binding := range queries {
 		requires = append(requires, binding.Ref)
 	}
 	return platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion,

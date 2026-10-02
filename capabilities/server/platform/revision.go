@@ -34,6 +34,7 @@ type FlowReleaseDescriptor struct {
 	Definition   json.RawMessage `json:"definition"`
 	Functions    []AssetBinding  `json:"functions,omitempty"`
 	Operations   []AssetBinding  `json:"operations,omitempty"`
+	Queries      []AssetBinding  `json:"queries,omitempty"`
 	Dependencies []AssetRef      `json:"dependencies,omitempty"`
 }
 
@@ -230,6 +231,7 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 					return err
 				}
 				bindings = append(slices.Clone(flow.Functions), flow.Operations...)
+				bindings = append(bindings, flow.Queries...)
 			} else {
 				var page Page
 				if err := json.Unmarshal(body, &page); err != nil {
@@ -265,7 +267,7 @@ func Candidate(roots []AssetRef, available []ReleaseAsset) (ReleaseCandidate, er
 			seen := map[AssetRef]bool{}
 			for _, binding := range bindings {
 				dependency, ok := lookup[binding.Ref]
-				if !ok || seen[binding.Ref] && ref.Kind == AssetFlow || binding.Ref.Kind != AssetFunction && binding.Ref.Kind != AssetCompute || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
+				if !ok || seen[binding.Ref] && ref.Kind == AssetFlow || binding.Ref.Kind != AssetFunction && binding.Ref.Kind != AssetCompute && !(ref.Kind == AssetFlow && binding.Ref.Kind == AssetQuery) || binding.SourceVersion == "" || dependency.SourceVersion != binding.SourceVersion {
 					return fmt.Errorf("%s needs exact function dependency %s at %s", ref, binding.Ref, binding.SourceVersion)
 				}
 				seen[binding.Ref] = true
@@ -444,6 +446,12 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 		for _, binding := range flow.Operations {
 			if binding.Ref.Kind != AssetCompute || binding.SourceVersion == "" {
 				return fmt.Errorf("release flow %s has an invalid compute binding", ref)
+			}
+			required = append(required, binding.Ref)
+		}
+		for _, binding := range flow.Queries {
+			if binding.Ref.Kind != AssetQuery || binding.SourceVersion == "" {
+				return fmt.Errorf("release flow %s has an invalid query binding", ref)
 			}
 			required = append(required, binding.Ref)
 		}

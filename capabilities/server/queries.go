@@ -31,6 +31,10 @@ func (t *Tenant) runQueryFrom(store *recordStore, m platform.Member, app, name, 
 	if !ok {
 		return RecordPage{}, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
+	return t.runDeclaredQueryFrom(store, m, q, of, now)
+}
+
+func (t *Tenant) runDeclaredQueryFrom(store *recordStore, m platform.Member, q platform.NamedQuery, of string, now time.Time) (RecordPage, *kernel.Error) {
 	if q.By != "" && of == "" {
 		return RecordPage{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{query} needs the record it is run for", q.Title)
 	}

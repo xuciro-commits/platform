@@ -1100,6 +1100,7 @@ export type ProcessStep = {
   protocol?: string;
   app?: string;
   query?: string;
+  queryVersion?: number;
   function?: FunctionRef;
   operation?: OperationRef;
   body?: string;

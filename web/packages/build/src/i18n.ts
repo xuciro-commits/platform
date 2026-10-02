@@ -1435,4 +1435,9 @@ register("zh-CN", {
   "Shared property catalog": "共享属性目录",
   "Edit shared property": "编辑共享属性",
   "Choose a shared property version to inspect its consumers.": "选择一个共享属性版本以查看使用它的字段。",
+  "Retained query version": "保留查询版本",
+  "Choose a retained query version": "选择保留查询版本",
+  "Unavailable query version": "查询版本不可用",
+  "Query versions keep their fixed conditions. Reads use the initiating member's current permissions.": "查询版本保留其固定条件。读取使用发起成员的当前权限。",
+  "The retained query source could not be loaded.": "保留查询来源无法加载。",
 });

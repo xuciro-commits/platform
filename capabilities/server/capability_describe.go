@@ -49,6 +49,22 @@ func (t *Tenant) retainedCapability(m platform.Member, ref platform.AssetRef, ve
 		{ID: "next", Title: "Next", Direction: "output", Channel: "control", Type: "flow"},
 		{ID: "error", Title: "Error", Direction: "output", Channel: "control", Type: "flow"},
 	}}
+	if ref.Kind == platform.AssetQuery {
+		q, source, ok := t.memberQueryVersion(m, ref, version)
+		if !ok {
+			return d, false
+		}
+		var info platform.EntityInfo
+		for _, entity := range t.Entities(m) {
+			if entity.Type == q.Object {
+				info = entity
+				break
+			}
+		}
+		d.Kind, d.Title, d.Description, d.Group, d.Icon, d.Tone, d.Target, d.Version = "query", q.Title, q.Description, "Data", "database", "info", q.Object, source
+		d.Input, d.Output = queryCapabilitySchemas(q, info)
+		return d, true
+	}
 	if ref.Kind == platform.AssetCompute {
 		op, ordinal, ok := operationDefinition(app, ref.Name, version)
 		if !ok || ordinal != version || !slices.Contains(op.Roles, m.Roles[ref.App]) {

@@ -19,6 +19,17 @@ func (c Caller) ReadQuery(app, name string, inputs json.RawMessage, now time.Tim
 	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Named queries require the host read path")
 }
 
+// ReadQueryVersion selects a retained tenant query. Version zero is reserved
+// for code declarations; missing retained sources never fall back to latest.
+func (c Caller) ReadQueryVersion(app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	if rt, ok := c.rt.(interface {
+		ReadQueryVersion(Caller, string, string, int, json.RawMessage, time.Time) (json.RawMessage, *kernel.Error)
+	}); ok {
+		return rt.ReadQueryVersion(c, app, name, version, inputs, now)
+	}
+	return nil, Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Retained queries require the host read path")
+}
+
 func (c Caller) ReadRecord(typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 	if rt, ok := c.rt.(interface {
 		ReadRecord(Caller, string, string, time.Time) (json.RawMessage, *kernel.Error)

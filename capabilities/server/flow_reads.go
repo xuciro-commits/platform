@@ -10,6 +10,26 @@ import (
 )
 
 func (t *Tenant) readQueryFrom(store *recordStore, c platform.Caller, app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	q, ok := t.namedQuery(app, name)
+	if !ok {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Named query is unavailable")
+	}
+	return t.readDeclaredQueryFrom(store, c, q, inputs, now)
+}
+
+func (t *Tenant) readQueryVersionFrom(store *recordStore, c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	q, _, ok := t.memberQueryVersion(c.Member, platform.AssetRef{App: app, Kind: platform.AssetQuery, Name: name}, version)
+	if !ok {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Retained query is unavailable to this member")
+	}
+	schema := queryInputSchema(q)
+	if err := schema.Validate(inputs, 32<<10); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	return t.readDeclaredQueryFrom(store, c, q, inputs, now)
+}
+
+func (t *Tenant) readDeclaredQueryFrom(store *recordStore, c platform.Caller, q platform.NamedQuery, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	values := struct {
 		For string `json:"for,omitempty"`
 	}{}
@@ -30,11 +50,10 @@ func (t *Tenant) readQueryFrom(store *recordStore, c platform.Caller, app, name 
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Query record reference must be a string")
 		}
 	}
-	page, refusal := t.runQueryFrom(store, c.Member, app, name, values.For, now)
+	page, refusal := t.runDeclaredQueryFrom(store, c.Member, q, values.For, now)
 	if refusal != nil {
 		return nil, refusal
 	}
-	q, _ := t.namedQuery(app, name)
 	sources := []string{}
 	store.mu.Lock()
 	et := store.types[q.Object]
@@ -90,6 +109,12 @@ func (r runtime) ReadQuery(c platform.Caller, app, name string, inputs json.RawM
 }
 func (d *stagedDecision) ReadQuery(c platform.Caller, app, name string, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
 	return d.tenant.readQueryFrom(d.records, c, app, name, inputs, now)
+}
+func (r runtime) ReadQueryVersion(c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	return r.t.readQueryVersionFrom(r.t.records, c, app, name, version, inputs, now)
+}
+func (d *stagedDecision) ReadQueryVersion(c platform.Caller, app, name string, version int, inputs json.RawMessage, now time.Time) (json.RawMessage, *kernel.Error) {
+	return d.tenant.readQueryVersionFrom(d.records, c, app, name, version, inputs, now)
 }
 func (r runtime) ReadRecord(c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *kernel.Error) {
 	return r.t.readRecordFrom(r.t.records, c, typ, id, now)
