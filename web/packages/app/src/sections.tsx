@@ -6,7 +6,7 @@ import {isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button, Card, Chart, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type Encoding, type EntityRecord, type RecordSource, type RecordView,
+  Button, Card, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { NewActions, RecordActions, prefixOf } from "./actions";
@@ -17,6 +17,7 @@ import { createWidgetRegistry, supportsPageUIProfile } from "./widgets/registry"
 import { useApplicationContext, useApplicationVariables } from "./runtime/ApplicationRuntime";
 import { usePageQueries } from "./runtime/PageQueries";
 import { planKey, variablePlan } from "./runtime/query-plans";
+import { compileChartSpec } from "./widgets/chart-spec";
 import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
 import { NestedLoopRuntime } from "./runtime/NestedLoopRuntime";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
@@ -25,6 +26,7 @@ import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, select
 import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
+const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
 const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
 const PivotRenderer=lazy(()=>import("./widgets/Pivot").then(module=>({default:module.PivotRenderer})));
 const ButtonRenderer=lazy(()=>import("./widgets/Button").then(module=>({default:module.ButtonRenderer})));
@@ -116,22 +118,13 @@ function ActionsWidget({ page, section, selected, live }: Bound) {
 
 /** An aggregate of the object: grouped and measured, drawn by the kit (ADR-0019). */
 function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]): ChartSpec {
-  const [aggregate, field] = (section.measure ?? "count").split(":");
-  const value: Encoding = { field, type: "quantitative", aggregate: aggregate as Encoding["aggregate"] };
-  const [group, timeUnit] = (section.group ?? "").split(":");
-  const by: Encoding = { field: group, type: timeUnit ? "temporal" : "nominal", timeUnit: timeUnit as Encoding["timeUnit"] };
-  return {
-    title: kpi ? section.title : undefined,
-    data: { entity: objectOf(page, section), domain },
-    mark: kpi ? "kpi" : "bar",
-    encoding: kpi ? { y: value } : { x: by, y: value },
-  };
+  return compileChartSpec({object:objectOf(page,section),title:section.title,group:section.group,measure:section.measure,mark:section.mark,kpi,domain});
 }
 
 function ChartWidget({ page, section, kpi, pivot, narrowed, sharedFilter, master, window, collection, aggregateScope }: Bound & { kpi: boolean; pivot?:boolean }) {
   const { source } = useHost();
   const aggregate = source.aggregate;
-  const render=(spec:ChartSpec,readScope?:string)=>pivot?<PivotRenderer object={objectOf(page,section)} query={"entity" in spec.data?{domain:spec.data.domain,search:spec.data.search,set:spec.data.set,traversal:spec.data.traversal,archived:spec.data.archived}:{}} rows={section.group??""} columns={section.columnGroup} measure={section.measure??"count"} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>:<Chart spec={spec} frame={false} height={kpi?120:240} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>;
+  const render=(spec:ChartSpec,readScope?:string)=>pivot?<PivotRenderer object={objectOf(page,section)} query={"entity" in spec.data?{domain:spec.data.domain,search:spec.data.search,set:spec.data.set,traversal:spec.data.traversal,archived:spec.data.archived}:{}} rows={section.group??""} columns={section.columnGroup} measure={section.measure??"count"} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>:<ChartRenderer spec={spec} height={kpi?120:240} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>;
   if(section.collectionVariable){
     if(!window)return <Panel role={collection?.status==="error"?"alert":"status"}>{t(collection?.status==="error"?collection.code:"Query window is unavailable.")}</Panel>;
     if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;
@@ -380,7 +373,7 @@ export function SectionView(bound: Bound & Composing) {
   if (implementation?.contract.layoutPreferences.frame === "inline") return <div onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined} className={cn("min-w-0", inHand && "outline outline-2 outline-primary rounded")}><WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary></div>;
   return (
     <Card onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined}
-      className={cn("grid min-w-0 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
+      className={cn("grid min-w-0 grid-cols-1 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
         onChoose && "cursor-pointer", inHand && "outline outline-2 outline-primary")}>
       {section.title && <h3 className="text-sm font-semibold">{section.title}</h3>}
       <WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary>

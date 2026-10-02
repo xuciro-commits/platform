@@ -123,6 +123,7 @@ type Section struct {
 	Fields      []string           `json:"fields,omitempty"`  // table, detail, filter, form
 	Actions     []AssetRef         `json:"actions,omitempty"` // actions
 	Group       string             `json:"group,omitempty"`   // chart: the field it groups by, or "<field>:month"
+	Mark        string             `json:"mark,omitempty"`
 	ColumnGroup string             `json:"columnGroup,omitempty"`
 	Measure     string             `json:"measure,omitempty"`   // chart, metric: count, sum:<field>, avg:<field>, min:<field>, max:<field>
 	Text        string             `json:"text,omitempty"`      // text

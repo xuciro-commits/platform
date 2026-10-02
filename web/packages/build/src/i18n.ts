@@ -2,6 +2,13 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Chart type": "图表类型",
+  "Bar chart": "柱状图",
+  "Line chart": "折线图",
+  "Area chart": "面积图",
+  "Pie chart": "饼图",
+  "Unavailable field": "字段不可用",
+  "Unavailable measure": "度量不可用",
   "Rows grouped by": "行分组字段",
   "Columns grouped by": "列分组字段",
   "No column grouping": "不按列分组",

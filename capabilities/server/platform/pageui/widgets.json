@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.23",
+  "uiProfile": "platform.page.v2.24",
   "widgets": [
     {
       "componentID": "table",
@@ -206,6 +206,15 @@
           "measure": {
             "type": "string",
             "maxLength": 256
+          },
+          "mark": {
+            "type": "string",
+            "enum": [
+              "bar",
+              "line",
+              "area",
+              "arc"
+            ]
           }
         }
       },
@@ -226,6 +235,15 @@
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
       }
     },
     {
@@ -785,7 +803,8 @@
     "platform.page.v2.20",
     "platform.page.v2.21",
     "platform.page.v2.22",
-    "platform.page.v2.23"
+    "platform.page.v2.23",
+    "platform.page.v2.24"
   ],
   "runtime": {
     "scope": "page",

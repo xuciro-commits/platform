@@ -26,6 +26,8 @@
 
 透视分析：在页面组件库添加“Pivot table / 透视表”，设置“Rows grouped by / 行分组字段”、可选“Columns grouped by / 列分组字段”和“Measure / 度量”。“Aggregate query set / 聚合集合来源”选择完整计划窗口，或使用组件自己的对象/关系/共享筛选。表格窗口的页码与limit不改变统计；正式交付沿原候选冻结两轴、度量和来源，后来草稿不会替换它。改变参数、权限、实例/浮层或读取失败时立即清除旧结果。最多4096分组结果及4096矩阵单元格，超出整体报错；平均值与极值不跨组相加。首个页面profile没有cell下钻动作，细节与恢复边界见[ADR-0046 §8.2](ADR/0046-application-studio-fusion.md#82-pivot分析组件-profile)。
 
+图表类型：在Chart检查器选择“Chart type / 图表类型”。Bar保持原分组，Line/Area选择日期的day/week/month/year分桶，Pie使用类别分组与count或非货币sum。无效组合保留草稿但发布拒绝；饼图收到负值或非有限值时清除旧图并报错。集合来源与分页独立，沿原候选冻结图表类型和字段。该profile提供聚合趋势与份额，缺失分桶不补零，不提供预测、原始点散点或Vega脚本；边界见[ADR-0046 §8.3](ADR/0046-application-studio-fusion.md#83-chart趋势与份额-profile)。
+
 完整集合指标与图表：在原Metric/Chart检查器的“Aggregate query set / 聚合集合来源”选择计划object-set变量，继续设置原“Measure / 度量”和“Grouped by / 分组字段”。来源可为页面/同浮层计划或应用只读共享窗口；对象要求自动绑定。统计使用完整匹配条件与搜索，表格的排序、页码和limit不改变总量/分组；新增条件放在计划中，不额外叠加组件筛选或关系。超出结果组预算整体拒绝，失败或参数/身份变化停止旧图，关闭实例/浮层废弃旧读取。正式发布冻结原页面/应用候选中的端口和来源。代码ChartSpec的entity数据可携带set，EdgeClient.aggregate自动走类型化组合聚合POST；不把window.records作为统计输入，原数值/Money语义及预算见[ADR-0046 §6.20](ADR/0046-application-studio-fusion.md#620-完整集合聚合与组件消费)。
 
 代码读取的集合组合：共享`RecordSource.list(type, query)`可在query中传入`set: {op: "union" | "intersect" | "subtract", inputs: [left, right]}`。每个来源为`{domain?, search?, set?}`，只描述同一对象的完整匹配条件；排序、offset、limit和archived在外层query设置。EdgeClient自动将组合通过类型化`POST /v1/records/{type}/query`发送，返回原RecordPage的records/total；普通读取继续使用原GET。分页前组合全部授权匹配记录，隐藏字段、非法或超预算分支拒绝整个读取，不自动重试为无条件列表。预算见[ADR-0046 §6.18](ADR/0046-application-studio-fusion.md#618-宿主集合查询与完整性)。可视化创作沿上述计划入口；此代码API不能当成可粘贴的租户页面定义。

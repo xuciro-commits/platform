@@ -61,7 +61,7 @@ func TestPageQuerySetsFreezeReplayAndPruneMembers(t *testing.T) {
 		document.Nodes[id] = platform.PageLayoutNode{Kind: "widget", Section: id}
 	}
 
-	submit(build.PageType, "page", "create", map[string]any{"name": "work", "title": "Work", "object": "build.note", "sections": []build.Section{{ID: "text", Widget: "text", ConfigVersion: 1, Text: "Read window"}, {ID: "private", Widget: "text", ConfigVersion: 1, Text: "Private window"}, {ID: "metric", Widget: "metric", ConfigVersion: 1, Measure: "count", CollectionVariable: "window"}, {ID: "chart", Widget: "chart", ConfigVersion: 1, Measure: "count", Group: "note", CollectionVariable: "window"}, {ID: "privateChart", Widget: "chart", ConfigVersion: 1, Measure: "count", Group: "secret", CollectionVariable: "window"}, {ID: "pivot", Widget: "pivot", ConfigVersion: 1, Measure: "count", Group: "note", ColumnGroup: "bucket", CollectionVariable: "window"}, {ID: "privatePivot", Widget: "pivot", ConfigVersion: 1, Measure: "count", Group: "note", ColumnGroup: "secret", CollectionVariable: "window"}}, "document": document})
+	submit(build.PageType, "page", "create", map[string]any{"name": "work", "title": "Work", "object": "build.note", "sections": []build.Section{{ID: "text", Widget: "text", ConfigVersion: 1, Text: "Read window"}, {ID: "private", Widget: "text", ConfigVersion: 1, Text: "Private window"}, {ID: "metric", Widget: "metric", ConfigVersion: 1, Measure: "count", CollectionVariable: "window"}, {ID: "chart", Widget: "chart", ConfigVersion: 1, Mark: "arc", Measure: "count", Group: "note", CollectionVariable: "window"}, {ID: "privateChart", Widget: "chart", ConfigVersion: 1, Measure: "count", Group: "secret", CollectionVariable: "window"}, {ID: "pivot", Widget: "pivot", ConfigVersion: 1, Measure: "count", Group: "note", ColumnGroup: "bucket", CollectionVariable: "window"}, {ID: "privatePivot", Widget: "pivot", ConfigVersion: 1, Measure: "count", Group: "note", ColumnGroup: "secret", CollectionVariable: "window"}}, "document": document})
 	submit(build.PageType, "page", "publish", map[string]any{})
 	submit(build.AppType, "app", "create", map[string]any{"name": "desk", "title": "Desk", "pages": []string{"work"}, "uiProfile": platform.PageUIProfile(), "queries": plans, "variables": map[string]platform.PageVariable{"count": {Scope: "application", Type: "decimal", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "count", Query: "read"}}, "privateCount": {Scope: "application", Type: "decimal", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "count", Query: "private"}}, "window": {Scope: "application", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "read"}}, "privateWindow": {Scope: "application", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "private"}}}})
 	preview, err := tn.PreviewRelease(member, platform.AssetApp, "app")
@@ -104,6 +104,9 @@ func TestPageQuerySetsFreezeReplayAndPruneMembers(t *testing.T) {
 				queries = d.Page.Document.Queries
 				if d.Page.Document.Variables["count"].Source.Query != "read" || d.Page.Document.Variables["privateCount"].Mode != "" {
 					t.Fatal("page count not frozen or private source leaked")
+				}
+				if got := d.Page.Sections[2]; got.Widget != "chart" || got.Mark != "arc" {
+					t.Fatal("chart mark not retained")
 				}
 				if got := d.Page.Sections[len(d.Page.Sections)-1]; got.Widget != "pivot" || got.ColumnGroup != "bucket" || got.CollectionVariable != "window" {
 					t.Fatal("pivot frozen binding or column group changed")

@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Pie values must be finite nonnegative quantities without mixed currencies.": "饼图值必须是有限非负数，且不能混合货币。",
   "The relation version or start record is unavailable.": "关系版本或起点记录不可用。",
   "Relation target object is incompatible.": "关系目标对象不兼容。",
   "Relation start record is incompatible.": "关系起点记录不兼容。",

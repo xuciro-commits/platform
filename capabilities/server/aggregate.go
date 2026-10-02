@@ -344,5 +344,28 @@ func checkAggregateSection(section platform.Section, info platform.EntityInfo) b
 			return false
 		}
 	}
+	if section.Widget == "chart" {
+		mark := section.Mark
+		if mark == "" {
+			mark = "bar"
+		}
+		switch mark {
+		case "bar":
+		case "line", "area":
+			name, unit, ok := strings.Cut(section.Group, ":")
+			f, exists := info.Field(name)
+			if !ok || !slices.Contains([]string{"day", "week", "month", "year"}, unit) || name != "created" && name != "changed" && (!exists || f.Type != "date" && f.Type != "datetime") {
+				return false
+			}
+		case "arc":
+			op, name, _ := strings.Cut(section.Measure, ":")
+			f, _ := info.Field(name)
+			if op != "count" && op != "sum" || f.Type == "money" {
+				return false
+			}
+		default:
+			return false
+		}
+	}
 	return true
 }

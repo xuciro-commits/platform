@@ -398,6 +398,9 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				}
 			}
 		case "chart", "metric", "pivot":
+			if s.Mark != "" && (p.Document == nil || !platform.PageUIProfileSupports(p.Document.UIProfile, "platform.page.v2.24")) {
+				return fmt.Errorf("%s: chart mark requires v2.24", where)
+			}
 			if s.Widget == "pivot" && p.Document == nil {
 				return fmt.Errorf("%s: pivot needs a V2 document", where)
 			}
@@ -421,7 +424,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
-			if s.Widget == "pivot" && !checkAggregateSection(s, info) {
+			if (s.Widget == "pivot" || s.Mark != "") && !checkAggregateSection(s, info) {
 				return fmt.Errorf("%s: invalid pivot group or measure", where)
 			}
 		case "button", "input":

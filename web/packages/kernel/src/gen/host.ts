@@ -1312,6 +1312,7 @@ export type Section = {
   fields?: string[];
   actions?: AssetRef[];
   group?: string;
+  mark?: string;
   columnGroup?: string;
   measure?: string;
   text?: string;
@@ -1605,7 +1606,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.23",
+  "uiProfile": "platform.page.v2.24",
   "widgets": [
     {
       "componentID": "table",
@@ -1812,6 +1813,15 @@ export const pageUIManifest = {
           "measure": {
             "type": "string",
             "maxLength": 256
+          },
+          "mark": {
+            "type": "string",
+            "enum": [
+              "bar",
+              "line",
+              "area",
+              "arc"
+            ]
           }
         }
       },
@@ -1832,6 +1842,15 @@ export const pageUIManifest = {
       "outputPorts": [],
       "layoutPreferences": {
         "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
       }
     },
     {
@@ -2391,7 +2410,8 @@ export const pageUIManifest = {
     "platform.page.v2.20",
     "platform.page.v2.21",
     "platform.page.v2.22",
-    "platform.page.v2.23"
+    "platform.page.v2.23",
+    "platform.page.v2.24"
   ],
   "runtime": {
     "scope": "page",

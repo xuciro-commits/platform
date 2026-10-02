@@ -3,7 +3,7 @@ import { AssetControls } from "./asset-controls";
 // Application Studio page design (ADR-0046). Document history, UI selection
 // and authorized runtime data have separate owners. Preview and operation use
 // the same registered widgets; save and activation use the original Go path.
-import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, SemanticPropertySelect, pageDocumentFromSections, pageUIProfile, pageVariableContract, supportsPageUIProfile, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
+import { ApplicationPage, ComposedPage, NewActions, SemanticObjectSelect, pageDocumentFromSections, pageUIProfile, pageVariableContract, supportsPageUIProfile, pageVariableDiagnostics, widgetContract, widgetContracts, useHost, useReadQuery, useRecordInventory, type PageVariableValue, type Definition } from "@platform/app";
 import {
   Button, Card, EditorWorkbench, Input, MarkdownEditor, PageHeader, Panel, RecordList, Select, StatusTag, Textarea, Toggles, defineStatuses, humanizeKernelError, notify, t, useWorkspace, useUnsavedChanges,
   type EntityInfo,
@@ -29,7 +29,7 @@ type PageRecord = {
   list?: string[]; detail?: string[]; actions?: string[];
   selections?: HostApi.SelectionVariable[];
   document?: HostApi.PageDocument;
-  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; recordVariable?: string; selectionVariable?: string; filterVariable?: string; collectionVariable?:string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; columnGroup?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
+  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; recordVariable?: string; selectionVariable?: string; filterVariable?: string; collectionVariable?:string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; mark?:string; columnGroup?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
@@ -61,7 +61,7 @@ const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDo
   selections: record.selections,
   document,
   sections: sections.map((s) => ({
-    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, selectionVariable:s.selectionVariable, filterVariable:s.filterVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, columnGroup: s.columnGroup, measure: s.measure, text: s.text,
+    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, selectionVariable:s.selectionVariable, filterVariable:s.filterVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, mark:s.mark, columnGroup: s.columnGroup, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
     query: s.query ? { app: s.query.split(".")[0] ?? "", kind: "query", name: s.query.split(".").slice(1).join(".") } : undefined,
     function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,
@@ -144,7 +144,7 @@ export function PageEditor({ id }: { id: string }) {
   const [variableValues, setVariableValues] = useState<Record<string, PageVariableValue>>({});
   if (!page) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const info = source.entity(page.object);
-  const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s) }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
+  const change = (index: number, patch: Partial<Draft>) => edit((old) => ({ ...old, sections: old.sections.map((s, at) => at === index ? { ...s, ...patch } : s),document:patch.mark?{...old.document,uiProfile:pageUIProfile}:old.document }), `widget:${sections[index]?.id}:${Object.keys(patch).join(",")}`);
   const move = (index: number, by: -1 | 1) => { const section = sections[index]; if (section?.id) edit((old) => ({ ...old, document: moveWidget(old.document, section.id!, by) })); };
   const add = (widget: string, destination?: { container: string; after?: string }) => {
     const contract = widgetContract(widget); if (!contract) return;
@@ -343,7 +343,7 @@ function Properties({ section, document, info, catalog, object, selections, rela
       )}
       {allows("filter-variable")&&!(leaf&&loopOwner(document,leaf))&&(!overlay||section.widget!=="filter")&&!section.collectionVariable&&<label className="grid gap-1 text-xs">{t("Shared filter binding")}<Select value={section.filterVariable??""} onChange={(e)=>onChange({filterVariable:e.target.value||undefined})}><option value="">{t("Keep filters in this page")}</option>{Object.entries(document.variables??{}).filter(([,v])=>v.mode==="shared"&&v.type==="filter"&&v.source?.object?.name===(section.object||object)&&(section.widget!=="filter"||v.writable)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
       {(() => {const Inspector=widgetInspector(section.widget,section.configVersion??0)?.bindings;return Inspector?<Inspector section={section} document={document} object={object} info={info} overlay={overlay} itemOwner={leaf?loopOwner(document,leaf):undefined} onChange={onChange}/>:null;})()}
-      {["chart","metric"].includes(section.widget) && <label className="grid gap-1 text-xs">{t("Aggregate query set")}<Select value={section.collectionVariable??""} onChange={(event)=>{const variable=document.variables?.[event.target.value],query=variable?.source?.query?document.queries?.[variable.source.query]:undefined,shared=variable?.source?.object;onChange({collectionVariable:event.target.value||undefined,filterVariable:undefined,query:undefined,parentSelection:undefined,relation:undefined,...((query?.object||shared)?{object:(query?.object||shared)!.name===object?undefined:(query?.object||shared)!.name}:{} )});}}><option value="">{t("Use the widget's own aggregate")}</option>{Object.entries(document.variables??{}).filter(([,v])=>accessible(v)&&v.type==="object-set"&&(v.source?.kind==="plan"||v.mode==="shared"&&!!v.source?.object)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
+      {section.widget==="metric" && <label className="grid gap-1 text-xs">{t("Aggregate query set")}<Select value={section.collectionVariable??""} onChange={(event)=>{const variable=document.variables?.[event.target.value],query=variable?.source?.query?document.queries?.[variable.source.query]:undefined,shared=variable?.source?.object;onChange({collectionVariable:event.target.value||undefined,filterVariable:undefined,query:undefined,parentSelection:undefined,relation:undefined,...((query?.object||shared)?{object:(query?.object||shared)!.name===object?undefined:(query?.object||shared)!.name}:{} )});}}><option value="">{t("Use the widget's own aggregate")}</option>{Object.entries(document.variables??{}).filter(([,v])=>accessible(v)&&v.type==="object-set"&&(v.source?.kind==="plan"||v.mode==="shared"&&!!v.source?.object)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
       {(["detail", "actions", "timeline", "tasks"].includes(section.widget)) && <label className="grid gap-1 text-xs">{t("Input record binding")}<Select value={document.variables?.[section.recordVariable ?? ""]?.source?.kind === "record" || document.variables?.[section.recordVariable ?? ""]?.mode === "input" || document.variables?.[section.recordVariable ?? ""]?.mode === "shared" ? section.recordVariable : ""} onChange={(e) => onChange({ recordVariable: e.target.value || undefined, selection: undefined })}><option value="">{t("Use page selection")}</option>{Object.entries(document.interface?.inputs ?? {}).filter(([, p]) => p.type === "record").map(([id, p]) => <option key={id} value={p.variable}>{id}</option>)}{Object.entries(document.variables??{}).filter(([,v])=>v.type==="record"&&(v.source?.kind==="record"||v.mode==="shared")&&accessible(v)).map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>}
       {section.recordVariable && <p className="text-xs text-muted">{t(document.variables?.[section.recordVariable]?.mode === "input" ? "This widget reads the input record." : document.variables?.[section.recordVariable]?.source?.kind==="record" ? "This widget reads the bound record selection." : "This widget reads the current loop record.")}</p>}
       {!section.recordVariable && (selections.length > 0 || section.selection) && contract?.selectionMode !== "none" &&
@@ -455,17 +455,11 @@ function Properties({ section, document, info, catalog, object, selections, rela
             onChange={(value) => onChange({ actions: value })} empty={t("No action of this object is offered to you.")} />
         </fieldset>
       )}
-      {(section.widget === "chart" || section.widget === "metric") && (
+      {section.widget === "metric" && (
         <label className="grid gap-1 text-xs">{t("Measure")}
           <Select value={section.measure ?? "count"} onChange={(e) => onChange({ measure: e.target.value })}>
             {measures.map((m) => <option key={m} value={m}>{m}</option>)}
           </Select>
-        </label>
-      )}
-      {section.widget === "chart" && (
-        <label className="grid gap-1 text-xs">{t("Grouped by")}
-          <SemanticPropertySelect label={t("Grouped by")} object={{ app: (section.object ?? object).split(".")[0]!, kind: "object", name: section.object ?? object }} value={section.group?.split(":")[0]}
-            onChange={(ref) => { const field = fields.find((field) => field.name === ref?.field); onChange({ group: ref ? `${ref.field}${field?.type === "date" || field?.type === "datetime" ? ":month" : ""}` : undefined }); }} />
         </label>
       )}
       {section.widget === "text" && (

@@ -65,7 +65,7 @@ export function Chart({ spec, source, height = 260, frame = true }: { spec: Char
     : <Canvas spec={spec} data={data} height={height} />;
   if (!frame) return body;
   return (
-    <section className="grid content-start gap-1 rounded-md border border-border bg-surface p-3">
+    <section className="grid min-w-0 grid-cols-1 content-start gap-1 rounded-md border border-border bg-surface p-3">
       {spec.title && <h3 className="text-sm font-semibold">{spec.title}</h3>}
       {spec.description && <p className="text-xs text-muted">{spec.description}</p>}
       {body}
@@ -106,5 +106,5 @@ function Canvas({ spec, data, height }: { spec: ChartSpec; data: AggregateData; 
     return () => { disposed = true; resize?.disconnect(); chart.current?.dispose(); chart.current = null; };
   }, []);
   useEffect(() => { chart.current?.setOption(option, true); }, [option]);
-  return <div ref={element} role="img" aria-label={spec.title ?? "Chart"} style={{ height }} className="w-full" />;
+  return <div ref={element} role="img" aria-label={spec.title ?? "Chart"} style={{ height }} className="min-w-0 w-full" />;
 }
