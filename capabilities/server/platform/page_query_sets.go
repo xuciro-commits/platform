@@ -80,7 +80,7 @@ func (d *PageDocument) CheckQuerySets() error {
 		visit = func(id string, depth int, path map[string]bool) error {
 			nodes++
 			q, ok := d.Queries[id]
-			if !ok || !pageNodeID.MatchString(id) || path[id] || depth > QuerySetMaxDepth || nodes > QuerySetMaxNodes || q.Object != plan.Object || q.Owner != plan.Owner {
+			if !ok || !pageNodeID.MatchString(id) || path[id] || depth > QuerySetMaxDepth || nodes > QuerySetMaxNodes || q.Object != plan.Object || q.Owner != plan.Owner || q.ItemOwner != plan.ItemOwner {
 				return fmt.Errorf("query set %s has a missing, cyclic, incompatible or oversized source", root)
 			}
 			if q.Set == nil {

@@ -85,19 +85,29 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.5") {
 			return fmt.Errorf("page loop %s requires UI profile v2.5", id)
 		}
-		if owner != "" {
+		if owner != "" && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.20") {
 			return fmt.Errorf("page loop %s cannot nest in another loop", id)
+		}
+		if owner != "" && owners[owner] != "" {
+			return fmt.Errorf("page loop %s exceeds supported depth", id)
 		}
 		loop := node.Loop
 		if loop == nil || loop.Limit < 1 || loop.Limit > contract.MaxItems {
 			return fmt.Errorf("page loop %s needs a bounded limit", id)
 		}
 		count++
-		total += loop.Limit
+		factor, err := d.loopFactor(owner)
+		if err != nil {
+			return err
+		}
+		total += loop.Limit * factor
 		collection := d.Variables[loop.Collection]
 		item := d.Variables[loop.ItemVariable]
-		if !accessible(loop.Collection, "", overlays[id]) || collection.Type != "object-set" || collection.Source == nil || !(collection.Mode == "resource" && (collection.Scope == "page" || collection.Scope == "overlay") && (collection.Source.Kind == "query" || collection.Source.Kind == "plan") || collection.Mode == "shared" && collection.Scope == "application" && collection.Source.Kind == "application" && collection.Source.Object != nil) || collection.Source.Kind == "query" && sectionOwners[collection.Source.Section] != "" {
+		if !accessible(loop.Collection, owner, overlays[id]) || collection.Type != "object-set" || collection.Source == nil || !(collection.Mode == "resource" && (collection.Scope == "page" || collection.Scope == "overlay" || collection.Scope == "loop-item" && collection.Owner == owner) && (collection.Source.Kind == "query" || collection.Source.Kind == "plan") || collection.Mode == "shared" && collection.Scope == "application" && collection.Source.Kind == "application" && collection.Source.Object != nil) || collection.Source.Kind == "query" && sectionOwners[collection.Source.Section] != "" {
 			return fmt.Errorf("page loop %s needs an external scoped query window", id)
+		}
+		if owner != "" && (collection.Source.Kind != "plan" || d.Queries[collection.Source.Query].ItemOwner != owner) {
+			return fmt.Errorf("nested loop must read its parent-owned plan")
 		}
 		if item.Scope != contract.Scope || item.Type != "record" || item.Mode != "resource" || item.Owner != id || item.Source == nil || item.Source.Kind != contract.Source || item.Source.Node != id {
 			return fmt.Errorf("page loop %s needs its own item record variable", id)
@@ -122,7 +132,7 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 			continue
 		}
 		loop := d.Nodes[variable.Owner].Loop
-		if loop == nil || variable.Mode == "resource" && loop.ItemVariable != id {
+		if loop == nil || variable.Mode == "resource" && loop.ItemVariable != id && !(variable.Type == "object-set" && variable.Source != nil && variable.Source.Kind == "plan" && d.Queries[variable.Source.Query].ItemOwner == variable.Owner) {
 			return fmt.Errorf("page variable %s needs an existing loop owner", id)
 		}
 	}
@@ -192,4 +202,20 @@ func (d *PageDocument) LoopRecordSource(variable string) string {
 		return ""
 	}
 	return collection.Source.Section
+}
+
+func (d *PageDocument) loopFactor(owner string) (int, error) {
+	factor := 1
+	seen := map[string]bool{}
+	owners := d.loopOwners()
+	for owner != "" {
+		loop := d.Nodes[owner].Loop
+		if seen[owner] || loop == nil || loop.Limit < 1 || loop.Limit > pageWidgets.Runtime.Loop.MaxItems || len(seen) >= pageWidgets.Runtime.Loop.MaxDepth {
+			return 0, fmt.Errorf("invalid loop ancestor budget")
+		}
+		seen[owner] = true
+		factor *= loop.Limit
+		owner = owners[owner]
+	}
+	return factor, nil
 }

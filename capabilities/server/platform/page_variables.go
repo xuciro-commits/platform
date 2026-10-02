@@ -68,6 +68,7 @@ type pageRuntimeContract struct {
 		Widget string `json:"widget"`
 	} `json:"resources"`
 	Loop struct {
+		MaxDepth            int      `json:"maxDepth"`
 		Scope               string   `json:"scope"`
 		Source              string   `json:"source"`
 		MaxContainers       int      `json:"maxContainers"`
@@ -231,7 +232,7 @@ func (d *PageDocument) CheckVariables() error {
 				break
 			}
 			if v.Source.Kind == "plan" {
-				if (v.Scope != "page" && v.Scope != "overlay" && v.Scope != "application") || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
+				if (v.Scope != "page" && v.Scope != "overlay" && v.Scope != "application" && v.Scope != "loop-item") || v.Type != "object-set" || !pageNodeID.MatchString(v.Source.Query) || v.Source.Section != "" || v.Source.Node != "" {
 					return fail("plan source needs a scoped query window")
 				}
 				break

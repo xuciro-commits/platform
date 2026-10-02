@@ -62,3 +62,17 @@ test("property cache exposes only the last successful member read and clears wit
  const ref={object:"sample.note",id:"one"};const source={scope:"member:v1",entity:()=>({fields:[{name:"active",type:"boolean"},{name:"count",type:"integer"}]}),get:async()=>({record:{id:"one",revision:1},values:{active:true,count:{kind:"decimal",value:"9007199254740993"}}}),list:async()=>({records:[],total:0})};
  const store=new PageSessionStore(source,{objects:new Map([["selected","sample.note"]]),children:new Map(),queryParents:new Map()});store.selectReference("selected",ref);await tick();assert.equal(store.property(ref,"active","boolean").value,true);assert.equal(store.property(ref,"count","decimal").value.value,"9007199254740993");assert.equal(store.property(ref,"hidden","boolean").status,"error");store.updateSource({...source,scope:"member:v2"});assert.equal(store.property(ref,"active","boolean").status,"error");store.dispose();
 });
+
+test("nested sessions isolate parent paths and retire pending windows when their parent leaves",async()=>{
+ const pending=[],source={scope:"one",entity:()=>({fields:[]}),get:async()=>({record:{id:"child",revision:1}}),list:()=>{const request=deferred();pending.push(request);return request.promise;}};
+ const root=new PageSessionStore(source,{objects:new Map(),children:new Map(),queryParents:new Map()});root.reconcileLoop("parents","same",["A","B"]);
+ const a=root.childSession("parents","A"),b=root.childSession("parents","B");a.reconcileLoop("children","a",["shared-child"]);b.reconcileLoop("children","b",["shared-child"]);a.setItemScalar("children","shared-child","note","A draft");assert.equal(b.snapshot().items["shared-child"],undefined);assert.equal(root.childSession("parents","A"),a);
+ const old=a.querySource("read").list("sample.child",{limit:3});await tick();root.reconcileLoop("parents","same",["B"]);pending[0].resolve({records:[{id:"obsolete",revision:1}],total:1});await old;assert.deepEqual(a.snapshot().queries,{});assert.equal(root.childSession("parents","B"),b);assert.notEqual(root.childSession("parents","A"),a);root.dispose();
+});
+
+test("child item evaluation inherits current outer values without sharing sibling item state",async()=>{
+ const {evaluateVariables}=await import("./variables.ts");const {readFileSync}=await import("node:fs");const pageUIManifest=JSON.parse(readFileSync(new URL("../../../../../capabilities/server/platform/pageui/widgets.json",import.meta.url),"utf8"));
+ const variables={global:{scope:"page",type:"boolean",mode:"state",initial:false},shared:{scope:"application",type:"string",mode:"shared",source:{kind:"application",variable:"label"}},local:{scope:"loop-item",owner:"children",type:"boolean",mode:"state",initial:false}};
+ const values=evaluateVariables(variables,{local:true},pageUIManifest.runtime,{},"children",undefined,undefined,{global:{status:"value",value:true},shared:{status:"value",value:"current"},local:{status:"value",value:false}});
+ assert.deepEqual(values.global,{status:"value",value:true});assert.deepEqual(values.shared,{status:"value",value:"current"});assert.deepEqual(values.local,{status:"value",value:true});
+});

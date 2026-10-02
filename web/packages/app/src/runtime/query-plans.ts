@@ -36,8 +36,9 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
 
 /** Build the finite read shape from member-visible descriptors and explicit
  * values. It emits the original RecordQuery, never source text or SQL. */
-export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[]): QueryPlanResult {
+export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[],setPredicate=false): QueryPlanResult {
   if(plan.set)return failed("A set plan requires its source graph.");
+  if(plan.itemOwner&&!plan.query&&!setPredicate)return failed("Item query needs its typed parent record.");
   if (!info || info.type !== plan.object.name || plan.object.kind !== "object" || plan.limit < 1 || plan.limit > contract.maxLimit || !Number.isInteger(plan.limit) || !Number.isInteger(plan.offset ?? 0) || (plan.offset ?? 0) < 0 || (plan.offset ?? 0) > contract.maxOffset || (plan.conditions?.length ?? 0) > contract.maxConditions || (plan.sort?.length ?? 0) > contract.maxSort) return failed("Query plan is unavailable or exceeds its budget.");
   const field = (name: string) => ["id", "created", "changed"].includes(name) ? { name, type: name === "id" ? "text" : "datetime", ref: undefined } : info.fields.find((field) => field.name === name);
   const usesPlan = (id: string, seen = new Set<string>()): boolean => { if (seen.has(id)) return false; seen.add(id); const variable = variables[id]; return variable?.mode==="property"&&!!variable.source?.variable&&usesPlan(variable.source.variable,seen)||variable?.source?.kind === "plan" || !!variable?.source?.section && !!sections.find((s)=>s.id===variable.source!.section)?.collectionVariable || !!variable?.expression?.args.some((arg) => arg.variable && usesPlan(arg.variable, seen)); };
@@ -49,7 +50,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
       return {status:"value",value:value as string|boolean|number|DecimalValue};
     }
     const variable = variables[binding.variable];
-    if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner) || usesPlan(binding.variable)) return { status: "error", code: "Query parameter escapes its input scope." };
+    if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner||variable.scope==="loop-item"&&variable.owner===plan.itemOwner&&!!plan.itemOwner) || usesPlan(binding.variable)) return { status: "error", code: "Query parameter escapes its input scope." };
     return values[binding.variable] ?? { status: "empty" };
   };
   const scalar = (value: QueryValueResult & { status: "value" }) => typeof value.value === "object" ? value.value.kind === "decimal"?value.value:value.value.kind === "record" ? value.value.reference.id : undefined : value.value;
@@ -67,6 +68,7 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
     named=plan.query?boundQueryDefinition(named,plan.query):named;
     if (!named?.query || named.version !== plan.query.sourceVersion || named.ref.app !== plan.query.ref.app || named.ref.name !== plan.query.ref.name || named.ref.kind !== "query" || named.query.object !== plan.object.name) return failed("The named query version is unavailable.");
     const declaration = named.query;
+    if(plan.itemOwner&&(!declaration.by||!plan.for?.variable||variables[plan.for.variable]?.owner!==plan.itemOwner||variables[plan.for.variable]?.source?.kind!=="item"))return failed("Item query needs its typed parent record.");
     if (Array.isArray(declaration.domain)) domain.push(...declaration.domain);
     else if (declaration.domain !== undefined && declaration.domain !== null) return failed("The named query domain is unavailable.");
     if (domain.some((term) => Array.isArray(term) && !field(String(term[0])))) return failed("A named query field is unavailable.");
@@ -101,9 +103,9 @@ export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:R
   const target=plans[root];
   const visit=(id:string,depth:number,path:Set<string>):QueryPlanResult=>{
    const plan=plans[id];nodes++;
-   if(!plan||path.has(id)||depth>contract.set.maxDepth||nodes>contract.set.maxNodes||plan.object.name!==target?.object.name||plan.object.app!==target?.object.app||plan.owner!==target?.owner)return failed("Set query sources are missing, cyclic or incompatible.");
+   if(!plan||path.has(id)||depth>contract.set.maxDepth||nodes>contract.set.maxNodes||plan.object.name!==target?.object.name||plan.object.app!==target?.object.app||plan.owner!==target?.owner||plan.itemOwner!==target?.itemOwner)return failed("Set query sources are missing, cyclic or incompatible.");
    if(!active(plan.owner))return {status:"empty"};
-   const own=compileQueryPlan({...plan,set:undefined},variables,values(plan.owner),entity(plan.object.name),named(plan),contract,sections);
+   const own=compileQueryPlan({...plan,set:undefined},variables,values(plan.owner),entity(plan.object.name),named(plan),contract,sections,!!plan.set);
    const sourceView=(result:QueryPlanResult)=>depth>0&&result.status==="value"?queryView(plan,result,view?.(id,result),entity(plan.object.name),named(plan),contract):result;
    if(!plan.set||own.status!=="value")return sourceView(own);
    if(!(contract.set.operations as readonly string[]).includes(plan.set.op)||plan.set.inputs.length!==2)return failed("Set query sources are missing, cyclic or incompatible.");

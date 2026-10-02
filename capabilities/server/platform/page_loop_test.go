@@ -119,6 +119,7 @@ func TestPageLoopRejectsNestedAndMultipliedBudgets(t *testing.T) {
 				s = append(s, Section{ID: body, Widget: "text", ConfigVersion: 1, Text: "Body"})
 				parent := "root"
 				if test.nested {
+					d.UIProfile = "platform.page.v2.19"
 					parent = "loop"
 				}
 				n := d.Nodes[parent]

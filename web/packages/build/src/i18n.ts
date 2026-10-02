@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Loop item": "循环条目",
  "Aggregate query set": "聚合集合来源",
  "Use the widget's own aggregate": "使用组件自身聚合",
   "Set operation": "集合操作",

@@ -43,7 +43,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
       if(variable.type==="object-set"&&(variable.writable||!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name))fail(id,"Shared window needs a read-only object requirement");
       if (variable.scope !== "application" || !variable.source || variable.source.kind !== "application" || !validID.test(variable.source.variable ?? "") || variable.source.section || variable.source.node || variable.source.query || variable.initial !== undefined || variable.expression) fail(id,"Shared binding needs only an application variable source");
     } else if (variable.mode === "resource" && variable.source?.kind === "plan") {
-      if (!["page","overlay","application"].includes(variable.scope) || variable.type !== "object-set" || !validID.test(variable.source.query ?? "") || variable.source.section || variable.source.node || variable.source.variable || variable.initial !== undefined || variable.expression) fail(id,"Plan source needs a scoped query window");
+      if (!["page","overlay","application","loop-item"].includes(variable.scope) || variable.type !== "object-set" || !validID.test(variable.source.query ?? "") || variable.source.section || variable.source.node || variable.source.variable || variable.initial !== undefined || variable.expression) fail(id,"Plan source needs a scoped query window");
     } else if(variable.mode === "resource"&&variable.scope==="application"&&["record","filter"].includes(variable.source?.kind??"")) {
       if(variable.type!==variable.source?.kind||!variable.source?.object||variable.source.object.kind!=="object"||!variable.source.object.app||!variable.source.object.name||variable.source.section||variable.source.node||variable.source.query||variable.source.variable||variable.initial!==undefined||variable.expression)fail(id,"Application record needs only an object source");
       if(variable.type==="filter"&&(!variable.source?.fields?.length||variable.source.fields.length>contract.application.maxFilterFields||new Set(variable.source.fields).size!==variable.source.fields.length||variable.source.fields.some((field)=>!validID.test(field))))fail(id,"Application filter needs bounded fields");
@@ -85,12 +85,13 @@ const operators: Record<Contract["operators"][number]["id"], (values: Scalar[]) 
   "decimal-less":([a,b])=>compareDecimal(a as import("./decimal").DecimalValue,b as import("./decimal").DecimalValue)<0,
 };
 
-export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string, overlay?: string,property?:PropertyReader): Record<string, VariableResult> {
+export function evaluateVariables(variables: Variables, state: Record<string, unknown>, contract: Contract, resources: Record<string, VariableResult> = {}, owner?: string, overlay?: string,property?:PropertyReader,inherited?:Record<string,VariableResult>): Record<string, VariableResult> {
   const compiled = compileVariables(variables, contract), result: Record<string, VariableResult> = {};
   if (compiled.issues.length) return Object.fromEntries(Object.keys(variables).map((id) => [id, { status: "error", code: "Invalid variable graph" }]));
   for (const id of compiled.order) {
     const variable = variables[id]!;
     if (variable.scope === contract.loop.scope && variable.owner !== owner || variable.scope === contract.overlay.scope && variable.owner !== overlay) { result[id] = { status: "empty" }; continue; }
+    if(variable.scope!==contract.loop.scope&&inherited?.[id]) { result[id]=inherited[id]!;continue; }
     if(variable.mode==="property") {const parent=result[variable.source!.variable!];if(!parent||parent.status!=="value"){result[id]=parent?.status==="error"?{status:"error",code:"Property source read failed"}:parent??{status:"empty"};continue;}const value=parent.value;if(typeof value!=="object"||value.kind!=="record"||value.reference.object!==variable.source?.object?.name){result[id]={status:"error",code:"Property record object is unavailable"};continue;}const read=property?.(value.reference,variable.source!.field!,variable.type)??{status:"error" as const,code:"Property value is unavailable."};result[id]=read.status==="value"&&valueType(read.value,contract)!==variable.type?{status:"error",code:"Property value type mismatch"}:read;continue;}
     if (variable.mode === "input" || variable.mode === "shared") { result[id] = resources[id] ?? (variable.initial !== undefined ? { status: "value", value: variable.initial as Scalar } : { status: "empty" }); continue; }
     if (variable.mode === "resource") {

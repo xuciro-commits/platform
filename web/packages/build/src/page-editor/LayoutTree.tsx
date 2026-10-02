@@ -1,4 +1,4 @@
-import { overlayOwner, variableAccessible, type LayoutKind } from "../page-layout";
+import { loopOwner, overlayOwner, variableAccessible, type LayoutKind } from "../page-layout";
 import type { Api } from "@platform/kernel";
 import { Button, Card, Input, Select, cn, t } from "@platform/ui";
 import { useState, type DragEvent, type ReactNode } from "react";
@@ -108,7 +108,7 @@ export function LayoutProperties({ document, id, onChange, onPatch, onUngroup }:
       <option value="start">{t("Start")}</option><option value="center">{t("Center")}</option><option value="end">{t("End")}</option><option value="between">{t("Space between")}</option>
     </Select></label>}
     {node.kind === "loop" && node.loop && <>
-      <label className="grid gap-1 text-xs">{t("Loop query window")}<Select value={node.loop.collection} onChange={(event) => onPatch(id, { loop: { ...node.loop!, collection: event.target.value } })}><option value="">{t("Choose a query window")}</option>{Object.entries(document.variables ?? {}).filter(([, value]) => variableAccessible(value,undefined,overlayOwner(document,id)) && value.type === "object-set" && (value.source?.kind === "query" || value.source?.kind === "plan" || value.mode==="shared")).map(([key, value]) => <option key={key} value={key}>{value.title || key}</option>)}</Select></label>
+      <label className="grid gap-1 text-xs">{t("Loop query window")}<Select value={node.loop.collection} onChange={(event) => onPatch(id, { loop: { ...node.loop!, collection: event.target.value } })}><option value="">{t("Choose a query window")}</option>{Object.entries(document.variables ?? {}).filter(([, value]) => (loopOwner(document,id)?value.scope==="loop-item"&&value.owner===loopOwner(document,id)&&value.source?.kind==="plan":variableAccessible(value,undefined,overlayOwner(document,id))) && value.type === "object-set" && (value.source?.kind === "query" || value.source?.kind === "plan" || value.mode==="shared")).map(([key, value]) => <option key={key} value={key}>{value.title || key}</option>)}</Select></label>
       <label className="grid gap-1 text-xs">{t("Loop item limit")}<Input type="number" min={1} max={100} value={node.loop.limit} onChange={(event) => onPatch(id, { loop: { ...node.loop!, limit: Number(event.target.value) } })} /></label>
       <p className="text-xs text-muted">{t("Record widgets bind to each item. The source query stays outside the loop.")}</p>
     </>}

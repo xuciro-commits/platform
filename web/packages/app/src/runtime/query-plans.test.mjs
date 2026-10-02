@@ -79,3 +79,18 @@ test("decimal parameters retain exact tagged conditions and errors never fall ba
  const result=compileQueryPlan(plan,variables,{threshold:{status:"value",value}},info,undefined,contract);assert.equal(result.status,"value");assert.deepEqual(result.query.domain,[["count",">",value]]);
  assert.equal(compileQueryPlan(plan,variables,{threshold:{status:"error",code:"Invalid numeric value."}},info,undefined,contract).status,"error");
 });
+
+
+test("item queries never broaden an unavailable parent into an object read and set leaves keep the same parent scope",()=>{
+ const object={app:"sample",kind:"object",name:"sample.child"},binding={ref:{app:"sample",kind:"query",name:"children"},sourceVersion:"q1"};
+ const info={type:object.name,fields:[{name:"parent",type:"reference",ref:"sample.parent"}]},variables={parent:{scope:"loop-item",owner:"parents",type:"record",mode:"resource",source:{kind:"item",node:"parents"}}};
+ const named={ref:binding.ref,version:"q1",query:{object:object.name,by:"parent",limit:3}},plan={object,itemOwner:"parents",query:binding,for:{variable:"parent"},limit:3};
+ const values={parent:{status:"value",value:{kind:"record",reference:{object:"sample.parent",id:"A"}}}};
+ assert.deepEqual(compileQueryPlan(plan,variables,values,info,named,contract).query.domain,[["parent","=","A"]]);
+ for(const status of ["empty","pending","error"])assert.equal(compileQueryPlan(plan,variables,{parent:{status,code:"Denied"}},info,named,contract).status,status);
+ assert.equal(compileQueryPlan({...plan,query:undefined,for:undefined},variables,values,info,undefined,contract).status,"error");
+ assert.equal(compileQueryPlan(plan,variables,{parent:{status:"value",value:{kind:"record",reference:{object:"sample.other",id:"A"}}}},info,named,contract).status,"error");
+ const plans={left:plan,right:plan,combined:{object,itemOwner:"parents",limit:3,set:{op:"union",inputs:["left","right"]}}};
+ const compile=plans=>Object.fromEntries(compileQueryPlans(plans,variables,()=>values,()=>info,()=>named,contract)).combined;
+ assert.equal(compile(plans).status,"value");assert.equal(compile({...plans,right:{...plan,query:undefined,for:undefined}}).status,"error");assert.equal(compile({...plans,right:{...plan,itemOwner:"other"}}).status,"error");
+});

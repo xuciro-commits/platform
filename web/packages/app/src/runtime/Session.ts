@@ -25,6 +25,12 @@ export type SelectionPlan = { filterObjects?:ReadonlyMap<string,string>;filterFi
  * The source remains the sole authority for reads and record permissions.
  */
 export class PageSessionStore {
+  private childSessions=new Map<string,{owner:string;session:PageSessionStore}>();
+  childSession(owner:string,key:string) {
+    let child=this.childSessions.get(key);
+    if(!child){child={owner,session:new PageSessionStore(this.readSource(),{objects:new Map(),children:new Map(),queryParents:new Map()})};this.childSessions.set(key,child);}
+    return child.session;
+  }
   private source: RecordSource;
   private plan: SelectionPlan;
   private state: PageSessionSnapshot = { views:{}, scalars: {}, items: {}, records: {}, filters: {}, queries: {} };
@@ -84,6 +90,7 @@ export class PageSessionStore {
     this.overlayEpochs.set(owner, this.overlayEpoch(owner) + 1);
     const scope=this.plan.overlayScopes?.get(owner);
     if(!scope)return;
+    for(const [key,child] of this.childSessions)if(scope.loops?.has(child.owner)){child.session.dispose();this.childSessions.delete(key)}
     const queries={...this.state.queries},views={...this.state.views},filters={...this.state.filters};
     for(const key of scope.filters??[])delete filters[key];
     for(const key of scope.queries){this.queries.delete(key);this.querySignatures.delete(key);this.queryData.delete(key);delete queries[key];delete views[key];}
@@ -112,6 +119,7 @@ export class PageSessionStore {
   reconcileLoop(owner: string, signature: string, keys: string[]) {
     const changed = this.loopQueries.get(owner) !== signature, allowed = new Set(keys), items = { ...this.state.items };
     let removed = false;
+    for(const [key,child] of this.childSessions)if(child.owner===owner&&(changed||!allowed.has(key))){child.session.dispose();this.childSessions.delete(key);removed=true;}
     for (const [key, parent] of this.itemOwners) if (parent === owner && (changed || !allowed.has(key))) { delete items[key]; this.itemOwners.delete(key); removed = true; }
     this.loopQueries.set(owner, signature); this.loopItems.set(owner, allowed);
     if (removed) this.publish({ items });
@@ -232,6 +240,7 @@ export class PageSessionStore {
     if (this.disposed || source === this.source && source.revision === this.sourceRevision && source.scope === this.sourceScope) return;
     const changedScope = source.scope !== this.sourceScope;
     this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.version++;
+    for(const child of this.childSessions.values())child.session.updateSource(this.readSource());
     this.queries.clear();this.queryData.clear(); this.reads.clear();this.viewCache.clear();
     this.publish({ queries: Object.fromEntries(Object.keys(this.state.queries).map((key) => [key, { status: "empty" }])) });
     if (changedScope) {
@@ -296,6 +305,7 @@ export class PageSessionStore {
     return request.promise;
   }
   dispose() {
+    for(const child of this.childSessions.values())child.session.dispose();this.childSessions.clear();
     this.disposed = true; this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear();this.viewCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
     this.state = { views:{}, scalars: {}, items: {}, records: {}, filters: {}, queries: {} };

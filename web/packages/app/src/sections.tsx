@@ -18,6 +18,7 @@ import { useApplicationContext, useApplicationVariables } from "./runtime/Applic
 import { usePageQueries } from "./runtime/PageQueries";
 import { planKey, variablePlan } from "./runtime/query-plans";
 import { inputSlot, usePageInputs, usePageNavigation } from "./runtime/PageNavigation";
+import { NestedLoopRuntime } from "./runtime/NestedLoopRuntime";
 import { LoopRuntime, type LoopContext } from "./runtime/LoopRuntime";
 import type { PageSessionStore } from "./runtime/Session";
 import { recordSlot, filterOwner, filtersForOwner, filterSessionBindings, selectionSlot, overlaySessionScopes, resourceVariables } from "./runtime/resources";
@@ -515,7 +516,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         numeric={initialVariables[valueVariable??""]?.type==="decimal"} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
         onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
           const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;
-          if (event.navigate || event.return) { navigation.emit(event, { values, set: (id, value) => setContextState(id, value, context, overlay), isActive: () => (!overlay || session.overlayEpoch(overlay) === epoch) && (!context || session.hasLoopItem(context.owner, context.key) && session.querySignature(context.queryKey) === context.signature) }); return; }
+          if (event.navigate || event.return) { navigation.emit(event, { values, set: (id, value) => setContextState(id, value, context, overlay), isActive: () => (!overlay || session.overlayEpoch(overlay) === epoch) && (!context || context.session.hasLoopItem(context.owner, context.key) && context.session.querySignature(context.queryKey) === context.signature) }); return; }
           if (typeof event.value === "string" || typeof event.value === "boolean" || isDecimal(event.value)) setContextState(event.target, event.value, context, overlay);
         } : undefined} />
     );
@@ -541,7 +542,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
     if (!["rows", "columns", "tabs", "flow", "toolbar", "loop"].includes(node.kind)) return <Panel role="alert">{t("This page layout is unavailable.")}</Panel>;
     const next = new Set(ancestors); next.add(id);
     if (node.kind === "loop") {
-      if (context) return <Panel role="alert">{t("Nested loops are not supported by this UI profile.")}</Panel>;
+      if(context)return <NestedLoopRuntime page={page} node={node} owner={id} parent={context} overlay={overlay}>{item=><>{node.children?.map(child=><div key={child} className="min-w-0">{renderNode(child,next,item,overlay)}</div>)}</>}</NestedLoopRuntime>;
       if (!node.loop) return <Panel role="alert">{t("Choose a loop query window.")}</Panel>;
       const collection = initialVariables[node.loop.collection]?.source, queryID=variablePlan(page,node.loop.collection);
       const shared=applicationVariable(node.loop.collection);const queryKey = shared?`application/${shared}`:queryID!==undefined?planKey(queryID):collection?.section??"";

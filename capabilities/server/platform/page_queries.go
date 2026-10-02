@@ -10,6 +10,7 @@ import (
 // PageQuery is a presentation-owned read plan over the original record API.
 // A named query keeps its source version and fixed owner conditions.
 type PageQuery struct {
+	ItemOwner  string               `json:"itemOwner,omitempty"`
 	Set        *PageQuerySet        `json:"set,omitempty"`
 	Owner      string               `json:"owner,omitempty"` // empty: page; otherwise an Overlay identity
 	Title      string               `json:"title,omitempty"`
@@ -110,7 +111,21 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 		if !pageNodeID.MatchString(id) || len(q.Title) > 1024 || q.Object.Check() != nil || q.Object.Kind != AssetObject || q.Limit < 1 || q.Limit > c.MaxLimit || q.Offset < 0 || q.Offset > c.MaxOffset || len(q.Conditions) > c.MaxConditions || len(q.Sort) > c.MaxSort {
 			return fmt.Errorf("page query %s has an invalid identity, object or budget", id)
 		}
-		total += q.Limit
+		factor := 1
+		if q.ItemOwner != "" {
+			if inputScope == "application" || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.20") || d.Nodes[q.ItemOwner].Loop == nil || d.overlayOwners()[q.ItemOwner] != q.Owner {
+				return fmt.Errorf("item query %s needs a matching parent loop scope", id)
+			}
+			var err error
+			factor, err = d.loopFactor(q.ItemOwner)
+			if err != nil {
+				return err
+			}
+			if q.Set == nil && (q.Query == nil || q.For == nil || q.For.Variable != d.Nodes[q.ItemOwner].Loop.ItemVariable) {
+				return fmt.Errorf("item query %s needs its parent record", id)
+			}
+		}
+		total += q.Limit * factor
 		if q.Query != nil && (q.Query.Ref.Check() != nil || q.Query.Ref.Kind != AssetQuery || q.Query.SourceVersion == "") {
 			return fmt.Errorf("page query %s needs an exact named query binding", id)
 		}
@@ -133,7 +148,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			}
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
-				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record") || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
+				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record") || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") && !(v.Scope == "loop-item" && v.Owner == q.ItemOwner && q.ItemOwner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
 					return fmt.Errorf("page query %s parameter escapes its input scope", id)
 				}
 			} else {
@@ -165,7 +180,7 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 	for id, v := range d.Variables {
 		if v.Source != nil && v.Source.Kind == "plan" {
 			q, ok := d.Queries[v.Source.Query]
-			if !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") || !(q.Owner == "" && v.Scope == inputScope || q.Owner != "" && v.Scope == "overlay" && v.Owner == q.Owner) {
+			if !ok || !PageUIProfileSupports(d.UIProfile, "platform.page.v2.9") || !(q.ItemOwner != "" && v.Scope == "loop-item" && v.Owner == q.ItemOwner || q.ItemOwner == "" && (q.Owner == "" && v.Scope == inputScope || q.Owner != "" && v.Scope == "overlay" && v.Owner == q.Owner)) {
 				return fmt.Errorf("page variable %s needs an existing query plan", id)
 			}
 		}
@@ -266,6 +281,9 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 			return fmt.Errorf("query requires its exact named query version and object")
 		}
 		decl := named.Query
+		if q.ItemOwner != "" && decl.By == "" {
+			return fmt.Errorf("item query requires its named parent reference")
+		}
 		if decl.By != "" {
 			field, ok := fieldType(decl.By)
 			if !ok || q.For == nil || !checkValue(field, *q.For) {

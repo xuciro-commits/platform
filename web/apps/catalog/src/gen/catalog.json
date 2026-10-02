@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:2847fe4612f4520e",
+  "revision": "sha256:8c2d8e81fc6709d0",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2207,6 +2207,7 @@
       "web/packages/app/src/pages.tsx",
       "web/packages/app/src/runtime/ApplicationRuntime.tsx",
       "web/packages/app/src/runtime/LoopRuntime.tsx",
+      "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",

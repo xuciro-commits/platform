@@ -944,6 +944,7 @@ export type PagePort = {
 };
 
 export type PageQuery = {
+  itemOwner?: string;
   set?: PageQuerySet;
   owner?: string;
   title?: string;
@@ -1576,7 +1577,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.19",
+  "uiProfile": "platform.page.v2.20",
   "widgets": [
     {
       "componentID": "table",
@@ -2091,7 +2092,8 @@ export const pageUIManifest = {
     "platform.page.v2.16",
     "platform.page.v2.17",
     "platform.page.v2.18",
-    "platform.page.v2.19"
+    "platform.page.v2.19",
+    "platform.page.v2.20"
   ],
   "runtime": {
     "scope": "page",
@@ -2203,7 +2205,8 @@ export const pageUIManifest = {
         "text",
         "button",
         "input"
-      ]
+      ],
+      "maxDepth": 2
     },
     "interface": {
       "maxPorts": 16,
