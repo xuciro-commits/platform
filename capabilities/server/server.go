@@ -685,6 +685,26 @@ func (h *Host) Handler() http.Handler {
 		}
 		WriteJSON(w, http.StatusOK, out)
 	})
+	handle(Route{Pattern: "POST /v1/aggregates/{type}/query", Summary: "Aggregate complete authorized record sets before any window (ADR-0046)", Body: AggregateQuery{}, Answer: Aggregate{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, platform.QuerySetMaxBytes))
+		decoder.DisallowUnknownFields()
+		var q *AggregateQuery
+		if decoder.Decode(&q) != nil || q == nil {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		var extra any
+		if decoder.Decode(&extra) != io.EOF {
+			Reply(w, nil, &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
+			return
+		}
+		out, err := t.Aggregate(m, r.PathValue("type"), *q, h.Now())
+		if err != nil {
+			Reply(w, nil, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, out)
+	})
 	handle(Route{Pattern: "GET /v1/aggregates/{type}", Summary: "Groups and measures of an entity type's records within the caller's scope (ADR-0019)", Answer: Aggregate{}, Query: []Param{{"group", "Fields or field:month, comma-separated"}, {"measure", "count, sum:field, avg:field, min:field, max:field"}, {"domain", "Filters, JSON"}, {"search", "Words to find"}, {"archived", "true: archived records too"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		p := r.URL.Query()
 		q := AggregateQuery{Domain: json.RawMessage(p.Get("domain")), Search: p.Get("search"), Archived: p.Get("archived") == "true"}

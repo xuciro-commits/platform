@@ -7,6 +7,7 @@ export type ApplicationReads = {source:RecordSource;queries:Record<string,Api.Pa
 /** Ephemeral application-instance state, owned by one workspace. Values never
  * appear in routes, persisted layout or the module's global scope. */
 export class ApplicationSession {
+  readonly readScope = crypto.randomUUID();
   private state: Record<string, ScalarValue> = {};
   private listeners = new Set<() => void>();
   private pages = new Map<symbol, () => void>();

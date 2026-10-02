@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.18",
+  "uiProfile": "platform.page.v2.19",
   "widgets": [
     {
       "componentID": "table",
@@ -122,7 +122,8 @@
         "object",
         "relation",
         "aggregate",
-        "filter-variable"
+        "filter-variable",
+        "collection-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -165,7 +166,8 @@
         "object",
         "relation",
         "aggregate",
-        "filter-variable"
+        "filter-variable",
+        "collection-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -511,7 +513,8 @@
     "platform.page.v2.15",
     "platform.page.v2.16",
     "platform.page.v2.17",
-    "platform.page.v2.18"
+    "platform.page.v2.18",
+    "platform.page.v2.19"
   ],
   "runtime": {
     "scope": "page",

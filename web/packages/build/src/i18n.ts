@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Aggregate query set": "聚合集合来源",
+ "Use the widget's own aggregate": "使用组件自身聚合",
   "Set operation": "集合操作",
   "Read one source": "读取单一来源",
   "Left set source": "左侧集合来源",

@@ -9,6 +9,18 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 	if err := p.CheckCollectionPorts(); err != nil {
 		return err
 	}
+	for _, section := range p.Sections {
+		if section.CollectionVariable != "" && (section.Widget == "chart" || section.Widget == "metric") {
+			object := section.Object.Name
+			if object == "" {
+				object = p.Object.Name
+			}
+			info, ok := t.entity(object)
+			if !ok || !checkAggregateSection(section, info) {
+				return fmt.Errorf("aggregate collection fields are unavailable or incompatible")
+			}
+		}
+	}
 	if p.Document == nil {
 		return nil
 	}

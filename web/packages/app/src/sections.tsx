@@ -37,6 +37,7 @@ type Bound = {
   master?: EntityRecord;
   session?: PageSessionStore;
   window?: NonNullable<Parameters<typeof RecordList>[0]["window"]>;
+ collection?:VariableResult; aggregateScope?:string;
   onClick?: () => void; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
   sharedFilter?:Record<string,unknown>; narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
@@ -139,9 +140,16 @@ function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]
   };
 }
 
-function ChartWidget({ page, section, kpi, narrowed, sharedFilter, master }: Bound & { kpi: boolean }) {
+function ChartWidget({ page, section, kpi, narrowed, sharedFilter, master, window, collection, aggregateScope }: Bound & { kpi: boolean }) {
   const { source } = useHost();
   const aggregate = source.aggregate;
+  if(section.collectionVariable){
+    if(!window)return <Panel role={collection?.status==="error"?"alert":"status"}>{t(collection?.status==="error"?collection.code:"Query window is unavailable.")}</Panel>;
+    if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;
+    const {domain,search,set,archived}=window.query;
+    const spec=chartSpec(page,section,kpi,domain??[]);spec.data={entity:objectOf(page,section),domain,search,set,archived};
+    return <Chart spec={spec} frame={false} height={kpi?120:240} source={aggregate?{aggregate,scope:aggregateScope,revision:source.revision}:undefined}/>;
+  }
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
   const info = source.entity(type);
@@ -155,7 +163,7 @@ function ChartWidget({ page, section, kpi, narrowed, sharedFilter, master }: Bou
   const domain = [...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
 
   return <Chart spec={chartSpec(page, section, kpi, domain)} frame={false} height={kpi ? 120 : 240}
-    source={aggregate ? { aggregate, revision: source.revision } : undefined} />;
+    source={aggregate ? { aggregate, scope:source.scope, revision: source.revision } : undefined} />;
 }
 
 /** The filter (16b): a value to narrow the object's records by, for each field
@@ -384,7 +392,7 @@ export function SectionView(bound: Bound & Composing) {
     <Card onClick={onChoose && at !== undefined ? () => onChoose(at) : undefined}
       className={cn("grid min-w-0 content-start gap-2 p-3", nested ? "w-full" : section.width === "half" ? "md:col-span-1" : "md:col-span-2",
         onChoose && "cursor-pointer", inHand && "outline outline-2 outline-primary")}>
-      {section.title && section.widget !== "metric" && <h3 className="text-sm font-semibold">{section.title}</h3>}
+      {section.title && <h3 className="text-sm font-semibold">{section.title}</h3>}
       <WidgetBoundary key={`${section.id ?? at}/${section.widget}/${section.configVersion}/${JSON.stringify(section)}`}>{body}</WidgetBoundary>
     </Card>
   );
@@ -440,8 +448,8 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
   }
   const applicationVariable=(id:string)=>{const v=initialVariables[id];if(v?.mode==="shared"&&v.type==="object-set")return id;if(v?.source?.kind==="query"){const section=page.sections?.find((s)=>s.id===v.source?.section);const bound=initialVariables[section?.collectionVariable??""];if(bound?.mode==="shared"&&bound.type==="object-set")return section?.collectionVariable;}return undefined;};
   const querySelections = new Map<string,Set<string>>();
-  for(const section of page.sections??[]){const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
-  for(const section of page.sections??[]){const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
+  for(const section of page.sections??[]){if(section.widget!=="table")continue;const variable=page.document?.variables?.[section.collectionVariable??""];if(variable?.source?.kind==="plan"){const key=planKey(variable.source.query??"");if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
+  for(const section of page.sections??[]){if(section.widget!=="table")continue;const id=section.collectionVariable;if(id&&applicationVariable(id)){const key=`application/${id}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
   for(const section of page.sections??[]){if(section.filterVariable&&section.widget==="table"){const key=section.id??`section:${page.sections!.indexOf(section)}`;if(!querySelections.has(key))querySelections.set(key,new Set());querySelections.get(key)!.add(selectionSlot(page,section));}}
   const { session, snapshot } = usePageSession(source, { objects: slots, children, queryParents, querySelections, ...(Number(/^platform\.page\.v2\.(\d+)$/.exec(page.document?.uiProfile??"")?.[1])>=13?filterSessionBindings(page):{}), overlayScopes:overlaySessionScopes(page) });
   const resourceKey = JSON.stringify([page.object, page.document?.variables, page.sections]);
@@ -503,6 +511,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         master={session.selected(selectionSlot(page,section,true))} onSelect={(record) => {onSelect(selectionSlot(page,section),record,selectionQuery(section));if(section.selectionVariable)application.select(section.selectionVariable,record?{object:section.object?.name||page.object.name,id:record.id}:undefined,recordProducer(section.id??""));}} live={live} narrowed={section.widget==="filter"&&section.filterVariable?{[objectOf(page,section)]:sharedFilter??{}}:filtersForOwner(snapshot.filters,filterOwner(page,section))} sharedFilter={sharedFilter} onNarrow={(object,field,value)=>section.filterVariable&&section.widget==="filter"?application.filter(section.filterVariable,field,value):session.filter(object,field,value,filterOwner(page,section))}
         chosen={chosen} onChoose={onChoose} at={i} nested={nested} enabled={enabled}
         window={section.collectionVariable?applicationVariable(section.collectionVariable)?application.windows[applicationVariable(section.collectionVariable)!]:queries.windows[initialVariables[section.collectionVariable]?.source?.query??""]:undefined}
+        collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
         onClick={page.document?.events?.find((event) => event.source === section.id && event.event === "click") ? () => {
           const event = page.document!.events!.find((event) => event.source === section.id && event.event === "click")!;

@@ -24,12 +24,17 @@ import (
 //     money field. Money is summed per currency: its currency becomes a group
 //     ("amount.currency"), and amounts stay in minor units.
 type AggregateQuery struct {
-	Domain   json.RawMessage
-	Search   string
-	Archived bool
-	Groups   []string
-	Measures []string
+	Set      *platform.QuerySet `json:"set,omitempty"`
+	Domain   json.RawMessage    `json:"domain,omitempty"`
+	Search   string             `json:"search,omitempty"`
+	Archived bool               `json:"archived,omitempty"`
+	Groups   []string           `json:"groups,omitempty"`
+	Measures []string           `json:"measures,omitempty"`
 }
+
+const AggregateSetMaxGroups = 4
+const AggregateSetMaxMeasures = 8
+const AggregateSetMaxRows = 4096
 
 // Aggregate is the answer: the columns it has, then one row per group, keyed
 // by column name, in the order of the groups' values.
@@ -153,6 +158,9 @@ func (et *entityType) measure(name string) (measure, bool) {
 // aggregate groups and measures the matching records; the caller holds s.mu.
 func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(reflect.Value) bool) (Aggregate, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	if q.Set != nil && (len(q.Groups) > AggregateSetMaxGroups || len(q.Measures) > AggregateSetMaxMeasures) {
+		return Aggregate{}, invalid
+	}
 	if len(q.Measures) == 0 {
 		q.Measures = []string{"count"}
 	}
@@ -179,7 +187,10 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 				key: func(v reflect.Value) any { return v.FieldByIndex(f.Index).Interface().(platform.Money).Currency }})
 		}
 	}
-	rows, err := s.matching(et, q.Domain, q.Search, q.Archived, visible)
+	if q.Set != nil && len(groups) > AggregateSetMaxGroups {
+		return Aggregate{}, invalid
+	}
+	rows, err := s.matchingQuery(et, platform.Query{Set: q.Set, Domain: q.Domain, Search: q.Search, Archived: q.Archived}, visible)
 	if err != nil {
 		return Aggregate{}, err
 	}
@@ -204,6 +215,9 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 		}
 		a := byKey[k]
 		if a == nil {
+			if q.Set != nil && len(order) >= AggregateSetMaxRows {
+				return Aggregate{}, invalid
+			}
 			a = &acc{keys: keys, sums: make([]float64, len(measures)), mins: make([]float64, len(measures)), maxs: make([]float64, len(measures)), seen: make([]int, len(measures))}
 			for i := range measures {
 				a.mins[i], a.maxs[i] = math.Inf(1), math.Inf(-1)
@@ -291,4 +305,19 @@ func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.aggregate(view, q, visible)
+}
+
+// Definitions and installation consult the original aggregate compiler so
+// grouping/measure semantics do not diverge into a second UI validator.
+func checkAggregateSection(section platform.Section, info platform.EntityInfo) bool {
+	et := entityType{info: info}
+	if _, ok := et.measure(section.Measure); !ok {
+		return false
+	}
+	if section.Widget == "chart" {
+		if _, ok := et.grouping(section.Group); !ok {
+			return false
+		}
+	}
+	return true
 }

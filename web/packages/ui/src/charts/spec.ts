@@ -1,3 +1,4 @@
+import type {Api} from "@platform/kernel";
 // The platform's visualization spec (ADR-0019 D5): what a chart shows, never how a
 // library draws it. After the Grammar of Graphics and Vega-Lite: data, a mark,
 // and encodings that map fields onto visual channels, each with a measurement
@@ -34,7 +35,7 @@ export type Channels = {
 
 /** Where the rows come from: an entity type's records, aggregated by the host with the member's scope, or inline values. */
 export type ChartData =
-  | { entity: string; domain?: unknown[]; search?: string; archived?: boolean }
+  | { entity: string; domain?: unknown[]; search?: string; archived?: boolean; set?:Api.QuerySet }
   | { values: Record<string, unknown>[] };
 
 export type ChartSpec = {
@@ -48,7 +49,7 @@ export type ChartSpec = {
 /** A host aggregate's answer (`GET /v1/aggregates/<type>`). */
 export type AggregateColumn = { name: string; title: string; kind: "group" | "measure"; type: MeasureType; field?: string; money?: boolean };
 export type AggregateData = { columns: AggregateColumn[]; rows: Record<string, unknown>[] };
-export type AggregateQuery = { domain?: unknown[]; search?: string; archived?: boolean; groups?: string[]; measures?: string[] };
+export type AggregateQuery = Omit<Api.AggregateQuery,"domain"> & {domain?:unknown[]};
 
 export const markOf = (spec: ChartSpec) => (typeof spec.mark === "string" ? { type: spec.mark } : spec.mark);
 
@@ -71,8 +72,8 @@ export function aggregateQuery(spec: ChartSpec): AggregateQuery | undefined {
     const list = e.aggregate ? measures : groups;
     if (column && !list.includes(column)) list.push(column);
   }
-  const { domain, search, archived } = spec.data;
-  return { domain, search, archived, groups, measures: measures.length ? measures : ["count"] };
+  const { domain, search, archived, set } = spec.data;
+  return { domain, search, archived, ...(set?{set}:{}), groups, measures: measures.length ? measures : ["count"] };
 }
 
 const bucket = (value: unknown, unit: TimeUnit): string => {

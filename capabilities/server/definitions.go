@@ -348,6 +348,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						}
 						shown = other
 					}
+					if (section.Widget == "chart" || section.Widget == "metric") && !checkAggregateSection(section, shown) {
+						continue
+					}
 					parentType := page.Object.Name
 					if section.ParentSelection != "" {
 						for _, selection := range page.Selections {

@@ -117,7 +117,7 @@ func (d *PageDocument) Check(sections []Section) error {
 		byID[section.ID] = true
 		if section.CollectionVariable != "" {
 			v, ok := d.Variables[section.CollectionVariable]
-			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.10") || section.Widget != "table" || !ok || v.Type != "object-set" || v.Source == nil || !(v.Mode == "resource" && (v.Scope == "page" || v.Scope == "overlay") && v.Source.Kind == "plan" || v.Mode == "shared" && v.Scope == "application" && v.Source.Kind == "application" && v.Source.Object != nil) || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
+			if !PageUIProfileSupports(d.UIProfile, "platform.page.v2.10") || !(section.Widget == "table" || (section.Widget == "chart" || section.Widget == "metric") && PageUIProfileSupports(d.UIProfile, "platform.page.v2.19")) || section.FilterVariable != "" || !ok || v.Type != "object-set" || v.Source == nil || !(v.Mode == "resource" && (v.Scope == "page" || v.Scope == "overlay") && v.Source.Kind == "plan" || v.Mode == "shared" && v.Scope == "application" && v.Source.Kind == "application" && v.Source.Object != nil) || section.Query.Name != "" || section.ParentSelection != "" || section.Relation != "" || section.RecordVariable != "" {
 				return fmt.Errorf("page section %s needs an exclusive plan window binding", section.ID)
 			}
 		}

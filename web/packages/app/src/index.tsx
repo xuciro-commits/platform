@@ -255,7 +255,7 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
     <>
       <PageHeader title={dashboard.title} description={dashboard.description} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-3">
-        {dashboard.charts.map((spec, i) => <Chart key={i} spec={spec} source={aggregate ? { aggregate, revision: source.revision } : undefined}
+        {dashboard.charts.map((spec, i) => <Chart key={i} spec={spec} source={aggregate ? { aggregate, scope:source.scope, revision: source.revision } : undefined}
           height={typeof spec.mark === "string" && spec.mark === "kpi" ? 60 : 240} />)}
       </div>
     </>

@@ -52,7 +52,14 @@ func TestPageQuerySetsFreezeReplayAndPruneMembers(t *testing.T) {
 		"hasPrivate":    {Scope: "page", Type: "boolean", Mode: "derived", Expression: &platform.PageExpression{Op: "present", Args: []platform.PageValue{{Variable: "privateWindow"}}}},
 	}, Queries: plans}
 
-	submit(build.PageType, "page", "create", map[string]any{"name": "work", "title": "Work", "object": "build.note", "sections": []build.Section{{ID: "text", Widget: "text", ConfigVersion: 1, Text: "Read window"}, {ID: "private", Widget: "text", ConfigVersion: 1, Text: "Private window"}}, "document": document})
+	root := document.Nodes["root"]
+	root.Children = append(root.Children, "metric", "chart", "privateChart")
+	document.Nodes["root"] = root
+	for _, id := range []string{"metric", "chart", "privateChart"} {
+		document.Nodes[id] = platform.PageLayoutNode{Kind: "widget", Section: id}
+	}
+
+	submit(build.PageType, "page", "create", map[string]any{"name": "work", "title": "Work", "object": "build.note", "sections": []build.Section{{ID: "text", Widget: "text", ConfigVersion: 1, Text: "Read window"}, {ID: "private", Widget: "text", ConfigVersion: 1, Text: "Private window"}, {ID: "metric", Widget: "metric", ConfigVersion: 1, Measure: "count", CollectionVariable: "window"}, {ID: "chart", Widget: "chart", ConfigVersion: 1, Measure: "count", Group: "note", CollectionVariable: "window"}, {ID: "privateChart", Widget: "chart", ConfigVersion: 1, Measure: "count", Group: "secret", CollectionVariable: "window"}}, "document": document})
 	submit(build.PageType, "page", "publish", map[string]any{})
 	submit(build.AppType, "app", "create", map[string]any{"name": "desk", "title": "Desk", "pages": []string{"work"}, "uiProfile": platform.PageUIProfile(), "queries": plans, "variables": map[string]platform.PageVariable{"window": {Scope: "application", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "read"}}, "privateWindow": {Scope: "application", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "private"}}}})
 	preview, err := tn.PreviewRelease(member, platform.AssetApp, "app")
@@ -93,7 +100,7 @@ func TestPageQuerySetsFreezeReplayAndPruneMembers(t *testing.T) {
 			if d.Page != nil && d.Ref.Name == "work" {
 				foundPage = true
 				queries = d.Page.Document.Queries
-				if len(d.Page.Sections) != 1 || d.Page.Document.Variables["privateWindow"].Mode != "" {
+				if len(d.Page.Sections) != 3 || d.Page.Document.Variables["privateWindow"].Mode != "" {
 					t.Fatal("private page set survived")
 				}
 			}

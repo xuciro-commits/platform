@@ -22,3 +22,8 @@ test("ordinary reads keep their original GET transport",async()=>{
  const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(options.method).toBeUndefined();const parsed=new URL(url);expect(parsed.pathname).toBe("/v1/records/sample.note");expect(parsed.searchParams.get("search")).toBe("part");expect(parsed.searchParams.get("limit")).toBe("1");return new Response(JSON.stringify({records:[],total:0}));});vi.stubGlobal("fetch",fetcher);
  await client().records("sample.note",{search:"part",limit:1});expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+test("set aggregates post predicates and measures without a record window or operand downloads",async()=>{
+ const query={set:{op:"intersect",inputs:[{domain:[["active","=",true]]},{search:"current"}]},groups:["bucket"],measures:["count"]};
+ const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(url).toBe("https://test.invalid/v1/aggregates/sample.note/query");expect(options.method).toBe("POST");expect(JSON.parse(String(options.body))).toEqual(query);expect(options.headers).toMatchObject({Authorization:"Bearer test","Platform-Tenant":"t"});return new Response(JSON.stringify({columns:[],rows:[]}));});vi.stubGlobal("fetch",fetcher);await client().aggregate("sample.note",query);expect(fetcher).toHaveBeenCalledTimes(1);
+});

@@ -8,7 +8,7 @@ import { aggregateQuery, aggregateValues, columnOf, markOf, type AggregateColumn
 import { t } from "../i18n";
 
 /** Where aggregates come from: the host's `GET /v1/aggregates/<type>`, wired by the workspace. */
-export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number };
+export type ChartSource = { aggregate: (type: string, query: AggregateQuery) => Promise<AggregateData>; revision?: number; scope?:string };
 
 // The kit's tokens as colours a canvas understands (they are oklch in CSS).
 function resolve(variable: string): string {
@@ -31,8 +31,8 @@ function theme(): Theme {
 
 /** Loads a spec's rows: the host aggregates records; inline values are aggregated here the same way. */
 export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: AggregateData; error?: string } {
-  const [state, setState] = useState<{ data?: AggregateData; error?: string }>({});
-  const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + (source?.revision ?? 0);
+  const [state, setState] = useState<{ key?:string; data?: AggregateData; error?: string }>({});
+  const key = JSON.stringify(spec.data) + JSON.stringify(spec.encoding) + JSON.stringify([source?.scope,source?.revision ?? 0]);
   const from = useRef(source); // read when the spec changes, not whenever a caller builds a new source object
   from.current = source;
   useEffect(() => {
@@ -43,21 +43,22 @@ export function useChartData(spec: ChartSpec, source?: ChartSource): { data?: Ag
       const columns: AggregateColumn[] = Object.values(spec.encoding).filter(Boolean).map((e) => ({
         name: columnOf(e!), title: e!.title ?? columnOf(e!), kind: e!.aggregate ? "measure" : "group", type: e!.type,
       }));
-      setState({ data: { columns, rows } });
+      setState({ key, data: { columns, rows } });
       return;
     }
-    if (!source || !("entity" in spec.data)) return setState({ error: t("No source for records") });
+    if (!source || !("entity" in spec.data)) return setState({ key,error: t("No source for records") });
     let live = true;
-    source.aggregate(spec.data.entity, query).then((data) => live && setState({ data }), (e) => live && setState({ error: String(e) }));
+    setState({key});
+    source.aggregate(spec.data.entity, query).then((data) => live && setState({ key, data }), (e) => live && setState({ key, error: String(e) }));
     return () => { live = false; };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  return state;
+  return state.key===key?state:{};
 }
 
 export function Chart({ spec, source, height = 260, frame = true }: { spec: ChartSpec; source?: ChartSource; height?: number; frame?: boolean }) {
   const { data, error } = useChartData(spec, source);
   const mark = markOf(spec);
-  const body = error ? <p className="text-sm text-[var(--tone-danger)]">{error}</p>
+  const body = error ? <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>
     : !data ? <p className="text-sm text-muted">{t("Loading…")}</p>
     : mark.type === "kpi" ? <Kpi spec={spec} data={data} />
     : data.rows.length === 0 ? <p className="text-sm text-muted">{t("No data")}</p>

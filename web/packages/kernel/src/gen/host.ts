@@ -97,6 +97,15 @@ export type Aggregate = {
   rows: Record<string, unknown>[];
 };
 
+export type AggregateQuery = {
+  set?: QuerySet;
+  domain?: unknown;
+  search?: string;
+  archived?: boolean;
+  groups?: string[];
+  measures?: string[];
+};
+
 export type AppEntry = {
   id: string;
   title: string;
@@ -1567,7 +1576,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.18",
+  "uiProfile": "platform.page.v2.19",
   "widgets": [
     {
       "componentID": "table",
@@ -1690,7 +1699,8 @@ export const pageUIManifest = {
         "object",
         "relation",
         "aggregate",
-        "filter-variable"
+        "filter-variable",
+        "collection-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -1733,7 +1743,8 @@ export const pageUIManifest = {
         "object",
         "relation",
         "aggregate",
-        "filter-variable"
+        "filter-variable",
+        "collection-variable"
       ],
       "selectionMode": "none",
       "propsSchema": {
@@ -2079,7 +2090,8 @@ export const pageUIManifest = {
     "platform.page.v2.15",
     "platform.page.v2.16",
     "platform.page.v2.17",
-    "platform.page.v2.18"
+    "platform.page.v2.18",
+    "platform.page.v2.19"
   ],
   "runtime": {
     "scope": "page",
