@@ -385,7 +385,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						}
 						shown = other
 					}
-					if (section.Widget == "chart" || section.Widget == "metric") && !checkAggregateSection(section, shown) {
+					if (section.Widget == "chart" || section.Widget == "metric" || section.Widget == "pivot") && !checkAggregateSection(section, shown) {
 						continue
 					}
 					parentType := page.Object.Name

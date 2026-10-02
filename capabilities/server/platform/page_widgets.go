@@ -137,6 +137,9 @@ func widgetEvent(id, event string) *pageWidgetEvent {
 	return nil
 }
 func (d *PageDocument) checkWidgetPorts(s Section) error {
+	if w := pageWidget(s.Widget); w != nil && !PageUIProfileSupports(d.UIProfile, w.RequiredUIProfile) {
+		return fmt.Errorf("widget %s requires UI profile %s", s.Widget, w.RequiredUIProfile)
+	}
 	for field, id := range map[string]string{"recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable} {
 		if id == "" {
 			continue
@@ -175,7 +178,7 @@ func checkPageWidget(section Section) error {
 		}
 		// Only presentation properties are validated here. Asset references,
 		// selections, queries and actions retain their original host owners.
-		values := map[string]string{"title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "measure": section.Measure}
+		values := map[string]string{"title": section.Title, "width": section.Width, "text": section.Text, "group": section.Group, "columnGroup": section.ColumnGroup, "measure": section.Measure}
 		props := map[string]string{}
 		for key, value := range values {
 			if value != "" {

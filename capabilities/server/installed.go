@@ -397,7 +397,10 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
-		case "chart", "metric":
+		case "chart", "metric", "pivot":
+			if s.Widget == "pivot" && p.Document == nil {
+				return fmt.Errorf("%s: pivot needs a V2 document", where)
+			}
 			if s.Measure == "" {
 				return fmt.Errorf("%s: nothing measured; count, sum:<field>, avg:<field>, min:<field> or max:<field>", where)
 			}
@@ -410,13 +413,16 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
-			if s.Widget == "chart" {
+			if s.Widget == "chart" || s.Widget == "pivot" {
 				if s.Group == "" {
 					return fmt.Errorf("%s: nothing to group by", where)
 				}
 				if err := field(s.Group); err != nil {
 					return err
 				}
+			}
+			if s.Widget == "pivot" && !checkAggregateSection(s, info) {
+				return fmt.Errorf("%s: invalid pivot group or measure", where)
 			}
 		case "button", "input":
 			if p.Document == nil || s.Object.Name != "" || s.Query.Name != "" || s.Selection != "" || s.ParentSelection != "" || s.Relation != "" || len(s.Fields) > 0 || len(s.Actions) > 0 || s.Text != "" || s.Function != nil || s.Operation != nil || len(s.Inputs) > 0 {

@@ -34,3 +34,9 @@ test("retained link traversal carries its exact identity and query once, and rej
  await expect(client().traverseLink(binding,"forward","parent one",query)).rejects.toThrow("403");expect(fetcher).toHaveBeenCalledTimes(1);
  await expect(client().traverseLink({...binding,sourceVersion:""},"forward","parent one",query)).rejects.toThrow("exact version");expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+test("a bounded direct aggregate posts its row budget and never retries as an unbounded GET",async()=>{
+ const query={groups:["bucket"],measures:["count"],maxRows:4096};
+ const fetcher=vi.fn(async(url:string,options:RequestInit)=>{expect(url).toBe("https://test.invalid/v1/aggregates/sample.note/query");expect(options.method).toBe("POST");expect(JSON.parse(String(options.body))).toEqual(query);return new Response("Budget refused",{status:400});});vi.stubGlobal("fetch",fetcher);
+ await expect(client().aggregate("sample.note",query)).rejects.toThrow("HTTP 400");expect(fetcher).toHaveBeenCalledTimes(1);
+});

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:9d97f59285e341f9",
+  "revision": "sha256:ce35b5b66e9b20b4",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -138,6 +138,7 @@
         "actions",
         "chart",
         "metric",
+        "pivot",
         "text",
         "filter",
         "form",
@@ -150,7 +151,8 @@
         "app/generated-form",
         "ui/record-page",
         "app/record-actions",
-        "app/compute-call"
+        "app/compute-call",
+        "ui/pivot"
       ],
       "snippet": "import { ComposedPage } from \"@platform/app\";\n<ComposedPage page={installedPage.page} live={false} />"
     },
@@ -1501,13 +1503,17 @@
       "maturity": "recommended",
       "scope": "platform",
       "uses": [
-        "code"
+        "code",
+        "widget"
       ],
       "tags": [
         "report",
         "aggregate"
       ],
       "type": "ChartSource",
+      "widgets": [
+        "pivot"
+      ],
       "states": [
         "Loading",
         "Empty",
@@ -2139,6 +2145,7 @@
       "web/packages/build/src/page-editor/OverlayPanel.tsx",
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
+      "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
@@ -2213,6 +2220,7 @@
       "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/Pivot.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/code.tsx",
@@ -2394,6 +2402,9 @@
     "ui/tasks": [
       "web/packages/app/src/sections.tsx",
       "web/apps/workspace/src/chrome.tsx"
+    ],
+    "ui/pivot": [
+      "web/packages/app/src/widgets/Pivot.tsx"
     ],
     "app/composed-page": [
       "web/packages/build/src/catalog.examples.tsx",

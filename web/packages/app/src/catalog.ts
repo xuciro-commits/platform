@@ -44,8 +44,8 @@ export const entries: CatalogEntry[] = [
     tags: ["page", "selection", "relation", "binding"],
     constraints: ["Named record selections keep same-object lists independent; parent bindings scope related sections.",
       "Form inputs read declared record paths. The original action checks writes; unavailable sources do not become manual inputs."],
-    uses: ["code", "widget"], widgets: ["table", "detail", "actions", "chart", "metric", "text", "filter", "form", "timeline", "tasks", "function", "compute"],
-    source: "web/packages/app/src/sections.tsx", dependencies: ["app/generated-form", "ui/record-page", "app/record-actions", "app/compute-call"],
+    uses: ["code", "widget"], widgets: ["table", "detail", "actions", "chart", "metric", "pivot", "text", "filter", "form", "timeline", "tasks", "function", "compute"],
+    source: "web/packages/app/src/sections.tsx", dependencies: ["app/generated-form", "ui/record-page", "app/record-actions", "app/compute-call", "ui/pivot"],
     snippet: 'import { ComposedPage } from "@platform/app";\n<ComposedPage page={installedPage.page} live={false} />',
   }),
   asset("agent-assistant", "Member-scoped assistant", "Give an installed agent a goal; review its proposed actions before confirming them.", ["Assistant"], "AssistantExample", {

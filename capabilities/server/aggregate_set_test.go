@@ -69,9 +69,31 @@ func TestAggregateSetGroupBudgetDoesNotReturnPartialGroups(t *testing.T) {
 	if err != nil || len(out.Rows) != AggregateSetMaxRows {
 		t.Fatal("legal full group result rejected", len(out.Rows), err)
 	}
+	q.Set = nil
+	q.MaxRows = AggregateSetMaxRows
+	out, err = tn.Aggregate(lead, "stock.item", q, time.Now())
+	if err != nil || len(out.Rows) != AggregateSetMaxRows {
+		t.Fatal("bounded direct aggregate failed", err)
+	}
 	q.Domain = nil
 	out, err = tn.Aggregate(lead, "stock.item", q, time.Now())
 	if err == nil || len(out.Rows) != 0 {
 		t.Fatal("oversized groups returned a partial aggregate", len(out.Rows), err)
+	}
+	q.Set = setExpression("union", &platform.RecordSetPredicate{}, &platform.RecordSetPredicate{})
+	q.MaxRows = 0
+	out, err = tn.Aggregate(lead, "stock.item", q, time.Now())
+	if err == nil || len(out.Rows) != 0 {
+		t.Fatal("set returned partial groups", err)
+	}
+}
+
+func TestAggregateRowBudgetRejectsInvalidLimit(t *testing.T) {
+	tn := setFixture(t)
+	member, _ := tn.Member("lead")
+	for _, limit := range []int{-1, AggregateSetMaxRows + 1} {
+		if _, err := tn.Aggregate(member, "stock.item", AggregateQuery{MaxRows: limit}, time.Now()); err == nil {
+			t.Fatal("invalid aggregate budget accepted")
+		}
 	}
 }

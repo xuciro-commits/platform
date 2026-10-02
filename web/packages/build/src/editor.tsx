@@ -29,7 +29,7 @@ type PageRecord = {
   list?: string[]; detail?: string[]; actions?: string[];
   selections?: HostApi.SelectionVariable[];
   document?: HostApi.PageDocument;
-  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; recordVariable?: string; selectionVariable?: string; filterVariable?: string; collectionVariable?:string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
+  sections?: { id?: string; configVersion?: number; widget: string; title?: string; width?: string; object?: string; selection?: string; recordVariable?: string; selectionVariable?: string; filterVariable?: string; collectionVariable?:string; parentSelection?: string; relation?: string; query?: string; fields?: string[]; actions?: string[]; group?: string; columnGroup?: string; measure?: string; text?: string; function?: { name: string; version: number }; operation?: HostApi.AssetBinding; inputs?: Record<string, HostApi.Binding> }[];
 };
 type Draft = NonNullable<PageRecord["sections"]>[number];
 
@@ -61,7 +61,7 @@ const asPage = (record: PageRecord, sections: Draft[], document?: HostApi.PageDo
   selections: record.selections,
   document,
   sections: sections.map((s) => ({
-    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, selectionVariable:s.selectionVariable, filterVariable:s.filterVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, measure: s.measure, text: s.text,
+    id: s.id, configVersion: s.configVersion, widget: s.widget, title: s.title, width: s.width, selection: s.selection, recordVariable: s.recordVariable, selectionVariable:s.selectionVariable, filterVariable:s.filterVariable, collectionVariable:s.collectionVariable, parentSelection: s.parentSelection, relation: s.relation, fields: s.fields, group: s.group, columnGroup: s.columnGroup, measure: s.measure, text: s.text,
     object: s.object ? { app: s.object.split(".")[0] ?? "", kind: "object", name: s.object } : undefined,
     query: s.query ? { app: s.query.split(".")[0] ?? "", kind: "query", name: s.query.split(".").slice(1).join(".") } : undefined,
     function: s.function ? { ref: { app: "build", kind: "function", name: s.function.name }, sourceVersion: `preview.function-${s.function.version}` } : undefined,

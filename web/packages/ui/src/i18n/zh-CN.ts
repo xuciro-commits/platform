@@ -1,5 +1,7 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+  "Pivot matrix exceeds its cell limit.": "透视矩阵超出单元格上限。",
+  "Choose a row grouping before saving.": "保存前请选择行分组。",
   "Virtual item list": "虚拟条目列表",
   "Render measured rows by stable identity and retain the focused item.": "按稳定身份呈现测量后的行，并保留当前聚焦项。",
   "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",

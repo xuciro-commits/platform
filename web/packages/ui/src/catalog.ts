@@ -97,7 +97,7 @@ export const entries: CatalogEntry[] = [
   asset("ui/chart", "Chart", "Render a visualization spec using inline values or a scoped aggregate source.", 3,
     "charts/Chart.tsx", ["Chart"], "Charts", { type: "ChartSpec", tags: ["chart", "kpi", "aggregate"], states: ["Loading", "Empty", "Error", "Ready"] }),
   asset("ui/pivot", "Pivot table", "Compare aggregate groups with totals and explicit drill-down.", 3,
-    "charts/Pivot.tsx", ["Pivot"], "Pivots", { type: "ChartSource", tags: ["report", "aggregate"], states: ["Loading", "Empty", "Error", "Ready"] }),
+    "charts/Pivot.tsx", ["Pivot"], "Pivots", { type: "ChartSource", uses:["code","widget"],widgets:["pivot"], tags: ["report", "aggregate"], states: ["Loading", "Empty", "Error", "Ready"] }),
   asset("ui/graph", "Read-only graph", "Observe relationships and execution paths through the shared canvas.", 3,
     "graph/Graph.tsx", ["Graph"], "Graphs", { type: "GraphNode", dependencies: ["ui/block-canvas"], states: ["Selected"] }),
   asset("ui/block-canvas", "Typed block canvas", "Compose nodes through typed ports with one shared graph interaction model.", 3,

@@ -24,6 +24,7 @@ import (
 //     money field. Money is summed per currency: its currency becomes a group
 //     ("amount.currency"), and amounts stay in minor units.
 type AggregateQuery struct {
+	MaxRows   int                     `json:"maxRows,omitempty"`
 	Traversal *platform.LinkTraversal `json:"traversal,omitempty"`
 	Set       *platform.QuerySet      `json:"set,omitempty"`
 	Domain    json.RawMessage         `json:"domain,omitempty"`
@@ -159,6 +160,13 @@ func (et *entityType) measure(name string) (measure, bool) {
 // aggregate groups and measures the matching records; the caller holds s.mu.
 func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(reflect.Value) bool) (Aggregate, *kernel.Error) {
 	invalid := &kernel.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	if q.MaxRows < 0 || q.MaxRows > AggregateSetMaxRows {
+		return Aggregate{}, invalid
+	}
+	maxRows := q.MaxRows
+	if q.Set != nil && (maxRows == 0 || maxRows > AggregateSetMaxRows) {
+		maxRows = AggregateSetMaxRows
+	}
 	if q.Set != nil && (len(q.Groups) > AggregateSetMaxGroups || len(q.Measures) > AggregateSetMaxMeasures) {
 		return Aggregate{}, invalid
 	}
@@ -216,7 +224,7 @@ func (s *recordStore) aggregate(et *entityType, q AggregateQuery, visible func(r
 		}
 		a := byKey[k]
 		if a == nil {
-			if q.Set != nil && len(order) >= AggregateSetMaxRows {
+			if maxRows > 0 && len(order) >= maxRows {
 				return Aggregate{}, invalid
 			}
 			a = &acc{keys: keys, sums: make([]float64, len(measures)), mins: make([]float64, len(measures)), maxs: make([]float64, len(measures)), seen: make([]int, len(measures))}
@@ -323,8 +331,16 @@ func checkAggregateSection(section platform.Section, info platform.EntityInfo) b
 	if _, ok := et.measure(section.Measure); !ok {
 		return false
 	}
-	if section.Widget == "chart" {
+	if section.Widget == "chart" || section.Widget == "pivot" {
 		if _, ok := et.grouping(section.Group); !ok {
+			return false
+		}
+	}
+	if section.Widget == "pivot" && section.ColumnGroup != "" {
+		if section.ColumnGroup == section.Group {
+			return false
+		}
+		if _, ok := et.grouping(section.ColumnGroup); !ok {
 			return false
 		}
 	}

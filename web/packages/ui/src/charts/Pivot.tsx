@@ -27,24 +27,26 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
   source: ChartSource; type: string; query: Omit<AggregateQuery, "groups" | "measures">;
   rows: string; columns?: string; measure: string; onDrill?: (domain: unknown[]) => void;
 }) {
-  const [data, setData] = useState<AggregateData>();
-  const [error, setError] = useState<string>();
-  const key = JSON.stringify([type, query, rows, columns, measure, source.revision ?? 0]);
+  const [state, setState] = useState<{key?:string;data?:AggregateData;error?:string}>({});
+  const key = JSON.stringify([type, query, rows, columns, measure, source.scope, source.revision ?? 0]);
   const from = useRef(source);
   from.current = source;
   useEffect(() => {
     let live = true;
-    from.current.aggregate(type, { ...query, groups: columns ? [rows, columns] : [rows], measures: [measure] })
-      .then((d) => { if (live) { setData(d); setError(undefined); } }, (e) => live && setError(String(e)));
+    setState({key});
+    from.current.aggregate(type, { ...query, maxRows:query.maxRows??4096, groups: columns ? [rows, columns] : [rows], measures: [measure] })
+      .then((data) => live && setState({key,data}), (e) => live && setState({key,error:String(e)}));
     return () => { live = false; };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (error) return <p className="text-sm text-[var(--tone-danger)]">{error}</p>;
+  const {data,error}=state.key===key?state:{};
+  if (error) return <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>;
   if (!data) return <p className="text-sm text-muted">{t("Loading…")}</p>;
   const fmt = formatter({ type: "quantitative", aggregate: measure === "count" ? "count" : measure.split(":")[0] as never, field: measure.split(":")[1] }, data.columns);
   const money = data.columns.find((c) => c.kind === "measure" && c.money);
   const currency = money ? `${money.field}.currency` : undefined;
   const rowKeys = [...new Set(data.rows.map((r) => text(r[rows])))];
   const colKeys = columns ? [...new Set(data.rows.map((r) => text(r[columns])))].sort() : [""];
+  if(rowKeys.length*colKeys.length>4096)return <p role="alert">{t("Pivot matrix exceeds its cell limit.")}</p>;
   const additive = measure === "count" || measure.startsWith("sum:");
   const cell = (rk: string, ck: string) => data.rows.filter((r) => text(r[rows]) === rk && text(r[columns!]) === ck);
   const total = (list: Record<string, unknown>[]) => list.reduce((n, r) => n + Number(r[measure] ?? 0), 0);
@@ -68,9 +70,9 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
       <table className="w-full border-collapse text-sm tabular-nums">
         <thead className="bg-surface text-xs text-muted">
           <tr>
-            <th className="border-b border-border px-2 py-1 text-left font-medium">{title(rows)}{columns ? ` by ${title(columns)}` : ""}</th>
+            <th className="border-b border-border px-2 py-1 text-left font-medium">{title(rows)}{columns ? ` · ${title(columns)}` : ""}</th>
             {columns && colKeys.map((ck) => <th key={ck} className="border-b border-border px-2 py-1 text-right font-medium">{ck}</th>)}
-            <th className="border-b border-border px-2 py-1 text-right font-medium">{title(measure)}{columns ? " · total" : ""}</th>
+            <th className="border-b border-border px-2 py-1 text-right font-medium">{title(measure)}{columns ? ` · ${t("Total")}` : ""}</th>
           </tr>
         </thead>
         <tbody>
@@ -78,9 +80,9 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
             <tr key={rk} className="hover:bg-row-hover">
               <th className="border-b border-border px-2 py-1 text-left font-normal">{rk}</th>
               {columns && colKeys.map((ck) => (
-                <td key={ck} className="cursor-pointer border-b border-border px-2 py-1 text-right" onClick={() => drill(rk, ck)}>{show(cell(rk, ck))}</td>
+                <td key={ck} className={`${onDrill?"cursor-pointer ":""}border-b border-border px-2 py-1 text-right`} onClick={() => drill(rk, ck)}>{show(cell(rk, ck))}</td>
               ))}
-              <td className="cursor-pointer border-b border-border px-2 py-1 text-right font-medium" onClick={() => drill(rk)}>{show(data.rows.filter((r) => text(r[rows]) === rk))}</td>
+              <td className={`${onDrill?"cursor-pointer ":""}border-b border-border px-2 py-1 text-right font-medium`} onClick={() => drill(rk)}>{show(data.rows.filter((r) => text(r[rows]) === rk))}</td>
             </tr>
           ))}
         </tbody>

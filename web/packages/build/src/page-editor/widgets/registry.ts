@@ -1,9 +1,11 @@
 import { widgetContract } from "@platform/app";
+import { PivotInspector } from "./PivotInspector";
 import { TableInspector } from "./TableInspector";
 import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+  pivot: {configVersion:1,bindings:PivotInspector},
   table: { configVersion:1, bindings:TableInspector },
   button: { configVersion:1, events:ButtonInspector },
 };

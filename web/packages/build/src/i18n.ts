@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+  "Rows grouped by": "行分组字段",
+  "Columns grouped by": "列分组字段",
+  "No column grouping": "不按列分组",
   "New relationship": "新建关系",
   "Only a builder can edit relationships.": "仅构建者可编辑关系。",
   "Define a reference-backed relationship and bind pages to an exact version.": "定义引用支持的关系，并将页面绑定到精确版本。",

@@ -10,7 +10,7 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 		return err
 	}
 	for _, section := range p.Sections {
-		if section.CollectionVariable != "" && (section.Widget == "chart" || section.Widget == "metric") {
+		if (section.CollectionVariable != "" && (section.Widget == "chart" || section.Widget == "metric")) || section.Widget == "pivot" {
 			object := section.Object.Name
 			if object == "" {
 				object = p.Object.Name

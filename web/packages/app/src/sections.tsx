@@ -26,6 +26,7 @@ import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 const TableRenderer=lazy(()=>import("./widgets/Table").then(module=>({default:module.TableRenderer})));
+const PivotRenderer=lazy(()=>import("./widgets/Pivot").then(module=>({default:module.PivotRenderer})));
 const ButtonRenderer=lazy(()=>import("./widgets/Button").then(module=>({default:module.ButtonRenderer})));
 
 type Page = NonNullable<Definition["page"]>;
@@ -127,15 +128,16 @@ function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]
   };
 }
 
-function ChartWidget({ page, section, kpi, narrowed, sharedFilter, master, window, collection, aggregateScope }: Bound & { kpi: boolean }) {
+function ChartWidget({ page, section, kpi, pivot, narrowed, sharedFilter, master, window, collection, aggregateScope }: Bound & { kpi: boolean; pivot?:boolean }) {
   const { source } = useHost();
   const aggregate = source.aggregate;
+  const render=(spec:ChartSpec,readScope?:string)=>pivot?<PivotRenderer object={objectOf(page,section)} query={"entity" in spec.data?{domain:spec.data.domain,search:spec.data.search,set:spec.data.set,traversal:spec.data.traversal,archived:spec.data.archived}:{}} rows={section.group??""} columns={section.columnGroup} measure={section.measure??"count"} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>:<Chart spec={spec} frame={false} height={kpi?120:240} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>;
   if(section.collectionVariable){
     if(!window)return <Panel role={collection?.status==="error"?"alert":"status"}>{t(collection?.status==="error"?collection.code:"Query window is unavailable.")}</Panel>;
     if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;
     const {domain,search,set,archived,traversal}=window.query;
     const spec=chartSpec(page,section,kpi,domain??[]);spec.data={entity:objectOf(page,section),domain,search,set,archived,traversal};
-    return <Chart spec={spec} frame={false} height={kpi?120:240} source={aggregate?{aggregate,scope:aggregateScope,revision:source.revision}:undefined}/>;
+    return render(spec,aggregateScope);
   }
   const type = objectOf(page, section);
   const isMaster = type === parentTypeOf(page, section) && !section.parentSelection && !section.relation;
@@ -149,8 +151,7 @@ function ChartWidget({ page, section, kpi, narrowed, sharedFilter, master, windo
   const relationDomain = refField && master ? [[refField.name, "=", master.id]] : [];
   const domain = [...domainOf(narrowed, type), ...domainOf({[type]:sharedFilter??{}},type), ...relationDomain];
 
-  return <Chart spec={chartSpec(page, section, kpi, domain)} frame={false} height={kpi ? 120 : 240}
-    source={aggregate ? { aggregate, scope:source.scope, revision: source.revision } : undefined} />;
+  return render(chartSpec(page, section, kpi, domain),aggregateScope);
 }
 
 /** The filter (16b): a value to narrow the object's records by, for each field
@@ -354,6 +355,7 @@ const widgets = createWidgetRegistry<Bound>({
   input: ({ section, value, onValue, enabled,numeric,valueError }) => <div className="grid gap-1"><Input inputMode={numeric?"decimal":undefined} maxLength={numeric?pageVariableContract.decimal.maxBytes:undefined} aria-invalid={!!valueError} aria-label={section.title || t("Text input")} value={value ?? ""} disabled={!onValue || enabled === false} onChange={(event) => onValue?.(event.target.value)} />{valueError&&<p role="alert" className="text-xs text-danger">{t(valueError)}</p>}</div>,
   button: ({ section, onClick, enabled }) => <ButtonRenderer title={section.title} onClick={onClick} enabled={enabled}/>,
   table: TableAdapter, detail: DetailWidget, actions: ActionsWidget,
+  pivot: (bound) => <ChartWidget {...bound} kpi={false} pivot/>,
   chart: (bound) => <ChartWidget {...bound} kpi={false} />,
   metric: (bound) => <ChartWidget {...bound} kpi />,
   text: ({ section }) => <Markdown content={section.text} className="text-sm" />,

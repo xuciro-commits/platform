@@ -1,4 +1,5 @@
 {
+  "Column group": "列分组",
   "A versioned relationship over an original reference; drafts do not change installed traversal.": "基于原引用的版本化关系；草稿不会改变已安装的遍历。",
   "Archive a link type: it leaves lists but stays referenced and in history.": "归档关系类型：从列表移除，但引用和历史仍保留。",
   "Archive link type": "归档关系类型",

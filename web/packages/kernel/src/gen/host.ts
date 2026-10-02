@@ -98,6 +98,7 @@ export type Aggregate = {
 };
 
 export type AggregateQuery = {
+  maxRows?: number;
   traversal?: LinkTraversal;
   set?: QuerySet;
   domain?: unknown;
@@ -1311,6 +1312,7 @@ export type Section = {
   fields?: string[];
   actions?: AssetRef[];
   group?: string;
+  columnGroup?: string;
   measure?: string;
   text?: string;
   function?: AssetBinding;
@@ -1603,7 +1605,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.22",
+  "uiProfile": "platform.page.v2.23",
   "widgets": [
     {
       "componentID": "table",
@@ -2284,6 +2286,86 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "card"
       }
+    },
+    {
+      "componentID": "pivot",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.23",
+      "title": "Pivot table",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "measure": "count",
+        "group": ""
+      },
+      "bindingKinds": [
+        "object",
+        "relation",
+        "aggregate",
+        "filter-variable",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "measure": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "columnGroup": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "group",
+          "measure"
+        ]
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.23"
+        },
+        {
+          "id": "filter",
+          "bindingField": "filterVariable",
+          "type": "filter",
+          "requiredUIProfile": "platform.page.v2.15"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -2308,7 +2390,8 @@ export const pageUIManifest = {
     "platform.page.v2.19",
     "platform.page.v2.20",
     "platform.page.v2.21",
-    "platform.page.v2.22"
+    "platform.page.v2.22",
+    "platform.page.v2.23"
   ],
   "runtime": {
     "scope": "page",
