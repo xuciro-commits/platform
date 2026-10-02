@@ -22,19 +22,20 @@ test("bounded loop cards keep item identity and state and invoke original action
   await tree.getByRole("button",{name:"Loop",exact:true}).click();
   await inspector.getByLabel("Container title",{exact:true}).fill("Record cards");
   await inspector.getByLabel("Loop item limit",{exact:true}).fill("50");
-  const loopButton=tree.getByRole("button",{name:/^Loop \d+/});
+  const loopButton=tree.getByRole("button",{name:"Commands for Record cards",exact:true});
+  const chooseLoop=async()=>{await loopButton.click();await page.getByRole("menuitem",{name:"Select layout",exact:true}).click();};
   await tree.getByRole("button",{name:"Page variables",exact:true}).click();
   await inspector.getByRole("button",{name:"Add variable",exact:true}).click();
   await inspector.getByLabel("Variable label",{exact:true}).fill("Item context shown");
   await inspector.getByRole("combobox",{name:"Value type",exact:true}).selectOption("boolean");
   await inspector.getByRole("combobox",{name:"Variable scope",exact:true}).selectOption({label:"Record cards"});
   const flag=await inspector.getByRole("combobox",{name:"Choose page variable",exact:true}).inputValue();
-  await loopButton.click();
+  await chooseLoop();
   await tree.getByRole("button",{name:"Button",exact:true}).click();
   await inspector.getByLabel("Title",{exact:true}).fill("Show context");
   await inspector.getByRole("combobox",{name:"Target state variable",exact:true}).selectOption(flag);
   await inspector.getByRole("checkbox",{name:"Event value",exact:true}).check();
-  await loopButton.click();
+  await chooseLoop();
   await tree.getByRole("button",{name:"Text",exact:true}).click();
   await inspector.getByLabel("Title",{exact:true}).fill("Item guidance");
   await inspector.getByPlaceholder("Write markdown here…",{exact:true}).fill("Context belongs to this record.");
@@ -49,7 +50,7 @@ test("bounded loop cards keep item identity and state and invoke original action
   expect(loop.loop.limit).toBe(50);
   expect(saved.sections.filter((s:any)=>["detail","actions"].includes(s.widget)).every((s:any)=>s.recordVariable===loop.loop.itemVariable)).toBe(true);
   if(process.env.PLATFORM_SCREENSHOTS) {
-    await loopButton.scrollIntoViewIfNeeded();await loopButton.click();
+    await loopButton.scrollIntoViewIfNeeded();await chooseLoop();
     await preview.getByText("Actions do not run while you compose.",{exact:true}).first().scrollIntoViewIfNeeded();
     await page.screenshot({path:testInfo.outputPath("loop-designer.png"),fullPage:true});
   }

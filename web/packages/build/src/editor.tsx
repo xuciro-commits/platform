@@ -187,7 +187,7 @@ export function PageEditor({ id }: { id: string }) {
     });
     select({ kind: "widget", id: copy.id });
   };
-  const clipboardError=(issue:ClipboardIssue)=>issue==="unsupported"?t("Copy a Rows or Columns layout containing only Rows, Columns and widgets."):issue==="scope"?t("Copy and paste layouts within the main page. Loop and overlay scopes need their own mapping."):issue==="dependencies"?t("An external binding changed since this layout was copied. Copy it again before pasting."):issue==="budget"?t("This copy would exceed the page's layout or resource limits."):t("This layout has missing or invalid references. Correct it before copying.");
+  const clipboardError=(issue:ClipboardIssue)=>issue==="unsupported"?t("Copy a main-page Rows, Columns, Tabs, Flow or Toolbar layout."):issue==="scope"?t("Copy and paste layouts within the main page. Loop and overlay scopes need their own mapping."):issue==="dependencies"?t("An external binding changed since this layout was copied. Copy it again before pasting."):issue==="budget"?t("This copy would exceed the page's layout or resource limits."):issue==="tab-binding"?t("Copied tabs need a private page-state selector. Shared tab selectors name the original panels."):t("This layout has missing or invalid references. Correct it before copying.");
   const copyContainer=(root:string)=>{
     if(lock.current)return;
     const result=copyLayout(session.draft,root,page.object);

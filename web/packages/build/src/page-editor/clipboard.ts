@@ -3,12 +3,13 @@ import type {Api} from "@platform/kernel";
 type Section = {id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
 type Draft<S extends Section> = {document:Api.PageDocument;sections:S[];selections:Api.SelectionVariable[]};
 export type LayoutClipboard<S extends Section> = {draft:Draft<S>;root:string;object:string};
-export type ClipboardIssue = "unsupported" | "scope" | "invalid" | "dependencies" | "budget";
+export type ClipboardIssue = "unsupported" | "scope" | "invalid" | "dependencies" | "budget" | "tab-binding";
 type Result<T> = {value:T;issue?:never} | {issue:ClipboardIssue;value?:never};
 type Limits = {maxVariables:number;query:{maxPlans:number;maxTotalLimit:number};selectionWriters:readonly string[];selectionWidgets:readonly string[];references:Readonly<Record<string,readonly string[]>>};
 const nodeFields=["valueVariable","activeVariable","visibleWhen","enabledWhen"] as const;
 const sectionFields=["recordVariable","selectionVariable","collectionVariable","filterVariable"] as const;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
+const layoutKinds=["rows","columns","tabs","flow","toolbar"];
 function inMainPage(document:Api.PageDocument,id:string):boolean {
  const seen=new Set<string>();let at:string|undefined=id;
  while(at&&!seen.has(at)){
@@ -23,10 +24,10 @@ function inMainPage(document:Api.PageDocument,id:string):boolean {
 export function copyLayout<S extends Section>(draft:Draft<S>,root:string,object:string):Result<LayoutClipboard<S>> {
  const document=draft.document,seen=new Set<string>();
  const walk=(id:string):boolean=>{
-  const node=document.nodes[id];if(!node||seen.has(id)||!["rows","columns","widget"].includes(node.kind))return false;
+  const node=document.nodes[id];if(!node||seen.has(id)||![...layoutKinds,"widget"].includes(node.kind))return false;
   seen.add(id);return [...(node.children??[]),...(document.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)].every(walk);
  };
- if(!document.nodes[root]||!["rows","columns"].includes(document.nodes[root]!.kind))return {issue:"unsupported"};
+ if(!document.nodes[root]||!layoutKinds.includes(document.nodes[root]!.kind))return {issue:"unsupported"};
  if(!walk(root))return {issue:"unsupported"};
  // First profile is a main-page subtree; Loop and Overlay ownership is not lifted.
  if(!inMainPage(document,root))return {issue:"scope"};
@@ -39,7 +40,7 @@ export function copyLayout<S extends Section>(draft:Draft<S>,root:string,object:
  * and reject stale external declarations before changing the current draft. */
 export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipboard<S>,target:string,object:string,limits:Limits):Result<{draft:Draft<S>;root:string;shared:string[]}> {
  if(object!==clip.object)return {issue:"scope"};
- if(!["rows","columns"].includes(current.document.nodes[target]?.kind??"")||!inMainPage(current.document,target))return {issue:"scope"};
+ if(!layoutKinds.includes(current.document.nodes[target]?.kind??"")||!inMainPage(current.document,target))return {issue:"scope"};
  const original=clip.draft.document,document=structuredClone(current.document);
  const nodes=new Set<string>(),walk=(id:string)=>{nodes.add(id);for(const child of [...(original.nodes[id]?.children??[]),...(original.unusedWidgets??[]).filter(e=>e.parent===id).map(e=>e.node)])walk(child);};walk(clip.root);
  const sections=clip.draft.sections.filter(s=>nodes.has(Object.keys(original.nodes).find(id=>original.nodes[id]?.section===s.id)??""));
@@ -57,9 +58,19 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  if(missing.value)return {issue:"invalid"};
  const externalPorts=new Set([...Object.values(original.interface?.inputs??{}),...Object.values(original.interface?.outputs??{})].map(p=>p.variable));
  const overlayOpen=new Set(Object.values(original.overlays??{}).map(o=>o.openVariable));
+ // Tab values name layout nodes. A selector exposed outside this subtree
+ // cannot keep naming the old identities while selecting the new children.
+ const tabSelectors=new Map<string,Set<string>>();
+ for(const id of nodes){const node=original.nodes[id]!;if(node.kind!=="tabs")continue;
+  const variable=node.activeVariable,v=original.variables?.[variable??""];
+  if(!variable||!v||v.scope!=="page"||v.mode!=="state"||v.type!=="string"||externalPorts.has(variable)||overlayOpen.has(variable))return {issue:"tab-binding"};
+  if(!node.children?.includes(String(v.initial)))return {issue:"invalid"};
+  const children=tabSelectors.get(variable)??new Set<string>();node.children.forEach(child=>children.add(child));tabSelectors.set(variable,children);
+ }
  const clonedVariables=new Set<string>(),clonedQueries=new Set<string>();
  const cloneState=(id:string)=>{const v=original.variables?.[id];if(v?.scope==="page"&&v.mode==="state"&&!externalPorts.has(id)&&!overlayOpen.has(id))clonedVariables.add(id);};
  for(const id of nodes){const v=original.nodes[id]?.valueVariable;if(v)cloneState(v);}
+ for(const id of tabSelectors.keys())cloneState(id);
  for(const event of events)for(const id of [event.target,...Object.values(event.navigate?.results??{})])if(locallyRead.has(id))cloneState(id);
  for(const id of variables){const v=original.variables![id]!;if(v.source?.section&&sectionIDs.has(v.source.section))clonedVariables.add(id);}
  let changed=true;
@@ -79,6 +90,7 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  const nodeMap=new Map([...nodes].map(id=>[id,newID("node")])),sectionMap=new Map([...sectionIDs].map(id=>[id,newID("section")]));
  const variableMap=new Map([...clonedVariables].map(id=>[id,newID("value")])),queryMap=new Map([...clonedQueries].map(id=>[id,newID("query")]));
  const remapValue=(value:Api.PageValue):Api.PageValue=>({...value,...(value.variable?{variable:variableMap.get(value.variable)??value.variable}:{})});
+ const tabValue=(variable:string,value:unknown)=>typeof value==="string"&&tabSelectors.get(variable)?.has(value)?nodeMap.get(value)!:value;
  const selectionMap=new Map<string,string>(),addedSelections:Api.SelectionVariable[]=[];
  const slot=(type:string,name?:string)=>JSON.stringify([type,name??""]);
  for(const s of sections)if(limits.selectionWriters.includes(s.widget)&&!s.selectionVariable){const type=s.object||object,key=slot(type,s.selection);if(!selectionMap.has(key)){const name=newID("selection");selectionMap.set(key,name);addedSelections.push({name,object:{app:type.split(".")[0]!,kind:"object",name:type}});}}
@@ -94,9 +106,22 @@ export function pasteLayout<S extends Section>(current:Draft<S>,clip:LayoutClipb
  document.nodes[target]!.children=[...(document.nodes[target]!.children??[]),nodeMap.get(clip.root)!];
  const dormant=(original.unusedWidgets??[]).filter(e=>nodes.has(e.parent)).map(e=>({node:nodeMap.get(e.node)!,parent:nodeMap.get(e.parent)!}));
  if(dormant.length)document.unusedWidgets=[...(document.unusedWidgets??[]),...dormant];
- for(const [id,mapped] of variableMap){const v=structuredClone(original.variables![id]!);if(v.expression)v.expression.args=v.expression.args.map(remapValue);if(v.source){if(v.source.section)v.source.section=sectionMap.get(v.source.section)??v.source.section;if(v.mode!=="shared"&&v.source.variable)v.source.variable=variableMap.get(v.source.variable)??v.source.variable;if(v.source.query)v.source.query=queryMap.get(v.source.query)??v.source.query;}document.variables={...document.variables,[mapped]:v};}
+ for(const [id,mapped] of variableMap){
+  const v=structuredClone(original.variables![id]!);
+  if(tabSelectors.has(id))v.initial=tabValue(id,v.initial);
+  if(v.expression){
+   const selector=v.expression.op==="equal"?v.expression.args.find(a=>a.variable&&tabSelectors.has(a.variable))?.variable:undefined;
+   v.expression.args=v.expression.args.map(a=>({...remapValue(a),...(selector&&typeof a.literal==="string"?{literal:tabValue(selector,a.literal)}:{})}));
+  }
+  if(v.source){
+   if(v.source.section)v.source.section=sectionMap.get(v.source.section)??v.source.section;
+   if(v.mode!=="shared"&&v.source.variable)v.source.variable=variableMap.get(v.source.variable)??v.source.variable;
+   if(v.source.query)v.source.query=queryMap.get(v.source.query)??v.source.query;
+  }
+  document.variables={...document.variables,[mapped]:v};
+ }
  for(const [id,mapped] of queryMap){const q=structuredClone(original.queries![id]!);if(q.search)q.search=remapValue(q.search);if(q.for)q.for=remapValue(q.for);if(q.conditions)q.conditions=q.conditions.map(c=>({...c,value:remapValue(c.value)}));if(q.set)q.set.inputs=q.set.inputs.map(id=>queryMap.get(id)??id);document.queries={...document.queries,[mapped]:q};}
- document.events=[...(document.events??[]),...events.map(source=>{const e=structuredClone(source);e.source=sectionMap.get(e.source)!;e.target=variableMap.get(e.target)??e.target;if(e.navigate){if(e.navigate.inputs)e.navigate.inputs=Object.fromEntries(Object.entries(e.navigate.inputs).map(([key,value])=>[key,remapValue(value)]));if(e.navigate.results)e.navigate.results=Object.fromEntries(Object.entries(e.navigate.results).map(([key,value])=>[key,variableMap.get(value)??value]));}return e;})];
+ document.events=[...(document.events??[]),...events.map(source=>{const e=structuredClone(source);e.source=sectionMap.get(e.source)!;if(e.value!==undefined)e.value=tabValue(e.target,e.value);e.target=variableMap.get(e.target)??e.target;if(e.navigate){if(e.navigate.inputs)e.navigate.inputs=Object.fromEntries(Object.entries(e.navigate.inputs).map(([key,value])=>[key,remapValue(value)]));if(e.navigate.results)e.navigate.results=Object.fromEntries(Object.entries(e.navigate.results).map(([key,value])=>[key,variableMap.get(value)??value]));}return e;})];
  const next={...current,document,sections:[...current.sections,...rewritten],selections:[...current.selections,...addedSelections]};
  if(Object.keys(document.nodes).length>256||next.sections.length>128||(document.unusedWidgets?.length??0)>128||Object.keys(document.variables??{}).length>limits.maxVariables||Object.keys(document.queries??{}).length>limits.query.maxPlans||Object.values(document.queries??{}).reduce((sum,q)=>sum+q.limit,0)>limits.query.maxTotalLimit)return {issue:"budget"};
  return {value:{draft:next,root:nodeMap.get(clip.root)!,shared:[...new Set(shared)]}};

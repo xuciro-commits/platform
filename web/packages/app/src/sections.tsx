@@ -537,7 +537,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       if (visible.value !== true) return wrapLayout ? wrapLayout(id, node, <Panel>{t("Hidden by page variable")}: {node.visibleWhen}</Panel>) : null;
     }
     const bounded=node.size?.height!==undefined||parentHeight&&(parentKind==="columns"||parentKind==="rows"&&node.size?.weight!==undefined);
-    const frame=(body:ReactNode)=><LayoutRegion key={id} size={node.size} parent={parentKind} fillHeight={parentKind==="columns"&&parentHeight}>{wrapLayout?wrapLayout(id,node,body):body}</LayoutRegion>;
+    const frame=(body:ReactNode)=><LayoutRegion key={id} size={node.size} parent={parentKind} fillHeight={parentKind==="columns"&&parentHeight} fillWidth={(parentKind==="flow"||parentKind==="toolbar")&&node.kind!=="widget"}>{wrapLayout?wrapLayout(id,node,body):body}</LayoutRegion>;
     if (node.kind === "widget") {
       const item = indexed.get(node.section);
       if (!item) return null; // server filtered this widget for the reader
@@ -566,7 +566,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
       return frame(body);
     }
     if (node.kind === "flow" || node.kind === "toolbar") {
-      const body = <FlowLayout toolbar={node.kind === "toolbar"} label={node.title || t("Toolbar")} align={node.align}>{node.children?.map((child) => <div key={child} className="min-w-0 max-w-full">{renderNode(child, next, context, overlay)}</div>)}</FlowLayout>;
+      const body = <FlowLayout toolbar={node.kind === "toolbar"} label={node.title || t("Toolbar")} align={node.align}>{node.children?.map(child=>renderNode(child,next,context,overlay,node.kind))}</FlowLayout>;
       return frame(body);
     }
     const body = <LayoutStack direction={node.kind as "rows"|"columns"} gap={node.gap}>

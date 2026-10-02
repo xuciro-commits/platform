@@ -6,10 +6,10 @@ export type LayoutSize=Api.PageLayoutSize;
 
 /** Presentation dimensions only. The document owner validates the budget and
  * parent compatibility; region sizing never changes a child's data or identity. */
-export function LayoutRegion({children,size,parent,label,fillHeight}: {children:ReactNode;size?:LayoutSize;parent?:string;label?:string;fillHeight?:boolean}) {
+export function LayoutRegion({children,size,parent,label,fillHeight,fillWidth}: {children:ReactNode;size?:LayoutSize;parent?:string;label?:string;fillHeight?:boolean;fillWidth?:boolean}) {
  const s=size??{};
  const style:CSSProperties={
-  width:s.width===undefined?undefined:`min(${s.width}px, 100%)`,
+  width:s.width===undefined?(fillWidth?"100%":undefined):`min(${s.width}px, 100%)`,
   minWidth:s.minWidth===undefined?0:`min(${s.minWidth}px, 100%)`,maxWidth:s.maxWidth===undefined?"100%":`min(${s.maxWidth}px, 100%)`,
   height:s.height??(fillHeight?"100%":undefined),minHeight:s.minHeight??0,maxHeight:s.maxHeight,
   overflow:s.scroll==="auto"?"auto":undefined,
