@@ -308,6 +308,8 @@ register("zh-CN", {
   "This page needs a newer workspace version. Refresh after updating the workspace.": "此页面需要更新版本的工作区。更新工作区后请刷新。",
   "Unavailable object: {name}": "对象不可用：{name}",
   "Unavailable property: {name}": "属性不可用：{name}",
+  "Local property": "本地属性",
+  "Shared property version": "共享属性版本",
   "Property": "属性",
   "Typed semantic selection": "类型化语义选择",
   "Choose an authorized object or property from the existing registry without writing internal identifiers.": "从现有注册表选择受权对象或属性，无需填写内部标识。",

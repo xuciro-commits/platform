@@ -14,8 +14,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 export { ComputeCall } from "./capability";
 export { FlowInstanceView } from "./flows";
 export { pageDocumentFromSections } from "./pageDocument";
-export { semanticModelView, propertyKey, relationKey, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
-export { SemanticObjectSelect, SemanticPropertySelect } from "./semantic/Selector";
+export { semanticModelView, semanticPropertyTypes, assetBindingKey, propertyKey, relationKey, type SemanticPropertyType, type PropertyRef, type ReferenceRelationRef, type SemanticRelation, type SemanticModelView } from "./semantic/model";
+export { SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect } from "./semantic/Selector";
 
 /** An app the member may open: the tenant runs it and they hold a role in it (ADR-0018 D4). */
 export type AppEntry = Api.AppEntry;

@@ -1,7 +1,7 @@
 import { Select, t } from "@platform/ui";
 import type { Api } from "@platform/kernel";
 import { useHost } from "../index";
-import { semanticModelView, type PropertyRef } from "./model";
+import { assetBindingKey, semanticModelView, semanticPropertyTypes, type PropertyRef, type SemanticPropertyType } from "./model";
 
 /** Typed semantic selection shared by model design and page binding. It uses
  * the member's registered descriptors, without a second ontology cache.
@@ -16,6 +16,20 @@ export function SemanticObjectSelect({ value, onChange, label, disabled, filter 
     <option value="">{t("Choose an object")}</option>
     {value && !objects.some((definition) => definition.ref.name === value) && <option value={value}>{t("Unavailable object: {name}", { name: value })}</option>}
     {objects.map((definition) => <option key={definition.ref.name} value={definition.ref.name}>{definition.entity!.title} · {definition.ref.name}</option>)}
+  </Select>;
+}
+
+export function SemanticPropertyTypeSelect({value,onChange,label,filter,disabled}: {
+  value?: Api.AssetBinding; onChange: (property?: SemanticPropertyType) => void; label: string; disabled?: boolean;
+  filter?: (property: SemanticPropertyType) => boolean;
+}) {
+  const {definitions} = useHost();
+  const properties = semanticPropertyTypes(definitions).filter(p => !filter || filter(p));
+  const selected = value ? assetBindingKey(value) : "";
+  return <Select aria-label={label} value={selected} disabled={disabled} onChange={event => onChange(properties.find(p => assetBindingKey(p.binding) === event.target.value))}>
+    <option value="">{t("Local property")}</option>
+    {value && !properties.some(p => assetBindingKey(p.binding) === selected) && <option value={selected}>{t("Unavailable property: {name}", {name:selected})}</option>}
+    {properties.map(p => <option key={assetBindingKey(p.binding)} value={assetBindingKey(p.binding)}>{p.property.title} · {t(p.property.type)} · {p.binding.ref.name}@{p.binding.sourceVersion}</option>)}
   </Select>;
 }
 

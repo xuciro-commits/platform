@@ -5,7 +5,8 @@ import { AssetControls } from "./asset-controls";
 // left, what a person will see in the middle, the piece in hand on the right.
 // It writes the object's own record through its own action; the host checks
 // everything again when the object is published.
-import { PayloadFields, SemanticObjectSelect, useHost, useReadQuery } from "@platform/app";
+import { PayloadFields, SemanticObjectSelect, SemanticPropertyTypeSelect, semanticPropertyTypes, assetBindingKey, useHost, useReadQuery } from "@platform/app";
+import type {Api} from "@platform/kernel";
 import {
   Button, Card, Checkbox, Disclosure, EditorWorkbench, Input, NodeCanvas, PageHeader, Panel, Select, StatusBar, StatusTag, Textarea, Toggles, canvasNodeHeight, canvasNodeWidth, cn, defineStatuses, layout, notify, t, useWorkspace, useUnsavedChanges,
   type CanvasEdge, type CanvasNode, type NodeCatalog, type EntityInfo,
@@ -15,7 +16,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModelWorkbench } from "./model-editor/ModelWorkbench";
 import { useDraftSession } from "./session/DraftSession";
 
-type Field = { name: string; title: string; type: string; choices?: string; required?: boolean; search?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
+type Field = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; search?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 type State = { name: string; title: string; tone?: string; description?: string };
 type Input_ = { name: string; title: string; type: string; choices?: string; required?: boolean };
 type Set_ = { field: string; from: string };
@@ -334,11 +335,15 @@ function FieldsOutline({ fields, chosen, onChoose, onAdd }: { fields: Field[]; c
 }
 
 function FieldProperties({ field, onChange, onRemove }: { field: Field; onChange: (patch: Partial<Field>) => void; onRemove: () => void }) {
+  const {definitions}=useHost();
+  const bound=field.property?semanticPropertyTypes(definitions).find(p=>assetBindingKey(p.binding)===assetBindingKey(field.property!)):undefined;
   return <Card className="grid content-start gap-3 p-3">
     <div className="text-xs font-semibold text-muted">{t("Field")}</div>
-    <Label text={t("What people call it")}><Input value={field.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
+    <Label text={t("Shared property version")}><SemanticPropertyTypeSelect label={t("Shared property version")} value={field.property} filter={p=>p.definition.source==="tenant"&&p.binding.ref.app==="build"} onChange={p=>onChange(p?{property:p.binding,type:p.property.type,title:p.property.title,choices:undefined,ref:undefined,inverse:undefined}:{property:undefined})}/></Label>
+    {field.property&&<><p className="break-all text-xs text-muted">{field.property.ref.name}@{field.property.sourceVersion}</p><p className="text-xs text-muted">{t("The shared source controls type and title. Local names, required values and access stay with this object.")}</p>{!bound&&<p role="alert" className="text-xs text-danger">{t("The bound shared property version is unavailable.")}</p>}</>}
+    <Label text={t("What people call it")}><Input disabled={!!field.property} value={field.title} onChange={(e) => onChange({ title: e.target.value })} /></Label>
     <Label text={t("Name")}><Input className="font-mono" value={field.name} onChange={(e) => onChange({ name: e.target.value })} /></Label>
-    <Label text={t("Type")}><Select value={field.type} onChange={(e) => onChange({ type: e.target.value })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
+    <Label text={t("Type")}><Select disabled={!!field.property} value={field.type} onChange={(e) => onChange({ type: e.target.value })}>{fieldTypes.map((x) => <option key={x} value={x}>{t(x)}</option>)}</Select></Label>
     {field.type === "choice" && <Label text={t("Choices")}><Input value={field.choices ?? ""} onChange={(e) => onChange({ choices: e.target.value })} /></Label>}
     {field.type === "reference" && <Label text={t("Reference object")}><SemanticObjectSelect label={t("Reference object")} value={field.ref} onChange={(ref) => onChange({ ref: ref?.name, inverse: undefined })} /></Label>}
     {field.type === "reference" && <Label text={t("Seen from there as")}><Input className="font-mono" placeholder="visits" value={field.inverse ?? ""} onChange={(e) => onChange({ inverse: e.target.value || undefined })} /></Label>}

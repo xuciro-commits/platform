@@ -1,7 +1,8 @@
 import "./i18n";
 import { useState } from "react";
 import { Panel, t } from "@platform/ui";
-import { ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, type Definition, type AssetRef } from "./index";
+import { ApplicationPage, ApplicationSessionsProvider, Assistant, ComposedPage, ComputeCall, DashboardView, FlowInstanceView, GeneratedForm, PagePreview, PayloadFields, RecordActions, RecordDetail, Records, RunView, Search, SemanticObjectSelect, SemanticPropertySelect, SemanticPropertyTypeSelect, type Definition, type AssetRef } from "./index";
+import type {Api} from "@platform/kernel";
 import { CatalogFixture, sampleActions, sampleDefinitions, sampleObject, samplePage, sampleRecords } from "./catalog.fixtures";
 
 export function GeneratedFormExample() {
@@ -45,10 +46,11 @@ export const ComputeExample = () => <CatalogFixture><ComputeCall recordType={sam
 
 function SemanticChoices() {
   const [object, setObject] = useState<AssetRef>(), [property, setProperty] = useState<string>();
+  const [shared,setShared]=useState<Api.AssetBinding>();
   return <div className="grid gap-3"><SemanticObjectSelect label={t("Object")} value={object?.name} onChange={(ref) => { setObject(ref); setProperty(undefined); }} />
-    {object && <SemanticPropertySelect object={object} value={property} label={t("Property")} onChange={(ref) => setProperty(ref?.field)} />}</div>;
+    {object && <SemanticPropertySelect object={object} value={property} label={t("Property")} onChange={(ref) => setProperty(ref?.field)} />}<SemanticPropertyTypeSelect label={t("Shared property version")} value={shared} onChange={p=>setShared(p?.binding)}/></div>;
 }
-export const SemanticSelectionExample = () => <CatalogFixture><SemanticChoices /></CatalogFixture>;
+export const SemanticSelectionExample = () => <CatalogFixture definitions={[...sampleDefinitions,{ref:{app:"catalog",kind:"property-type",name:"quantity"},source:"catalog-fixture",version:"fixture-v2",contractVersion:1,requires:[],propertyType:{name:"quantity",title:"Quantity",description:"A count in the local example.",type:"integer"},propertyVersions:{"fixture-v1":{name:"quantity",title:"Original quantity",description:"A retained local example.",type:"integer"}}}]}><SemanticChoices /></CatalogFixture>;
 
 export function ApplicationSessionsExample() {
   const object={app:"catalog",kind:"object" as const,name:sampleObject.type};

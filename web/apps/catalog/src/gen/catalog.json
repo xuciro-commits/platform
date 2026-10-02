@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:3b5b3d300616650b",
+  "revision": "sha256:cafaa3cc18b60b3e",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -510,7 +510,8 @@
       "source": "web/packages/app/src/semantic/Selector.tsx",
       "exports": [
         "SemanticObjectSelect",
-        "SemanticPropertySelect"
+        "SemanticPropertySelect",
+        "SemanticPropertyTypeSelect"
       ],
       "example": "SemanticSelectionExample",
       "constraints": [
@@ -2100,6 +2101,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -2150,6 +2152,7 @@
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -2237,6 +2240,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -2311,6 +2315,7 @@
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
       "web/packages/build/src/process.tsx",
+      "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/release.tsx",
       "web/packages/build/src/simulate.tsx",
@@ -2367,6 +2372,7 @@
       "web/packages/build/src/function.tsx",
       "web/packages/build/src/link-type.tsx",
       "web/packages/build/src/model-editor/ModelWorkbench.tsx",
+      "web/packages/build/src/property-type.tsx",
       "web/packages/build/src/query.tsx",
       "web/packages/build/src/workflow.tsx",
       "web/apps/workspace/src/chrome.tsx"
@@ -2642,6 +2648,7 @@
       "source": "web/packages/app/src/index.tsx",
       "symbols": [
         "HostContext",
+        "assetBindingKey",
         "assetKey",
         "createWidgetRegistry",
         "defineApp",
@@ -2661,6 +2668,7 @@
         "relationKey",
         "runStates",
         "semanticModelView",
+        "semanticPropertyTypes",
         "supportsPageUIProfile",
         "useCapabilities",
         "useDefinitions",
@@ -2697,6 +2705,7 @@
         "RunStep",
         "SavedView",
         "SemanticModelView",
+        "SemanticPropertyType",
         "SemanticRelation",
         "WidgetContract",
         "WidgetID",

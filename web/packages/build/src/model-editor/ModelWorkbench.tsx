@@ -1,4 +1,4 @@
-import { NewActions, newId, pageDocumentFromSections, semanticModelView, useHost, useRecordInventory,
+import { NewActions, newId, pageDocumentFromSections, semanticModelView, assetBindingKey, useHost, useRecordInventory,
   type Definition, type PropertyRef, type SemanticRelation } from "@platform/app";
 import { Button, Card, Checkbox, DataTable, EditorWorkbench, Form, Input, NodeCanvas, PageHeader, Panel, PropertyList, RecordList, Select, Tag,
   canvasNodeHeight, canvasNodeWidth, layout, t, useWorkspace, type CanvasEdge, type CanvasNode, type ColumnDef, type NodeCatalog } from "@platform/ui";
@@ -6,7 +6,7 @@ import type { Api } from "@platform/kernel";
 import { Boxes, Database, GitBranch, Link2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type DraftProperty = { name: string; title: string; type: string; choices?: string; required?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
+type DraftProperty = { name: string; title: string; type: string; property?:Api.AssetBinding; choices?: string; required?: boolean; ref?: string; inverse?: string; read?: string[]; write?: string[] };
 type ObjectDraft = { id: string; revision: number; archived?: boolean; name: string; title: string; state: string; fields: DraftProperty[]; actions?: { name: string; title: string }[]; access?: { role: string; read: string }[] };
 type Resource = { ref: Api.AssetRef; title: string; source: string; installed?: Definition; draft?: ObjectDraft; fields: (Api.FieldInfo | DraftProperty)[] };
 type Selection = { kind: "property"; ref: PropertyRef } | { kind: "relation"; relation: SemanticRelation; inbound: boolean } | { kind: "action"; definition: Definition };
@@ -27,9 +27,11 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const { open } = useWorkspace();
   const inventory = useRecordInventory<ObjectDraft>("build.object");
   const linkInventory=useRecordInventory<{id:string;name:string}>("build.linktype");
+  const propertyInventory=useRecordInventory<{id:string;name:string}>("build.propertytype");
   const model = useMemo(() => semanticModelView(host.definitions), [host.definitions]);
   const [search, setSearch] = useState(""), [origin, setOrigin] = useState("all");
-  const [current, setCurrent] = useState(initialObject ?? ""), [view, setView] = useState<"catalog" | "graph" | "detail">(initialObject ? "detail" : "catalog");
+  const [current, setCurrent] = useState(initialObject ?? ""), [view, setView] = useState<"catalog" | "graph" | "detail" | "shared">(initialObject ? "detail" : "catalog");
+  const [shared,setShared]=useState("");
   const [tab, setTab] = useState(initialTab ?? "overview"), [selection, select] = useState<Selection>();
   const [seed, setSeed] = useState<PageSeed>();
   const resources = useMemo(() => {
@@ -44,7 +46,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const resource = resources.find((item) => item.ref.name === current);
   const visible = useMemo(() => resources.filter((item) => (origin === "all" || item.source === origin) && `${item.title} ${item.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())), [resources, origin, search]);
   const choose = (item: Resource) => { setCurrent(item.ref.name); setView("detail"); select(undefined); setTab("overview"); };
-  useEffect(() => { select(undefined); setSeed(undefined); }, [current]);
+  useEffect(() => { setSeed(undefined); }, [current]);
   const edit = (item: Resource, parameters: Record<string, string> = {}) => {
     if (item.draft && host.can("build.object.edit")) open({ view: "process", params: { id: item.draft.id, ...parameters } });
   };
@@ -70,12 +72,17 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
   const actions = host.definitions.filter((definition) => definition.ref.kind === "action" && definition.action?.target === current);
   const used = model.usages.filter((usage) => usage.resource.name === current && usage.resource.kind === "object");
   const property = selection?.kind === "property" ? resource?.fields.find((field) => field.name === selection.ref.field) : undefined;
+  const sharedProperties=model.propertyTypes.filter(p=>(origin==="all"||p.definition.source===origin)&&`${p.property.title} ${p.binding.ref.name}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const sharedProperty=model.propertyTypes.find(p=>assetBindingKey(p.binding)===shared);
+  const propertySource=property?.property?model.propertyTypes.find(p=>assetBindingKey(p.binding)===assetBindingKey(property.property!)):undefined;
+  const editShared=(name:string)=>{const draft=propertyInventory.data?.records.find(p=>p.name===name);if(draft)open({view:"property-type",params:{id:draft.id}});};
   return <div className="flex flex-col gap-2 lg:h-[calc(100dvh-8rem)] lg:min-h-0">
     <PageHeader title={t("Objects")} description={t("Explore the business model, inspect relationships, and bind real resources to pages.")}
-      actions={<div className="flex gap-2"><NewActions type="build.object"/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button></div>} />
+      actions={<div className="flex flex-wrap gap-2"><NewActions type="build.object"/><Button onClick={()=>open({view:"link-type",params:{id:"new",parent:current}})}>{t("New relationship")}</Button><Button onClick={()=>open({view:"property-type",params:{id:"new"}})}>{t("New shared property")}</Button></div>} />
     <Card role="toolbar" aria-label={t("Model navigation")} className="flex flex-wrap items-center gap-2 px-3 py-2">
       <Button variant={view === "catalog" ? "primary" : "ghost"} onClick={() => setView("catalog")}><Boxes />{t("Model catalog")}</Button>
       <Button variant={view === "graph" ? "primary" : "ghost"} onClick={() => setView("graph")}><GitBranch />{t("Relationship graph")}</Button>
+      <Button variant={view === "shared" ? "primary" : "ghost"} onClick={() => setView("shared")}><Boxes />{t("Shared property catalog")}</Button>
       <label className="ml-auto flex min-w-0 items-center gap-2 text-xs">{t("Source")}<Select value={origin} onChange={(event) => setOrigin(event.target.value)}>
         <option value="all">{t("All sources")}</option><option value="code">{t("Native code")}</option><option value="tenant">{t("Tenant definitions")}</option>
       </Select></label>
@@ -91,11 +98,12 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
       </div>}
       right={<div className="grid content-start gap-3 p-3">
         <h3 className="text-xs font-semibold text-muted">{t("Semantic inspector")}</h3>
-        {resource ? <><h2 className="text-sm font-semibold">{property?.title ?? resource.title}</h2><p className="break-all font-mono text-xs text-muted">{current}{property ? `.${property.name}` : ""}</p>
+        {view==="shared" ? sharedProperty ? <><h2 className="text-sm font-semibold">{sharedProperty.property.title}</h2><PropertyList items={[[t("Identity"),sharedProperty.binding.ref.name],[t("Type"),t(sharedProperty.property.type)],[t("Version"),sharedProperty.binding.sourceVersion],[t("Source"),t(sharedProperty.definition.source==="code"?"Native code":"Tenant definition")]]}/><p className="text-xs">{sharedProperty.property.description}</p>{sharedProperty.definition.source==="tenant"&&<Button onClick={()=>editShared(sharedProperty.binding.ref.name)}>{t("Edit shared property")}</Button>}<p className="text-xs text-muted">{t("Local field names, required values and access belong to each object.")}</p>{resources.flatMap(item=>item.fields.filter(f=>f.property&&assetBindingKey(f.property)===shared).map(f=><Button key={`${item.ref.name}/${f.name}`} variant="row" onClick={()=>{choose(item);setTab("properties");select({kind:"property",ref:{object:item.ref,field:f.name}});}}>{item.title} · {f.name}</Button>))}</>:<p className="text-xs text-muted">{t("Choose a shared property version to inspect its consumers.")}</p> : resource ? <><h2 className="text-sm font-semibold">{property?.title ?? resource.title}</h2><p className="break-all font-mono text-xs text-muted">{current}{property ? `.${property.name}` : ""}</p>
           <Tag label={t(resource.source === "code" ? "Native code" : "Tenant definition")} />
           {view === "graph" && <Button onClick={() => choose(resource)}>{t("Open object details")}</Button>}
           {selection?.kind === "property" && property && <>
             <PropertyList items={[[t("Type"), t(property.type)], [t("Required"), property.required ? t("Yes") : t("No")]]} />
+            {property.property&&<><PropertyList items={[[t("Shared property"),property.property.ref.name],[t("Version"),property.property.sourceVersion]]}/>{propertySource?<><p className="text-xs">{propertySource.property.description}</p>{propertySource.definition.source==="tenant"&&<Button onClick={()=>editShared(propertySource.binding.ref.name)}>{t("Edit shared property")}</Button>}</>:<p role="alert" className="text-xs text-danger">{t("The bound shared property version is unavailable.")}</p>}</>}
             <Button disabled={!resource.installed} onClick={() => setSeed({ object: resource.ref, field: property.name })}>{t("Use property in page")}</Button>
             {resource.draft && <Button disabled={!host.can("build.object.edit")} onClick={() => edit(resource, { field: property.name })}>{t("Edit property")}</Button>}
           </>}
@@ -118,6 +126,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
         </> : <p className="text-xs text-muted">{t("Choose an object or relationship to inspect it.")}</p>}
       </div>}>
       <div className="min-h-[26rem] flex-1 overflow-auto p-3">
+        {view==="shared"&&<DataTable data={sharedProperties} getRowId={p=>assetBindingKey(p.binding)} searchable={false} height="100%" onRowClick={p=>setShared(assetBindingKey(p.binding))} empty={t("No published shared property yet.")} columns={[{id:"title",header:t("Shared property"),accessorFn:p=>p.property.title},{id:"name",header:t("Identity"),accessorFn:p=>p.binding.ref.name},{id:"type",header:t("Type"),accessorFn:p=>t(p.property.type)},{id:"version",header:t("Version"),accessorFn:p=>p.binding.sourceVersion}]}/>}
         {view === "catalog" && <DataTable data={visible} columns={columns} getRowId={(item) => item.ref.name} height="100%" loading={inventory.isLoading} searchable={false}
           onRowClick={(item) => item.draft && !item.installed ? edit(item) : choose(item)} empty={t("No matching objects.")} />}
         {view === "graph" && <div className="flex h-full min-h-[25rem] flex-col"><p className="mb-2 text-xs text-muted" role="status">{t("Showing {shown} of {total} objects", { shown: graph.nodes.length, total: visible.length })}</p>
@@ -131,7 +140,7 @@ function ModelInventory({ initialObject, initialTab }: { initialObject?: string;
           {tab === "overview" && <><PropertyList items={[[t("Identity"), resource.ref.name], [t("Owner"), resource.ref.app], [t("Source"), t(resource.source === "code" ? "Native code" : "Tenant definition")], [t("Version"), resource.installed?.version ?? t("Draft")], [t("Title property"), resource.installed?.entity?.display ?? "—"]]} />
             <p className="text-sm text-muted">{resource.installed?.entity?.description ?? t("Define fields, relationships, actions and access.")}</p></>}
           {tab === "properties" && <DataTable data={resource.fields} getRowId={(field) => field.name} searchable={false} height={380} onRowClick={(field) => select({ kind: "property", ref: { object: resource.ref, field: field.name } })}
-            columns={[{ accessorKey: "title", header: t("Property") }, { accessorKey: "name", header: t("Name") }, { accessorKey: "type", header: t("Type"), cell: ({ row }) => t(row.original.type) }, { id: "reference", header: t("Reference object"), accessorFn: (field) => field.ref ?? "—" }]} />}
+            columns={[{ accessorKey: "title", header: t("Property") }, { accessorKey: "name", header: t("Name") }, { accessorKey: "type", header: t("Type"), cell: ({ row }) => t(row.original.type) }, { id: "shared", header: t("Shared property version"), accessorFn:f=>f.property?`${f.property.ref.name}@${f.property.sourceVersion}`:"—" }, { id: "reference", header: t("Reference object"), accessorFn: (field) => field.ref ?? "—" }]} />}
           {tab === "links" && <div className="grid gap-2">{related.map((relation) => {
             const inbound = relation.target.name === current;
             return <Button key={relation.ref.kind==="link-type"?`${relation.ref.binding.ref.app}/${relation.ref.binding.ref.name}`:`${relation.ref.object.name}/${relation.ref.field}`} variant="row" onClick={() => select({ kind: "relation", relation, inbound })}>

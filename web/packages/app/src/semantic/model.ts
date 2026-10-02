@@ -10,8 +10,21 @@ export type SemanticRelation = {
 };
 export type SemanticModelView = {
   objects: Api.Definition[]; relations: SemanticRelation[];
+  propertyTypes: SemanticPropertyType[];
   usages: { owner: Api.Definition; resource: Api.AssetRef }[];
 };
+
+export type SemanticPropertyType = { binding: Api.AssetBinding; property: Api.PropertyType; definition: Api.Definition };
+export const assetBindingKey = (binding: Api.AssetBinding) => `${key(binding.ref)}@${binding.sourceVersion}`;
+
+/** Retained declarations only. A missing version never resolves to latest. */
+export function semanticPropertyTypes(definitions: Api.Definition[]): SemanticPropertyType[] {
+  return definitions.filter(d => d.ref.kind === "property-type" && d.propertyType).flatMap(definition => {
+    const versions = new Map(Object.entries(definition.propertyVersions ?? {}));
+    versions.set(definition.version, definition.propertyType!);
+    return [...versions].map(([sourceVersion, property]) => ({ binding: { ref: definition.ref, sourceVersion }, property, definition }));
+  });
+}
 
 const key = (ref: Api.AssetRef) => `${ref.app}/${ref.kind}/${ref.name}`;
 
@@ -47,7 +60,7 @@ export function semanticModelView(definitions: Api.Definition[]): SemanticModelV
     const distinct = new Map(refs.filter((ref) => known.has(key(ref))).map((ref) => [key(ref), ref]));
     return [...distinct.values()].map((resource) => ({ owner, resource }));
   });
-  return { objects, relations, usages };
+  return { objects, relations, usages, propertyTypes: semanticPropertyTypes(definitions) };
 }
 
 export const propertyKey = (ref: PropertyRef) => `${key(ref.object)}#${ref.field}`;
