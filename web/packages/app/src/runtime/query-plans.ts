@@ -25,12 +25,21 @@ const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|NumberValue|DecimalValue|import("./decimal").StringSetValue|ResourceValue};
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
 
-export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract): QueryPlanResult {
+export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, pickerTitle?:string): QueryPlanResult {
   named=plan.query?boundQueryDefinition(named,plan.query):named;
   if(base.status!=="value" || !view) return base;
   const query={...base.query};
   if(view.offset!==undefined){if(!Number.isInteger(view.offset)||view.offset<0||view.offset>contract.maxOffset)return failed("Query window offset exceeds its budget.");query.offset=view.offset;}
-  if(view.search!==undefined){if(plan.search)return failed("This plan owns its search parameter.");if(new TextEncoder().encode(view.search).length>4096)return failed("Query search requires text.");query.search=view.search;}
+  if(view.search!==undefined){
+   if(new TextEncoder().encode(view.search).length>4096)return failed("Query search requires text.");
+   if(pickerTitle){
+    if(pickerTitle!=="id"&&!info?.fields.some(f=>f.name===pickerTitle&&["text","longtext","choice","reference"].includes(f.type)))return failed("Picker title is unavailable.");
+    if(view.search!==""){
+     const domain=query.domain??[],terms=domain.filter(Array.isArray).length,extra=pickerTitle==="id"?1:2;if(terms+extra>contract.maxConditions)return failed("Picker search exceeds its condition budget.");
+     query.domain=[...domain,...pickerTitle==="id"?[["id","like",view.search]]:["|",[pickerTitle,"like",view.search],["id","like",view.search]]];
+    }
+   }else{if(plan.search)return failed("This plan owns its search parameter.");query.search=view.search;}
+  }
   if(view.sort!==undefined){if(named?.query?.sort?.length)return failed("The named query owns its ordering.");if(view.sort.length<1||view.sort.length>contract.maxSort||view.sort.some((key)=>{const field=key.replace(/^-/,"");return !validID.test(field)||!["id","created","changed"].includes(field)&&!info?.fields.some((f)=>f.name===field&&!['references','tags','lines','json'].includes(f.type));}))return failed("Query sort field is unavailable.");query.sort=view.sort;}
   return {...base,query,signature:JSON.stringify([base.object,query])};
 }

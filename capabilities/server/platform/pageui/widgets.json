@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.57",
+  "uiProfile": "platform.page.v2.58",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2362,6 +2362,66 @@
           "close"
         ]
       }
+    },
+    {
+      "componentID": "record-picker",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.58",
+      "title": "Record picker",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.58"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.58"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -2421,7 +2481,8 @@
     "platform.page.v2.54",
     "platform.page.v2.55",
     "platform.page.v2.56",
-    "platform.page.v2.57"
+    "platform.page.v2.57",
+    "platform.page.v2.58"
   ],
   "runtime": {
     "scope": "page",
@@ -2574,6 +2635,11 @@
         "kind": "record",
         "type": "record",
         "widget": "record-leaderboard"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "record-picker"
       }
     ],
     "loop": {
@@ -2915,6 +2981,10 @@
     },
     "dateInput": {
       "requiredUIProfile": "platform.page.v2.57"
+    },
+    "recordPicker": {
+      "requiredUIProfile": "platform.page.v2.58",
+      "maxCandidates": 20
     }
   },
   "layout": {

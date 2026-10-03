@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Picker title is unavailable.": "选择器标题不可用。",
+ "Picker search exceeds its condition budget.": "选择器搜索超过条件预算。",
+ "Record picker": "记录选择器",
+ "Record picker window is unavailable.": "记录选择器窗口不可用。",
+ "Record picker window bounds or ordering changed.": "记录选择器窗口范围或排序已改变。",
+ "Up to 20 authorized candidates from the original query.": "来自原查询的最多20条受权候选记录。",
  "Date input": "日期输入",
  "Date input is unavailable or incompatible.": "日期输入不可用或不兼容。",
  "Invalid date value.": "日期值无效。",

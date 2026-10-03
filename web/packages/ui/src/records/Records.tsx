@@ -234,7 +234,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   fields?: string[];
   /** A caller-owned authorized window. Controls emit view changes and never
    * issue another list/aggregate read or override the owning plan's domain. */
-  window?: { query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; maxOffset:number; onChange:(change:{search?:string;sort?:string[];offset?:number})=>void };
+  window?: { query:RecordQuery; page?:RecordPageData; error?:string; searchLocked?:boolean; sortLocked?:boolean; inputSearch?:string; maxOffset:number; onChange:(change:{search?:string;sort?:string[];offset?:number})=>void };
   /** Always applied, like an app's own view of the type. */
   domain?: unknown[];
   /** Where the list starts, such as a saved view; `onSave` offers to save where it is. */
@@ -249,7 +249,7 @@ export function RecordList({ source, type, onOpen, toolbar, height = "calc(100dv
   const [archived, setArchived] = useState(initial.archived ?? false);
   const [loadedPage, setLoadedPage] = useState<{ scope?: string; page: RecordPageData }>();
   const page = window ? window.page : loadedPage?.scope === source.scope ? loadedPage?.page : undefined;
-  const search = window ? window.query.search ?? "" : localSearch, sort = window ? window.query.sort?.[0] ?? "id" : localSort, offset = window ? window.query.offset ?? 0 : localOffset;
+  const search = window ? window.inputSearch ?? window.query.search ?? "" : localSearch, sort = window ? window.query.sort?.[0] ?? "id" : localSort, offset = window ? window.query.offset ?? 0 : localOffset;
   if (window) pageSize = window.query.limit ?? pageSize;
   const windowKey = JSON.stringify(window?.query);
   const [localError, setError] = useState<string>();

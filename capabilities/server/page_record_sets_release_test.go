@@ -250,6 +250,14 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	dateRoot.Children = append(dateRoot.Children, "dateInput")
 	doc.Nodes[doc.Root] = dateRoot
 	sections = append(sections, build.Section{ID: "dateInput", Widget: "date-input", ConfigVersion: 1, DateVariable: "dateState", DateLabel: &dateLabel})
+	doc.Queries["pickerQuery"] = platform.PageQuery{Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.note"}, Limit: 20, Sort: []string{"id"}}
+	doc.Variables["pickerWindow"] = platform.PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: "pickerQuery"}}
+	doc.Nodes["pickerInput"] = platform.PageLayoutNode{Kind: "widget", Section: "pickerInput"}
+	pickerRoot := doc.Nodes[doc.Root]
+	pickerRoot.Children = append(pickerRoot.Children, "pickerInput")
+	doc.Nodes[doc.Root] = pickerRoot
+	sections = append(sections, build.Section{ID: "pickerInput", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "pickerWindow", RecordPicker: &platform.PageRecordPicker{LabelField: "name"}})
+	doc.Variables["pickerRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "pickerInput"}}
 	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
@@ -276,6 +284,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[56].RecordPicker = &platform.PageRecordPicker{LabelField: "id"}
 	laterDateLabel := "Later date"
 	sections[55].DateLabel = &laterDateLabel
 	doc.Variables["dateState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2026-01-01")}
@@ -321,6 +330,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					pickerFound := false
+					for _, s := range d.Page.Sections {
+						if s.ID == "pickerInput" {
+							pickerFound = s.RecordPicker != nil && s.RecordPicker.LabelField == "name" && s.CollectionVariable == "pickerWindow"
+						}
+					}
+					if !pickerFound || d.Page.Document.Variables["pickerRecord"].Source.Section != "pickerInput" {
+						t.Fatal("frozen picker binding or producer changed")
+					}
 					dateFound := false
 					for _, s := range d.Page.Sections {
 						if s.ID == "dateInput" {

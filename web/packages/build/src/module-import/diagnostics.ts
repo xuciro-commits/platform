@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "picker-binding":"Map an original visible record title and scoped query. Record pickers need a fixed 20-record ID-sorted window and compatible retained ordering.",
+ "native-record-picker":"The picker searches the original authorized query and confirms original record identity before publishing selection. Candidates are bounded to 20 in host ID order; original title/ID predicates replace local array filtering, and declared search conditions remain fixed. Original conditions, versions and ownership remain; reads or scope changes retire old candidates and selection.",
  "date-input-profile":"Date inputs need original static civil date text, a bounded label, and the supported date-input profile. Timestamps and executable sources need their own time contract.",
  "native-date-input":"Civil dates keep the original YYYY-MM-DD text, empty conditions and invalid drafts. The picker does not convert through a timezone; invalid drafts have an explicit repair input. Date query conditions validate real Gregorian dates before reading. Overlay-owned state retires on close.",
  "native-multiple-choice":"Multiple choices use the original string set and IN query condition. A toggle adds or removes one declared option while retaining unmatched selections; an empty set stays empty. Type and selection budgets are checked, and owned state retires on close.",

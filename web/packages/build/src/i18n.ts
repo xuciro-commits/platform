@@ -2,6 +2,15 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record picker": "记录选择器",
+ "Picker title field": "选择器标题字段",
+ "Picker label": "选择器标签",
+ "Picker query window": "选择器查询窗口",
+ "Map record picker {widget}": "映射记录选择器 {widget}",
+ "Bind an original 20-record ID-sorted query. Search keeps its conditions; selection uses original record authorization.": "绑定原20条记录且按ID排序的查询。搜索保留原条件，选择使用原记录授权。",
+ "Bind a picker title and a 20-record ID-sorted query before saving.": "保存前请绑定选择器标题及20条记录、按ID排序的查询。",
+ "Map an original visible record title and scoped query. Record pickers need a fixed 20-record ID-sorted window and compatible retained ordering.": "映射原可见记录标题和作用域查询。记录选择器需要固定20条记录、按ID排序的窗口及兼容的保留排序。",
+ "The picker searches the original authorized query and confirms original record identity before publishing selection. Candidates are bounded to 20 in host ID order; original title/ID predicates replace local array filtering, and declared search conditions remain fixed. Original conditions, versions and ownership remain; reads or scope changes retire old candidates and selection.": "选择器搜索原受权查询，确认原记录身份后发布选择。候选按宿主ID顺序限制为20条；原标题/ID条件替代本地数组筛选，声明的搜索条件保持固定。原条件、版本和拥有者保留，读取或作用域变化清理旧候选及选择。",
  "Date input": "日期输入",
  "Date state variable": "日期状态变量",
  "Date label": "日期标签",

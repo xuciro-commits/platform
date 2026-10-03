@@ -1119,6 +1119,11 @@ export type PageRecordList = {
   layout: string;
 };
 
+export type PageRecordPicker = {
+  labelField: string;
+  label?: string;
+};
+
 export type PageRecordView = {
   tabs: string[];
 };
@@ -1455,6 +1460,7 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  recordPicker?: PageRecordPicker;
   dateVariable?: string;
   dateLabel?: string;
   choiceSetVariable?: string;
@@ -1805,7 +1811,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.57",
+  "uiProfile": "platform.page.v2.58",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4168,6 +4174,66 @@ export const pageUIManifest = {
           "close"
         ]
       }
+    },
+    {
+      "componentID": "record-picker",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.58",
+      "title": "Record picker",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.58"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.58"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -4227,7 +4293,8 @@ export const pageUIManifest = {
     "platform.page.v2.54",
     "platform.page.v2.55",
     "platform.page.v2.56",
-    "platform.page.v2.57"
+    "platform.page.v2.57",
+    "platform.page.v2.58"
   ],
   "runtime": {
     "scope": "page",
@@ -4380,6 +4447,11 @@ export const pageUIManifest = {
         "kind": "record",
         "type": "record",
         "widget": "record-leaderboard"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "record-picker"
       }
     ],
     "loop": {
@@ -4721,6 +4793,10 @@ export const pageUIManifest = {
     },
     "dateInput": {
       "requiredUIProfile": "platform.page.v2.57"
+    },
+    "recordPicker": {
+      "requiredUIProfile": "platform.page.v2.58",
+      "maxCandidates": 20
     }
   },
   "layout": {

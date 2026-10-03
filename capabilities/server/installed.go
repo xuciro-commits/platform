@@ -467,6 +467,9 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return err
 			}
 		case "record-list":
+			if err := s.CheckRecordPicker(info); err != nil {
+				return err
+			}
 			if err := s.CheckRecordList(info); err != nil {
 				return err
 			}

@@ -456,6 +456,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.CheckRecordGantt(shown) != nil {
 						continue
 					}
+					if section.CheckRecordPicker(shown) != nil {
+						continue
+					}
 					if section.CheckRecordCalendar(shown) != nil {
 						continue
 					}

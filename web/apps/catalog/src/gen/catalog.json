@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:bdb25bba72e4e175",
+  "revision": "sha256:fd6e1dc550dc41f6",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2906,6 +2906,7 @@
       "web/packages/build/src/page-editor/widgets/RecordGanttInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordPickerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SummaryInspector.tsx",
@@ -2987,6 +2988,7 @@
       "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
       "web/packages/app/src/widgets/RecordGantt.tsx",
+      "web/packages/app/src/widgets/RecordPicker.tsx",
       "web/packages/app/src/widgets/RecordTimeline.tsx",
       "web/packages/app/src/widgets/Summary.tsx",
       "web/packages/app/src/widgets/Table.tsx",
@@ -3042,7 +3044,8 @@
     ],
     "ui/record-lookup": [
       "web/packages/app/src/actions.tsx",
-      "web/packages/app/src/sections.tsx"
+      "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/RecordPicker.tsx"
     ],
     "ui/form": [
       "web/packages/app/src/agents.tsx",
