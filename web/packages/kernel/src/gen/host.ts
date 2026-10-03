@@ -1051,6 +1051,12 @@ export type PageQuerySet = {
   inputs: string[];
 };
 
+export type PageRecordCalendar = {
+  dateField: string;
+  labelField: string;
+  initialMonth: string;
+};
+
 export type PageRecordChart = {
   mark: string;
   xField: string;
@@ -1403,6 +1409,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
@@ -1737,7 +1744,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.45",
+  "uiProfile": "platform.page.v2.46",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3360,6 +3367,87 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-calendar",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.46",
+      "title": "Record calendar",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "recordCalendar": {
+          "dateField": "",
+          "labelField": "id",
+          "initialMonth": ""
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordCalendar": {
+            "type": "object",
+            "properties": {
+              "dateField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "initialMonth": {
+                "type": "string",
+                "maxLength": 7
+              }
+            },
+            "required": [
+              "dateField",
+              "labelField",
+              "initialMonth"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.46"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3407,7 +3495,8 @@ export const pageUIManifest = {
     "platform.page.v2.42",
     "platform.page.v2.43",
     "platform.page.v2.44",
-    "platform.page.v2.45"
+    "platform.page.v2.45",
+    "platform.page.v2.46"
   ],
   "runtime": {
     "scope": "page",
@@ -3534,6 +3623,11 @@ export const pageUIManifest = {
         "kind": "records",
         "type": "record-set",
         "widget": "table"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "record-calendar"
       }
     ],
     "loop": {
@@ -3815,6 +3909,10 @@ export const pageUIManifest = {
         "warning",
         "danger"
       ]
+    },
+    "recordCalendar": {
+      "requiredUIProfile": "platform.page.v2.46",
+      "maxRecords": 100
     }
   },
   "layout": {

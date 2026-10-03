@@ -552,6 +552,14 @@ F1e20沿既有原窗口/纯呈现Widget归属增加record-events/configVersion=1
 
 来源Timeline只有objectSetVarId配置，却隐式读取title/createdAt/severity并取前30条。导入必须逐项选择原标题、业务时间和严重度，并声明原枚举色调；报告要求确认原ID排序、窗口、UTC及呈现差异。原文/映射与定位拒绝保持，原状态/本体数组不成为事件权威；实际证据仍归§14。
 
+### 6.41 Calendar的月日视图、原记录与日期规则
+
+F1e21沿原查询窗口/记录选择的归属增加record-calendar/configVersion=1及v2.46，声明recordCalendar={dateField,labelField,initialMonth}。日期为原date/datetime业务字段，标题为原标量文本/ID；initialMonth为冻结的YYYY-MM（0001–9999）。不将创建时间当作业务到期日，不产生日期写入或下载全集。复用原timelineTime解析，civil date保留原日，datetime明确投影到UTC日；月/日计数只覆盖当前受权窗口，范围与无效日期明确显示，原QueryWindowFrame负责分页和错误。
+
+原共享UI没有月格记录日历，横轴时间线不能提供来源Calendar的月/日交互。采用纯呈现RecordCalendar，日格与选中日期列表保留原记录ID及原窗口顺序；原PageSession授权确认后供详情/原动作消费，不把来源对象直接写入变量。月份/日期变化清理当前记录选择，查询/成员/绑定和拥有Overlay退役恢复初始月份/清理日期，旧响应沿原查询owner丢弃。支持跨年导航，界限不溢出0001/9999；无权限日期/标题裁掉整个组件，候选与恢复冻结原字段和初始月份。
+
+源Calendar显式映射dateProperty、原标题和activeVarId的唯一实际生产者；多个Table/List/Board/Calendar写者仍阻止导入。来源固定2026年10月作为初始月份保留，原本地时区与固定年限制改为上述明确规则，报告要求确认日期、月份、窗口和选择清理差异。Loop/应用共享、创建/改期、完整月历查询和排程能力留在原工作项；实际证据归§14。
+
 ## 7. 本体设计台与平台语义融合（D5）
 
 本体设计台编辑的是平台的业务语义资产。统一投影 `SemanticModelView` 由已有 Definition/Entity/Field/Action/Query/Capability 与 build 草稿生成，不保存另一份 `OntologyMeta` 真相。名称、描述、图标等呈现信息补在原资产owner；不同资产的编辑仍提交各自原命令。
@@ -735,7 +743,7 @@ Store按编辑器标签/运行实例创建，禁止外包OSel/FlowRuntime等模�
 
 兼容转换是规范加载入口中的纯转换，不形成第二套编辑器/渲染器。一次性导入适配在迁移结束后退出常规运行路径。
 
-首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。二十一类组件为ObjectTable→Table、ObjectList→§6.34的RecordList、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button、ButtonGroup→§6.29的ButtonGroup、Links→§6.30的RecordLinks、StatusTracker→§6.31的StatusTracker、MetricCard→§6.32的Metric、HeaderText/ObjectSetTitle→§6.33的Heading/CollectionTitle、ChartXY→§6.35的原Chart/§6.36的RecordChart、ChartPie→§6.37的原Chart、PivotTable→§6.38的原Pivot、KanbanBoard→§6.39的原Kanban及Timeline→§6.40的RecordEvents，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
+首个页面导入profile（F1e）归Build的`module-import/`。读取外包`ModuleDef` JSON，显式选择一个页面及已有平台对象、字段、原记录动作；可选择与目标对象相符、无需父参数的精确保留查询版本，其固定条件叠加而非替换源条件。支持Rows/Columns/Tabs/Flow/Toolbar层级、完整Modal/Drawer、有限显示条件与暂存组件；重新分配节点、Section、变量、查询和Overlay身份。二十二类组件为ObjectTable→Table、ObjectList→§6.34的RecordList、ObjectView→§6.28的RecordView、PropertyList→Detail、InlineAction→InlineAction、Markdown→Text、TextInput/NumericInput→Input、FilterList→类型化Filter、SingleButton→Button、ButtonGroup→§6.29的ButtonGroup、Links→§6.30的RecordLinks、StatusTracker→§6.31的StatusTracker、MetricCard→§6.32的Metric、HeaderText/ObjectSetTitle→§6.33的Heading/CollectionTitle、ChartXY→§6.35的原Chart/§6.36的RecordChart、ChartPie→§6.37的原Chart、PivotTable→§6.38的原Pivot、KanbanBoard→§6.39的原Kanban、Timeline→§6.40的RecordEvents及Calendar→§6.41的RecordCalendar，均只开放有限配置。Table支持按生产者隔离的activeObject、§6.24的selectedObjects多选引用集合及§6.25的onSelect固定状态事件、§6.26的列标题/宽度/固定格式与showSearch、显式字段、§8.8的标准编辑绑定及静态/类型化可选ObjectSet where条件，系统ID沿原表格标识列和记录标题展示并诊断；详情沿§6.27保留hideNull和有界列数；详情和内联表单消费原记录资源，动作必须属于映射对象且非创建动作。Input只绑定原文本状态；NumericInput的空数字输入按显式asDecimal查询条件解释；Button只转换单个开关Overlay或JSON标量setVariable，ButtonGroup按控件保留独立固定事件；均不执行表达式源码、函数或流程脚本。
 
 原文件按输入文本保留在报告中，可原样下载；映射报告包含完整来源、绑定、定位诊断、身份重写及原生草稿。应用是原DraftSession的一次可撤销替换，不提交业务操作、不自动保存；再次打开导入窗口可在同一编辑作用域下载报告。报告不是平台资产，离开编辑器或切换成员前须下载保留。选择页面之外的页面、页头、流程和未引用内容明确保留在报告但不执行，原导航由工作区提供；可识别的原生展示差异需勾选确认。未知配置、未知组件、未支持的选择/编辑配置、不兼容作用域和执行定义阻止应用。源变量虽是Module全局值，本profile不复制跨根局部变量：记录资源按生产者归属，页面选中记录可供浮层读取，浮层选中记录不能逃到页面；浮层独占状态转为关闭重置的原生局部状态并给出确认警告，静态值跨根共享需后续显式映射。Loop、更广动态转换、源应用拆分、接口、更广变量/事件及92类型完整配置转换仍待后续。
 
@@ -930,6 +938,8 @@ Module页面导入（F1e–F1e2）已接通§10.1的八类组件有限profile、
 
 状态看板迁移（F1e19，沿既有Kanban profile）已接通§6.39的KanbanBoard→原kanban、显式生命周期/卡片/原移动映射、独立选择及已有record生产者；当前20类源组件开放有限profile。原定义投影将统一可选字段/动作裁剪提前到看板校验前；Go覆盖冻结后改草稿、私有摘要裁剪仍保留可读看板、无权动作变只读、私有标题整组件裁掉、原记录生产者、CheckReplay及内存快照。导入拒绝移动丢失/错误映射、只读来源获得动作、多个写者及旧profile，复制保留原字段/动作并重写详情生产者；相关原资源/动作读取路径保持。浏览器验证默认groupBy/actionId/actionParam/activeVarId配置→GUI显式映射/检查器→保存冻结后新草稿不改原标题/动作，三套真实看板选择隔离与原详情，私有摘要/标题裁剪，拖动原表单、未提交记录不变、原条件拒绝保留输入、成功后实际状态改变及revision冲突保留输入，筛选、Overlay关闭重开与刷新清理；原生看板路线仍通过，普通/窄屏已观察，全量Web路线通过。更广参数化移动/非生命周期分组、负责人视觉认可、生产性能和真实PostgreSQL恢复仍未提供或验证。
 
-垂直事件窗口（F1e20，v2.45）已接通§6.40的record-events、共享RecordEvents/原timelineTime与QueryWindowFrame、原字段/色调检查器及Timeline有限导入，当前21类源组件开放有限profile。Go检查旧profile/无文档/无排序、原日期/标题/枚举严重度、未知/重复色调，冻结后改草稿、隐藏时间/标题/严重度整组件裁剪、CheckReplay及内存快照保持；原Build正反转换与API生成携带recordEvents。共享UI验证原窗口顺序/30项边界、带偏移时间转UTC及civil date、业务时间不替代为创建时间、缺失/无效时间标记、不可见字段/未知色调拒绝；导入与复制保留原字段/色调并重写拥有计划。浏览器验证默认仅objectSetVarId配置→逐项GUI字段/色调/缺时间不能保存/检查器/31条窗口→冻结后新草稿不替换标题/色调，35条真实记录保留ID顺序且显示2001业务时间而非当前创建时间，30项范围、下一窗4项、筛选15项、私有三字段裁剪及403旧列表清理，浮层35/20局部窗口、关闭重开复位及刷新；普通/窄屏可视区域已观察，全量Web路线通过。更广严重度字段、Loop/应用共享事件窗、业务事件生成、负责人视觉认可、生产性能及真实PostgreSQL恢复仍未提供或验证。
+垂直事件窗口（F1e20，v2.45）已接通§6.40的record-events、共享RecordEvents/原timelineTime与QueryWindowFrame、原字段/色调检查器及Timeline有限导入。Go检查旧profile/无文档/无排序、原日期/标题/枚举严重度、未知/重复色调，冻结后改草稿、隐藏时间/标题/严重度整组件裁剪、CheckReplay及内存快照保持；原Build正反转换与API生成携带recordEvents。共享UI验证原窗口顺序/30项边界、带偏移时间转UTC及civil date、业务时间不替代为创建时间、缺失/无效时间标记、不可见字段/未知色调拒绝；导入与复制保留原字段/色调并重写拥有计划。浏览器验证默认仅objectSetVarId配置→逐项GUI字段/色调/缺时间不能保存/检查器/31条窗口→冻结后新草稿不替换标题/色调，35条真实记录保留ID顺序且显示2001业务时间而非当前创建时间，30项范围、下一窗4项、筛选15项、私有三字段裁剪及403旧列表清理，浮层35/20局部窗口、关闭重开复位及刷新；普通/窄屏可视区域已观察，全量Web路线通过。更广严重度字段、Loop/应用共享事件窗、业务事件生成、负责人视觉认可、生产性能及真实PostgreSQL恢复仍未提供或验证。
 
-F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和二十一类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。
+月日记录日历（F1e21，v2.46）已接通§6.41的record-calendar、共享RecordCalendar/原timelineTime及QueryWindowFrame、原日期/标题/初始月份检查器和Calendar有限导入，当前22类源组件开放有限profile。Go检查旧profile、无文档/排序、原业务日期/标题与月份边界，冻结后新草稿不替换原字段/月份，隐藏日期/标题整组件裁剪，CheckReplay及内存快照保持。共享UI验证civil date不跨日、带偏移datetime归UTC日、无效日期计数、跨年与0001/9999边界、原记录返回及月日/身份变化清理；导入与复制保留字段/月份并重写原计划和实际记录生产者，多写者及不完整映射拒绝。浏览器验证GUI导入与缺日期不能保存、原冻结交付、同日两条记录/详情、独立日历选择、UTC归日、私有字段裁剪、月日/筛选变化和403旧记录清理、Overlay重开及刷新复位；普通与390px窄屏已观察，适用Go/组合/格式与Calendar定向浏览器检查通过；完整Web回归88/89通过，既有表格单元格编辑冲突后重试读取超时，独立连续3次复跑通过但根因未定位，不能计为完整回归全部通过或问题已修复。查询窗口外的月记录不计入日格；没有日期写入、完整月查询、Loop/应用共享日历，负责人视觉认可、生产性能及真实PostgreSQL恢复仍未验证。
+
+F3仍未完成：更多组件的计划端口（Table/Loop窗口及Metric/Chart完整聚合已接通）、更多字段类型派生、更多聚合变量/其他分析端口及widget-local作用域，更深Loop和其他Widget的item端口仍待扩展。F4更强关系约束与接口语义、F5其余组件与Logic吸收、F6完整默认切换仍待实施。F1已提供受控权重/尺寸、组件行菜单与unused、主页面六类容器及完整Overlay根复制和二十二类组件有限页面导入；Loop/Overlay片段与跨页的完整剪贴板命令和外包格式完整导入仍待后续。已有工程结果不代表负责人已认可融合后的手感，也不代表大数据性能或生产部署验收。

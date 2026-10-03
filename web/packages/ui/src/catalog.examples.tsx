@@ -5,7 +5,7 @@ import {
   FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
-  RecordEvents, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  RecordCalendar, RecordEvents, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
@@ -317,4 +317,5 @@ export function FacetChoicesExample(){const [value,set]=useState<string[]>([]);r
 
 export function RecordCardsExample(){const [selected,onSelect]=useState<EntityRecord>();return <RecordCards records={demoRows} info={demoInfo} fields={["quantity"]} labelField="name" layout="grid" selected={selected?.id} onSelect={onSelect}/>;}
 export function RecordChartExample(){return <RecordChart records={demoRows} info={demoInfo} fields={{mark:"line",xField:"name",yField:"quantity"}}/>;}
+export function RecordCalendarExample(){const [selected,setSelected]=useState<EntityRecord>();return <RecordCalendar records={[{id:"W1",revision:1,created:stamp,changed:stamp,title:"Inspect equipment",due:"2026-10-02"}]} fields={{dateField:"due",labelField:"title",initialMonth:"2026-10",kind:"date"}} selected={selected?.id} onSelect={setSelected}/>;}
 export function RecordEventsExample(){const info:EntityInfo={...demoInfo,fields:[{name:"title",title:"Event title",type:"text"},{name:"raised",title:"Business time",type:"datetime"},{name:"severity",title:"Severity",type:"choice",choices:["high","low"]}]};return <RecordEvents info={info} records={[{id:"E1",revision:1,created:stamp,changed:stamp,title:"Temperature exceeded threshold",raised:"2026-10-02T08:00:00Z",severity:"high"}]} fields={{timeField:"raised",titleField:"title",severityField:"severity",tones:[{value:"high",tone:"danger"}]}}/>;}

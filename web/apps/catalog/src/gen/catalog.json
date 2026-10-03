@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:26173f9db3664ce8",
+  "revision": "sha256:76ff03fda02f7389",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1707,6 +1707,36 @@
       ]
     },
     {
+      "id": "ui/record-calendar",
+      "owner": "@platform/ui",
+      "name": "Authorized record calendar",
+      "summary": "Browse original business dates by month and day and select original records.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordCalendar.tsx",
+      "exports": [
+        "RecordCalendar",
+        "calendarRecords",
+        "adjacentCalendarMonth",
+        "validCalendarMonth"
+      ],
+      "example": "RecordCalendarExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "calendar",
+        "date",
+        "records",
+        "selection"
+      ],
+      "constraints": [
+        "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection."
+      ]
+    },
+    {
       "id": "ui/record-cards",
       "owner": "@platform/ui",
       "name": "Record cards",
@@ -2248,6 +2278,7 @@
       "Authorized cross-application search": "受权跨应用搜索",
       "Authorized event list": "受权事件列表",
       "Authorized lifecycle board": "授权生命周期看板",
+      "Authorized record calendar": "受权记录日历",
       "Authorized record detail": "受权记录详情",
       "Authorized record list": "受权记录列表",
       "Authorized record timeline": "授权记录时间轴",
@@ -2255,6 +2286,7 @@
       "Bind a published Go/Wasm operation to a page using its original owner contract.": "按原能力契约将已发布 Go/Wasm 操作绑定到页面。",
       "Bound dashboard": "绑定仪表盘",
       "Browse a scoped entity source with search, sort and paging.": "通过搜索、排序和分页浏览限定范围的实体数据源。",
+      "Browse original business dates by month and day and select original records.": "按月日浏览原业务日期并选择原记录。",
       "Browse records, choose a record and save a list view through the member’s host.": "通过当前成员的宿主浏览和选择记录，并保存列表视图。",
       "Browse, sort and edit typed rows in a shared virtualized table.": "在共享虚拟化表格中浏览、排序和编辑类型化行。",
       "Build filters from the entity's declared fields and operators.": "从实体声明的字段和操作符构建筛选条件。",
@@ -2418,6 +2450,7 @@
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
       "The caller owns the authorized window and business time; the list does not create events or read another collection.": "调用方拥有受权窗口和业务时间；列表不创建事件或读取另一集合。",
+      "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection.": "调用方拥有有界窗口和记录授权；日历不写日期或读取另一集合。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
@@ -2551,6 +2584,7 @@
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordCalendarInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordEventsInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
@@ -2622,6 +2656,7 @@
       "web/packages/app/src/widgets/Kanban.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
+      "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
       "web/packages/app/src/widgets/RecordTimeline.tsx",
       "web/packages/app/src/widgets/Table.tsx",
@@ -2854,6 +2889,9 @@
     "ui/pivot": [
       "web/packages/app/src/widgets/Pivot.tsx"
     ],
+    "ui/record-calendar": [
+      "web/packages/app/src/widgets/RecordCalendar.tsx"
+    ],
     "ui/record-chart": [
       "web/packages/app/src/widgets/RecordChart.tsx"
     ],
@@ -3041,6 +3079,7 @@
         "BlockDiagnostic",
         "BlockStatus",
         "ButtonProps",
+        "CalendarFields",
         "CanvasAddContext",
         "CanvasEdge",
         "CanvasHistory",

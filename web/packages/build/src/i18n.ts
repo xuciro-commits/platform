@@ -2,6 +2,17 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record calendar": "记录日历",
+ "Calendar query window": "日历查询窗口",
+ "Map calendar {widget}": "映射日历 {widget}",
+ "Business calendar date field": "业务日历日期字段",
+ "Calendar record title field": "日历记录标题字段",
+ "Initial calendar month": "日历初始月份",
+ "Bind calendar fields, an initial month and an explicitly sorted plan before saving.": "保存前请绑定日历字段、初始月份及显式排序计划。",
+ "Civil dates keep their original day; business datetimes use UTC days. Calendar counts cover the current authorized window.": "自然日期保留原日，业务日期时间按 UTC 日归组；日历计数覆盖当前受权窗口。",
+ "Calendar import needs an original query collection and the supported record-calendar profile.": "日历导入需要原查询集合及受支持的记录日历配置。",
+ "Map the original business date, choose a visible record title and declare a valid initial month.": "映射原业务日期、选择可见的记录标题并声明有效初始月份。",
+ "The calendar shows current-window records and uses original civil dates or UTC datetime days. Its initial month is explicit and navigation can cross years; changing month or day clears selection. Source local-time parsing and fixed-year behavior are not copied.": "日历显示当前窗口记录，使用原自然日期或 UTC 日期时间日。初始月份须明确，导航可跨年；切换月日清理选择。来源本地时间解析和固定年份行为不直接复制。",
  "Record events": "记录事件",
  "Event query window": "事件查询窗口",
  "Map event timeline {widget}": "映射事件时间线 {widget}",

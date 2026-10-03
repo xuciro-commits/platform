@@ -56,3 +56,4 @@ export {CollectionTitle} from "./components/CollectionTitle";
 export {RecordCards} from "./records/RecordCards";
 export {RecordChart,recordChartSpec,type RecordChartFields} from "./records/RecordChart";
 export {RecordEvents,recordEventRows} from "./records/RecordEvents";
+export {RecordCalendar,calendarRecords,adjacentCalendarMonth,validCalendarMonth,type CalendarFields} from "./records/RecordCalendar";

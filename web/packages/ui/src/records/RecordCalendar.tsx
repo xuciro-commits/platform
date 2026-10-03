@@ -1,0 +1,22 @@
+import {useState} from "react";
+import {Button} from "../primitives/button";
+import {t} from "../i18n";
+import {timelineTime} from "./RecordTimeline";
+import type {EntityRecord} from "./Records";
+
+export type CalendarFields={dateField:string;labelField:string;initialMonth:string;kind:"date"|"datetime"};
+export const validCalendarMonth=(value:string)=>/^(?!0000)\d{4}-(0[1-9]|1[0-2])$/.test(value);
+export function adjacentCalendarMonth(month:string,step:number):string|undefined {if(!validCalendarMonth(month)||![-1,1].includes(step))return;const n=Number(month.slice(0,4))*12+Number(month.slice(5))-1+step;if(n<12||n>119999)return;return `${String(Math.floor(n/12)).padStart(4,"0")}-${String(n%12+1).padStart(2,"0")}`;}
+export function calendarRecords(records:EntityRecord[],fields:CalendarFields) {
+ const rows=records.flatMap(record=>{const stamp=timelineTime(record[fields.dateField],fields.kind);if(stamp===undefined)return [];const d=new Date(stamp);if(d.getUTCFullYear()<1||d.getUTCFullYear()>9999)return [];return [{record,day:d.toISOString().slice(0,10),label:fields.labelField==="id"?record.id:String(record[fields.labelField]??record.id)}];});
+ return {rows,invalid:records.length-rows.length};
+}
+
+/** Caller-owned authorized window in; original records out. No date writes. */
+export function RecordCalendar({records,fields,scope="calendar",selected,onSelect,maxRecords=100}:{records:EntityRecord[];fields:CalendarFields;scope?:string;selected?:string;onSelect:(record?:EntityRecord)=>void;maxRecords?:number}) {
+ const identity=JSON.stringify([scope,fields]),[state,setState]=useState<{identity:string;month:string;day?:string}>(),month=state?.identity===identity?state.month:fields.initialMonth,day=state?.identity===identity?state.day:undefined;
+ if(!validCalendarMonth(month)||records.length>maxRecords)return <p role="alert">{t("Calendar month or record window is unavailable or out of bounds.")}</p>;
+ const model=calendarRecords(records,fields),year=Number(month.slice(0,4)),m=Number(month.slice(5))-1,first=new Date(0),last=new Date(0);first.setUTCFullYear(year,m,1);first.setUTCHours(0,0,0,0);last.setUTCFullYear(year,m+1,0);last.setUTCHours(0,0,0,0);const previous=adjacentCalendarMonth(month,-1),next=adjacentCalendarMonth(month,1);
+ const chooseMonth=(month:string)=>{setState({identity,month});onSelect(undefined);},chooseDay=(day:string)=>{setState({identity,month,day});onSelect(undefined);};
+ return <div className="grid min-w-0 grid-cols-1 gap-2"><div className="flex flex-wrap items-center justify-between gap-2"><Button size="sm" disabled={!previous} onClick={()=>previous&&chooseMonth(previous)}>{t("Previous month")}</Button><span className="text-sm tabular-nums">{month}</span><Button size="sm" disabled={!next} onClick={()=>next&&chooseMonth(next)}>{t("Next month")}</Button></div><p className="text-xs text-muted">{t(fields.kind==="date"?"Calendar uses original civil dates.":"Calendar groups business datetimes by UTC day.")}</p>{model.invalid>0&&<p role="status" className="text-xs text-warning">{t("{count} records have missing or invalid calendar dates.",{count:model.invalid})}</p>}<div className="grid min-w-0 grid-cols-7 gap-1">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><span key={d} className="text-center text-[10px] text-muted">{t(d)}</span>)}{Array.from({length:first.getUTCDay()},(_,i)=><span key={`empty:${i}`} aria-hidden/>)}{Array.from({length:last.getUTCDate()},(_,i)=>{const date=`${month}-${String(i+1).padStart(2,"0")}`,count=model.rows.filter(r=>r.day===date).length;return <Button key={date} variant={day===date?"primary":"ghost"} className="h-12 min-w-0 flex-col border border-border px-1 text-xs" aria-pressed={day===date} aria-label={t("{date} · {count} records",{date,count})} onClick={()=>chooseDay(date)}><span>{i+1}</span>{count>0&&<span className="text-[10px] font-semibold">{count}</span>}</Button>;})}</div>{day&&<div role="region" aria-label={t("Records on {date}",{date:day})} className="grid min-w-0 grid-cols-1 gap-1">{model.rows.filter(r=>r.day===day).map(r=><Button key={r.record.id} variant={selected===r.record.id?"primary":"ghost"} className="h-auto justify-start whitespace-normal text-left" aria-pressed={selected===r.record.id} onClick={()=>onSelect(r.record)}>{r.label}</Button>)}{!model.rows.some(r=>r.day===day)&&<p className="text-sm text-muted">{t("Nothing scheduled in this window on this day.")}</p>}</div>}</div>;
+}

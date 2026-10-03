@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.45",
+  "uiProfile": "platform.page.v2.46",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -1622,6 +1622,87 @@
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-calendar",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.46",
+      "title": "Record calendar",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "recordCalendar": {
+          "dateField": "",
+          "labelField": "id",
+          "initialMonth": ""
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordCalendar": {
+            "type": "object",
+            "properties": {
+              "dateField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "initialMonth": {
+                "type": "string",
+                "maxLength": 7
+              }
+            },
+            "required": [
+              "dateField",
+              "labelField",
+              "initialMonth"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.46"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -1669,7 +1750,8 @@
     "platform.page.v2.42",
     "platform.page.v2.43",
     "platform.page.v2.44",
-    "platform.page.v2.45"
+    "platform.page.v2.45",
+    "platform.page.v2.46"
   ],
   "runtime": {
     "scope": "page",
@@ -1796,6 +1878,11 @@
         "kind": "records",
         "type": "record-set",
         "widget": "table"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "record-calendar"
       }
     ],
     "loop": {
@@ -2077,6 +2164,10 @@
         "warning",
         "danger"
       ]
+    },
+    "recordCalendar": {
+      "requiredUIProfile": "platform.page.v2.46",
+      "maxRecords": 100
     }
   },
   "layout": {

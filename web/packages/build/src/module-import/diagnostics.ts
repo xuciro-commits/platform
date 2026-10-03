@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "calendar-profile":"Calendar import needs an original query collection and the supported record-calendar profile.",
+ "calendar-binding":"Map the original business date, choose a visible record title and declare a valid initial month.",
+ "native-calendar-window":"The calendar shows current-window records and uses original civil dates or UTC datetime days. Its initial month is explicit and navigation can cross years; changing month or day clears selection. Source local-time parsing and fixed-year behavior are not copied.",
  "events-profile":"Event timelines need an original query collection and the supported ordered event-list profile.",
  "events-binding":"Map the original business time, title and choice severity, and use unique original severity values with supported tones.",
  "native-event-window":"Events show the first 30 records of the ordered original window in UTC. Business time is explicitly mapped; record creation time is not substituted. Original severity tones and ID sorting can differ from the source.",

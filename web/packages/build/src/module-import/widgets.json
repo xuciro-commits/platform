@@ -565,9 +565,9 @@
       "sourceType": "Calendar",
       "sourceCategory": "Analytics",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-calendar",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "RangeSlider",

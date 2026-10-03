@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Calendar fields are unavailable or incompatible.": "日历字段不可用或不兼容。",
+ "Calendar counts and records cover the current query window.": "日历计数和记录覆盖当前查询窗口。",
  "This list shows original business events in the ordered query window.": "此列表显示排序查询窗口中的原业务事件。",
  "This chart shows ordered records in the current query window.": "此图表显示当前查询窗口中按序排列的记录。",
   "Inline action": "就地动作",
