@@ -709,9 +709,9 @@
       "sourceType": "Leaderboard",
       "sourceCategory": "Analytics",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-leaderboard",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "ObjectSetBuilder",

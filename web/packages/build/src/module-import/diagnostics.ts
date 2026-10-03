@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "leaderboard-binding":"Map an original numeric ranking field and visible title, and choose a supported ranking limit and direction.",
+ "leaderboard-order":"The retained named query owns an ordering that does not match this ranking.",
+ "leaderboard-profile":"Leaderboard requires the supported original Top-N query profile.",
+ "native-leaderboard-top":"Ranking uses an independent original query with numeric/ID order, zero offset and fixed Top-N limit. Original conditions and record identities remain; changing the ranking query clears selection. Client array sorting, missing-value coercion and source metadata formatting are not copied.",
  "summary-profile":"Summary statistics need an original integer or decimal field and matching complete-query statistics profile.",
  "native-summary-answer":"All five statistics use one original complete authorized aggregate answer. Count stays exact and numeric measures retain host precision. Missing or empty numeric measures remain empty; client arrays, zero filling and source metadata formatting are not copied.",
  "gauge-scalar":"Map the original sum, average, minimum or maximum field, or bind a supported numeric input. Function-backed values need their original result contract.",

@@ -73,6 +73,9 @@ func (t *Tenant) checkPageQueries(p platform.Page) error {
 				return fmt.Errorf("link source schema is unavailable")
 			}
 		}
+		if err := p.CheckLeaderboardQuery(id, named); err != nil {
+			return err
+		}
 		if err := p.CheckQuerySchema(q, object, named); err != nil {
 			return fmt.Errorf("page query %s: %w", id, err)
 		}

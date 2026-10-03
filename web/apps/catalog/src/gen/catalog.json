@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:5fa5fd5fb4fc485c",
+  "revision": "sha256:01b829db3b8c303b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1975,6 +1975,33 @@
       ]
     },
     {
+      "id": "ui/record-leaderboard",
+      "owner": "@platform/ui",
+      "name": "Authorized record leaderboard",
+      "summary": "Present original host-ranked Top-N records and emit their original identities.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordLeaderboard.tsx",
+      "exports": [
+        "RecordLeaderboard",
+        "leaderboardRows"
+      ],
+      "example": "RecordLeaderboardExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "leaderboard",
+        "rank",
+        "records"
+      ],
+      "constraints": [
+        "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records."
+      ]
+    },
+    {
       "id": "ui/record-list",
       "owner": "@platform/ui",
       "name": "Record list",
@@ -2389,6 +2416,7 @@
       "Authorized numeric gauge": "授权数值仪表",
       "Authorized record calendar": "受权记录日历",
       "Authorized record detail": "受权记录详情",
+      "Authorized record leaderboard": "授权记录排行榜",
       "Authorized record list": "受权记录列表",
       "Authorized record timeline": "授权记录时间轴",
       "Authorized summary statistics": "授权汇总统计",
@@ -2500,6 +2528,7 @@
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
+      "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
       "Present original ordered business intervals on an explicit fixed UTC range.": "在显式固定 UTC 范围呈现原排序业务区间。",
       "Pressed": "按下",
       "Published code function call": "已发布代码函数调用",
@@ -2572,6 +2601,7 @@
       "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
       "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
       "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
+      "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
       "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
@@ -2703,6 +2733,7 @@
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/InlineActionInspector.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ProgressInspector.tsx",
@@ -2754,6 +2785,7 @@
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
@@ -2780,6 +2812,7 @@
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
+      "web/packages/app/src/widgets/Leaderboard.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
       "web/packages/app/src/widgets/Progress.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
@@ -3018,6 +3051,9 @@
     ],
     "ui/record-kanban": [
       "web/packages/app/src/widgets/Kanban.tsx"
+    ],
+    "ui/record-leaderboard": [
+      "web/packages/app/src/widgets/Leaderboard.tsx"
     ],
     "ui/pivot": [
       "web/packages/app/src/widgets/Pivot.tsx"

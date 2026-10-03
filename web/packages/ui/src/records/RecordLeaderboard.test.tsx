@@ -1,0 +1,9 @@
+import {cleanup,fireEvent,render,screen} from "@testing-library/react";
+import {afterEach,expect,test,vi} from "vitest";
+import {RecordLeaderboard,leaderboardRows} from "./RecordLeaderboard";
+import type {EntityInfo,EntityRecord} from "./Records";
+afterEach(cleanup);
+const info={type:"sample.asset",app:"sample",title:"Asset",plural:"Assets",fields:[{name:"title",title:"Title",type:"text"},{name:"qty",title:"Exposure",type:"decimal"}]} as EntityInfo;
+const fields={valueField:"qty",labelField:"title",limit:8,ascending:false},row=(id:string,qty:unknown):EntityRecord=>({id,revision:1,created:{by:"test",at:"2026-01-01T00:00:00Z"},changed:{by:"test",at:"2026-01-01T00:00:00Z"},title:id,qty});
+test("leaderboard preserves caller order and original record identity, signed values and bounded ranks",()=>{const records=[row("Z",100),row("A",100),row("N",-20)],model=leaderboardRows(records,info,fields)!;expect(model.rows.map(r=>r.record)).toEqual(records);expect(model.rows.map(r=>r.rank)).toEqual([1,2,3]);expect(model.rows[2]!.value).toBe(-20);const select=vi.fn();render(<RecordLeaderboard records={records} info={info} fields={fields} total={20} onSelect={select}/>);fireEvent.click(screen.getByRole("button",{name:"A"}));expect(select).toHaveBeenLastCalledWith(records[1]);expect(screen.getByRole("status").textContent).toContain("Top 3 of 20");});
+test("leaderboard rejects missing values, hidden fields and over-bound windows without coercion or local sorting",()=>{for(const value of [null,undefined,"",{},Infinity])expect(leaderboardRows([row("A",value)],info,fields)).toBeUndefined();expect(leaderboardRows(Array.from({length:9},(_,i)=>row(String(i),i)),info,fields)).toBeUndefined();expect(leaderboardRows([row("A",1)],{...info,fields:info.fields.filter(f=>f.name!=="qty")},fields)).toBeUndefined();expect(leaderboardRows([row("A","0.1")],info,fields)!.rows[0]!.value).toBe(0.1);});

@@ -110,6 +110,7 @@ type Section struct {
 	RecordChart           *PageRecordChart        `json:"recordChart,omitempty"`
 	RecordList            *PageRecordList         `json:"recordList,omitempty"`
 	HeadingLevel          string                  `json:"headingLevel,omitempty"`
+	Leaderboard           *PageLeaderboard        `json:"leaderboard,omitempty"`
 	SummaryField          string                  `json:"summaryField,omitempty"`
 	StatisticsVariable    string                  `json:"statisticsVariable,omitempty"`
 	Gauge                 *PageGauge              `json:"gauge,omitempty"`

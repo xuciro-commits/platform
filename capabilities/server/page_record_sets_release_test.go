@@ -199,6 +199,18 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Variables[spec.id+"Stats"] = platform.PageVariable{Scope: "page", Type: "statistics", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "statistics", Query: "metricq", Measure: spec.field}}
 		sections = append(sections, build.Section{ID: spec.id, Widget: "summary-stats", ConfigVersion: 1, CollectionVariable: "metricWindow", StatisticsVariable: spec.id + "Stats", SummaryField: spec.field})
 	}
+	for _, spec := range []struct{ id, value, label string }{{"rank", "amount", "name"}, {"hiddenRankValue", "sensitive", "name"}, {"hiddenRankTitle", "amount", "secret"}} {
+		qid := spec.id + "Query"
+		window := spec.id + "Window"
+		doc.Queries[qid] = platform.PageQuery{Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.note"}, Sort: []string{"-" + spec.value, "id"}, Limit: 8}
+		doc.Variables[window] = platform.PageVariable{Scope: "page", Type: "object-set", Mode: "resource", Source: &platform.PageResourceSource{Kind: "plan", Query: qid}}
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "record-leaderboard", ConfigVersion: 1, CollectionVariable: window, Leaderboard: &platform.PageLeaderboard{ValueField: spec.value, LabelField: spec.label, Limit: 8}})
+	}
+	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -224,6 +236,11 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[47].Leaderboard = &platform.PageLeaderboard{ValueField: "amount", LabelField: "id", Limit: 4, Ascending: true}
+	rankQuery := doc.Queries["rankQuery"]
+	rankQuery.Sort = []string{"amount", "id"}
+	rankQuery.Limit = 4
+	doc.Queries["rankQuery"] = rankQuery
 	sections[45].SummaryField = "sensitive"
 	sections[45].StatisticsVariable = "hiddenSummaryStats"
 	sections[43].Gauge = &platform.PageGauge{Max: 200, Label: "Later availability"}
@@ -249,6 +266,21 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					rank, privateRanks := false, 0
+					for _, s := range d.Page.Sections {
+						if s.ID == "rank" {
+							r := s.Leaderboard
+							q := d.Page.Document.Queries[d.Page.Document.Variables[s.CollectionVariable].Source.Query]
+							rank = r != nil && r.ValueField == "amount" && r.LabelField == "name" && r.Limit == 8 && !r.Ascending && q.Limit == 8 && len(q.Sort) == 2 && q.Sort[0] == "-amount" && q.Sort[1] == "id"
+						}
+						if s.ID == "hiddenRankValue" || s.ID == "hiddenRankTitle" {
+							privateRanks++
+						}
+					}
+					if !rank || privateRanks != map[bool]int{true: 2, false: 0}[member.ID == builder.ID] || d.Page.Document.Variables["rankRecord"].Source.Section != "rank" {
+						t.Fatal("frozen leaderboard/producer or private ranking changed")
+					}
+
 					summary, privateSummary := false, false
 					for _, s := range d.Page.Sections {
 						if s.ID == "summary" {

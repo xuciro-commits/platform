@@ -553,4 +553,10 @@ export default {
   "Authorized summary statistics": "授权汇总统计",
   "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
   "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
+  "Leaderboard fields, limit or values are unavailable or incompatible.": "排行榜字段、条数或数值不可用或不兼容。",
+  "Top {shown} of {total} matching records · {field}": "匹配记录 {total} 条中的前 {shown} 条 · {field}",
+  "No ranked records.": "没有排名记录。",
+  "Authorized record leaderboard": "授权记录排行榜",
+  "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
+  "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
 } as Record<string, string>;

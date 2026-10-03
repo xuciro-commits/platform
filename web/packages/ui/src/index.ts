@@ -61,3 +61,4 @@ export {RecordGantt,recordGanttRows,ganttRange} from "./records/RecordGantt";
 export {Progress,progressRatio} from "./components/Progress";
 export {Gauge,gaugeModel} from "./components/Gauge";
 export {SummaryStatistics,type StatisticsValue} from "./components/SummaryStatistics";
+export {RecordLeaderboard,leaderboardRows} from "./records/RecordLeaderboard";

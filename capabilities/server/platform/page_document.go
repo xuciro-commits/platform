@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "record-leaderboard" || s.Leaderboard != nil {
+				return fmt.Errorf("leaderboard needs a document")
+			}
 			if s.Widget == "summary-stats" || s.SummaryField != "" || s.StatisticsVariable != "" {
 				return fmt.Errorf("summary needs a document")
 			}
@@ -176,6 +179,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkLeaderboard(section); err != nil {
+			return err
+		}
 		if err := d.checkSummary(section); err != nil {
 			return err
 		}

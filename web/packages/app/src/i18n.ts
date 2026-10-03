@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Ranking window is unavailable.": "排名窗口不可用。",
+ "Ranking window ordering or bounds changed.": "排名窗口的顺序或范围已改变。",
  "Statistics are unavailable or loading.": "统计不可用或正在加载。",
  "Statistics fields or result are unavailable or incompatible.": "统计字段或结果不可用或不兼容。",
  "Statistics result is invalid.": "统计结果无效。",

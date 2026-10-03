@@ -994,6 +994,13 @@ export type PageLayoutSize = {
   scroll?: string;
 };
 
+export type PageLeaderboard = {
+  valueField: string;
+  labelField: string;
+  limit: number;
+  ascending: boolean;
+};
+
 export type PageLoop = {
   collection: string;
   itemVariable: string;
@@ -1433,6 +1440,7 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  leaderboard?: PageLeaderboard;
   summaryField?: string;
   statisticsVariable?: string;
   gauge?: PageGauge;
@@ -1771,7 +1779,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.50",
+  "uiProfile": "platform.page.v2.51",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3793,6 +3801,93 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-leaderboard",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.51",
+      "title": "Record leaderboard",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "leaderboard": {
+          "valueField": "",
+          "labelField": "id",
+          "limit": 8,
+          "ascending": false
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "selection"
+      ],
+      "selectionMode": "write",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "leaderboard": {
+            "type": "object",
+            "properties": {
+              "valueField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "labelField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32
+              },
+              "ascending": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "valueField",
+              "labelField",
+              "limit",
+              "ascending"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.51"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3845,7 +3940,8 @@ export const pageUIManifest = {
     "platform.page.v2.47",
     "platform.page.v2.48",
     "platform.page.v2.49",
-    "platform.page.v2.50"
+    "platform.page.v2.50",
+    "platform.page.v2.51"
   ],
   "runtime": {
     "scope": "page",
@@ -3993,6 +4089,11 @@ export const pageUIManifest = {
         "kind": "record",
         "type": "record",
         "widget": "record-calendar"
+      },
+      {
+        "kind": "record",
+        "type": "record",
+        "widget": "record-leaderboard"
       }
     ],
     "loop": {
@@ -4303,6 +4404,10 @@ export const pageUIManifest = {
     },
     "summary": {
       "requiredUIProfile": "platform.page.v2.50"
+    },
+    "leaderboard": {
+      "requiredUIProfile": "platform.page.v2.51",
+      "maxRanks": 32
     }
   },
   "layout": {

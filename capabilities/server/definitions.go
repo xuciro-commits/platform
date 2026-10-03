@@ -447,6 +447,9 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 							continue
 						}
 					}
+					if section.CheckLeaderboard(shown) != nil {
+						continue
+					}
 					if section.CheckSummary(shown) != nil {
 						continue
 					}

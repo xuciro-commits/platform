@@ -2,6 +2,20 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Break equal values by record ID": "同值按记录 ID 排序",
+ "Record leaderboard": "记录排行榜",
+ "Ranking query window": "排名查询窗口",
+ "Ranking value field": "排名数值字段",
+ "Ranking title field": "排名标题字段",
+ "Ranking limit": "排名条数",
+ "Ascending ranking": "升序排名",
+ "Map leaderboard {widget}": "映射排行榜 {widget}",
+ "Set the original query to numeric direction then ID, zero offset and this limit. Ranking queries keep a fixed view; named ordering must match.": "将原查询设为数值方向后按 ID 排序、零偏移及此条数。排名查询保持固定视图，具名排序须匹配。",
+ "Bind ranking fields and a matching numeric/ID sorted Top-N query before saving.": "保存前请绑定排名字段及匹配的数值/ID 排序 Top-N 查询。",
+ "Map an original numeric ranking field and visible title, and choose a supported ranking limit and direction.": "映射原数值排名字段和可见标题，选择受支持的排名条数与方向。",
+ "The retained named query owns an ordering that does not match this ranking.": "保留的具名查询排序与此排名不匹配。",
+ "Leaderboard requires the supported original Top-N query profile.": "排行榜需要受支持的原 Top-N 查询配置。",
+ "Ranking uses an independent original query with numeric/ID order, zero offset and fixed Top-N limit. Original conditions and record identities remain; changing the ranking query clears selection. Client array sorting, missing-value coercion and source metadata formatting are not copied.": "排名使用具有数值/ID 排序、零偏移及固定 Top-N 条数的独立原查询。保留原条件与记录身份，改变排名查询会清理选择。不复制客户端数组排序、缺失值强制转换和来源元数据格式。",
  "Summary statistics": "汇总统计",
  "Summary query window": "汇总查询窗口",
  "Summary numeric field": "汇总数值字段",
