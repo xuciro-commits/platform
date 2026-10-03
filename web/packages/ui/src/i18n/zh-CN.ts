@@ -531,4 +531,10 @@ export default {
   "Authorized task Gantt": "授权任务甘特图",
   "Present original ordered business intervals on an explicit fixed UTC range.": "在显式固定 UTC 范围呈现原排序业务区间。",
   "The caller owns the authorized window; this presentation does not reorder records, filter by the viewport, or write dates.": "调用方拥有授权窗口；此呈现不重排记录，不按视窗筛选，也不写入日期。",
+  "Progress": "进度",
+  "Progress needs a valid nonnegative value and a positive total.": "进度需要有效非负分子和正数分母。",
+  "Value exceeds total; the bar is capped at 100%.": "分子超出总数；条形最高显示 100%。",
+  "Exact decimal progress": "精确十进制进度",
+  "Show exact authorized scalar values with a bounded progress ratio.": "以有界进度比例显示精确授权标量。",
+  "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
 } as Record<string, string>;

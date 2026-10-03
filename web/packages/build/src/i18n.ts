@@ -2,6 +2,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Progress": "进度",
+ "Progress label": "进度标签",
+ "Progress value variable": "进度分子变量",
+ "Progress total variable": "进度分母变量",
+ "Choose a decimal variable": "选择十进制变量",
+ "Use a fixed total": "使用固定总数",
+ "Fixed progress total": "固定进度总数",
+ "Bind exact decimal values. Query counts cover the complete authorized set; an invalid total never becomes 1.": "绑定精确十进制数值。查询计数覆盖完整授权集合，无效总数不会替换为 1。",
+ "Bind a decimal numerator and exactly one positive fixed total or decimal denominator before saving.": "保存前请绑定十进制分子，并选择一个正数固定总数或十进制分母。",
+ "Progress values need a supported numeric variable; original input text is converted by the declared decimal operator.": "进度数值需要受支持的数值变量；原输入文本通过声明的十进制运算转换。",
+ "Map progress aggregations to an original complete count. Other aggregate scalar outputs need their own supported binding.": "将进度聚合映射为原完整集合计数；其他聚合标量输出需要对应的受支持绑定。",
+ "Choose exactly one denominator variable or a positive fixed decimal total.": "选择一个分母变量或正数固定十进制总数。",
+ "Progress labels need bounded plain text.": "进度标签需要有界纯文本。",
+ "Progress requires the supported decimal-input profile.": "进度需要受支持的十进制输入配置。",
+ "Progress uses original complete counts or typed decimal values. Invalid or missing inputs remain explicit; zero totals are not replaced by 1. The bar is capped at 100% while over-total values are reported. Source numeric coercion and fabricated fallback values are not copied.": "进度使用原完整计数或类型化十进制数值。无效或缺失输入明确提示，零总数不替换为 1。条形最高 100%，超出总数另作提示。来源数值强制转换及虚构回退值不复制。",
  "Record Gantt": "记录甘特图",
  "Gantt query window": "甘特图查询窗口",
  "Map task Gantt {widget}": "映射任务甘特图 {widget}",

@@ -5,7 +5,7 @@ import {
   FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
-  RecordGantt, RecordCalendar, RecordEvents, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
+  Progress, RecordGantt, RecordCalendar, RecordEvents, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
   type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
@@ -321,3 +321,5 @@ export function RecordCalendarExample(){const [selected,setSelected]=useState<En
 export function RecordEventsExample(){const info:EntityInfo={...demoInfo,fields:[{name:"title",title:"Event title",type:"text"},{name:"raised",title:"Business time",type:"datetime"},{name:"severity",title:"Severity",type:"choice",choices:["high","low"]}]};return <RecordEvents info={info} records={[{id:"E1",revision:1,created:stamp,changed:stamp,title:"Temperature exceeded threshold",raised:"2026-10-02T08:00:00Z",severity:"high"}]} fields={{timeField:"raised",titleField:"title",severityField:"severity",tones:[{value:"high",tone:"danger"}]}}/>;}
 
 export function RecordGanttExample(){const info:EntityInfo={...demoInfo,fields:[{name:"title",title:"Task",type:"text"},{name:"begin",title:"Start",type:"datetime"},{name:"due",title:"Due",type:"date"},{name:"status",title:"Status",type:"choice",choices:["open","done"]}]};return <RecordGantt info={info} records={[{id:"WO1",revision:1,created:stamp,changed:stamp,title:"Inspect bearing",begin:"2026-09-20T08:00:00Z",due:"2026-10-04",status:"open"}]} fields={{startField:"begin",endField:"due",titleField:"title",statusField:"status",rangeStart:"2026-09-01",rangeEnd:"2026-11-01",tones:[{value:"open",tone:"warning"}]}}/>;}
+
+export function ProgressExample(){return <Progress value="83" total="100" label="Completed work"/>;}

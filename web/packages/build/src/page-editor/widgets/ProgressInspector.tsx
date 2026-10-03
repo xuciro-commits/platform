@@ -1,0 +1,9 @@
+import {Input,Select,t} from "@platform/ui";
+import {parsePageDecimal as parseDecimal} from "@platform/app";
+import {variableAccessible} from "../../page-layout";
+import type {Api} from "@platform/kernel";
+import type {AuthoringSection} from "../draft";
+export function ProgressInspector({section,document,overlay,itemOwner,onChange}:{section:AuthoringSection;document:Api.PageDocument;overlay?:string;itemOwner?:string;onChange:(patch:Partial<AuthoringSection>)=>void}) {
+ const choices=Object.entries(document.variables??{}).filter(([,v])=>v.type==="decimal"&&variableAccessible(v,itemOwner,overlay));
+ return <><label className="grid gap-1 text-xs">{t("Progress label")}<Input value={section.progressLabel??""} maxLength={1024} onChange={e=>onChange({progressLabel:e.target.value||undefined})}/></label><label className="grid gap-1 text-xs">{t("Progress value variable")}<Select value={section.progressValueVariable??""} onChange={e=>onChange({progressValueVariable:e.target.value||undefined})}><option value="">{t("Choose a decimal variable")}</option>{choices.map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label><label className="grid gap-1 text-xs">{t("Progress total variable")}<Select value={section.progressTotalVariable??""} onChange={e=>onChange({progressTotalVariable:e.target.value||undefined,progressTotal:e.target.value?undefined:"100"})}><option value="">{t("Use a fixed total")}</option>{choices.map(([id,v])=><option key={id} value={id}>{v.title||id}</option>)}</Select></label>{!section.progressTotalVariable&&<label className="grid gap-1 text-xs">{t("Fixed progress total")}<Input inputMode="decimal" value={section.progressTotal??""} maxLength={128} onChange={e=>onChange({progressTotal:parseDecimal(e.target.value)?.value??e.target.value})}/></label>}<p className="text-xs text-muted">{t("Bind exact decimal values. Query counts cover the complete authorized set; an invalid total never becomes 1.")}</p></>;
+}

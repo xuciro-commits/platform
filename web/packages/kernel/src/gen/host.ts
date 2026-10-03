@@ -1425,6 +1425,10 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  progressLabel?: string;
+  progressValueVariable?: string;
+  progressTotalVariable?: string;
+  progressTotal?: string;
   countVariable?: string;
   metricPresentation?: PageMetricPresentation;
   statusTracker?: PageStatusTracker;
@@ -1755,7 +1759,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.47",
+  "uiProfile": "platform.page.v2.48",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3586,6 +3590,65 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "progress",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.48",
+      "title": "Progress",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "progressTotal": "100"
+      },
+      "bindingKinds": [
+        "progress-value",
+        "progress-total"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "progressTotal": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "progressLabel": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "value",
+          "bindingField": "progressValueVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.48"
+        },
+        {
+          "id": "total",
+          "bindingField": "progressTotalVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.48"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3635,7 +3698,8 @@ export const pageUIManifest = {
     "platform.page.v2.44",
     "platform.page.v2.45",
     "platform.page.v2.46",
-    "platform.page.v2.47"
+    "platform.page.v2.47",
+    "platform.page.v2.48"
   ],
   "runtime": {
     "scope": "page",
@@ -3714,6 +3778,13 @@ export const pageUIManifest = {
         "output": "boolean",
         "minArgs": 2,
         "maxArgs": 2
+      },
+      {
+        "id": "parse-decimal",
+        "input": "string",
+        "output": "decimal",
+        "minArgs": 1,
+        "maxArgs": 1
       }
     ],
     "resources": [
@@ -3789,7 +3860,8 @@ export const pageUIManifest = {
         "text",
         "button",
         "input",
-        "button-group"
+        "button-group",
+        "progress"
       ],
       "maxDepth": 2
     },
@@ -4064,6 +4136,9 @@ export const pageUIManifest = {
         "danger"
       ],
       "maxRows": 20
+    },
+    "progress": {
+      "requiredUIProfile": "platform.page.v2.48"
     }
   },
   "layout": {

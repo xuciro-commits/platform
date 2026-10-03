@@ -1,13 +1,13 @@
 import type {Api} from "@platform/kernel";
 
-type Section = {countVariable?:string;selectionSetVariable?:string;facets?:Api.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
+type Section = {progressValueVariable?:string;progressTotalVariable?:string;countVariable?:string;selectionSetVariable?:string;facets?:Api.PageFacet[];filterSearchVariable?:string;id?:string;widget:string;object?:string;selection?:string;parentSelection?:string;relation?:string;inputs?:Record<string,Api.Binding>;recordVariable?:string;selectionVariable?:string;collectionVariable?:string;filterVariable?:string};
 type Draft<S extends Section> = {document:Api.PageDocument;sections:S[];selections:Api.SelectionVariable[]};
 export type LayoutClipboard<S extends Section> = {draft:Draft<S>;root:string;object:string;overlay?:string};
 export type ClipboardIssue = "unsupported" | "scope" | "invalid" | "dependencies" | "budget" | "tab-binding" | "overlay-entry";
 type Result<T> = {value:T;issue?:never} | {issue:ClipboardIssue;value?:never};
 type Limits = {maxVariables:number;query:{maxPlans:number;maxTotalLimit:number};loop:{maxContainers:number;maxItems:number;maxTotalItems:number;maxDepth:number};aggregate:{maxVariables:number;maxExpandedReads:number};selectionWriters:readonly string[];selectionWidgets:readonly string[];references:Readonly<Record<string,readonly string[]>>};
 const nodeFields=["valueVariable","activeVariable","visibleWhen","enabledWhen"] as const;
-const sectionFields=["countVariable","recordVariable","selectionVariable","collectionVariable","filterVariable","filterSearchVariable","selectionSetVariable"] as const;
+const sectionFields=["progressValueVariable","progressTotalVariable","countVariable","recordVariable","selectionVariable","collectionVariable","filterVariable","filterSearchVariable","selectionSetVariable"] as const;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const layoutKinds=["rows","columns","tabs","flow","toolbar","loop"];
 function inMainPage(document:Api.PageDocument,id:string,wholeLoop=false):boolean {

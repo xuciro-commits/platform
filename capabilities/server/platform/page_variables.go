@@ -42,6 +42,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Progress struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+	} `json:"progress"`
 	RecordGantt struct {
 		RequiredUIProfile string   `json:"requiredUIProfile"`
 		MaxRows           int      `json:"maxRows"`
@@ -381,6 +384,9 @@ func (d *PageDocument) CheckVariables() error {
 				return fail("derived variable needs only an expression")
 			}
 			expr := v.Expression
+			if expr != nil && expr.Op == "parse-decimal" && !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.Progress.RequiredUIProfile) {
+				return fail("parse-decimal requires its profile")
+			}
 			at := slices.IndexFunc(contract.Operators, func(op pageOperator) bool { return op.ID == expr.Op })
 			if at < 0 {
 				return fail("unsupported operator")

@@ -79,7 +79,7 @@ var pageWidgets = func() pageUIContract {
 		seen[widget.ComponentID] = true
 		fields := map[string]bool{}
 		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
-			if port.ID == "" || fields[port.BindingField] || !slices.Contains([]string{"recordVariable", "collectionVariable", "selectionVariable", "filterVariable", "selectionSetVariable", "countVariable", "enabledWhen"}, port.BindingField) || !slices.Contains([]string{"record", "record-set", "object-set", "filter", "boolean", "decimal"}, port.Type) || !slices.Contains(manifest.SupportedProfiles, port.RequiredUIProfile) {
+			if port.ID == "" || fields[port.BindingField] || !slices.Contains([]string{"recordVariable", "collectionVariable", "selectionVariable", "filterVariable", "selectionSetVariable", "countVariable", "progressValueVariable", "progressTotalVariable", "enabledWhen"}, port.BindingField) || !slices.Contains([]string{"record", "record-set", "object-set", "filter", "boolean", "decimal"}, port.Type) || !slices.Contains(manifest.SupportedProfiles, port.RequiredUIProfile) {
 				panic("invalid page widget port")
 			}
 			fields[port.BindingField] = true
@@ -170,7 +170,7 @@ func (d *PageDocument) checkWidgetPorts(s Section) error {
 	if w := pageWidget(s.Widget); w != nil && !PageUIProfileSupports(d.UIProfile, w.RequiredUIProfile) {
 		return fmt.Errorf("widget %s requires UI profile %s", s.Widget, w.RequiredUIProfile)
 	}
-	for field, id := range map[string]string{"countVariable": s.CountVariable, "recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable, "selectionSetVariable": s.SelectionSetVariable} {
+	for field, id := range map[string]string{"progressValueVariable": s.ProgressValueVariable, "progressTotalVariable": s.ProgressTotalVariable, "countVariable": s.CountVariable, "recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable, "selectionSetVariable": s.SelectionSetVariable} {
 		if id == "" {
 			continue
 		}

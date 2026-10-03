@@ -127,6 +127,16 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   if(!base)return {};let output=collection;if(predicates.length){const query=id("metric_query",sourceID),value=id("metric_set",sourceID);document.queries![query]={...base,conditions:[...(base.conditions??[]),...predicates]};document.variables![value]={scope:context.kind,owner:context.owner,type:"object-set",mode:"resource",source:{kind:"plan",query}};output=value;}
   issue(path,"native-metric-aggregate",false);return {collectionVariable:output,measure,object:e?.type===target.object?undefined:e?.type};
  };
+ const progressScalar=(sourceID:string,context:{kind:"page"|"overlay";owner?:string},path:string)=>{
+  const v=vars.get(sourceID);if(!v||v.type!=="numeric"){issue(path,"progress-scalar");return "";}
+  if(v.definitionKind==="static"){
+   const input=variable(sourceID,context,path),mapped=id("progress_decimal",sourceID);document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:"decimal",mode:"derived",expression:{op:"parse-decimal",args:[{variable:input}]}};return mapped;
+  }
+  const value=metric(sourceID,context,path),resource=document.variables![value.collectionVariable??""],query=resource?.source?.query;
+  if(value.measure!=="count"||!query){issue(path,"progress-count");return "";}
+  const previous=scope.get(sourceID);if(previous&&(previous.kind!==context.kind||previous.owner!==context.owner)){issue(path,"variable-scope");return "";}scope.set(sourceID,context);const mapped=id("variable",sourceID);ids.variables[sourceID]=mapped;
+  document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:"decimal",mode:"aggregate",source:{kind:"count",query}};return mapped;
+ };
  const widget=(sourceID:string,owner?:string)=>{
   const w=m.widgets[sourceID];if(!w){issue(`/widgets/${pointer(sourceID)}`,"widget-reference");return "";}
   if(usedWidgets.has(sourceID)){issue(`/widgets/${pointer(sourceID)}`,"multiple-parents");return id("leaf",sourceID);}usedWidgets.add(sourceID);
@@ -143,6 +153,13 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   }
   if(w.type==="HeaderText"){safeKeys(config,["text","variant"],`${path}/config`);section.text=text(config.text);section.headingLevel=text(config.variant)||"h2";if(typeof config.text!=="string"||!section.text.trim()||new TextEncoder().encode(section.text).length>pageUIManifest.runtime.titles.maxTextBytes||config.variant!==undefined&&typeof config.variant!=="string"||!(pageUIManifest.runtime.titles.headingLevels as readonly string[]).includes(section.headingLevel))issue(`${path}/config`,"title-profile");}
   if(w.type==="ObjectSetTitle"){safeKeys(config,["objectSetVarId"],`${path}/config`);const source=text(config.objectSetVarId);section.collectionVariable=variable(source,context,`${path}/config/objectSetVarId`);const input=document.variables![section.collectionVariable],query=input?.source?.query,external=queryObjects.get(source)||"",e=entity(external,`${path}/config/objectSetVarId`);section.object=e?.type===target.object?undefined:e?.type;section.title=text(vars.get(source)?.name)||source;section.countVariable=id("count",source);document.variables![section.countVariable]={title:section.title,scope:context.kind,owner:context.owner,type:"decimal",mode:"aggregate",source:{kind:"count",query}};if(!query)issue(`${path}/config/objectSetVarId`,"title-profile");issue(`${path}/config`,"native-collection-title",false);}
+  if(w.type==="ProgressBar"){
+   safeKeys(config,["valueVarId","totalVarId","total","label"],`${path}/config`);if(config.totalVarId!==undefined&&typeof config.totalVarId!=="string")issue(`${path}/config/totalVarId`,"progress-total");section.progressValueVariable=progressScalar(text(config.valueVarId),context,`${path}/config/valueVarId`);
+   if(config.totalVarId){section.progressTotalVariable=progressScalar(text(config.totalVarId),context,`${path}/config/totalVarId`);if(config.total!==undefined)issue(`${path}/config/total`,"progress-total");}
+   else {const total=config.total===undefined?100:config.total;section.progressTotal=String(total);if(typeof total!=="number"||!Number.isFinite(total)||total<=0||!/(?:^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$)/.test(String(total)))issue(`${path}/config/total`,"progress-total");}
+   if(config.label!==undefined){if(typeof config.label!=="string"||!text(config.label).trim()||new TextEncoder().encode(text(config.label)).length>1024)issue(`${path}/config/label`,"progress-label");else section.progressLabel=text(config.label);}
+   if(Number(target.profile.split(".").at(-1))<Number(pageUIManifest.runtime.progress.requiredUIProfile.split(".").at(-1)))issue(path,"progress-profile");issue(`${path}/config`,"native-progress-values",false);
+  }
   if(w.type==="Gantt"){
    safeKeys(config,["objectSetVarId"],`${path}/config`);const input=text(config.objectSetVarId);section.collectionVariable=variable(input,context,`${path}/config/objectSetVarId`);const resource=document.variables![section.collectionVariable],external=queryObjects.get(input)||"",e=entity(external,`${path}/config/objectSetVarId`),binding=own(bindings.gantts??{},sourceID),limits=pageUIManifest.runtime.recordGantt;
    section.object=e?.type===target.object?undefined:e?.type;const start=obj(binding)?text(binding.startField):"",end=obj(binding)?text(binding.endField):"",title=obj(binding)?text(binding.titleField):"",status=obj(binding)?text(binding.statusField):"",rangeStart=obj(binding)?text(binding.rangeStart):"",rangeEnd=obj(binding)?text(binding.rangeEnd):"",tones=obj(binding)?arr(binding.tones):[],choices=e?.fields.find(f=>f.name===status)?.choices??[];

@@ -173,6 +173,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "record-gantt", ConfigVersion: 1, CollectionVariable: "metricWindow", RecordGantt: &platform.PageRecordGantt{StartField: spec.start, EndField: spec.end, TitleField: spec.title, StatusField: spec.status, RangeStart: "2026-09-01", RangeEnd: "2026-11-01", Tones: []platform.PageEventTone{{Value: "high", Tone: "danger"}}}})
 	}
+	doc.Queries["privateProgressQuery"] = platform.PageQuery{Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.note"}, Limit: 1, Conditions: []platform.PageQueryCondition{{Field: "secret", Op: "=", Value: platform.PageValue{Literal: platform.Raw("private")}}}}
+	doc.Variables["privateProgressCount"] = platform.PageVariable{Scope: "page", Type: "decimal", Mode: "aggregate", Source: &platform.PageResourceSource{Kind: "count", Query: "privateProgressQuery"}}
+	for _, spec := range []struct{ id, value, total, fixed string }{{"progress", "collectionCount", "", "400"}, {"dualProgress", "collectionCount", "collectionCount", ""}, {"hiddenProgressValue", "privateProgressCount", "", "400"}, {"hiddenProgressTotal", "collectionCount", "privateProgressCount", ""}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "progress", ConfigVersion: 1, ProgressValueVariable: spec.value, ProgressTotalVariable: spec.total, ProgressTotal: spec.fixed, ProgressLabel: "Frozen progress"})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -198,6 +207,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[39].ProgressTotal = "800"
+	sections[39].ProgressLabel = "Later progress"
+	sections[40].ProgressTotalVariable = "privateProgressCount"
 	sections[34].RecordGantt = &platform.PageRecordGantt{StartField: "raised", EndField: "due", TitleField: "id", StatusField: "severity", RangeStart: "2027-01-01", RangeEnd: "2027-02-01", Tones: []platform.PageEventTone{{Value: "high", Tone: "warning"}}}
 	sections[27].RecordEvents = &platform.PageRecordEvents{TimeField: "raised", TitleField: "id", SeverityField: "severity", Tones: []platform.PageEventTone{{Value: "high", Tone: "warning"}}}
 	sections[10].Text = "Later heading"
@@ -216,6 +228,21 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					progress, dual, privateProgress := false, false, 0
+					for _, s := range d.Page.Sections {
+						if s.ID == "progress" {
+							progress = s.ProgressValueVariable == "collectionCount" && s.ProgressTotal == "400" && s.ProgressLabel == "Frozen progress"
+						}
+						if s.ID == "dualProgress" {
+							dual = s.ProgressTotalVariable == "collectionCount" && s.ProgressValueVariable == "collectionCount"
+						}
+						if s.ID == "hiddenProgressValue" || s.ID == "hiddenProgressTotal" {
+							privateProgress++
+						}
+					}
+					if !progress || !dual || member.ID == builder.ID && privateProgress != 2 || member.ID != builder.ID && privateProgress != 0 {
+						t.Fatal("frozen progress or private scalar projection changed")
+					}
 					gantt := false
 					privateGantts := 0
 					for _, s := range d.Page.Sections {

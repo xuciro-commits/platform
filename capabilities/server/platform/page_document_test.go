@@ -82,6 +82,7 @@ func TestPageVariableSharedVectors(t *testing.T) {
 	}
 	var vectors []struct {
 		Name      string
+		UIProfile string
 		Variables map[string]PageVariable
 		Valid     bool
 	}
@@ -90,7 +91,7 @@ func TestPageVariableSharedVectors(t *testing.T) {
 	}
 	for _, vector := range vectors {
 		t.Run(vector.Name, func(t *testing.T) {
-			d := &PageDocument{Variables: vector.Variables}
+			d := &PageDocument{UIProfile: vector.UIProfile, Variables: vector.Variables}
 			err := d.CheckVariables()
 			if (err == nil) != vector.Valid {
 				t.Fatalf("valid=%v: %v", vector.Valid, err)

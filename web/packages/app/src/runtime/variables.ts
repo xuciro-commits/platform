@@ -80,6 +80,7 @@ export function compileVariables(variables: Variables, contract: Contract) {
 }
 
 const operators: Record<Contract["operators"][number]["id"], (values: Scalar[]) => Scalar> = {
+ "parse-decimal":([text])=>{const value=parseDecimal(text as string);if(!value)throw new Error("Invalid numeric value.");return value;},
   equal: ([a, b]) => isDecimal(a)&&isDecimal(b)?compareDecimal(a,b)===0:a === b, not: ([a]) => !a,
   and: (values) => values.every((value) => value === true), or: (values) => values.some((value) => value === true),
   concat: (values) => values.join(""),
@@ -116,7 +117,7 @@ export function evaluateVariables(variables: Variables, state: Record<string, un
     if (inputs.some((input) => input.status === "pending")) { result[id] = { status: "pending" }; continue; }
     if (expression.op === "present" && inputs[0]?.status === "empty") { result[id] = { status: "value", value: false }; continue; }
     if (inputs.some((input) => input.status === "empty")) { result[id] = { status: "empty" }; continue; }
-    let value:Scalar;try {value = operators[expression.op as keyof typeof operators](inputs.map((input) => (input as { value: Scalar }).value));}catch {result[id]={status:"error",code:"Numeric result exceeds its budget."};continue;}
+    let value:Scalar;try {value = operators[expression.op as keyof typeof operators](inputs.map((input) => (input as { value: Scalar }).value));}catch {result[id]={status:"error",code:expression.op==="parse-decimal"?"Invalid numeric value.":"Numeric result exceeds its budget."};continue;}
     result[id] = valueType(value, contract) === variable.type ? { status: "value", value } : { status: "error", code: "Variable result limit exceeded" };
   }
   return result;

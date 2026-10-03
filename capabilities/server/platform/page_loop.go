@@ -137,6 +137,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if !accessible(section.ProgressValueVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) || !accessible(section.ProgressTotalVariable, sectionOwners[section.ID], sectionOverlays[section.ID]) {
+			return fmt.Errorf("progress scalar cannot escape its scope")
+		}
 		if !accessible(section.CountVariable, "", sectionOverlays[section.ID]) || section.Widget == "collection-title" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("collection count cannot escape its scope or enter a loop")
 		}

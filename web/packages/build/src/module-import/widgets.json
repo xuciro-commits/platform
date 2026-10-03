@@ -549,9 +549,9 @@
       "sourceType": "ProgressBar",
       "sourceCategory": "Analytics",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "progress",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Treemap",

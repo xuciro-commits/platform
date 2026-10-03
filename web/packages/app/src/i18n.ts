@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Progress values are unavailable or loading.": "进度数值不可用或正在加载。",
+ "Progress needs compatible decimal values.": "进度需要兼容的十进制数值。",
  "Gantt fields are unavailable or incompatible.": "甘特图字段不可用或不兼容。",
  "This Gantt shows the current authorized query window.": "此甘特图显示当前授权查询窗口。",
  "Calendar fields are unavailable or incompatible.": "日历字段不可用或不兼容。",

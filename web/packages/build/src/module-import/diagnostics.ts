@@ -1,5 +1,11 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "progress-scalar":"Progress values need a supported numeric variable; original input text is converted by the declared decimal operator.",
+ "progress-count":"Map progress aggregations to an original complete count. Other aggregate scalar outputs need their own supported binding.",
+ "progress-total":"Choose exactly one denominator variable or a positive fixed decimal total.",
+ "progress-label":"Progress labels need bounded plain text.",
+ "progress-profile":"Progress requires the supported decimal-input profile.",
+ "native-progress-values":"Progress uses original complete counts or typed decimal values. Invalid or missing inputs remain explicit; zero totals are not replaced by 1. The bar is capped at 100% while over-total values are reported. Source numeric coercion and fabricated fallback values are not copied.",
  "gantt-profile":"Gantt import needs an original query collection and the supported fixed-range profile.",
  "gantt-binding":"Map original business start, end, title and choice status, and declare a valid fixed range and status tones.",
  "native-gantt-window":"The Gantt preserves the ordered window and shows at most 20 tasks on the declared UTC range. Original civil dates or offset datetimes are used; bars are clipped and invalid or outside-range intervals remain explicit. Source local-time parsing and overflowing bars are not copied.",

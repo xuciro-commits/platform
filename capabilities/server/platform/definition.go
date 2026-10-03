@@ -104,25 +104,29 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
-	RecordGantt          *PageRecordGantt        `json:"recordGantt,omitempty"`
-	RecordCalendar       *PageRecordCalendar     `json:"recordCalendar,omitempty"`
-	RecordEvents         *PageRecordEvents       `json:"recordEvents,omitempty"`
-	RecordChart          *PageRecordChart        `json:"recordChart,omitempty"`
-	RecordList           *PageRecordList         `json:"recordList,omitempty"`
-	HeadingLevel         string                  `json:"headingLevel,omitempty"`
-	CountVariable        string                  `json:"countVariable,omitempty"`
-	MetricPresentation   *PageMetricPresentation `json:"metricPresentation,omitempty"`
-	StatusTracker        *PageStatusTracker      `json:"statusTracker,omitempty"`
-	RecordLinks          []PageRecordLink        `json:"recordLinks,omitempty"`
-	Buttons              []PageButton            `json:"buttons,omitempty"`
-	RecordView           *PageRecordView         `json:"recordView,omitempty"`
-	DetailPresentation   *PageDetailPresentation `json:"detailPresentation,omitempty"`
-	TableColumns         []PageTableColumn       `json:"tableColumns,omitempty"`
-	ShowSearch           *bool                   `json:"showSearch,omitempty"`
-	SelectionSetVariable string                  `json:"selectionSetVariable,omitempty"`
-	InlineEdit           *PageInlineEdit         `json:"inlineEdit,omitempty"`
-	Facets               []PageFacet             `json:"facets,omitempty"`
-	FilterSearchVariable string                  `json:"filterSearchVariable,omitempty"`
+	RecordGantt           *PageRecordGantt        `json:"recordGantt,omitempty"`
+	RecordCalendar        *PageRecordCalendar     `json:"recordCalendar,omitempty"`
+	RecordEvents          *PageRecordEvents       `json:"recordEvents,omitempty"`
+	RecordChart           *PageRecordChart        `json:"recordChart,omitempty"`
+	RecordList            *PageRecordList         `json:"recordList,omitempty"`
+	HeadingLevel          string                  `json:"headingLevel,omitempty"`
+	ProgressLabel         string                  `json:"progressLabel,omitempty"`
+	ProgressValueVariable string                  `json:"progressValueVariable,omitempty"`
+	ProgressTotalVariable string                  `json:"progressTotalVariable,omitempty"`
+	ProgressTotal         string                  `json:"progressTotal,omitempty"`
+	CountVariable         string                  `json:"countVariable,omitempty"`
+	MetricPresentation    *PageMetricPresentation `json:"metricPresentation,omitempty"`
+	StatusTracker         *PageStatusTracker      `json:"statusTracker,omitempty"`
+	RecordLinks           []PageRecordLink        `json:"recordLinks,omitempty"`
+	Buttons               []PageButton            `json:"buttons,omitempty"`
+	RecordView            *PageRecordView         `json:"recordView,omitempty"`
+	DetailPresentation    *PageDetailPresentation `json:"detailPresentation,omitempty"`
+	TableColumns          []PageTableColumn       `json:"tableColumns,omitempty"`
+	ShowSearch            *bool                   `json:"showSearch,omitempty"`
+	SelectionSetVariable  string                  `json:"selectionSetVariable,omitempty"`
+	InlineEdit            *PageInlineEdit         `json:"inlineEdit,omitempty"`
+	Facets                []PageFacet             `json:"facets,omitempty"`
+	FilterSearchVariable  string                  `json:"filterSearchVariable,omitempty"`
 	// ID is required when Document references this section; older pages omit it.
 	ID            string `json:"id,omitempty"`
 	ConfigVersion int    `json:"configVersion,omitempty"`

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:c82bd35f13d11e3f",
+  "revision": "sha256:82161518cfe44a7d",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1707,6 +1707,33 @@
       ]
     },
     {
+      "id": "ui/progress",
+      "owner": "@platform/ui",
+      "name": "Exact decimal progress",
+      "summary": "Show exact authorized scalar values with a bounded progress ratio.",
+      "layer": 3,
+      "source": "web/packages/ui/src/components/Progress.tsx",
+      "exports": [
+        "Progress",
+        "progressRatio"
+      ],
+      "example": "ProgressExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "progress",
+        "decimal",
+        "count"
+      ],
+      "constraints": [
+        "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one."
+      ]
+    },
+    {
       "id": "ui/record-calendar",
       "owner": "@platform/ui",
       "name": "Authorized record calendar",
@@ -2356,6 +2383,7 @@
       "Enabled": "启用",
       "Entity form": "实体表单",
       "Error": "错误",
+      "Exact decimal progress": "精确十进制进度",
       "Expanded": "展开",
       "Facet choices": "分面多选",
       "File picker": "文件选择器",
@@ -2460,6 +2488,7 @@
       "Share declared presentation state across pages of one scoped application instance.": "在同一受控应用实例的页面间共享声明式展示状态。",
       "Shared": "共享",
       "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
+      "Show exact authorized scalar values with a bounded progress ratio.": "以有界进度比例显示精确授权标量。",
       "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
       "Sized layout regions": "可配置尺寸的布局区域",
       "Staged edits": "暂存修改",
@@ -2483,6 +2512,7 @@
       "The caller owns the authorized window; this presentation does not reorder records, filter by the viewport, or write dates.": "调用方拥有授权窗口；此呈现不重排记录，不按视窗筛选，也不写入日期。",
       "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection.": "调用方拥有有界窗口和记录授权；日历不写日期或读取另一集合。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
+      "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
       "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
@@ -2615,6 +2645,7 @@
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/MetricInspector.tsx",
       "web/packages/build/src/page-editor/widgets/PivotInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ProgressInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordCalendarInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordEventsInspector.tsx",
@@ -2687,6 +2718,7 @@
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
       "web/packages/app/src/widgets/Pivot.tsx",
+      "web/packages/app/src/widgets/Progress.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
@@ -2921,6 +2953,10 @@
     ],
     "ui/pivot": [
       "web/packages/app/src/widgets/Pivot.tsx"
+    ],
+    "ui/progress": [
+      "web/packages/app/src/widgets/Progress.tsx",
+      "web/packages/build/src/editor.tsx"
     ],
     "ui/record-calendar": [
       "web/packages/app/src/widgets/RecordCalendar.tsx"

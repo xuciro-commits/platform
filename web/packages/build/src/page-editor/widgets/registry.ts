@@ -1,3 +1,4 @@
+import {ProgressInspector} from "./ProgressInspector";
 import {RecordListInspector} from "./RecordListInspector";
 import {RecordCalendarInspector} from "./RecordCalendarInspector";
 import {RecordGanttInspector} from "./RecordGanttInspector";
@@ -22,6 +23,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ progress:{configVersion:1,bindings:ProgressInspector},
  "record-gantt":{configVersion:1,bindings:RecordGanttInspector},
  "record-calendar":{configVersion:1,bindings:RecordCalendarInspector},
  "record-events":{configVersion:1,bindings:RecordEventsInspector},

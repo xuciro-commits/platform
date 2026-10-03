@@ -7,6 +7,7 @@ const { compileVariables, evaluateVariables }=await import("./variables.ts");
 const root = new URL("../../../../../capabilities/server/platform/pageui/", import.meta.url);
 const contract = JSON.parse(readFileSync(new URL("widgets.json", root))).runtime;
 const vectors = JSON.parse(readFileSync(new URL("variables.vectors.json", root)));
+test("declared decimal parsing follows the original text input and retains invalid, pending and refused state",()=>{const variables={text:{scope:"page",type:"string",mode:"state",initial:"0.10"},number:{scope:"page",type:"decimal",mode:"derived",expression:{op:"parse-decimal",args:[{variable:"text"}]}}};assert.equal(compileVariables(variables,contract).issues.length,0);assert.deepEqual(evaluateVariables(variables,{},contract).number,{status:"value",value:{kind:"decimal",value:"0.1"}});assert.equal(evaluateVariables(variables,{text:""},contract).number.code,"Invalid numeric value.");assert.equal(evaluateVariables(variables,{text:"1e3"},contract).number.status,"error");const resource={...variables,text:{scope:"page",type:"string",mode:"input"}};assert.equal(evaluateVariables(resource,{},contract,{text:{status:"pending"}}).number.status,"pending");assert.equal(evaluateVariables(resource,{},contract,{text:{status:"error",code:"Denied"}}).number.status,"error");});
 for (const vector of vectors) test(vector.name, () => {
   assert.equal(compileVariables(vector.variables, contract).issues.length === 0, vector.valid);
   if (!vector.valid) return;
