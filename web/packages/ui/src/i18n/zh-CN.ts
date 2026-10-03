@@ -1,5 +1,13 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Date input": "日期输入",
+ "Civil date input": "业务日期输入",
+ "Edit original business date text with a native picker and explicit invalid draft repair.": "通过原生日期选择器及显式无效草稿修正编辑原业务日期文本。",
+ "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。无效草稿保持可见，不应用本地时区或时间点转换。",
+ "Invalid date draft": "无效日期草稿",
+ "{label} date draft": "{label} 日期草稿",
+ "Invalid date value. Use a real YYYY-MM-DD date; the original draft is retained.": "日期无效。请使用真实的 YYYY-MM-DD 日期；原草稿已保留。",
+ "Clear date": "清空日期",
  "Set choice input": "集合选择输入",
  "Present caller-owned string selections through shared toggles without dropping unmatched values.": "通过共享多选控件呈现调用方拥有的字符串集合，不丢弃未匹配值。",
  "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections.": "调用方拥有原字符串集合及查询条件。多选控件修改一个声明选项并保留未匹配值。",

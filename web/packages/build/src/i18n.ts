@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Date input": "日期输入",
+ "Date state variable": "日期状态变量",
+ "Date label": "日期标签",
+ "Bind the original civil date text. Empty and invalid drafts remain explicit; queries validate dates before reading.": "绑定原业务日期文本。空值和无效草稿明确保留，查询在读取前校验日期。",
+ "Bind the date input to its original scoped text state before saving.": "保存前请将日期输入绑定到原有作用域的文本状态。",
+ "Read text as a civil date": "将文本读取为业务日期",
+ "Date inputs need original static civil date text, a bounded label, and the supported date-input profile. Timestamps and executable sources need their own time contract.": "日期输入需要原静态业务日期文本、有界标签及受支持的日期输入配置。时间点和可执行来源需要各自时间契约。",
+ "Civil dates keep the original YYYY-MM-DD text, empty conditions and invalid drafts. The picker does not convert through a timezone; invalid drafts have an explicit repair input. Date query conditions validate real Gregorian dates before reading. Overlay-owned state retires on close.": "业务日期保留原 YYYY-MM-DD 文本、空条件及无效草稿。选择器不经过时区转换，无效草稿提供显式修正输入。日期查询条件在读取前校验真实公历日期。浮层拥有的状态在关闭时清理。",
  "Choose a string-set state variable": "选择字符串集合状态变量",
  "Multiple selection": "多选",
  "Choices need an original text state, unique nonempty bounded static options, and the supported single-choice or string-set profile.": "选择需要原文本或字符串集合状态、唯一非空有界静态选项及受支持的单选或集合配置。",

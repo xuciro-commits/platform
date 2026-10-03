@@ -35,6 +35,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/command-menu": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContextCommands })),
   "ui/content-tabs": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContentTabsExample })),
   "ui/data-table": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Tables })),
+  "ui/date-input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.DateInputExample })),
   "ui/dialog": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Dialogs })),
   "ui/disclosure": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Disclosures })),
   "ui/editor-workbench": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.EditorPanels })),

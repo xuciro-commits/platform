@@ -113,3 +113,7 @@ test("relation plans keep retained versions and typed starts instead of broadeni
  for(const status of ["empty","pending","error"])assert.equal(compileQueryPlan(plan,variables,{start:{status,code:"Denied"}},info,definition,contract).status,status);
  assert.equal(compileQueryPlan(plan,variables,values,info,{...definition,linkVersions:{}},contract).status,"error");assert.equal(compileQueryPlan({...plan,object:parent},variables,values,{type:parent.name,fields:[]},definition,contract).status,"error");
 });
+
+test("civil date query text rejects normalization and clears invalid input instead of broadening conditions",()=>{
+ const vars={day:{scope:"page",type:"string",mode:"state",initial:""}},info={type:"sample.note",fields:[{name:"due",type:"date"}]},q={object:{app:"sample",kind:"object",name:"sample.note"},limit:20,conditions:[{field:"due",op:">=",value:{variable:"day"},optional:true,asDate:true}]},compile=day=>compileQueryPlan(q,vars,{day:{status:"value",value:day}},info,undefined,contract);assert.deepEqual(compile("").query.domain,[]);assert.deepEqual(compile("2028-02-29").query.domain,[["due",">=","2028-02-29"]]);for(const date of ["2026-02-30","0000-01-01","2028-02-29T00:00:00Z"]){assert.equal(compile(date).status,"error");assert.equal(compile(date).code,"Invalid date value.");}
+});

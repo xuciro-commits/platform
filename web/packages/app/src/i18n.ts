@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Date input": "日期输入",
+ "Date input is unavailable or incompatible.": "日期输入不可用或不兼容。",
+ "Invalid date value.": "日期值无效。",
  "Multiple choice input is unavailable or incompatible.": "多选输入不可用或不兼容。",
  "Choice input": "单选输入",
  "Choice input is unavailable or incompatible.": "单选输入不可用或不兼容。",

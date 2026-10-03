@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.56",
+  "uiProfile": "platform.page.v2.57",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2300,6 +2300,68 @@
           "close"
         ]
       }
+    },
+    {
+      "componentID": "date-input",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.57",
+      "title": "Date input",
+      "category": "Inputs",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "dateLabel": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.57"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "dateVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.57"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -2358,7 +2420,8 @@
     "platform.page.v2.53",
     "platform.page.v2.54",
     "platform.page.v2.55",
-    "platform.page.v2.56"
+    "platform.page.v2.56",
+    "platform.page.v2.57"
   ],
   "runtime": {
     "scope": "page",
@@ -2849,6 +2912,9 @@
       "maxOptionBytes": 256,
       "multipleRequiredUIProfile": "platform.page.v2.56",
       "maxSelected": 64
+    },
+    "dateInput": {
+      "requiredUIProfile": "platform.page.v2.57"
     }
   },
   "layout": {

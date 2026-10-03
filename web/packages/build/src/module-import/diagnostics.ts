@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "date-input-profile":"Date inputs need original static civil date text, a bounded label, and the supported date-input profile. Timestamps and executable sources need their own time contract.",
+ "native-date-input":"Civil dates keep the original YYYY-MM-DD text, empty conditions and invalid drafts. The picker does not convert through a timezone; invalid drafts have an explicit repair input. Date query conditions validate real Gregorian dates before reading. Overlay-owned state retires on close.",
  "native-multiple-choice":"Multiple choices use the original string set and IN query condition. A toggle adds or removes one declared option while retaining unmatched selections; an empty set stays empty. Type and selection budgets are checked, and owned state retires on close.",
  "choice-input-profile":"Choices need an original text state, unique nonempty bounded static options, and the supported single-choice or string-set profile.",
  "native-choice-input":"All presentations share the original string state and optional query condition. Empty and unmatched values remain explicit; no first choice is written automatically. Dropdowns can clear the value, radio groups use native keyboard and label behavior, and segments emit the declared choice. Overlay-owned state retires on close.",

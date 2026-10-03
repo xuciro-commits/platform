@@ -243,6 +243,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	multiRoot.Children = append(multiRoot.Children, "multiInput")
 	doc.Nodes[doc.Root] = multiRoot
 	sections = append(sections, build.Section{ID: "multiInput", Widget: "choice-input", ConfigVersion: 1, ChoiceSetVariable: "multiState", ChoiceInput: &platform.PageChoiceInput{Variant: "multiple", Options: []string{"Open", "Closed"}}})
+	dateLabel := "Frozen date"
+	doc.Variables["dateState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2028-02-29")}
+	doc.Nodes["dateInput"] = platform.PageLayoutNode{Kind: "widget", Section: "dateInput"}
+	dateRoot := doc.Nodes[doc.Root]
+	dateRoot.Children = append(dateRoot.Children, "dateInput")
+	doc.Nodes[doc.Root] = dateRoot
+	sections = append(sections, build.Section{ID: "dateInput", Widget: "date-input", ConfigVersion: 1, DateVariable: "dateState", DateLabel: &dateLabel})
 	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
@@ -269,6 +276,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	laterDateLabel := "Later date"
+	sections[55].DateLabel = &laterDateLabel
+	doc.Variables["dateState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2026-01-01")}
 	sections[54].ChoiceInput = &platform.PageChoiceInput{Variant: "multiple", Options: []string{"Other"}}
 	doc.Variables["multiState"] = platform.PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: platform.Raw(map[string]any{"kind": "string-set", "values": []string{"Other"}})}
 	laterChoiceLabel := "Later choice"
@@ -311,6 +321,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					dateFound := false
+					for _, s := range d.Page.Sections {
+						if s.ID == "dateInput" {
+							dateFound = s.DateVariable == "dateState" && s.DateLabel != nil && *s.DateLabel == "Frozen date"
+						}
+					}
+					if !dateFound || string(d.Page.Document.Variables["dateState"].Initial) != `"2028-02-29"` {
+						t.Fatal("frozen civil date binding changed")
+					}
 					multiFound := false
 					for _, s := range d.Page.Sections {
 						if s.ID == "multiInput" {

@@ -43,6 +43,9 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	DateInput struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+	} `json:"dateInput"`
 	ChoiceInput struct {
 		RequiredUIProfile         string   `json:"requiredUIProfile"`
 		Variants                  []string `json:"variants"`

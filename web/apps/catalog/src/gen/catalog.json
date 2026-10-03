@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:d47efec794a626f9",
+  "revision": "sha256:bdb25bba72e4e175",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1106,6 +1106,33 @@
       "dependencies": [
         "ui/input",
         "ui/field-types"
+      ]
+    },
+    {
+      "id": "ui/date-input",
+      "owner": "@platform/ui",
+      "name": "Civil date input",
+      "summary": "Edit original business date text with a native picker and explicit invalid draft repair.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/DateInput.tsx",
+      "exports": [
+        "DateInput",
+        "validCivilDate"
+      ],
+      "example": "DateInputExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "date",
+        "civil",
+        "input"
+      ],
+      "constraints": [
+        "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied."
       ]
     },
     {
@@ -2555,6 +2582,7 @@
       "Checked": "已选中",
       "Choose an authorized object or property from the existing registry without writing internal identifiers.": "从现有注册表选择受权对象或属性，无需填写内部标识。",
       "Choose several authorized options with complete source counts and an optional histogram.": "从授权选项中多选，显示完整来源计数及可选直方图。",
+      "Civil date input": "业务日期输入",
       "Closed": "关闭",
       "Collapsed": "收起",
       "Collection title": "集合标题",
@@ -2578,6 +2606,7 @@
       "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
+      "Edit original business date text with a native picker and explicit invalid draft repair.": "通过原生日期选择器及显式无效草稿修正编辑原业务日期文本。",
       "Edit two original text drafts on an exact decimal tick grid and clear them atomically.": "在精确十进制刻度上编辑两个原文本草稿并原子清空。",
       "Editing": "编辑中",
       "Editor workbench": "编辑工作台",
@@ -2722,6 +2751,7 @@
       "The caller owns the boolean and its effects; this control does not coerce unrelated values or write records.": "调用方拥有布尔值及其效果；控件不强制转换无关值或写入记录。",
       "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection.": "调用方拥有有界窗口和记录授权；日历不写日期或读取另一集合。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
+      "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。无效草稿保持可见，不应用本地时区或时间点转换。",
       "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
       "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
       "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
@@ -2859,6 +2889,7 @@
       "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/DateInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
@@ -2944,6 +2975,7 @@
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
       "web/packages/app/src/widgets/ChoiceInput.tsx",
+      "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
@@ -3187,6 +3219,9 @@
     "ui/choice-input": [
       "web/packages/app/src/widgets/ChoiceInput.tsx",
       "web/packages/build/src/editor.tsx"
+    ],
+    "ui/date-input": [
+      "web/packages/app/src/widgets/DateInput.tsx"
     ],
     "ui/facet-choices": [
       "web/packages/app/src/widgets/Facets.tsx"

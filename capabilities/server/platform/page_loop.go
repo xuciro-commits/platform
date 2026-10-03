@@ -137,6 +137,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if !accessible(section.DateVariable, "", sectionOverlays[section.ID]) || section.Widget == "date-input" && sectionOwners[section.ID] != "" {
+			return fmt.Errorf("date input cannot escape its scope or enter a loop")
+		}
 		if !accessible(section.ChoiceSetVariable, "", sectionOverlays[section.ID]) || !accessible(section.ChoiceVariable, "", sectionOverlays[section.ID]) || section.Widget == "choice-input" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("choice input cannot escape its scope or enter a loop")
 		}

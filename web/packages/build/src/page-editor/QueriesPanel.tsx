@@ -45,7 +45,8 @@ export function QueriesPanel({ document, object, values, onChange, onPreviewOwne
         <Select aria-label={t("Query condition operator")} value={condition.op} onChange={(event)=>patch({conditions:plan.conditions!.map((c,i)=>i===at?{...c,op:event.target.value}:c)})}>{pageVariableContract.query.operators.map((op)=><option key={op} value={op}>{op}</option>)}</Select>
         <QueryValue application={application} label="Query condition value" value={condition.value} document={document} owner={plan.owner} itemOwner={plan.itemOwner} onChange={(value)=>patch({conditions:plan.conditions!.map((c,i)=>i===at?{...c,value}:c)})}/>
         <Checkbox checked={!!condition.optional} onChange={optional=>patch({conditions:plan.conditions!.map((c,i)=>i===at?{...c,optional}:c)})}>{t("Skip a valid empty input")}</Checkbox>
-        <Checkbox checked={!!condition.asDecimal} onChange={asDecimal=>patch({conditions:plan.conditions!.map((c,i)=>i===at?{...c,asDecimal}:c)})}>{t("Read text as an exact number")}</Checkbox>
+        <Checkbox checked={!!condition.asDecimal} onChange={asDecimal=>patch({conditions:plan.conditions!.map((c,i)=>i===at?{...c,asDecimal,asDate:asDecimal?false:c.asDate}:c)})}>{t("Read text as an exact number")}</Checkbox>
+        <Checkbox checked={!!condition.asDate} onChange={asDate=>patch({conditions:plan.conditions!.map((c,i)=>i===at?{...c,asDate,asDecimal:asDate?false:c.asDecimal}:c)})}>{t("Read text as a civil date")}</Checkbox>
         <Button onClick={()=>patch({conditions:plan.conditions!.filter((_,i)=>i!==at)})}>{t("Remove query condition")}</Button>
       </fieldset>)}
       <Button disabled={(plan.conditions?.length??0)>=pageVariableContract.query.maxConditions} onClick={()=>patch({conditions:[...(plan.conditions??[]),{field:"",op:"=",value:{literal:""}}]})}>{t("Add query condition")}</Button>

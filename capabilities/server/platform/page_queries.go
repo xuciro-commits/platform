@@ -31,6 +31,7 @@ type PageQuerySet struct {
 
 type PageQueryCondition struct {
 	Optional  bool      `json:"optional,omitempty"`
+	AsDate    bool      `json:"asDate,omitempty"`
 	AsDecimal bool      `json:"asDecimal,omitempty"`
 	Field     string    `json:"field"`
 	Op        string    `json:"op"`
@@ -146,6 +147,9 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 		for _, term := range q.Conditions {
 			if (term.Optional || term.AsDecimal || term.Op == "in" || term.Op == "not in") && !PageUIProfileSupports(d.UIProfile, "platform.page.v2.30") {
 				return fmt.Errorf("optional/set query conditions require v2.30")
+			}
+			if term.AsDate && (!PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.DateInput.RequiredUIProfile) || term.AsDecimal || term.Value.Variable == "" || d.Variables[term.Value.Variable].Type != "string") {
+				return fmt.Errorf("date text condition needs its profile and exclusive string binding")
 			}
 			if term.AsDecimal && (term.Value.Variable == "" || d.Variables[term.Value.Variable].Type != "string") {
 				return fmt.Errorf("decimal text condition needs a string variable")
@@ -306,6 +310,9 @@ func (p Page) CheckQuerySchema(q PageQuery, object EntityInfo, named *Definition
 	for _, term := range q.Conditions {
 		field, ok := fieldType(term.Field)
 		compatible := checkValue(field, term.Value)
+		if term.AsDate {
+			compatible = valueType(term.Value) == "string" && field.Type == "date" && !term.AsDecimal
+		}
 		if term.AsDecimal {
 			compatible = valueType(term.Value) == "string" && slices.Contains([]string{"integer", "decimal"}, field.Type)
 		}

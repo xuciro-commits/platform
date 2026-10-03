@@ -1060,6 +1060,7 @@ export type PageQuery = {
 
 export type PageQueryCondition = {
   optional?: boolean;
+  asDate?: boolean;
   asDecimal?: boolean;
   field: string;
   op: string;
@@ -1454,6 +1455,8 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  dateVariable?: string;
+  dateLabel?: string;
   choiceSetVariable?: string;
   choiceVariable?: string;
   choiceInput?: PageChoiceInput;
@@ -1802,7 +1805,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.56",
+  "uiProfile": "platform.page.v2.57",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4103,6 +4106,68 @@ export const pageUIManifest = {
           "close"
         ]
       }
+    },
+    {
+      "componentID": "date-input",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.57",
+      "title": "Date input",
+      "category": "Inputs",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "dateLabel": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.57"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "dateVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.57"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -4161,7 +4226,8 @@ export const pageUIManifest = {
     "platform.page.v2.53",
     "platform.page.v2.54",
     "platform.page.v2.55",
-    "platform.page.v2.56"
+    "platform.page.v2.56",
+    "platform.page.v2.57"
   ],
   "runtime": {
     "scope": "page",
@@ -4652,6 +4718,9 @@ export const pageUIManifest = {
       "maxOptionBytes": 256,
       "multipleRequiredUIProfile": "platform.page.v2.56",
       "maxSelected": 64
+    },
+    "dateInput": {
+      "requiredUIProfile": "platform.page.v2.57"
     }
   },
   "layout": {
