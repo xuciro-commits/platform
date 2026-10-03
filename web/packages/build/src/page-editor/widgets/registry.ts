@@ -1,3 +1,4 @@
+import {HeatmapInspector} from "./HeatmapInspector";
 import {HistogramInspector} from "./HistogramInspector";
 import {TermsInspector} from "./TermsInspector";
 import {SpacerInspector} from "./SpacerInspector";
@@ -38,6 +39,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ heatmap:{configVersion:1,bindings:HeatmapInspector},
  histogram:{configVersion:1,bindings:HistogramInspector},
  "term-counts":{configVersion:1,bindings:TermsInspector},
  "record-picker":{configVersion:1,bindings:RecordPickerInspector},

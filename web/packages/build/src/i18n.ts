@@ -2,6 +2,16 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Heatmap": "热图",
+ "Heatmap row field": "热图行字段",
+ "Heatmap column field": "热图列字段",
+ "Heatmap row filter output": "热图行筛选输出",
+ "Heatmap column filter output": "热图列筛选输出",
+ "No filter output": "不输出筛选",
+ "Counts cover the complete authorized set. Cell filters update their original states together; Clear resets only these outputs.": "计数覆盖完整授权集合；单元格筛选同时更新原状态；清空仅重置这些输出。",
+ "Bind two distinct heatmap axes, complete count and the original query set before saving.": "保存前绑定两个不同的热图轴、完整计数及原查询集合。",
+ "Map two distinct original text or choice axes, an authorized plan and exclusive string or string-set states in the same owner.": "映射两个不同的原文本/选项轴、授权计划及同一拥有者的独占string或string-set状态。",
+ "Heatmap counts the complete authorized set through the original pivot aggregate. Typed axes distinguish missing, empty and literal values. Cell filters use declared state types and update together; missing groups cannot be written to text filters. Source array counts, concatenated keys and variable-name type guesses are not imported.": "热图沿原透视聚合计数完整授权集合；类型化轴区分缺值、空文本和字面值；单元格筛选按声明的状态类型同时更新，缺值分组不写入文本筛选；不导入来源数组计数、拼接键和按变量名猜类型的逻辑。",
  "Scatter query window": "散点查询窗口",
  "Scatter X field": "散点X字段",
  "Scatter Y field": "散点Y字段",
@@ -1702,6 +1712,16 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Heatmap": "热图",
+ "Heatmap row field": "热图行字段",
+ "Heatmap column field": "热图列字段",
+ "Heatmap row filter output": "热图行筛选输出",
+ "Heatmap column filter output": "热图列筛选输出",
+ "No filter output": "不输出筛选",
+ "Counts cover the complete authorized set. Cell filters update their original states together; Clear resets only these outputs.": "计数覆盖完整授权集合；单元格筛选同时更新原状态；清空仅重置这些输出。",
+ "Bind two distinct heatmap axes, complete count and the original query set before saving.": "保存前绑定两个不同的热图轴、完整计数及原查询集合。",
+ "Map two distinct original text or choice axes, an authorized plan and exclusive string or string-set states in the same owner.": "映射两个不同的原文本/选项轴、授权计划及同一拥有者的独占string或string-set状态。",
+ "Heatmap counts the complete authorized set through the original pivot aggregate. Typed axes distinguish missing, empty and literal values. Cell filters use declared state types and update together; missing groups cannot be written to text filters. Source array counts, concatenated keys and variable-name type guesses are not imported.": "热图沿原透视聚合计数完整授权集合；类型化轴区分缺值、空文本和字面值；单元格筛选按声明的状态类型同时更新，缺值分组不写入文本筛选；不导入来源数组计数、拼接键和按变量名猜类型的逻辑。",
  "Scatter query window": "散点查询窗口",
  "Scatter X field": "散点X字段",
  "Scatter Y field": "散点Y字段",

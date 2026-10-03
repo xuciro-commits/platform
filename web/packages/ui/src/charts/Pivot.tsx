@@ -1,5 +1,6 @@
 // A pivot over an entity type (ADR-0019): row and column groups, one measure,
 // totals, and drilling into the records behind a cell, like Odoo's pivot view.
+import {CountMatrix} from "./CountMatrix";
 import { useEffect, useRef, useState } from "react";
 import { formatter } from "./echarts";
 import type { AggregateData, AggregateQuery } from "./spec";
@@ -23,7 +24,8 @@ export function groupDomain(group: string, value: unknown): unknown[] {
   return [[field, ">=", start], [field, "<", d.toISOString().slice(0, 10)]];
 }
 
-export function Pivot({ source, type, query, rows, columns, measure, onDrill }: {
+export function Pivot({ source, type, query, rows, columns, measure, onDrill,heatmap,onCellFilter,onClearFilters,enabled,filterAxes }: {
+  filterAxes?:{row:boolean;column:boolean};heatmap?:boolean;enabled?:boolean;onCellFilter?:(row?:string,column?:string)=>void;onClearFilters?:()=>void;
   source: ChartSource; type: string; query: Omit<AggregateQuery, "groups" | "measures">;
   rows: string; columns?: string; measure: string; onDrill?: (domain: unknown[]) => void;
 }) {
@@ -41,6 +43,7 @@ export function Pivot({ source, type, query, rows, columns, measure, onDrill }: 
   const {data,error}=state.key===key?state:{};
   if (error) return <p role="alert" className="text-sm text-[var(--tone-danger)]">{error}</p>;
   if (!data) return <p className="text-sm text-muted">{t("Loading…")}</p>;
+  if(measure==="count"&&columns)return <CountMatrix data={data} rows={rows} columns={columns} heatmap={heatmap} filterAxes={filterAxes} enabled={enabled} onClear={onClearFilters} onSelect={heatmap?onCellFilter?(row,column)=>{if((typeof row==="string"||!filterAxes?.row)&&(typeof column==="string"||!filterAxes?.column))onCellFilter(typeof row==="string"?row:undefined,typeof column==="string"?column:undefined);}:undefined:onDrill?(row,column)=>onDrill([...groupDomain(rows,row),...groupDomain(columns,column)]):undefined}/>;
   const fmt = formatter({ type: "quantitative", aggregate: measure === "count" ? "count" : measure.split(":")[0] as never, field: measure.split(":")[1] }, data.columns);
   const money = data.columns.find((c) => c.kind === "measure" && c.money);
   const currency = money ? `${money.field}.currency` : undefined;

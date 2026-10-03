@@ -543,11 +543,11 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
-		case "chart", "metric", "pivot":
+		case "chart", "metric", "pivot", "heatmap":
 			if s.Mark != "" && (p.Document == nil || !platform.PageUIProfileSupports(p.Document.UIProfile, "platform.page.v2.24")) {
 				return fmt.Errorf("%s: chart mark requires v2.24", where)
 			}
-			if s.Widget == "pivot" && p.Document == nil {
+			if (s.Widget == "pivot" || s.Widget == "heatmap") && p.Document == nil {
 				return fmt.Errorf("%s: pivot needs a V2 document", where)
 			}
 			if s.Measure == "" {
@@ -562,7 +562,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
-			if s.Widget == "chart" || s.Widget == "pivot" {
+			if s.Widget == "chart" || (s.Widget == "pivot" || s.Widget == "heatmap") {
 				if s.Group == "" {
 					return fmt.Errorf("%s: nothing to group by", where)
 				}
@@ -570,7 +570,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 					return err
 				}
 			}
-			if (s.Widget == "pivot" || s.Mark != "") && !checkAggregateSection(s, info) {
+			if ((s.Widget == "pivot" || s.Widget == "heatmap") || s.Mark != "") && !checkAggregateSection(s, info) {
 				return fmt.Errorf("%s: invalid pivot group or measure", where)
 			}
 		case "button", "input":

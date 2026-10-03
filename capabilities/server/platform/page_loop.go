@@ -137,6 +137,11 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		for _, id := range []string{section.RowValueVariable, section.RowSetVariable, section.ColumnValueVariable, section.ColumnSetVariable} {
+			if !accessible(id, "", sectionOverlays[section.ID]) || section.Widget == "heatmap" && sectionOwners[section.ID] != "" {
+				return fmt.Errorf("heatmap filter needs its original page or overlay owner")
+			}
+		}
 		if !accessible(section.PickerValueVariable, "", sectionOverlays[section.ID]) {
 			return fmt.Errorf("picker ID state cannot escape its scope")
 		}

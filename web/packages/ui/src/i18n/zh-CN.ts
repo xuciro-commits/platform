@@ -1,5 +1,16 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Count matrix": "计数矩阵",
+ "Complete typed count matrix": "完整类型化计数矩阵",
+ "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",
+ "The caller owns complete authorized counts and filter writes. Missing, empty and literal values remain distinct; no grouping, truncation or record reads happen here.": "调用方拥有完整授权计数与筛选写入；缺值、空文本和字面值保持独立；此处不分组、不截断、不读记录。",
+ "Heatmap": "热图",
+ "Count heatmap": "计数热图",
+ "No value (missing)": "无值（缺失）",
+ "Count matrix values are invalid or exceed the cell limit.": "计数矩阵值无效或超过单元格预算。",
+ "{count} matching records · stronger color means a larger count": "{count}条匹配记录 · 颜色越深表示计数越大",
+ "Clear cell filters": "清空单元格筛选",
+ "Select a cell to update the declared filters together. Missing groups cannot be written to text filters.": "选择单元格可同时更新已声明的筛选；缺值分组不能写入文本筛选。",
  "The selected record could not be confirmed.": "无法确认所选记录的访问权限。",
  "Record scatter plot": "记录散点图",
  "Scatter fields, record identities or numeric values are unavailable or incompatible.": "散点字段、记录身份或数值不可用或不兼容。",

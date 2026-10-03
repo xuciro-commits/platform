@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:8527a7e26e8bafca",
+  "revision": "sha256:8a35c6eb8cc30af1",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1098,6 +1098,34 @@
       ],
       "dependencies": [
         "ui/button"
+      ]
+    },
+    {
+      "id": "ui/count-matrix",
+      "owner": "@platform/ui",
+      "name": "Complete typed count matrix",
+      "summary": "Present original complete counts with distinct axis identities and optional controlled heatmap selection.",
+      "layer": 3,
+      "source": "web/packages/ui/src/charts/CountMatrix.tsx",
+      "exports": [
+        "CountMatrix",
+        "countMatrix"
+      ],
+      "example": "CountMatrixExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "heatmap",
+        "matrix",
+        "count",
+        "filter"
+      ],
+      "constraints": [
+        "The caller owns complete authorized counts and filter writes. Missing, empty and literal values remain distinct; no grouping, truncation or record reads happen here."
       ]
     },
     {
@@ -2808,6 +2836,7 @@
       "Collapsed": "收起",
       "Collection title": "集合标题",
       "Compare aggregate groups with totals and explicit drill-down.": "比较聚合分组，展示合计并提供明确的下钻。",
+      "Complete typed count matrix": "完整类型化计数矩阵",
       "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
       "Compose nodes through typed ports with one shared graph interaction model.": "通过类型化端口装配节点，使用统一的图交互模型。",
       "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
@@ -2910,6 +2939,7 @@
       "Present complete caller-owned counts as bounded frequency-scaled literal labels.": "将调用方拥有的完整计数呈现为有界、按频次缩放的字面词条标签。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
+      "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",
       "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
       "Present original ordered business intervals on an explicit fixed UTC range.": "在显式固定 UTC 范围呈现原排序业务区间。",
       "Pressed": "按下",
@@ -2982,6 +3012,7 @@
       "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
       "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
+      "The caller owns complete authorized counts and filter writes. Missing, empty and literal values remain distinct; no grouping, truncation or record reads happen here.": "调用方拥有完整授权计数与筛选写入；缺值、空文本和字面值保持独立；此处不分组、不截断、不读记录。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
@@ -3139,6 +3170,7 @@
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/HeatmapInspector.tsx",
       "web/packages/build/src/page-editor/widgets/HistogramInspector.tsx",
       "web/packages/build/src/page-editor/widgets/InlineActionInspector.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",

@@ -343,16 +343,19 @@ func (t *Tenant) Aggregate(m platform.Member, typ string, q AggregateQuery, now 
 // Definitions and installation consult the original aggregate compiler so
 // grouping/measure semantics do not diverge into a second UI validator.
 func checkAggregateSection(section platform.Section, info platform.EntityInfo) bool {
+	if section.CheckHeatmap(info) != nil {
+		return false
+	}
 	et := entityType{info: info}
 	if _, ok := et.measure(section.Measure); !ok {
 		return false
 	}
-	if section.Widget == "chart" || section.Widget == "pivot" {
+	if section.Widget == "chart" || (section.Widget == "pivot" || section.Widget == "heatmap") {
 		if _, ok := et.grouping(section.Group); !ok {
 			return false
 		}
 	}
-	if section.Widget == "pivot" && section.ColumnGroup != "" {
+	if (section.Widget == "pivot" || section.Widget == "heatmap") && section.ColumnGroup != "" {
 		if section.ColumnGroup == section.Group {
 			return false
 		}

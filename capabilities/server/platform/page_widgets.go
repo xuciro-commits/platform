@@ -79,7 +79,7 @@ var pageWidgets = func() pageUIContract {
 		seen[widget.ComponentID] = true
 		fields := map[string]bool{}
 		for _, port := range append(slices.Clone(widget.InputPorts), widget.OutputPorts...) {
-			if port.ID == "" || fields[port.BindingField] || !slices.Contains([]string{"recordVariable", "collectionVariable", "selectionVariable", "filterVariable", "selectionSetVariable", "countVariable", "progressValueVariable", "progressTotalVariable", "gaugeValueVariable", "statisticsVariable", "rangeMinVariable", "rangeMaxVariable", "booleanVariable", "choiceVariable", "choiceSetVariable", "dateVariable", "alertValueVariable", "pickerValueVariable", "enabledWhen"}, port.BindingField) || !slices.Contains([]string{"record", "record-set", "object-set", "filter", "boolean", "decimal", "number", "statistics", "string", "string-set"}, port.Type) || !slices.Contains(manifest.SupportedProfiles, port.RequiredUIProfile) {
+			if port.ID == "" || fields[port.BindingField] || !slices.Contains([]string{"recordVariable", "collectionVariable", "selectionVariable", "filterVariable", "selectionSetVariable", "countVariable", "progressValueVariable", "progressTotalVariable", "gaugeValueVariable", "statisticsVariable", "rangeMinVariable", "rangeMaxVariable", "booleanVariable", "choiceVariable", "choiceSetVariable", "dateVariable", "alertValueVariable", "rowValueVariable", "rowSetVariable", "columnValueVariable", "columnSetVariable", "pickerValueVariable", "enabledWhen"}, port.BindingField) || !slices.Contains([]string{"record", "record-set", "object-set", "filter", "boolean", "decimal", "number", "statistics", "string", "string-set"}, port.Type) || !slices.Contains(manifest.SupportedProfiles, port.RequiredUIProfile) {
 				panic("invalid page widget port")
 			}
 			fields[port.BindingField] = true
@@ -170,7 +170,7 @@ func (d *PageDocument) checkWidgetPorts(s Section) error {
 	if w := pageWidget(s.Widget); w != nil && !PageUIProfileSupports(d.UIProfile, w.RequiredUIProfile) {
 		return fmt.Errorf("widget %s requires UI profile %s", s.Widget, w.RequiredUIProfile)
 	}
-	for field, id := range map[string]string{"pickerValueVariable": s.PickerValueVariable, "alertValueVariable": s.AlertValueVariable, "dateVariable": s.DateVariable, "choiceSetVariable": s.ChoiceSetVariable, "choiceVariable": s.ChoiceVariable, "booleanVariable": s.BooleanVariable, "rangeMinVariable": s.RangeMinVariable, "rangeMaxVariable": s.RangeMaxVariable, "statisticsVariable": s.StatisticsVariable, "gaugeValueVariable": s.GaugeValueVariable, "progressValueVariable": s.ProgressValueVariable, "progressTotalVariable": s.ProgressTotalVariable, "countVariable": s.CountVariable, "recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable, "selectionSetVariable": s.SelectionSetVariable} {
+	for field, id := range map[string]string{"rowValueVariable": s.RowValueVariable, "rowSetVariable": s.RowSetVariable, "columnValueVariable": s.ColumnValueVariable, "columnSetVariable": s.ColumnSetVariable, "pickerValueVariable": s.PickerValueVariable, "alertValueVariable": s.AlertValueVariable, "dateVariable": s.DateVariable, "choiceSetVariable": s.ChoiceSetVariable, "choiceVariable": s.ChoiceVariable, "booleanVariable": s.BooleanVariable, "rangeMinVariable": s.RangeMinVariable, "rangeMaxVariable": s.RangeMaxVariable, "statisticsVariable": s.StatisticsVariable, "gaugeValueVariable": s.GaugeValueVariable, "progressValueVariable": s.ProgressValueVariable, "progressTotalVariable": s.ProgressTotalVariable, "countVariable": s.CountVariable, "recordVariable": s.RecordVariable, "collectionVariable": s.CollectionVariable, "selectionVariable": s.SelectionVariable, "filterVariable": s.FilterVariable, "selectionSetVariable": s.SelectionSetVariable} {
 		if id == "" {
 			continue
 		}
@@ -182,7 +182,7 @@ func (d *PageDocument) checkWidgetPorts(s Section) error {
 		}
 		port := widgetPort(s.Widget, field)
 		v, ok := d.Variables[id]
-		if port == nil || !ok || !PageUIProfileSupports(d.UIProfile, port.RequiredUIProfile) || v.Type != port.Type || port.Writable && field != "selectionSetVariable" && !(v.Writable || (field == "rangeMinVariable" || field == "rangeMaxVariable" || field == "booleanVariable" || field == "choiceVariable" || field == "choiceSetVariable" || field == "dateVariable" || field == "pickerValueVariable") && v.Mode == "state") {
+		if port == nil || !ok || !PageUIProfileSupports(d.UIProfile, port.RequiredUIProfile) || v.Type != port.Type || port.Writable && field != "selectionSetVariable" && !(v.Writable || (field == "rangeMinVariable" || field == "rangeMaxVariable" || field == "booleanVariable" || field == "choiceVariable" || field == "choiceSetVariable" || field == "dateVariable" || field == "pickerValueVariable" || field == "rowValueVariable" || field == "rowSetVariable" || field == "columnValueVariable" || field == "columnSetVariable") && v.Mode == "state") {
 			return fmt.Errorf("widget %s has an invalid %s port", s.Widget, field)
 		}
 	}

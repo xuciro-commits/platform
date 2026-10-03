@@ -123,6 +123,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.ChartVariant != "" {
 				return fmt.Errorf("chart variant requires a document")
 			}
+			if s.Widget == "heatmap" || s.RowValueVariable != "" || s.RowSetVariable != "" || s.ColumnValueVariable != "" || s.ColumnSetVariable != "" {
+				return fmt.Errorf("heatmap requires a page document")
+			}
 			if s.Widget == "record-scatter" || s.Scatter != nil {
 				return fmt.Errorf("record scatter needs a document")
 			}
@@ -273,6 +276,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkRecordEvents(section); err != nil {
+			return err
+		}
+		if err := d.checkHeatmap(section); err != nil {
 			return err
 		}
 		if err := d.checkScatter(section); err != nil {
@@ -643,7 +649,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if node.Kind == "widget" {
 			for _, s := range sections {
 				if s.ID == node.Section {
-					for _, id := range []string{s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
+					for _, id := range []string{s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

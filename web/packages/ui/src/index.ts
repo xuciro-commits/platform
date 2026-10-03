@@ -77,3 +77,5 @@ export {SummaryStatistics,type StatisticsValue} from "./components/SummaryStatis
 export {RecordLeaderboard,leaderboardRows} from "./records/RecordLeaderboard";
 
 export {RecordScatter,scatterPoints} from "./records/RecordScatter";
+
+export {CountMatrix,countMatrix} from "./charts/CountMatrix";

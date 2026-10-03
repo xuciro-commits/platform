@@ -1,0 +1,33 @@
+import {pageUIManifest} from "@platform/kernel";
+import {Button} from "../primitives/button";
+import {t} from "../i18n";
+import type {AggregateData} from "./spec";
+const limits=pageUIManifest.runtime.heatmap;
+type Value=string|number|boolean|null;
+type Axis={key:string;value:Value};
+const identity=(value:Value)=>JSON.stringify([value===null?"missing":typeof value,value]);
+const label=(value:Value)=>value===null?t("No value (missing)"):value===""?t("Empty text"):String(value);
+/** Typed axis identities keep empty, missing, literal placeholders and separator-bearing values apart. */
+export function countMatrix(data:AggregateData,rows:string,columns:string,{maxAxis=limits.maxCells,maxCells=limits.maxCells,sortRows=false,stringAxes=false}:{stringAxes?:boolean;maxAxis?:number;maxCells?:number;sortRows?:boolean}={}) {
+ if(!data||!Array.isArray(data.columns)||!Array.isArray(data.rows)||data.columns.some(c=>!c||typeof c!=="object")||!rows||!columns||rows===columns||rows==="count"||columns==="count"||!Number.isInteger(maxAxis)||maxAxis<1||maxAxis>limits.maxCells||!Number.isInteger(maxCells)||maxCells<1||maxCells>limits.maxCells||data.columns.length!==3||![rows,columns].every(name=>data.columns.filter(c=>c.kind==="group"&&c.name===name).length===1)||!data.columns.some(c=>c.kind==="measure"&&c.name==="count"&&!c.money)||data.rows.length>maxCells)return;
+ const rowAxes=new Map<string,Axis>(),columnAxes=new Map<string,Axis>(),cells=new Map<string,Map<string,bigint>>(),rowTotals=new Map<string,bigint>(),columnTotals=new Map<string,bigint>();let total=0n,max=0n;
+ for(const entry of data.rows){
+  if(!entry||typeof entry!=="object"||Array.isArray(entry)||!Object.hasOwn(entry,rows)||!Object.hasOwn(entry,columns))return;
+  const rawRow=entry[rows]??null,rawColumn=entry[columns]??null,n=entry.count,valid=(value:unknown)=>value===null||["string","boolean"].includes(typeof value)||typeof value==="number"&&Number.isFinite(value)&&Number.isSafeInteger(value);
+  if(stringAxes&&[rawRow,rawColumn].some(value=>value!==null&&typeof value!=="string")||!valid(rawRow)||!valid(rawColumn)||typeof n!=="number"||!Number.isSafeInteger(n)||n<1)return;
+  const row:Axis={value:rawRow as Value,key:identity(rawRow as Value)},column:Axis={value:rawColumn as Value,key:identity(rawColumn as Value)},count=BigInt(n);
+  rowAxes.set(row.key,row);columnAxes.set(column.key,column);if(rowAxes.size>maxAxis||columnAxes.size>maxAxis||rowAxes.size*columnAxes.size>maxCells)return;
+  if(!cells.has(row.key))cells.set(row.key,new Map());if(cells.get(row.key)!.has(column.key))return;cells.get(row.key)!.set(column.key,count);
+  rowTotals.set(row.key,(rowTotals.get(row.key)??0n)+count);columnTotals.set(column.key,(columnTotals.get(column.key)??0n)+count);total+=count;if(count>max)max=count;
+ }
+ const compare=(a:Axis,b:Axis)=>label(a.value)<label(b.value)?-1:label(a.value)>label(b.value)?1:a.key<b.key?-1:a.key>b.key?1:0,orderedRows=[...rowAxes.values()],orderedColumns=[...columnAxes.values()].sort(compare);if(sortRows)orderedRows.sort(compare);
+ return {rows:orderedRows,columns:orderedColumns,cells,rowTotals,columnTotals,total,max,rowTitle:data.columns.find(c=>c.name===rows)!.title,columnTitle:data.columns.find(c=>c.name===columns)!.title};
+}
+/** Original complete counts have one model for plain pivots and heat intensity. */
+export function CountMatrix({data,rows,columns,heatmap=false,enabled=true,onSelect,onClear,filterAxes={row:true,column:true}}:{filterAxes?:{row:boolean;column:boolean};data:AggregateData;rows:string;columns:string;heatmap?:boolean;enabled?:boolean;onSelect?:(row:Value,column:Value)=>void;onClear?:()=>void}) {
+ const model=countMatrix(data,rows,columns,{maxAxis:heatmap?limits.maxAxis:limits.maxCells,sortRows:heatmap,stringAxes:heatmap});
+ if(!model)return <p role="alert">{t("Count matrix values are invalid or exceed the cell limit.")}</p>;
+ if(!model.rows.length&&heatmap)return <div className="grid gap-2"><p role="status">{t("No matching records.")}</p>{heatmap&&onClear&&<Button size="sm" disabled={!enabled} onClick={onClear}>{t("Clear cell filters")}</Button>}</div>;
+ const axis=(value:Value)=>value===null||value===""?<em className="text-muted">{label(value)}</em>:label(value);
+ return <div className="grid min-w-0 gap-2">{heatmap&&<p role="status" className="text-xs text-muted">{t("{count} matching records · stronger color means a larger count",{count:model.total.toString()})}</p>}<div className="overflow-auto rounded-md border border-border"><table aria-label={heatmap?t("Count heatmap"):undefined} className="w-full border-collapse text-sm tabular-nums"><thead className="bg-surface text-xs text-muted"><tr><th className="border-b border-border px-2 py-1 text-left font-medium">{model.rowTitle} · {model.columnTitle}</th>{model.columns.map(col=><th key={col.key} scope="col" className="border-b border-border px-2 py-1 text-right font-medium">{axis(col.value)}</th>)}<th scope="col" className="border-b border-border px-2 py-1 text-right font-medium">{t("Count")} · {t("Total")}</th></tr></thead><tbody>{model.rows.map(row=><tr key={row.key}><th scope="row" className="border-b border-border px-2 py-1 text-left font-normal">{axis(row.value)}</th>{model.columns.map(col=>{const count=model.cells.get(row.key)?.get(col.key)??0n,title=`${label(row.value)} × ${label(col.value)}: ${count}`,color=heatmap?{background:`color-mix(in srgb, var(--tone-info) ${Math.round(8+Number(count)/Number(model.max)*55)}%, var(--surface))`}:undefined;return <td key={col.key} title={title} className="border-b border-border px-2 py-1 text-right" style={color}>{onSelect?<Button variant="ghost" disabled={!enabled||heatmap&&(filterAxes.row&&row.value===null||filterAxes.column&&col.value===null)} aria-label={title} className="h-auto w-full justify-end text-xs" onClick={()=>onSelect(row.value,col.value)}>{count.toString()}</Button>:count.toString()}</td>;})}<td className="border-b border-border px-2 py-1 text-right font-medium">{model.rowTotals.get(row.key)!.toString()}</td></tr>)}</tbody><tfoot className="bg-surface font-medium"><tr><th scope="row" className="px-2 py-1 text-left">{t("Total")}</th>{model.columns.map(col=><td key={col.key} className="px-2 py-1 text-right">{model.columnTotals.get(col.key)!.toString()}</td>)}<td className="px-2 py-1 text-right">{model.total.toString()}</td></tr></tfoot></table></div>{heatmap&&onClear&&<Button size="sm" disabled={!enabled} onClick={onClear}>{t("Clear cell filters")}</Button>}{heatmap&&onSelect&&<p className="text-xs text-muted">{t("Select a cell to update the declared filters together. Missing groups cannot be written to text filters.")}</p>}</div>;
+}

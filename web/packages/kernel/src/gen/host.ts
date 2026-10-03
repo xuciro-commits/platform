@@ -1515,6 +1515,10 @@ export type Section = {
   recordGantt?: PageRecordGantt;
   recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
+  rowValueVariable?: string;
+  rowSetVariable?: string;
+  columnValueVariable?: string;
+  columnSetVariable?: string;
   scatter?: PageRecordScatter;
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
@@ -1880,7 +1884,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.69",
+  "uiProfile": "platform.page.v2.70",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4766,6 +4770,111 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "heatmap",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.70",
+      "title": "Heatmap",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "measure": "count",
+        "group": "",
+        "columnGroup": ""
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable",
+        "aggregate"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "measure": {
+            "type": "string",
+            "enum": [
+              "count"
+            ]
+          },
+          "columnGroup": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "group",
+          "columnGroup",
+          "measure"
+        ]
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.70"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "rowValue",
+          "bindingField": "rowValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.70"
+        },
+        {
+          "id": "rowSet",
+          "bindingField": "rowSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.70"
+        },
+        {
+          "id": "columnValue",
+          "bindingField": "columnValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.70"
+        },
+        {
+          "id": "columnSet",
+          "bindingField": "columnSetVariable",
+          "type": "string-set",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.70"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -4837,7 +4946,8 @@ export const pageUIManifest = {
     "platform.page.v2.66",
     "platform.page.v2.67",
     "platform.page.v2.68",
-    "platform.page.v2.69"
+    "platform.page.v2.69",
+    "platform.page.v2.70"
   ],
   "runtime": {
     "scope": "page",
@@ -5390,6 +5500,11 @@ export const pageUIManifest = {
     "recordScatter": {
       "requiredUIProfile": "platform.page.v2.69",
       "maxPoints": 100
+    },
+    "heatmap": {
+      "requiredUIProfile": "platform.page.v2.70",
+      "maxAxis": 64,
+      "maxCells": 4096
     }
   },
   "layout": {

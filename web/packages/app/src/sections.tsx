@@ -64,7 +64,7 @@ type Section = NonNullable<Page["sections"]>[number];
 type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
-type Bound = {pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?:VariableResult;onPickerID?:(record?:EntityRecord)=>void;alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
+type Bound = {onHeatmap?:(row?:string,column?:string)=>void;pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?:VariableResult;onPickerID?:(record?:EntityRecord)=>void;alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
   onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
@@ -191,10 +191,10 @@ function chartSpec(page: Page, section: Section, kpi: boolean, domain: unknown[]
   return {...compileChartSpec({object:objectOf(page,section),title:section.title,group:section.group,measure:section.measure,mark:section.mark,chartVariant:section.chartVariant,kpi,domain}),metric:kpi?section.metricPresentation:undefined};
 }
 
-function ChartWidget({ page, section, kpi, pivot, narrowed, sharedFilter, master, window, collection, aggregateScope }: Bound & { kpi: boolean; pivot?:boolean }) {
+function ChartWidget({ page, section, kpi, pivot, narrowed, sharedFilter, master, window, collection, aggregateScope,onHeatmap,enabled }: Bound & { kpi: boolean; pivot?:boolean }) {
   const { source } = useHost();
   const aggregate = source.aggregate;
-  const render=(spec:ChartSpec,readScope?:string)=>pivot?<PivotRenderer object={objectOf(page,section)} query={"entity" in spec.data?{domain:spec.data.domain,search:spec.data.search,set:spec.data.set,traversal:spec.data.traversal,archived:spec.data.archived}:{}} rows={section.group??""} columns={section.columnGroup} measure={section.measure??"count"} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>:<ChartRenderer spec={spec} height={kpi?120:240} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>;
+  const render=(spec:ChartSpec,readScope?:string)=>pivot?<PivotRenderer filterAxes={{row:!!(section.rowValueVariable||section.rowSetVariable),column:!!(section.columnValueVariable||section.columnSetVariable)}} heatmap={section.widget==="heatmap"} enabled={enabled} onCellFilter={onHeatmap} onClearFilters={onHeatmap?()=>onHeatmap():undefined} object={objectOf(page,section)} query={"entity" in spec.data?{domain:spec.data.domain,search:spec.data.search,set:spec.data.set,traversal:spec.data.traversal,archived:spec.data.archived}:{}} rows={section.group??""} columns={section.columnGroup} measure={section.measure??"count"} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>:<ChartRenderer spec={spec} height={kpi?120:240} source={aggregate?{aggregate,scope:readScope??source.scope,revision:source.revision}:undefined}/>;
   if(section.collectionVariable){
     if(!window)return <Panel role={collection?.status==="error"?"alert":"status"}>{t(collection?.status==="error"?collection.code:"Query window is unavailable.")}</Panel>;
     if(window.error)return <Panel role="alert">{t(window.error)}</Panel>;
@@ -449,6 +449,7 @@ const widgets = createWidgetRegistry<Bound>({
   button: ({ section, onClick, enabled }) => <ButtonRenderer title={section.title} onClick={onClick} enabled={enabled}/>,
   "inline-action":({page,section,selected,live,aggregateScope})=><InlineActionForm type={objectOf(page,section)} schema={section.actions?.[0]?.name??""} record={selected} live={live} scope={aggregateScope}/>,
   table: TableAdapter, detail: DetailWidget, actions: ActionsWidget,
+  heatmap:(props)=><ChartWidget {...props} kpi={false} pivot/>,
   pivot: (bound) => <ChartWidget {...bound} kpi={false} pivot/>,
   chart: (bound) => <ChartWidget {...bound} kpi={false} />,
   metric: (bound) => <ChartWidget {...bound} kpi />,
@@ -615,6 +616,12 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         choiceValue={values[section.choiceVariable??""]} onChoice={section.widget==="choice-input"&&section.choiceVariable?(value)=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch||typeof value!=="string"||!(section.choiceInput?.options.includes(value)||value===""&&section.choiceInput?.variant==="select"))return;writeState(section.choiceVariable!,value,overlay);}:undefined}
         booleanInput={values[section.booleanVariable??""]} onBoolean={section.widget==="boolean-input"&&section.booleanVariable?(checked)=>{if(context||enabled===false||typeof checked!=="boolean"||overlay&&session.overlayEpoch(overlay)!==epoch)return;writeState(section.booleanVariable!,checked,overlay);}:undefined}
         rangeLower={values[section.rangeMinVariable??""]} rangeUpper={values[section.rangeMaxVariable??""]}
+        onHeatmap={section.widget==="heatmap"&&(section.rowValueVariable||section.rowSetVariable||section.columnValueVariable||section.columnSetVariable)?(row,column)=>{
+          if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;
+          const entries:[[string|undefined,string|undefined],[string|undefined,string|undefined]]=[[section.rowValueVariable??section.rowSetVariable,row],[section.columnValueVariable??section.columnSetVariable,column]],changes:Record<string,ScalarValue>={};
+          for(const [id,value] of entries){if(!id)continue;const v=initialVariables[id];if(!v||v.mode!=="state"||!(v.scope==="page"||v.scope==="overlay"&&v.owner===overlay))return;const next=v.type==="string-set"?{kind:"string-set" as const,values:value===undefined?[]:[value]}:value??"";if(!scalarAssignable(v.type,next,pageVariableContract.maxStringBytes,pageVariableContract.decimal.maxBytes))return;changes[id]=next;}
+          session.setScalars(changes);
+        }:undefined}
         onRange={section.widget==="range-input"?(lower,upper)=>{
           if(context || overlay&&session.overlayEpoch(overlay)!==epoch)return;
           const min=section.rangeMinVariable,max=section.rangeMaxVariable;if(!min||!max||min===max)return;

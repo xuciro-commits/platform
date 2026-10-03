@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "heatmap-binding":"Map two distinct original text or choice axes, an authorized plan and exclusive string or string-set states in the same owner.",
+ "native-heatmap":"Heatmap counts the complete authorized set through the original pivot aggregate. Typed axes distinguish missing, empty and literal values. Cell filters use declared state types and update together; missing groups cannot be written to text filters. Source array counts, concatenated keys and variable-name type guesses are not imported.",
+
  "scatter-binding":"Map original numeric coordinates, text or choice colors, an explicit record title and a compatible ordered query window.",
  "native-record-scatter":"The scatter plot retains individual IDs in a paged authorized window of at most 100 records. Missing coordinates are excluded, invalid numbers are refused, and overlapping records remain separately selectable. Source coercion and its 400-record array slice are not imported.",
 

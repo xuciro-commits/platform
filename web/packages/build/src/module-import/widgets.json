@@ -525,9 +525,9 @@
       "sourceType": "Heatmap",
       "sourceCategory": "Analytics",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "heatmap",
+      "reason": "complete-typed-count-matrix-filter-profile"
     },
     {
       "sourceType": "Gauge",

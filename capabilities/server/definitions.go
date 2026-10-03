@@ -439,7 +439,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 						return !visible || section.Widget == "form" && (field.ReadOnly || !field.Writes(m.Roles[shown.App]))
 					})
 					section.Actions = slices.DeleteFunc(slices.Clone(section.Actions), func(ref platform.AssetRef) bool { _, ok := actions[ref.Name]; return !ok })
-					if (section.Widget == "chart" || section.Widget == "metric" || section.Widget == "pivot") && !checkAggregateSection(section, shown) {
+					if (section.Widget == "chart" || section.Widget == "metric" || (section.Widget == "pivot" || section.Widget == "heatmap")) && !checkAggregateSection(section, shown) {
 						continue
 					}
 					if section.Widget == "record-list" && section.CardLabel != "id" {

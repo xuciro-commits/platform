@@ -360,6 +360,16 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		root.Children = append(root.Children, spec.id)
 		doc.Nodes[doc.Root] = root
 	}
+	heatmapIndex := len(sections)
+	doc.Variables["heatrow"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("original row")}
+	doc.Variables["heatcolumn"] = platform.PageVariable{Scope: "page", Type: "string-set", Mode: "state", Initial: platform.Raw(map[string]any{"kind": "string-set", "values": []string{"high"}})}
+	for _, spec := range []struct{ id, row, column string }{{"heatmap", "name", "severity"}, {"hiddenHeatmapRow", "secret", "severity"}, {"hiddenHeatmapColumn", "name", "privateseverity"}} {
+		sections = append(sections, build.Section{ID: spec.id, Widget: "heatmap", ConfigVersion: 1, Group: spec.row, ColumnGroup: spec.column, Measure: "count", CollectionVariable: "pickerWindow", RowValueVariable: "heatrow", ColumnSetVariable: "heatcolumn"})
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -385,6 +395,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[heatmapIndex].ColumnSetVariable = ""
+	sections[heatmapIndex].Group = "secret"
+	doc.Variables["heatrow"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("later row")}
 	sections[scatterIndex].Scatter = &platform.PageRecordScatter{XField: "sensitive", YField: "sensitive", ColorField: "privateseverity", LabelField: "secret"}
 	sections[histIndex].Histogram = &platform.PageHistogram{Field: "sensitive", Bins: 2}
 	sections[termsIndex].Group = "secret"
@@ -508,6 +521,18 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !alertFound || member.ID == builder.ID && privateAlerts != 1 || member.ID != builder.ID && privateAlerts != 0 {
 						t.Fatal("frozen alert config, count binding or private dependency changed")
+					}
+					heatmapFound, privateHeatmap := false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "heatmap" {
+							heatmapFound = section.Group == "name" && section.ColumnGroup == "severity" && section.Measure == "count" && section.RowValueVariable == "heatrow" && section.ColumnSetVariable == "heatcolumn" && string(d.Page.Document.Variables["heatrow"].Initial) == `"original row"`
+						}
+						if strings.HasPrefix(section.ID, "hiddenHeatmap") {
+							privateHeatmap++
+						}
+					}
+					if !heatmapFound || member.ID == builder.ID && privateHeatmap != 2 || member.ID != builder.ID && privateHeatmap != 0 {
+						t.Fatal("frozen heatmap fields, typed filters or member projection changed")
 					}
 					scatterFound, privateScatter := false, 0
 					for _, section := range d.Page.Sections {
