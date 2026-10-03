@@ -1,3 +1,4 @@
+import {BreadcrumbInspector,BreadcrumbHomeInspector,AvatarInspector,ImageInspector} from "./ContextInspectors";
 import {HistoryInspector,WorkViewsInspector} from "./WorkViewsInspector";
 import {CollaborationInspector} from "./CollaborationInspector";
 import {TagCountsInspector} from "./TagCountsInspector";
@@ -46,6 +47,9 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ breadcrumb:{configVersion:1,bindings:BreadcrumbInspector,events:BreadcrumbHomeInspector},
+ "avatar-stack":{configVersion:1,bindings:AvatarInspector},
+ "static-image":{configVersion:1,bindings:ImageInspector},
  "approval-inbox":{configVersion:1,bindings:WorkViewsInspector},
  "notification-feed":{configVersion:1,bindings:WorkViewsInspector},
  timeline:{configVersion:1,bindings:HistoryInspector},

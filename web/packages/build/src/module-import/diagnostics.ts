@@ -1,5 +1,13 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "static-image-profile":"Preserve a literal HTTP(S) or same-origin image URL, caption and finite height of 0–4096. Other schemes, credentials, whitespace, controls and malformed escapes are rejected.",
+ "native-static-image":"The original image URL, caption and height are preserved. The browser renders that configured public source with cover fit; empty URLs stay unconfigured. It is not replaced by an attachment or a claim of frozen remote bytes.",
+ "breadcrumb-binding":"Bind an existing published home page with its actual interface and no required inputs; map the optional original record title explicitly.",
+ "native-breadcrumb":"Module and page labels remain original. Home navigation uses the explicit published page binding; clearing the page crumb retires the original record selection and its dependent context.",
+ "context-record-binding":"Use the actual compatible original record producer in the same page or overlay, with its original object identity.",
+ "avatar-query-binding":"Explicitly bind a published all-person query, original title and at most two unique detail fields. Its six-record window keeps original ID ordering and real totals.",
+ "avatar-context-query":"Bind a published query over the same personnel object whose declared reference parameter consumes the actual original context record.",
+ "native-avatar-query":"The chosen original personnel queries govern all and contextual associations. Stable IDs, original titles and details replace source-specific owner and work-order joins; those joins and global ontology arrays are not inferred or copied.",
  "work-migration-required":"Choose this widget's explicit migration to the original caller approval inbox, member notifications or selected-record history. Each source has different semantics.",
  "work-source-profile":"Retain only well-formed nonexecuting source hints. Business sources, action names and status filters do not become platform Work or notification services automatically.",
  "work-record-binding":"Map the actual compatible active-record producer in the same page or overlay; bounded history requires its original confirmed record resource.",

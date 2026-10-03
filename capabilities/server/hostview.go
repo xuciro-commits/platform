@@ -247,7 +247,9 @@ func (h hostView) InstallPage(c platform.Caller, p platform.Page) error {
 	if c.Staging() {
 		unsupportedStagedEffect()
 	}
-	return h.t.InstallPage(h.app, p)
+	// Reinstall restores original descriptors as a group, then validates all
+	// navigation targets against that complete group before returning.
+	return h.t.installPage(h.app, p, !c.Replaying)
 }
 func (h hostView) ValidateInstallPage(p platform.Page) error {
 	return h.installationDraft().InstallPage(h.app, p)

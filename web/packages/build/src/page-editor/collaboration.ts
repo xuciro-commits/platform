@@ -4,7 +4,7 @@ import type {AuthoringSection} from "./draft";
 
 export const collaborationWidgets=["record-comments","record-uploader","media-preview","pdf-viewer"] as const;
 export const isCollaborationWidget=(widget:string)=>collaborationWidgets.some(value=>value===widget);
-export const requiresOriginalRecord=(section:AuthoringSection)=>isCollaborationWidget(section.widget)||section.widget==="timeline"&&(section.historyLimit??0)>0;
+export const requiresOriginalRecord=(section:AuthoringSection)=>isCollaborationWidget(section.widget)||section.widget==="breadcrumb"||section.widget==="timeline"&&(section.historyLimit??0)>0;
 
 /** The shared record resource remains attached to its actual compatible producer. */
 export function collaborationRecordSource(document:Api.PageDocument,sections:AuthoringSection[],variable:string,consumer:string,pageObject:string):{object:string;producer:AuthoringSection}|undefined {

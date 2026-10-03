@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:dc3e2fc972671cd7",
+  "revision": "sha256:26f341506cba4e09",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1012,6 +1012,37 @@
       ],
       "constraints": [
         "The canvas owns interaction; its caller owns graph semantics, validation and persistence."
+      ]
+    },
+    {
+      "id": "ui/breadcrumb-trail",
+      "owner": "@platform/ui",
+      "name": "Original navigation trail",
+      "summary": "Present original navigation identities and a controlled current location with literal labels and record details.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/BreadcrumbTrail.tsx",
+      "exports": [
+        "BreadcrumbTrail"
+      ],
+      "example": "BreadcrumbTrailExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "breadcrumbs",
+        "navigation",
+        "record",
+        "identity"
+      ],
+      "type": "BreadcrumbTrailProps",
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller owns page navigation, confirmed record identity and clearing the original producer. Duplicate labels remain distinct; an optional current-page action clears context without invoking ancestor navigation. Read-only trails do not invoke callbacks."
       ]
     },
     {
@@ -2284,6 +2315,34 @@
       ]
     },
     {
+      "id": "ui/record-avatar-stack",
+      "owner": "@platform/ui",
+      "name": "Authorized people avatars",
+      "summary": "Show the original first six people records as initials with their stable identities and complete authorized total.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordAvatarStack.tsx",
+      "exports": [
+        "RecordAvatarStack"
+      ],
+      "example": "RecordAvatarStackExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "avatars",
+        "people",
+        "records",
+        "window"
+      ],
+      "type": "RecordAvatarStackProps",
+      "constraints": [
+        "The caller owns authorized people queries, field metadata and the complete total. Original order, names and IDs remain separate; initials never infer a member identity or replace missing records."
+      ]
+    },
+    {
       "id": "ui/record-calendar",
       "owner": "@platform/ui",
       "name": "Authorized record calendar",
@@ -3007,6 +3066,40 @@
       ]
     },
     {
+      "id": "ui/static-image",
+      "owner": "@platform/ui",
+      "name": "Static URL image",
+      "summary": "Display the original public image URL, caption and cover height through the browser image element.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/StaticImage.tsx",
+      "exports": [
+        "StaticImage",
+        "validStaticImage",
+        "validStaticImageURL"
+      ],
+      "example": "StaticImageExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "image",
+        "url",
+        "static",
+        "caption"
+      ],
+      "type": "StaticImageProps",
+      "states": [
+        "Loading",
+        "Refused"
+      ],
+      "constraints": [
+        "The caller owns the fixed URL configuration. Only HTTP(S) absolute or single-root-relative public paths render; loading and failure remain explicit. Published URL configuration does not freeze remote bytes or authorize attachments."
+      ]
+    },
+    {
       "id": "ui/status",
       "owner": "@platform/ui",
       "name": "Semantic status tags",
@@ -3285,6 +3378,7 @@
       "Authorized event list": "受权事件列表",
       "Authorized lifecycle board": "授权生命周期看板",
       "Authorized numeric gauge": "授权数值仪表",
+      "Authorized people avatars": "已授权人员头像",
       "Authorized proportional treemap": "授权比例树图",
       "Authorized raster preview": "已授权位图预览",
       "Authorized record calendar": "受权记录日历",
@@ -3348,6 +3442,7 @@
       "Display a bounded record window as time points or intervals, grouped by an original resource field.": "将有界记录窗口显示为时间点或区间，按原资源字段分组。",
       "Display declared record states and caller-allowed transitions.": "展示已声明的记录状态与调用方允许的跃迁。",
       "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
+      "Display the original public image URL, caption and cover height through the browser image element.": "通过浏览器图片元素展示原公开图片地址、说明及覆盖高度。",
       "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes.": "离开编辑器前请下载原 JSON 和映射报告。报告在当前编辑作用域内保留，关闭或切换成员时清理。",
       "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",
       "Edit caller-owned search text and show the actual readable object scope.": "编辑调用方拥有的搜索文本，并显示实际可读对象范围。",
@@ -3417,6 +3512,7 @@
       "Ordered record chart": "按序逐记录图表",
       "Organize navigation and shared published objects, workflows and functions with the original application editor.": "使用原应用编辑器组织导航及共享的已发布对象、流程和函数。",
       "Original approval tasks": "原审批任务",
+      "Original navigation trail": "原导航路径",
       "Original record journal": "原记录日志",
       "Original scalar and record sparkline": "原标量与记录迷你线",
       "Page header": "页面标题区",
@@ -3445,6 +3541,7 @@
       "Present original change IDs, schemas, actors and field changes in their supplied order with an explicit display window.": "按提供顺序呈现原变更身份、决策名称、操作者及字段变更，并明确展示窗口。",
       "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",
       "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
+      "Present original navigation identities and a controlled current location with literal labels and record details.": "呈现原导航身份、受控当前位置及原始标签和记录详情。",
       "Present original ordered business intervals on an explicit fixed UTC range.": "在显式固定 UTC 范围呈现原排序业务区间。",
       "Present original persisted comments and a caller-owned draft whose confirmation belongs to the host.": "呈现原持久化评论及调用方持有的草稿，提交确认由宿主负责。",
       "Pressed": "按下",
@@ -3506,10 +3603,12 @@
       "Shared": "共享",
       "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
       "Show exact authorized scalar values with a bounded progress ratio.": "以有界进度比例显示精确授权标量。",
+      "Show the original first six people records as initials with their stable identities and complete authorized total.": "以姓名首字显示原前六条人员记录，同时保留稳定身份及完整已授权总数。",
       "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
       "Single choice input": "单选输入",
       "Sized layout regions": "可配置尺寸的布局区域",
       "Staged edits": "暂存修改",
+      "Static URL image": "静态地址图片",
       "Steps and tabs": "步骤与标签页",
       "Steps and tabs use canonical index string values and a same-length label list; duplicate labels remain separate choices. An absent write callback renders them read-only.": "步骤与标签页使用规范索引字符串值及等长标签列表；重名标签保留为独立选项。没有写入回调时只读展示。",
       "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.": "工坊要求绑定对象和可见字段，动作来自当前成员的原动作目录。",
@@ -3533,6 +3632,7 @@
       "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
       "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
       "The caller owns authorized original notifications, read decisions and navigation. Optional limits disclose the loaded range; read state changes only when the caller supplies confirmed data. Read-only or busy controls cannot initiate writes.": "调用方负责已授权原通知、已读决策及导航；可选限制说明已加载范围，已读状态仅随调用方提供的已确认数据变化。只读或忙碌控件不发起写入。",
+      "The caller owns authorized people queries, field metadata and the complete total. Original order, names and IDs remain separate; initials never infer a member identity or replace missing records.": "调用方负责已授权人员查询、字段元数据及完整总数；原顺序、姓名与身份独立保留，首字不推断成员身份或替代缺失记录。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
       "The caller owns complete authorized counts and filter writes. Missing, empty and literal values remain distinct; no grouping, truncation or record reads happen here.": "调用方拥有完整授权计数与筛选写入；缺值、空文本和字面值保持独立；此处不分组、不截断、不读记录。",
       "The caller owns confirmed record reads and field metadata. Optional display limits disclose the loaded range and total; omitting a limit retains all supplied changes. No per-change revision or session action log is fabricated.": "调用方负责已确认记录读取及字段元数据；可选展示限制说明已加载范围及总数，省略限制时保留所有已提供变更。不编造逐条修订或会话操作日志。",
@@ -3540,6 +3640,7 @@
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns offered tasks, original request reads, action permission, submission and async state. Task and request IDs and revisions remain separate; unreadable or incompatible requests cannot expose approval actions.": "调用方负责待办任务、原请求读取、操作权限、提交及异步状态；任务与请求身份及修订保持独立，不可读或不兼容的请求不提供审批操作。",
       "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
+      "The caller owns page navigation, confirmed record identity and clearing the original producer. Duplicate labels remain distinct; an optional current-page action clears context without invoking ancestor navigation. Read-only trails do not invoke callbacks.": "调用方负责页面导航、已确认记录身份及清除原选择来源；重复标签保持独立，可选当前页操作清除上下文而不调用上层导航。只读路径不调用回调。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller owns scalar precision, authorized window and field metadata. Missing values break the line; points retain stable IDs and never read or write records.": "调用方拥有标量精度、授权窗口与字段元数据；缺值断线，点保留稳定ID，不读写记录。",
       "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search.": "调用方拥有文本、对象范围及授权读取；此控件不查询数据，也不声称全本体搜索。",
@@ -3550,6 +3651,7 @@
       "The caller owns the boolean and its effects; this control does not coerce unrelated values or write records.": "调用方拥有布尔值及其效果；控件不强制转换无关值或写入记录。",
       "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection.": "调用方拥有有界窗口和记录授权；日历不写日期或读取另一集合。",
       "The caller owns the condition and message. This component performs no queries, template execution or notification delivery.": "调用方拥有条件及消息，本组件不执行查询、模板代码或通知发送。",
+      "The caller owns the fixed URL configuration. Only HTTP(S) absolute or single-root-relative public paths render; loading and failure remain explicit. Published URL configuration does not freeze remote bytes or authorize attachments.": "调用方负责固定图片地址配置；仅呈现HTTP(S)绝对地址或单斜杠根相对公开路径，并明确显示加载及失败状态。发布地址配置不冻结远程字节或授权附件。",
       "The caller owns the label and visibility. The separator is horizontal and noninteractive, without data reads or text evaluation.": "调用方拥有标签及显示条件。分隔为横向、不可交互，不读取数据或执行文本。",
       "The caller owns the ordered authorized window and confirmation. Missing coordinates are excluded; invalid values refuse the plot, and overlapping points remain separate records.": "调用方拥有有序授权窗口与选择确认；缺值坐标排除，无效值拒绝绘制，重叠点仍是独立记录。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
@@ -3697,6 +3799,7 @@
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
       "web/packages/build/src/page-editor/widgets/CollaborationInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ContextInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/DateInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
@@ -3801,6 +3904,7 @@
       "web/packages/app/src/widgets/Alert.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
       "web/packages/app/src/widgets/ChoiceInput.tsx",
+      "web/packages/app/src/widgets/ContextViews.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",
@@ -4068,6 +4172,15 @@
       "web/packages/app/src/widgets/ChoiceInput.tsx",
       "web/packages/build/src/editor.tsx"
     ],
+    "ui/breadcrumb-trail": [
+      "web/packages/app/src/widgets/ContextViews.tsx"
+    ],
+    "ui/record-avatar-stack": [
+      "web/packages/app/src/widgets/ContextViews.tsx"
+    ],
+    "ui/static-image": [
+      "web/packages/app/src/widgets/ContextViews.tsx"
+    ],
     "ui/datetime-input": [
       "web/packages/app/src/widgets/DateInput.tsx",
       "web/packages/build/src/editor.tsx"
@@ -4206,6 +4319,7 @@
     "ui/toggles": [
       "web/packages/build/src/editor.tsx",
       "web/packages/build/src/module-import/ModuleImportDialog.tsx",
+      "web/packages/build/src/page-editor/widgets/ContextInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/KanbanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordCardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordComparisonInspector.tsx",
@@ -4350,6 +4464,8 @@
         "BlockCanvasProps",
         "BlockDiagnostic",
         "BlockStatus",
+        "BreadcrumbTrailItem",
+        "BreadcrumbTrailProps",
         "ButtonProps",
         "CalendarFields",
         "CanvasAddContext",
@@ -4403,6 +4519,7 @@
         "Option",
         "Options",
         "PdfViewerProps",
+        "RecordAvatarStackProps",
         "RecordChange",
         "RecordChartFields",
         "RecordColumnPresentation",
@@ -4421,6 +4538,8 @@
         "Session",
         "ShellCommand",
         "State",
+        "StaticImageConfig",
+        "StaticImageProps",
         "StatisticsValue",
         "StatusRegistry",
         "TermCount",

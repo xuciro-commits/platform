@@ -104,6 +104,9 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	Breadcrumb               *PageBreadcrumb         `json:"breadcrumb,omitempty"`
+	Avatar                   *PageAvatarStack        `json:"avatar,omitempty"`
+	Image                    *PageStaticImage        `json:"image,omitempty"`
 	HistoryLimit             int                     `json:"historyLimit,omitempty"`
 	CommentDraftVariable     string                  `json:"commentDraftVariable,omitempty"`
 	FileVariable             string                  `json:"fileVariable,omitempty"`

@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if contextView(s.Widget) || s.Breadcrumb != nil || s.Avatar != nil || s.Image != nil {
+				return fmt.Errorf("context views require a page document")
+			}
 			if workFeed(s.Widget) || s.HistoryLimit != 0 {
 				return fmt.Errorf("work views require a page document")
 			}
@@ -297,6 +300,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkRecordEvents(section); err != nil {
+			return err
+		}
+		if err := d.checkContextViews(section); err != nil {
 			return err
 		}
 		if err := d.checkWorkViews(section); err != nil {
@@ -691,6 +697,13 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 			for _, s := range sections {
 
 				if s.ID == node.Section {
+					for _, id := range s.ContextViewVariables() {
+						if id != "" {
+							if _, ok := variables[id]; !ok {
+								return false
+							}
+						}
+					}
 					for _, id := range []string{s.CommentDraftVariable, s.FileVariable, s.PdfPageVariable, s.RecordSetVariable, s.SparklineDecimalVariable, s.SparklineNumberVariable, s.GroupValueVariable, s.GroupSetVariable, s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
 						if id != "" {
 							if _, ok := variables[id]; !ok {

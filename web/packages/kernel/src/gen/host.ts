@@ -929,6 +929,19 @@ export type PageAlertBanner = {
   message: string;
 };
 
+export type PageAvatarStack = {
+  labelField: string;
+  detailFields?: string[];
+  contextVariable?: string;
+  contextCollectionVariable?: string;
+};
+
+export type PageBreadcrumb = {
+  homeLabel: string;
+  pageLabel: string;
+  labelField?: string;
+};
+
 export type PageButton = {
   id: string;
   title: string;
@@ -1212,6 +1225,12 @@ export type PageSparkline = {
   field?: string;
   label?: string;
   suffix?: string;
+};
+
+export type PageStaticImage = {
+  url?: string;
+  caption?: string;
+  height?: number;
 };
 
 export type PageStatusTracker = {
@@ -1528,6 +1547,9 @@ export type SavedView = {
 };
 
 export type Section = {
+  breadcrumb?: PageBreadcrumb;
+  avatar?: PageAvatarStack;
+  image?: PageStaticImage;
   historyLimit?: number;
   commentDraftVariable?: string;
   fileVariable?: string;
@@ -1912,7 +1934,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.77",
+  "uiProfile": "platform.page.v2.78",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5653,6 +5675,183 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "breadcrumb",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.78",
+      "title": "Breadcrumbs",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.78"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.78"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      },
+      "events": [
+        {
+          "id": "click",
+          "payload": "void",
+          "required": true,
+          "maxBindings": 1,
+          "requiredUIProfile": "platform.page.v2.78"
+        }
+      ]
+    },
+    {
+      "componentID": "avatar-stack",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.78",
+      "title": "Avatar stack",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.78"
+        },
+        {
+          "id": "context",
+          "bindingField": "avatar.contextVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.78"
+        },
+        {
+          "id": "context-collection",
+          "bindingField": "avatar.contextCollectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.78"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "static-image",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.78",
+      "title": "Image",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -5732,7 +5931,8 @@ export const pageUIManifest = {
     "platform.page.v2.74",
     "platform.page.v2.75",
     "platform.page.v2.76",
-    "platform.page.v2.77"
+    "platform.page.v2.77",
+    "platform.page.v2.78"
   ],
   "runtime": {
     "scope": "page",
@@ -6340,6 +6540,16 @@ export const pageUIManifest = {
       "maxNotificationsWindow": 40,
       "maxHistoryWindow": 100,
       "defaultHistoryWindow": 18
+    },
+    "contextViews": {
+      "requiredUIProfile": "platform.page.v2.78",
+      "maxAvatarWindow": 6,
+      "maxDetailFields": 2,
+      "maxLabelBytes": 1024,
+      "maxURLBytes": 4096,
+      "maxCaptionBytes": 4096,
+      "maxImageHeight": 4096,
+      "defaultImageHeight": 160
     }
   },
   "layout": {

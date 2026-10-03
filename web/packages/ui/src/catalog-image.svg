@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="320" viewBox="0 0 640 320">
+  <title>Catalog landscape</title>
+  <rect width="640" height="320" fill="#dbe8f1"/>
+  <circle cx="490" cy="72" r="36" fill="#ffd684"/>
+  <path d="M0 264 150 95 296 256 437 133 640 277V320H0Z" fill="#688a9c"/>
+  <path d="M0 300 171 211 329 307 493 232 640 306V320H0Z" fill="#335d70"/>
+</svg>

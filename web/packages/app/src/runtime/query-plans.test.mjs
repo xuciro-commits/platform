@@ -85,6 +85,39 @@ test("overlay query parameters accept their own locals and reject foreign roots,
  assert.equal(compileQueryPlan(scoped,selected,values,info,undefined,contract,[{id:"table",collectionVariable:"window"}]).status,"error");
 });
 
+function avatarPlans(owner){
+ const asset={app:"sample",kind:"object",name:"sample.asset"},person={app:"sample",kind:"object",name:"sample.person"},scope=owner?{scope:"overlay",owner}:{scope:"page"};
+ const all={ref:{app:"sample",kind:"query",name:"people"},sourceVersion:"q1"},related={ref:{app:"sample",kind:"query",name:"assetPeople"},sourceVersion:"q1"};
+ const plans={assets:{object:asset,limit:2,sort:["id"],conditions:[{field:"active",op:"=",value:{literal:true}}],...(owner?{owner}:{})},all:{object:person,query:all,limit:6,sort:["id"],...(owner?{owner}:{})},related:{object:person,query:related,for:{variable:"active"},limit:6,sort:["id"],...(owner?{owner}:{})}};
+ const variables={assetWindow:{...scope,type:"object-set",mode:"resource",source:{kind:"plan",query:"assets"}},active:{...scope,type:"record",mode:"resource",source:{kind:"record",section:"assetTable"}},all:{...scope,type:"object-set",mode:"resource",source:{kind:"plan",query:"all"}},related:{...scope,type:"object-set",mode:"resource",source:{kind:"plan",query:"related"}}};
+ const sections=[{id:"assetTable",widget:"table",object:asset,collectionVariable:"assetWindow"},{id:"avatars",widget:"avatar-stack",object:person,collectionVariable:"all",avatar:{labelField:"name",contextVariable:"active",contextCollectionVariable:"related"}}];
+ const values={active:{status:"value",value:{kind:"record",reference:{object:asset.name,id:"ASSET-A"}}}};
+ const entity=type=>type===asset.name?{type,fields:[{name:"active",type:"boolean"}]}:type===person.name?{type,fields:[{name:"asset",type:"reference",ref:asset.name},{name:"shift",type:"text"},{name:"name",type:"text"}]}:undefined;
+ const named=plan=>plan.query?{ref:plan.query.ref,version:"q1",query:{object:person.name,...(plan.query.ref.name==="assetPeople"?{by:"asset",domain:[["shift","=","night"]]}:{})}}:undefined;
+ return {plans,variables,sections,values,entity,named};
+}
+const compileAvatar=f=>Object.fromEntries(compileQueryPlans(f.plans,f.variables,()=>f.values,f.entity,f.named,contract,f.sections));
+test("an avatar consumes the confirmed original record from an independent page or overlay plan and preserves the typed named domain",()=>{
+ for(const owner of [undefined,"panel"]){const f=avatarPlans(owner),compiled=compileAvatar(f);assert.equal(compiled.assets.status,"value");assert.deepEqual(compiled.assets.query.domain,[["active","=",true]]);assert.equal(compiled.related.status,"value");assert.deepEqual(compiled.related.query.domain,[["shift","=","night"],["asset","=","ASSET-A"]]);assert.deepEqual(compiled.related.query.sort,["id"]);assert.equal(compiled.related.query.limit,6);
+  for(const status of ["empty","pending","error"])assert.equal(compileAvatar({...f,values:{active:{status,code:"Denied"}}}).related.status,status);
+  assert.equal(compileAvatar({...f,values:{active:{status:"value",value:{kind:"record",reference:{object:"sample.other",id:"ASSET-A"}}}}}).related.status,"error");
+ }
+});
+test("avatar planned parent exceptions reject actual direct, transitive and set feedback and retain unrelated input scope rules",()=>{
+ for(const kind of ["direct","transitive","set","condition","property"]){const f=avatarPlans();
+  if(kind==="direct")f.sections[0].collectionVariable="related";
+  if(kind==="transitive"){f.variables.fromContext={scope:"page",type:"record",mode:"resource",source:{kind:"record",section:"contextTable"}};f.sections.push({id:"contextTable",widget:"table",collectionVariable:"related"});f.plans.assets.for={variable:"fromContext"};}
+  if(kind==="set")f.plans.assets.set={op:"union",inputs:["related","all"]};
+  if(kind==="condition"){f.variables.fromContext={scope:"page",type:"boolean",mode:"derived",expression:{op:"present",args:[{variable:"related"}]}};f.plans.assets.conditions=[{field:"active",op:"=",value:{variable:"fromContext"}}];}
+  if(kind==="property"){f.variables.fromContext={scope:"page",type:"string",mode:"property",source:{kind:"property",variable:"related",field:"name"}};f.sections[0].filterVariable="fromContext";}
+  const result=compileAvatar(f).related;assert.equal(result.status,"error",kind);assert.equal(result.code,"Query parameter escapes its input scope.",kind);
+ }
+ for(const change of [f=>f.sections.pop(),f=>f.sections[0].widget="detail",f=>f.variables.active.mode="state",f=>f.variables.active.scope="application",f=>f.sections[1].avatar.contextVariable="copy",f=>{f.variables.related.source.query="all";}]){const f=avatarPlans();change(f);assert.equal(compileAvatar(f).related.status,"error");}
+ for(const change of [f=>f.variables.active.owner="foreign",f=>{f.variables.active.scope="page";delete f.variables.active.owner;},f=>delete f.plans.related.owner]){const f=avatarPlans("panel");change(f);assert.equal(compileAvatar(f).related.status,"error");}
+ const original=avatarPlans(),related=original.plans.related;
+ assert.equal(compileQueryPlan(related,original.variables,original.values,original.entity(related.object.name),original.named(related),contract,original.sections).status,"error");
+});
+
 test("decimal parameters retain exact tagged conditions and errors never fall back to an old threshold",()=>{
  const variables={threshold:{scope:"page",type:"decimal",mode:"state",initial:{kind:"decimal",value:"0"}}},plan={object:{app:"sample",kind:"object",name:"sample.note"},limit:10,conditions:[{field:"count",op:">",value:{variable:"threshold"}}]},value={kind:"decimal",value:"1.9999999999999999"};
  const result=compileQueryPlan(plan,variables,{threshold:{status:"value",value}},info,undefined,contract);assert.equal(result.status,"value");assert.deepEqual(result.query.domain,[["count",">",value]]);

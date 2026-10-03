@@ -300,7 +300,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			}
 			info = shown
 		}
-		if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 {
+		if len(s.CollaborationDependencies()) > 0 || s.HistoryLimit > 0 || s.Widget == "avatar-stack" || s.Widget == "breadcrumb" && s.RecordVariable != "" {
 			object := s.Object
 			if object.Name == "" {
 				object = p.Object
@@ -308,6 +308,16 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if object.Kind != platform.AssetObject || object.App != info.App || object.Name != info.Type {
 				return fmt.Errorf("%s: collaboration object does not match its actual entity owner", where)
 			}
+		}
+		if s.Avatar != nil && s.Avatar.ContextVariable != "" {
+			ref := p.RecordResourceObject(s.Avatar.ContextVariable)
+			actual, ok := t.entity(ref.Name)
+			if !ok || ref.Kind != platform.AssetObject || ref.App != actual.App || ref.Name != actual.Type {
+				return fmt.Errorf("%s: avatar original context owner is unavailable", where)
+			}
+		}
+		if err := s.CheckContextViews(info); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
 		}
 		if s.RecordVariable != "" {
 			producer := p.Document.LoopRecordSource(s.RecordVariable)
@@ -477,6 +487,8 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckHistogram(info); err != nil {
 				return err
 			}
+		case "breadcrumb", "avatar-stack", "static-image":
+			// Their finite bindings and original field schema were checked above.
 		case "record-comparison":
 			if err := s.CheckRecordComparison(info); err != nil {
 				return err

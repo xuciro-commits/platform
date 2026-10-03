@@ -605,9 +605,9 @@
       "sourceType": "Breadcrumbs",
       "sourceCategory": "Layout & content",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "breadcrumb",
+      "reason": "original-record-context-and-explicit-native-navigation-profile"
     },
     {
       "sourceType": "AlertBanner",
@@ -645,9 +645,9 @@
       "sourceType": "ImageWidget",
       "sourceCategory": "Layout & content",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "static-image",
+      "reason": "literal-governed-image-url-caption-height-profile"
     },
     {
       "sourceType": "SingleButton",
@@ -701,9 +701,9 @@
       "sourceType": "AvatarStack",
       "sourceCategory": "Layout & content",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "avatar-stack",
+      "reason": "explicit-original-all-and-context-personnel-query-profile"
     },
     {
       "sourceType": "Leaderboard",

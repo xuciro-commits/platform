@@ -704,6 +704,33 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 	for _, s := range page.Sections {
+		if err := page.CheckContextViewBinding(s); err != nil {
+			return err
+		}
+		if contextView(s.Widget) {
+			refs := []AssetRef{}
+			if s.Widget == "avatar-stack" || s.RecordVariable != "" {
+				ref := s.Object
+				if ref.Name == "" {
+					ref = page.Object
+				}
+				refs = append(refs, ref)
+			}
+			if s.Avatar != nil && s.Avatar.ContextVariable != "" {
+				refs = append(refs, page.RecordResourceObject(s.Avatar.ContextVariable))
+			}
+			for _, ref := range refs {
+				asset, ok := lookup[ref]
+				info, err := queryObjectDescriptor(asset.Body)
+				shown := s.Object
+				if shown.Name == "" {
+					shown = page.Object
+				}
+				if !ok || err != nil || !frozenObjectOwnerMatches(asset, ref) || ref == shown && s.CheckContextViews(info) != nil {
+					return fmt.Errorf("frozen context presentation object or fields are unavailable")
+				}
+			}
+		}
 		if err := page.CheckHistoryBinding(s); err != nil {
 			return err
 		}
@@ -874,6 +901,9 @@ func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
 			if err := page.CheckRecordPickerQuery(id, named); err != nil {
 				return err
 			}
+			if err := page.CheckAvatarQuery(id, named, object); err != nil {
+				return err
+			}
 			if err := page.CheckLeaderboardQuery(id, named); err != nil {
 				return err
 			}
@@ -949,4 +979,24 @@ func queryObjectDescriptor(body []byte) (EntityInfo, error) {
 		shape.Lifecycle = &l
 	}
 	return EntityInfo{App: owner, Type: shape.Type, Fields: fields, Lifecycle: shape.Lifecycle}, nil
+}
+
+// The narrow finite context profile keeps original complete object identity.
+// Code assets may use a type prefix that differs from their actual app owner.
+func frozenObjectOwnerMatches(asset ReleaseAsset, ref AssetRef) bool {
+	var descriptor struct {
+		Type   string      `json:"type"`
+		App    string      `json:"app"`
+		Entity *EntityInfo `json:"entity"`
+	}
+	if json.Unmarshal(asset.Body, &descriptor) != nil {
+		return false
+	}
+	owner, typ := descriptor.App, descriptor.Type
+	if descriptor.Entity != nil {
+		owner, typ = descriptor.Entity.App, descriptor.Entity.Type
+	} else if owner == "" {
+		owner, _, _ = strings.Cut(typ, ".")
+	}
+	return ref.Kind == AssetObject && typ == descriptor.Type && typ == ref.Name && owner == ref.App
 }

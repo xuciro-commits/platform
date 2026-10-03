@@ -48,12 +48,16 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 	for _, event := range d.Events {
 		found := false
 		group := false
+		breadcrumb := false
 		for _, section := range sections {
 			if descriptor := widgetEvent(section.Widget, event.Event); section.ID == event.Source && descriptor != nil {
 				found = descriptor.RequiredUIProfile == "" || PageUIProfileSupports(d.UIProfile, descriptor.RequiredUIProfile)
 				group = section.Widget == "button-group"
+				breadcrumb = section.Widget == "breadcrumb"
 				if group {
 					found = found && slices.ContainsFunc(section.Buttons, func(b PageButton) bool { return b.ID == event.Control })
+				} else if breadcrumb {
+					found = found && event.Control == "home" && event.Navigate != nil && !event.Return && len(event.Navigate.Inputs) == 0 && len(event.Navigate.Results) == 0
 				} else if event.Control != "" {
 					found = false
 				}
@@ -98,7 +102,7 @@ func (d *PageDocument) checkEvents(sections []Section) error {
 				}
 			}
 		}
-		if event := widgetEvent(section.Widget, "click"); event != nil && event.Required && section.Widget != "button-group" && !bound[section.ID+"/"] {
+		if event := widgetEvent(section.Widget, "click"); event != nil && event.Required && section.Widget != "button-group" && section.Widget != "breadcrumb" && !bound[section.ID+"/"] {
 			return fmt.Errorf("page button %s needs a click binding", section.ID)
 		}
 	}

@@ -1,6 +1,6 @@
 import {validCivilDate,validTimestamp} from "@platform/ui/date";
 import {isStringSet,parseDecimal,isDecimal,type NumberValue,type DecimalValue} from "./decimal";
-import type { Api, pageUIManifest } from "@platform/kernel";
+import type {Api,pageUIManifest} from "@platform/kernel";
 import type { EntityInfo, RecordQuery } from "@platform/ui";
 import type { ResourceValue, VariableResult } from "./variables";
 import type { QueryView } from "./Session";
@@ -24,6 +24,36 @@ export type QueryPlanResult = { status: "value"; object: string; query: RecordQu
 const validID = /^[A-Za-z][A-Za-z0-9._:-]{0,79}$/;
 type QueryValueResult = Exclude<VariableResult,{status:"value"}> | {status:"value";value:string|boolean|number|NumberValue|DecimalValue|import("./decimal").StringSetValue|ResourceValue};
 const failed = (code: string): QueryPlanResult => ({ status: "error", code });
+type QueryGraph={id:string;plans:Record<string,Api.PageQuery>};
+
+/** Only an actual avatar's original record input may come from an independent planned producer. */
+function avatarContextQueryInput(variable:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],graph:QueryGraph):boolean {
+ const plan=graph.plans[graph.id],input=variables[variable];
+ if(plan?.for?.variable!==variable||input?.type!=="record"||input.mode!=="resource"||input.source?.kind!=="record"||!(input.scope==="page"&&!plan.owner||input.scope==="overlay"&&input.owner===plan.owner&&!!plan.owner))return false;
+ const consumer=sections.some(section=>{if(section.widget!=="avatar-stack"||section.avatar?.contextVariable!==variable)return false;const window=variables[section.avatar.contextCollectionVariable??""];return window?.mode==="resource"&&window.source?.kind==="plan"&&window.source.query===graph.id;});
+ if(!consumer)return false;
+ const producer=sections.find(section=>section.id===input.source!.section);
+ return !!producer&&["table","record-list","record-timeline","kanban","record-calendar","record-picker","record-leaderboard","record-scatter"].includes(producer.widget);
+}
+
+/** Follow original variables, producer inputs and set operands, rather than downloaded rows. */
+function variableDependsOnQuery(variable:string,target:string,variables:Record<string,Api.PageVariable>,sections:Api.Section[],plans:Record<string,Api.PageQuery>):boolean {
+ const seenVariables=new Set<string>(),seenQueries=new Set<string>();
+ const queryDepends=(id:string):boolean=>{
+  if(id===target)return true;if(seenQueries.has(id))return false;seenQueries.add(id);
+  const plan=plans[id];if(!plan)return false;
+  return [...(plan.conditions??[]).map(condition=>condition.value),...(plan.search?[plan.search]:[]),...(plan.for?[plan.for]:[])].some(value=>!!value.variable&&variableDepends(value.variable))||!!plan.set?.inputs.some(queryDepends);
+ };
+ const variableDepends=(id:string):boolean=>{
+  if(!id||seenVariables.has(id))return false;seenVariables.add(id);const input=variables[id];if(!input)return false;
+  if(input.expression?.args.some(value=>!!value.variable&&variableDepends(value.variable)))return true;
+  const source=input.source;if(!source)return false;
+  if(source.kind==="property"&&!!source.variable&&variableDepends(source.variable))return true;
+  if((source.kind==="plan"||input.mode==="aggregate")&&!!source.query&&queryDepends(source.query))return true;
+  return ["record","records","query","filter"].includes(source.kind)&&sections.filter(section=>section.id===source.section).some(section=>[section.collectionVariable,section.filterVariable,section.recordVariable].some(id=>!!id&&variableDepends(id)));
+ };
+ return variableDepends(variable);
+}
 
 export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: QueryView | undefined, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, pickerTitle?:string): QueryPlanResult {
   named=plan.query?boundQueryDefinition(named,plan.query):named;
@@ -46,7 +76,7 @@ export function queryView(plan: Api.PageQuery, base: QueryPlanResult, view: Quer
 
 /** Build the finite read shape from member-visible descriptors and explicit
  * values. It emits the original RecordQuery, never source text or SQL. */
-export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[],setPredicate=false): QueryPlanResult {
+export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, Api.PageVariable>, values: Record<string, VariableResult>, info: EntityInfo | undefined, named: Api.Definition | undefined, contract: Contract, sections:Api.Section[]=[],setPredicate=false,graph?:QueryGraph): QueryPlanResult {
   if(plan.set)return failed("A set plan requires its source graph.");
   if(plan.itemOwner&&!plan.query&&!setPredicate)return failed("Item query needs its typed parent record.");
   if (!info || info.type !== plan.object.name || plan.object.kind !== "object" || plan.limit < 1 || plan.limit > contract.maxLimit || !Number.isInteger(plan.limit) || !Number.isInteger(plan.offset ?? 0) || (plan.offset ?? 0) < 0 || (plan.offset ?? 0) > contract.maxOffset || (plan.conditions?.length ?? 0) > contract.maxConditions || (plan.sort?.length ?? 0) > contract.maxSort) return failed("Query plan is unavailable or exceeds its budget.");
@@ -60,7 +90,8 @@ export function compileQueryPlan(plan: Api.PageQuery, variables: Record<string, 
       return {status:"value",value:value as string|boolean|number|DecimalValue|import("./decimal").StringSetValue};
     }
     const variable = variables[binding.variable];
-    if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner||variable.scope==="loop-item"&&variable.owner===plan.itemOwner&&!!plan.itemOwner) || usesPlan(binding.variable)) return { status: "error", code: "Query parameter escapes its input scope." };
+    const plannedInput=usesPlan(binding.variable)&&!(graph&&avatarContextQueryInput(binding.variable,variables,sections,graph)&&!variableDependsOnQuery(binding.variable,graph.id,variables,sections,graph.plans));
+    if (!variable || !(variable.scope==="page"||variable.scope==="application"||variable.scope==="overlay"&&variable.owner===plan.owner&&!!plan.owner||variable.scope==="loop-item"&&variable.owner===plan.itemOwner&&!!plan.itemOwner) || plannedInput) return { status: "error", code: "Query parameter escapes its input scope." };
     return values[binding.variable] ?? { status: "empty" };
   };
   const scalar = (value: QueryValueResult & { status: "value" }) => typeof value.value === "object" ? value.value.kind === "string-set"?value.value.values:value.value.kind === "decimal"?value.value:value.value.kind === "record" ? value.value.reference.id : undefined : value.value;
@@ -134,7 +165,7 @@ export function compileQueryPlans(plans:Record<string,Api.PageQuery>,variables:R
    if(depth>0&&plan?.query?.ref.kind==="link-type")return failed("A relation cannot be a set predicate source.");
    if(!plan||path.has(id)||depth>contract.set.maxDepth||nodes>contract.set.maxNodes||plan.object.name!==target?.object.name||plan.object.app!==target?.object.app||plan.owner!==target?.owner||plan.itemOwner!==target?.itemOwner)return failed("Set query sources are missing, cyclic or incompatible.");
    if(!active(plan.owner))return {status:"empty"};
-   const own=compileQueryPlan({...plan,set:undefined},variables,values(plan.owner),entity(plan.object.name),named(plan),contract,sections,!!plan.set);
+   const own=compileQueryPlan({...plan,set:undefined},variables,values(plan.owner),entity(plan.object.name),named(plan),contract,sections,!!plan.set,{id,plans});
    const sourceView=(result:QueryPlanResult)=>depth>0&&result.status==="value"?queryView(plan,result,view?.(id,result),entity(plan.object.name),named(plan),contract):result;
    if(!plan.set||own.status!=="value")return sourceView(own);
    if(!(contract.set.operations as readonly string[]).includes(plan.set.op)||plan.set.inputs.length!==2)return failed("Set query sources are missing, cyclic or incompatible.");

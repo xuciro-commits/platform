@@ -43,6 +43,16 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	ContextViews struct {
+		RequiredUIProfile  string `json:"requiredUIProfile"`
+		MaxAvatarWindow    int    `json:"maxAvatarWindow"`
+		MaxDetailFields    int    `json:"maxDetailFields"`
+		MaxLabelBytes      int    `json:"maxLabelBytes"`
+		MaxURLBytes        int    `json:"maxURLBytes"`
+		MaxCaptionBytes    int    `json:"maxCaptionBytes"`
+		MaxImageHeight     int    `json:"maxImageHeight"`
+		DefaultImageHeight int    `json:"defaultImageHeight"`
+	} `json:"contextViews"`
 	WorkViews struct {
 		RequiredUIProfile      string `json:"requiredUIProfile"`
 		MaxApprovalsWindow     int    `json:"maxApprovalsWindow"`

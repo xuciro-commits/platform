@@ -842,6 +842,17 @@ func (b *Build) Reinstall() error {
 			return fmt.Errorf("page %s: %v", p.Name, err)
 		}
 	}
+	// Navigation may be reciprocal or refer to a later page ID. All original
+	// descriptors must exist before the same strict live target/interface check.
+	for _, p := range pages {
+		was, ok := wasPublished[Page](p.Published)
+		if !ok || p.Archived {
+			continue
+		}
+		if err := b.host.ValidateInstallPage(descriptor(was)); err != nil {
+			return fmt.Errorf("page %s navigation: %w", p.Name, err)
+		}
+	}
 	if err := b.installProcesses(); err != nil {
 		return err
 	}

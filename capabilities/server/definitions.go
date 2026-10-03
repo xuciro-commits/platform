@@ -462,6 +462,14 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 					if section.CheckHistogram(shown) != nil {
 						continue
 					}
+					if section.Avatar != nil {
+						avatar := *section.Avatar
+						avatar.DetailFields = slices.DeleteFunc(slices.Clone(avatar.DetailFields), func(name string) bool { _, ok := shown.Field(name); return name != "id" && !ok })
+						section.Avatar = &avatar
+					}
+					if section.CheckContextViews(shown) != nil {
+						continue
+					}
 					if section.CheckRecordComparison(shown) != nil {
 						continue
 					}
@@ -660,7 +668,7 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 								named = nil
 							}
 						}
-						if page.CheckQuerySchema(q, info, named) == nil && (named == nil || named.LinkType != nil || named.Query != nil && checkNamedQuery(*named.Query, info) == nil) {
+						if page.CheckAvatarQuery(id, named, info) == nil && page.CheckQuerySchema(q, info, named) == nil && (named == nil || named.LinkType != nil || named.Query != nil && checkNamedQuery(*named.Query, info) == nil) {
 							doc.Queries[id] = q
 						}
 					}

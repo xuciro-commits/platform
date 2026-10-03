@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  BreadcrumbTrail,RecordAvatarStack,StaticImage,ApprovalInbox, RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -377,3 +377,15 @@ export function PdfViewerExample(){const blob=useMemo(catalogPdf,[]),[page,setPa
 
 export function ApprovalInboxExample(){const [errors,setErrors]=useState<Record<string,string>>({}),task={id:"TASK-17",revision:2,created:stamp,changed:stamp,title:"Drawing review",body:"Review the current drawing before release.",ref:"work.approval/REQUEST-17",app:"build",candidates:["approver"],state:"open" as const},request={id:"REQUEST-17",revision:4,created:stamp,changed:stamp,action:"build.drawing.release",title:"Release original drawing",app:"build",target:"build.drawing/DRAWING-17",requester:"requester",submission:"original-held-submission",level:0,levels:[{title:"Owner review",approvers:["approver"],approved:[]}],state:"pending" as const},refuse=()=>setErrors({"REQUEST-17":t("Catalog examples do not decide approvals.")});return <ApprovalInbox rows={[{task,request}]} total={1} onApprove={refuse} onReject={refuse} errors={errors}/>;}
 export function RecordHistoryExample(){return <RecordHistory info={demoInfo} recordID="DEMO-001" recordRevision={2} limit={1} total={2} history={[{change:"CHANGE-2",schema:"demo.record.edit",by:"actual-member",at:stamp.at,fields:[{field:"quantity",before:12,after:24}]},{change:"CHANGE-1",schema:"demo.record.create",by:"creator",at:"2026-09-29T12:00:00Z",fields:[{field:"name",after:"Sample Alpha"}]}]}/>;}
+
+export function BreadcrumbTrailExample(){
+ const [selected,setSelected]=useState(true),[message,setMessage]=useState("");
+ const items=[{id:"home",label:t("Demo workspace")},{id:"page",label:t("Records")},...(selected?[{id:"sample.person/P-17",label:"Taylor Chen",detail:"sample.person/P-17"}]:[])];
+ return <div className="grid gap-2"><BreadcrumbTrail items={items} currentID={selected?"sample.person/P-17":"page"} onActivate={item=>{setSelected(false);if(item.id==="home")setMessage(t("Catalog example navigation stays local."));}}/><output className="text-xs text-muted">{message}</output></div>;
+}
+export function RecordAvatarStackExample(){
+ const info={type:"sample.person",title:"People",fields:[{name:"name",title:"Name",type:"text"},{name:"shift",title:"Shift",type:"text"}]} as EntityInfo;
+ const records=["P-17","P-22","P-28","P-31","P-40","P-52"].map((id,index)=>({id,revision:1,created:stamp,changed:stamp,name:index<2?"Taylor Chen":["Alex Smith","王明","Sasha Lee","Sam Rivera"][index-2]!,shift:index%2?"day":"night"}));
+ return <RecordAvatarStack records={records} info={info} labelField="name" detailFields={["shift"]} total={14}/>;
+}
+export function StaticImageExample(){return <StaticImage src={new URL("./catalog-image.svg",import.meta.url).href} alt={t("Catalog landscape")} caption={t("A real bundled image at its original static URL.")}/>;}

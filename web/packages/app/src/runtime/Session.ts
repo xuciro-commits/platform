@@ -97,6 +97,7 @@ export class PageSessionStore {
   constructor(source: RecordSource, plan: SelectionPlan) { this.source = source; this.sourceRevision = source.revision; this.sourceScope = source.scope; this.plan = plan; }
   activate() { this.disposed = false; }
   snapshot = () => this.state;
+  snapshotScope = () => this.sourceScope;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private publish(patch: Partial<PageSessionSnapshot>) {
     if (this.disposed) return;

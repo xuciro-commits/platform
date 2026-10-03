@@ -3,6 +3,7 @@ package platformserver
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,6 +64,48 @@ func TestFrozenNavigationPagesActivateAndReplayAsOneClosure(t *testing.T) {
 	submit(build.PageType, "second", "edit", map[string]any{"document": later})
 	if _, err := tn.ActivateRelease(member, preview.CandidateID, "activate", at); err != nil {
 		t.Fatal(err)
+	}
+	CheckReplay(t, tn, entries, compose)
+	saved, _, err := tn.Snapshot(func() int64 { return int64(len(entries)) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := compose()
+	if err := restored.Restore(saved); err != nil {
+		t.Fatal("reciprocal pages failed original snapshot restore", err)
+	}
+	for _, broken := range []string{"target", "interface"} {
+		var state tenantState
+		if err := json.Unmarshal(saved, &state); err != nil {
+			t.Fatal(err)
+		}
+		changed := false
+		for i, row := range state.Records[build.PageType] {
+			var page build.Page
+			if json.Unmarshal(row.Value, &page) != nil || page.Name != "first" {
+				continue
+			}
+			var published build.Page
+			if err := json.Unmarshal([]byte(page.Published), &published); err != nil {
+				t.Fatal(err)
+			}
+			nav := published.Document.Events[0].Navigate
+			if broken == "target" {
+				nav.Page.Name = "missing"
+			} else {
+				nav.InterfaceVersion = 2
+			}
+			page.Published = string(platform.Raw(published))
+			row.Value = platform.Raw(page)
+			state.Records[build.PageType][i] = row
+			changed = true
+		}
+		if !changed {
+			t.Fatal("published navigation tampering fixture missing")
+		}
+		if err := compose().Restore(platform.Raw(state)); err == nil || !strings.Contains(err.Error(), "navigation") {
+			t.Fatalf("invalid original %s was not rejected by final restore navigation check: %v", broken, err)
+		}
 	}
 	replayed := compose()
 	if err := replayed.Replay(entries); err != nil {

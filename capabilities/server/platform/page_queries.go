@@ -173,7 +173,11 @@ func (d *PageDocument) checkQueries(sections []Section, inputScope string) error
 			}
 			if value.Variable != "" {
 				v, ok := d.Variables[value.Variable]
-				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record" && (q.Query == nil || q.Query.Ref.Kind != AssetLinkType)) || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") && !(v.Scope == "loop-item" && v.Owner == q.ItemOwner && q.ItemOwner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal", "string-set"}, v.Type) || dependsOnPlan(value.Variable, map[string]bool{}) {
+				plannedInput := dependsOnPlan(value.Variable, map[string]bool{})
+				if plannedInput && inputScope == "page" && d.avatarContextQueryInput(id, value.Variable, sections) && !d.variableDependsOnQuery(value.Variable, id, sections) {
+					plannedInput = false
+				}
+				if !ok || inputScope == "application" && (v.Scope != "application" || v.Type == "record" && (q.Query == nil || q.Query.Ref.Kind != AssetLinkType)) || (v.Scope != "page" && v.Scope != "application" && !(v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") && !(v.Scope == "loop-item" && v.Owner == q.ItemOwner && q.ItemOwner != "")) || !slices.Contains([]string{"string", "boolean", "record", "decimal", "string-set"}, v.Type) || plannedInput {
 					return fmt.Errorf("page query %s parameter escapes its input scope", id)
 				}
 			} else {
@@ -437,4 +441,105 @@ func (p Page) CheckCollectionPorts() error {
 		}
 	}
 	return nil
+}
+
+// A contextual avatar consumes the confirmed record of an original producer,
+// including one with its own independent query window. It may not consume a
+// record whose actual read dependencies lead back to this query.
+func (d *PageDocument) avatarContextQueryInput(query, variable string, sections []Section) bool {
+	q := d.Queries[query]
+	v := d.Variables[variable]
+	if q.For == nil || q.For.Variable != variable || v.Type != "record" || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "record" || !(v.Scope == "page" && q.Owner == "" || v.Scope == "overlay" && v.Owner == q.Owner && q.Owner != "") {
+		return false
+	}
+	consumer := false
+	for _, s := range sections {
+		if s.Widget != "avatar-stack" || s.Avatar == nil || s.Avatar.ContextVariable != variable {
+			continue
+		}
+		window := d.Variables[s.Avatar.ContextCollectionVariable]
+		if window.Mode == "resource" && window.Source != nil && window.Source.Kind == "plan" && window.Source.Query == query {
+			consumer = true
+			break
+		}
+	}
+	if !consumer {
+		return false
+	}
+	for _, s := range sections {
+		if s.ID != v.Source.Section {
+			continue
+		}
+		for _, r := range pageWidgets.Runtime.Resources {
+			if r.Kind == "record" && (r.Widget == s.Widget || slices.Contains(r.Widgets, s.Widget)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+func (d *PageDocument) variableDependsOnQuery(variable, target string, sections []Section) bool {
+	seenVariables, seenQueries := map[string]bool{}, map[string]bool{}
+	var variableDepends func(string) bool
+	var queryDepends func(string) bool
+	queryDepends = func(id string) bool {
+		if id == target {
+			return true
+		}
+		if seenQueries[id] {
+			return false
+		}
+		seenQueries[id] = true
+		q := d.Queries[id]
+		for _, value := range q.Values() {
+			if value.Variable != "" && variableDepends(value.Variable) {
+				return true
+			}
+		}
+		if q.Set != nil {
+			for _, input := range q.Set.Inputs {
+				if queryDepends(input) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	variableDepends = func(id string) bool {
+		if id == "" || seenVariables[id] {
+			return false
+		}
+		seenVariables[id] = true
+		v := d.Variables[id]
+		if v.Expression != nil {
+			for _, value := range v.Expression.Args {
+				if variableDepends(value.Variable) {
+					return true
+				}
+			}
+		}
+		if v.Source == nil {
+			return false
+		}
+		if v.Source.Kind == "property" && variableDepends(v.Source.Variable) {
+			return true
+		}
+		if (v.Source.Kind == "plan" || v.Mode == "aggregate") && queryDepends(v.Source.Query) {
+			return true
+		}
+		if slices.Contains([]string{"record", "records", "query", "filter"}, v.Source.Kind) {
+			for _, s := range sections {
+				if s.ID != v.Source.Section {
+					continue
+				}
+				for _, input := range []string{s.CollectionVariable, s.FilterVariable, s.RecordVariable} {
+					if variableDepends(input) {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	return variableDepends(variable)
 }
