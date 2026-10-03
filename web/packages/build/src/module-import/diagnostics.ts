@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "separator-profile":"Separators require an optional static plain label within its UTF-8 budget and the supported profile. Unknown fields, executable configuration and incompatible values are refused.",
+ "native-separator":"The Divider maps to an original horizontal semantic separator. Missing or empty labels remain visually empty; widget identity supplies its accessible name. Labels and HTML stay literal, with original visibility, ownership and frozen delivery.",
  "notice-profile":"Notices require a static optional title, plain text and a supported semantic tone within the declared UTF-8 budgets. Unknown configurations, executable inputs and old profiles are refused.",
  "native-notice":"Callout primary maps to the original info tone; success, warning and danger are retained. Optional and empty titles remain distinct from the widget name. Text, HTML and {value} are literal, and static notes do not announce themselves as live alerts. Original visibility, ownership and frozen delivery remain.",
  "alert-profile":"Alert banners require an original exact decimal value, a bounded numeric threshold, an info/warning/danger tone and nonempty plain text. Unknown configurations and old profiles are refused.",

@@ -2,6 +2,14 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Separator": "分隔",
+ "Show separator label": "显示分隔标签",
+ "Separator label": "分隔标签",
+ "Use a horizontal semantic separator for operator groups. Empty or absent labels stay visually empty; the widget name preserves accessible identity.": "操作分组使用横向语义分隔。空或缺省标签保持无可见文字，组件名保留可访问身份。",
+ "Declare a bounded plain separator label or leave it absent before saving.": "保存前请声明有界的纯文本分隔标签，或不声明标签。",
+ "Separators require an optional static plain label within its UTF-8 budget and the supported profile. Unknown fields, executable configuration and incompatible values are refused.": "分隔需要符合 UTF-8 预算的可选静态纯文本标签，以及受支持的版本。未知字段、执行配置与不兼容值拒绝。",
+ "The Divider maps to an original horizontal semantic separator. Missing or empty labels remain visually empty; widget identity supplies its accessible name. Labels and HTML stay literal, with original visibility, ownership and frozen delivery.": "Divider 映射原横向语义分隔。缺省或空标签保持无可见文字，组件身份提供无障碍名称。标签和 HTML 按字面显示，原显示条件、拥有者与冻结交付保持。",
+
  "Notice": "说明",
  "Show notice title": "显示说明标题",
  "Notice title": "说明标题",
@@ -1636,6 +1644,14 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Separator": "分隔",
+ "Show separator label": "显示分隔标签",
+ "Separator label": "分隔标签",
+ "Use a horizontal semantic separator for operator groups. Empty or absent labels stay visually empty; the widget name preserves accessible identity.": "操作分组使用横向语义分隔。空或缺省标签保持无可见文字，组件名保留可访问身份。",
+ "Declare a bounded plain separator label or leave it absent before saving.": "保存前请声明有界的纯文本分隔标签，或不声明标签。",
+ "Separators require an optional static plain label within its UTF-8 budget and the supported profile. Unknown fields, executable configuration and incompatible values are refused.": "分隔需要符合 UTF-8 预算的可选静态纯文本标签，以及受支持的版本。未知字段、执行配置与不兼容值拒绝。",
+ "The Divider maps to an original horizontal semantic separator. Missing or empty labels remain visually empty; widget identity supplies its accessible name. Labels and HTML stay literal, with original visibility, ownership and frozen delivery.": "Divider 映射原横向语义分隔。缺省或空标签保持无可见文字，组件身份提供无障碍名称。标签和 HTML 按字面显示，原显示条件、拥有者与冻结交付保持。",
+
  "Notice": "说明",
  "Show notice title": "显示说明标题",
  "Notice title": "说明标题",

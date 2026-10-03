@@ -1,5 +1,11 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Separator": "分隔",
+ "Operator instructions": "操作说明",
+ "Semantic separator": "语义分隔",
+ "Separate operator groups with an optional literal label and accessible identity.": "通过可选纯文本标签和可访问身份分隔操作分组。",
+ "The caller owns the label and visibility. The separator is horizontal and noninteractive, without data reads or text evaluation.": "调用方拥有标签及显示条件。分隔为横向、不可交互，不读取数据或执行文本。",
+
  "Notice": "说明",
 
  "Alert banner": "条件提示",

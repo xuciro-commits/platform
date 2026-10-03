@@ -295,6 +295,22 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		sections = append(sections, build.Section{ID: spec.id, Widget: "notice", ConfigVersion: 1, Notice: &platform.PageNotice{Title: spec.title, Tone: spec.tone, Message: "<img src=x> {value} **literal**"}})
 	}
 	doc.Variables["privateNoticeVisible"] = platform.PageVariable{Scope: "page", Type: "boolean", Mode: "derived", Expression: &platform.PageExpression{Op: "decimal-less", Args: []platform.PageValue{{Literal: platform.Raw(map[string]any{"kind": "decimal", "value": "0"})}, {Variable: "privateProgressCount"}}}}
+	separatorIndex := len(sections)
+	separatorLabel := "<img src=x> {value}"
+	for _, spec := range []struct {
+		id    string
+		label *string
+	}{{"separatorInput", &separatorLabel}, {"emptySeparator", &emptyNoticeTitle}, {"absentSeparator", nil}, {"hiddenSeparator", nil}} {
+		node := platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		if spec.id == "hiddenSeparator" {
+			node.VisibleWhen = "privateNoticeVisible"
+		}
+		doc.Nodes[spec.id] = node
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "separator", ConfigVersion: 1, Separator: &platform.PageSeparator{Label: spec.label}})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -321,6 +337,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
 	sections[56].RecordPicker = &platform.PageRecordPicker{LabelField: "id"}
+	sections[separatorIndex].Separator = &platform.PageSeparator{Label: &emptyNoticeTitle}
 	sections[noticeIndex].Notice = &platform.PageNotice{Title: &emptyNoticeTitle, Tone: "danger", Message: "Later note"}
 	sections[alertIndex].AlertBanner = &platform.PageAlertBanner{Threshold: "999", Tone: "info", Message: "Later alert"}
 	sections[alertIndex].AlertValueVariable = "privateProgressCount"
@@ -375,6 +392,24 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					lineFound, emptyLineFound, absentLineFound, privateLines := false, false, false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "separatorInput" {
+							lineFound = section.Separator != nil && section.Separator.Label != nil && *section.Separator.Label == "<img src=x> {value}"
+						}
+						if section.ID == "emptySeparator" {
+							emptyLineFound = section.Separator != nil && section.Separator.Label != nil && *section.Separator.Label == ""
+						}
+						if section.ID == "absentSeparator" {
+							absentLineFound = section.Separator != nil && section.Separator.Label == nil
+						}
+						if section.ID == "hiddenSeparator" {
+							privateLines++
+						}
+					}
+					if !lineFound || !emptyLineFound || !absentLineFound || member.ID == builder.ID && privateLines != 1 || member.ID != builder.ID && privateLines != 0 {
+						t.Fatal("frozen separator label, empty/absent identity or display permission changed")
+					}
 					noticeFound, emptyNoticeFound, privateNotices := false, false, 0
 					for _, section := range d.Page.Sections {
 						if section.ID == "noticeInput" {

@@ -2,6 +2,9 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Separator": "分隔",
+ "Separator configuration is unavailable or incompatible.": "分隔配置不可用或不兼容。",
+
  "Notice": "说明",
  "Notice configuration is unavailable or incompatible.": "说明配置不可用或不兼容。",
 
@@ -335,6 +338,9 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Separator": "分隔",
+ "Separator configuration is unavailable or incompatible.": "分隔配置不可用或不兼容。",
+
  "Notice": "说明",
  "Notice configuration is unavailable or incompatible.": "说明配置不可用或不兼容。",
 

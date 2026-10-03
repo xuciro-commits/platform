@@ -78,6 +78,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/record-timeline": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordTimelines })),
   "ui/record-workspace": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.MasterDetail })),
   "ui/retro-button": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RetroButtons })),
+  "ui/separator": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SeparatorExample })),
   "ui/sheet": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Sheets })),
   "ui/status": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Statuses })),
   "ui/summary-statistics": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.SummaryStatisticsExample })),

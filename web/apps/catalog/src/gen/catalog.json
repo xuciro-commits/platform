@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:969f9c79f253e4f9",
+  "revision": "sha256:ae0d646a92967321",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2368,6 +2368,32 @@
       "snippet": "import { RetroButton } from \"@platform/ui\";\n<RetroButton variant=\"default\">RUN</RetroButton>"
     },
     {
+      "id": "ui/separator",
+      "owner": "@platform/ui",
+      "name": "Semantic separator",
+      "summary": "Separate operator groups with an optional literal label and accessible identity.",
+      "layer": 1,
+      "source": "web/packages/ui/src/primitives/separator.tsx",
+      "exports": [
+        "Separator"
+      ],
+      "example": "SeparatorExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "separator",
+        "divider",
+        "layout"
+      ],
+      "constraints": [
+        "The caller owns the label and visibility. The separator is horizontal and noninteractive, without data reads or text evaluation."
+      ]
+    },
+    {
       "id": "ui/sheet",
       "owner": "@platform/ui",
       "name": "Detail sheet",
@@ -2779,8 +2805,10 @@
       "Select original records from a caller-owned grid or list window.": "在调用方拥有的网格或列表窗口中选择原记录。",
       "Selected": "已选中",
       "Semantic notice": "语义提示",
+      "Semantic separator": "语义分隔",
       "Semantic status tags": "语义状态标签",
       "Semantic tokens": "语义令牌",
+      "Separate operator groups with an optional literal label and accessible identity.": "通过可选纯文本标签和可访问身份分隔操作分组。",
       "Set choice input": "集合选择输入",
       "Share declared presentation state across pages of one scoped application instance.": "在同一受控应用实例的页面间共享声明式展示状态。",
       "Shared": "共享",
@@ -2812,6 +2840,7 @@
       "The caller owns the boolean and its effects; this control does not coerce unrelated values or write records.": "调用方拥有布尔值及其效果；控件不强制转换无关值或写入记录。",
       "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection.": "调用方拥有有界窗口和记录授权；日历不写日期或读取另一集合。",
       "The caller owns the condition and message. This component performs no queries, template execution or notification delivery.": "调用方拥有条件及消息，本组件不执行查询、模板代码或通知发送。",
+      "The caller owns the label and visibility. The separator is horizontal and noninteractive, without data reads or text evaluation.": "调用方拥有标签及显示条件。分隔为横向、不可交互，不读取数据或执行文本。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
       "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。无效草稿保持可见，不应用本地时区或时间点转换。",
       "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
@@ -2972,6 +3001,7 @@
       "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordPickerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/SeparatorInspector.tsx",
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SummaryInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
@@ -3016,6 +3046,7 @@
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
       "web/packages/build/src/page-editor/widgets/LeaderboardInspector.tsx",
       "web/packages/build/src/page-editor/widgets/NoticeInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/SeparatorInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
       "web/packages/build/src/process.tsx",
       "web/packages/build/src/query.tsx",
@@ -3057,6 +3088,7 @@
       "web/packages/app/src/widgets/RecordGantt.tsx",
       "web/packages/app/src/widgets/RecordPicker.tsx",
       "web/packages/app/src/widgets/RecordTimeline.tsx",
+      "web/packages/app/src/widgets/Separator.tsx",
       "web/packages/app/src/widgets/Summary.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/build/src/application.tsx",
@@ -3340,6 +3372,9 @@
     ],
     "ui/record-timeline": [
       "web/packages/app/src/widgets/RecordTimeline.tsx"
+    ],
+    "ui/separator": [
+      "web/packages/app/src/widgets/Separator.tsx"
     ],
     "ui/summary-statistics": [
       "web/packages/app/src/widgets/Summary.tsx"

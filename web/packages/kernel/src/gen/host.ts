@@ -1153,6 +1153,10 @@ export type PageResourceSource = {
   node?: string;
 };
 
+export type PageSeparator = {
+  label?: string;
+};
+
 export type PageStatusTracker = {
   field: string;
   stages: string[];
@@ -1474,6 +1478,7 @@ export type Section = {
   recordList?: PageRecordList;
   headingLevel?: string;
   recordPicker?: PageRecordPicker;
+  separator?: PageSeparator;
   notice?: PageNotice;
   alertValueVariable?: string;
   alertBanner?: PageAlertBanner;
@@ -1829,7 +1834,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.61",
+  "uiProfile": "platform.page.v2.62",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4408,6 +4413,50 @@ export const pageUIManifest = {
       "layoutPreferences": {
         "frame": "inline"
       }
+    },
+    {
+      "componentID": "separator",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.62",
+      "title": "Separator",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "separator": {}
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "separator": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "maxLength": 1024
+              }
+            }
+          }
+        }
+      },
+      "inputPorts": [],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      }
     }
   ],
   "supportedProfiles": [
@@ -4471,7 +4520,8 @@ export const pageUIManifest = {
     "platform.page.v2.58",
     "platform.page.v2.59",
     "platform.page.v2.60",
-    "platform.page.v2.61"
+    "platform.page.v2.61",
+    "platform.page.v2.62"
   ],
   "runtime": {
     "scope": "page",
@@ -4995,6 +5045,10 @@ export const pageUIManifest = {
         "warning",
         "danger"
       ]
+    },
+    "separator": {
+      "requiredUIProfile": "platform.page.v2.62",
+      "maxLabelBytes": 1024
     }
   },
   "layout": {
