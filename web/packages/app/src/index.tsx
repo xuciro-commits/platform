@@ -1,3 +1,4 @@
+export {searchInputObjects} from "./widgets/search-input";
 // The app API of the workspace (ADR-0018), the browser's counterpart of
 // platformserver/platform: an app's UI declares itself with defineApp and
 // reaches the host only through useHost, as a server-side app reaches it only

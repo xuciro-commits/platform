@@ -331,6 +331,14 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	}
 	doc.Variables["personID"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: json.RawMessage(`"legacy name"`)}
 	sections[56].PickerValueVariable = "personID"
+	doc.Variables["searchState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("%_\\")}
+	doc.Queries["searchQuery"] = platform.PageQuery{Object: platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "build.note"}, Search: &platform.PageValue{Variable: "searchState"}, Limit: 20}
+	doc.Nodes["searchInput"] = platform.PageLayoutNode{Kind: "widget", Section: "searchInput", ValueVariable: "searchState"}
+	searchRoot := doc.Nodes[doc.Root]
+	searchRoot.Children = append(searchRoot.Children, "searchInput")
+	doc.Nodes[doc.Root] = searchRoot
+	searchIndex := len(sections)
+	sections = append(sections, build.Section{ID: "searchInput", Widget: "input", ConfigVersion: 1, InputKind: "search"})
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -356,6 +364,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[searchIndex].InputKind = ""
+	doc.Variables["searchState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("later draft")}
 	sections[56].PickerValueVariable = ""
 	doc.Variables["personID"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: json.RawMessage(`"later draft"`)}
 	sections[56].RecordPicker = &platform.PageRecordPicker{LabelField: "id"}
@@ -474,6 +484,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !alertFound || member.ID == builder.ID && privateAlerts != 1 || member.ID != builder.ID && privateAlerts != 0 {
 						t.Fatal("frozen alert config, count binding or private dependency changed")
+					}
+					searchFound := false
+					for _, section := range d.Page.Sections {
+						if section.ID == "searchInput" {
+							searchFound = section.InputKind == "search"
+						}
+					}
+					if !searchFound || string(d.Page.Document.Variables["searchState"].Initial) != `"%_\\"` || d.Page.Document.Queries["searchQuery"].Search.Variable != "searchState" {
+						t.Fatal("frozen search presentation, query or literal text changed")
 					}
 					pickerFound := false
 					for _, s := range d.Page.Sections {

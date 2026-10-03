@@ -78,6 +78,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Widget == "record-picker" || s.RecordPicker != nil || s.PickerValueVariable != "" {
 				return fmt.Errorf("record picker requires a page document")
 			}
+			if s.InputKind != "" {
+				return fmt.Errorf("search input requires a page document")
+			}
 			if s.Widget == "date-input" || s.DateVariable != "" || s.DateLabel != nil || s.DateKind != "" || s.DateOffset != "" {
 				return fmt.Errorf("date input requires a page document")
 			}
@@ -206,6 +209,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return fmt.Errorf("page document sections need unique stable IDs")
 		}
 		byID[section.ID] = true
+		if err := d.checkInputPresentation(section); err != nil {
+			return err
+		}
 		if err := d.checkRecordPicker(section); err != nil {
 			return err
 		}

@@ -1,3 +1,4 @@
+import {searchInputObjects} from "./widgets/search-input";
 import {tableEditableFields} from "./widgets/table-edit";
 import {Facets} from "./widgets/Facets";
 import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime/decimal";
@@ -8,7 +9,7 @@ import {isStringSet,isDecimal,scalarAssignable,type ScalarValue} from "./runtime
 // the aggregate chart — so a code page and a composed page look and behave the
 // same, and nothing here interprets data of its own.
 import {
-  Button,ButtonGroup, CollectionTitle, PageHeader, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, RecordStatus, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
+  Button,ButtonGroup, CollectionTitle, PageHeader, Card, LayoutRegion, LayoutStack, ContentTabs, Dialog, FlowLayout, Sheet, Input, SearchInput, Markdown, Panel, PropertyList, RecordHistory, RecordList, RecordLookup, RecordPage, RecordLinks, RecordStatus, Select, Tasks, cn, t, useViewVisible, type ChartSpec, type EntityRecord, type RecordSource, type RecordView,
 } from "@platform/ui";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { NewActions, RecordActions, InlineActionForm, prefixOf } from "./actions";
@@ -70,7 +71,7 @@ type Bound = {pickerConfirmation?:"empty"|"pending"|"value"|"error";pickerValue?
   selectionSet?:import("@platform/ui").RecordSelectionPort;
   keepActive?:boolean;
   facetValues?:Record<string,VariableResult>;onFacet?:(id:string,value:ScalarValue)=>void;
-  onClick?: () => void; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
+  inputScopes?:string[];onClick?: () => void; numeric?:boolean; valueError?:string; value?: string; onValue?: (value: string) => void; enabled?: boolean; readSource?: RecordSource;
   sharedFilter?:Record<string,unknown>; narrowed: Narrowed; onNarrow: (object: string, field: string, value: unknown) => void;
 };
 
@@ -438,7 +439,7 @@ const widgets = createWidgetRegistry<Bound>({
  "record-view":RecordViewWidget,
   kanban:KanbanAdapter,
   "record-timeline":RecordTimelineAdapter,
-  input: ({ section, value, onValue, enabled,numeric,valueError }) => <div className="grid gap-1"><Input inputMode={numeric?"decimal":undefined} maxLength={numeric?pageVariableContract.decimal.maxBytes:undefined} aria-invalid={!!valueError} aria-label={section.title || t("Text input")} value={value ?? ""} disabled={!onValue || enabled === false} onChange={(event) => onValue?.(event.target.value)} />{valueError&&<p role="alert" className="text-xs text-danger">{t(valueError)}</p>}</div>,
+  input: ({ section, value, onValue, enabled,numeric,valueError,inputScopes }) => <div className="grid gap-1">{section.inputKind==="search"?<SearchInput value={value??""} onChange={onValue??(()=>{})} disabled={!onValue||enabled===false} aria-label={section.title||t("Search records")} scope={inputScopes??[]}/>:<Input inputMode={numeric?"decimal":undefined} maxLength={numeric?pageVariableContract.decimal.maxBytes:undefined} aria-invalid={!!valueError} aria-label={section.title || t("Text input")} value={value ?? ""} disabled={!onValue || enabled === false} onChange={(event) => onValue?.(event.target.value)} />}{valueError&&<p role="alert" className="text-xs text-danger">{t(valueError)}</p>}</div>,
   button: ({ section, onClick, enabled }) => <ButtonRenderer title={section.title} onClick={onClick} enabled={enabled}/>,
   "inline-action":({page,section,selected,live,aggregateScope})=><InlineActionForm type={objectOf(page,section)} schema={section.actions?.[0]?.name??""} record={selected} live={live} scope={aggregateScope}/>,
   table: TableAdapter, detail: DetailWidget, actions: ActionsWidget,
@@ -601,7 +602,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
         collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"||!!valueVariable&&Object.values(page.document?.queries??{}).some(q=>q.conditions?.some(c=>c.asDecimal&&c.value.variable===valueVariable))} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
-        pickerConfirmation={snapshot.records[selectionSlot(page,section)]?.status} pickerValue={values[section.pickerValueVariable??""]} onPickerID={section.pickerValueVariable?(record)=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const variable=section.pickerValueVariable!,scalarState=session.snapshot().scalars,query=selectionQuery(section);if(!record){session.select(selectionSlot(page,section),undefined);writeState(variable,"",overlay);return;}if(!query)return;void session.confirmSelection(selectionSlot(page,section),record,query).then(confirmed=>{if(!confirmed||overlay&&session.overlayEpoch(overlay)!==epoch||session.snapshot().scalars!==scalarState||session.selected(selectionSlot(page,section))?.id!==confirmed.id)return;writeState(variable,confirmed.id,overlay);});}:undefined}
+        inputScopes={searchInputObjects(page.document,valueVariable).flatMap(object=>{const info=source.entity(object);return info?[info.plural||info.title]:[];})} pickerConfirmation={snapshot.records[selectionSlot(page,section)]?.status} pickerValue={values[section.pickerValueVariable??""]} onPickerID={section.pickerValueVariable?(record)=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const variable=section.pickerValueVariable!,scalarState=session.snapshot().scalars,query=selectionQuery(section);if(!record){session.select(selectionSlot(page,section),undefined);writeState(variable,"",overlay);return;}if(!query)return;void session.confirmSelection(selectionSlot(page,section),record,query).then(confirmed=>{if(!confirmed||overlay&&session.overlayEpoch(overlay)!==epoch||session.snapshot().scalars!==scalarState||session.selected(selectionSlot(page,section))?.id!==confirmed.id)return;writeState(variable,confirmed.id,overlay);});}:undefined}
         alertValue={values[section.alertValueVariable??""]}
         dateValue={values[section.dateVariable??""]} onDate={section.widget==="date-input"&&section.dateVariable?(value)=>{if(context||enabled===false||typeof value!=="string"||overlay&&session.overlayEpoch(overlay)!==epoch)return;writeState(section.dateVariable!,value,overlay);}:undefined}
         choiceSetValue={values[section.choiceSetVariable??""]} onChoiceSet={section.widget==="choice-input"&&section.choiceInput?.variant==="multiple"&&section.choiceSetVariable?(next)=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const current=values[section.choiceSetVariable!];if(current?.status!=="value"||!isStringSet(current.value)||!isStringSet({kind:"string-set",values:next}))return;const previous=current.value.values,delta=[...next.filter(item=>!previous.includes(item)),...previous.filter(item=>!next.includes(item))];if(!(section.choiceInput?.clearable&&next.length===0&&previous.length>0)&&(delta.length!==1||!section.choiceInput?.options.includes(delta[0]!)))return;writeState(section.choiceSetVariable!,{kind:"string-set",values:next},overlay);}:undefined}

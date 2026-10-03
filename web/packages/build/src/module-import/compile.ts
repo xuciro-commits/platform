@@ -1,3 +1,4 @@
+import {searchInputObjects} from "@platform/app/search";
 import {explorationChoices} from "./exploration";
 import {parseDecimal} from "@platform/app/decimal";
 import {validTimestampOffset,withTimestampOffset} from "@platform/ui/date";
@@ -305,6 +306,7 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   }
   if(["HeaderText","ObjectSetTitle"].includes(w.type)&&Number(target.profile.split(".").at(-1))<Number(pageUIManifest.runtime.titles.requiredUIProfile.split(".").at(-1)))issue(`${path}/config`,"title-profile");
   if(w.type==="Markdown"){safeKeys(config,["text"],`${path}/config`);section.text=text(config.text);}
+  if(w.type==="ExplorationSearch"){safeKeys(config,["variableId"],`${path}/config`);const input=variable(text(config.variableId),context,`${path}/config/variableId`),v=document.variables![input];section.inputKind="search";document.nodes[leaf]!.valueVariable=input;if(vars.get(text(config.variableId))?.type!=="string"||v?.type!=="string"||v.mode!=="state"||Number(target.profile.split(".").at(-1))<66)issue(`${path}/config`,"exploration-search-binding");issue(`${path}/config`,"native-exploration-search",false);}
   if(w.type==="TextInput"||w.type==="NumericInput"){if(w.type==="NumericInput")issue(`${path}/config`,"native-number-syntax",false);safeKeys(config,["variableId","label","placeholder"],`${path}/config`);document.nodes[leaf]!.valueVariable=variable(text(config.variableId),context,`${path}/config/variableId`);if(document.variables![document.nodes[leaf]!.valueVariable!]?.type!=="string")issue(`${path}/config/variableId`,"input-profile");if(config.label!==undefined)section.title=text(config.label);if(config.placeholder!==undefined)issue(`${path}/config/placeholder`,"native-presentation",false);}
   if(w.type==="MetricCard"){
    safeKeys(config,["label","variableId","variant","prefix","suffix","color","formatter"],`${path}/config`);Object.assign(section,metric(text(config.variableId),context,`${path}/config/variableId`));section.title=text(config.label)||w.name;const limits=pageUIManifest.runtime.metricPresentation,formatter=config.formatter===undefined?"number":config.formatter==="currencyShort"?"short":"",variant=text(config.variant)||"card",tone=text(config.color)||"neutral";
@@ -410,6 +412,7 @@ if(w.type==="PropertyList"){safeKeys(config,["objectVarId","properties","columns
  // Check selection producer after the full tree traversal, so order does not grant meaning.
  for(const [sourceID,mapped] of Object.entries(ids.variables)){const v=vars.get(sourceID);if(v?.definitionKind==="widgetOutput"&&!expectedWidgets.has(recordProducers.get(sourceID)??text(v.widgetId)))issue(`${variablePath(sourceID)}/widgetId`,"selection-producer");const value=document.variables![mapped];if((value?.source?.kind==="record"||value?.source?.kind==="records")&&!sections.some(s=>s.id===value.source!.section&&(s.widget==="table"||value.source!.kind==="record"&&["record-list","kanban","record-calendar","record-picker","record-leaderboard"].includes(s.widget))))issue(`${variablePath(sourceID)}/widgetId`,"selection-producer");}
  if(Object.keys(m.widgets).some(w=>!usedWidgets.has(w))||m.variables.some(v=>!ids.variables[v.id]))issue("/","unreferenced-content-retained",false);
+ for(const [sourceID,sectionID] of Object.entries(ids.widgets)){const section=sections.find(s=>s.id===sectionID);if(section?.inputKind!=="search")continue;const input=document.nodes[id("leaf",sourceID)]?.valueVariable;if(!searchInputObjects(document,input).length)issue(`/widgets/${pointer(sourceID)}/config/variableId`,"exploration-search-binding");}
  if(Object.keys(document.queries!).length>8||Object.values(document.queries!).reduce((s,q)=>s+q.limit,0)>512||Object.keys(document.variables!).length>64||sections.length>128||Object.keys(document.nodes).length>256)issue("/","target-budget");
  if(!diagnostics.some(d=>d.blocking))report.draft=draft;
  return report;

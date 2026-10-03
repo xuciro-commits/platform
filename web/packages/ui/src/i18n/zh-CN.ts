@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Scoped search input": "有范围的搜索输入",
+ "Edit caller-owned search text and show the actual readable object scope.": "编辑调用方拥有的搜索文本，并显示实际可读对象范围。",
+ "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search.": "调用方拥有文本、对象范围及授权读取；此控件不查询数据，也不声称全本体搜索。",
+ "Search scope is unavailable.": "搜索范围不可用。",
+ "Search records…": "搜索记录…",
+ "Search in: {objects}": "搜索范围：{objects}",
+
  "Optional whole-set clearing removes all selected values, including unmatched values.": "可选整组清空会移除全部已选值，包括未匹配的值。",
  "Clear selections": "清空选择",
 

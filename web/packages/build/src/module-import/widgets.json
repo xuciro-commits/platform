@@ -445,9 +445,9 @@
       "sourceType": "ExplorationSearch",
       "sourceCategory": "Filtering",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "input",
+      "reason": "original-scoped-plan-search-profile"
     },
     {
       "sourceType": "ProminentTerms",

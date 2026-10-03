@@ -1482,6 +1482,7 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  inputKind?: string;
   pickerValueVariable?: string;
   recordPicker?: PageRecordPicker;
   spacer?: PageSpacer;
@@ -1841,7 +1842,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.65",
+  "uiProfile": "platform.page.v2.66",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -2612,6 +2613,12 @@ export const pageUIManifest = {
             "enum": [
               "full",
               "half"
+            ]
+          },
+          "inputKind": {
+            "type": "string",
+            "enum": [
+              "search"
             ]
           }
         }
@@ -4589,7 +4596,8 @@ export const pageUIManifest = {
     "platform.page.v2.62",
     "platform.page.v2.63",
     "platform.page.v2.64",
-    "platform.page.v2.65"
+    "platform.page.v2.65",
+    "platform.page.v2.66"
   ],
   "runtime": {
     "scope": "page",
@@ -5122,6 +5130,9 @@ export const pageUIManifest = {
     },
     "spacer": {
       "requiredUIProfile": "platform.page.v2.63"
+    },
+    "input": {
+      "searchRequiredUIProfile": "platform.page.v2.66"
     }
   },
   "layout": {

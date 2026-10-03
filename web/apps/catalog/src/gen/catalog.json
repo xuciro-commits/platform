@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:ef0552d15ae7b53b",
+  "revision": "sha256:c925ba21a83df074",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -2396,6 +2396,35 @@
       "snippet": "import { RetroButton } from \"@platform/ui\";\n<RetroButton variant=\"default\">RUN</RetroButton>"
     },
     {
+      "id": "ui/search-input",
+      "owner": "@platform/ui",
+      "name": "Scoped search input",
+      "summary": "Edit caller-owned search text and show the actual readable object scope.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/SearchInput.tsx",
+      "exports": [
+        "SearchInput"
+      ],
+      "example": "SearchInputExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "search",
+        "input",
+        "scope"
+      ],
+      "dependencies": [
+        "ui/input"
+      ],
+      "constraints": [
+        "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search."
+      ]
+    },
+    {
       "id": "ui/separator",
       "owner": "@platform/ui",
       "name": "Semantic separator",
@@ -2715,6 +2744,7 @@
       "Display the original finite numeric aggregate with a bounded arc and warning threshold.": "以有界弧线和警告阈值显示原有限数值聚合。",
       "Download the original JSON and mapping report before leaving the editor. Reports remain in the current editing scope until it closes or its member changes.": "离开编辑器前请下载原 JSON 和映射报告。报告在当前编辑作用域内保留，关闭或切换成员时清理。",
       "Each control has a stable identity; the caller owns its binding, permissions and execution.": "每个控件具有稳定身份，其绑定、权限及执行由调用方拥有。",
+      "Edit caller-owned search text and show the actual readable object scope.": "编辑调用方拥有的搜索文本，并显示实际可读对象范围。",
       "Edit caller-owned timestamp text without browser timezone conversion or precision truncation.": "编辑调用方拥有的时刻文本，不应用浏览器时区转换或精度截断。",
       "Edit declared entity fields using their shared validators and editors.": "使用共享校验器和编辑器编辑已声明的实体字段。",
       "Edit fields from the original object declaration; submit through the owning action.": "按原对象声明编辑字段，通过原动作提交。",
@@ -2828,6 +2858,7 @@
       "Reveal supporting details while keeping the summary visible.": "显示补充详情，同时保留摘要。",
       "Rows are always expanded; collapse and full tree keyboard navigation are not implemented.": "所有行始终展开；尚未实现折叠与完整的树键盘导航。",
       "Schema form": "模式表单",
+      "Scoped search input": "有范围的搜索输入",
       "Search a caller's scoped source to choose a reference by record ID.": "搜索调用方的限定范围数据源，按记录 ID 选择引用。",
       "Search records and knowledge through the current member’s original read endpoints.": "通过当前成员的原读取入口搜索记录与知识。",
       "Select a record, inspect its details and use the original object actions.": "选择记录、查看详情，并使用原对象动作。",
@@ -2865,6 +2896,7 @@
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
+      "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search.": "调用方拥有文本、对象范围及授权读取；此控件不查询数据，也不声称全本体搜索。",
       "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
       "The caller owns the authorized window and business time; the list does not create events or read another collection.": "调用方拥有受权窗口和业务时间；列表不创建事件或读取另一集合。",
       "The caller owns the authorized window; this presentation does not reorder records, filter by the viewport, or write dates.": "调用方拥有授权窗口；此呈现不重排记录，不按视窗筛选，也不写入日期。",
@@ -3315,6 +3347,9 @@
     "ui/virtual-stack": [
       "web/packages/app/src/runtime/LoopRuntime.tsx"
     ],
+    "ui/search-input": [
+      "web/packages/app/src/sections.tsx"
+    ],
     "ui/collection-title": [
       "web/packages/app/src/sections.tsx"
     ],
@@ -3691,6 +3726,7 @@
         "propertyKey",
         "relationKey",
         "runStates",
+        "searchInputObjects",
         "semanticModelView",
         "semanticPropertyTypes",
         "supportsPageUIProfile",

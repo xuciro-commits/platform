@@ -1,5 +1,5 @@
 {
-  "uiProfile": "platform.page.v2.65",
+  "uiProfile": "platform.page.v2.66",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -770,6 +770,12 @@
             "enum": [
               "full",
               "half"
+            ]
+          },
+          "inputKind": {
+            "type": "string",
+            "enum": [
+              "search"
             ]
           }
         }
@@ -2747,7 +2753,8 @@
     "platform.page.v2.62",
     "platform.page.v2.63",
     "platform.page.v2.64",
-    "platform.page.v2.65"
+    "platform.page.v2.65",
+    "platform.page.v2.66"
   ],
   "runtime": {
     "scope": "page",
@@ -3280,6 +3287,9 @@
     },
     "spacer": {
       "requiredUIProfile": "platform.page.v2.63"
+    },
+    "input": {
+      "searchRequiredUIProfile": "platform.page.v2.66"
     }
   },
   "layout": {

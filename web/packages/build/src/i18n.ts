@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Bind search text to a query search in the same scope before saving.": "保存前，请将搜索文本绑定到同一作用域的查询搜索。",
+ "Input presentation": "输入呈现",
+ "Scoped record search": "有范围的记录搜索",
+ "Bind original page or overlay text state to a same-owner query search. Unbound, executable, coerced and unsupported source settings are refused.": "将原页面或浮层文本状态绑定到同一拥有作用域的查询搜索；未绑定、执行来源、类型强制转换及不支持的源设置会被拒绝。",
+ "The source only writes text. The original query searches its authorized searchable fields with retained conditions, and the control shows its actual object scope. The source Ontology-wide placeholder is replaced; no cross-ontology search engine is imported.": "来源只写入文本；原查询保留条件并搜索授权的可搜索字段，控件显示实际对象范围；来源声称跨本体的占位文本会被替换，不导入跨本体搜索引擎。",
+
  "Allow clearing all selections": "允许清空全部选择",
  "Map exploration choices {variable}": "映射探索筛选选项 {variable}",
  "Original value for {option}": "{option} 对应的原业务值",

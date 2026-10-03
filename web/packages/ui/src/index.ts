@@ -1,3 +1,4 @@
+export {SearchInput} from "./components/SearchInput";
 export { t, language, languages, setLanguage, register, type Dictionary } from "./i18n";
 export { cn } from "./lib/cn";
 export { Button, type ButtonProps } from "./primitives/button";

@@ -1,5 +1,7 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "exploration-search-binding":"Bind original page or overlay text state to a same-owner query search. Unbound, executable, coerced and unsupported source settings are refused.",
+ "native-exploration-search":"The source only writes text. The original query searches its authorized searchable fields with retained conditions, and the control shows its actual object scope. The source Ontology-wide placeholder is replaced; no cross-ontology search engine is imported.",
  "exploration-binding":"Map all four exploration choices to unique original values and an original scoped string-set state. Choice fields must contain the mapped values; unsupported consumers and lossy initial collisions are refused.",
  "native-exploration-filter":"The fixed source filter uses original shared toggles and string-set query state. Known initial values and shared static options use the explicit mapping; unmatched selections remain until changed. Clear explicitly removes the whole set, including unmatched values, without changing business records.",
  "spacer-profile":"Spacers require a finite nonnegative static size within the original layout budget and supported profile. String coercion, dynamic or executable configuration and invalid sizes are refused.",

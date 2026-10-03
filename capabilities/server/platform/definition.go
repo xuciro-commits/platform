@@ -110,6 +110,7 @@ type Section struct {
 	RecordChart           *PageRecordChart        `json:"recordChart,omitempty"`
 	RecordList            *PageRecordList         `json:"recordList,omitempty"`
 	HeadingLevel          string                  `json:"headingLevel,omitempty"`
+	InputKind             string                  `json:"inputKind,omitempty"`
 	PickerValueVariable   string                  `json:"pickerValueVariable,omitempty"`
 	RecordPicker          *PageRecordPicker       `json:"recordPicker,omitempty"`
 	Spacer                *PageSpacer             `json:"spacer,omitempty"`
