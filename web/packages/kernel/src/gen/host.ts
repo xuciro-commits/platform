@@ -1481,6 +1481,7 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  pickerValueVariable?: string;
   recordPicker?: PageRecordPicker;
   spacer?: PageSpacer;
   separator?: PageSeparator;
@@ -1839,7 +1840,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.63",
+  "uiProfile": "platform.page.v2.64",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4260,7 +4261,15 @@ export const pageUIManifest = {
           "requiredUIProfile": "platform.page.v2.58"
         }
       ],
-      "outputPorts": [],
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "pickerValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.64"
+        }
+      ],
       "layoutPreferences": {
         "frame": "card"
       },
@@ -4577,7 +4586,8 @@ export const pageUIManifest = {
     "platform.page.v2.60",
     "platform.page.v2.61",
     "platform.page.v2.62",
-    "platform.page.v2.63"
+    "platform.page.v2.63",
+    "platform.page.v2.64"
   ],
   "runtime": {
     "scope": "page",
@@ -5080,7 +5090,8 @@ export const pageUIManifest = {
     },
     "recordPicker": {
       "requiredUIProfile": "platform.page.v2.58",
-      "maxCandidates": 20
+      "maxCandidates": 20,
+      "valueRequiredUIProfile": "platform.page.v2.64"
     },
     "alertBanner": {
       "requiredUIProfile": "platform.page.v2.60",

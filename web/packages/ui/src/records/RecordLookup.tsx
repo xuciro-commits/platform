@@ -38,7 +38,8 @@ export function RecordLookup({ id, source, type, value, onChange, window, labelF
       readOnly={!!window?.searchLocked}
       placeholder={t("Search records")} value={open ? window?.inputSearch??window?.query.search??query : selectedRecord?label(selectedRecord):value ?? ""}
       onFocus={(e) => { setQuery(window?window.inputSearch??window.query.search??"":value??""); setOffset(0); setPage(undefined); setOpen(true); e.currentTarget.select(); }}
-      onChange={(e) => { if(disabled||window?.searchLocked)return;setQuery(e.target.value); setOffset(0); setPage(undefined);if(window)window.onChange({search:e.target.value,offset:0}); }}
+      onClick={() => {if(!disabled&&!open){setQuery(window?window.inputSearch??window.query.search??"":value??"");setOpen(true);}}}
+      onChange={(e) => { if(disabled||window?.searchLocked)return;setOpen(true);setQuery(e.target.value); setOffset(0); setPage(undefined);if(window)window.onChange({search:e.target.value,offset:0}); }}
       onKeyDown={(e) => {
         if (e.key === "ArrowDown") { e.preventDefault(); document.getElementById(listId)?.querySelector<HTMLButtonElement>("[role=option]")?.focus(); }
         if (e.key === "Enter" && open && !disabled && !currentError && currentPage?.records.length) {

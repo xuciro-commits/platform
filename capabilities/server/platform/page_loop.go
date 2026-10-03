@@ -137,6 +137,9 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 	}
 	for _, section := range sections {
+		if !accessible(section.PickerValueVariable, "", sectionOverlays[section.ID]) {
+			return fmt.Errorf("picker ID state cannot escape its scope")
+		}
 		if !accessible(section.AlertValueVariable, "", sectionOverlays[section.ID]) || section.Widget == "alert-banner" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("alert cannot escape its scope or enter a loop")
 		}

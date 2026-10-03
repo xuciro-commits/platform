@@ -2,6 +2,19 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Optional personnel query": "可选人员查询",
+ "Bind picker ID output to original text state with the same query owner before saving.": "保存前，请将选择器 ID 输出绑定到与查询同一拥有作用域的原文本状态。",
+ "Map an original business personnel object and visible title field to a same-owner string state. Candidates use a fixed ID-sorted window and original authorization.": "将原业务人员对象和可见标题字段映射到同一拥有作用域的字符串状态；候选沿固定 ID 顺序窗口和原授权读取。",
+ "The people picker requires a reference field targeting its explicitly mapped business personnel object; text-name search cannot consume record IDs.": "人员选择器要求引用字段指向显式映射的业务人员对象；姓名文本搜索不能消费记录 ID。",
+ "Source name matching becomes exact original personnel record ID matching on the explicitly mapped reference field.": "来源姓名匹配转换为在显式映射引用字段上的原人员记录 ID 精确匹配。",
+ "Original authorized business personnel records replace source operator names. Confirmed stable IDs drive the original string state; unmatched drafts remain unchanged. Names are display labels only.": "原授权业务人员记录替代来源操作者姓名；经确认的稳定 ID 驱动原字符串状态，未匹配草稿保持原值；姓名仅用于显示。",
+
+ "Map people picker {widget}": "映射人员选择器 {widget}",
+ "Business personnel object": "业务人员对象",
+ "Select original business personnel records. Names are labels; confirmed record IDs drive reference filters.": "选择原业务人员记录；姓名用于显示，经确认的记录 ID 驱动引用字段筛选。",
+ "Confirmed ID output": "经确认的 ID 输出",
+ "Keep record selection only": "仅保留记录选择",
+
  "Spacer": "空白",
  "Blank region size (px)": "空白区域尺寸（px）",
  "The size controls this blank region only. Zero and fractions are preserved; parent container gaps are configured separately. Blank space has no accessible content or focus target.": "尺寸只控制此处空白。零值和小数保留，父容器间距另行设置。空白没有无障碍内容或焦点。",

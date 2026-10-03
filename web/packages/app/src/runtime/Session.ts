@@ -219,6 +219,12 @@ export class PageSessionStore {
     this.publish({ records, queries });
     void this.read(key, { object, id: record.id });
   }
+  async confirmSelection(key:string,record:EntityRecord,query:string):Promise<EntityRecord|undefined> {
+    const object=this.plan.objects.get(key),members=this.queryData.get(query)?.records.map(r=>r.id),allowed=members?new Set(members):this.externalMembers.get(query);
+    if(this.disposed||!object||!this.plan.querySelections?.get(query)?.has(key)||this.queryObjects.has(query)&&this.queryObjects.get(query)!==object||typeof record.id!=="string"||!record.id||record.id.length>1024||!allowed?.has(record.id))return;
+    this.publish({records:this.clear([key]),queries:this.invalidate([key])});this.selectionQueries.set(key,query);
+    return this.read(key,{object,id:record.id},true);
+  }
   selectionSetReferences(key:string){const state=this.state.recordSets[key];return state&&"value" in state?state.value??[]:[];}
   selectedSet(key:string){return this.selectionSetCache.get(key)??[];}
   selectSet(key:string,ids:string[],query:string){
@@ -259,16 +265,17 @@ export class PageSessionStore {
     for(const key of this.plan.filterQueries?.get(filterKey)??[]){this.queries.delete(key);this.querySignatures.delete(key);this.queryData.delete(key);queries[key]={status:"empty"};}
     this.publish({filters:{...this.state.filters,[filterKey]:fields},records:this.clear(keys),queries});
   }
-  private async read(key: string, reference: RecordReference) {
+  private async read(key: string, reference: RecordReference,selectable=false) {
     const epoch = (this.recordEpoch.get(key) ?? 0) + 1, source = this.source, scope = source.scope;
     this.recordEpoch.set(key, epoch);
     this.publish({ records: { ...this.state.records, [key]: { status: "pending", value: reference } } });
     try {
       const view = await source.get(reference.object, reference.id);
       if (this.disposed || source !== this.source || source.scope !== scope || this.recordEpoch.get(key) !== epoch) return;
-      if (view.record.id !== reference.id) throw new Error("Record identity mismatch");
+      if (view.record.id !== reference.id || selectable&&view.record.archived) throw new Error("Record identity mismatch or unavailable selection");
       this.recordCache.set(key, view.record);this.cacheView(JSON.stringify([reference.object,reference.id]),view);
       this.publish({ records: { ...this.state.records, [key]: { status: "value", value: reference } } });
+      return view.record;
     } catch (error) {
       if (this.disposed || source !== this.source || source.scope !== scope || this.recordEpoch.get(key) !== epoch) return;
       const records = this.clear([key]); records[key] = { status: "error", error: String(error) };

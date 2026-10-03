@@ -12,7 +12,7 @@ type PageRecordPicker struct {
 
 func (d *PageDocument) checkRecordPicker(s Section) error {
 	if s.Widget != "record-picker" {
-		if s.RecordPicker != nil {
+		if s.RecordPicker != nil || s.PickerValueVariable != "" {
 			return fmt.Errorf("record picker configuration needs its widget")
 		}
 		return nil
@@ -20,6 +20,12 @@ func (d *PageDocument) checkRecordPicker(s Section) error {
 	v := d.Variables[s.CollectionVariable]
 	if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordPicker.RequiredUIProfile) || s.RecordPicker == nil || s.RecordPicker.Label != nil && len(*s.RecordPicker.Label) > 1024 || v.Mode != "resource" || v.Source == nil || v.Source.Kind != "plan" || !slices.Contains([]string{"page", "overlay"}, v.Scope) || len(s.Fields) > 0 || len(s.Actions) > 0 || s.SelectionVariable != "" {
 		return fmt.Errorf("record picker needs an original scoped query window and bounded label")
+	}
+	if s.PickerValueVariable != "" {
+		value := d.Variables[s.PickerValueVariable]
+		if !PageUIProfileSupports(d.UIProfile, pageWidgets.Runtime.RecordPicker.ValueRequiredUIProfile) || value.Type != "string" || value.Mode != "state" || value.Scope != v.Scope || value.Owner != v.Owner {
+			return fmt.Errorf("picker ID output needs its profile and original same-owner text state")
+		}
 	}
 	q := d.Queries[v.Source.Query]
 	if q.Offset != 0 || q.Limit != pageWidgets.Runtime.RecordPicker.MaxCandidates || !slices.Equal(q.Sort, []string{"id"}) {

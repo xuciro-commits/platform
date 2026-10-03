@@ -75,7 +75,7 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Widget == "alert-banner" || s.AlertValueVariable != "" || s.AlertBanner != nil {
 				return fmt.Errorf("alert banner requires a document")
 			}
-			if s.Widget == "record-picker" || s.RecordPicker != nil {
+			if s.Widget == "record-picker" || s.RecordPicker != nil || s.PickerValueVariable != "" {
 				return fmt.Errorf("record picker requires a page document")
 			}
 			if s.Widget == "date-input" || s.DateVariable != "" || s.DateLabel != nil || s.DateKind != "" || s.DateOffset != "" {
@@ -619,7 +619,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if node.Kind == "widget" {
 			for _, s := range sections {
 				if s.ID == node.Section {
-					for _, id := range []string{s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
+					for _, id := range []string{s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

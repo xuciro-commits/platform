@@ -62,8 +62,9 @@ type pageRuntimeContract struct {
 		Tones             []string `json:"tones"`
 	} `json:"alertBanner"`
 	RecordPicker struct {
-		RequiredUIProfile string `json:"requiredUIProfile"`
-		MaxCandidates     int    `json:"maxCandidates"`
+		RequiredUIProfile      string `json:"requiredUIProfile"`
+		MaxCandidates          int    `json:"maxCandidates"`
+		ValueRequiredUIProfile string `json:"valueRequiredUIProfile"`
 	} `json:"recordPicker"`
 	DateInput struct {
 		RequiredUIProfile         string `json:"requiredUIProfile"`

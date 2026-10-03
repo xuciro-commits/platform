@@ -1,6 +1,7 @@
 package platformserver
 
 import (
+	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
@@ -328,6 +329,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		doc.Nodes[doc.Root] = root
 		sections = append(sections, build.Section{ID: spec.id, Widget: "spacer", ConfigVersion: 1, Spacer: &platform.PageSpacer{Size: spec.size}})
 	}
+	doc.Variables["personID"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: json.RawMessage(`"legacy name"`)}
+	sections[56].PickerValueVariable = "personID"
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -353,6 +356,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[56].PickerValueVariable = ""
+	doc.Variables["personID"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: json.RawMessage(`"later draft"`)}
 	sections[56].RecordPicker = &platform.PageRecordPicker{LabelField: "id"}
 	sections[spacerIndex].Spacer = &platform.PageSpacer{Size: &zeroSpacer}
 	sections[separatorIndex].Separator = &platform.PageSeparator{Label: &emptyNoticeTitle}
@@ -473,7 +478,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					pickerFound := false
 					for _, s := range d.Page.Sections {
 						if s.ID == "pickerInput" {
-							pickerFound = s.RecordPicker != nil && s.RecordPicker.LabelField == "name" && s.CollectionVariable == "pickerWindow"
+							pickerFound = s.RecordPicker != nil && s.RecordPicker.LabelField == "name" && s.CollectionVariable == "pickerWindow" && s.PickerValueVariable == "personID" && string(d.Page.Document.Variables["personID"].Initial) == `"legacy name"`
 						}
 					}
 					if !pickerFound || d.Page.Document.Variables["pickerRecord"].Source.Section != "pickerInput" {

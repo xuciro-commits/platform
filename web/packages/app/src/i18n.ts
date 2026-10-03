@@ -2,6 +2,11 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Confirming record access…": "正在确认记录访问权限…",
+ "The record could not be confirmed. The original ID is unchanged.": "无法确认该记录，原 ID 保持不变。",
+ "Picker ID state is unavailable or incompatible.": "选择器 ID 状态不可用或类型不兼容。",
+ "The original ID is outside the current candidate window: {id}.": "原 ID 不在当前候选窗口内：{id}。",
+
  "Spacer": "空白",
  "Spacer configuration is unavailable or incompatible.": "空白配置不可用或不兼容。",
 

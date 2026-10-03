@@ -55,3 +55,34 @@ func TestRecordPickerOriginalCandidatesAndProducer(t *testing.T) {
 		t.Fatal("named ordering discarded")
 	}
 }
+
+func TestRecordPickerStableIDStateOwnership(t *testing.T) {
+	p := queryPlanPage()
+	d := p.Document
+	d.Variables["personID"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: []byte(`"legacy name"`)}
+	s := Section{ID: "pickerID", Widget: "record-picker", ConfigVersion: 1, CollectionVariable: "window", PickerValueVariable: "personID", RecordPicker: &PageRecordPicker{LabelField: "title"}}
+	d.Nodes[s.ID] = PageLayoutNode{Kind: "widget", Section: s.ID}
+	root := d.Nodes[d.Root]
+	root.Children = append(root.Children, s.ID)
+	d.Nodes[d.Root] = root
+	p.Sections = append(p.Sections, s)
+	if err := d.Check(p.Sections); err != nil {
+		t.Fatal(err)
+	}
+	d.UIProfile = "platform.page.v2.63"
+	if d.Check(p.Sections) == nil {
+		t.Fatal("old profile accepted stable ID output")
+	}
+	d.UIProfile = PageUIProfile()
+	for _, v := range []PageVariable{{Scope: "page", Type: "string", Mode: "constant", Initial: []byte(`""`)}, {Scope: "page", Type: "boolean", Mode: "state", Initial: []byte(`false`)}, {Scope: "overlay", Owner: "other", Type: "string", Mode: "state", Initial: []byte(`""`)}} {
+		d.Variables["personID"] = v
+		if d.Check(p.Sections) == nil {
+			t.Fatal("incompatible ID state accepted")
+		}
+	}
+	d.Variables["personID"] = PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: []byte(`""`)}
+	p.Sections[len(p.Sections)-1].Widget = "table"
+	if d.Check(p.Sections) == nil {
+		t.Fatal("ID output on wrong widget accepted")
+	}
+}

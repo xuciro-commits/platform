@@ -122,9 +122,9 @@
       "sourceType": "UserSelect",
       "sourceCategory": "Filtering",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-picker",
+      "reason": "explicit-business-record-id-profile"
     },
     {
       "sourceType": "MetricCard",
