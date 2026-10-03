@@ -61,6 +61,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/record-chart": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordChartExample })),
   "ui/record-events": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordEventsExample })),
   "ui/record-form": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordForms })),
+  "ui/record-gantt": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordGanttExample })),
   "ui/record-kanban": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordKanbans })),
   "ui/record-list": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordLists })),
   "ui/record-lookup": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.RecordLookups })),

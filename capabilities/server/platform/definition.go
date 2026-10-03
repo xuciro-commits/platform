@@ -104,6 +104,7 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	RecordGantt          *PageRecordGantt        `json:"recordGantt,omitempty"`
 	RecordCalendar       *PageRecordCalendar     `json:"recordCalendar,omitempty"`
 	RecordEvents         *PageRecordEvents       `json:"recordEvents,omitempty"`
 	RecordChart          *PageRecordChart        `json:"recordChart,omitempty"`

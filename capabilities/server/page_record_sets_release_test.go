@@ -166,6 +166,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		sections = append(sections, build.Section{ID: spec.id, Widget: "record-calendar", ConfigVersion: 1, CollectionVariable: "metricWindow", RecordCalendar: &platform.PageRecordCalendar{DateField: spec.date, LabelField: spec.label, InitialMonth: "2026-10"}})
 	}
 	doc.Variables["calendarRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "calendar"}}
+	for _, spec := range []struct{ id, start, end, title, status string }{{"gantt", "raised", "due", "name", "severity"}, {"hiddenGanttStart", "privateraised", "due", "name", "severity"}, {"hiddenGanttEnd", "raised", "privatedue", "name", "severity"}, {"hiddenGanttTitle", "raised", "due", "secret", "severity"}, {"hiddenGanttStatus", "raised", "due", "name", "privateseverity"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root = doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "record-gantt", ConfigVersion: 1, CollectionVariable: "metricWindow", RecordGantt: &platform.PageRecordGantt{StartField: spec.start, EndField: spec.end, TitleField: spec.title, StatusField: spec.status, RangeStart: "2026-09-01", RangeEnd: "2026-11-01", Tones: []platform.PageEventTone{{Value: "high", Tone: "danger"}}}})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -191,6 +198,7 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	sections[34].RecordGantt = &platform.PageRecordGantt{StartField: "raised", EndField: "due", TitleField: "id", StatusField: "severity", RangeStart: "2027-01-01", RangeEnd: "2027-02-01", Tones: []platform.PageEventTone{{Value: "high", Tone: "warning"}}}
 	sections[27].RecordEvents = &platform.PageRecordEvents{TimeField: "raised", TitleField: "id", SeverityField: "severity", Tones: []platform.PageEventTone{{Value: "high", Tone: "warning"}}}
 	sections[10].Text = "Later heading"
 	sections[11].Title = "Later collection"
@@ -208,6 +216,20 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					gantt := false
+					privateGantts := 0
+					for _, s := range d.Page.Sections {
+						if s.ID == "gantt" {
+							g := s.RecordGantt
+							gantt = g != nil && g.StartField == "raised" && g.EndField == "due" && g.TitleField == "name" && g.StatusField == "severity" && g.RangeStart == "2026-09-01" && g.RangeEnd == "2026-11-01" && len(g.Tones) == 1 && g.Tones[0].Tone == "danger"
+						}
+						if s.ID == "hiddenGanttStart" || s.ID == "hiddenGanttEnd" || s.ID == "hiddenGanttTitle" || s.ID == "hiddenGanttStatus" {
+							privateGantts++
+						}
+					}
+					if !gantt || member.ID == builder.ID && privateGantts != 4 || member.ID != builder.ID && privateGantts != 0 {
+						t.Fatal("frozen gantt fields/range/tones or private projection changed")
+					}
 					calendar, hiddenDate, hiddenLabel := false, false, false
 					for _, s := range d.Page.Sections {
 						switch s.ID {

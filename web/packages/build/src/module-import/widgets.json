@@ -181,9 +181,9 @@
       "sourceType": "Gantt",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-gantt",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Timeline",

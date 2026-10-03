@@ -1070,6 +1070,16 @@ export type PageRecordEvents = {
   tones: PageEventTone[];
 };
 
+export type PageRecordGantt = {
+  startField: string;
+  endField: string;
+  titleField: string;
+  statusField: string;
+  rangeStart: string;
+  rangeEnd: string;
+  tones: PageEventTone[];
+};
+
 export type PageRecordLink = {
   object: AssetRef;
   field: string;
@@ -1409,6 +1419,7 @@ export type SavedView = {
 };
 
 export type Section = {
+  recordGantt?: PageRecordGantt;
   recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
   recordChart?: PageRecordChart;
@@ -1744,7 +1755,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.46",
+  "uiProfile": "platform.page.v2.47",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -3448,6 +3459,133 @@ export const pageUIManifest = {
         ],
         "hidden": "retain"
       }
+    },
+    {
+      "componentID": "record-gantt",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.47",
+      "title": "Record Gantt",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "recordGantt": {
+          "startField": "",
+          "endField": "",
+          "titleField": "id",
+          "statusField": "",
+          "rangeStart": "",
+          "rangeEnd": "",
+          "tones": []
+        }
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "recordGantt": {
+            "type": "object",
+            "properties": {
+              "startField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "endField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "titleField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "statusField": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "rangeStart": {
+                "type": "string",
+                "maxLength": 10
+              },
+              "rangeEnd": {
+                "type": "string",
+                "maxLength": 10
+              },
+              "tones": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "maxLength": 256
+                    },
+                    "tone": {
+                      "type": "string",
+                      "enum": [
+                        "neutral",
+                        "info",
+                        "success",
+                        "warning",
+                        "danger"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "tone"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "startField",
+              "endField",
+              "titleField",
+              "statusField",
+              "rangeStart",
+              "rangeEnd",
+              "tones"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "collection",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.47"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ],
+        "hidden": "retain"
+      }
     }
   ],
   "supportedProfiles": [
@@ -3496,7 +3634,8 @@ export const pageUIManifest = {
     "platform.page.v2.43",
     "platform.page.v2.44",
     "platform.page.v2.45",
-    "platform.page.v2.46"
+    "platform.page.v2.46",
+    "platform.page.v2.47"
   ],
   "runtime": {
     "scope": "page",
@@ -3913,6 +4052,18 @@ export const pageUIManifest = {
     "recordCalendar": {
       "requiredUIProfile": "platform.page.v2.46",
       "maxRecords": 100
+    },
+    "recordGantt": {
+      "requiredUIProfile": "platform.page.v2.47",
+      "maxTones": 32,
+      "tones": [
+        "neutral",
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ],
+      "maxRows": 20
     }
   },
   "layout": {

@@ -29,6 +29,7 @@ import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
+const RecordGanttRenderer=lazy(()=>import("./widgets/RecordGantt").then(module=>({default:module.RecordGanttRenderer})));
 const RecordCalendarRenderer=lazy(()=>import("./widgets/RecordCalendar").then(module=>({default:module.RecordCalendarRenderer})));
 const RecordEventsRenderer=lazy(()=>import("./widgets/RecordEvents").then(module=>({default:module.RecordEventsRenderer})));
 const RecordChartRenderer=lazy(()=>import("./widgets/RecordChart").then(module=>({default:module.RecordChartRenderer})));
@@ -398,6 +399,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ "record-gantt":({page,section,window})=>{const {source}=useHost();return <RecordGanttRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.recordGantt}/>;},
  "record-calendar":({page,section,window,selected,onSelect})=>{const {source}=useHost(),object=objectOf(page,section);return <RecordCalendarRenderer key={JSON.stringify([source.scope,object,section.recordCalendar,window?.query])} window={window} info={source.entity(object)} fields={section.recordCalendar} selected={selected} onSelect={onSelect}/>;},
  "record-events":({page,section,window})=>{const {source}=useHost();return <RecordEventsRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.recordEvents}/>;},
  "record-chart":RecordChartAdapter,

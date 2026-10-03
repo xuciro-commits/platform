@@ -2,6 +2,21 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Record Gantt": "记录甘特图",
+ "Gantt query window": "甘特图查询窗口",
+ "Map task Gantt {widget}": "映射任务甘特图 {widget}",
+ "Business task start field": "业务任务开始字段",
+ "Business task end field": "业务任务结束字段",
+ "Task title field": "任务标题字段",
+ "Task status field": "任务状态字段",
+ "Display range start (UTC date)": "显示范围开始（UTC 日期）",
+ "Display range end (exclusive UTC date)": "显示范围结束（不含该 UTC 日期）",
+ "Task tone for {value}": "任务 {value} 的色调",
+ "Map original business dates and status. The Gantt preserves window order and shows at most 20 tasks on the fixed UTC range.": "映射原业务日期与状态。甘特图保留窗口顺序，在固定 UTC 范围内最多显示 20 个任务。",
+ "Bind Gantt fields, a valid fixed range and an explicitly sorted plan before saving.": "保存前请绑定甘特图字段、有效固定范围及显式排序计划。",
+ "Gantt import needs an original query collection and the supported fixed-range profile.": "甘特图导入需要原查询集合及受支持的固定范围配置。",
+ "Map original business start, end, title and choice status, and declare a valid fixed range and status tones.": "映射原业务开始、结束、标题和枚举状态，并声明有效固定范围及状态色调。",
+ "The Gantt preserves the ordered window and shows at most 20 tasks on the declared UTC range. Original civil dates or offset datetimes are used; bars are clipped and invalid or outside-range intervals remain explicit. Source local-time parsing and overflowing bars are not copied.": "甘特图保留排序窗口，在声明的 UTC 范围内最多显示 20 个任务。使用原自然日期或带时区日期时间；条形裁剪到范围，无效或范围外区间明确提示。来源本地时区解析及溢出条形不复制。",
  "Record calendar": "记录日历",
  "Calendar query window": "日历查询窗口",
  "Map calendar {widget}": "映射日历 {widget}",

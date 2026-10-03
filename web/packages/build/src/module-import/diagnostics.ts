@@ -1,5 +1,8 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "gantt-profile":"Gantt import needs an original query collection and the supported fixed-range profile.",
+ "gantt-binding":"Map original business start, end, title and choice status, and declare a valid fixed range and status tones.",
+ "native-gantt-window":"The Gantt preserves the ordered window and shows at most 20 tasks on the declared UTC range. Original civil dates or offset datetimes are used; bars are clipped and invalid or outside-range intervals remain explicit. Source local-time parsing and overflowing bars are not copied.",
  "calendar-profile":"Calendar import needs an original query collection and the supported record-calendar profile.",
  "calendar-binding":"Map the original business date, choose a visible record title and declare a valid initial month.",
  "native-calendar-window":"The calendar shows current-window records and uses original civil dates or UTC datetime days. Its initial month is explicit and navigation can cross years; changing month or day clears selection. Source local-time parsing and fixed-year behavior are not copied.",

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:76ff03fda02f7389",
+  "revision": "sha256:c82bd35f13d11e3f",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1857,6 +1857,34 @@
       ]
     },
     {
+      "id": "ui/record-gantt",
+      "owner": "@platform/ui",
+      "name": "Authorized task Gantt",
+      "summary": "Present original ordered business intervals on an explicit fixed UTC range.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordGantt.tsx",
+      "exports": [
+        "RecordGantt",
+        "recordGanttRows",
+        "ganttRange"
+      ],
+      "example": "RecordGanttExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "gantt",
+        "schedule",
+        "window"
+      ],
+      "constraints": [
+        "The caller owns the authorized window; this presentation does not reorder records, filter by the viewport, or write dates."
+      ]
+    },
+    {
       "id": "ui/record-kanban",
       "owner": "@platform/ui",
       "name": "Authorized lifecycle board",
@@ -2282,6 +2310,7 @@
       "Authorized record detail": "受权记录详情",
       "Authorized record list": "受权记录列表",
       "Authorized record timeline": "授权记录时间轴",
+      "Authorized task Gantt": "授权任务甘特图",
       "Authorized workflow run": "受权流程运行",
       "Bind a published Go/Wasm operation to a page using its original owner contract.": "按原能力契约将已发布 Go/Wasm 操作绑定到页面。",
       "Bound dashboard": "绑定仪表盘",
@@ -2386,6 +2415,7 @@
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
+      "Present original ordered business intervals on an explicit fixed UTC range.": "在显式固定 UTC 范围呈现原排序业务区间。",
       "Pressed": "按下",
       "Published code function call": "已发布代码函数调用",
       "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it.": "查询使用原记录读取与成员权限；页面明确选择保留的来源版本，后续草稿与发布不会替换它。",
@@ -2450,6 +2480,7 @@
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
       "The caller owns the authorized window and business time; the list does not create events or read another collection.": "调用方拥有受权窗口和业务时间；列表不创建事件或读取另一集合。",
+      "The caller owns the authorized window; this presentation does not reorder records, filter by the viewport, or write dates.": "调用方拥有授权窗口；此呈现不重排记录，不按视窗筛选，也不写入日期。",
       "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection.": "调用方拥有有界窗口和记录授权；日历不写日期或读取另一集合。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
@@ -2587,6 +2618,7 @@
       "web/packages/build/src/page-editor/widgets/RecordCalendarInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordEventsInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/RecordGanttInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordListInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordTimelineInspector.tsx",
@@ -2658,6 +2690,7 @@
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
       "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
+      "web/packages/app/src/widgets/RecordGantt.tsx",
       "web/packages/app/src/widgets/RecordTimeline.tsx",
       "web/packages/app/src/widgets/Table.tsx",
       "web/packages/build/src/application.tsx",
@@ -2897,6 +2930,10 @@
     ],
     "ui/record-events": [
       "web/packages/app/src/widgets/RecordEvents.tsx"
+    ],
+    "ui/record-gantt": [
+      "web/packages/app/src/widgets/RecordGantt.tsx",
+      "web/packages/build/src/editor.tsx"
     ],
     "ui/record-timeline": [
       "web/packages/app/src/widgets/RecordTimeline.tsx"
