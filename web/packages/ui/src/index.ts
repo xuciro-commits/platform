@@ -1,6 +1,7 @@
 export {Histogram} from "./components/Histogram";
 export {validHistogram} from "./components/histogram-data";
 export {TermCounts,type TermCount} from "./components/TermCounts";
+export {TagCounts} from "./components/TagCounts";
 export {SearchInput} from "./components/SearchInput";
 export { t, language, languages, setLanguage, register, type Dictionary } from "./i18n";
 export { cn } from "./lib/cn";
@@ -19,6 +20,7 @@ export {DateInput} from "./components/DateInput";
 export {validCivilDate,validTimestamp,validTimestampOffset,timestampParts,withTimestampOffset} from "./components/date";
 export {MultipleChoiceInput} from "./components/MultipleChoiceInput";
 export {ChoiceInput} from "./components/ChoiceInput";
+export {StepSelector,TabSelector} from "./components/IndexedChoices";
 export {ButtonGroup} from "./components/ButtonGroup";
 export { FlowLayout } from "./layout/FlowLayout";
 export { VirtualStack } from "./layout/VirtualStack";

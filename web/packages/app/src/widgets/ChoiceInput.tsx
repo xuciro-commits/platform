@@ -9,6 +9,6 @@ export function ChoiceInputRenderer({value,setValue,fields,title,enabled,onChang
   return <MultipleChoiceInput {...fields} value={setValue.value.values} title={title} disabled={enabled===false} onChange={onSet}/>;
  }
  if(value?.status==="error")return <Panel role="alert">{t(value.code)}</Panel>;
- if(value?.status!=="value"||typeof value.value!=="string"||!fields||!onChange)return <Panel role="alert">{t("Choice input is unavailable or incompatible.")}</Panel>;
+ if(value?.status!=="value"||typeof value.value!=="string"||!fields||!onChange&&!(["steps","tabs"].includes(fields.variant)))return <Panel role="alert">{t("Choice input is unavailable or incompatible.")}</Panel>;
  return <ChoiceInput {...fields} value={value.value} title={title} disabled={enabled===false} onChange={onChange}/>;
 }

@@ -2,6 +2,17 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Steps": "步骤",
+ "Choice option label {n}": "选项显示文字{n}",
+ "Labels retain their original positions; index IDs remain separate. Duplicate and empty labels are allowed, and unmatched original indices remain unchanged until explicit selection.": "显示文字保留原位置，索引ID独立保存；允许重复和空文字，不匹配的原索引保留到明确选择为止。",
+ "Tag query window": "标签查询窗口",
+ "Tag grouping field": "标签分组字段",
+ "Tag group filter output": "标签分组筛选输出",
+ "Tags show complete authorized scalar group counts. Optional selection writes the original text state; missing groups cannot be selected.": "标签显示完整授权标量分组计数；可选的选择操作写入原文本状态，缺失值分组不可选择。",
+ "Use 1–64 static step or tab labels and an original local static numeric index, or omit the variable for a read-only first index.": "使用1–64个静态步骤或标签文字以及原本地静态数值索引；不指定变量时只读显示第一个索引。",
+ "Steps and tabs preserve separate index IDs and original labels. Duplicate or empty labels retain their positions; out-of-range initial indices stay unmatched until explicit selection. Missing source variables become read-only original index zero; source execution and alternate state owners are rejected.": "步骤与标签保留独立索引ID和原显示文字，重复或空文字保留各自位置；越界初始索引保持无匹配到明确选择为止。缺少来源变量时使用只读原索引零，拒绝来源执行及其他状态归属。",
+ "Map an original scalar text or choice field, an authorized plan and an optional original text state in the same owner. Array-valued tags require a separate typed field contract.": "映射同一归属内的原标量文本或选项字段、授权查询计划及可选原文本状态；数组标签需要单独的类型化字段契约。",
+ "Tags use complete authorized scalar group counts and original typed group values. Missing, empty and literal values remain distinct; optional selection writes the original text state and filters through the original query. Source object arrays and implicit array coercion are not copied.": "标签采用完整授权标量分组计数及原类型化分组值，区分缺失、空值和字面值；可选选择写入原文本状态并通过原查询筛选，不复制来源对象数组及隐式数组转换。",
  "Comparison title field": "比较标题字段",
  "Comparison fields": "比较字段",
  "Input record set binding": "输入记录集绑定",

@@ -407,6 +407,25 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		root.Children = append(root.Children, spec.id)
 		doc.Nodes[doc.Root] = root
 	}
+	doc.Variables["indexState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("0")}
+	doc.Variables["indexReadonly"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "constant", Initial: platform.Raw("0")}
+	indexedIndex := len(sections)
+	for _, spec := range []struct{ id, variant, variable string }{{"steps", "steps", "indexState"}, {"indexTabs", "tabs", "indexState"}, {"readonlySteps", "steps", "indexReadonly"}} {
+		sections = append(sections, build.Section{ID: spec.id, Widget: "choice-input", ConfigVersion: 1, ChoiceVariable: spec.variable, ChoiceInput: &platform.PageChoiceInput{Variant: spec.variant, Options: []string{"0", "1", "2"}, OptionLabels: []string{"Observe", "Investigate", "Act"}}})
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+	}
+	doc.Variables["tagFilter"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("original")}
+	tagCountsIndex := len(sections)
+	for _, spec := range []struct{ id, group, output string }{{"tagCounts", "name", "tagFilter"}, {"readonlyTags", "name", ""}, {"privateTags", "secret", ""}} {
+		sections = append(sections, build.Section{ID: spec.id, Widget: "tag-counts", ConfigVersion: 1, CollectionVariable: "pickerWindow", Group: spec.group, GroupValueVariable: spec.output})
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -436,6 +455,10 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[recordCardIndex].Fields = nil
 	sections[comparisonIndex].RecordComparison = &platform.PageRecordComparison{LabelField: "id"}
 	sections[comparisonIndex].Fields = []string{"name"}
+	sections[indexedIndex].ChoiceInput.OptionLabels[1] = "Later draft"
+	doc.Variables["indexState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2")}
+	sections[tagCountsIndex].Group = "secret"
+	doc.Variables["tagFilter"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("later")}
 	sections[sparklineIndex].Sparkline = &platform.PageSparkline{Field: "sensitive", Suffix: "later"}
 	sections[treemapIndex].GroupSetVariable = ""
 	sections[treemapIndex].Group = "secret"
@@ -592,6 +615,28 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if !comparisonFound || member.ID == builder.ID && privateComparisons != 1 || member.ID != builder.ID && privateComparisons != 0 {
 						t.Fatal("frozen comparison title, fields, original multi-record producer or member projection changed")
+					}
+					indexedFound, tagsFound, privateTags := 0, 0, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "steps" || section.ID == "indexTabs" || section.ID == "readonlySteps" {
+							c := section.ChoiceInput
+							if c == nil || len(c.OptionLabels) != 3 || c.OptionLabels[1] != "Investigate" || c.Options[1] != "1" || string(d.Page.Document.Variables[section.ChoiceVariable].Initial) != `"0"` {
+								t.Fatal("frozen indexed control identity, label or original state changed")
+							}
+							indexedFound++
+						}
+						if section.ID == "tagCounts" || section.ID == "readonlyTags" {
+							if section.Group != "name" || section.CollectionVariable != "pickerWindow" || section.ID == "tagCounts" && (section.GroupValueVariable != "tagFilter" || string(d.Page.Document.Variables["tagFilter"].Initial) != `"original"`) {
+								t.Fatal("frozen tag field, source or original output changed")
+							}
+							tagsFound++
+						}
+						if section.ID == "privateTags" {
+							privateTags++
+						}
+					}
+					if indexedFound != 3 || tagsFound != 2 || privateTags != map[bool]int{true: 1, false: 0}[member.ID == builder.ID] {
+						t.Fatal("frozen indexed choices or tag field permissions changed")
 					}
 					sparklineFound, numberSparkline, privateSparkline := false, false, 0
 					for _, section := range d.Page.Sections {

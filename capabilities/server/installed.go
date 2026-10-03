@@ -462,7 +462,7 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 			if err := s.CheckSparkline(info); err != nil {
 				return err
 			}
-		case "term-counts", "treemap":
+		case "term-counts", "treemap", "tag-counts":
 			if err := s.CheckTerms(info); err != nil {
 				return err
 			}

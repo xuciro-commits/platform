@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:0a4f9c84c7d1b9a9",
+  "revision": "sha256:11c4fabe8d3932a7",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -991,7 +991,7 @@
       "id": "ui/choice-input",
       "owner": "@platform/ui",
       "name": "Single choice input",
-      "summary": "Present caller-owned static choices as a select, radio group or segmented control.",
+      "summary": "Present caller-owned static choices as a select, radio group, segmented control, steps or tabs.",
       "layer": 1,
       "source": "web/packages/ui/src/components/ChoiceInput.tsx",
       "exports": [
@@ -1009,10 +1009,16 @@
         "choice",
         "radio",
         "select",
-        "segments"
+        "segments",
+        "steps",
+        "tabs"
+      ],
+      "dependencies": [
+        "ui/indexed-choices"
       ],
       "constraints": [
-        "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection."
+        "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection.",
+        "Steps and tabs use canonical index string values and a same-length label list; duplicate labels remain separate choices. An absent write callback renders them read-only."
       ]
     },
     {
@@ -1679,6 +1685,37 @@
       ],
       "constraints": [
         "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records."
+      ]
+    },
+    {
+      "id": "ui/indexed-choices",
+      "owner": "@platform/ui",
+      "name": "Steps and tabs",
+      "summary": "Select original string identities through ordered steps or semantic tabs with independently keyed labels.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/IndexedChoices.tsx",
+      "exports": [
+        "StepSelector",
+        "TabSelector"
+      ],
+      "example": "IndexedChoicesExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "choice",
+        "steps",
+        "tabs",
+        "index"
+      ],
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller owns current state and optional writes. Duplicate labels retain distinct values; empty or unmatched state has no current choice. Step position makes no business workflow claim and tabs do not invent panel content."
       ]
     },
     {
@@ -2759,6 +2796,37 @@
       ]
     },
     {
+      "id": "ui/tag-counts",
+      "owner": "@platform/ui",
+      "name": "Counted tag groups",
+      "summary": "Present complete original scalar counts as fixed-size tags with optional caller-owned group selection.",
+      "layer": 2,
+      "source": "web/packages/ui/src/components/TagCounts.tsx",
+      "exports": [
+        "TagCounts"
+      ],
+      "example": "TagCountsExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "tags",
+        "count",
+        "groups",
+        "filter"
+      ],
+      "dependencies": [
+        "ui/button",
+        "ui/term-counts"
+      ],
+      "constraints": [
+        "The caller owns authorized complete counts and filter writes. Null, empty and literal groups retain their original identities; missing groups cannot be written to text filters. No array expansion, string coercion or record reads happen here."
+      ]
+    },
+    {
       "id": "ui/tasks",
       "owner": "@platform/ui",
       "name": "Tasks and inbox",
@@ -2962,6 +3030,7 @@
       "Context commands": "上下文命令",
       "Controlled blank space": "受控空白",
       "Controlled page composition": "受控页面装配",
+      "Counted tag groups": "带计数的标签分组",
       "Counted term labels": "计数词条标签",
       "Data table": "数据表格",
       "Declared action controls": "声明式动作控件",
@@ -3054,10 +3123,11 @@
       "Present an original confirmed record through shared card and field formatters with explicit identity and properties.": "通过共享卡片及字段格式器呈现原已确认记录、显式身份及属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
       "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
-      "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",
+      "Present caller-owned static choices as a select, radio group, segmented control, steps or tabs.": "以选择框、单选组、分段按钮、步骤或标签页呈现调用方持有的静态选项。",
       "Present caller-owned string selections through shared toggles without dropping unmatched values.": "通过共享多选控件呈现调用方拥有的字符串集合，不丢弃未匹配值。",
       "Present complete caller-owned bins with exact bounds, counts and missing-value disclosure.": "呈现调用方拥有的完整分箱、精确边界、计数及缺值说明。",
       "Present complete caller-owned counts as bounded frequency-scaled literal labels.": "将调用方拥有的完整计数呈现为有界、按频次缩放的字面词条标签。",
+      "Present complete original scalar counts as fixed-size tags with optional caller-owned group selection.": "以固定字号标签呈现完整原标量计数，并可由调用方控制分组选择。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
       "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",
@@ -3103,6 +3173,7 @@
       "Select a row from a small hierarchy of labelled records.": "从小型记录层级中选择一行。",
       "Select bounded records in their original lifecycle lanes and emit declared move commands.": "在原生命周期列中选择有界记录，并发出已声明的移动命令。",
       "Select original records from a caller-owned grid or list window.": "在调用方拥有的网格或列表窗口中选择原记录。",
+      "Select original string identities through ordered steps or semantic tabs with independently keyed labels.": "通过有序步骤或语义标签页选择原字符串身份，标签使用独立键。",
       "Selected": "已选中",
       "Semantic notice": "语义提示",
       "Semantic separator": "语义分隔",
@@ -3118,6 +3189,8 @@
       "Single choice input": "单选输入",
       "Sized layout regions": "可配置尺寸的布局区域",
       "Staged edits": "暂存修改",
+      "Steps and tabs": "步骤与标签页",
+      "Steps and tabs use canonical index string values and a same-length label list; duplicate labels remain separate choices. An absent write callback renders them read-only.": "步骤与标签页使用规范索引字符串值及等长标签列表；重名标签保留为独立选项。没有写入回调时只读展示。",
       "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.": "工坊要求绑定对象和可见字段，动作来自当前成员的原动作目录。",
       "Submit an ad hoc form on Enter without reloading the page.": "按回车提交临时表单，不刷新页面。",
       "Submitting": "提交中",
@@ -3133,10 +3206,12 @@
       "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes.": "调用方确认原记录访问并提供权限裁剪元数据；标题及属性保持原字段归属，卡片不读写记录。",
       "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
       "The caller owns authorized complete counts and filter writes. Layout never inflates small groups, reads records or writes business data.": "调用方拥有完整授权计数与筛选写入；布局不放大小分组、不读记录、不写业务数据。",
+      "The caller owns authorized complete counts and filter writes. Null, empty and literal groups retain their original identities; missing groups cannot be written to text filters. No array expansion, string coercion or record reads happen here.": "调用方持有授权完整计数与筛选写入；缺值、空文本及字面分组保留原身份，缺值分组不能写入文本筛选。组件不展开数组、不强制转换字符串，也不读取记录。",
       "The caller owns authorized complete counts and stable order. Empty text and null remain distinct; this control performs no queries or mutations.": "调用方拥有授权完整计数和稳定顺序；空文本与空值保持区分，此控件不查询或修改数据。",
       "The caller owns authorized options, counts and typed selected values.": "调用方管理授权选项、计数和类型化选中值。",
       "The caller owns commands and disabled states; the menu does not perform business operations itself.": "调用方拥有命令及禁用状态；菜单自身不执行业务操作。",
       "The caller owns complete authorized counts and filter writes. Missing, empty and literal values remain distinct; no grouping, truncation or record reads happen here.": "调用方拥有完整授权计数与筛选写入；缺值、空文本和字面值保持独立；此处不分组、不截断、不读记录。",
+      "The caller owns current state and optional writes. Duplicate labels retain distinct values; empty or unmatched state has no current choice. Step position makes no business workflow claim and tabs do not invent panel content.": "调用方持有当前状态及可选写入；重名标签保留不同值，空状态或不匹配状态没有当前选项。步骤位置不声明业务流程进度，标签页不生成面板内容。",
       "The caller owns data reads and item state; offscreen local inputs are disposed.": "调用方管理读取与条目状态；屏幕外的局部输入卸载清理。",
       "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
@@ -3322,6 +3397,7 @@
       "web/packages/build/src/page-editor/widgets/StatusTrackerInspector.tsx",
       "web/packages/build/src/page-editor/widgets/SummaryInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TableInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/TagCountsInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TermsInspector.tsx",
       "web/packages/build/src/page-editor/widgets/TitleInspectors.tsx",
       "web/packages/build/src/page-editor/widgets/TreemapInspector.tsx",
@@ -3725,6 +3801,9 @@
     ],
     "ui/summary-statistics": [
       "web/packages/app/src/widgets/Summary.tsx"
+    ],
+    "ui/tag-counts": [
+      "web/packages/app/src/widgets/TermCounts.tsx"
     ],
     "ui/count-treemap": [
       "web/packages/app/src/widgets/TermCounts.tsx"

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
@@ -336,6 +336,7 @@ export function RangeInputExample(){const [values,setValues]=useState<[string,st
 export function SwitchExample(){const [on,setOn]=useState(false);return <Switch label="Active assets" checked={on} onChange={setOn}/>;}
 
 export function ChoiceInputExample(){const [value,setValue]=useState("");return <ChoiceInput value={value} options={["Open","In progress","Done"]} variant="segments" label="Status" title="Task status" onChange={setValue}/>;}
+export function IndexedChoicesExample(){const [value,setValue]=useState("1"),options=[{value:"0",label:"Configure"},{value:"1",label:"Review"},{value:"2",label:"Review"}];return <div className="grid min-w-0 gap-4"><StepSelector options={options} value={value} label="Build steps" onChange={setValue}/><TabSelector options={options} value={value} label="Review tabs" onChange={setValue}/></div>;}
 
 export function MultipleChoiceInputExample(){const [value,setValue]=useState(["Open"]);return <MultipleChoiceInput clearable value={value} options={["Open","In progress","Done"]} label="Status" title="Task status" onChange={setValue}/>;}
 
@@ -352,6 +353,7 @@ export function SpacerExample(){return <div className="grid"><p>{t("Operator ins
 export function SearchInputExample(){const [value,setValue]=useState("");return <SearchInput aria-label="Asset search" value={value} onChange={setValue} scope={["Assets"]}/>;}
 
 export function TermCountsExample(){return <TermCounts label="Status terms" terms={[{value:"Active",count:24},{value:"Warning",count:8},{value:"",count:2},{value:null,count:1}]}/>;}
+export function TagCountsExample(){const [selected,setSelected]=useState<string[]>([]);return <TagCounts label="Status tags" terms={[{value:"Active",count:24},{value:"Warning",count:8},{value:"",count:2},{value:null,count:1}]} selected={selected} onSelect={value=>setSelected(value===undefined?[]:[value])}/>;}
 
 export function HistogramExample(){return <Histogram label="Values" value={{field:"value",requestedBins:3,valid:8,missing:1,minimum:"0",maximum:"1",buckets:[{lower:"0",upper:"1/3",upperInclusive:false,count:2},{lower:"1/3",upper:"2/3",upperInclusive:false,count:5},{lower:"2/3",upper:"1",upperInclusive:true,count:1}]}}/>;}
 

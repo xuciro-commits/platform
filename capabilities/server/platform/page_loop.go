@@ -152,8 +152,14 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 			}
 		}
 		for _, id := range []string{section.GroupValueVariable, section.GroupSetVariable} {
-			if !accessible(id, "", sectionOverlays[section.ID]) || section.Widget == "treemap" && sectionOwners[section.ID] != "" {
+			if !accessible(id, "", sectionOverlays[section.ID]) || (section.Widget == "treemap" || section.Widget == "tag-counts") && sectionOwners[section.ID] != "" {
 				return fmt.Errorf("treemap filter needs its original page or overlay owner")
+			}
+		}
+		if section.Widget == "tag-counts" {
+			v := d.Variables[section.CollectionVariable]
+			if v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
+				return fmt.Errorf("tag counts need the original collection's page or overlay owner")
 			}
 		}
 		for _, id := range []string{section.RowValueVariable, section.RowSetVariable, section.ColumnValueVariable, section.ColumnSetVariable} {
@@ -169,6 +175,12 @@ func (d *PageDocument) checkLoops(sections []Section) error {
 		}
 		if !accessible(section.DateVariable, "", sectionOverlays[section.ID]) || section.Widget == "date-input" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("date input cannot escape its scope or enter a loop")
+		}
+		if c := section.ChoiceInput; c != nil && (c.Variant == "steps" || c.Variant == "tabs") {
+			v := d.Variables[section.ChoiceVariable]
+			if v.Scope == "page" && sectionOverlays[section.ID] != "" || v.Scope == "overlay" && v.Owner != sectionOverlays[section.ID] {
+				return fmt.Errorf("indexed choice needs its original page or overlay owner")
+			}
 		}
 		if !accessible(section.ChoiceSetVariable, "", sectionOverlays[section.ID]) || !accessible(section.ChoiceVariable, "", sectionOverlays[section.ID]) || section.Widget == "choice-input" && sectionOwners[section.ID] != "" {
 			return fmt.Errorf("choice input cannot escape its scope or enter a loop")

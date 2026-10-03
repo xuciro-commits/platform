@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "index-choice-profile":"Use 1–64 static step or tab labels and an original local static numeric index, or omit the variable for a read-only first index.",
+ "native-index-choice":"Steps and tabs preserve separate index IDs and original labels. Duplicate or empty labels retain their positions; out-of-range initial indices stay unmatched until explicit selection. Missing source variables become read-only original index zero; source execution and alternate state owners are rejected.",
+ "tag-counts-binding":"Map an original scalar text or choice field, an authorized plan and an optional original text state in the same owner. Array-valued tags require a separate typed field contract.",
+ "native-tag-counts":"Tags use complete authorized scalar group counts and original typed group values. Missing, empty and literal values remain distinct; optional selection writes the original text state and filters through the original query. Source object arrays and implicit array coercion are not copied.",
  "comparison-producer":"Bind the original multiple-selection ObjectTable output in the same page or overlay.",
  "record-comparison-binding":"Map an original record set, visible title or ID, and 1–64 unique scalar comparison fields.",
  "native-record-comparison":"ObjectComparison reads 2–4 original confirmed records with stable IDs and original field formatting. Differences compare typed values; larger selections require correction and are never silently truncated. Private titles hide the comparison, private fields are removed, and source object arrays or OntologyMeta are not copied.",

@@ -50,4 +50,4 @@ AI 编程助手从这里开始。`CLAUDE.md` 仅引用本文件；`.agents/skill
 - `new-app`：新建或扩展业务应用；只取当前批次所需步骤。
 - `close-out`：检查、必要文档与交付一起收尾；三个技能的唯一定义在 `.claude/skills/`。
 
-验证统一入口为 `scripts/verify.sh <step>`。检查选择表在 [Testing](docs/Testing.md#检查选择与停止)：`contract`、`formal`、`capabilities`、`composition`、`web`、`pms`、`mes`、`deploy`、`format`；`ci` 为持续集成组合，无参数为全部检查。日常增量按影响面选择，不默认跑全部。样式/布局用启动截图与人工走查；自动回归聚焦核心行为、权限、数据和恢复，不写像素/尺寸断言或复制设备/语言路线。
+验证统一入口为 `scripts/verify.sh <step>`。检查选择表在 [Testing](docs/Testing.md#检查选择与停止)：`contract`、`formal`、`capabilities`、`composition`、`web-check`、`web`、`pms`、`mes`、`deploy`、`format`；`ci` 为持续集成组合，无参数为全部检查。日常增量按影响面选择，不默认跑全部。同类组件按共同能力3–5个一组实现和提交；编码期间选`go test`、`pnpm check`及单元测试（统一入口`web-check`），完整Playwright/部署演练在成组交付或重要集成、发布/部署节点统一选择，不按单组件重复。样式/布局用启动截图与人工走查；自动回归聚焦核心行为、权限、数据和恢复，不写像素/尺寸断言或复制设备/语言路线。

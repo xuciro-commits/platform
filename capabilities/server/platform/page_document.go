@@ -99,7 +99,7 @@ func (d *PageDocument) Check(sections []Section) error {
 			if s.Widget == "histogram" || s.Histogram != nil {
 				return fmt.Errorf("histogram requires a page document")
 			}
-			if s.Widget == "term-counts" {
+			if s.Widget == "term-counts" || s.Widget == "tag-counts" {
 				return fmt.Errorf("term counts require a page document")
 			}
 			if s.Widget == "summary-stats" || s.SummaryField != "" || s.StatisticsVariable != "" {

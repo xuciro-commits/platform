@@ -13,9 +13,12 @@
 | Lean 模型/工具链 | `scripts/verify.sh formal`；映射与可信前提见 [Lean README](../contract/lean/README.md) |
 | Go 宿主 | `scripts/verify.sh capabilities format`；改变应用 API/组合时加 `composition` |
 | 应用/协议 | `scripts/verify.sh composition format`；MES 规则加 `mes`，PMS 桌面/离线链加 `pms` |
-| Web 行为或浏览器测试 | `scripts/verify.sh web`：类型、构建、共享组件测试与精简浏览器路线 |
+| Web 日常编码与同类组件批次 | `scripts/verify.sh web-check`：生成一致性、Catalog、`pnpm check` 的类型、单元测试与构建；开发中按问题选择原 owner 的 `go test` 和单元测试 |
+| 成组交付、重要集成或发布节点 | 按影响面选择一条联合浏览器路线；需要全量验收时 `scripts/verify.sh web` 共用一次完整 Playwright，不按每个组件重复 |
 | 纯样式/布局/文案 | `pnpm --dir web check`，启动查看并截所改页面；不要求重跑浏览器业务路线 |
 | 提交/恢复/激活语义或部署 | 对应持久化/故障检查及 `scripts/verify.sh deploy`；纯发布导航不自动触发 |
+
+同类展示、容器、输入或操作组件按共同数据/状态能力合成3–5个一组，共用实现与验证后统一提交。编码期间以Go与Web轻检查为主；完整Playwright及部署演练留到重要集成、发布或实际部署/恢复变更节点，依据本批影响选择，不为单个小部件重复全量E2E。
 
 开发中定向定位问题，收尾只跑适用组合。通过后只有新代码、失败修复、环境变化或必要断言未覆盖才重跑；文档更新不是重跑理由。未通过或未执行如实报告，不伪造通过，也不因此扩大到不相关能力。
 

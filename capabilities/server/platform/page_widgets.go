@@ -182,7 +182,8 @@ func (d *PageDocument) checkWidgetPorts(s Section) error {
 		}
 		port := widgetPort(s.Widget, field)
 		v, ok := d.Variables[id]
-		if port == nil || !ok || !PageUIProfileSupports(d.UIProfile, port.RequiredUIProfile) || v.Type != port.Type || port.Writable && field != "selectionSetVariable" && !(v.Writable || (field == "rangeMinVariable" || field == "rangeMaxVariable" || field == "booleanVariable" || field == "choiceVariable" || field == "choiceSetVariable" || field == "dateVariable" || field == "pickerValueVariable" || field == "rowValueVariable" || field == "rowSetVariable" || field == "columnValueVariable" || field == "columnSetVariable" || field == "groupValueVariable" || field == "groupSetVariable") && v.Mode == "state") {
+		readonlyIndexChoice := field == "choiceVariable" && s.ChoiceInput != nil && (s.ChoiceInput.Variant == "steps" || s.ChoiceInput.Variant == "tabs") && v.Mode == "constant"
+		if port == nil || !ok || !PageUIProfileSupports(d.UIProfile, port.RequiredUIProfile) || v.Type != port.Type || port.Writable && field != "selectionSetVariable" && !readonlyIndexChoice && !(v.Writable || (field == "rangeMinVariable" || field == "rangeMaxVariable" || field == "booleanVariable" || field == "choiceVariable" || field == "choiceSetVariable" || field == "dateVariable" || field == "pickerValueVariable" || field == "rowValueVariable" || field == "rowSetVariable" || field == "columnValueVariable" || field == "columnSetVariable" || field == "groupValueVariable" || field == "groupSetVariable") && v.Mode == "state") {
 			return fmt.Errorf("widget %s has an invalid %s port", s.Widget, field)
 		}
 	}

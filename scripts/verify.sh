@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform verification. Usage: scripts/verify.sh [contract|formal|capabilities|web|pms|mes|composition|deploy|format|ci]...   (default: everything; several steps run in turn)
+# Platform verification. Usage: scripts/verify.sh [contract|formal|capabilities|web-check|web|pms|mes|composition|deploy|format|ci]...   (default: everything; several steps run in turn)
 # The web step needs node and pnpm (brew install node pnpm); deploy also needs a running Docker (orb start), curl, jq and Chrome or Playwright Chromium.
 # Needs go, buf and protoc-gen-go (brew install go bufbuild/buf/buf; go install google.golang.org/protobuf/cmd/protoc-gen-go@latest).
 set -uo pipefail
@@ -39,9 +39,13 @@ formal() {
   fi
 }
 
+web_check() {
+  step web bash -c 'cd web && pnpm install --frozen-lockfile && gen() { find packages/kernel/src/gen -type f -exec shasum {} + | sort; } && before=$(gen) && pnpm --dir packages/kernel generate && { [ "$before" = "$(gen)" ] || { echo "TypeScript contract types were stale; regenerated"; exit 1; }; } && pnpm check'
+}
+
 web() {
   local web_failures=${#failed[@]}
-  step web bash -c 'cd web && pnpm install --frozen-lockfile && gen() { find packages/kernel/src/gen -type f -exec shasum {} + | sort; } && before=$(gen) && pnpm --dir packages/kernel generate && { [ "$before" = "$(gen)" ] || { echo "TypeScript contract types were stale; regenerated"; exit 1; }; } && pnpm check'
+  web_check
   # docs/Testing.md's routes in a browser against a development host (web/e2e, F-35; needs Go and Chrome or Playwright's Chromium)
   if ((${#failed[@]} == web_failures)); then
     step web-routes bash -c 'cd web && pnpm --filter @platform/e2e e2e'
@@ -105,6 +109,7 @@ for target in "${@:-all}"; do
 case "$target" in
   contract) contract ;;
   formal) formal ;;
+  web-check) web_check ;;
   web) web ;;
   pms) web; pms ;;
   capabilities) capabilities ;;
@@ -115,7 +120,7 @@ case "$target" in
   all) contract; formal; format; capabilities; web; pms; mes; composition; deploy ;;
   # What CI runs on Linux: the rehearsal needs Docker, so it stays on the owner's Mac.
   ci) contract; formal; format; capabilities; mes; composition ;;
-  *) echo "usage: $0 [contract|formal|capabilities|web|pms|mes|composition|deploy|format|ci]..."; exit 2 ;;
+  *) echo "usage: $0 [contract|formal|capabilities|web-check|web|pms|mes|composition|deploy|format|ci]..."; exit 2 ;;
 esac
 done
 

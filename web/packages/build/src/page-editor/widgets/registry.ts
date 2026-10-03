@@ -1,3 +1,4 @@
+import {TagCountsInspector} from "./TagCountsInspector";
 import {RecordComparisonInspector} from "./RecordComparisonInspector";
 import {RecordCardInspector} from "./RecordCardInspector";
 import {SparklineInspector} from "./SparklineInspector";
@@ -43,6 +44,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "tag-counts":{configVersion:1,bindings:TagCountsInspector},
  "record-comparison":{configVersion:1,bindings:RecordComparisonInspector},
  "record-card":{configVersion:1,bindings:RecordCardInspector},
  "sparkline-kpi":{configVersion:1,bindings:SparklineInspector},

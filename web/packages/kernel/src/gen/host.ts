@@ -940,6 +940,7 @@ export type PageChoiceInput = {
   clearable?: boolean;
   variant: string;
   options: string[];
+  optionLabels?: string[];
   label?: string;
 };
 
@@ -1907,7 +1908,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.74",
+  "uiProfile": "platform.page.v2.75",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5205,6 +5206,78 @@ export const pageUIManifest = {
         ],
         "hidden": "unmount"
       }
+    },
+    {
+      "componentID": "tag-counts",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.75",
+      "title": "Tag counts",
+      "category": "Analysis",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "collection-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "records",
+          "bindingField": "collectionVariable",
+          "type": "object-set",
+          "requiredUIProfile": "platform.page.v2.75"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.75"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "groupValue",
+          "bindingField": "groupValueVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.75"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "hidden": "unmount",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -5281,7 +5354,8 @@ export const pageUIManifest = {
     "platform.page.v2.71",
     "platform.page.v2.72",
     "platform.page.v2.73",
-    "platform.page.v2.74"
+    "platform.page.v2.74",
+    "platform.page.v2.75"
   ],
   "runtime": {
     "scope": "page",
@@ -5777,13 +5851,16 @@ export const pageUIManifest = {
         "select",
         "radio",
         "segments",
-        "multiple"
+        "multiple",
+        "steps",
+        "tabs"
       ],
       "maxOptions": 64,
       "maxOptionBytes": 256,
       "multipleRequiredUIProfile": "platform.page.v2.56",
       "maxSelected": 64,
-      "clearRequiredUIProfile": "platform.page.v2.65"
+      "clearRequiredUIProfile": "platform.page.v2.65",
+      "indexedRequiredUIProfile": "platform.page.v2.75"
     },
     "dateInput": {
       "requiredUIProfile": "platform.page.v2.57",
