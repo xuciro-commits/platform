@@ -88,3 +88,8 @@ export {RecordSparkline,recordSparklinePoints} from "./records/RecordSparkline";
 
 export {RecordCard} from "./records/RecordCard";
 export {RecordComparison} from "./records/RecordComparison";
+export {RecordComments,type RecordCommentsProps} from "./records/RecordComments";
+export {RecordUploader,type RecordUploaderProps} from "./records/RecordUploader";
+export {MediaPreview,type AttachmentPreviewProps} from "./records/MediaPreview";
+export {PdfViewer,type PdfViewerProps} from "./records/PdfViewer";
+export type {AttachedFile,RecordComment} from "./records/Records";

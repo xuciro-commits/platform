@@ -423,6 +423,15 @@ func (t *Tenant) Definitions(m platform.Member) []platform.Definition {
 			if len(page.Sections) > 0 {
 				sections := make([]platform.Section, 0, len(page.Sections))
 				for _, section := range page.Sections {
+					if slices.ContainsFunc(section.CollaborationDependencies(), func(ref platform.AssetRef) bool {
+						if ref.Kind != platform.AssetObject {
+							return false // write permission does not control discovery of a readable service
+						}
+						service, visible := entities[ref.Name]
+						return !visible || service.App != ref.App
+					}) {
+						continue
+					}
 					if section.Selection != "" && !selections[section.Selection] || section.ParentSelection != "" && !selections[section.ParentSelection] {
 						continue
 					}

@@ -18,8 +18,8 @@
     "build": "true"
   },
   "dependencies": {
-    "@platform/catalog": "workspace:*",
     "@hookform/resolvers": "^5.9.1",
+    "@platform/catalog": "workspace:*",
     "@platform/kernel": "workspace:*",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.13",
@@ -30,6 +30,7 @@
     "dockview-react": "^8.3.1",
     "echarts": "^6.1.0",
     "lucide-react": "^1.47.0",
+    "pdfjs-dist": "6.3.289",
     "radix-ui": "^1.6.7",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

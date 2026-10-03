@@ -104,6 +104,9 @@ type PageInlineEdit struct {
 }
 
 type Section struct {
+	CommentDraftVariable     string                  `json:"commentDraftVariable,omitempty"`
+	FileVariable             string                  `json:"fileVariable,omitempty"`
+	PdfPageVariable          string                  `json:"pdfPageVariable,omitempty"`
 	RecordGantt              *PageRecordGantt        `json:"recordGantt,omitempty"`
 	RecordCalendar           *PageRecordCalendar     `json:"recordCalendar,omitempty"`
 	RecordEvents             *PageRecordEvents       `json:"recordEvents,omitempty"`

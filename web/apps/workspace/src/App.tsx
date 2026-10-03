@@ -3,7 +3,7 @@
 // and the member holds a role in (`/v1/me`), the actions of their catalog — and
 // each app's UI package contributes its views and navigation through defineApp.
 import "./i18n";
-import { ApplicationSessionsProvider, HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
+import { ApplicationSessionsProvider, confirmedDecision, HostContext, type AppUI, type Definition, type Host, type Me, type SavedView } from "@platform/app";
 import { EdgeClient, keepFresh, signOut, type ActionDeclaration, type Entry, type OidcConfig, type OidcSession, type Api } from "@platform/kernel";
 import { Button, Card, Dialog, Workspace, humanizeKernelError, notify, routeToHash, type AggregateData, type EntityInfo, type RecordPageData, type RecordSource, type RecordView, type Route, t, language, setLanguage, setCurrency } from "@platform/ui";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
@@ -141,21 +141,20 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
     if (!client.authorities.authorityOf(client.connection.tenant, target.type)) {
       await client.refreshDeclarations().catch(() => undefined);
     }
-    client.draft(schema, target, payload, options.evidence, options.expectedRevision);
-    let ok = false;
+    const key=client.draft(schema, target, payload, options.evidence, options.expectedRevision);
     for (const entry of await client.send()) {
-      ok = entry.state === "SUBMISSION_STATE_CONFIRMED";
-      const declared = actions?.find((a) => a.schema === schema);
+      const ok=entry.state === "SUBMISSION_STATE_CONFIRMED",own=entry.submission.tenantId===client.connection.tenant&&entry.submission.idempotencyKey===key;
+      const declared = actions?.find((a) => a.schema === entry.submission.schema?.name);
       const done = declared?.needsApproval ? t("sent for approval") : t("done"); // held by the host until its approvers agree (ADR-0017)
       const rawOutcome = entry.reason ?? entry.outcome;
       const outcomeText = ok ? done : humanizeKernelError(rawOutcome);
-      if (!ok) options.onRefused?.(outcomeText);
-      if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? schema, target: target.id, outcome: outcomeText }));
+      if (!ok&&own) options.onRefused?.(outcomeText);
+      if (!ok || !options.quiet) (ok ? notify.success : notify.error)(t("{action} {target}: {outcome}", { action: declared?.title ?? entry.submission.schema?.name ?? schema, target: entry.submission.target?.id??target.id, outcome: outcomeText }));
     }
     setOutbox([...client.authorities.outbox]);
     await queries.invalidateQueries();
     setRevision((r) => r + 1);
-    return ok;
+    return confirmedDecision(client.authorities.outbox,client.connection.tenant,key);
   }, [actions, client, queries]);
 
   const host = useMemo<Host | undefined>(() => {
@@ -183,7 +182,7 @@ export function App({ signedIn, identities }: { signedIn?: { config: OidcConfig;
       can: (schema) => !!actions?.some((a) => a.schema === schema),
       action: (schema) => actions?.find((a) => a.schema === schema),
       catalog: actions ?? [],
-      resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); await queries.invalidateQueries(); },
+      resend: async () => { await client.send(); setOutbox([...client.authorities.outbox]); await queries.invalidateQueries(); setRevision(r=>r+1); },
     };
   }, [actions, apps, client, decide, definitions, entities, me, outbox, protocols, queries, revision]);
 

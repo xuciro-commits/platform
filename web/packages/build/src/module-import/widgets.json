@@ -213,17 +213,17 @@
       "sourceType": "PdfViewer",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "pdf-viewer",
+      "reason": "authorized-original-pdf-bytes-page-profile"
     },
     {
       "sourceType": "MediaPreview",
       "sourceCategory": "Visualization",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "media-preview",
+      "reason": "authorized-original-attachment-bytes-profile"
     },
     {
       "sourceType": "StatusTracker",
@@ -269,17 +269,17 @@
       "sourceType": "Comments",
       "sourceCategory": "Action",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "comments",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-comments",
+      "reason": "original-authorized-record-comment-service-profile"
     },
     {
       "sourceType": "MediaUploader",
       "sourceCategory": "Action",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": "files",
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "record-uploader",
+      "reason": "original-record-attachment-service-profile"
     },
     {
       "sourceType": "InlineAction",

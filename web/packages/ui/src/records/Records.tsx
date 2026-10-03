@@ -6,6 +6,8 @@ import { ChevronLeft, ChevronRight, History as HistoryIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import {RecordCards} from "./RecordCards";
+import {RecordComments} from "./RecordComments";
+import {RecordUploader} from "./RecordUploader";
 import {EditableRecordGrid,type RecordEditPort,type RecordSelectionPort} from "./EditableRecordGrid";
 import {presentRecordColumns,type RecordColumnPresentation} from "./ColumnPresentation";
 import { DataTable } from "../components/DataTable";
@@ -485,8 +487,8 @@ export function RecordPage({ source, type, id, actions, onOpen, reload = 0, can,
       </section>}
       {!detailOnly && info.type === "work.approval" && <ApprovalGraph approval={r as unknown as Api.ApprovalRequest} />}
       {properties}
-      {!detailOnly && (view.files.length > 0 || files) && <Files attached={view.files} files={files} />}
-      {!detailOnly && (view.comments.length > 0 || comments) && <Comments list={view.comments} following={view.following} comments={comments} />}
+      {!detailOnly && (view.files.length > 0 || files) && <Files key={JSON.stringify([source.scope,type,id])} attached={view.files} files={files} />}
+      {!detailOnly && (view.comments.length > 0 || comments) && <Comments key={JSON.stringify([source.scope,type,id])} list={view.comments} following={view.following} comments={comments} />}
       {!detailOnly && related}
       {!detailOnly && (view.activity?.length ?? 0) > 0 && (
         <section>
@@ -554,21 +556,12 @@ const size = (n: number) => (n < 1024 ? `${n} B` : n < 1 << 20 ? `${Math.round(n
 
 /** A record's files: download each, add one. */
 function Files({ attached, files }: { attached: AttachedFile[]; files?: { upload: (file: File) => Promise<void>; download: (f: AttachedFile) => void } }) {
-  const [busy, setBusy] = useState(false);
+  const [file,setFile]=useState<File>(),[busy,setBusy]=useState(false),[error,setError]=useState<string>();const epoch=useRef(0),picked=useRef(file);picked.current=file;useEffect(()=>()=>{epoch.current++;},[]);
+  const upload=async()=>{const submitted=picked.current,started=epoch.current;if(!submitted||!files||busy)return;setBusy(true);setError(undefined);try{await files.upload(submitted);if(epoch.current===started&&picked.current===submitted){picked.current=undefined;setFile(undefined);}}catch{if(epoch.current===started)setError(t("The attachment could not be confirmed. Your selected file is retained."));}finally{if(epoch.current===started)setBusy(false);}};
   return (
     <section>
-      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">{t("Files")}
-        {files && <label className="cursor-pointer text-xs font-normal text-[var(--tone-info)] hover:underline">
-          {busy ? t("Uploading…") : t("Add file")}
-          <input type="file" className="hidden" disabled={busy} onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            setBusy(true);
-            try { await files.upload(file); } finally { setBusy(false); }
-          }} />
-        </label>}
-      </h2>
+      <h2 className="mb-1 text-sm font-semibold">{t("Files")}</h2>
+      {files&&<RecordUploader label={t("Add file")} file={file} busy={busy} error={error} onFile={next=>{picked.current=next;setFile(next);setError(undefined);}} onUpload={upload} onClear={()=>{picked.current=undefined;setFile(undefined);setError(undefined);}}/>}
       {attached.length === 0 ? <p className="text-xs text-muted">{t("No files")}</p> :
         <ul className="grid gap-1">
           {attached.map((f) => (
@@ -584,31 +577,10 @@ function Files({ attached, files }: { attached: AttachedFile[]; files?: { upload
 
 /** A record's comments, oldest first, and a box to add one; following tells of its changes. */
 function Comments({ list, following, comments }: { list: RecordComment[]; following: boolean; comments?: { add: (text: string) => Promise<boolean>; follow: (on: boolean) => Promise<void> } }) {
-  const [text, setText] = useState("");
-  return (
-    <section>
-      <h2 className="mb-1 flex flex-wrap items-center gap-2 text-sm font-semibold">{t("Comments")}
-        {/* The follow state said, and the button that changes it: a bare "Follow" read as a heading (the owner's testing). */}
-        {comments && <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 text-xs font-normal text-muted">
-          {following ? t("You follow this record: you hear of its changes and comments") : t("You do not follow this record")}
-          <Button size="sm" variant={following ? "ghost" : undefined} onClick={() => void comments.follow(!following)}>{following ? t("Unfollow") : t("Follow")}</Button>
-        </span>}
-      </h2>
-      <ol className="grid gap-2">
-        {list.map((c) => (
-          <li key={c.id} className="rounded-md border border-border bg-surface p-2 text-sm">
-            <div className="text-xs text-muted">{c.by} · {c.created?.at ? new Date(c.created.at).toLocaleString() : ""}</div>
-            <p className="whitespace-pre-wrap">{c.text}</p>
-          </li>
-        ))}
-      </ol>
-      {comments && <form className="mt-2 grid gap-2" onSubmit={async (e) => { e.preventDefault(); if (text.trim() && await comments.add(text)) setText(""); }}>
-        <textarea aria-label={t("Comment")} className="min-h-16 rounded-md border border-border bg-surface p-2 text-sm" placeholder={t("Write a comment; @member tells them")}
-          value={text} onChange={(e) => setText(e.target.value)} />
-        <div><Button type="submit" size="sm" variant="primary" disabled={!text.trim()}>{t("Comment")}</Button></div>
-      </form>}
-    </section>
-  );
+  const [text,setText]=useState(""),[busy,setBusy]=useState(false),[followBusy,setFollowBusy]=useState(false),[error,setError]=useState<string>();const epoch=useRef(0),draft=useRef(text);draft.current=text;useEffect(()=>()=>{epoch.current++;},[]);
+  const add=async()=>{const submitted=draft.current,started=epoch.current;if(!comments||busy||!submitted.trim())return;setBusy(true);setError(undefined);try{const confirmed=await comments.add(submitted);if(epoch.current!==started)return;if(confirmed&&draft.current===submitted){draft.current="";setText("");}else if(!confirmed)setError(t("The comment could not be confirmed. Your draft is retained."));}catch{if(epoch.current===started)setError(t("The comment could not be confirmed. Your draft is retained."));}finally{if(epoch.current===started)setBusy(false);}};
+  const follow=async(on:boolean)=>{const started=epoch.current;if(!comments||followBusy)return;setFollowBusy(true);setError(undefined);try{await comments.follow(on);}catch{if(epoch.current===started)setError(t("Following this record could not be confirmed."));}finally{if(epoch.current===started)setFollowBusy(false);}};
+  return <RecordComments list={list} text={text} following={following} busy={busy} followBusy={followBusy} error={error} onText={comments?next=>{draft.current=next;setText(next);}:undefined} onAdd={comments?add:undefined} onFollow={comments?follow:undefined}/>;
 }
 
 const processTone = (state: string) =>

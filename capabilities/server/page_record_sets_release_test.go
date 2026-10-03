@@ -5,6 +5,8 @@ import (
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/apps/build"
+	"platformserver/apps/files"
+	"platformserver/apps/relations"
 	"platformserver/platform"
 	"strings"
 	"testing"
@@ -13,7 +15,7 @@ import (
 
 func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	compose := func() *Tenant {
-		tn, err := NewTenant("record-sets", NewConsole("record-sets", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}, Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{build.ID: build.User}}}), build.New("record-sets"))
+		tn, err := NewTenant("record-sets", NewConsole("record-sets", Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}, Seat{Subjects: []string{"reader"}, Member: platform.Member{ID: "reader", Roles: map[string]string{build.ID: build.User}}}), build.New("record-sets"), files.New("record-sets"), relations.New("record-sets"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -426,6 +428,17 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 		root.Children = append(root.Children, spec.id)
 		doc.Nodes[doc.Root] = root
 	}
+	doc.Variables["commentDraft"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("")}
+	doc.Variables["attachedFile"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("")}
+	doc.Variables["pdfPage"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("27")}
+	collaborationIndex := len(sections)
+	for _, spec := range []struct{ id, widget, draft, file, page string }{{"comments", "record-comments", "commentDraft", "", ""}, {"uploader", "record-uploader", "", "attachedFile", ""}, {"preview", "media-preview", "", "attachedFile", ""}, {"pdf", "pdf-viewer", "", "attachedFile", "pdfPage"}} {
+		sections = append(sections, build.Section{ID: spec.id, Widget: spec.widget, ConfigVersion: 1, RecordVariable: "active", CommentDraftVariable: spec.draft, FileVariable: spec.file, PdfPageVariable: spec.page})
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -455,6 +468,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[recordCardIndex].Fields = nil
 	sections[comparisonIndex].RecordComparison = &platform.PageRecordComparison{LabelField: "id"}
 	sections[comparisonIndex].Fields = []string{"name"}
+	sections[collaborationIndex].Title = "Later collaboration"
+	doc.Variables["pdfPage"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("1")}
 	sections[indexedIndex].ChoiceInput.OptionLabels[1] = "Later draft"
 	doc.Variables["indexState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2")}
 	sections[tagCountsIndex].Group = "secret"
@@ -637,6 +652,22 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 					}
 					if indexedFound != 3 || tagsFound != 2 || privateTags != map[bool]int{true: 1, false: 0}[member.ID == builder.ID] {
 						t.Fatal("frozen indexed choices or tag field permissions changed")
+					}
+					collaborationFound := 0
+					for _, section := range d.Page.Sections {
+						switch section.ID {
+						case "comments", "uploader", "preview", "pdf":
+							if section.RecordVariable != "active" || section.Title == "Later collaboration" {
+								t.Fatal("frozen collaboration record producer or presentation changed")
+							}
+							if section.ID == "comments" && section.CommentDraftVariable != "commentDraft" || section.ID != "comments" && section.FileVariable != "attachedFile" || section.ID == "pdf" && (section.PdfPageVariable != "pdfPage" || string(d.Page.Document.Variables["pdfPage"].Initial) != `"27"`) {
+								t.Fatal("frozen collaboration original scalar bindings changed")
+							}
+							collaborationFound++
+						}
+					}
+					if collaborationFound != 4 {
+						t.Fatal("frozen collaboration services or member record permissions changed")
 					}
 					sparklineFound, numberSparkline, privateSparkline := false, false, 0
 					for _, section := range d.Page.Sections {

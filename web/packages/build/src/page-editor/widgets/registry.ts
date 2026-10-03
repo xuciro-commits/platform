@@ -1,3 +1,4 @@
+import {CollaborationInspector} from "./CollaborationInspector";
 import {TagCountsInspector} from "./TagCountsInspector";
 import {RecordComparisonInspector} from "./RecordComparisonInspector";
 import {RecordCardInspector} from "./RecordCardInspector";
@@ -44,6 +45,10 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "record-comments":{configVersion:1,bindings:CollaborationInspector},
+ "record-uploader":{configVersion:1,bindings:CollaborationInspector},
+ "media-preview":{configVersion:1,bindings:CollaborationInspector},
+ "pdf-viewer":{configVersion:1,bindings:CollaborationInspector},
  "tag-counts":{configVersion:1,bindings:TagCountsInspector},
  "record-comparison":{configVersion:1,bindings:RecordComparisonInspector},
  "record-card":{configVersion:1,bindings:RecordCardInspector},

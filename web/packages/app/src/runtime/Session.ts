@@ -23,7 +23,7 @@ export type PageSessionSnapshot = {
   filters: Record<string, Record<string, unknown>>;
   queries: Record<string, ReadState<QueryWindow>>;
 };
-export type SelectionPlan = {maxSelectionSetRecords?:number; filterObjects?:ReadonlyMap<string,string>;filterFields?:ReadonlyMap<string,ReadonlySet<string>>; objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;filters?:ReadonlySet<string>;loops?:ReadonlySet<string>}>; filterSelections?:ReadonlyMap<string,ReadonlySet<string>>;filterQueries?:ReadonlyMap<string,ReadonlySet<string>>;querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
+export type SelectionPlan = {recordScalars?:ReadonlyMap<string,ReadonlyMap<string,ScalarValue>>;maxSelectionSetRecords?:number; filterObjects?:ReadonlyMap<string,string>;filterFields?:ReadonlyMap<string,ReadonlySet<string>>; objects: ReadonlyMap<string, string>; children: ReadonlyMap<string, ReadonlySet<string>>; queryParents: ReadonlyMap<string, string>; overlayScopes?:ReadonlyMap<string,{queries:ReadonlySet<string>;selections:ReadonlySet<string>;filters?:ReadonlySet<string>;loops?:ReadonlySet<string>}>; filterSelections?:ReadonlyMap<string,ReadonlySet<string>>;filterQueries?:ReadonlyMap<string,ReadonlySet<string>>;querySelections?:ReadonlyMap<string,ReadonlySet<string>> };
 
 /** One member/definition-scoped presentation session. References and query
  * windows are values; record fields/revisions are a separate ephemeral cache.
@@ -59,6 +59,7 @@ export class PageSessionStore {
   private viewCache=new Map<string,RecordView>();
   private recordCache = new Map<string, EntityRecord>();
   private confirmedEpoch=new Map<string,number>();
+  private recordLeases=new Map<string,number>();
   confirmedSelected(key:string):EntityRecord|undefined {return !this.disposed&&this.state.records[key]?.status==="value"&&this.confirmedEpoch.get(key)===this.recordEpoch.get(key)?this.recordCache.get(key):undefined;}
   private recordEpoch = new Map<string, number>();
   private selectionSetCache=new Map<string,EntityRecord[]>();
@@ -183,6 +184,16 @@ export class PageSessionStore {
   private cacheView(key:string,view:RecordView){if(!this.viewCache.has(key)&&this.viewCache.size>=256)this.viewCache.delete(this.viewCache.keys().next().value!);this.viewCache.set(key,view);}
   property:PropertyReader=(reference,field,type)=>{const descriptor=this.source.entity(reference.object)?.fields.find((f)=>f.name===field),view=this.viewCache.get(JSON.stringify([reference.object,reference.id]));if(!descriptor||!view)return {status:"error",code:"Property value is unavailable."};if(view.valueErrors?.[field])return {status:"error",code:view.valueErrors[field]!};if(!view.values||!Object.hasOwn(view.values,field))return {status:"empty"};const value=view.values[field];if(type==="decimal"?!isDecimal(value):typeof value!==type)return {status:"error",code:"Property value type mismatch"};return {status:"value",value:value as import("./decimal").ScalarValue};};
   selected(key: string): EntityRecord | undefined { return this.recordCache.get(key); }
+  /** Binding retirement changes even when the next original record has the same ID. */
+  recordBindingEpoch(key:string):number {return this.recordLeases.get(key)??0;}
+  /** Capture only confirmed access. Data revision reads retain identity; binding retirement invalidates the lease. */
+  captureRecordLease(key:string):(()=>boolean)|undefined {
+    const record=this.confirmedSelected(key),reference=this.state.records[key];
+    if(!record||reference?.status!=="value")return undefined;
+    const captured=reference.value,epoch=this.recordLeases.get(key)??0;
+    return ()=>{const current=this.state.records[key];return !this.disposed&&(this.recordLeases.get(key)??0)===epoch&&(current?.status==="value"||current?.status==="pending")&&current.value?.object===captured.object&&current.value?.id===captured.id;};
+  }
+
   private descendants(keys: string[]) {
     const seen = new Set<string>();
     const visit = (key: string) => { if (seen.has(key)) return; seen.add(key); for (const child of this.plan.children.get(key) ?? []) visit(child); };
@@ -201,7 +212,7 @@ export class PageSessionStore {
     const records = { ...this.state.records }, visited = new Set<string>();
     const remove = (key: string) => {
       if (visited.has(key)) return;
-      visited.add(key);this.confirmedEpoch.delete(key);this.selectionSetEpoch.set(key,(this.selectionSetEpoch.get(key)??0)+1);this.selectionSetCache.delete(key);if(this.state.recordSets[key])this.state={...this.state,recordSets:{...this.state.recordSets,[key]:{status:"empty"}}}; records[key] = { status: "empty" }; this.recordCache.delete(key);this.selectionQueries.delete(key);
+      visited.add(key);this.recordLeases.set(key,(this.recordLeases.get(key)??0)+1);const resets=this.plan.recordScalars?.get(key);if(resets?.size)this.state={...this.state,scalars:{...this.state.scalars,...Object.fromEntries(resets)}};this.confirmedEpoch.delete(key);this.selectionSetEpoch.set(key,(this.selectionSetEpoch.get(key)??0)+1);this.selectionSetCache.delete(key);if(this.state.recordSets[key])this.state={...this.state,recordSets:{...this.state.recordSets,[key]:{status:"empty"}}}; records[key] = { status: "empty" }; this.recordCache.delete(key);this.selectionQueries.delete(key);
       this.recordEpoch.set(key, (this.recordEpoch.get(key) ?? 0) + 1);
       for (const child of this.plan.children.get(key) ?? []) remove(child);
     };
@@ -361,6 +372,7 @@ export class PageSessionStore {
     this.aggregates.clear();
     this.disposed = true;this.selectionSetCache.clear();for(const [key,epoch] of this.selectionSetEpoch)this.selectionSetEpoch.set(key,epoch+1);this.externalMembers.clear(); this.querySignatures.clear(); this.queries.clear(); this.queryObjects.clear();this.queryData.clear(); this.recordCache.clear();this.viewCache.clear();this.selectionQueries.clear(); this.sources.clear(); this.reads.clear(); this.itemOwners.clear(); this.loopQueries.clear(); this.loopItems.clear();
     for (const [key, epoch] of this.recordEpoch) this.recordEpoch.set(key, epoch + 1);
+    for(const [key,epoch] of this.recordLeases)this.recordLeases.set(key,epoch+1);
     this.state = { aggregates:{}, views:{}, scalars: {}, items: {}, records: {},recordSets:{}, filters: {}, queries: {} };
     this.confirmedEpoch.clear();this.listeners.clear();
   }

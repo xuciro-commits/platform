@@ -82,6 +82,7 @@ func PageReleaseAsset(app, sourceVersion string, page Page) (ReleaseAsset, error
 		for _, group := range section.RecordLinks {
 			requires = append(requires, group.Object)
 		}
+		requires = append(requires, section.CollaborationDependencies()...)
 		requires = append(requires, section.Actions...)
 		if section.InlineEdit != nil {
 			requires = append(requires, section.InlineEdit.Action)
@@ -511,6 +512,7 @@ func checkReleaseBindings(ref AssetRef, body []byte, declared []AssetRef) error 
 			for _, group := range section.RecordLinks {
 				required = append(required, group.Object)
 			}
+			required = append(required, section.CollaborationDependencies()...)
 			required = append(required, section.Actions...)
 			if section.InlineEdit != nil {
 				required = append(required, section.InlineEdit.Action)
@@ -701,6 +703,33 @@ func CandidateDiff(before, after ReleaseCandidate) (added, removed, changed []As
 }
 
 func checkFrozenQueries(page Page, lookup map[AssetRef]ReleaseAsset) error {
+	for _, s := range page.Sections {
+		if err := page.CheckCollaborationBinding(s); err != nil {
+			return err
+		}
+		if err := s.CheckCollaborationServices(func(ref AssetRef) (EntityInfo, bool) {
+			asset, ok := lookup[ref]
+			var descriptor struct {
+				Type   string      `json:"type"`
+				Entity *EntityInfo `json:"entity"`
+			}
+			var info EntityInfo
+			err := json.Unmarshal(asset.Body, &descriptor)
+			if descriptor.Entity != nil {
+				info = *descriptor.Entity // service names may differ from their actual app owner
+			} else if err == nil {
+				err = json.Unmarshal(asset.Body, &info)
+			}
+			return info, ok && err == nil && descriptor.Type == info.Type
+		}, func(ref AssetRef) (Action, bool) {
+			asset, ok := lookup[ref]
+			var action Action
+			err := json.Unmarshal(asset.Body, &action)
+			return action, ok && err == nil
+		}); err != nil {
+			return err
+		}
+	}
 	for _, s := range page.Sections {
 		if s.Widget != "record-links" {
 			continue

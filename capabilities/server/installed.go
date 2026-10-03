@@ -231,6 +231,18 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 	parentBindings := map[string]string{}
 	for i, s := range p.Sections {
 		where := fmt.Sprintf("page %s, section %d (%s)", p.Name, i+1, s.Widget)
+		if err := s.CheckCollaborationServices(func(ref platform.AssetRef) (platform.EntityInfo, bool) {
+			info, ok := t.entity(ref.Name)
+			return info, ok && info.App == ref.App
+		}, func(ref platform.AssetRef) (platform.Action, bool) {
+			owner := t.owner["action:"+ref.Name]
+			if owner == nil || owner.Manifest().ID != ref.App {
+				return platform.Action{}, false
+			}
+			return owner.Manifest().Actions.Action(ref.Name)
+		}); err != nil {
+			return fmt.Errorf("%s: %w", where, err)
+		}
 		if !slices.Contains(platform.Widgets, s.Widget) {
 			return fmt.Errorf("%s: no widget %q; there are %s", where, s.Widget, strings.Join(platform.Widgets, ", "))
 		}
@@ -281,6 +293,15 @@ func (t *Tenant) checkSections(p platform.Page, page platform.EntityInfo) error 
 				return fmt.Errorf("%s: no object %s", where, s.Object.Name)
 			}
 			info = shown
+		}
+		if len(s.CollaborationDependencies()) > 0 {
+			object := s.Object
+			if object.Name == "" {
+				object = p.Object
+			}
+			if object.Kind != platform.AssetObject || object.App != info.App || object.Name != info.Type {
+				return fmt.Errorf("%s: collaboration object does not match its actual entity owner", where)
+			}
 		}
 		if s.RecordVariable != "" {
 			producer := p.Document.LoopRecordSource(s.RecordVariable)

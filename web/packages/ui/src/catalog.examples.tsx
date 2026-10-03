@@ -2,12 +2,12 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import {
-  StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
+  RecordComments, RecordUploader, MediaPreview, PdfViewer, StepSelector, TabSelector, TagCounts, RecordComparison, RecordCard, RecordSparkline, CountTreemap, Histogram, TermCounts, SearchInput, Spacer, Separator, Notice, DateTimeInput, DateInput, MultipleChoiceInput, ChoiceInput, FacetChoices,Button,ButtonGroup, CollectionTitle, CommandMenu, MetalButton, LiquidButton, RetroButton, Input, Select, Textarea, Card, Panel, Switch, Checkbox, Form, Disclosure, FilePicker, Toggles, Tree, Dialog, Sheet,
   StatusTag, Tag, submissionStatuses, DataTable, EntityForm, RecordForm, Markdown, MarkdownEditor, field,
   defineEntity, columnsFor, applyFilters, FilterBar, EntityCard, PropertyList, PageHeader, NotificationList,
   RangeInput, RecordLeaderboard, SummaryStatistics, Gauge, Progress, RecordGantt, RecordCalendar, RecordEvents, CountMatrix, RecordScatter, RecordChart, RecordCards, RecordKanban, RecordTimeline, RecordList, RecordPage, RecordLinks, RecordStatus, RecordHistory, RecordLookup, RecordWorkspace, Tasks, Inbox, StatusBar,
   Chart, Pivot, Graph, BlockCanvas, FlowView, FlowGraph, Workspace, EditorWorkbench, LayoutRegion, LayoutStack, ContentTabs, FlowLayout, VirtualStack, notify, t,
-  type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView,
+  type FieldType, type Filter, type EntityInfo, type EntityRecord, type RecordSource, type RecordView, type AttachedFile,
   type InboxTask, type Lifecycle as LifecycleInfo, type NodeCatalog, type CanvasNode, type CanvasEdge,
   type FlowDefinition, type FlowInstanceData, type ChartSpec, type Route,
 } from "./index";
@@ -366,3 +366,11 @@ export function CountTreemapExample(){return <CountTreemap label="Assets by stat
 export function RecordSparklineExample(){const info:EntityInfo={...demoInfo,fields:[{name:"availability",title:"Availability",type:"decimal"}]};return <RecordSparkline valueText="120" label="Assets in view" suffix=" assets" records={[90,93,null,95,92].map((availability,index)=>({id:`A${index}`,revision:1,created:stamp,changed:stamp,availability}))} info={info} field="availability"/>;}
 
 export function RecordCardExample(){return <RecordCard record={{id:"A-17",revision:1,created:stamp,changed:stamp,name:"Feed pump",quantity:42}} info={demoInfo} fields={["quantity"]} config={{labelField:"name",tone:"info"}}/>;}
+
+export function RecordCommentsExample(){const [text,setText]=useState(""),[error,setError]=useState<string>();return <RecordComments list={[{id:"CMT-DEMO",revision:1,created:stamp,changed:stamp,by:"demo-member",text:"The revised drawing is ready for review."}]} total={1} text={text} onText={setText} onAdd={()=>setError(t("Catalog examples do not persist comments."))} error={error}/>;}
+export function RecordUploaderExample(){const [file,setFile]=useState<File>(),[error,setError]=useState<string>();return <RecordUploader label={t("Attach file")} file={file} error={error} onFile={next=>{setFile(next);setError(undefined);}} onUpload={()=>setError(t("Catalog examples do not persist attachments."))} onClear={()=>{setFile(undefined);setError(undefined);}}/>;}
+const rasterExample="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNImHDhPwAF1ALAFmQ9YgAAAABJRU5ErkJggg==";
+function previewAttachment(name:string,blob:Blob):AttachedFile{return {id:`FILE-${name}`,revision:1,created:stamp,changed:stamp,by:"demo-member",name,size:blob.size,contentType:blob.type};}
+export function MediaPreviewExample(){const blob=useMemo(()=>new Blob([Uint8Array.from(atob(rasterExample),char=>char.charCodeAt(0))],{type:"image/png"}),[]);return <MediaPreview blob={blob} attachment={previewAttachment("pixel.png",blob)} scope="catalog"/>;}
+function catalogPdf(){const content="BT /F1 18 Tf 36 100 Td (Catalog PDF page) Tj ET",objects=["<< /Type /Catalog /Pages 2 0 R >>","<< /Type /Pages /Kids [3 0 R] /Count 1 >>","<< /Type /Page /Parent 2 0 R /MediaBox [0 0 320 180] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>","<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",`<< /Length ${content.length} >>\nstream\n${content}\nendstream`];let body="%PDF-1.4\n",offsets:number[]=[];for(const [index,object] of objects.entries()){offsets.push(body.length);body+=`${index+1} 0 obj\n${object}\nendobj\n`;}const xref=body.length;body+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n${offsets.map(offset=>`${String(offset).padStart(10,"0")} 00000 n \n`).join("")}trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;return new Blob([body],{type:"application/pdf"});}
+export function PdfViewerExample(){const blob=useMemo(catalogPdf,[]),[page,setPage]=useState("1");return <PdfViewer blob={blob} attachment={previewAttachment("catalog.pdf",blob)} page={page} onPage={setPage} scope="catalog"/>;}

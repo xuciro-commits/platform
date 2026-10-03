@@ -1528,6 +1528,9 @@ export type SavedView = {
 };
 
 export type Section = {
+  commentDraftVariable?: string;
+  fileVariable?: string;
+  pdfPageVariable?: string;
   recordGantt?: PageRecordGantt;
   recordCalendar?: PageRecordCalendar;
   recordEvents?: PageRecordEvents;
@@ -1908,7 +1911,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.75",
+  "uiProfile": "platform.page.v2.76",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -5278,6 +5281,270 @@ export const pageUIManifest = {
           "scope-close"
         ]
       }
+    },
+    {
+      "componentID": "record-comments",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.76",
+      "title": "Record comments",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.76"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.76"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "draft",
+          "bindingField": "commentDraftVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "record-uploader",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.76",
+      "title": "Record uploader",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.76"
+        },
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.76"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "media-preview",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.76",
+      "title": "Media preview",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.76"
+        },
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
+    },
+    {
+      "componentID": "pdf-viewer",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.76",
+      "title": "PDF viewer",
+      "category": "Records",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [
+        "object",
+        "record-variable"
+      ],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "record",
+          "bindingField": "recordVariable",
+          "type": "record",
+          "requiredUIProfile": "platform.page.v2.76"
+        },
+        {
+          "id": "file",
+          "bindingField": "fileVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "page",
+          "bindingField": "pdfPageVariable",
+          "type": "string",
+          "requiredUIProfile": "platform.page.v2.76",
+          "writable": true
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "widget-instance",
+        "clearOn": [
+          "record",
+          "member",
+          "definition",
+          "scope-close"
+        ],
+        "hidden": "unmount"
+      }
     }
   ],
   "supportedProfiles": [
@@ -5355,7 +5622,8 @@ export const pageUIManifest = {
     "platform.page.v2.72",
     "platform.page.v2.73",
     "platform.page.v2.74",
-    "platform.page.v2.75"
+    "platform.page.v2.75",
+    "platform.page.v2.76"
   ],
   "runtime": {
     "scope": "page",
@@ -5535,7 +5803,11 @@ export const pageUIManifest = {
         "record-view",
         "record-links",
         "status-tracker",
-        "record-card"
+        "record-card",
+        "record-comments",
+        "record-uploader",
+        "media-preview",
+        "pdf-viewer"
       ],
       "presentationWidgets": [
         "text",
@@ -5942,6 +6214,16 @@ export const pageUIManifest = {
       "maxRecords": 4,
       "maxFields": 64,
       "minFields": 1
+    },
+    "collaboration": {
+      "requiredUIProfile": "platform.page.v2.76",
+      "maxCommentsWindow": 50,
+      "maxFilesWindow": 100,
+      "maxPreviewBytes": 26214400,
+      "maxCommentBytes": 16384,
+      "maxImagePixels": 16777216,
+      "maxPDFPixels": 16777216,
+      "maxPDFPages": 1000
     }
   },
   "layout": {

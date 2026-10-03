@@ -1,0 +1,47 @@
+import {act,cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
+import {afterEach,expect,test,vi} from "vitest";
+import {RecordComments} from "./RecordComments";
+import {RecordUploader} from "./RecordUploader";
+import {RecordPage,type EntityInfo,type EntityRecord,type RecordComment,type RecordSource,type RecordView} from "./Records";
+afterEach(cleanup);
+const stamp={by:"owner",at:"2026-10-03T12:00:00Z"},comment=(id:string):RecordComment=>({id,revision:1,created:stamp,changed:stamp,by:"actual-member",text:"<b>Actual comment</b>"});
+const info={app:"sample",type:"sample.asset",title:"Asset",plural:"Assets",display:"name",standard:[],fields:[{name:"name",title:"Name",type:"text"}]} as EntityInfo;
+function source(scope="member:one"):RecordSource{return {scope,entity:()=>info,list:vi.fn(),get:async(_type,id)=>({record:{id,name:id,revision:1,created:stamp,changed:stamp} as EntityRecord,history:[],related:[],linked:[],activity:[],processes:[],approvals:[],tasks:[],files:[],comments:[],following:false}) as RecordView};}
+function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return {promise,resolve};}
+test("controlled comments retain original author, timestamp and identity and expose real window totals",()=>{
+ const writes:string[]=[],add=vi.fn(),{container,rerender}=render(<RecordComments list={[comment("C1"),comment("C2")]} total={20} text="Submitted draft" onText={text=>writes.push(text)} onAdd={add}/>);
+ expect(screen.getAllByText("actual-member")).toHaveLength(2);expect(screen.getAllByText(stamp.at)).toHaveLength(2);expect(screen.getByText("· C1")).toBeTruthy();expect(screen.getAllByText("<b>Actual comment</b>")).toHaveLength(2);expect(container.querySelector("b")).toBeNull();expect(screen.getByRole("status").textContent).toBe("Showing 2 of 20 comments.");
+ fireEvent.change(screen.getByRole("textbox",{name:"Comment"}),{target:{value:"New draft"}});expect(writes).toEqual(["New draft"]);expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Submitted draft");fireEvent.click(screen.getByRole("button",{name:"Comment"}));expect(add).toHaveBeenCalledOnce();expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Submitted draft");
+ rerender(<RecordComments list={[comment("C1")]} total={20} text="New draft" busy onText={text=>writes.push(text)} onAdd={add}/>);fireEvent.click(screen.getByRole("button",{name:"Submitting comment…"}));expect(add).toHaveBeenCalledOnce();fireEvent.change(screen.getByRole("textbox"),{target:{value:"Typed while pending"}});expect(writes.at(-1)).toBe("Typed while pending");
+});
+test("comment refusal remains visible with the draft and read-only views preserve the entire loaded legacy list",()=>{
+ const {rerender}=render(<RecordComments list={[comment("C1")]} total={1} text="Retained" onText={()=>{}} onAdd={()=>{}} error="Denied by the host"/>);expect(screen.getByRole("alert").textContent).toBe("Denied by the host");expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("Retained");
+ rerender(<RecordComments list={Array.from({length:200},(_,index)=>comment(String(index)))} text=""/>);expect(screen.getAllByRole("listitem")).toHaveLength(200);expect(screen.getByRole("status").textContent).toBe("200 loaded comments; the complete total is unavailable.");expect(screen.queryByRole("textbox")).toBeNull();
+ rerender(<RecordComments list={[comment("C1"),comment("C1")]} total={2} text=""/>);expect(screen.getByRole("alert")).toBeTruthy();expect(screen.queryByRole("list")).toBeNull();
+});
+test("legacy record-page confirmation cannot clear a later draft and a member or record change retires local state",async()=>{
+ const old=deferred<boolean>(),add=vi.fn(()=>old.promise),comments={add,follow:vi.fn(async()=>{})},props={source:source(),type:info.type,id:"A",comments},view=render(<RecordPage {...props}/>);
+ await screen.findByRole("textbox",{name:"Comment"});fireEvent.change(screen.getByRole("textbox",{name:"Comment"}),{target:{value:"First submission"}});fireEvent.click(screen.getByRole("button",{name:"Comment"}));expect(add).toHaveBeenCalledWith("First submission");fireEvent.change(screen.getByRole("textbox",{name:"Comment"}),{target:{value:"Later draft"}});await act(async()=>old.resolve(true));expect((screen.getByRole("textbox",{name:"Comment"}) as HTMLTextAreaElement).value).toBe("Later draft");
+ view.rerender(<RecordPage {...props} id="B"/>);await waitFor(()=>expect(screen.getByRole("heading",{name:"B"})).toBeTruthy());expect((screen.getByRole("textbox",{name:"Comment"}) as HTMLTextAreaElement).value).toBe("");fireEvent.change(screen.getByRole("textbox",{name:"Comment"}),{target:{value:"B draft"}});view.rerender(<RecordPage {...props} id="B" source={source("member:two")}/>);await screen.findByRole("textbox",{name:"Comment"});expect((screen.getByRole("textbox",{name:"Comment"}) as HTMLTextAreaElement).value).toBe("");
+});
+test("legacy comment refusal preserves the submitted draft and a retired acknowledgement cannot affect the new record",async()=>{
+ const old=deferred<boolean>(),add=vi.fn().mockResolvedValueOnce(false).mockImplementationOnce(()=>old.promise),props={source:source(),type:info.type,id:"A",comments:{add,follow:vi.fn(async()=>{})}},view=render(<RecordPage {...props}/>);
+ await screen.findByRole("textbox",{name:"Comment"});fireEvent.change(screen.getByRole("textbox",{name:"Comment"}),{target:{value:"Rejected draft"}});fireEvent.click(screen.getByRole("button",{name:"Comment"}));await screen.findByRole("alert");expect((screen.getByRole("textbox",{name:"Comment"}) as HTMLTextAreaElement).value).toBe("Rejected draft");
+ fireEvent.click(screen.getByRole("button",{name:"Comment"}));view.rerender(<RecordPage {...props} id="B"/>);await waitFor(()=>expect(screen.getByRole("heading",{name:"B"})).toBeTruthy());fireEvent.change(screen.getByRole("textbox",{name:"Comment"}),{target:{value:"New record draft"}});await act(async()=>old.resolve(true));expect((screen.getByRole("textbox",{name:"Comment"}) as HTMLTextAreaElement).value).toBe("New record draft");
+});
+test("upload control selects the actual File and leaves persistence, retry and confirmed metadata with its caller",()=>{
+ const file=new File(["actual bytes"],"inspection.txt",{type:"text/plain"}),picked=vi.fn(),upload=vi.fn(),view=render(<RecordUploader label="Record upload" onFile={picked} onUpload={upload}/>);
+ fireEvent.change(view.container.querySelector("input[type=file]")!,{target:{files:[file]}});expect(picked).toHaveBeenCalledWith(file);expect(upload).not.toHaveBeenCalled();expect(screen.queryByText(/Confirmed attachment/)).toBeNull();
+ view.rerender(<RecordUploader label="Record upload" file={file} onFile={picked} onUpload={upload}/>);expect(screen.getByText("Selected file: inspection.txt")).toBeTruthy();expect(screen.getByText("text/plain · 12 bytes")).toBeTruthy();fireEvent.click(screen.getByRole("button",{name:"Upload and attach"}));expect(upload).toHaveBeenCalledOnce();expect(screen.getByText("Selected file: inspection.txt")).toBeTruthy();
+ view.rerender(<RecordUploader label="Record upload" file={file} error="Refused" onFile={picked} onUpload={upload}/>);expect(screen.getByRole("alert").textContent).toBe("Refused");fireEvent.click(screen.getByRole("button",{name:"Retry attachment"}));expect(upload).toHaveBeenCalledTimes(2);
+ view.rerender(<RecordUploader label="Record upload" file={file} busy onFile={picked} onUpload={upload}/>);expect(screen.getByRole("status").textContent).toBe("Uploading and confirming the attachment…");fireEvent.click(screen.getByRole("button",{name:"Upload and attach"}));expect(upload).toHaveBeenCalledTimes(2);
+});
+test("drop and readonly controls cannot manufacture an upload and confirmed metadata displays original identity",()=>{
+ const file=new File(["abc"],"real.txt"),picked=vi.fn(),upload=vi.fn(),props={label:"Upload",file,onFile:picked,onUpload:upload},view=render(<RecordUploader {...props}/>),zone=view.container.querySelector("[class*=border-dashed]")!;
+ fireEvent.drop(zone,{dataTransfer:{files:[file]}});expect(picked).toHaveBeenCalledWith(file);expect(upload).not.toHaveBeenCalled();view.rerender(<RecordUploader {...props} enabled={false}/>);fireEvent.drop(zone,{dataTransfer:{files:[file]}});expect(picked).toHaveBeenCalledOnce();fireEvent.click(screen.getByRole("button",{name:"Upload and attach"}));expect(upload).not.toHaveBeenCalled();
+ view.rerender(<RecordUploader label="Upload" currentFile={{id:"FILE-17",name:"real.txt",size:3,contentType:"text/plain"}}/>);expect(screen.getByText("Confirmed attachment: real.txt")).toBeTruthy();expect(screen.getByText("FILE-17 · text/plain · 3 bytes")).toBeTruthy();expect((screen.getByRole("button",{name:"Choose file"}) as HTMLButtonElement).disabled).toBe(true);
+});
+test("legacy record uploader retains the exact file after refused attachment",async()=>{
+ const file=new File(["abc"],"real.txt",{type:"text/plain"}),upload=vi.fn(async()=>{throw Error("Denied");}),view=render(<RecordPage source={source()} type={info.type} id="A" files={{upload,download:vi.fn()}}/>);
+ await screen.findByRole("heading",{name:"Add file"});fireEvent.change(view.container.querySelector("input[type=file]")!,{target:{files:[file]}});fireEvent.click(screen.getByRole("button",{name:"Upload and attach"}));await screen.findByRole("alert");expect(upload).toHaveBeenCalledWith(file);expect(screen.getByText("Selected file: real.txt")).toBeTruthy();expect(screen.getByRole("button",{name:"Retry attachment"})).toBeTruthy();
+});

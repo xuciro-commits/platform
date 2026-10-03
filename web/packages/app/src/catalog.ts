@@ -7,6 +7,8 @@ const asset = (id: string, name: string, summary: string, exports: string[], exa
 });
 
 export const entries: CatalogEntry[] = [
+  asset("record-collaboration", "Record collaboration services", "Post comments and attach real file bytes through the original record's authorized service actions.", ["createRecordCollaboration"], "RecordDetailExample", {type:"CollaborationTarget",source:"web/packages/app/src/collaboration/service.ts",dependencies:["app/record-detail"],states:["Confirming","Retired","Refused"],constraints:["Capture the original record and a current lease. Confirmed metadata never substitutes for authorized byte reads; queued decisions remain durable after a view retires."]}),
+  asset("decision-confirmation", "Decision confirmation", "Match one decision's confirmation to its original tenant and idempotency key.", ["confirmedDecision"], "RecordDetailExample", {source:"web/packages/app/src/collaboration/decision.ts",dependencies:["app/record-collaboration"],states:["Pending","Confirmed","Refused"]}),
   asset("application-sessions", "Application sessions", "Share declared presentation state across pages of one scoped application instance.", ["ApplicationPage", "ApplicationSessionsProvider"], "ApplicationSessionsExample", {
     source:"web/packages/app/src/runtime/ApplicationRuntime.tsx", tags:["application","scope","instance","state"], dependencies:["app/composed-page","pattern/workspace"], states:["Shared","Isolated","Closed"],
     constraints:["Application owns scalar declarations and bounded queries. Pages use typed shared bindings; windows remain read-only, ephemeral and member-scoped."],

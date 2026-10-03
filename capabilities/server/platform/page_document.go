@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if collaborationWidget(s.Widget) || s.CommentDraftVariable != "" || s.FileVariable != "" || s.PdfPageVariable != "" {
+				return fmt.Errorf("collaboration requires a page document")
+			}
 			if s.Widget == "spacer" || s.Spacer != nil {
 				return fmt.Errorf("spacer requires a document")
 			}
@@ -212,6 +215,9 @@ func (d *PageDocument) Check(sections []Section) error {
 	if err := d.CheckVariables(); err != nil {
 		return err
 	}
+	if err := d.checkCollaborationOwners(sections); err != nil {
+		return err
+	}
 	if err := d.checkInterface(); err != nil {
 		return err
 	}
@@ -288,6 +294,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkRecordEvents(section); err != nil {
+			return err
+		}
+		if err := d.checkCollaboration(section); err != nil {
 			return err
 		}
 		if err := d.checkRecordComparison(section); err != nil {
@@ -532,6 +541,7 @@ func (d *PageDocument) Check(sections []Section) error {
 			dependencies = append(dependencies, controls[variable.Source.Section]...)
 			if variable.Source.Kind == "filter" {
 				for _, s := range sections {
+
 					if s.ID == variable.Source.Section && s.FilterVariable != "" {
 						dependencies = append(dependencies, s.FilterVariable)
 					}
@@ -539,6 +549,7 @@ func (d *PageDocument) Check(sections []Section) error {
 			}
 			if variable.Source.Kind == "query" || variable.Source.Kind == "record" || variable.Source.Kind == "records" {
 				for _, s := range sections {
+
 					if s.ID == variable.Source.Section && s.CollectionVariable != "" {
 						dependencies = append(dependencies, s.CollectionVariable)
 					}
@@ -672,8 +683,9 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		}
 		if node.Kind == "widget" {
 			for _, s := range sections {
+
 				if s.ID == node.Section {
-					for _, id := range []string{s.RecordSetVariable, s.SparklineDecimalVariable, s.SparklineNumberVariable, s.GroupValueVariable, s.GroupSetVariable, s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
+					for _, id := range []string{s.CommentDraftVariable, s.FileVariable, s.PdfPageVariable, s.RecordSetVariable, s.SparklineDecimalVariable, s.SparklineNumberVariable, s.GroupValueVariable, s.GroupSetVariable, s.RowValueVariable, s.RowSetVariable, s.ColumnValueVariable, s.ColumnSetVariable, s.PickerValueVariable, s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

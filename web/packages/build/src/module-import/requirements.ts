@@ -2,6 +2,16 @@ import type {SourceModule} from "./compile";
 
 const text=(v:unknown)=>typeof v==="string"?v:"";
 const object=(v:unknown)=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:undefined;
+/** Offer only active-record producers actually present in this widget's owner. */
+export function collaborationRecordChoices(module:SourceModule|undefined,pageID:string,widgetID:string):{id:string;title:string;object:string}[] {
+ if(!module)return [];
+ const owners=new Map<string,string|undefined>(),walk=(root:string,owner?:string,seen=new Set<string>())=>{if(seen.has(root))return;seen.add(root);for(const child of module.sections[root]?.children??[]){if(child.kind==="widget")owners.set(child.id,owner);else walk(child.id,owner,seen);}};
+ const page=module.pages.find(p=>p.id===pageID);if(!page)return [];walk(page.rootSectionId);module.overlays.forEach(o=>walk(o.rootSectionId,o.id));module.unusedWidgetIds.forEach(id=>owners.set(id,undefined));if(!owners.has(widgetID))return [];
+ return module.variables.flatMap(v=>{if(v.type!=="object"||v.definitionKind!=="widgetOutput"||v.widgetOutputKey!=="activeObject"||v.isInterface)return [];
+  const producers=Object.values(module.widgets).filter(w=>owners.has(w.id)&&!module.unusedWidgetIds.includes(w.id)&&owners.get(w.id)===owners.get(widgetID)&&["ObjectTable","ObjectList","KanbanBoard","Calendar","ObjectSelector","Leaderboard","ScatterPlot"].includes(w.type)&&w.config.activeVarId===v.id&&(w.type!=="ObjectTable"||v.widgetId===w.id));if(producers.length!==1)return [];
+  const set=module.variables.find(value=>value.id===producers[0]!.config.objectSetVarId),external=text(object(set?.objectSet)?.objectType||set?.sourceObjectType);return external?[{id:v.id,title:v.name,object:external}]:[];
+ });
+}
 /** Discover the explicit source metadata that the import mapping dialog must expose. */
 export function workshopRequirements(module:SourceModule|undefined){
  const objects=new Set<string>(),fields:Record<string,Set<string>>=Object.create(null),actions=new Set<string>();

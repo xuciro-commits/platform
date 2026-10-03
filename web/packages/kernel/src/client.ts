@@ -96,9 +96,9 @@ export class EdgeClient {
 
   /** Calls a host service that is not a submission, such as a model call (ADR-0015): the answer's JSON comes back whatever its status. */
   /** Uploads a file's bytes (ADR-0028); answers the hash to attach. */
-  async upload(file: Blob, name: string): Promise<{ hash: string; size: number; contentType: string; name: string }> {
+  async upload(file: Blob, name: string, options:{signal?:AbortSignal}={}): Promise<{ hash: string; size: number; contentType: string; name: string }> {
     const response = await fetch(`${this.connection.server}/v1/files?name=${encodeURIComponent(name)}`, {
-      method: "POST", headers: { ...this.headers(), "Content-Type": file.type || "application/octet-stream" }, body: file,
+      method: "POST", headers: { ...this.headers(), "Content-Type": file.type || "application/octet-stream" }, body: file, signal:options.signal,
     });
     if (!response.ok) throw new Error(await response.text() || `upload failed: ${response.status}`);
     return response.json();
@@ -121,10 +121,18 @@ export class EdgeClient {
   }
 
   /** A file's bytes, as the member may read them (ADR-0028). */
-  async download(id: string): Promise<Blob> {
-    const response = await fetch(`${this.connection.server}/v1/files/${encodeURIComponent(id)}`, { headers: this.headers() });
+  async download(id: string, options:{signal?:AbortSignal;maxBytes?:number}={}): Promise<Blob> {
+    const limit=options.maxBytes;
+    if(limit!==undefined&&(!Number.isSafeInteger(limit)||limit<0))throw new Error("Invalid download byte budget");
+    const response = await fetch(`${this.connection.server}/v1/files/${encodeURIComponent(id)}`, { headers: this.headers(),signal:options.signal });
     if (!response.ok) throw new Error(`download failed: ${response.status}`);
-    return response.blob();
+    if(limit===undefined)return response.blob();
+    if(Number(response.headers.get("Content-Length"))>limit){await response.body?.cancel();throw new Error("The file exceeds the preview byte budget.");}
+    if(!response.body){const blob=await response.blob();if(blob.size>limit)throw new Error("The file exceeds the preview byte budget.");return blob;}
+    const reader=response.body.getReader(),parts:Uint8Array<ArrayBuffer>[]=[];let size=0;
+    try {while(true){const next=await reader.read();if(next.done)break;size+=next.value.byteLength;if(size>limit){await reader.cancel();throw new Error("The file exceeds the preview byte budget.");}parts.push(next.value);}}
+    finally {reader.releaseLock();}
+    return new Blob(parts,{type:response.headers.get("Content-Type")??"application/octet-stream"});
   }
 
   async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<{ ok: boolean; status: number; body: T }> {

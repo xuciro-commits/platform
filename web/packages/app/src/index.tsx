@@ -1,3 +1,7 @@
+import {createRecordCollaboration} from "./collaboration/service";
+export {createRecordCollaboration} from "./collaboration/service";
+export type {CollaborationTarget,CollaborationHost} from "./collaboration/service";
+export {confirmedDecision} from "./collaboration/decision";
 export {searchInputObjects} from "./widgets/search-input";
 // The app API of the workspace (ADR-0018), the browser's counterpart of
 // platformserver/platform: an app's UI declares itself with defineApp and
@@ -11,7 +15,7 @@ import {
  t } from "@platform/ui";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { NewActions, RecordActions, useTransition, useRecordArchive } from "./actions";
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 export { ComputeCall } from "./capability";
 export { FlowInstanceView } from "./flows";
 export { pageDocumentFromSections } from "./pageDocument";
@@ -265,7 +269,7 @@ export function DashboardView({ dashboard }: { dashboard: Dashboard }) {
 
 /** A record page with its lifecycle's transitions and the generated edit and archive where the catalog grants them. */
 export function RecordDetail({ type, id, fields, allowed, advice }: { type: string; id: string; fields?: string[]; allowed?: string[]; advice?: { action: string; fields: string[] } }) {
-  const { source, can, decide, client, me, catalog } = useHost();
+  const { source, can, decide, client, me, catalog, resend } = useHost();
   const openRecord = useOpenRecord();
   const { open } = useWorkspace();
   const [editing, setEditing] = useState<EntityRecord>();
@@ -273,24 +277,20 @@ export function RecordDetail({ type, id, fields, allowed, advice }: { type: stri
   const transition = useTransition(type);
   // Files (ADR-0028): upload the bytes, then attach them to this record by a decision.
   // Comments and following (ADR-0028 D6).
+  const original=useRef({type,id,scope:source.scope});original.current={type,id,scope:source.scope};
+  const mounted=useRef(true);useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  const scope=source.scope,active=()=>mounted.current&&original.current.type===type&&original.current.id===id&&original.current.scope===scope;
+  const collaboration=useMemo(()=>createRecordCollaboration({client,source,can,decide,resend},{type,id},active,newId),[client,type,id,scope]);
   const comments = {
-    add: (text: string) => decide("platform.comment.add", { type: "platform.comment", id: newId("CMT") }, { target: `${type}/${id}`, text }, { expectedRevision: 0 }),
+    add: collaboration.addComment,
     follow: async (on: boolean) => {
       const follow = `${me.principalId}@${type}~${id}`;
       await decide(on ? "platform.follow.add" : "platform.follow.remove", { type: "platform.follow", id: follow }, on ? { target: `${type}/${id}` } : {});
     },
   };
   const files = {
-    upload: async (file: File) => {
-      const up = await client.upload(file, file.name);
-      await decide("files.file.attach", { type: "files.file", id: newId("FILE") }, { hash: up.hash, name: up.name, contentType: up.contentType, size: up.size, target: `${type}/${id}` }, { expectedRevision: 0 });
-    },
-    download: async (f: { id: string; name: string }) => {
-      const url = URL.createObjectURL(await client.download(f.id));
-      const a = Object.assign(document.createElement("a"), { href: url, download: f.name });
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    },
+    upload:async(file:File)=>{await collaboration.upload(file);},
+    download:collaboration.download.bind(collaboration),
   };
   const act = async (schema: string, r: EntityRecord, payload: object) => {
     if (await decide(schema, { type, id: r.id }, payload, { expectedRevision: r.revision })) setEditing(undefined);

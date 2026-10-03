@@ -43,6 +43,16 @@ type PageValue struct {
 	Literal  json.RawMessage `json:"literal,omitempty"`
 }
 type pageRuntimeContract struct {
+	Collaboration struct {
+		RequiredUIProfile string `json:"requiredUIProfile"`
+		MaxCommentsWindow int    `json:"maxCommentsWindow"`
+		MaxFilesWindow    int    `json:"maxFilesWindow"`
+		MaxPreviewBytes   int    `json:"maxPreviewBytes"`
+		MaxCommentBytes   int    `json:"maxCommentBytes"`
+		MaxImagePixels    int    `json:"maxImagePixels"`
+		MaxPDFPixels      int    `json:"maxPDFPixels"`
+		MaxPDFPages       int    `json:"maxPDFPages"`
+	} `json:"collaboration"`
 	Histogram struct {
 		RequiredUIProfile string `json:"requiredUIProfile"`
 		MaxBins           int    `json:"maxBins"`

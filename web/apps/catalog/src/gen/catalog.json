@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:11c4fabe8d3932a7",
+  "revision": "sha256:acc43747da4b4c2b",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -227,6 +227,40 @@
       "snippet": "import { DashboardView } from \"@platform/app\";\n<DashboardView dashboard={dashboard} />"
     },
     {
+      "id": "app/decision-confirmation",
+      "owner": "@platform/app",
+      "name": "Decision confirmation",
+      "summary": "Match one decision's confirmation to its original tenant and idempotency key.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/collaboration/decision.ts",
+      "exports": [
+        "confirmedDecision"
+      ],
+      "example": "RecordDetailExample",
+      "constraints": [
+        "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions."
+      ],
+      "dependencies": [
+        "app/record-collaboration"
+      ],
+      "states": [
+        "Pending",
+        "Confirmed",
+        "Refused"
+      ]
+    },
+    {
       "id": "app/flow-instance",
       "owner": "@platform/app",
       "name": "Authorized workflow run",
@@ -412,6 +446,41 @@
         "conflict"
       ],
       "snippet": "import { RecordActions } from \"@platform/app\";\n<RecordActions type=\"your.object\" record={record} steps />"
+    },
+    {
+      "id": "app/record-collaboration",
+      "owner": "@platform/app",
+      "name": "Record collaboration services",
+      "summary": "Post comments and attach real file bytes through the original record's authorized service actions.",
+      "layer": 3,
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "record",
+        "binding",
+        "host"
+      ],
+      "source": "web/packages/app/src/collaboration/service.ts",
+      "exports": [
+        "createRecordCollaboration"
+      ],
+      "example": "RecordDetailExample",
+      "constraints": [
+        "Capture the original record and a current lease. Confirmed metadata never substitutes for authorized byte reads; queued decisions remain durable after a view retires."
+      ],
+      "type": "CollaborationTarget",
+      "dependencies": [
+        "app/record-detail"
+      ],
+      "states": [
+        "Confirming",
+        "Retired",
+        "Refused"
+      ]
     },
     {
       "id": "app/record-detail",
@@ -1826,6 +1895,37 @@
       ]
     },
     {
+      "id": "ui/media-preview",
+      "owner": "@platform/ui",
+      "name": "Authorized raster preview",
+      "summary": "Decode original attachment bytes and retain their confirmed identity and actual metadata.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/MediaPreview.tsx",
+      "exports": [
+        "MediaPreview"
+      ],
+      "example": "MediaPreviewExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "media",
+        "image",
+        "bytes",
+        "attachment"
+      ],
+      "type": "AttachmentPreviewProps",
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller supplies authorized bytes and confirmed attachment metadata. Only PNG, JPEG, GIF and WebP with bounded matching dimensions render inline; other formats keep metadata and downloads. Object URLs retire with bytes, scope or unmount."
+      ]
+    },
+    {
       "id": "ui/metal-button",
       "owner": "@platform/ui",
       "name": "Metal button",
@@ -1986,6 +2086,38 @@
       "dependencies": [
         "ui/button",
         "foundation/semantic-tokens"
+      ]
+    },
+    {
+      "id": "ui/pdf-viewer",
+      "owner": "@platform/ui",
+      "name": "Authorized PDF pages",
+      "summary": "Render actual PDF pages from authorized attachment bytes with caller-owned original page state.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/PdfViewer.tsx",
+      "exports": [
+        "PdfViewer"
+      ],
+      "example": "PdfViewerExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "pdf",
+        "pages",
+        "bytes",
+        "attachment"
+      ],
+      "type": "PdfViewerProps",
+      "dependencies": [
+        "ui/button",
+        "ui/input"
+      ],
+      "constraints": [
+        "The caller owns attachment authorization and the original page string. The lazy renderer uses bundled PDF.js, its same-version worker and fixed font assets; actual page and pixel budgets apply. PDF-provided URLs, scripts, forms, XFA and annotations are not activated."
       ]
     },
     {
@@ -2194,6 +2326,37 @@
       ],
       "constraints": [
         "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes."
+      ]
+    },
+    {
+      "id": "ui/record-comments",
+      "owner": "@platform/ui",
+      "name": "Record discussion",
+      "summary": "Present original persisted comments and a caller-owned draft whose confirmation belongs to the host.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordComments.tsx",
+      "exports": [
+        "RecordComments"
+      ],
+      "example": "RecordCommentsExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "comments",
+        "record",
+        "draft",
+        "collaboration"
+      ],
+      "type": "RecordCommentsProps",
+      "dependencies": [
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller owns authorization, the original bounded comment window, total and persistence. Unknown totals remain explicit; the presenter never invents authors, timestamps, comments or confirmations."
       ]
     },
     {
@@ -2562,6 +2725,38 @@
       ],
       "constraints": [
         "The caller supplies authorized records and selection. This component does not schedule or write records."
+      ]
+    },
+    {
+      "id": "ui/record-uploader",
+      "owner": "@platform/ui",
+      "name": "Record attachment uploader",
+      "summary": "Select a real local file and explicitly upload it through the caller's confirmed-record attachment path.",
+      "layer": 3,
+      "source": "web/packages/ui/src/records/RecordUploader.tsx",
+      "exports": [
+        "RecordUploader"
+      ],
+      "example": "RecordUploaderExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "files",
+        "upload",
+        "record",
+        "attachment"
+      ],
+      "type": "RecordUploaderProps",
+      "dependencies": [
+        "ui/file-picker",
+        "ui/button"
+      ],
+      "constraints": [
+        "The caller owns the actual File, bytes upload, attach decision and confirmed metadata. Refusal preserves the selected file; this control reports no simulated progress or local filename as a confirmed attachment."
       ]
     },
     {
@@ -2982,11 +3177,13 @@
       "Arrange weighted regions with bounded dimensions and local scrolling, stacking columns in narrow containers.": "以有界尺寸与局部滚动安排带权重的区域，在窄容器中堆叠列。",
       "Ask for a bounded decision with focus trapping and a labelled title.": "用限制焦点范围、带标题的对话框完成有界决策。",
       "Author fixed record conditions and retain explicit query versions for shared page plans.": "编写固定记录条件，保留共享页面计划的明确查询版本。",
+      "Authorized PDF pages": "已授权PDF页面",
       "Authorized cross-application search": "受权跨应用搜索",
       "Authorized event list": "受权事件列表",
       "Authorized lifecycle board": "授权生命周期看板",
       "Authorized numeric gauge": "授权数值仪表",
       "Authorized proportional treemap": "授权比例树图",
+      "Authorized raster preview": "已授权位图预览",
       "Authorized record calendar": "受权记录日历",
       "Authorized record detail": "受权记录详情",
       "Authorized record leaderboard": "授权记录排行榜",
@@ -3006,6 +3203,7 @@
       "Build filters from the entity's declared fields and operators.": "从实体声明的字段和操作符构建筛选条件。",
       "Button": "按钮",
       "Button group": "按钮组",
+      "Capture the original record and a current lease. Confirmed metadata never substitutes for authorized byte reads; queued decisions remain durable after a view retires.": "捕获原记录及当前作用域确认；已确认元数据不能代替受权字节读取，视图退役后已排队决策仍保持持久语义。",
       "Card fields come from permission-filtered metadata; the caller owns reads, selection and navigation.": "卡片字段来自权限裁剪后的元数据，调用方负责读取、选择及导航。",
       "Cards and panels": "卡片与面板",
       "Chart": "图表",
@@ -3023,8 +3221,10 @@
       "Compose app navigation, routed tabs, commands and session context in one shell.": "在同一外壳中装配应用导航、路由标签页、命令与会话上下文。",
       "Compose nodes through typed ports with one shared graph interaction model.": "通过类型化端口装配节点，使用统一的图交互模型。",
       "Compose typed platform blocks with the existing native workflow editor and shared canvas.": "用现有原生流程编辑器和共享画布装配类型化平台区块。",
+      "Confirmed": "已确认",
       "Confirmed record comparison": "已确认记录对比",
       "Confirmed record summary": "已确认记录摘要",
+      "Confirming": "确认中",
       "Connect through the workspace Host. The Catalog preview uses local fixtures and grants no permissions.": "通过工作区 Host 接入。目录预览使用本地示例，不授予权限。",
       "Content tabs": "内容标签页",
       "Context commands": "上下文命令",
@@ -3033,7 +3233,9 @@
       "Counted tag groups": "带计数的标签分组",
       "Counted term labels": "计数词条标签",
       "Data table": "数据表格",
+      "Decision confirmation": "决策确认",
       "Declared action controls": "声明式动作控件",
+      "Decode original attachment bytes and retain their confirmed identity and actual metadata.": "解码原附件字节并保留其已确认身份及实际元数据。",
       "Detail sheet": "详情侧栏",
       "Disabled": "禁用",
       "Disclosure": "展开区块",
@@ -3089,6 +3291,7 @@
       "Map actual domain or kernel states to a label and one of five tones.": "将真实领域或内核状态映射为标签与五种语义色调之一。",
       "Markdown display and editor": "Markdown 展示与编辑器",
       "Master-detail interaction": "列表详情交互",
+      "Match one decision's confirmation to its original tenant and idempotency key.": "按原租户和幂等键匹配一次决策的确认。",
       "Member-scoped assistant": "成员范围内的助手",
       "Metal button": "金属与流体按钮",
       "Modal dialog": "模态对话框",
@@ -3118,6 +3321,7 @@
       "Pivot table": "透视表",
       "Plot original authorized records without merging equal axis labels or reading another collection.": "绘制原受权记录，不合并相同坐标标签，也不读取另一集合。",
       "Plot original numeric record coordinates and retain independently selectable stable identities.": "绘制原记录数值坐标，保留可独立选择的稳定身份。",
+      "Post comments and attach real file bytes through the original record's authorized service actions.": "通过原记录的受权服务动作发表评论并挂接真实文件字节。",
       "Present a caller-owned scalar and original ordered record values without inventing time or replacing missing data.": "呈现调用方拥有的标量及原有序记录值，不虚构时间或替换缺值。",
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present an original confirmed record through shared card and field formatters with explicit identity and properties.": "通过共享卡片及字段格式器呈现原已确认记录、显式身份及属性。",
@@ -3133,6 +3337,7 @@
       "Present original complete counts with distinct axis identities and optional controlled heatmap selection.": "呈现原完整计数、独立轴身份与可选的受控热图选择。",
       "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
       "Present original ordered business intervals on an explicit fixed UTC range.": "在显式固定 UTC 范围呈现原排序业务区间。",
+      "Present original persisted comments and a caller-owned draft whose confirmation belongs to the host.": "呈现原持久化评论及调用方持有的草稿，提交确认由宿主负责。",
       "Pressed": "按下",
       "Published code function call": "已发布代码函数调用",
       "Queries use the original record reader and member permissions. Pages explicitly choose a retained source version; later drafts and publications do not replace it.": "查询使用原记录读取与成员权限；页面明确选择保留的来源版本，后续草稿与发布不会替换它。",
@@ -3143,8 +3348,11 @@
       "Read only": "只读",
       "Read-only graph": "只读关系图",
       "Ready": "就绪",
+      "Record attachment uploader": "记录附件上传器",
       "Record cards": "记录卡片",
+      "Record collaboration services": "记录协作服务",
       "Record detail and history": "记录详情与历史",
+      "Record discussion": "记录讨论",
       "Record handling workspace": "记录处理工作台",
       "Record list": "记录列表",
       "Record list and detail": "记录列表与详情",
@@ -3153,7 +3361,9 @@
       "RecordColumnPresentation configures visible column titles, widths and typed formats without replacing field metadata or permissions. Hiding search retains the caller query.": "RecordColumnPresentation 配置可见列的标题、宽度及类型化格式，不替换字段元数据或权限。隐藏搜索保留调用方查询。",
       "RecordSelectionPort controls bounded selection in the current window; the caller confirms record permissions and owns pending, failure and cleanup. Window selection is not a complete matching set.": "RecordSelectionPort 控制当前窗口的有界选择，由调用方确认记录权限并管理在途、失败及清理。窗口选择不代表完整匹配集合。",
       "Reference links need a Workspace; attachment upload needs an explicit caller implementation.": "引用链接需要 Workspace；附件上传需要调用方明确实现。",
+      "Refused": "拒绝",
       "Render a visualization spec using inline values or a scoped aggregate source.": "使用内联值或限定范围的聚合数据源呈现可视化规格。",
+      "Render actual PDF pages from authorized attachment bytes with caller-owned original page state.": "从授权附件字节渲染实际PDF页面，并使用调用方持有的原页码状态。",
       "Render labelled editors and validate an ad hoc schema before submission.": "呈现带标签的编辑器，并在提交前校验临时模式。",
       "Render measured rows by stable identity and retain the focused item.": "按稳定身份呈现测量后的行，并保留当前聚焦项。",
       "Render original Page sections with shared selection and filters; composition disables writes.": "按原 Page 区块共享选择和过滤状态；装配预览关闭写入。",
@@ -3161,6 +3371,7 @@
       "Render the existing chart specification over the member’s permitted aggregates.": "用原图表规范展示当前成员有权读取的聚合数据。",
       "Reserve one caller-owned blank region independently of container gaps.": "保留一处调用方拥有的空白区域，与容器间距独立。",
       "Results come from the current member’s host. The offline example searches synthetic records only.": "结果来自当前成员的宿主。离线示例只搜索合成记录。",
+      "Retired": "已退役",
       "Retro button": "复古实体按键",
       "Reusable query workbench": "复用查询设计台",
       "Reveal supporting details while keeping the summary visible.": "显示补充详情，同时保留摘要。",
@@ -3169,6 +3380,7 @@
       "Scoped search input": "有范围的搜索输入",
       "Search a caller's scoped source to choose a reference by record ID.": "搜索调用方的限定范围数据源，按记录 ID 选择引用。",
       "Search records and knowledge through the current member’s original read endpoints.": "通过当前成员的原读取入口搜索记录与知识。",
+      "Select a real local file and explicitly upload it through the caller's confirmed-record attachment path.": "选择真实本地文件，并通过调用方的已确认记录附件路径显式上传。",
       "Select a record, inspect its details and use the original object actions.": "选择记录、查看详情，并使用原对象动作。",
       "Select a row from a small hierarchy of labelled records.": "从小型记录层级中选择一行。",
       "Select bounded records in their original lifecycle lanes and emit declared move commands.": "在原生命周期列中选择有界记录，并发出已声明的移动命令。",
@@ -3204,6 +3416,8 @@
       "The 92-type migration inventory grants no runtime eligibility. Eight source widget types have bounded configuration profiles; unsupported settings block application.": "92 类型迁移清单不授予运行资格。八种源组件已有有限配置方案，未支持配置阻止应用。",
       "The caller confirms every original record and supplies permission-filtered metadata. Values are compared by their declared scalar types; presentation performs no reads or writes and never truncates the selection.": "调用方确认每条原记录并提供权限裁剪元数据；值按声明的标量类型对比，展示不读写记录且不截断选择。",
       "The caller confirms original record access and supplies permission-filtered metadata. Titles and properties remain in their original field owners; the card performs no reads or writes.": "调用方确认原记录访问并提供权限裁剪元数据；标题及属性保持原字段归属，卡片不读写记录。",
+      "The caller owns attachment authorization and the original page string. The lazy renderer uses bundled PDF.js, its same-version worker and fixed font assets; actual page and pixel budgets apply. PDF-provided URLs, scripts, forms, XFA and annotations are not activated.": "调用方负责附件授权及原页码字符串；按需加载的渲染器使用内置PDF.js、同版本工作线程和固定字体资产，并施加实际页数及像素预算。不激活PDF提供的地址、脚本、表单、XFA或注释。",
+      "The caller owns authorization, the original bounded comment window, total and persistence. Unknown totals remain explicit; the presenter never invents authors, timestamps, comments or confirmations.": "调用方负责授权、原有界评论窗口、总数及持久化；未知总数明确显示，展示组件不编造作者、时间、评论或确认结果。",
       "The caller owns authorized complete bins. The control validates intervals and counts without re-binning, and never writes records.": "调用方拥有授权完整分箱；控件校验区间和计数，不重新分箱，也不写入记录。",
       "The caller owns authorized complete counts and filter writes. Layout never inflates small groups, reads records or writes business data.": "调用方拥有完整授权计数与筛选写入；布局不放大小分组、不读记录、不写业务数据。",
       "The caller owns authorized complete counts and filter writes. Null, empty and literal groups retain their original identities; missing groups cannot be written to text filters. No array expansion, string coercion or record reads happen here.": "调用方持有授权完整计数与筛选写入；缺值、空文本及字面分组保留原身份，缺值分组不能写入文本筛选。组件不展开数组、不强制转换字符串，也不读取记录。",
@@ -3217,6 +3431,7 @@
       "The caller owns persistence, authorization and conflict handling.": "持久化、授权与冲突处理由调用方负责。",
       "The caller owns scalar precision, authorized window and field metadata. Missing values break the line; points retain stable IDs and never read or write records.": "调用方拥有标量精度、授权窗口与字段元数据；缺值断线，点保留稳定ID，不读写记录。",
       "The caller owns text, object scope and authorized reads. This control performs no queries and does not promise global ontology search.": "调用方拥有文本、对象范围及授权读取；此控件不查询数据，也不声称全本体搜索。",
+      "The caller owns the actual File, bytes upload, attach decision and confirmed metadata. Refusal preserves the selected file; this control reports no simulated progress or local filename as a confirmed attachment.": "调用方持有实际文件并负责字节上传、挂载决策及已确认元数据；拒绝时保留所选文件，组件不报告模拟进度或将本地文件名当作已确认附件。",
       "The caller owns the authorized complete count and clears obsolete values.": "调用方负责受权完整计数并清理过期值。",
       "The caller owns the authorized window and business time; the list does not create events or read another collection.": "调用方拥有受权窗口和业务时间；列表不创建事件或读取另一集合。",
       "The caller owns the authorized window; this presentation does not reorder records, filter by the viewport, or write dates.": "调用方拥有授权窗口；此呈现不重排记录，不按视窗筛选，也不写入日期。",
@@ -3234,6 +3449,7 @@
       "The caller owns the original string set and query conditions. Toggles change one declared choice and preserve unmatched selections.": "调用方拥有原字符串集合及查询条件。多选控件修改一个声明选项并保留未匹配值。",
       "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection.": "调用方拥有原字符串状态、选项及查询条件。空值或未匹配值保留到显式选择。",
       "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
+      "The caller supplies authorized bytes and confirmed attachment metadata. Only PNG, JPEG, GIF and WebP with bounded matching dimensions render inline; other formats keep metadata and downloads. Object URLs retire with bytes, scope or unmount.": "调用方提供授权字节及已确认附件元数据；只有尺寸符合预算及文件头的PNG、JPEG、GIF、WebP内联显示，其他格式保留元数据和下载。对象地址随字节、作用域变更或卸载退役。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
       "The caller supplies validated dimensions and parent axes; layout grants no business access.": "调用方提供已验证的尺寸与父轴；布局不授予业务访问权限。",
@@ -3294,6 +3510,7 @@
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/Button.tsx",
       "web/packages/app/src/widgets/QueryWindowFrame.tsx",
+      "web/packages/app/src/widgets/RecordCollaboration.tsx",
       "web/packages/build/src/application.tsx",
       "web/packages/build/src/asset-controls.tsx",
       "web/packages/build/src/code.tsx",
@@ -3366,6 +3583,7 @@
       "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/CollaborationInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DateInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
@@ -3482,6 +3700,7 @@
       "web/packages/app/src/widgets/Range.tsx",
       "web/packages/app/src/widgets/RecordCalendar.tsx",
       "web/packages/app/src/widgets/RecordCard.tsx",
+      "web/packages/app/src/widgets/RecordCollaboration.tsx",
       "web/packages/app/src/widgets/RecordComparison.tsx",
       "web/packages/app/src/widgets/RecordEvents.tsx",
       "web/packages/app/src/widgets/RecordGantt.tsx",
@@ -3774,6 +3993,18 @@
     "ui/record-chart": [
       "web/packages/app/src/widgets/RecordChart.tsx"
     ],
+    "ui/record-comments": [
+      "web/packages/app/src/widgets/RecordCollaboration.tsx"
+    ],
+    "ui/record-uploader": [
+      "web/packages/app/src/widgets/RecordCollaboration.tsx"
+    ],
+    "ui/media-preview": [
+      "web/packages/app/src/widgets/RecordCollaboration.tsx"
+    ],
+    "ui/pdf-viewer": [
+      "web/packages/app/src/widgets/RecordCollaboration.tsx"
+    ],
     "ui/record-comparison": [
       "web/packages/app/src/widgets/RecordComparison.tsx"
     ],
@@ -3916,6 +4147,9 @@
       "web/apps/pms-desk/src/App.tsx",
       "web/apps/workspace/src/App.tsx"
     ],
+    "app/decision-confirmation": [
+      "web/apps/workspace/src/App.tsx"
+    ],
     "app/flow-instance": [
       "web/apps/workspace/src/chrome.tsx"
     ],
@@ -3986,7 +4220,9 @@
         "AggregateData",
         "AggregateOp",
         "AggregateQuery",
+        "AttachedFile",
         "Attachment",
+        "AttachmentPreviewProps",
         "BlockCanvasProps",
         "BlockDiagnostic",
         "BlockStatus",
@@ -4041,14 +4277,18 @@
         "Operator",
         "Option",
         "Options",
+        "PdfViewerProps",
         "RecordChange",
         "RecordChartFields",
         "RecordColumnPresentation",
+        "RecordComment",
+        "RecordCommentsProps",
         "RecordEditPort",
         "RecordPageData",
         "RecordQuery",
         "RecordSelectionPort",
         "RecordSource",
+        "RecordUploaderProps",
         "RecordView",
         "RetroButtonProps",
         "Route",
@@ -4111,6 +4351,8 @@
         "AppUI",
         "AssetRef",
         "Citation",
+        "CollaborationHost",
+        "CollaborationTarget",
         "Dashboard",
         "Decision",
         "Definition",
