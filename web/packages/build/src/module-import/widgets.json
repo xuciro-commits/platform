@@ -82,9 +82,9 @@
       "sourceType": "StringSelector",
       "sourceCategory": "Filtering",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "choice-input",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Checkbox",
@@ -589,17 +589,17 @@
       "sourceType": "RadioGroup",
       "sourceCategory": "Filtering",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "choice-input",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "SegmentedControl",
       "sourceCategory": "Filtering",
       "owner": "@platform/ui",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "choice-input",
+      "reason": "bounded-config-profile"
     },
     {
       "sourceType": "Breadcrumbs",

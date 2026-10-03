@@ -30,6 +30,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/button-group": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ButtonGroups })),
   "ui/chart": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Charts })),
   "ui/checkbox": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Checkboxes })),
+  "ui/choice-input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ChoiceInputExample })),
   "ui/collection-title": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.CollectionTitles })),
   "ui/command-menu": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContextCommands })),
   "ui/content-tabs": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.ContentTabsExample })),

@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:6303dbe2535cd620",
+  "revision": "sha256:a1ab158c17fa266c",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -959,6 +959,34 @@
         "Checked",
         "Unchecked",
         "Disabled"
+      ]
+    },
+    {
+      "id": "ui/choice-input",
+      "owner": "@platform/ui",
+      "name": "Single choice input",
+      "summary": "Present caller-owned static choices as a select, radio group or segmented control.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/ChoiceInput.tsx",
+      "exports": [
+        "ChoiceInput",
+        "validChoiceInput"
+      ],
+      "example": "ChoiceInputExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "choice",
+        "radio",
+        "select",
+        "segments"
+      ],
+      "constraints": [
+        "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection."
       ]
     },
     {
@@ -2588,6 +2616,7 @@
       "Plot original authorized records without merging equal axis labels or reading another collection.": "绘制原受权记录，不合并相同坐标标签，也不读取另一集合。",
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
+      "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
       "Present ordered original business events with explicit time and severity tones.": "以显式时间及严重度色调呈现排序后的原业务事件。",
       "Present original host-ranked Top-N records and emit their original identities.": "呈现原宿主排序的 Top-N 记录，并输出原身份。",
@@ -2638,6 +2667,7 @@
       "Show a declared collection name and its caller-owned complete count.": "显示声明的集合名称及调用方提供的完整计数。",
       "Show exact authorized scalar values with a bounded progress ratio.": "以有界进度比例显示精确授权标量。",
       "Show unread changes and let the caller mark a notification as read.": "展示未读变更，由调用方将通知标记为已读。",
+      "Single choice input": "单选输入",
       "Sized layout regions": "可配置尺寸的布局区域",
       "Staged edits": "暂存修改",
       "Studio requires an object and visible fields; actions are chosen from the current member’s original action catalog.": "工坊要求绑定对象和可见字段，动作来自当前成员的原动作目录。",
@@ -2665,6 +2695,7 @@
       "The caller owns the original numeric result and complete set. The gauge does not substitute zero for empty or denied values.": "调用方拥有原数值结果与完整集合，仪表不将空值或拒绝值替换为零。",
       "The caller owns the original scalars and complete-set count. Invalid values never become zero or a denominator of one.": "调用方拥有原标量与完整集合计数，无效值不替换为零或分母一。",
       "The caller owns the original state pair and query conditions. Empty or invalid drafts are never replaced by bounds.": "调用方拥有原状态对和查询条件。空值或无效草稿不会被替换为边界。",
+      "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection.": "调用方拥有原字符串状态、选项及查询条件。空值或未匹配值保留到显式选择。",
       "The caller owns the ranked query and record authorization. This component does not sort an unranked window or write records.": "调用方拥有排名查询与记录授权。此组件不对未排序窗口排名，也不写入记录。",
       "The caller supplies authorized records and selection. This component does not schedule or write records.": "调用方提供授权记录与选择。本组件不执行排程或写入记录。",
       "The caller supplies authorized records, lifecycle states and actions. This component does not write state.": "调用方提供授权记录、生命周期状态与动作。本组件不写入状态。",
@@ -2739,6 +2770,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/RecordLinksInspector.tsx",
       "web/packages/build/src/process.tsx",
@@ -2794,6 +2826,7 @@
       "web/packages/build/src/page-editor/widgets/BooleanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
+      "web/packages/build/src/page-editor/widgets/ChoiceInspector.tsx",
       "web/packages/build/src/page-editor/widgets/DetailInspector.tsx",
       "web/packages/build/src/page-editor/widgets/FilterInspector.tsx",
       "web/packages/build/src/page-editor/widgets/GaugeInspector.tsx",
@@ -2878,6 +2911,7 @@
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
+      "web/packages/app/src/widgets/ChoiceInput.tsx",
       "web/packages/app/src/widgets/Facets.tsx",
       "web/packages/app/src/widgets/Gauge.tsx",
       "web/packages/app/src/widgets/Kanban.tsx",
@@ -3114,6 +3148,10 @@
     ],
     "ui/switch": [
       "web/packages/app/src/widgets/BooleanInput.tsx"
+    ],
+    "ui/choice-input": [
+      "web/packages/app/src/widgets/ChoiceInput.tsx",
+      "web/packages/build/src/editor.tsx"
     ],
     "ui/facet-choices": [
       "web/packages/app/src/widgets/Facets.tsx"

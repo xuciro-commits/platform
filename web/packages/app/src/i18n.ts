@@ -2,6 +2,8 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Choice input": "单选输入",
+ "Choice input is unavailable or incompatible.": "单选输入不可用或不兼容。",
  "Boolean presentation is unsupported.": "布尔呈现不受支持。",
  "Boolean switch": "布尔开关",
  "Boolean input is unavailable or incompatible.": "布尔输入不可用或不兼容。",

@@ -29,6 +29,7 @@ import { evaluateVariables, type VariableResult } from "./runtime/variables";
 import { pageVariableContract, usePageVariables, usePageSession } from "./runtime/PageRuntime";
 
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
+const ChoiceInputRenderer=lazy(()=>import("./widgets/ChoiceInput").then(module=>({default:module.ChoiceInputRenderer})));
 const BooleanInputRenderer=lazy(()=>import("./widgets/BooleanInput").then(module=>({default:module.BooleanInputRenderer})));
 const RangeRenderer=lazy(()=>import("./widgets/Range").then(module=>({default:module.RangeRenderer})));
 const LeaderboardRenderer=lazy(()=>import("./widgets/Leaderboard").then(module=>({default:module.LeaderboardRenderer})));
@@ -53,7 +54,7 @@ type Section = NonNullable<Page["sections"]>[number];
 type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
-type Bound = {booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
+type Bound = {choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
   onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
@@ -405,6 +406,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
 /** One section: its title, and the widget it holds. While a page is being
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
+ "choice-input":({section,choiceValue,onChoice,enabled})=><ChoiceInputRenderer value={choiceValue} fields={section.choiceInput} title={section.title||t("Choice input")} enabled={enabled} onChange={onChoice}/>,
  "boolean-input":({section,booleanInput,onBoolean,enabled})=><BooleanInputRenderer value={booleanInput} label={section.booleanLabel} variant={section.booleanVariant} title={section.title||t("Boolean switch")} enabled={enabled} onChange={onBoolean}/>,
  "range-input":({section,rangeLower,rangeUpper,onRange})=><RangeRenderer lower={rangeLower} upper={rangeUpper} fields={section.rangeInput} title={section.title||t("Range input")} onChange={onRange}/>,
  "record-leaderboard":({page,section,window,selected,onSelect})=>{const {source}=useHost();return <LeaderboardRenderer window={window} info={source.entity(objectOf(page,section))} fields={section.leaderboard} selected={selected} onSelect={onSelect}/>;},
@@ -587,6 +589,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
         collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"||!!valueVariable&&Object.values(page.document?.queries??{}).some(q=>q.conditions?.some(c=>c.asDecimal&&c.value.variable===valueVariable))} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
+        choiceValue={values[section.choiceVariable??""]} onChoice={section.widget==="choice-input"&&section.choiceVariable?(value)=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch||typeof value!=="string"||!(section.choiceInput?.options.includes(value)||value===""&&section.choiceInput?.variant==="select"))return;writeState(section.choiceVariable!,value,overlay);}:undefined}
         booleanInput={values[section.booleanVariable??""]} onBoolean={section.widget==="boolean-input"&&section.booleanVariable?(checked)=>{if(context||enabled===false||typeof checked!=="boolean"||overlay&&session.overlayEpoch(overlay)!==epoch)return;writeState(section.booleanVariable!,checked,overlay);}:undefined}
         rangeLower={values[section.rangeMinVariable??""]} rangeUpper={values[section.rangeMaxVariable??""]}
         onRange={section.widget==="range-input"?(lower,upper)=>{

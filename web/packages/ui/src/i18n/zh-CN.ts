@@ -1,5 +1,12 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Choice input": "单选输入",
+ "Single choice input": "单选输入",
+ "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",
+ "The caller owns the original string state, options and query conditions. Empty or unmatched values are preserved until explicit selection.": "调用方拥有原字符串状态、选项及查询条件。空值或未匹配值保留到显式选择。",
+ "Choice configuration is unsupported.": "选项配置不受支持。",
+ "No choices available.": "暂无可用选项。",
+ "Current choice is outside the configured options: {value}.": "当前选择不在配置选项内：{value}。",
  "Boolean switch": "布尔开关",
  "Toggle one caller-owned boolean with explicit checked and disabled states.": "切换调用方拥有的单个布尔值，显式呈现选中与禁用状态。",
  "The caller owns the boolean and its effects; this control does not coerce unrelated values or write records.": "调用方拥有布尔值及其效果；控件不强制转换无关值或写入记录。",

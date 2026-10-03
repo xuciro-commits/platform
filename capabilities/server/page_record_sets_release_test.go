@@ -230,6 +230,13 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	checkboxRoot.Children = append(checkboxRoot.Children, "checkboxInput")
 	doc.Nodes[doc.Root] = checkboxRoot
 	sections = append(sections, build.Section{ID: "checkboxInput", Widget: "boolean-input", ConfigVersion: 1, BooleanVariant: "checkbox", BooleanVariable: "booleanFlag", BooleanLabel: &checkboxLabel})
+	choiceLabel := "Frozen choice"
+	doc.Variables["choiceState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("retired")}
+	doc.Nodes["choiceInput"] = platform.PageLayoutNode{Kind: "widget", Section: "choiceInput"}
+	choiceRoot := doc.Nodes[doc.Root]
+	choiceRoot.Children = append(choiceRoot.Children, "choiceInput")
+	doc.Nodes[doc.Root] = choiceRoot
+	sections = append(sections, build.Section{ID: "choiceInput", Widget: "choice-input", ConfigVersion: 1, ChoiceVariable: "choiceState", ChoiceInput: &platform.PageChoiceInput{Variant: "segments", Options: []string{"Open", "Closed"}, Label: &choiceLabel}})
 	doc.Variables["rankRecord"] = platform.PageVariable{Scope: "page", Type: "record", Mode: "resource", Source: &platform.PageResourceSource{Kind: "record", Section: "rank"}}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
@@ -256,6 +263,9 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].CardLabel = "id"
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
+	laterChoiceLabel := "Later choice"
+	sections[53].ChoiceInput = &platform.PageChoiceInput{Variant: "select", Options: []string{"Other"}, Label: &laterChoiceLabel}
+	doc.Variables["choiceState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("Other")}
 	sections[52].BooleanVariant = "switch"
 	laterCheckboxLabel := "Later checkbox"
 	sections[52].BooleanLabel = &laterCheckboxLabel
@@ -293,6 +303,16 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					choiceFound := false
+					for _, s := range d.Page.Sections {
+						if s.ID == "choiceInput" {
+							c := s.ChoiceInput
+							choiceFound = s.ChoiceVariable == "choiceState" && c != nil && c.Variant == "segments" && len(c.Options) == 2 && c.Options[0] == "Open" && c.Options[1] == "Closed" && c.Label != nil && *c.Label == "Frozen choice"
+						}
+					}
+					if !choiceFound || string(d.Page.Document.Variables["choiceState"].Initial) != `"retired"` {
+						t.Fatal("frozen choice config or original unmatched state changed")
+					}
 					checkboxFound := false
 					for _, s := range d.Page.Sections {
 						if s.ID == "checkboxInput" {

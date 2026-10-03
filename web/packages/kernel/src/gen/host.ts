@@ -906,6 +906,12 @@ export type PageButton = {
   icon?: string;
 };
 
+export type PageChoiceInput = {
+  variant: string;
+  options: string[];
+  label?: string;
+};
+
 export type PageDetailPresentation = {
   columns: number;
   hideNull?: boolean;
@@ -1448,6 +1454,8 @@ export type Section = {
   recordChart?: PageRecordChart;
   recordList?: PageRecordList;
   headingLevel?: string;
+  choiceVariable?: string;
+  choiceInput?: PageChoiceInput;
   booleanVariant?: string;
   booleanVariable?: string;
   booleanLabel?: string;
@@ -1793,7 +1801,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.54",
+  "uiProfile": "platform.page.v2.55",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4029,6 +4037,64 @@ export const pageUIManifest = {
           "close"
         ]
       }
+    },
+    {
+      "componentID": "choice-input",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.55",
+      "title": "Choice input",
+      "category": "Inputs",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full"
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "enabled",
+          "bindingField": "enabledWhen",
+          "type": "boolean",
+          "requiredUIProfile": "platform.page.v2.55"
+        }
+      ],
+      "outputPorts": [
+        {
+          "id": "value",
+          "bindingField": "choiceVariable",
+          "type": "string",
+          "writable": true,
+          "requiredUIProfile": "platform.page.v2.55"
+        }
+      ],
+      "layoutPreferences": {
+        "frame": "card"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -4085,7 +4151,8 @@ export const pageUIManifest = {
     "platform.page.v2.51",
     "platform.page.v2.52",
     "platform.page.v2.53",
-    "platform.page.v2.54"
+    "platform.page.v2.54",
+    "platform.page.v2.55"
   ],
   "runtime": {
     "scope": "page",
@@ -4563,6 +4630,16 @@ export const pageUIManifest = {
         "switch",
         "checkbox"
       ]
+    },
+    "choiceInput": {
+      "requiredUIProfile": "platform.page.v2.55",
+      "variants": [
+        "select",
+        "radio",
+        "segments"
+      ],
+      "maxOptions": 64,
+      "maxOptionBytes": 256
     }
   },
   "layout": {

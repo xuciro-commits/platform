@@ -1,3 +1,4 @@
+import {ChoiceInspector} from "./ChoiceInspector";
 import {BooleanInspector} from "./BooleanInspector";
 import {RangeInspector} from "./RangeInspector";
 import {LeaderboardInspector} from "./LeaderboardInspector";
@@ -28,6 +29,7 @@ import { ButtonInspector } from "./ButtonInspector";
 
 /** Build owns editor implementations, keyed by the shared runtime identity. */
 const inspectors = {
+ "choice-input":{configVersion:1,bindings:ChoiceInspector},
  "boolean-input":{configVersion:1,bindings:BooleanInspector},
  "range-input":{configVersion:1,bindings:RangeInspector},
  "record-leaderboard":{configVersion:1,bindings:LeaderboardInspector},
