@@ -899,6 +899,12 @@ export type Page = {
   selections?: SelectionVariable[];
 };
 
+export type PageAlertBanner = {
+  threshold: string;
+  tone: string;
+  message: string;
+};
+
 export type PageButton = {
   id: string;
   title: string;
@@ -1462,6 +1468,8 @@ export type Section = {
   recordList?: PageRecordList;
   headingLevel?: string;
   recordPicker?: PageRecordPicker;
+  alertValueVariable?: string;
+  alertBanner?: PageAlertBanner;
   dateKind?: string;
   dateOffset?: string;
   dateVariable?: string;
@@ -1814,7 +1822,7 @@ export type WorkTask = {
 
 /** Shared build-time page UI contracts (ADR-0046). */
 export const pageUIManifest = {
-  "uiProfile": "platform.page.v2.59",
+  "uiProfile": "platform.page.v2.60",
   "widgets": [
     {
       "componentID": "inline-action",
@@ -4248,6 +4256,87 @@ export const pageUIManifest = {
           "close"
         ]
       }
+    },
+    {
+      "componentID": "alert-banner",
+      "configVersion": 1,
+      "requiredUIProfile": "platform.page.v2.60",
+      "title": "Alert banner",
+      "category": "Content",
+      "fieldPreset": "none",
+      "defaults": {
+        "width": "full",
+        "alertBanner": {
+          "threshold": "0",
+          "tone": "warning",
+          "message": "{value}"
+        }
+      },
+      "bindingKinds": [],
+      "selectionMode": "none",
+      "propsSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "full",
+              "half"
+            ]
+          },
+          "alertBanner": {
+            "type": "object",
+            "properties": {
+              "threshold": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "warning",
+                  "danger"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "threshold",
+              "tone",
+              "message"
+            ]
+          }
+        }
+      },
+      "inputPorts": [
+        {
+          "id": "value",
+          "bindingField": "alertValueVariable",
+          "type": "decimal",
+          "requiredUIProfile": "platform.page.v2.60"
+        }
+      ],
+      "outputPorts": [],
+      "layoutPreferences": {
+        "frame": "inline"
+      },
+      "lifecyclePolicy": {
+        "stateOwner": "page-session",
+        "hidden": "retain",
+        "clearOn": [
+          "scope-change",
+          "binding-change",
+          "close"
+        ]
+      }
     }
   ],
   "supportedProfiles": [
@@ -4309,7 +4398,8 @@ export const pageUIManifest = {
     "platform.page.v2.56",
     "platform.page.v2.57",
     "platform.page.v2.58",
-    "platform.page.v2.59"
+    "platform.page.v2.59",
+    "platform.page.v2.60"
   ],
   "runtime": {
     "scope": "page",
@@ -4813,6 +4903,15 @@ export const pageUIManifest = {
     "recordPicker": {
       "requiredUIProfile": "platform.page.v2.58",
       "maxCandidates": 20
+    },
+    "alertBanner": {
+      "requiredUIProfile": "platform.page.v2.60",
+      "maxMessageBytes": 4096,
+      "tones": [
+        "info",
+        "warning",
+        "danger"
+      ]
     }
   },
   "layout": {

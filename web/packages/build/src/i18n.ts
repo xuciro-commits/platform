@@ -2,6 +2,18 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Alert banner": "条件提示",
+ "Alert value variable": "提示值变量",
+ "Alert threshold": "提示阈值",
+ "Alert tone": "提示色调",
+ "Alert message": "提示消息",
+ "The alert appears above its exact threshold. Counts cover the complete authorized set; only the first {value} token inserts the original value as plain text.": "原值超过精确阈值时显示提示。计数覆盖完整受权集合；仅第一个 {value} 以纯文本插入原值。",
+ "Bind an original decimal value and a valid threshold, tone and plain message before saving.": "保存前请绑定原十进制值，并配置有效阈值、色调及纯文本消息。",
+ "Alert banners require an original exact decimal value, a bounded numeric threshold, an info/warning/danger tone and nonempty plain text. Unknown configurations and old profiles are refused.": "条件提示需要原精确十进制值、有界数值阈值、info/warning/danger 色调及非空纯文本。未知配置和旧版本拒绝。",
+ "Alerts accept original static numeric text or complete-set count declarations. Invalid, executable and incompatible scalar sources are refused.": "条件提示仅接受原静态数值文本或完整集合计数声明。无效、可执行及不兼容标量来源拒绝。",
+ "Map the original complete-set count and explicit equality condition for this alert. Partial-window counts and non-count aggregates are not interchangeable.": "请映射原完整集合计数及明确等值条件。分页窗口计数与非 count 聚合不能互换。",
+ "The banner compares original exact values against its frozen threshold. Complete authorized counts are independent of table paging. Only the first {value} token is replaced as plain text; empty, invalid, refused or obsolete values never become zero or retain old messages.": "提示将原精确值与冻结阈值比较。完整受权计数不随表格分页改变，仅首个 {value} 以纯文本替换；空、无效、拒绝或过期值不变成零，也不保留旧消息。",
+
  "Date value kind": "日期值类型",
  "Civil date": "业务日期",
  "Date and time with UTC offset": "带 UTC 偏移的日期时间",
@@ -1614,6 +1626,18 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Alert banner": "条件提示",
+ "Alert value variable": "提示值变量",
+ "Alert threshold": "提示阈值",
+ "Alert tone": "提示色调",
+ "Alert message": "提示消息",
+ "The alert appears above its exact threshold. Counts cover the complete authorized set; only the first {value} token inserts the original value as plain text.": "原值超过精确阈值时显示提示。计数覆盖完整受权集合；仅第一个 {value} 以纯文本插入原值。",
+ "Bind an original decimal value and a valid threshold, tone and plain message before saving.": "保存前请绑定原十进制值，并配置有效阈值、色调及纯文本消息。",
+ "Alert banners require an original exact decimal value, a bounded numeric threshold, an info/warning/danger tone and nonempty plain text. Unknown configurations and old profiles are refused.": "条件提示需要原精确十进制值、有界数值阈值、info/warning/danger 色调及非空纯文本。未知配置和旧版本拒绝。",
+ "Alerts accept original static numeric text or complete-set count declarations. Invalid, executable and incompatible scalar sources are refused.": "条件提示仅接受原静态数值文本或完整集合计数声明。无效、可执行及不兼容标量来源拒绝。",
+ "Map the original complete-set count and explicit equality condition for this alert. Partial-window counts and non-count aggregates are not interchangeable.": "请映射原完整集合计数及明确等值条件。分页窗口计数与非 count 聚合不能互换。",
+ "The banner compares original exact values against its frozen threshold. Complete authorized counts are independent of table paging. Only the first {value} token is replaced as plain text; empty, invalid, refused or obsolete values never become zero or retain old messages.": "提示将原精确值与冻结阈值比较。完整受权计数不随表格分页改变，仅首个 {value} 以纯文本替换；空、无效、拒绝或过期值不变成零，也不保留旧消息。",
+
  "Date value kind": "日期值类型",
  "Civil date": "业务日期",
  "Date and time with UTC offset": "带 UTC 偏移的日期时间",

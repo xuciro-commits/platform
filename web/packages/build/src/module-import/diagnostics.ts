@@ -1,5 +1,9 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "alert-profile":"Alert banners require an original exact decimal value, a bounded numeric threshold, an info/warning/danger tone and nonempty plain text. Unknown configurations and old profiles are refused.",
+ "alert-scalar":"Alerts accept original static numeric text or complete-set count declarations. Invalid, executable and incompatible scalar sources are refused.",
+ "alert-count":"Map the original complete-set count and explicit equality condition for this alert. Partial-window counts and non-count aggregates are not interchangeable.",
+ "native-alert":"The banner compares original exact values against its frozen threshold. Complete authorized counts are independent of table paging. Only the first {value} token is replaced as plain text; empty, invalid, refused or obsolete values never become zero or retain old messages.",
  "datetime-binding":"Choose an explicit UTC offset for datetime input. Only original static text with an empty, complete offset timestamp or complete local date and time is supported; conflicting offsets, date-only values and executable sources are refused.",
  "native-datetime":"Original seconds, fractional seconds and UTC offsets are preserved. Complete local source values use the explicitly mapped offset, with omitted seconds set to 00. Browser timezone conversion and source truncation are not copied.",
  "native-object-dropdown-alias":"This source ObjectDropdown uses the same renderer as StringSelector and selects static strings. It maps to the original text choice state, not a record reference. Object selection remains a separate authorized record-picker contract.",

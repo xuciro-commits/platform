@@ -1,5 +1,11 @@
 // Simplified Chinese for the UI kit (ADR-0023), keyed by the English source text.
 export default {
+ "Alert banner": "条件提示",
+ "Semantic notice": "语义提示",
+ "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
+ "The caller owns the condition and message. This component performs no queries, template execution or notification delivery.": "调用方拥有条件及消息，本组件不执行查询、模板代码或通知发送。",
+ "Review the affected records before continuing.": "请在继续前检查受影响的记录。",
+
  "Offset datetime input": "带偏移的日期时间输入",
  "Edit caller-owned timestamp text without browser timezone conversion or precision truncation.": "编辑调用方拥有的时刻文本，不应用浏览器时区转换或精度截断。",
  "The caller owns original text and query conditions. UTC offset is explicit; seconds and up to nine fractional digits are retained, and invalid drafts remain repairable.": "调用方拥有原文本和查询条件。UTC 偏移须明确，保留秒及最多九位分数秒，无效草稿可修正。",

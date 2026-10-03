@@ -2,6 +2,12 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "Alert banner": "条件提示",
+ "Alert configuration is unavailable or incompatible.": "条件提示配置不可用或不兼容。",
+ "Alert needs an exact decimal value.": "条件提示需要精确十进制值。",
+ "Loading alert value…": "正在加载提示值…",
+ "Alert value is unavailable.": "提示值不可用。",
+
  "Invalid datetime value.": "无效日期时间。",
 
  "Picker title is unavailable.": "选择器标题不可用。",
@@ -326,6 +332,12 @@ register("zh-CN", {
 
 // Catalog content belongs to this owner and uses the same source-text keys.
 register("zh-CN", {
+ "Alert banner": "条件提示",
+ "Alert configuration is unavailable or incompatible.": "条件提示配置不可用或不兼容。",
+ "Alert needs an exact decimal value.": "条件提示需要精确十进制值。",
+ "Loading alert value…": "正在加载提示值…",
+ "Alert value is unavailable.": "提示值不可用。",
+
  "Invalid datetime value.": "无效日期时间。",
 
 

@@ -57,6 +57,7 @@ export const previewLoaders: Record<string, () => Promise<{ default: ComponentTy
   "ui/markdown": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.MarkdownContent })),
   "ui/metal-button": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.MetalButtons })),
   "ui/multiple-choice-input": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.MultipleChoiceInputExample })),
+  "ui/notice": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.NoticeExample })),
   "ui/notifications": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Notifications })),
   "ui/page-header": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Headers })),
   "ui/panels": () => import("@platform/ui/catalog/examples").then((module) => ({ default: module.Panels })),

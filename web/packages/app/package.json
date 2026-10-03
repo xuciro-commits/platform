@@ -6,7 +6,8 @@
     ".": "./src/index.tsx",
     "./catalog": "./src/catalog.ts",
     "./catalog/examples": "./src/catalog.examples.tsx",
-    "./catalog/fixtures": "./src/catalog.fixtures.tsx"
+    "./catalog/fixtures": "./src/catalog.fixtures.tsx",
+    "./decimal": "./src/runtime/decimal.ts"
   },
   "scripts": {
     "typecheck": "tsc -p .",

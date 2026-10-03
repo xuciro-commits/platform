@@ -1,5 +1,5 @@
 {
-  "revision": "sha256:c5b91e3371dfbd43",
+  "revision": "sha256:114c7e2f60d8b1f9",
   "entries": [
     {
       "id": "app/agent-assistant",
@@ -1741,6 +1741,32 @@
       ]
     },
     {
+      "id": "ui/notice",
+      "owner": "@platform/ui",
+      "name": "Semantic notice",
+      "summary": "Present caller-owned plain text with an accessible semantic tone.",
+      "layer": 1,
+      "source": "web/packages/ui/src/components/Notice.tsx",
+      "exports": [
+        "Notice"
+      ],
+      "example": "NoticeExample",
+      "authority": "api",
+      "maturity": "recommended",
+      "scope": "platform",
+      "uses": [
+        "code"
+      ],
+      "tags": [
+        "alert",
+        "callout",
+        "notice"
+      ],
+      "constraints": [
+        "The caller owns the condition and message. This component performs no queries, template execution or notification delivery."
+      ]
+    },
+    {
       "id": "ui/notifications",
       "owner": "@platform/ui",
       "name": "Notifications",
@@ -2706,6 +2732,7 @@
       "Plot original authorized records without merging equal axis labels or reading another collection.": "绘制原受权记录，不合并相同坐标标签，也不读取另一集合。",
       "Present a record's title, status and labelled properties.": "展示记录的标题、状态和带标签的属性。",
       "Present assigned work with the answers and actions supplied by its owner.": "展示分配的工作，以及其归属方提供的答复和动作。",
+      "Present caller-owned plain text with an accessible semantic tone.": "以可访问的语义色调呈现调用方拥有的纯文本。",
       "Present caller-owned static choices as a select, radio group or segmented control.": "以下拉、单选组或分段控件呈现调用方拥有的静态选项。",
       "Present caller-owned string selections through shared toggles without dropping unmatched values.": "通过共享多选控件呈现调用方拥有的字符串集合，不丢弃未匹配值。",
       "Present five measures from one complete authorized aggregate answer.": "呈现同一完整授权聚合答复中的五项度量。",
@@ -2751,6 +2778,7 @@
       "Select bounded records in their original lifecycle lanes and emit declared move commands.": "在原生命周期列中选择有界记录，并发出已声明的移动命令。",
       "Select original records from a caller-owned grid or list window.": "在调用方拥有的网格或列表窗口中选择原记录。",
       "Selected": "已选中",
+      "Semantic notice": "语义提示",
       "Semantic status tags": "语义状态标签",
       "Semantic tokens": "语义令牌",
       "Set choice input": "集合选择输入",
@@ -2783,6 +2811,7 @@
       "The caller owns the authorized window; this presentation does not reorder records, filter by the viewport, or write dates.": "调用方拥有授权窗口；此呈现不重排记录，不按视窗筛选，也不写入日期。",
       "The caller owns the boolean and its effects; this control does not coerce unrelated values or write records.": "调用方拥有布尔值及其效果；控件不强制转换无关值或写入记录。",
       "The caller owns the bounded window and record authorization; the calendar never writes dates or reads another collection.": "调用方拥有有界窗口和记录授权；日历不写日期或读取另一集合。",
+      "The caller owns the condition and message. This component performs no queries, template execution or notification delivery.": "调用方拥有条件及消息，本组件不执行查询、模板代码或通知发送。",
       "The caller owns the ordered window, field permissions and point budget; this chart performs no reads or writes.": "调用方拥有排序窗口、字段权限和点数预算；此图表不读取或写入数据。",
       "The caller owns the original date text and query conditions. Invalid drafts remain visible; no local timezone or timestamp conversion is applied.": "调用方拥有原日期文本及查询条件。无效草稿保持可见，不应用本地时区或时间点转换。",
       "The caller owns the original five-measure answer. Counts remain exact; missing numeric measures remain empty.": "调用方拥有原五度量答复。计数保持精确，缺失数值度量保持为空。",
@@ -2918,6 +2947,7 @@
       "web/packages/build/src/page-editor/QueriesPanel.tsx",
       "web/packages/build/src/page-editor/VariablesPanel.tsx",
       "web/packages/build/src/page-editor/widgets/AggregateSource.tsx",
+      "web/packages/build/src/page-editor/widgets/AlertInspector.tsx",
       "web/packages/build/src/page-editor/widgets/BooleanInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ButtonGroupInspector.tsx",
       "web/packages/build/src/page-editor/widgets/ChartInspector.tsx",
@@ -3007,6 +3037,7 @@
       "web/packages/app/src/runtime/LoopRuntime.tsx",
       "web/packages/app/src/runtime/NestedLoopRuntime.tsx",
       "web/packages/app/src/sections.tsx",
+      "web/packages/app/src/widgets/Alert.tsx",
       "web/packages/app/src/widgets/BooleanInput.tsx",
       "web/packages/app/src/widgets/ChoiceInput.tsx",
       "web/packages/app/src/widgets/DateInput.tsx",
@@ -3245,6 +3276,9 @@
     "ui/lifecycle": [
       "web/packages/app/src/sections.tsx",
       "web/packages/build/src/process.tsx"
+    ],
+    "ui/notice": [
+      "web/packages/app/src/widgets/Alert.tsx"
     ],
     "ui/switch": [
       "web/packages/app/src/widgets/BooleanInput.tsx"

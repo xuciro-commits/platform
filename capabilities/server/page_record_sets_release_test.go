@@ -268,6 +268,15 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	doc.Nodes[doc.Root] = timeRoot
 	sections = append(sections, build.Section{ID: "timeInput", Widget: "date-input", ConfigVersion: 1, DateVariable: "timeState", DateLabel: &timeLabel, DateKind: "datetime", DateOffset: "+08:00"})
 	doc.Queries["timeQuery"] = platform.PageQuery{Object: platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: "build.note"}, Limit: 20, Conditions: []platform.PageQueryCondition{{Field: "raised", Op: ">=", Value: platform.PageValue{Variable: "timeState"}, AsDateTime: true, Optional: true}}}
+	alertIndex := len(sections)
+	alertConfig := &platform.PageAlertBanner{Threshold: "0.1", Tone: "danger", Message: "{value} affected records"}
+	for _, spec := range []struct{ id, variable string }{{"alertInput", "collectionCount"}, {"hiddenAlert", "privateProgressCount"}} {
+		doc.Nodes[spec.id] = platform.PageLayoutNode{Kind: "widget", Section: spec.id}
+		root := doc.Nodes[doc.Root]
+		root.Children = append(root.Children, spec.id)
+		doc.Nodes[doc.Root] = root
+		sections = append(sections, build.Section{ID: spec.id, Widget: "alert-banner", ConfigVersion: 1, AlertValueVariable: spec.variable, AlertBanner: alertConfig})
+	}
 	submit(build.PageType, "P", "create", map[string]any{"name": "notes", "title": "Notes", "object": "build.note", "document": doc, "sections": sections})
 	preview, err := tn.PreviewRelease(builder, platform.AssetPage, "P")
 	if err != nil || preview.Diagnostic != "" {
@@ -294,6 +303,8 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 	sections[25].Actions = nil
 	sections[31].RecordCalendar = &platform.PageRecordCalendar{DateField: "due", LabelField: "id", InitialMonth: "2027-01"}
 	sections[56].RecordPicker = &platform.PageRecordPicker{LabelField: "id"}
+	sections[alertIndex].AlertBanner = &platform.PageAlertBanner{Threshold: "999", Tone: "info", Message: "Later alert"}
+	sections[alertIndex].AlertValueVariable = "privateProgressCount"
 	sections[timeIndex].DateKind = "date"
 	sections[timeIndex].DateOffset = ""
 	doc.Variables["timeState"] = platform.PageVariable{Scope: "page", Type: "string", Mode: "state", Initial: platform.Raw("2027-01-01")}
@@ -345,6 +356,18 @@ func TestFrozenRecordSetPortsAndRecovery(t *testing.T) {
 			for _, d := range current.Definitions(member) {
 				if d.Page != nil && d.Ref.Name == "notes" {
 					seen = true
+					alertFound, privateAlerts := false, 0
+					for _, section := range d.Page.Sections {
+						if section.ID == "alertInput" {
+							alertFound = section.AlertValueVariable == "collectionCount" && section.AlertBanner != nil && section.AlertBanner.Threshold == "0.1" && section.AlertBanner.Tone == "danger" && section.AlertBanner.Message == "{value} affected records"
+						}
+						if section.ID == "hiddenAlert" {
+							privateAlerts++
+						}
+					}
+					if !alertFound || member.ID == builder.ID && privateAlerts != 1 || member.ID != builder.ID && privateAlerts != 0 {
+						t.Fatal("frozen alert config, count binding or private dependency changed")
+					}
 					pickerFound := false
 					for _, s := range d.Page.Sections {
 						if s.ID == "pickerInput" {

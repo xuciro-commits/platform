@@ -1,3 +1,4 @@
+import {parseDecimal} from "@platform/app/decimal";
 import {validTimestampOffset,withTimestampOffset} from "@platform/ui/date";
 import {validChoiceInput} from "@platform/ui/choices";
 import {rangeGrid} from "@platform/ui/range";
@@ -133,13 +134,13 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   if(!base)return {};let output=collection;if(predicates.length){const query=id("metric_query",sourceID),value=id("metric_set",sourceID);document.queries![query]={...base,conditions:[...(base.conditions??[]),...predicates]};document.variables![value]={scope:context.kind,owner:context.owner,type:"object-set",mode:"resource",source:{kind:"plan",query}};output=value;}
   issue(path,"native-metric-aggregate",false);return {collectionVariable:output,measure,object:e?.type===target.object?undefined:e?.type};
  };
- const progressScalar=(sourceID:string,context:{kind:"page"|"overlay";owner?:string},path:string)=>{
-  const v=vars.get(sourceID);if(!v||v.type!=="numeric"){issue(path,"progress-scalar");return "";}
+ const decimalScalar=(sourceID:string,context:{kind:"page"|"overlay";owner?:string},path:string,purpose="progress")=>{
+  const v=vars.get(sourceID);if(!v||v.type!=="numeric"){issue(path,`${purpose}-scalar`);return "";}
   if(v.definitionKind==="static"){
    const input=variable(sourceID,context,path),mapped=id("progress_decimal",sourceID);document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:"decimal",mode:"derived",expression:{op:"parse-decimal",args:[{variable:input}]}};return mapped;
   }
   const value=metric(sourceID,context,path),resource=document.variables![value.collectionVariable??""],query=resource?.source?.query;
-  if(value.measure!=="count"||!query){issue(path,"progress-count");return "";}
+  if(value.measure!=="count"||!query){issue(path,`${purpose}-count`);return "";}
   const previous=scope.get(sourceID);if(previous&&(previous.kind!==context.kind||previous.owner!==context.owner)){issue(path,"variable-scope");return "";}scope.set(sourceID,context);const mapped=id("variable",sourceID);ids.variables[sourceID]=mapped;
   document.variables![mapped]={title:v.name,scope:context.kind,owner:context.owner,type:"decimal",mode:"aggregate",source:{kind:"count",query}};return mapped;
  };
@@ -165,6 +166,11 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
   }
   if(w.type==="HeaderText"){safeKeys(config,["text","variant"],`${path}/config`);section.text=text(config.text);section.headingLevel=text(config.variant)||"h2";if(typeof config.text!=="string"||!section.text.trim()||new TextEncoder().encode(section.text).length>pageUIManifest.runtime.titles.maxTextBytes||config.variant!==undefined&&typeof config.variant!=="string"||!(pageUIManifest.runtime.titles.headingLevels as readonly string[]).includes(section.headingLevel))issue(`${path}/config`,"title-profile");}
   if(w.type==="ObjectSetTitle"){safeKeys(config,["objectSetVarId"],`${path}/config`);const source=text(config.objectSetVarId);section.collectionVariable=variable(source,context,`${path}/config/objectSetVarId`);const input=document.variables![section.collectionVariable],query=input?.source?.query,external=queryObjects.get(source)||"",e=entity(external,`${path}/config/objectSetVarId`);section.object=e?.type===target.object?undefined:e?.type;section.title=text(vars.get(source)?.name)||source;section.countVariable=id("count",source);document.variables![section.countVariable]={title:section.title,scope:context.kind,owner:context.owner,type:"decimal",mode:"aggregate",source:{kind:"count",query}};if(!query)issue(`${path}/config/objectSetVarId`,"title-profile");issue(`${path}/config`,"native-collection-title",false);}
+  if(w.type==="AlertBanner"){
+   safeKeys(config,["variableId","threshold","intent","message"],`${path}/config`);const sourceID=text(config.variableId),input=decimalScalar(sourceID,context,`${path}/config/variableId`,"alert"),v=document.variables![input],raw=config.threshold===undefined?0:config.threshold,threshold=typeof raw==="number"&&Number.isFinite(raw)&&Math.abs(raw)<=Number.MAX_SAFE_INTEGER?parseDecimal(String(raw))?.value:undefined,tone=config.intent===undefined?"warning":text(config.intent);section.alertValueVariable=input;section.alertBanner={threshold:threshold??"",tone,message:text(config.message)};
+   const original=vars.get(sourceID);if(original?.definitionKind==="static"&&typeof original.staticValue==="number"&&(!parseDecimal(String(original.staticValue))||Math.abs(original.staticValue)>Number.MAX_SAFE_INTEGER))issue(`${path}/config/variableId`,"alert-scalar");
+   if(!v||v.type!=="decimal"||!threshold||!(pageUIManifest.runtime.alertBanner.tones as readonly string[]).includes(tone)||typeof config.message!=="string"||!config.message||new TextEncoder().encode(config.message).length>pageUIManifest.runtime.alertBanner.maxMessageBytes||Number(target.profile.split(".").at(-1))<60)issue(`${path}/config`,"alert-profile");issue(`${path}/config`,"native-alert",false);
+  }
   if(w.type==="DateTimePicker"){
    safeKeys(config,["variableId","label"],`${path}/config`);const sourceID=text(config.variableId),input=variable(sourceID,context,`${path}/config/variableId`),v=document.variables![input];section.dateVariable=input;section.dateKind="datetime";section.dateOffset=bindings.datetimes?.[w.id]?.offset??"";if(config.label!==undefined)section.dateLabel=text(config.label);if(!["string","date"].includes(vars.get(sourceID)?.type??"")||v?.type!=="string"||v.mode!=="state"||config.label!==undefined&&(typeof config.label!=="string"||new TextEncoder().encode(text(config.label)).length>1024)||!validTimestampOffset(section.dateOffset)||Number(target.profile.split(".").at(-1))<59)issue(`${path}/config`,"datetime-binding");issue(`${path}/config`,"native-datetime",false);
   }
@@ -211,8 +217,8 @@ export function compileWorkshopModule(source:string,pageID:string,bindings:Impor
    if(typeof max!=="number"||!Number.isFinite(max)||max<=0||warn!==undefined&&(typeof warn!=="number"||!Number.isFinite(warn))||config.label!==undefined&&(typeof config.label!=="string"||!text(config.label).trim()||new TextEncoder().encode(text(config.label)).length>1024)||config.suffix!==undefined&&(typeof config.suffix!=="string"||new TextEncoder().encode(text(config.suffix)).length>64))issue(`${path}/config`,"gauge-presentation");if(Number(target.profile.split(".").at(-1))<Number(pageUIManifest.runtime.gauge.requiredUIProfile.split(".").at(-1)))issue(path,"gauge-profile");issue(`${path}/config`,"native-gauge-value",false);
   }
   if(w.type==="ProgressBar"){
-   safeKeys(config,["valueVarId","totalVarId","total","label"],`${path}/config`);if(config.totalVarId!==undefined&&typeof config.totalVarId!=="string")issue(`${path}/config/totalVarId`,"progress-total");section.progressValueVariable=progressScalar(text(config.valueVarId),context,`${path}/config/valueVarId`);
-   if(config.totalVarId){section.progressTotalVariable=progressScalar(text(config.totalVarId),context,`${path}/config/totalVarId`);if(config.total!==undefined)issue(`${path}/config/total`,"progress-total");}
+   safeKeys(config,["valueVarId","totalVarId","total","label"],`${path}/config`);if(config.totalVarId!==undefined&&typeof config.totalVarId!=="string")issue(`${path}/config/totalVarId`,"progress-total");section.progressValueVariable=decimalScalar(text(config.valueVarId),context,`${path}/config/valueVarId`);
+   if(config.totalVarId){section.progressTotalVariable=decimalScalar(text(config.totalVarId),context,`${path}/config/totalVarId`);if(config.total!==undefined)issue(`${path}/config/total`,"progress-total");}
    else {const total=config.total===undefined?100:config.total;section.progressTotal=String(total);if(typeof total!=="number"||!Number.isFinite(total)||total<=0||!/(?:^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$)/.test(String(total)))issue(`${path}/config/total`,"progress-total");}
    if(config.label!==undefined){if(typeof config.label!=="string"||!text(config.label).trim()||new TextEncoder().encode(text(config.label)).length>1024)issue(`${path}/config/label`,"progress-label");else section.progressLabel=text(config.label);}
    if(Number(target.profile.split(".").at(-1))<Number(pageUIManifest.runtime.progress.requiredUIProfile.split(".").at(-1)))issue(path,"progress-profile");issue(`${path}/config`,"native-progress-values",false);

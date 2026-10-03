@@ -63,6 +63,9 @@ var pageNodeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,79}$`)
 func (d *PageDocument) Check(sections []Section) error {
 	if d == nil {
 		for _, s := range sections {
+			if s.Widget == "alert-banner" || s.AlertValueVariable != "" || s.AlertBanner != nil {
+				return fmt.Errorf("alert banner requires a document")
+			}
 			if s.Widget == "record-picker" || s.RecordPicker != nil {
 				return fmt.Errorf("record picker requires a page document")
 			}
@@ -216,6 +219,9 @@ func (d *PageDocument) Check(sections []Section) error {
 			return err
 		}
 		if err := d.checkGauge(section); err != nil {
+			return err
+		}
+		if err := d.checkAlertBanner(section); err != nil {
 			return err
 		}
 		if err := d.checkProgress(section); err != nil {
@@ -595,7 +601,7 @@ func (d *PageDocument) Visible(sections []Section) *PageDocument {
 		if node.Kind == "widget" {
 			for _, s := range sections {
 				if s.ID == node.Section {
-					for _, id := range []string{s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
+					for _, id := range []string{s.AlertValueVariable, s.DateVariable, s.ChoiceSetVariable, s.ChoiceVariable, s.BooleanVariable, s.RangeMinVariable, s.RangeMaxVariable, s.StatisticsVariable, s.GaugeValueVariable, s.ProgressValueVariable, s.ProgressTotalVariable} {
 						if id != "" {
 							if _, ok := variables[id]; !ok {
 								return false

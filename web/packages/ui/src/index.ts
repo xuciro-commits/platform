@@ -8,6 +8,7 @@ export { Card, Panel } from "./primitives/card";
 export { EditorWorkbench } from "./layout/EditorWorkbench";
 export { ContentTabs } from "./layout/ContentTabs";
 export {validChoiceInput} from "./components/choice";
+export {Notice} from "./components/Notice";
 export {DateTimeInput} from "./components/DateTimeInput";
 export {DateInput} from "./components/DateInput";
 export {validCivilDate,validTimestamp,validTimestampOffset,timestampParts,withTimestampOffset} from "./components/date";

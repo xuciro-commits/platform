@@ -30,6 +30,7 @@ import { pageVariableContract, usePageVariables, usePageSession } from "./runtim
 
 const ChartRenderer=lazy(()=>import("./widgets/Chart").then(module=>({default:module.ChartRenderer})));
 const RecordPickerRenderer=lazy(()=>import("./widgets/RecordPicker").then(module=>({default:module.RecordPickerRenderer})));
+const AlertRenderer=lazy(()=>import("./widgets/Alert").then(module=>({default:module.AlertRenderer})));
 const DateInputRenderer=lazy(()=>import("./widgets/DateInput").then(module=>({default:module.DateInputRenderer})));
 const ChoiceInputRenderer=lazy(()=>import("./widgets/ChoiceInput").then(module=>({default:module.ChoiceInputRenderer})));
 const BooleanInputRenderer=lazy(()=>import("./widgets/BooleanInput").then(module=>({default:module.BooleanInputRenderer})));
@@ -56,7 +57,7 @@ type Section = NonNullable<Page["sections"]>[number];
 type Narrowed = Record<string, Record<string, unknown>>;
 
 /** What a section is bound to, and what the page has selected and narrowed to. */
-type Bound = {dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
+type Bound = {alertValue?:VariableResult;dateValue?:VariableResult;onDate?:(value:string)=>void;choiceSetValue?:VariableResult;onChoiceSet?:(value:string[])=>void;choiceValue?:VariableResult;onChoice?:(value:string)=>void;booleanInput?:VariableResult;onBoolean?:(checked:boolean)=>void;rangeLower?:VariableResult;rangeUpper?:VariableResult;onRange?:(lower:string,upper:string)=>void;statisticsValue?:VariableResult;gaugeValue?:VariableResult;progressValue?:VariableResult;progressTotal?:VariableResult;countValue?:string;countError?:string;
   onControl?:(id:string)=>void;controlBound?:(id:string)=>boolean;
   page: Page; section: Section; selected?: EntityRecord; onSelect: (record?: EntityRecord) => void; live: boolean;
   master?: EntityRecord;
@@ -409,6 +410,7 @@ function FunctionWidget({ page, section, selected, live }: Bound) {
  *  composed, clicking it takes it in hand. */
 const widgets = createWidgetRegistry<Bound>({
  "record-picker":({page,section,window,selected,enabled,onSelect})=><RecordPickerRenderer type={objectOf(page,section)} window={window} fields={section.recordPicker} title={section.title||t("Record picker")} selected={selected} enabled={enabled} onSelect={onSelect}/>,
+ "alert-banner":({section,alertValue})=><AlertRenderer value={alertValue} config={section.alertBanner} title={section.title||t("Alert banner")}/>,
  "date-input":({section,dateValue,onDate,enabled})=><DateInputRenderer value={dateValue} kind={section.dateKind} offset={section.dateOffset} label={section.dateLabel} title={section.title||t("Date input")} enabled={enabled} onChange={onDate}/>,
  "choice-input":({section,choiceValue,choiceSetValue,onChoice,onChoiceSet,enabled})=><ChoiceInputRenderer setValue={choiceSetValue} onSet={onChoiceSet} value={choiceValue} fields={section.choiceInput} title={section.title||t("Choice input")} enabled={enabled} onChange={onChoice}/>,
  "boolean-input":({section,booleanInput,onBoolean,enabled})=><BooleanInputRenderer value={booleanInput} label={section.booleanLabel} variant={section.booleanVariant} title={section.title||t("Boolean switch")} enabled={enabled} onChange={onBoolean}/>,
@@ -593,6 +595,7 @@ function PageSession({ page, live = true, notice, chosen, onChoose, wrapLayout, 
         facetValues={values} onFacet={(id,value)=>setContextState(id,value,context,overlay)}
         collection={values[section.collectionVariable??""]} aggregateScope={JSON.stringify([source.scope,applicationVariable(section.collectionVariable??"")?[application.identity,application.readScope]:undefined,overlay,epoch,context?[context.owner,context.key,context.signature]:undefined])}
         numeric={initialVariables[valueVariable??""]?.type==="decimal"||!!valueVariable&&Object.values(page.document?.queries??{}).some(q=>q.conditions?.some(c=>c.asDecimal&&c.value.variable===valueVariable))} valueError={value?.status==="error"?value.code:undefined} value={value?.status==="error"?value.draft:value?.status==="value"?value.draft??(isDecimal(value.value)?value.value.value:typeof value.value==="string"?value.value:undefined):undefined} onValue={valueVariable ? (value) => setContextState(valueVariable,initialVariables[valueVariable]?.type==="decimal"?{kind:"decimal",value}:value, context, overlay) : undefined}
+        alertValue={values[section.alertValueVariable??""]}
         dateValue={values[section.dateVariable??""]} onDate={section.widget==="date-input"&&section.dateVariable?(value)=>{if(context||enabled===false||typeof value!=="string"||overlay&&session.overlayEpoch(overlay)!==epoch)return;writeState(section.dateVariable!,value,overlay);}:undefined}
         choiceSetValue={values[section.choiceSetVariable??""]} onChoiceSet={section.widget==="choice-input"&&section.choiceInput?.variant==="multiple"&&section.choiceSetVariable?(next)=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch)return;const current=values[section.choiceSetVariable!];if(current?.status!=="value"||!isStringSet(current.value)||!isStringSet({kind:"string-set",values:next}))return;const previous=current.value.values,delta=[...next.filter(item=>!previous.includes(item)),...previous.filter(item=>!next.includes(item))];if(delta.length!==1||!section.choiceInput?.options.includes(delta[0]!))return;writeState(section.choiceSetVariable!,{kind:"string-set",values:next},overlay);}:undefined}
         choiceValue={values[section.choiceVariable??""]} onChoice={section.widget==="choice-input"&&section.choiceVariable?(value)=>{if(context||enabled===false||overlay&&session.overlayEpoch(overlay)!==epoch||typeof value!=="string"||!(section.choiceInput?.options.includes(value)||value===""&&section.choiceInput?.variant==="select"))return;writeState(section.choiceVariable!,value,overlay);}:undefined}
