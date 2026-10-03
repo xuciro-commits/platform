@@ -1,5 +1,6 @@
 /** Human explanations accompany stable machine codes and JSON pointers. */
 export const diagnosticMessages:Record<string,string>={
+ "native-object-dropdown-alias":"This source ObjectDropdown uses the same renderer as StringSelector and selects static strings. It maps to the original text choice state, not a record reference. Object selection remains a separate authorized record-picker contract.",
  "picker-binding":"Map an original visible record title and scoped query. Record pickers need a fixed 20-record ID-sorted window and compatible retained ordering.",
  "native-record-picker":"The picker searches the original authorized query and confirms original record identity before publishing selection. Candidates are bounded to 20 in host ID order; original title/ID predicates replace local array filtering, and declared search conditions remain fixed. Original conditions, versions and ownership remain; reads or scope changes retire old candidates and selection.",
  "date-input-profile":"Date inputs need original static civil date text, a bounded label, and the supported date-input profile. Timestamps and executable sources need their own time contract.",

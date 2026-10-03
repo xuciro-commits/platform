@@ -2,6 +2,7 @@
 import { register } from "@platform/ui";
 
 register("zh-CN", {
+ "This source ObjectDropdown uses the same renderer as StringSelector and selects static strings. It maps to the original text choice state, not a record reference. Object selection remains a separate authorized record-picker contract.": "来源ObjectDropdown与StringSelector使用同一渲染器并选择静态字符串。它映射原文本选择状态，不是记录引用。对象选择仍归独立受权记录选择器契约。",
  "Record picker": "记录选择器",
  "Picker title field": "选择器标题字段",
  "Picker label": "选择器标签",

@@ -74,9 +74,9 @@
       "sourceType": "ObjectDropdown",
       "sourceCategory": "Filtering",
       "owner": "@platform/app",
-      "status": "planned",
-      "target": null,
-      "reason": "config-or-capability-profile-required"
+      "status": "profile",
+      "target": "choice-input",
+      "reason": "bounded-string-alias-profile"
     },
     {
       "sourceType": "StringSelector",

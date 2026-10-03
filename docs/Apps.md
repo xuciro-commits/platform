@@ -58,7 +58,7 @@
 
 日期输入：添加“Date input / 日期输入”，绑定原 page/Overlay 的string state并设置可选标签；源DateInput的date/string静态变量同样映射原文本。日期保留YYYY-MM-DD与业务日期语义，范围0001–9999，支持真实闰日；清空不设默认日期。外部TextInput写入无效日期后，日期组件保留草稿并提供修正文本输入；修正或“Clear date / 清空日期”显式替换原状态。在原Query plans条件勾选“Read text as a civil date / 将文本读取为业务日期”，条件字段须date、变量须string，与数字转换互斥；无效日期在读取前拒绝，optional空值跳过。原状态/标签/asDate条件随冻结发布，原启用、查询选择及浮层关闭清理保持；范围见[ADR-0046 §6.52](ADR/0046-application-studio-fusion.md#652-dateinput的原日期草稿与civil条件)。
 
-静态单选：添加“Choice input / 单选输入”，选择原 page/Overlay 的string state、“Choice presentation / 选择呈现”（Dropdown、Radio group、Segmented control），逐项填写唯一非空选项与可选标签。最多64项，每项256字节；空列表明确显示暂无选项。三种形态可绑定同一状态，与原TextInput及查询条件同步；空值不自动选首项，未匹配值保留并提示。下拉的“—”清空状态并沿原optional条件移除限制，Radio使用原生标签/方向键/Space，分段按钮显式写入选项，原enabledWhen决定禁用。StringSelector/RadioGroup/SegmentedControl导入分别声明select/radio/segments并保留原选项顺序、标签与初值；配置沿原保存/冻结发布/作用域清理，范围见[ADR-0046 §6.50](ADR/0046-application-studio-fusion.md#650-三种静态单选的原字符串绑定)。
+静态单选：添加“Choice input / 单选输入”，选择原 page/Overlay 的string state、“Choice presentation / 选择呈现”（Dropdown、Radio group、Segmented control），逐项填写唯一非空选项与可选标签。最多64项，每项256字节；空列表明确显示暂无选项。三种形态可绑定同一状态，与原TextInput及查询条件同步；空值不自动选首项，未匹配值保留并提示。下拉的“—”清空状态并沿原optional条件移除限制，Radio使用原生标签/方向键/Space，分段按钮显式写入选项，原enabledWhen决定禁用。StringSelector/RadioGroup/SegmentedControl导入分别声明select/radio/segments并保留原选项顺序、标签与初值；配置沿原保存/冻结发布/作用域清理，范围见[ADR-0046 §6.50](ADR/0046-application-studio-fusion.md#650-三种静态单选的原字符串绑定)。 ObjectDropdown导入同样使用select形态；报告明确该来源选择静态字符串，不输出记录引用。对象配置与执行来源须修正后应用，真正对象选择沿上文Record picker；范围见[ADR-0046 §6.54](ADR/0046-application-studio-fusion.md#654-objectdropdown来源别名的字符串语义)。
 
 静态多选：在“Choice presentation / 选择呈现”中选择“Multiple selection / 多选”，绑定原 page/Overlay 的string-set state；从单双类型切换后须显式重绑，原变量声明仍保留。MultiSelector导入沿array静态值映射原集合，并与IN/not-in条件共享；每个Toggles操作增删一个声明选项，未匹配已选项保留并提示。最多64个选中字符串，满额阻止新增、允许移除；空集合沿optional条件移除过滤。原启用条件/字段权限/查询选择及Overlay重开清理保持，配置和集合初值随冻结发布交付；范围见[ADR-0046 §6.51](ADR/0046-application-studio-fusion.md#651-multiselector的原string-set端口与in条件)。
 
@@ -70,7 +70,7 @@
 
 记录排行榜：添加“Record leaderboard / 记录排行榜”，选择原排名查询窗口、数值/标题字段、1–32条Top-N及方向。Query plans设相同limit、offset=0、数值字段方向排序，并勾选“Break equal values by record ID / 同值按记录 ID 排序”；原具名排序须相同。排名视图固定，共享表格也不能改其排序/分页；榜单只呈现原宿主顺序及原数值，点击记录供原详情/动作消费。Leaderboard导入创建独立排名计划、保留原条件及limit/方向并显式映射标题，activeVarId按单一实际记录生产者重写；多个写者拒绝。私有字段或读取拒绝不会保留旧排名，查询变化/Overlay重开会清理原选择。正式交付沿原Save→冻结候选→激活；范围见[ADR-0046 §6.46](ADR/0046-application-studio-fusion.md#646-leaderboard的原全集top-n与记录生产者)。
 
-导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持三十六类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
+导入外包页面：先新建或打开绑定已有对象的页面，点击“Import Workshop module / 导入 Workshop 模块”，选择源JSON文件或粘贴原文，再选择源页面。逐项映射已有平台对象、字段及原记录动作；可选同对象的精确保留查询版本。先检查定位诊断与原生展示/作用域差异，下载原始JSON和映射报告，再勾选审查确认并应用。应用替换当前未保存草稿，支持原Undo/Redo；仍需按原Save→Review release→冻结候选→Activate release交付。当前支持三十七类组件的有限配置，完整范围见[ADR-0046 §10.1](ADR/0046-application-studio-fusion.md#101-两种输入一个规范模型)。有阻塞诊断时原草稿保持；全部原配置在报告中保留。同一编辑作用域可重新打开窗口下载上次应用的报告，关闭编辑器/切换成员后清理，离开前须下载。导入不创建对象或执行外包函数/流程，92类型清单不代表92项已经可运行。
 
 应用设计台默认进入工坊总览：点击能力卡片，或搜索/选择资产查看状态与关联；选中后打开编辑器、测试或发布审查，返回总览保留搜索与选择；工作流内可切换设计、测试、运行历史与发布。代码声明和租户定义共享应用 API、授权、组件及发布校验。客户不执行任意脚本。构建者拥有 `build.builder`；业务用户按对象/动作/字段权限操作，交付应用本身不增加权限。
 
